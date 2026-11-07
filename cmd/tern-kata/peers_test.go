@@ -48,15 +48,24 @@ func message(t *testing.T, env map[string]string, args ...string) LaunchPlan {
 }
 
 func TestMessageTakesTheTextVerbatimAndTheSendersIdentityFromTheEnvironment(t *testing.T) {
-	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_TEAMMATE": "builder-12", "KATA_INBOX_USER": " dana/builder-12 "}, "demo#aa11", "-m", "--help me, -h")
+	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_TEAMMATE": "builder-12", "KATA_REF": "demo#aa11", "KATA_INBOX_USER": " dana/builder-12 "}, "demo#aa11", "-m", "--help me, -h")
 	if plan.Subcommand != "message" || plan.TargetRef != "demo#aa11" || plan.MessageText != "--help me, -h" || plan.Actor != "dana" || plan.Teammate != "builder-12" || plan.InboxUser != "dana/builder-12" {
 		t.Fatalf("plan %+v", plan)
 	}
 	if plan := message(t, map[string]string{"KATA_AUTHOR": "dana"}, "-m", "hi", "dana/omp-1", "--as", "bob"); plan.TargetRef != "dana/omp-1" || plan.Actor != "bob" || plan.Teammate != "" {
 		t.Fatalf("plan %+v", plan)
 	}
-	if plan := message(t, map[string]string{"KATA_AUTHOR": "me-agent", "KATA_INBOX_USER": "dana/omp-2", "KATA_TEAMMATE": "omp-2"}, "dana/omp-1", "-m", "hi"); plan.Actor != "dana" || plan.Teammate != "omp-2" {
+	if plan := message(t, map[string]string{"KATA_AUTHOR": "me-agent", "KATA_REF": "demo#aa11", "KATA_INBOX_USER": "dana/omp-2", "KATA_TEAMMATE": "omp-2"}, "dana/omp-1", "-m", "hi"); plan.Actor != "dana" || plan.Teammate != "omp-2" {
 		t.Fatalf("plan %+v", plan)
+	}
+	if plan := message(t, map[string]string{"KATA_AUTHOR": "me", "KATA_INBOX_USER": "dana"}, "dana/omp-1", "-m", "hi", "--as", "dana"); plan.Actor != "dana" || plan.InboxUser != "" || plan.Teammate != "" {
+		t.Fatalf("a person with an inbox user and --as: plan %+v", plan)
+	}
+	if plan := message(t, map[string]string{"KATA_AUTHOR": "me", "KATA_INBOX_USER": "dana"}, "dana/omp-1", "-m", "hi"); plan.Actor != "me" || plan.InboxUser != "" {
+		t.Fatalf("a person with an inbox user: plan %+v", plan)
+	}
+	if plan := message(t, map[string]string{"KATA_AUTHOR": "me", "KATA_INBOX_USER": "dana/omp-2"}, "dana/omp-1", "-m", "hi"); plan.Actor != "me" || plan.InboxUser != "" {
+		t.Fatalf("an address without KATA_REF is not an agent: plan %+v", plan)
 	}
 	for _, args := range [][]string{{"demo#aa11"}, {"-m", "hi"}, {"a", "b", "-m", "hi"}, {"a", "-m"}, {"a", "-m", "x", "-m", "y"}, {"a", "-m", "x", "--bogus"}} {
 		if _, err := PlanLaunch(append([]string{"message"}, args...), peerEnv(nil), "test"); err == nil {
@@ -111,7 +120,7 @@ func TestAgentsListsTheRunningOnesAndCutsToAnIssue(t *testing.T) {
 
 func TestMessageToAnAddressWritesFromTheActorWithTheSendersTeammate(t *testing.T) {
 	s := &sender{}
-	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_TEAMMATE": "builder-12", "KATA_INBOX_USER": "dana/builder-12"}, "dana/omp-2", "-m", " I changed the API ")
+	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_TEAMMATE": "builder-12", "KATA_REF": "demo#aa11", "KATA_INBOX_USER": "dana/builder-12"}, "dana/omp-2", "-m", " I changed the API ")
 	var out bytes.Buffer
 	if err := runMessage(plan, "/w", running(omp("demo#aa11", "1", "dana/omp-1"), omp("demo#bb22", "2", "dana/omp-2")), s.send, &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
@@ -128,7 +137,7 @@ func TestMessageToAnAddressWritesFromTheActorWithTheSendersTeammate(t *testing.T
 func TestMessageFromAnAgentWithoutATeammateNameWritesNothing(t *testing.T) {
 	s := &sender{}
 	var out bytes.Buffer
-	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_INBOX_USER": "dana/omp-2"}, "dana/omp-1", "-m", "hi")
+	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_REF": "demo#aa11", "KATA_INBOX_USER": "dana/omp-2"}, "dana/omp-1", "-m", "hi")
 	err := runMessage(plan, "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
 	var failed subcommandError
 	if !errors.As(err, &failed) || !strings.Contains(err.Error(), "no teammate name") || len(s.sent) != 0 {
@@ -163,7 +172,7 @@ func TestMessageToARefReachesEveryAgentOnTheIssueButTheSenderAndNamesTheOnesNotW
 	}}
 	list := running(omp("demo#aa11", "1", "dana/omp-1"), omp("demo#aa11", "2", "dana/omp-2"), omp("demo#aa11", "3", "dana/omp-3"), omp("demo#aa11", "4", "dana/builder-4"), omp("demo#bb22", "5", "dana/omp-5"))
 	var out bytes.Buffer
-	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_INBOX_USER": "dana/builder-4", "KATA_TEAMMATE": "builder-4"}, "demo#aa11", "-m", "heads up")
+	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_REF": "demo#aa11", "KATA_INBOX_USER": "dana/builder-4", "KATA_TEAMMATE": "builder-4"}, "demo#aa11", "-m", "heads up")
 	err := runMessage(plan, "/w", list, s.send, &out)
 	var addrs []string
 	for _, c := range s.sent {

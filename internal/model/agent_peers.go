@@ -38,13 +38,7 @@ func CheckAgentMessage(text string) (string, error) {
 func RunningAgents(entries []AgentEntry, states []AgentState) []IssueAgent {
 	var running []IssueAgent
 	for _, entry := range entries {
-		agent := IssueAgent{AgentEntry: entry}
-		for _, s := range states {
-			if s.Block == entry.Block {
-				agent.State = s.State
-				break
-			}
-		}
+		agent := agentWithState(entry, states)
 		if agent.State != AgentExited {
 			running = append(running, agent)
 		}

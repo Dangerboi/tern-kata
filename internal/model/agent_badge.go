@@ -50,13 +50,7 @@ func (m Model) IssueAgents(issueUID string) []IssueAgent {
 		if entry.IssueUID != issueUID {
 			continue
 		}
-		agent := IssueAgent{AgentEntry: entry}
-		for _, s := range m.Agents.States {
-			if s.Block == entry.Block {
-				agent.State = s.State
-				break
-			}
-		}
+		agent := agentWithState(entry, m.Agents.States)
 		if agent.State != AgentExited {
 			if issue == nil {
 				issue = m.issueByUID(issueUID)
@@ -68,6 +62,18 @@ func (m Model) IssueAgents(issueUID string) []IssueAgent {
 		agents = append(agents, agent)
 	}
 	return agents
+}
+
+// agentWithState is the IssueAgent of entry with the state the relay gave its block ("" when no relay listed it).
+func agentWithState(entry AgentEntry, states []AgentState) IssueAgent {
+	agent := IssueAgent{AgentEntry: entry}
+	for _, s := range states {
+		if s.Block == entry.Block {
+			agent.State = s.State
+			break
+		}
+	}
+	return agent
 }
 
 // AgentStateWords is how the badge and the Agent card name an agent's state, and the tone of the words.

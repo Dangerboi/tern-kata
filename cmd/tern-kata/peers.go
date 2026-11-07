@@ -36,8 +36,9 @@ func planAgents(args []string, lookup func(string) (string, bool)) (LaunchPlan, 
 }
 
 // planMessage parses `tern-kata message <address|ref> -m <text>`: TargetRef is the address or Issue ref, MessageText the text,
-// which may start with dashes. The sender's identity comes from the environment `tern-kata agent` set: KATA_TEAMMATE names the
-// sending agent, KATA_INBOX_USER is its own address.
+// which may start with dashes. The sender is an agent only when the environment `tern-kata agent` set is present, KATA_INBOX_USER
+// in address form (<actor>/<name>) next to KATA_REF: KATA_TEAMMATE then names the sending agent and KATA_INBOX_USER is its own
+// address. A person's own KATA_INBOX_USER (the Attention Page address) does not make them one.
 func planMessage(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
 	plan := LaunchPlan{Subcommand: "message"}
 	var operands []string
@@ -74,10 +75,12 @@ func planMessage(args []string, lookup func(string) (string, bool)) (LaunchPlan,
 	}
 	plan.TargetRef = operands[0]
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
-	if v, ok := lookup("KATA_INBOX_USER"); ok {
-		plan.InboxUser = strings.TrimSpace(v)
-		if plan.InboxUser != "" && plan.fallbackAuthor == "" {
-			plan.Actor = model.AgentAddressActor(plan.InboxUser)
+	inbox, _ := lookup("KATA_INBOX_USER")
+	ref, _ := lookup("KATA_REF")
+	if inbox = strings.TrimSpace(inbox); strings.Contains(inbox, "/") && strings.TrimSpace(ref) != "" {
+		plan.InboxUser = inbox
+		if plan.fallbackAuthor == "" {
+			plan.Actor = model.AgentAddressActor(inbox)
 		}
 	}
 	if v, ok := lookup("KATA_TEAMMATE"); ok {
@@ -128,7 +131,7 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 	}
 	missed := 0
 	for _, a := range targets {
-		line, written := deliver(plan, workspace, a, text, send)
+		line, written := writeSlot(plan, workspace, a, text, send)
 		if !written {
 			missed++
 		}
@@ -142,8 +145,8 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 	return nil
 }
 
-// deliver writes text to agent a and says what came of it, and whether it was written.
-func deliver(plan LaunchPlan, workspace string, a model.IssueAgent, text string, send func(model.Cmd) model.Msg) (line string, written bool) {
+// writeSlot writes text to agent a's slot and says what came of it, and whether it was written.
+func writeSlot(plan LaunchPlan, workspace string, a model.IssueAgent, text string, send func(model.Cmd) model.Msg) (line string, written bool) {
 	if owner := model.AgentAddressActor(a.Address); owner != plan.Actor {
 		return fmt.Sprintf("Cannot message %s on %s: it acts for %s, and only that actor's messages reach it (you are %s).", a.Address, a.IssueRef, owner, plan.Actor), false
 	}
