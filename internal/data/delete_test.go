@@ -218,7 +218,7 @@ func TestARetriedDeleteAfterARefusalPostsTheReasonOnce(t *testing.T) {
 func TestADeleteAfterARestoreWithTheSameReasonPostsItAgain(t *testing.T) {
 	f := newUndoFixture(t)
 	uid := f.issue("Again")
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if got := f.deleteIssue(uid, "dup"); got.Err != nil {
 			t.Fatal(got.Err)
 		}
