@@ -138,9 +138,9 @@ type Model struct {
 	// relay were both in.
 	agentsPruned bool
 	sweepPending bool
-	Project   Project
-	Daemon    Daemon
-	Snapshot  Snapshot
+	Project      Project
+	Daemon       Daemon
+	Snapshot     Snapshot
 	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
 	Relationships RelationshipIndex
 	Issues        []Issue
