@@ -95,6 +95,7 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{RevealActivityTab{}, false},
 		{RevokeTokenCmd{}, true},
 		{RunJobNow{}, false},
+		{SaveAgentStates{}, false},
 		{SaveDraft{}, false},
 		{SaveFilters{}, false},
 		{SaveJobCmd{}, true},
