@@ -166,6 +166,13 @@ ctl key q
 expect_panes 1
 # A quit inside the 2 s window is a clean exit too, not a startup failure.
 expect_no_kata_toast
+# With no agent waiting, the go-to-waiting palette command only toasts: no focus change, no Pane opened or closed.
+ctl state >"$tmp/waiting-before.json"
+printf 'palette "Go to the agent waiting for you"\nkey Enter\n' >"$tmp/waiting.ctl"
+ctl --file "$tmp/waiting.ctl"
+expect_toast "No agent is waiting for you"
+ctl state >"$tmp/waiting-after.json"
+jq -e --slurpfile before "$tmp/waiting-before.json" '.tabs[0].panes == $before[0].tabs[0].panes and .focused.id == $before[0].focused.id' "$tmp/waiting-after.json" >/dev/null
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
 show_issue_link() {
   command="printf '\\033[2J\\033[H\\033]8;;$1\\007Plugin link\\033]8;;\\007\\n'"
@@ -530,4 +537,4 @@ expect_toast "tern-kata plugin v$own_version is up to date"
 for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
 ctl remote disconnect loop
 jq -Rse 'contains("plugin window halves loaded count=2") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line, no plugin step and an up-to-date toast when the window plugin is already at the release\n'
+printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, the go-to-waiting command toasting with no agent waiting and moving nothing, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line, no plugin step and an up-to-date toast when the window plugin is already at the release\n'

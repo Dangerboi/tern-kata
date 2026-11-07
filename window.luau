@@ -4,6 +4,7 @@ local placement = require("./placement")
 local releases = require("./releases")
 local panecommands = require("./panecommands")
 local waitingtext = require("./waitingtext")
+local waitingagents = require("./waitingagents")
 
 -- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
 local launched: { [number]: boolean } = {}
@@ -466,6 +467,67 @@ tern.on("focus", function(ev, cx)
     openFocusedAgent(cx, ev.pane, ev.tab)
 end)
 
+-- The kata agents that wait for you. `waitOrder` numbers each agent's move into waiting (a later move, a larger number); it
+-- is empty after a plugin reload, which leaves the agents already waiting last, in Tern's order. `waitingCount` is what the
+-- status segment draws: the formatter only reads it, and it is refreshed when the count changes.
+local waitOrder: { [number]: number } = {}
+local waitStamp = 0
+local waitingCount = 0
+local GO_WAITING_ID = "go-to-waiting-agent"
+
+local function waitingPanes(cx: WindowCx, skip: number?): { number }
+    local agents: { waitingagents.Agent } = {}
+    for _, agent in cx.agents:list() do
+        table.insert(agents, {pane = agent.pane, command = agent.command, state = agent.state :: string})
+    end
+    return waitingagents.waiting(agents, waitOrder, isPromptCommand, skip)
+end
+
+local function recountWaiting(cx: WindowCx, skip: number?)
+    local count = #waitingPanes(cx, skip)
+    if count == waitingCount then return end
+    waitingCount = count
+    tern.chrome.refresh()
+end
+
+tern.chrome.status(function(_pane)
+    return waitingagents.segment(waitingCount, "plugin.tern-kata." .. GO_WAITING_ID)
+end)
+
+-- Tern's `cx.layout:focus` does not say that it raises the `focus` event, so the agent is opened here by the handler's own path
+-- (a no-op for an agent outside the hidden session) before it is focused. A parked agent is dealt into the current tab first;
+-- the agent's session is shown before the focus, as the focus handler's path does, so an agent in another session is reached.
+tern.command({
+    id = GO_WAITING_ID,
+    title = "Go to the agent waiting for you",
+    keys = {"shift+f9"},
+    run = function(cx)
+        local pane = waitingPanes(cx, nil)[1]
+        local info = if pane then cx.session:pane(pane) else nil
+        if not pane or not info then
+            cx:toast("info", "No agent is waiting for you")
+            return
+        end
+        if info.parked or not info.tab then
+            local ok, err = cx.layout:unpark(pane)
+            if not ok then
+                cx:toast("error", err or "Could not bring the waiting agent back")
+                return
+            end
+            info = cx.session:pane(pane)
+        end
+        local shown = if info then info.tab else nil
+        if not shown then return end
+        openFocusedAgent(cx, pane, shown)
+        local now = cx.session:pane(pane)
+        local tab = if now then now.tab else nil
+        for _, entry in cx.session:tabs() do
+            if entry.id == tab then cx.sessions:switch(entry.session) end
+        end
+        cx.layout:focus(pane)
+    end,
+})
+
 tern.on("tab_created", function(ev, cx)
     placeAgentTab(cx, ev.tab, PLACE_TRIES)
 end)
@@ -477,6 +539,8 @@ tern.on("pane_closed", function(ev, cx)
     end
     pending[ev.pane] = nil
     pendingSweep[ev.pane] = nil
+    waitOrder[ev.pane] = nil
+    recountWaiting(cx, ev.pane)
     relayed[ev.pane] = nil
     retrying[ev.pane] = nil
     placed[ev.pane] = nil
@@ -499,6 +563,7 @@ local function markAll(cx: WindowCx)
     restyleMarks()
     -- Agents already there were placed (or put somewhere on purpose) before this run: only later ones are moved.
     for _, agent in cx.agents:list() do placed[agent.pane] = true end
+    recountWaiting(cx, nil)
     relayAll(cx, false)
 end
 
@@ -541,6 +606,15 @@ end)
 
 -- Agents' states go to every kata Pane as they change, so its badges follow them.
 tern.on("agent_state", function(ev, cx)
+    if ev.new == "waiting_input" then
+        if ev.old ~= "waiting_input" then
+            waitStamp += 1
+            waitOrder[ev.pane] = waitStamp
+        end
+    else
+        waitOrder[ev.pane] = nil
+    end
+    recountWaiting(cx, nil)
     relayAll(cx, false)
 end)
 
