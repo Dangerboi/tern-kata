@@ -120,6 +120,9 @@ func dash(s string) string {
 // An address that holds a message its agent has not cleared is not written over. Every target is tried; the error says how many
 // were not written.
 func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, send func(model.Cmd) model.Msg, out io.Writer) error {
+	if plan.InboxUser != "" && plan.Teammate == "" {
+		return subcommandError{fmt.Errorf("this agent has no teammate name, so its message would read as the person's own; a shorter agent.toml name gives it one")}
+	}
 	text, err := model.CheckAgentMessage(plan.MessageText)
 	if err != nil {
 		return subcommandError{err}
