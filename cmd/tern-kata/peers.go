@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	agentsUsage  = "usage: tern-kata agents [--issue <ref>] [--as <actor>]"
+	agentsUsage  = "usage: tern-kata agents [--issue <ref>]"
 	messageUsage = "usage: tern-kata message <address|ref> -m <text> [--as <actor>]"
 )
 
@@ -30,16 +30,8 @@ func planAgents(args []string, lookup func(string) (string, bool)) (LaunchPlan, 
 			plan.TargetRef = value
 			continue
 		}
-		actor, matched, err := parseAs(args, &i)
-		if err != nil {
-			return LaunchPlan{}, err
-		}
-		if !matched {
-			return LaunchPlan{}, fmt.Errorf("agents: unknown flag %s", arg)
-		}
-		plan.fallbackAuthor = actor
+		return LaunchPlan{}, fmt.Errorf("agents: unknown flag %s", arg)
 	}
-	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
 	return plan, nil
 }
 
@@ -84,6 +76,9 @@ func planMessage(args []string, lookup func(string) (string, bool)) (LaunchPlan,
 	plan.Actor = resolveActor(plan.fallbackAuthor, lookup)
 	if v, ok := lookup("KATA_INBOX_USER"); ok {
 		plan.InboxUser = strings.TrimSpace(v)
+		if plan.InboxUser != "" && plan.fallbackAuthor == "" {
+			plan.Actor = model.AgentAddressActor(plan.InboxUser)
+		}
 	}
 	if v, ok := lookup("KATA_TEAMMATE"); ok {
 		plan.Teammate = strings.TrimSpace(v)
