@@ -55,6 +55,9 @@ func TestMessageTakesTheTextVerbatimAndTheSendersIdentityFromTheEnvironment(t *t
 	if plan := message(t, map[string]string{"KATA_AUTHOR": "dana"}, "-m", "hi", "dana/omp-1", "--as", "bob"); plan.TargetRef != "dana/omp-1" || plan.Actor != "bob" || plan.Teammate != "" {
 		t.Fatalf("plan %+v", plan)
 	}
+	if plan := message(t, map[string]string{"KATA_AUTHOR": "me-agent", "KATA_INBOX_USER": "dana/omp-2", "KATA_TEAMMATE": "omp-2"}, "dana/omp-1", "-m", "hi"); plan.Actor != "dana" || plan.Teammate != "omp-2" {
+		t.Fatalf("plan %+v", plan)
+	}
 	for _, args := range [][]string{{"demo#aa11"}, {"-m", "hi"}, {"a", "b", "-m", "hi"}, {"a", "-m"}, {"a", "-m", "x", "-m", "y"}, {"a", "-m", "x", "--bogus"}} {
 		if _, err := PlanLaunch(append([]string{"message"}, args...), peerEnv(nil), "test"); err == nil {
 			t.Errorf("message %v was accepted", args)
@@ -67,7 +70,7 @@ func TestAgentsTakesOnlyAnIssue(t *testing.T) {
 	if err != nil || plan.Subcommand != "agents" || plan.TargetRef != "demo#aa11" {
 		t.Fatalf("plan %+v, %v", plan, err)
 	}
-	for _, args := range [][]string{{"agents", "demo#aa11"}, {"agents", "--issue"}, {"agents", "--bogus"}} {
+	for _, args := range [][]string{{"agents", "demo#aa11"}, {"agents", "--issue"}, {"agents", "--bogus"}, {"agents", "--as", "bob"}} {
 		if _, err := PlanLaunch(args, peerEnv(nil), "test"); err == nil {
 			t.Errorf("%v was accepted", args)
 		}

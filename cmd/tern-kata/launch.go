@@ -541,7 +541,7 @@ Usage:
   tern-kata worker resume <job-uid>
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
-  tern-kata agents [--issue <ref>] [--as <actor>]
+  tern-kata agents [--issue <ref>]
   tern-kata message <address|ref> -m <text> [--as <actor>]
   tern-kata docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
   tern-kata docbank supervise on|off
