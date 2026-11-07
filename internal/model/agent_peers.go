@@ -100,6 +100,3 @@ func MessageTargets(running []IssueAgent, to, own string) ([]IssueAgent, error) 
 	}
 	return nil, fmt.Errorf("no running agent at or on %q; `tern-kata agents` lists them", to)
 }
-
-// AgentAddressActor is the actor an Agent address names, whose messages its agent acts on.
-func AgentAddressActor(address string) string { return addressActor(address) }

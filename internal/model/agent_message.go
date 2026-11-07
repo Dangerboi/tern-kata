@@ -146,7 +146,7 @@ func (m Model) newestAgentOn(issueUID string, match func(AgentEntry) bool) (Agen
 		if e.IssueUID != issueUID || !match(e) {
 			continue
 		}
-		if e.Address != "" && addressActor(e.Address) != m.Actor {
+		if e.Address != "" && AgentAddressActor(e.Address) != m.Actor {
 			continue
 		}
 		waits := agentWaiting(m.Agents.States, e.Block)
@@ -167,14 +167,14 @@ func (m Model) agentMessageRefusal(e AgentEntry) string {
 		return AgentNotOmpRefusal
 	case e.Address == "":
 		return AgentWithoutAddressRefusal
-	case addressActor(e.Address) != m.Actor:
+	case AgentAddressActor(e.Address) != m.Actor:
 		return AgentOtherActorRefusal
 	}
 	return ""
 }
 
-// addressActor is the actor an Agent address names: everything before its last "/", "" when it has none.
-func addressActor(address string) string {
+// AgentAddressActor is the actor an Agent address names, whose messages its agent acts on: everything before its last "/", "" when it has none.
+func AgentAddressActor(address string) string {
 	i := strings.LastIndex(address, "/")
 	if i < 0 {
 		return ""
@@ -227,7 +227,10 @@ func askAgentAboutComment(m Model) (Model, []Cmd) {
 	if m.tab != TabComments || !ok || row.Kind != RowComment || issue == nil {
 		return m, nil
 	}
-	target, found := m.newestAgentOn(issue.UID, func(AgentEntry) bool { return true })
+	target, found := m.newestAgentOn(issue.UID, func(e AgentEntry) bool { return m.agentMessageRefusal(e) == "" })
+	if !found {
+		target, found = m.newestAgentOn(issue.UID, func(AgentEntry) bool { return true })
+	}
 	reason := NoAgentOnIssueRefusal
 	if found {
 		reason = m.agentMessageRefusal(target)
