@@ -3,6 +3,7 @@ package docbanksetup
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -58,8 +59,11 @@ func TestSetSupervisionCreatesAndRemovesThePrivateMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(e.ManualPath())
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("marker: %v, %v", info, err)
+	if err != nil {
+		t.Fatalf("marker: %v", err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 { // Windows reports every file as 0666: it has no mode bits to set
+		t.Fatalf("marker mode %v, want 0600", info.Mode().Perm())
 	}
 	if err := e.SetSupervision(false); err != nil {
 		t.Errorf("a second off: %v", err)

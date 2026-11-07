@@ -355,6 +355,18 @@ func (s *Store) ClosingRun(projectUID, jobUID string) string {
 	return first
 }
 
+// readRuns lists the runs folder. Windows reports a file standing where the folder belongs as "path not found",
+// which reads as an absent folder, so a listing that claims absence is checked against RunsReadable.
+func (s *Store) readRuns() ([]os.DirEntry, error) {
+	entries, err := os.ReadDir(s.dirs.Runs())
+	if errors.Is(err, fs.ErrNotExist) {
+		if rerr := s.RunsReadable(); rerr != nil {
+			return nil, rerr
+		}
+	}
+	return entries, err
+}
+
 // RunsReadable says whether the runs folder can be listed; a missing folder holds no runs and reads fine.
 func (s *Store) RunsReadable() error {
 	info, err := os.Stat(s.dirs.Runs())
@@ -524,7 +536,7 @@ func renameInDir(dir, from, to string) error {
 // uid from then on (ADR-0006); the uids moved are returned. A run that fails for any other reason stays in place and
 // is named in err, but the journals that could be read are still returned: one bad run must not blind every caller.
 func (s *Store) Scan() (journals []*Journal, quarantined []string, err error) {
-	entries, rerr := os.ReadDir(s.dirs.Runs())
+	entries, rerr := s.readRuns()
 	if errors.Is(rerr, fs.ErrNotExist) {
 		return nil, nil, nil
 	}
@@ -651,7 +663,7 @@ func (s *Store) Acknowledged(uid string) (by string, ok bool) {
 // A held run, one with an unsent write and one still in flight stay, and so does a journal it cannot read (startup
 // recovery owns quarantine). The removed runs' mutexes are retired with them.
 func (s *Store) Retain(cutoff time.Time) (removed []string, err error) {
-	entries, err := os.ReadDir(s.dirs.Runs())
+	entries, err := s.readRuns()
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

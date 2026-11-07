@@ -52,6 +52,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - The Delete card's reason is no longer lost: kata's delete records none, so the Pane adds it to the Issue as a `Deleted: <reason>` comment just before the delete, and deletes nothing when that comment fails.
 
+#### Jobs and worker
+
+- On Windows, a worker whose runs folder is a file instead of a folder refuses work and says why, as on Linux and macOS; it used to read the file as no runs and go on.
+
 #### Tern window
 
 - On Windows, the programs tern-kata runs in the background (`tern` opening a run's session tab, `git config user.name`, docbank setup, the update steps and the file opener) start without a console window, so none flashes up.

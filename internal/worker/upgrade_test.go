@@ -9,14 +9,10 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker/workertest"
 )
 
-const upgradeTail = `# keep me
-[checkouts]
-repo = "/tmp/repo" # and me
-[profiles.default]
-command = "omp"
-[secrets]
-token = { env = "TK_UPGRADE_TOKEN" }
-`
+// upgradeTail is the config's tail; its checkout is a real folder, as a path must be absolute on every OS.
+func upgradeTail(t *testing.T) string {
+	return "# keep me\n[checkouts]\nrepo = '" + t.TempDir() + "' # and me\n[profiles.default]\ncommand = \"omp\"\n[secrets]\ntoken = { env = \"TK_UPGRADE_TOKEN\" }\n"
+}
 
 // upgraded runs Upgrade on text against the daemon, the config being text itself as the loader reads it.
 func upgraded(t *testing.T, d *workertest.Daemon, text string) (string, []string, error) {
@@ -37,7 +33,7 @@ func TestUpgradeAddsWhatTheJobsUseToThatProjectsTableOnly(t *testing.T) {
 	d.CreateJob(t, demo, workertest.Job{Name: "builds", Workflow: wf.UID})
 	d.CreateJob(t, other, workertest.Job{Name: "plain", Prompt: "Do it."})
 
-	text := "executor = \"laptop\"\n[[projects]]\nname = \"demo\" # the one\ncapacity = 2\n\n# a comment\n[[projects]]\nname = 'other'\n" + upgradeTail
+	text := "executor = \"laptop\"\n[[projects]]\nname = \"demo\" # the one\ncapacity = 2\n\n# a comment\n[[projects]]\nname = 'other'\n" + upgradeTail(t)
 	got, report, err := upgraded(t, d, text)
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +59,7 @@ func TestUpgradeIgnoresAJobKeyedToAnotherAdapter(t *testing.T) {
 	d.CreateJob(t, demo, workertest.Job{Name: "theirs", Workflow: wf.UID, Adapter: "herdr-kata", Secrets: map[string]string{"OTHER": "other"}})
 	d.CreateJob(t, demo, workertest.Job{Name: "ours", Prompt: "Do it.", Adapter: "tern-kata", Secrets: map[string]string{"TOKEN": "token"}})
 
-	text := "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n" + upgradeTail + "other = { env = \"TK_UPGRADE_OTHER\" }\n"
+	text := "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n" + upgradeTail(t) + "other = { env = \"TK_UPGRADE_OTHER\" }\n"
 	got, report, err := upgraded(t, d, text)
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +80,7 @@ func TestUpgradeLeavesAKeyTheUserWroteAndReportsTheNeed(t *testing.T) {
 	d.CreateJob(t, demo, workertest.Job{Name: "uses secret", Prompt: "Do it.", Secrets: map[string]string{"TOKEN": "token"}})
 	d.CreateJob(t, demo, workertest.Job{Name: "builds", Workflow: wf.UID})
 
-	text := "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\nsecrets = []\ncommands = false\n" + upgradeTail
+	text := "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\nsecrets = []\ncommands = false\n" + upgradeTail(t)
 	got, report, err := upgraded(t, d, text)
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +98,7 @@ func TestUpgradeReportsASecretWorkerTomlDoesNotDefineAndAddsNothingForIt(t *test
 	demo := d.Project(t, "demo")
 	d.CreateJob(t, demo, workertest.Job{Name: "uses secret", Prompt: "Do it.", Secrets: map[string]string{"TOKEN": "undefined"}})
 
-	text := "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n" + upgradeTail
+	text := "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n" + upgradeTail(t)
 	got, report, err := upgraded(t, d, text)
 	if err != nil {
 		t.Fatal(err)
@@ -116,11 +112,11 @@ func TestUpgradeWritesNothingWhenAProjectCannotBeResolvedOrWhenProjectsAreInline
 	d := workertest.StartKata(t)
 	d.Project(t, "demo")
 
-	_, _, err := upgraded(t, d, "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n[[projects]]\nname = \"ghost\"\n"+upgradeTail)
+	_, _, err := upgraded(t, d, "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n[[projects]]\nname = \"ghost\"\n"+upgradeTail(t))
 	if err == nil || !strings.Contains(err.Error(), "ghost") {
 		t.Fatalf("error %v, want one naming the Project kata does not have", err)
 	}
-	_, _, err = upgraded(t, d, "executor = \"laptop\"\nprojects = [{ name = \"demo\" }]\n"+upgradeTail)
+	_, _, err = upgraded(t, d, "executor = \"laptop\"\nprojects = [{ name = \"demo\" }]\n"+upgradeTail(t))
 	if err == nil || !strings.Contains(err.Error(), "by hand") {
 		t.Fatalf("error %v, want a refusal to edit by hand", err)
 	}
@@ -129,7 +125,7 @@ func TestUpgradeWritesNothingWhenAProjectCannotBeResolvedOrWhenProjectsAreInline
 func TestDoctorSuggestsUpgradeOnlyWhenJobsAreSetAsideForUnlistedSecretsOrCommands(t *testing.T) {
 	d := workertest.StartKata(t)
 	demo := d.Project(t, "demo")
-	dirs := workertest.WriteConfig(t, "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n"+upgradeTail)
+	dirs := workertest.WriteConfig(t, "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n"+upgradeTail(t))
 
 	doctor := func() string {
 		return worker.Doctor(context.Background(), worker.DoctorOptions{Dirs: dirs, Kata: d.Kata}).String()
@@ -147,7 +143,7 @@ func TestDoctorSuggestsUpgradeOnlyWhenJobsAreSetAsideForUnlistedSecretsOrCommand
 func TestDoctorSuggestsUpgradeForACommandStepInAProjectWithoutCommands(t *testing.T) {
 	d := workertest.StartKata(t)
 	demo := d.Project(t, "demo")
-	dirs := workertest.WriteConfig(t, "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n"+upgradeTail)
+	dirs := workertest.WriteConfig(t, "executor = \"laptop\"\n[[projects]]\nname = \"demo\"\n"+upgradeTail(t))
 	wf := d.CreateWorkflow(t, demo, "build", workertest.Step{Key: "make", Command: "make"})
 	d.CreateJob(t, demo, workertest.Job{Name: "builds", Workflow: wf.UID})
 

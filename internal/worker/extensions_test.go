@@ -274,7 +274,7 @@ func TestDoctorDoesNotWarnForAProfileWhoseArgsDisableDiscovery(t *testing.T) {
 
 func TestAnExtensionsListWithExtensionArgsIsRefusedWithTheProfilesName(t *testing.T) {
 	for _, arg := range []string{"'-e', '/x.ts'", "'--extension', '/x.ts'", "'--extension=/x.ts'", "'--hook', '/x.ts'"} {
-		_, err := load(t, "executor = \"laptop\"\n[profiles.default]\n[profiles.worker]\nextensions = ['/abs/k.ts']\nargs = ["+arg+"]\n")
+		_, err := load(t, "executor = \"laptop\"\n[profiles.default]\n[profiles.worker]\nextensions = ['"+filepath.Join(t.TempDir(), "k.ts")+"']\nargs = ["+arg+"]\n")
 		if err == nil || !strings.Contains(err.Error(), "profiles.worker: extensions") || !strings.Contains(err.Error(), "--hook") {
 			t.Fatalf("args %s: error %v, want one naming profiles.worker", arg, err)
 		}
