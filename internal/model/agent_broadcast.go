@@ -23,10 +23,13 @@ const (
 // message was not written to it, "" while it is to be or was written; Answered says kata answered the write.
 type BroadcastTarget struct {
 	Agent, Address     string
+	Block              string
 	IssueUID, IssueRef string
 	ProjectID          int64
 	Skipped            string
 	Answered           bool
+	// Worked says a sweep saw the agent working after the wrap-up reached it, so an idle agent now has done the wrap-up.
+	Worked bool
 }
 
 // BroadcastTargets are the agents a broadcast on the Issue uid (qualified id ref) goes through: those this Pane knows on it and
@@ -43,10 +46,14 @@ func (m Model) BroadcastTargets(uid, ref string) []BroadcastTarget {
 		if !ok || agentExited(m.Agents.States, e.Block) {
 			continue
 		}
-		targets = append(targets, BroadcastTarget{Agent: e.Teammate, Address: e.Address, IssueUID: e.IssueUID, IssueRef: issueRef,
-			ProjectID: m.projectOf(e), Skipped: m.agentMessageRefusal(e)})
+		targets = append(targets, m.broadcastTarget(e, issueRef))
 	}
 	return targets
+}
+
+func (m Model) broadcastTarget(e AgentEntry, issueRef string) BroadcastTarget {
+	return BroadcastTarget{Agent: e.Teammate, Address: e.Address, Block: e.Block, IssueUID: e.IssueUID, IssueRef: issueRef,
+		ProjectID: m.projectOf(e), Skipped: m.agentMessageRefusal(e)}
 }
 
 // openAgentBroadcast is `S`: the Message card for the agents of the selected Issue and its open children, or the reason there is
@@ -71,8 +78,14 @@ func sendAgentBroadcast(m Model) (Model, []Cmd) {
 	if !ok {
 		return m, nil
 	}
+	return writeBroadcast(m, m.BroadcastTargets(m.AgentMessage.IssueUID, m.AgentMessage.IssueRef), text)
+}
+
+// writeBroadcast writes text to each of targets that can take it; the card shows the outcome once every write has answered, at
+// once when none is to be written.
+func writeBroadcast(m Model, targets []BroadcastTarget, text string) (Model, []Cmd) {
 	f := &m.AgentMessage
-	f.Targets = m.BroadcastTargets(f.IssueUID, f.IssueRef)
+	f.Targets = targets
 	f.Err = nil
 	var cmds []Cmd
 	for _, t := range f.Targets {
@@ -102,6 +115,8 @@ func broadcastSent(m Model, msg AgentMessageSent) Model {
 		targets[i].Skipped = fmt.Sprintf("The message could not be written: %s", msg.Err)
 	case msg.Held != "":
 		targets[i].Skipped = AgentHoldsMessageRefusal
+	default:
+		targets[i].Worked = m.agentState(targets[i].Block) == AgentWorking
 	}
 	f.Targets = targets
 	if !slices.ContainsFunc(targets, func(t BroadcastTarget) bool { return t.Skipped == "" && !t.Answered }) {

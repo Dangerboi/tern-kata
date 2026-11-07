@@ -442,6 +442,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = msg.Err
 	case AgentStatesMsg:
 		m, cmds := relayAgents(m, msg)
+		m = trackSweep(m)
 		m, back := sendAgentsBack(m)
 		m, flagged := followAgents(m, m.Agents.listedStates())
 		m, raised := raiseAgentAttention(m, true)
@@ -480,6 +481,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		switch msg.Action {
 		case SelectIssueAction:
 			return openIssue(m, msg.Value)
+		case WrapUpSweepAction:
+			return sweepAgents(m)
 		case ToggleExpansion:
 			return toggleRow(m, msg.Value)
 		case OpenRow:

@@ -44,6 +44,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - After `pause_after_failures` runs of one job in a row recorded `failed` (default 3, set under `[limits]` in `worker.toml`, 0 turns pausing off) the worker admits no more of its runs until you resume it; timeouts count, held runs and cancelled runs don't, and a succeeded run starts the count again.
   - The pause lives in the worker's own state, so kata's job is not changed and other machines keep their own counts. `tern-kata worker status` and the Jobs Page name it ("paused: failed runs"); `u` on the Jobs Page, or `tern-kata worker resume <job>` on a host with no Pane, resumes the job.
 
+#### Tern window
+
+- **Wrap up every running agent** in the palette sends "wrap up: commit what you have and comment your status" to every running agent this host's Panes started, on whatever Issue each runs, and lists who has finished.
+  - It writes the way `S` does: an agent holding an unread message is skipped, never replaced, and an agent it cannot reach (not omp, started before agents had an address, another actor's) is listed with the reason.
+  - The card follows each agent: finished once it exited, or went idle after working on the wrap-up; "not yet" otherwise, with the agent's last message.
+
 ### Changed
 
 #### Agents
