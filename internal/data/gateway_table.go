@@ -713,7 +713,7 @@ func init() {
 			return ok(c.SendAgentMessage(ctx, cmd))
 		},
 		func(cmd model.SendAgentMessage, err error) model.Msg {
-			return model.AgentMessageSent{UID: cmd.UID, Err: err}
+			return model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address, Err: err}
 		},
 		nil, nil)
 

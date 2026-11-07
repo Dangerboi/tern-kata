@@ -318,6 +318,9 @@ var cardBindings = []Binding{
 	{Chord: "escape", Key: "esc", Action: AgentMessageCancel, Help: "cancel", Mode: ModeAgentMessage, ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: AgentMessageReplace, Help: "replace it", Mode: ModeAgentMessageReplace, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentMessageKeep, Help: "keep editing", Mode: ModeAgentMessageReplace, ShowInFooter: true},
+	// Broadcast outcome: who the message reached and who it skipped; either key closes the card.
+	{Chord: "enter", Key: "enter", Action: AgentMessageCancel, Help: "close", Mode: ModeAgentBroadcastOutcome, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: AgentMessageCancel, Help: "close", Mode: ModeAgentBroadcastOutcome},
 	// Quick-reply picker: 1, 2 or 3 sends that canned message through the Message card's send.
 	{Chord: "1", Key: "1", Action: AgentQuickReplyOne, Help: "continue", Mode: ModeAgentQuickReply, ShowInFooter: true},
 	{Chord: "2", Key: "2", Action: AgentQuickReplyTwo, Help: "wrap up", Mode: ModeAgentQuickReply, ShowInFooter: true},

@@ -138,14 +138,14 @@ func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessag
 	for range guardedAttempts {
 		_, err := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, value, expect)
 		if daemonCode(err) != "metadata_guard_failed" {
-			return model.AgentMessageSent{UID: cmd.UID}, daemonError(err)
+			return model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address}, daemonError(err)
 		}
 		raw, held, err := c.readSlot(ctx, cmd.ProjectID, cmd.UID, key)
 		if err != nil {
-			return model.AgentMessageSent{UID: cmd.UID}, err
+			return model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address}, err
 		}
 		if held && (expect == nil || raw != *expect) {
-			sent := model.AgentMessageSent{UID: cmd.UID, Held: raw}
+			sent := model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address, Held: raw}
 			if slot, err := model.ReadNotificationSlot(key, raw); err == nil {
 				sent.Unread = slot.Message
 			}
@@ -156,7 +156,7 @@ func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessag
 			expect = &raw
 		}
 	}
-	return model.AgentMessageSent{UID: cmd.UID}, errors.New("what kata holds for the agent kept changing; send the message again")
+	return model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address}, errors.New("what kata holds for the agent kept changing; send the message again")
 }
 
 // ClearAgentAddress removes whatever is left at an exited agent's Agent address on an Issue, whoever wrote it: nobody reads that

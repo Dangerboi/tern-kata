@@ -22,6 +22,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - It has the same refusals as `m` and asks the same question before replacing an unread message.
   - The replies are "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold".
 
+- `S` on an Issue messages every running agent on it and on its open children from one Message card.
+  - Each agent gets the message at its own address on its own Issue; agents on closed children and exited agents get none.
+  - An agent that has not cleared its last message is skipped, never replaced; once every write has answered the card lists how many got it and each skipped agent with its reason.
+
 #### Issues and Pages
 
 - `u` on the Attention Page restores the Issue the Pane just deleted, as `u` does on the other Pages, and the Page reads its requests again; it is offered there only while a delete is the newest change in the undo history.
