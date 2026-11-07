@@ -195,6 +195,20 @@ func TestAskingTheAgentAboutACommentSendsTheMessageNamingItsHandle(t *testing.T)
 	}
 }
 
+func TestAskingAboutACommentPassesOverANewerAgentThatCannotBeMessaged(t *testing.T) {
+	older, newer := ompAgent, ompAgent
+	newer.Block, newer.Address, newer.StartedAt = "32", "dana/omp-32", ompAgent.StartedAt.Add(time.Minute)
+	s := step(t, commentPane(t, older, newer), model.AgentStatesMsg{States: []model.AgentState{{Block: "31", State: model.AgentIdle}, {Block: "32", State: model.AgentExited}}}).State
+	open := step(t, s, key("m"))
+	if m := open.State.Model; m.TopCard() != model.CardAgentMessage || m.AgentMessage.Address != "dana/omp-31" {
+		t.Fatalf("card %v address %q notice %q, want the Message card for dana/omp-31", m.TopCard(), m.AgentMessage.Address, m.Notice)
+	}
+	sending := step(t, step(t, open.State, tern.Key{Text: "still true?"}).State, key("enter"))
+	if got := sentMessage(t, sending.Cmds); got.Address != "dana/omp-31" {
+		t.Fatalf("sent to %q, want dana/omp-31", got.Address)
+	}
+}
+
 func TestAskingAboutACommentWithoutAnAgentThatCanBeMessagedOnlySaysWhy(t *testing.T) {
 	other := ompAgent
 	other.IssueUID = "other-bb22"
