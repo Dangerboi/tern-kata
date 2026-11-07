@@ -29,10 +29,11 @@ func broadcastPane(t *testing.T, states []model.AgentState, agents ...model.Agen
 		{ID: 1, Type: "parent", FromIssueUID: "c1", FromQualifiedID: "work#c1", FromStatus: "open", ToIssueUID: "p", ToQualifiedID: "work#p", ToStatus: "open"},
 		{ID: 2, Type: "parent", FromIssueUID: "c2", FromQualifiedID: "work#c2", FromStatus: "closed", ToIssueUID: "p", ToQualifiedID: "work#p", ToStatus: "open"},
 	})
-	s.Model.AgentMapping = agents
-	if states != nil {
-		s = step(t, s, model.AgentStatesMsg{States: states}).State
+	s = step(t, s, model.AgentsPruned{Agents: agents}).State
+	if states == nil {
+		states = []model.AgentState{}
 	}
+	s = step(t, s, model.AgentStatesMsg{States: states}).State
 	return s
 }
 
