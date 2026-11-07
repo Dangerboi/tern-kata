@@ -30,22 +30,24 @@ The agent is told which Issue to work on and how to leave a record: claim it for
 actor = "me-agent"        # optional; without one the agent writes to kata as whoever kata resolves in its shell (KATA_AUTHOR as inherited)
 name = "builder"          # optional; the teammate its Attention requests carry, default the command's program name
 command = ["omp"]         # optional argv; the Pane appends @<prompt file>, so it must accept omp's @file message
+forward_comments = true   # optional, default false; tell the agent of a person's comment on its Issue (see Comments from people)
 [projects.tern-kata]      # optional, by Project name; overrides the values above
 actor = "..."
 name = "..."
 command = ["omp", "--model", "opus"]
+forward_comments = false   # a boolean; overrides the top-level value for this Project
 checkout = "/home/me/Code/tern-kata"   # an absolute directory
 ```
 
-An unknown key, a relative `checkout` or an empty `command` refuses the start and shows the error. The Pane remembers the agents it started in `agents.json` in its state folder and forgets the ones whose block has closed.
+An unknown key, a `forward_comments` that is not a boolean, a relative `checkout` or an empty `command` refuses the start and shows the error. The Pane remembers the agents it started in `agents.json` in its state folder and forgets the ones whose block has closed.
 
 ### How the agent runs
 
-The agent always runs through `tern-kata agent [--as <actor>] [--address-prefix <actor>/<name>] --ref <qualified ref> --`. For a daemon other than the default one, the Pane also passes the route flags it needs to reach that daemon: `--home`, `--db`, `--schema`, `--dsn-file`, `--env-file`, `--daemon`, `--server`, `--token-file`, `--auth-file`, `--allow-insecure` and `--trust-private-network`, each only when it has a value. No flag holds a secret: a token or DSN goes through a private file the wrapper reads and deletes. The wrapper:
+The agent always runs through `tern-kata agent [--as <actor>] [--address-prefix <actor>/<name> [--forward-comments]] --ref <qualified ref> --`. For a daemon other than the default one, the Pane also passes the route flags it needs to reach that daemon: `--home`, `--db`, `--schema`, `--dsn-file`, `--env-file`, `--daemon`, `--server`, `--token-file`, `--auth-file`, `--allow-insecure` and `--trust-private-network`, each only when it has a value. No flag holds a secret: a token or DSN goes through a private file the wrapper reads and deletes. The wrapper:
 
 - sets `KATA_REF` to the Issue, so kata-plugin's todo plan hangs under it, and drops an inherited `KATA_REF`, `KATA_INBOX_USER` and `KATA_TEAMMATE` (your own inbox and teammate name are not the agent's);
 - sets `KATA_AUTHOR` when there is an `actor`, and otherwise leaves `KATA_AUTHOR` as inherited;
-- for an omp agent (the Pane passes `--address-prefix`), sets `KATA_INBOX_USER` to the agent's own address, `<your actor>/<agent.toml name>-<block id>` (the block id from `TERN_PANE`), `KATA_TEAMMATE` to `<agent.toml name>-<block id>` (so the agent's comments and requests carry its own teammate name; left unset when kata would refuse the name, for instance over 64 bytes), and `KATA_OMP_LIVE_INBOX=0`, and omp loads tern-kata's extension with `-e`, or with `--trusted-extension` when the agent's args hold one (see [Messages to an agent](#messages-to-an-agent)).
+- for an omp agent (the Pane passes `--address-prefix`), sets `TERN_KATA_FORWARD_COMMENTS=1` when the Pane passed `--forward-comments`, `KATA_INBOX_USER` to the agent's own address, `<your actor>/<agent.toml name>-<block id>` (the block id from `TERN_PANE`), `KATA_TEAMMATE` to `<agent.toml name>-<block id>` (so the agent's comments and requests carry its own teammate name; left unset when kata would refuse the name, for instance over 64 bytes), and `KATA_OMP_LIVE_INBOX=0`, and omp loads tern-kata's extension with `-e`, or with `--trusted-extension` when the agent's args hold one (see [Messages to an agent](#messages-to-an-agent)).
 
 `tern-kata` must be on the `PATH` of Tern's shell on that machine, and must be this version: an older one refuses `--ref` or `--address-prefix` and the agent exits at once.
 
@@ -120,6 +122,15 @@ When an Issue that blocks an agent's Issue closes, the agent is told, with no on
 - **Only the agent's own Project**: the extension follows the events of the Project its Issue is in, so a blocker in another Project sends nothing.
 - **Only closes after the agent started**: a close that happened before is not sent, and a close the agent missed while its stream was down is sent once it is back. An Issue closed, reopened and closed again sends each close.
 - **Which agents**: the omp agents the Pane starts, as for messages; worker runs receive none.
+
+### Comments from people
+
+With `forward_comments = true` in `agent.toml` for the agent's name (top level or in a `[projects.<name>]` table), a comment a person leaves on the agent's Issue is delivered to the running agent, with no one writing a message and with the Pane closed. The text is "New comment on <ref> from <author>: <first lines> (c:<comment UID>)": the first 3 lines of the comment, at most 400 characters, and the comment's UID, which the agent passes to `kata comment --reply`. The Pane starts the agent with `--forward-comments`, which sets `TERN_KATA_FORWARD_COMMENTS=1` for the extension; without the key the extension forwards nothing.
+
+- **Only people's comments**: a comment with a teammate is an agent's, since every agent the Pane starts writes with `KATA_TEAMMATE`, so the agent's own comments and other agents' are not delivered.
+- **Only the agent's own Issue**: comments on other Issues send nothing.
+- **Only comments after the agent started**: an older comment is not sent, and one the agent missed while its stream was down is sent once it is back.
+- **Which agents**: the omp agents the Pane starts; an agent started before you set the key keeps its old setting.
 
 ### Transcript links on closes
 

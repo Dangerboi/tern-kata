@@ -1,6 +1,6 @@
 // tern-kata's omp extension: delivers kata notification slots written for this
 // agent (from tern-kata's Attention Page) to the running omp session as user messages,
-// tells the agent when an Issue that blocks its own closes,
+// tells the agent when an Issue that blocks its own closes and, when the Pane opted in, when a person comments on its Issue,
 // and names the session to `kata close` so a close carries a transcript reference.
 
 import { renameSync, rmSync, writeFileSync } from "node:fs";
@@ -18,6 +18,8 @@ export interface FollowerDeps {
   project: string;
   /** The agent's Issue, qualified (`project#short id`). */
   ref: string;
+  /** Deliver a person's comment on the agent's Issue (TERN_KATA_FORWARD_COMMENTS=1); off when absent. */
+  forwardComments?: boolean;
   /** Starts a long-running kata command; args exclude "kata". */
   spawn(args: string[]): Spawned;
   /** Runs a one-shot kata command; args exclude "kata". */
@@ -53,6 +55,7 @@ export interface Config {
   address: string;
   project: string;
   ref: string;
+  forwardComments?: boolean;
 }
 
 /** A stream event other than a slot write, with the fields reactions read. */
@@ -93,14 +96,14 @@ export function trustedSender(address: string): string | undefined {
   return i > 0 ? address.slice(0, i) : undefined;
 }
 
-/** Reads KATA_INBOX_USER and KATA_REF; undefined means the extension must do nothing. */
+/** Reads KATA_INBOX_USER and KATA_REF, and TERN_KATA_FORWARD_COMMENTS; undefined means the extension must do nothing. */
 export function readConfig(env: Record<string, string | undefined>): Config | undefined {
   const address = (env.KATA_INBOX_USER ?? "").trim();
   const ref = (env.KATA_REF ?? "").trim();
   const hash = ref.indexOf("#");
   const project = hash > 0 ? ref.slice(0, hash).trim() : "";
   if (address === "" || project === "" || trustedSender(address) === undefined) return undefined;
-  return { address, project, ref };
+  return { address, project, ref, forwardComments: env.TERN_KATA_FORWARD_COMMENTS === "1" || undefined };
 }
 
 function asRecord(v: unknown): Record<string, unknown> | undefined {
@@ -204,6 +207,17 @@ export function parseTitle(stdout: string): string | undefined {
   }
 }
 
+const COMMENT_EXCERPT_LINES = 3;
+const COMMENT_EXCERPT_CHARS = 400;
+
+/** Builds the user message for a person's comment: the first lines of its body, bounded, and the UID `kata comment --reply` takes. */
+export function commentText(ref: string, author: string, body: string, uid: string): string {
+  let excerpt = body.trim().split("\n").slice(0, COMMENT_EXCERPT_LINES).join("\n");
+  if (excerpt.length > COMMENT_EXCERPT_CHARS) excerpt = excerpt.slice(0, COMMENT_EXCERPT_CHARS).trimEnd() + "…";
+  else if (body.trim() !== excerpt) excerpt += "\n…";
+  return `New comment on ${ref} from ${author}: ${excerpt} (c:${uid})`;
+}
+
 /** Builds the user message for a closed blocker; `remaining` is the number of the Issue's other blockers still open, when known. */
 export function blockerClosedText(blocker: string, title: string | undefined, ref: string, remaining: number | undefined): string {
   const parts = [`${blocker} closed${title ? `: ${title}` : ""}.`, `${ref} may be unblocked.`];
@@ -274,6 +288,7 @@ export function createFollower(deps: FollowerDeps): Follower {
   const reactions: Record<string, (event: KataEvent, gen: number) => Promise<void>> = {
     "issue.closed": onClosed,
     "issue.links_changed": onLinksChanged,
+    ...(deps.forwardComments ? { "issue.commented": onCommented } : {}),
   };
   const reactionTypes = Object.keys(reactions);
   const shortId = deps.ref.slice(deps.ref.indexOf("#") + 1);
@@ -317,6 +332,15 @@ export function createFollower(deps: FollowerDeps): Follower {
     if (gen !== generation) return;
     const remaining = mine?.filter((b) => b.open && b.ref !== event.ref).length;
     deps.deliver(blockerClosedText(event.ref, theirs === undefined ? undefined : parseTitle(theirs), deps.ref, remaining));
+  }
+
+  // A comment with a teammate is an agent's (every Pane-started agent writes with KATA_TEAMMATE), so only a person's is delivered.
+  async function onCommented(event: KataEvent): Promise<void> {
+    if (event.ref !== deps.ref || optionalText(event.payload.teammate) !== undefined) return;
+    const uid = optionalText(event.payload.comment_uid);
+    const body = event.payload.body;
+    if (uid === undefined || typeof body !== "string" || body.trim() === "") return;
+    deps.deliver(commentText(deps.ref, optionalText(event.payload.author) ?? "someone", body, uid));
   }
 
   // react acts on an event created after the follower started, once per event id.

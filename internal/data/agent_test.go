@@ -1386,6 +1386,41 @@ func TestRefreshingDoesNotAdoptAnAgentFromAListingThatBeganBeforeItsPaneOpened(t
 	}
 }
 
+func TestAgentConfigForwardCommentsIsOffUnlessSet(t *testing.T) {
+	cfg, err := ReadAgentConfig(writeAgentFile(t, filepath.Join(t.TempDir(), "agent.toml"), "forward_comments = true\n[projects.quiet]\nforward_comments = false\n[projects.loud]\nname = \"x\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for project, want := range map[string]bool{"other": true, "quiet": false, "loud": true} {
+		if got := cfg.For(project).ForwardComments; got != want {
+			t.Errorf("forward_comments for %s = %v, want %v", project, got, want)
+		}
+	}
+	off, err := ReadAgentConfig(writeAgentFile(t, filepath.Join(t.TempDir(), "agent.toml"), "[projects.on]\nforward_comments = true\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if off.For("other").ForwardComments || !off.For("on").ForwardComments {
+		t.Errorf("default %v, project table %v; want off, on", off.For("other").ForwardComments, off.For("on").ForwardComments)
+	}
+	if _, err := ReadAgentConfig(writeAgentFile(t, filepath.Join(t.TempDir(), "agent.toml"), "forward_comments = \"yes\"\n")); err == nil {
+		t.Error("a non-boolean forward_comments was accepted")
+	}
+}
+
+func TestAgentCommandLinePassesForwardCommentsOnlyWithAnAddress(t *testing.T) {
+	on := AgentCommandLine("me", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", ForwardComments: true}, AgentRoute{}, []string{"omp"}, "/p.md")
+	if want := []string{"tern-kata", "agent", "--as", "me", "--address-prefix", "dana/omp", "--forward-comments", "--ref", "demo#ab12", "--", "omp", "@/p.md"}; !slices.Equal(on, want) {
+		t.Errorf("on: %q, want %q", on, want)
+	}
+	if line := AgentCommandLine("me", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp"}, AgentRoute{}, []string{"omp"}, "/p.md"); slices.Contains(line, "--forward-comments") {
+		t.Errorf("off: %q holds --forward-comments", line)
+	}
+	if line := AgentCommandLine("me", "demo#ab12", AgentMessaging{ForwardComments: true}, AgentRoute{}, []string{"codex"}, "/p.md"); slices.Contains(line, "--forward-comments") {
+		t.Errorf("no address: %q holds --forward-comments", line)
+	}
+}
+
 func TestAgentTomlNameIsTheTeammateAndDefaultsToTheProgram(t *testing.T) {
 	unset, err := ReadAgentConfig(filepath.Join(t.TempDir(), "missing.toml"))
 	if err != nil {

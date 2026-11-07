@@ -66,7 +66,8 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 // KATA_REF set to plan.AgentRef when it is not empty. An Agent address prefix (the agent loads tern-kata's omp extension) sets
 // KATA_OMP_LIVE_INBOX=0, so kata-omp leaves live delivery to the extension, and in a block KATA_INBOX_USER to the agent's Agent
 // address, from the block id in TERN_PANE, and KATA_TEAMMATE to <name>-<block id>, so its comments and requests carry its own
-// teammate name; a name kata would refuse leaves KATA_TEAMMATE unset.
+// teammate name; a name kata would refuse leaves KATA_TEAMMATE unset. plan.AgentForwardComments with the prefix sets
+// TERN_KATA_FORWARD_COMMENTS=1, which the extension reads; an inherited value is dropped.
 func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string {
 	dropped := []string{"KATA_REF", "KATA_INBOX_USER", "KATA_TEAMMATE"}
 	if plan.Actor != "" {
@@ -74,7 +75,7 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 	}
 	block := ""
 	if plan.AgentAddressPrefix != "" {
-		dropped = append(dropped, "KATA_OMP_LIVE_INBOX")
+		dropped = append(dropped, "KATA_OMP_LIVE_INBOX", "TERN_KATA_FORWARD_COMMENTS")
 		block = strings.TrimSpace(envValue(environ, "TERN_PANE", caseInsensitive))
 	}
 	env := envWithout(environ, caseInsensitive, dropped...)
@@ -86,6 +87,9 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 	}
 	if plan.AgentAddressPrefix != "" {
 		env = append(env, "KATA_OMP_LIVE_INBOX=0")
+		if plan.AgentForwardComments {
+			env = append(env, "TERN_KATA_FORWARD_COMMENTS=1")
+		}
 		if block != "" {
 			env = append(env, "KATA_INBOX_USER="+data.AgentAddress(plan.AgentAddressPrefix, block))
 			name := plan.AgentAddressPrefix[strings.LastIndex(plan.AgentAddressPrefix, "/")+1:]
