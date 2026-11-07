@@ -75,7 +75,7 @@ function fakeChild(args: string[]): FakeChild {
 
 const NOW = Date.parse("2026-11-07T10:00:00Z");
 
-function harness(inboxStdout: () => string = () => emptyInbox()) {
+function harness(inboxStdout: () => string = () => emptyInbox(), options: Partial<FollowerDeps> = {}) {
   const children: FakeChild[] = [];
   const runs: string[][] = [];
   const delivered: string[] = [];
@@ -87,6 +87,7 @@ function harness(inboxStdout: () => string = () => emptyInbox()) {
     address: ADDRESS,
     project: "demo",
     ref: REF,
+    ...options,
     now: () => NOW,
     spawn(args) {
       const c = fakeChild(args);
@@ -292,6 +293,87 @@ describe("blocker closes", () => {
     h.children[0].push(eventLine(32, "issue.closed", "demo#aaaa", true));
     await flush();
     expect(h.delivered).toHaveLength(2);
+  });
+});
+
+describe("comment forwarding", () => {
+  const person = { comment_uid: "01JCOMMENT0000000000000001", author: "dana", body: "please also cover the empty case" };
+  const on = () => harness(() => emptyInbox(), { forwardComments: true });
+
+  test("a person's comment after start delivers once, with its author, excerpt and UID", async () => {
+    const h = on();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(40, "issue.commented", REF, true, person));
+    h.children[0].push(eventLine(40, "issue.commented", REF, true, person));
+    await flush();
+    expect(h.delivered).toEqual([`New comment on ${REF} from dana: please also cover the empty case (c:01JCOMMENT0000000000000001)`]);
+  });
+
+  test("a long body is cut to its first lines and a bounded length", async () => {
+    const h = on();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(40, "issue.commented", REF, true, { ...person, body: "one\ntwo\nthree\nfour" }));
+    h.children[0].push(eventLine(41, "issue.commented", REF, true, { ...person, body: "x".repeat(900) }));
+    await flush();
+    expect(h.delivered[0]).toBe(`New comment on ${REF} from dana: one\ntwo\nthree\n… (c:${person.comment_uid})`);
+    expect(h.delivered[1]).toBe(`New comment on ${REF} from dana: ${"x".repeat(400)}… (c:${person.comment_uid})`);
+  });
+
+  test("a comment with a teammate, the agent's own or another's, delivers nothing", async () => {
+    const h = on();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(40, "issue.commented", REF, true, { ...person, teammate: "omp-123" }));
+    h.children[0].push(eventLine(41, "issue.commented", REF, true, { ...person, teammate: "codex-9" }));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("a comment on another Issue delivers nothing", async () => {
+    const h = on();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(40, "issue.commented", "demo#other", true, person));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("a comment replayed from before the start delivers nothing", async () => {
+    const h = on();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(40, "issue.commented", REF, false, person));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("off by default: nothing is delivered", async () => {
+    const h = harness();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(40, "issue.commented", REF, true, person));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("after a stream restart the comment is not delivered twice, and a newer one is", async () => {
+    const h = on();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(40, "issue.commented", REF, true, person));
+    await flush();
+    h.children[0].exit();
+    await flush();
+    h.fire();
+    await flush();
+    expect(h.children[1].args).toContain("40");
+    h.children[1].push(eventLine(40, "issue.commented", REF, true, person));
+    h.children[1].push(eventLine(41, "issue.commented", REF, true, { ...person, comment_uid: "01JCOMMENT0000000000000002" }));
+    await flush();
+    expect(h.delivered).toHaveLength(2);
+    expect(h.delivered[1]).toContain("(c:01JCOMMENT0000000000000002)");
   });
 });
 
@@ -509,6 +591,13 @@ describe("readConfig", () => {
       project: "tern-kata",
       ref: "tern-kata#n4ta",
     });
+  });
+
+  test("TERN_KATA_FORWARD_COMMENTS=1 turns comment forwarding on, anything else leaves it off", () => {
+    const base = { KATA_INBOX_USER: ADDRESS, KATA_REF: "p#1" };
+    expect(readConfig({ ...base, TERN_KATA_FORWARD_COMMENTS: "1" })?.forwardComments).toBe(true);
+    expect(readConfig({ ...base, TERN_KATA_FORWARD_COMMENTS: "0" })?.forwardComments).toBeUndefined();
+    expect(readConfig(base)?.forwardComments).toBeUndefined();
   });
 
   test("blank address, missing project or an address without / yields nothing", () => {

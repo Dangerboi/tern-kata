@@ -19,6 +19,7 @@ import (
 //	actor = "me-agent"
 //	name = "builder"
 //	command = ["omp"]
+//	forward_comments = true
 //	[projects.tern-kata]
 //	actor = "..."
 //	name = "..."
@@ -31,10 +32,12 @@ var DefaultAgentCommand = []string{worker.DefaultCommand}
 
 // AgentConfig is agent.toml, strictly decoded.
 type AgentConfig struct {
-	Actor    string                  `toml:"actor"`
-	Name     string                  `toml:"name"`
-	Command  []string                `toml:"command"`
-	Projects map[string]AgentProject `toml:"projects"`
+	Actor   string   `toml:"actor"`
+	Name    string   `toml:"name"`
+	Command []string `toml:"command"`
+	// ForwardComments turns on telling the agent about a person's comment on its Issue; unset is off.
+	ForwardComments *bool                   `toml:"forward_comments"`
+	Projects        map[string]AgentProject `toml:"projects"`
 }
 
 // AgentProject is one [projects.<name>] table; its values override the top-level ones.
@@ -43,6 +46,8 @@ type AgentProject struct {
 	Name     string   `toml:"name"`
 	Command  []string `toml:"command"`
 	Checkout string   `toml:"checkout"`
+	// ForwardComments overrides the top-level value when set.
+	ForwardComments *bool `toml:"forward_comments"`
 }
 
 // ReadAgentConfig reads and validates path; a missing file is an empty configuration. Any other failure names the file.
@@ -115,11 +120,13 @@ type AgentSettings struct {
 	Command []string
 	// Checkout is the Project's table's checkout, "" when it has none.
 	Checkout string
+	// ForwardComments is whether the agent is told of a person's comment on its Issue.
+	ForwardComments bool
 }
 
 // For is the settings for a Project: its table's values over the top-level ones over the defaults.
 func (c AgentConfig) For(project string) AgentSettings {
-	s := AgentSettings{Actor: c.Actor, Name: c.Name, Command: c.Command}
+	s := AgentSettings{Actor: c.Actor, Name: c.Name, Command: c.Command, ForwardComments: c.ForwardComments != nil && *c.ForwardComments}
 	if p, ok := c.Projects[project]; ok {
 		if p.Actor != "" {
 			s.Actor = p.Actor
@@ -131,6 +138,9 @@ func (c AgentConfig) For(project string) AgentSettings {
 			s.Command = p.Command
 		}
 		s.Checkout = p.Checkout
+		if p.ForwardComments != nil {
+			s.ForwardComments = *p.ForwardComments
+		}
 	}
 	if len(s.Command) == 0 {
 		s.Command = DefaultAgentCommand
