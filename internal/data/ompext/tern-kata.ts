@@ -1,5 +1,6 @@
 // tern-kata's omp extension: delivers kata notification slots written for this
 // agent (from tern-kata's Attention Page) to the running omp session as user messages,
+// tells the agent when an Issue that blocks its own closes,
 // and names the session to `kata close` so a close carries a transcript reference.
 
 import { renameSync, rmSync, writeFileSync } from "node:fs";
@@ -15,11 +16,15 @@ export interface Spawned {
 export interface FollowerDeps {
   address: string;
   project: string;
+  /** The agent's Issue, qualified (`project#short id`). */
+  ref: string;
   /** Starts a long-running kata command; args exclude "kata". */
   spawn(args: string[]): Spawned;
   /** Runs a one-shot kata command; args exclude "kata". */
   run(args: string[]): Promise<{ code: number; stdout: string }>;
   deliver(text: string): void;
+  /** Milliseconds since the epoch; events created before the follower started are not acted on. */
+  now(): number;
   setTimer(fn: () => void, ms: number): unknown;
   clearTimer(handle: unknown): void;
 }
@@ -47,6 +52,24 @@ export type StreamEvent =
 export interface Config {
   address: string;
   project: string;
+  ref: string;
+}
+
+/** A stream event other than a slot write, with the fields reactions read. */
+export interface KataEvent {
+  eventId: number;
+  type: string;
+  /** The Issue the event is about, `project#short id`. */
+  ref: string;
+  /** Milliseconds since the epoch. */
+  createdAt: number;
+  payload: Record<string, unknown>;
+}
+
+/** A blocking link of the agent's Issue: the blocker and whether it was open when read. */
+export interface Blocker {
+  ref: string;
+  open: boolean;
 }
 
 /** Delivery state kept for one Issue ref: the last event id and value seen, and the stream count when the stream last set it. */
@@ -77,7 +100,7 @@ export function readConfig(env: Record<string, string | undefined>): Config | un
   const hash = ref.indexOf("#");
   const project = hash > 0 ? ref.slice(0, hash).trim() : "";
   if (address === "" || project === "" || trustedSender(address) === undefined) return undefined;
-  return { address, project };
+  return { address, project, ref };
 }
 
 function asRecord(v: unknown): Record<string, unknown> | undefined {
@@ -126,6 +149,66 @@ export function parseStreamLine(line: string, key: string): StreamEvent | undefi
   if (change.to === null) return { type: "slot", ref, eventId: parsed.event_id, to: null };
   const to = toSlot(change.to);
   return to ? { type: "slot", ref, eventId: parsed.event_id, to } : undefined;
+}
+
+/** Interprets one stream line as an event of one of `types`; undefined for any other line. */
+export function parseEventLine(line: string, types: readonly string[]): KataEvent | undefined {
+  if (!types.some((t) => line.includes(`"${t}"`))) return undefined;
+  let parsed: Record<string, unknown> | undefined;
+  try {
+    parsed = asRecord(JSON.parse(line));
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed.type !== "string" || !types.includes(parsed.type)) return undefined;
+  if (typeof parsed.event_id !== "number" || typeof parsed.project_name !== "string") return undefined;
+  if (typeof parsed.issue_short_id !== "string" || typeof parsed.created_at !== "string") return undefined;
+  const createdAt = Date.parse(parsed.created_at);
+  if (Number.isNaN(createdAt)) return undefined;
+  return {
+    eventId: parsed.event_id,
+    type: parsed.type,
+    ref: `${parsed.project_name}#${parsed.issue_short_id}`,
+    createdAt,
+    payload: asRecord(parsed.payload) ?? {},
+  };
+}
+
+/** Reads the blockers of `ref` from `kata show --json` output; undefined on bad JSON. Only blocking links count. */
+export function parseBlockers(stdout: string, ref: string): Blocker[] | undefined {
+  let links: unknown;
+  try {
+    links = asRecord(JSON.parse(stdout))?.links;
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(links)) return undefined;
+  const out: Blocker[] = [];
+  for (const link of links) {
+    const l = asRecord(link);
+    const from = asRecord(l?.from);
+    const to = asRecord(l?.to);
+    if (!l || !from || !to) continue;
+    const blocker = l.type === "blocks" && to.qualified_id === ref ? from : l.type === "blocked_by" && from.qualified_id === ref ? to : undefined;
+    if (blocker && typeof blocker.qualified_id === "string") out.push({ ref: blocker.qualified_id, open: blocker.status === "open" });
+  }
+  return out;
+}
+
+/** Reads an Issue's title from `kata show --json` output. */
+export function parseTitle(stdout: string): string | undefined {
+  try {
+    return optionalText(asRecord(asRecord(JSON.parse(stdout))?.issue)?.title);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Builds the user message for a closed blocker; `remaining` is the number of the Issue's other blockers still open, when known. */
+export function blockerClosedText(blocker: string, title: string | undefined, ref: string, remaining: number | undefined): string {
+  const parts = [`${blocker} closed${title ? `: ${title}` : ""}.`, `${ref} may be unblocked.`];
+  if (remaining) parts.push(`${remaining} other ${remaining === 1 ? "blocker is" : "blockers are"} still open.`);
+  return parts.join(" ");
 }
 
 /** Builds the user message the agent receives for a slot value. */
@@ -181,6 +264,62 @@ export function createFollower(deps: FollowerDeps): Follower {
   let readAgain = false;
   // streamed counts the stream's slot events, so a read can leave alone the refs the stream changed while it ran.
   let streamed = 0;
+  // Event reactions: what the follower does with a stream event that is not a slot write. A new reaction is one more entry.
+  const reactions: Record<string, (event: KataEvent, gen: number) => Promise<void>> = {
+    "issue.closed": onClosed,
+    "issue.links_changed": onLinksChanged,
+  };
+  const reactionTypes = Object.keys(reactions);
+  const shortId = deps.ref.slice(deps.ref.indexOf("#") + 1);
+  let startedAt = 0;
+  let reacted = 0;
+  let blockers = new Set<string>();
+  // queue runs reactions one at a time in stream order, the first being the read of the blockers at start.
+  let queue: Promise<void> = Promise.resolve();
+
+  function enqueue(gen: number, task: () => Promise<void>): void {
+    queue = queue.then(() => (gen === generation ? task() : undefined)).catch(() => {});
+  }
+
+  async function showOf(ref: string): Promise<string | undefined> {
+    try {
+      const result = await deps.run(["show", ref, "--json"]);
+      return result.code === 0 ? result.stdout : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function readBlockers(gen: number): Promise<Blocker[] | undefined> {
+    const stdout = await showOf(deps.ref);
+    const list = stdout === undefined || gen !== generation ? undefined : parseBlockers(stdout, deps.ref);
+    if (list) blockers = new Set(list.map((b) => b.ref));
+    return list;
+  }
+
+  async function onLinksChanged(event: KataEvent, gen: number): Promise<void> {
+    const names = (field: string): boolean => {
+      const value = event.payload[field];
+      return Array.isArray(value) && value.some((v) => v === shortId || v === deps.ref);
+    };
+    if (event.ref === deps.ref || names("blocks_added") || names("blocks_removed")) await readBlockers(gen);
+  }
+
+  async function onClosed(event: KataEvent, gen: number): Promise<void> {
+    if (!blockers.has(event.ref)) return;
+    const [mine, theirs] = await Promise.all([readBlockers(gen), showOf(event.ref)]);
+    if (gen !== generation) return;
+    const remaining = mine?.filter((b) => b.open && b.ref !== event.ref).length;
+    deps.deliver(blockerClosedText(event.ref, theirs === undefined ? undefined : parseTitle(theirs), deps.ref, remaining));
+  }
+
+  // react acts on an event created after the follower started, once per event id.
+  function react(event: KataEvent): void {
+    if (event.createdAt <= startedAt || event.eventId <= reacted) return;
+    reacted = event.eventId;
+    const gen = generation;
+    enqueue(gen, () => reactions[event.type](event, gen));
+  }
 
   function handle(ref: string, eventId: number | undefined, slot: Slot | null): void {
     const stored = states.get(ref);
@@ -243,7 +382,11 @@ export function createFollower(deps: FollowerDeps): Follower {
     const id = eventIdOf(line);
     if (id !== undefined && id > cursor) cursor = id;
     const event = parseStreamLine(line, key);
-    if (!event) return;
+    if (!event) {
+      const other = parseEventLine(line, reactionTypes);
+      if (other) react(other);
+      return;
+    }
     if (event.type === "reset") {
       cursor = event.after;
       void readInbox();
@@ -302,6 +445,9 @@ export function createFollower(deps: FollowerDeps): Follower {
       running = true;
       generation++;
       backoff = MIN_BACKOFF_MS;
+      startedAt = deps.now();
+      const gen = generation;
+      enqueue(gen, async () => void (await readBlockers(gen)));
       launch(generation);
       void readInbox();
     },
@@ -461,6 +607,7 @@ export function createExtension(
         ...c,
         spawn: (args) => io.spawn(args, ctx.cwd),
         run: (args) => io.run(args, ctx.cwd),
+        now: () => Date.now(),
         deliver: (text) => {
           try {
             Promise.resolve(pi.sendUserMessage(text, { deliverAs: "aside" })).catch(() => {});

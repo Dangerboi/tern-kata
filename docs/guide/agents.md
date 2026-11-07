@@ -100,6 +100,15 @@ Work attention is the Issue's own `work.attention`. An open Issue whose `work.at
 
 `r` on the Attention Page (on a request an agent raised) and on the Agent card (on the selected agent) opens a picker with three canned replies: `1` "continue", `2` "wrap up: commit what you have and comment your status", `3` "commit and close if the acceptance criteria hold". The key sends at once; `esc` cancels. A quick reply is the typed message with that text: the same address, the same delivery, the same question before replacing an unread message, and `r` is off, with the same reason, wherever `m` is.
 
+### Blocker closes
+
+When an Issue that blocks an agent's Issue closes, the agent is told, with no one writing a message and with the Pane closed. The text is "<blocker ref> closed: <title>. <ref> may be unblocked."; when the agent's Issue still has other open blockers it adds how many ("1 other blocker is still open."). The message arrives the way a [message to an agent](#messages-to-an-agent) does, and nothing is left for the agent to clear.
+
+- **Which links**: only blocking links (blocks and blocked by). A parent, a child or a related Issue closing sends nothing. A blocker added or removed while the agent runs is picked up.
+- **Only the agent's own Project**: the extension follows the events of the Project its Issue is in, so a blocker in another Project sends nothing.
+- **Only closes after the agent started**: a close that happened before is not sent, and a close the agent missed while its stream was down is sent once it is back. An Issue closed, reopened and closed again sends each close.
+- **Which agents**: the omp agents the Pane starts, as for messages; worker runs receive none.
+
 ### Transcript links on closes
 
 kata can record which agent session closed an Issue, and link it to [AgentsView](https://agentsview.io), when `kata close` runs with `[close.transcript]` turned on in kata's `config.toml` (in `KATA_HOME`, `~/.kata` by default):
