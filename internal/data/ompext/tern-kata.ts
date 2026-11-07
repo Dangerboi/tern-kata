@@ -294,6 +294,8 @@ export function createFollower(deps: FollowerDeps): Follower {
   const reactions: Record<string, (event: KataEvent, gen: number) => Promise<void>> = {
     "issue.closed": onClosed,
     "issue.links_changed": onLinksChanged,
+    "issue.linked": onLinkEdge,
+    "issue.unlinked": onLinkEdge,
     ...(deps.forwardComments ? { "issue.commented": onCommented } : {}),
   };
   const reactionTypes = Object.keys(reactions);
@@ -330,6 +332,12 @@ export function createFollower(deps: FollowerDeps): Follower {
       return Array.isArray(value) && value.some((v) => v === shortId || v === deps.ref);
     };
     if (event.ref === deps.ref || names("blocks_added") || names("blocks_removed")) await readBlockers(gen);
+  }
+
+  // kata's links endpoint reports one link as issue.linked or issue.unlinked, naming both ends in from_short_id and to_short_id.
+  async function onLinkEdge(event: KataEvent, gen: number): Promise<void> {
+    const ends = [event.payload.from_short_id, event.payload.to_short_id];
+    if (event.ref === deps.ref || ends.some((v) => v === shortId || v === deps.ref)) await readBlockers(gen);
   }
 
   async function onClosed(event: KataEvent, gen: number): Promise<void> {
