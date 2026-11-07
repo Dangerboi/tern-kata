@@ -3,7 +3,6 @@ package data
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -69,7 +68,7 @@ func (f *undoFixture) commentBodies(uid string) []string {
 	return bodies
 }
 
-func TestDeleteKeepsTheReasonAsACommentAndLookupDeletedReadsItBack(t *testing.T) {
+func TestDeleteKeepsTheReasonAsAComment(t *testing.T) {
 	f := newUndoFixture(t)
 	for reason, want := range map[string]string{"dup": "dup", "": ""} {
 		uid := f.issue("Gone " + reason)
@@ -83,109 +82,6 @@ func TestDeleteKeepsTheReasonAsACommentAndLookupDeletedReadsItBack(t *testing.T)
 		if want != "" && (len(bodies) != 1 || bodies[0] != "Deleted: dup") {
 			t.Errorf("comments %q, want the reason as a comment", bodies)
 		}
-		got := f.lookup(uid, 0, true)
-		if got.Err != nil || !got.Issue.Deleted {
-			t.Fatalf("lookup %+v", got)
-		}
-		if got.Issue.DeletedBy != "tester" || got.Issue.DeletedAt.IsZero() || got.Issue.Reason != want {
-			t.Errorf("reason %q: deleted by %q at %v with reason %q", reason, got.Issue.DeletedBy, got.Issue.DeletedAt, got.Issue.Reason)
-		}
-	}
-}
-
-func TestLookupDeletedReadsTheNewestDeletesReasonOnly(t *testing.T) {
-	f := newUndoFixture(t)
-	uid := f.issue("Twice")
-	if got := f.deleteIssue(uid, "first"); got.Err != nil {
-		t.Fatal(got.Err)
-	}
-	if got := f.restore(uid); got.Err != nil {
-		t.Fatal(got.Err)
-	}
-	// A comment by the same actor without the prefix is not a reason.
-	client, err := f.gateway.client(context.Background(), f.workspace)
-	if err != nil {
-		t.Fatal(err)
-	}
-	actor := "tester"
-	if _, err := client.CreateCommentWithResponse(context.Background(), &g.CreateCommentRequestOptions{
-		PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(f.project.ID), Ref: uid},
-		Body:       &g.CreateCommentBody{Body: "plain remark", Actor: &actor},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if got := f.deleteIssue(uid, ""); got.Err != nil {
-		t.Fatal(got.Err)
-	}
-	if got := f.lookup(uid, 0, true); got.Err != nil || got.Issue.Reason != "" {
-		t.Errorf("lookup %+v, want the second delete's empty reason", got)
-	}
-}
-
-func TestLookupDeletedStillFindsTheDeleteAfterAnotherIssueWasPurged(t *testing.T) {
-	f := newUndoFixture(t)
-	other := f.issue("Purge me")
-	client, err := f.gateway.client(context.Background(), f.workspace)
-	if err != nil {
-		t.Fatal(err)
-	}
-	confirm := "PURGE " + f.qualified(other)
-	purged, err := client.PurgeIssueWithResponse(context.Background(), &g.PurgeIssueRequestOptions{
-		PathParams: &g.PurgeIssuePath{ProjectID: f.project.ID, Ref: other},
-		Header:     &g.PurgeIssueHeaders{XKataConfirm: &confirm},
-		Body:       &g.PurgeIssueBody{Actor: "tester"},
-	})
-	if err != nil || purged.StatusCode >= 300 {
-		t.Fatalf("purge: %v %d", err, purged.StatusCode)
-	}
-	uid := f.issue("Gone after a purge")
-	if got := f.deleteIssue(uid, "dup"); got.Err != nil {
-		t.Fatal(got.Err)
-	}
-	got := f.lookup(uid, 0, true)
-	if got.Err != nil || !got.Issue.Described || got.Issue.DeletedBy != "tester" || got.Issue.Reason != "dup" {
-		t.Errorf("lookup %+v, want the actor and reason although the log asked for a reset", got)
-	}
-}
-
-func TestLookupDeletedReadsOnlyTheReasonAfterTheLastRestore(t *testing.T) {
-	f := newUndoFixture(t)
-	uid := f.issue("Round trip")
-	for _, step := range []func() error{
-		func() error { return f.deleteIssue(uid, "first").Err },
-		func() error { return f.restore(uid).Err },
-		func() error { return f.deleteIssue(uid, "").Err },
-	} {
-		if err := step(); err != nil {
-			t.Fatal(err)
-		}
-	}
-	// The first delete's comment sits before the restore, so it cannot be the second delete's reason.
-	got := f.lookup(uid, 0, true)
-	if !got.Issue.Described || got.Issue.Reason != "" {
-		t.Errorf("lookup %+v, want a described delete with no reason", got)
-	}
-}
-
-func TestOneActorsReasonIsNotAnotherActorsDelete(t *testing.T) {
-	f := newUndoFixture(t)
-	uid := f.issue("Two hands")
-	client, err := f.gateway.client(context.Background(), f.workspace)
-	if err != nil {
-		t.Fatal(err)
-	}
-	other := "someone-else"
-	if _, err := client.CreateCommentWithResponse(context.Background(), &g.CreateCommentRequestOptions{
-		PathParams: &g.CreateCommentPath{ProjectID: fmt.Sprint(f.project.ID), Ref: uid},
-		Body:       &g.CreateCommentBody{Body: "Deleted: not mine", Actor: &other},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if got := f.deleteIssue(uid, "mine"); got.Err != nil {
-		t.Fatal(got.Err)
-	}
-	if got := f.lookup(uid, 0, true); got.Issue.Reason != "mine" {
-		t.Errorf("reason %q, want the deleting actor's own comment", got.Issue.Reason)
 	}
 }
 

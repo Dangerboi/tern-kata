@@ -25,7 +25,6 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - `u` on the Attention Page restores the Issue the Pane just deleted, as `u` does on the other Pages, and the Page reads its requests again; it is offered there only while a delete is the newest change in the undo history.
-- The Menu's "Restore a deleted Issue" card shows who deleted the Issue, when, and the reason (or "no reason given"), read from the Project's event log.
 
 #### Jobs and worker
 

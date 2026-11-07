@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/oklog/ulid/v2"
 )
@@ -21,8 +20,7 @@ const (
 	RestoreKey   = "restore"
 )
 
-// DeletedIssue is the Issue a restore reads: Deleted says kata holds it as deleted. DeletedBy, DeletedAt and Reason are the
-// actor, time and reason of its newest delete as kata recorded them; each is empty (zero) when kata gave none.
+// DeletedIssue is the Issue a restore reads: Deleted says kata holds it as deleted.
 type DeletedIssue struct {
 	UID         string
 	ProjectID   int64
@@ -30,34 +28,6 @@ type DeletedIssue struct {
 	Title       string
 	QualifiedID string
 	Deleted     bool
-	DeletedBy   string
-	DeletedAt   time.Time
-	Reason      string
-	// Described says a delete event of the Issue was read, so DeletedBy and Reason are what kata kept; without it only
-	// DeletedAt, from the Issue itself, is known.
-	Described bool
-}
-
-// DeletionLine is what the restore card says about the delete: who, when and why, as far as kata recorded it. stamp prints
-// the time in the Pane's zone. It is "" when kata gave no delete information at all.
-func (d DeletedIssue) DeletionLine(stamp func(time.Time) string) string {
-	if !d.Deleted || (!d.Described && d.DeletedAt.IsZero()) {
-		return ""
-	}
-	line := "deleted"
-	if d.DeletedBy != "" {
-		line += " by " + d.DeletedBy
-	}
-	if !d.DeletedAt.IsZero() {
-		line += " " + stamp(d.DeletedAt)
-	}
-	switch {
-	case !d.Described:
-		return line
-	case d.Reason != "":
-		return line + " · reason: " + d.Reason
-	}
-	return line + " · no reason given"
 }
 
 // LookupDeleted reads an Issue with deleted Issues included. Typed is the reference as the user typed it and Ref the part kata

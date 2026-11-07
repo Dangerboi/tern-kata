@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -375,42 +374,6 @@ func TestCtrlUClearsTheDeleteCardsConfirmation(t *testing.T) {
 	s = step(t, s, key("ctrl+u")).State
 	if got := s.Model.DeleteForm.ID; got != "" {
 		t.Fatalf("ctrl+u left %q in the confirmation", got)
-	}
-}
-
-func TestTheRestoreCardSaysWhoDeletedTheIssueWhenAndWhy(t *testing.T) {
-	at := time.Date(2026, 11, 6, 14, 2, 0, 0, time.UTC)
-	for name, tc := range map[string]struct {
-		issue model.DeletedIssue
-		want  string
-	}{
-		"with a reason":           {model.DeletedIssue{DeletedBy: "alice", DeletedAt: at, Reason: "duplicate of work#b", Described: true}, "deleted by alice 2026-11-06 14:02 · reason: duplicate of work#b"},
-		"without a reason":        {model.DeletedIssue{DeletedBy: "alice", DeletedAt: at, Described: true}, "deleted by alice 2026-11-06 14:02 · no reason given"},
-		"time only, nothing read": {model.DeletedIssue{DeletedAt: at}, "deleted 2026-11-06 14:02"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			s := step(t, typed(t, menuRestore(t, movePane(t, movable("a"))), "a"), key("enter")).State
-			tc.issue.UID, tc.issue.ProjectID, tc.issue.ShortID, tc.issue.Title, tc.issue.Deleted = "x", 7, "a", "Gone", true
-			found := step(t, s, model.DeletedLooked{Ref: "a", Issue: tc.issue})
-			if got := formText(t, found.State, "found-deletion"); got != tc.want {
-				t.Errorf("the card says %q, want %q", got, tc.want)
-			}
-			restoring := step(t, found.State, key("enter"))
-			if got := onlyCmd[model.RestoreIssueCmd](t, restoring.Cmds); got.UID != "x" {
-				t.Fatalf("restore %+v", got)
-			}
-		})
-	}
-}
-
-func TestTheRestoreCardHasNoDeletionLineWhenKataGaveNone(t *testing.T) {
-	s := step(t, typed(t, menuRestore(t, movePane(t, movable("a"))), "a"), key("enter")).State
-	found := step(t, s, model.DeletedLooked{Ref: "a", Issue: model.DeletedIssue{UID: "x", ProjectID: 7, ShortID: "a", Title: "Gone", Deleted: true}})
-	if got := formText(t, found.State, "found-deletion"); got != "" {
-		t.Errorf("the card says %q, want no deletion line", got)
-	}
-	if again := step(t, found.State, key("enter")); onlyCmd[model.RestoreIssueCmd](t, again.Cmds).UID != "x" {
-		t.Fatal("restore not sent")
 	}
 }
 
