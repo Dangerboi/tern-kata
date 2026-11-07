@@ -128,14 +128,14 @@ When an Issue that blocks an agent's Issue closes, the agent is told, with no on
 
 - **Which links**: only blocking links (blocks and blocked by). A parent, a child or a related Issue closing sends nothing. A blocker added or removed while the agent runs is picked up.
 - **Only the agent's own Project**: the extension follows the events of the Project its Issue is in, so a blocker in another Project sends nothing.
-- **Only closes after the agent started**: a close that happened before is not sent, and a close the agent missed while its stream was down is sent once it is back. An Issue closed, reopened and closed again sends each close.
+- **Only closes after the agent started**: a close that happened before is not sent, and a close the agent missed while its stream was down is sent once it is back. The extension reads the Issue's blockers again whenever the stream restarts or kata asks for a reset, so a blocker that could not be read at start is picked up. An Issue closed, reopened and closed again sends each close.
 - **Which agents**: the omp agents the Pane starts, as for messages; worker runs receive none.
 
 ### Comments from people
 
 With `forward_comments = true` in `agent.toml` for the agent's name (top level or in a `[projects.<name>]` table), a comment a person leaves on the agent's Issue is delivered to the running agent, with no one writing a message and with the Pane closed. The text is "New comment on <ref> from <author>: <first lines> (c:<comment UID>)": the first 3 lines of the comment, at most 400 characters, and the comment's UID, which the agent passes to `kata comment --reply`. The Pane starts the agent with `--forward-comments`, which sets `TERN_KATA_FORWARD_COMMENTS=1` for the extension; without the key the extension forwards nothing, and it needs an agent name short enough for a teammate (`<name>-<block id>` within 64 bytes).
 
-- **Only people's comments**: a comment with a teammate is an agent's, since every agent the Pane starts writes with `KATA_TEAMMATE`, so the agent's own comments and other agents' are not delivered.
+- **Only comments without a teammate**: a comment with a teammate is an agent's and is not delivered, so the agent's own comments and other omp agents' are not. An agent that writes no teammate (an agent that is not omp, a worker run) looks like a person to the extension, and its comment on the Issue is delivered.
 - **Only the agent's own Issue**: comments on other Issues send nothing.
 - **Only comments after the agent started**: an older comment is not sent, and one the agent missed while its stream was down is sent once it is back.
 - **Which agents**: the omp agents the Pane starts; an agent started before you set the key keeps its old setting.
