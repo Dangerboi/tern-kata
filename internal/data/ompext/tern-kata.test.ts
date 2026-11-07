@@ -73,22 +73,28 @@ function fakeChild(args: string[]): FakeChild {
   return child;
 }
 
+const NOW = Date.parse("2026-11-07T10:00:00Z");
+
 function harness(inboxStdout: () => string = () => emptyInbox()) {
   const children: FakeChild[] = [];
   const runs: string[][] = [];
   const delivered: string[] = [];
   const timers: FakeTimer[] = [];
+  const shows = new Map<string, string>();
   let inbox = inboxStdout;
   let held: Array<(stdout: string) => void> | undefined;
   const deps: FollowerDeps = {
     address: ADDRESS,
     project: "demo",
+    ref: REF,
+    now: () => NOW,
     spawn(args) {
       const c = fakeChild(args);
       children.push(c);
       return c;
     },
     async run(args) {
+      if (args[0] === "show") return { code: 0, stdout: shows.get(args[1]) ?? showJson(args[1], "", []) };
       runs.push(args);
       const waiting = held;
       if (waiting) {
@@ -113,6 +119,9 @@ function harness(inboxStdout: () => string = () => emptyInbox()) {
     runs,
     delivered,
     timers,
+    setShow(ref: string, stdout: string) {
+      shows.set(ref, stdout);
+    },
     follower: createFollower(deps),
     setInbox(f: () => string) {
       inbox = f;
@@ -151,6 +160,140 @@ function slotLine(id: number, to: Record<string, unknown> | null, key = KEY): st
 }
 
 const hello = { from: "dangerboi", message: "hello there" };
+
+function showJson(ref: string, title: string, links: unknown[]): string {
+  return JSON.stringify({ kata_api_version: 1, issue: { short_id: ref.slice(ref.indexOf("#") + 1), title }, links });
+}
+
+function endpoint(ref: string, status: string) {
+  return { qualified_id: ref, short_id: ref.slice(ref.indexOf("#") + 1), project: "demo", status };
+}
+
+/** A link as `kata show --json` lists it: `from` blocks `to`, or is related to or the parent of it. */
+function link(type: string, from: string, to: string, fromStatus = "open") {
+  return { type, from: endpoint(from, fromStatus), to: endpoint(to, "open") };
+}
+
+function eventLine(id: number, type: string, ref: string, afterStart: boolean, payload: Record<string, unknown> = {}): string {
+  const [project, short] = ref.split("#");
+  return JSON.stringify({
+    event_id: id,
+    type,
+    project_name: project,
+    issue_short_id: short,
+    created_at: new Date(NOW + (afterStart ? 5000 : -5000)).toISOString(),
+    payload,
+  });
+}
+
+describe("blocker closes", () => {
+  test("a blocker's close after start delivers once with its title and the blockers still open", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF), link("blocks", "demo#bbbb", REF), link("blocks", "demo#cccc", REF, "closed")]));
+    h.follower.start();
+    await flush();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF, "closed"), link("blocks", "demo#bbbb", REF), link("blocks", "demo#cccc", REF, "closed")]));
+    h.setShow("demo#aaaa", showJson("demo#aaaa", "Ship the parser", []));
+    h.children[0].push(eventLine(30, "issue.closed", "demo#aaaa", true));
+    h.children[0].push(eventLine(30, "issue.closed", "demo#aaaa", true));
+    await flush();
+    expect(h.delivered).toEqual([`demo#aaaa closed: Ship the parser. ${REF} may be unblocked. 1 other blocker is still open.`]);
+  });
+
+  test("the last blocker closing names no remaining count", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF)]));
+    h.follower.start();
+    await flush();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF, "closed")]));
+    h.setShow("demo#aaaa", showJson("demo#aaaa", "Ship the parser", []));
+    h.children[0].push(eventLine(30, "issue.closed", "demo#aaaa", true));
+    await flush();
+    expect(h.delivered).toEqual([`demo#aaaa closed: Ship the parser. ${REF} may be unblocked.`]);
+  });
+
+  test("a close replayed from before the start delivers nothing", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF)]));
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(30, "issue.closed", "demo#aaaa", false));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("a parent, related or unrelated Issue closing delivers nothing", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("parent", "demo#pppp", REF), link("related", "demo#rrrr", REF), link("blocks", REF, "demo#dddd")]));
+    h.follower.start();
+    await flush();
+    for (const [i, ref] of ["demo#pppp", "demo#rrrr", "demo#dddd", "demo#zzzz"].entries()) {
+      h.children[0].push(eventLine(30 + i, "issue.closed", ref, true));
+    }
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("a blocker added by links_changed delivers when it closes later", async () => {
+    const h = harness();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(30, "issue.closed", "demo#aaaa", true));
+    await flush();
+    expect(h.delivered).toEqual([]);
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF)]));
+    h.children[0].push(eventLine(31, "issue.links_changed", REF, true, { blocked_by_added: ["aaaa"] }));
+    await flush();
+    h.children[0].push(eventLine(32, "issue.closed", "demo#aaaa", true));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    expect(h.delivered[0]).toContain("demo#aaaa closed");
+  });
+
+  test("a blocker removed by links_changed no longer delivers", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF)]));
+    h.follower.start();
+    await flush();
+    h.setShow(REF, showJson(REF, "mine", []));
+    h.children[0].push(eventLine(30, "issue.links_changed", REF, true, { blocked_by_removed: ["aaaa"] }));
+    h.children[0].push(eventLine(31, "issue.closed", "demo#aaaa", true));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("a restart with the cursor delivers a close missed in the gap and none already delivered", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF), link("blocks", "demo#bbbb", REF)]));
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(30, "issue.closed", "demo#aaaa", true));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    h.children[0].exit(1);
+    await flush();
+    h.fire();
+    await flush();
+    expect(h.children[1].args.slice(-2)).toEqual(["--last-event-id", "30"]);
+    h.children[1].push(eventLine(30, "issue.closed", "demo#aaaa", true));
+    h.children[1].push(eventLine(31, "issue.closed", "demo#bbbb", true));
+    await flush();
+    expect(h.delivered).toHaveLength(2);
+    expect(h.delivered[1]).toContain("demo#bbbb closed");
+  });
+
+  test("a blocker closed, reopened and closed again delivers each close", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF)]));
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(30, "issue.closed", "demo#aaaa", true));
+    h.children[0].push(eventLine(31, "issue.reopened", "demo#aaaa", true));
+    h.children[0].push(eventLine(32, "issue.closed", "demo#aaaa", true));
+    await flush();
+    expect(h.delivered).toHaveLength(2);
+  });
+});
 
 describe("createFollower", () => {
   test("a trusted slot write delivers once with the delivery text", async () => {
@@ -352,6 +495,7 @@ describe("readConfig", () => {
     expect(readConfig({ KATA_INBOX_USER: ADDRESS, KATA_REF: "tern-kata#n4ta" })).toEqual({
       address: ADDRESS,
       project: "tern-kata",
+      ref: "tern-kata#n4ta",
     });
   });
 

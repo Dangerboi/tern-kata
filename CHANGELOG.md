@@ -22,6 +22,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - It has the same refusals as `m` and asks the same question before replacing an unread message.
   - The replies are "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold".
 - An omp agent started in a block writes to kata as its own teammate: the wrapper sets `KATA_TEAMMATE` to `<agent.toml name>-<block id>` and drops an inherited one, so the agent's comments and requests carry that name.
+- An omp agent is told when an Issue that blocks its own closes, with the blocker's title and how many other blockers are still open, also with the Pane closed.
+  - Only blocking links count, and only blockers in the agent's own Project; a close before the agent started is not sent.
 
 #### Issues and Pages
 
