@@ -10,6 +10,8 @@ local launched: { [number]: boolean } = {}
 local fresh: { [number]: boolean } = {}
 -- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
 local pending: { [number]: string? } = {}
+-- New kata Panes that are to run the wrap-up sweep once their surface is live.
+local pendingSweep: { [number]: boolean } = {}
 -- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
 -- Kept in `tern.kv` too, because a plugin reload (a local update brings the plugin along) empties this table while the
 -- Pane is still open; `pane_closed` removes the id from both.
@@ -221,11 +223,19 @@ local function relayAll(cx: WindowCx, onlyNew: boolean)
     end
 end
 
+local function sweepAgents(cx: WindowCx, pane: number)
+    cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "wrap-up-sweep", value = ""})
+end
+
 local function deliver(cx: WindowCx, pane: number)
     local ref = pending[pane]
     if ref and cx.session:surface(pane) then
         pending[pane] = nil
         selectIssue(cx, pane, ref)
+    end
+    if pendingSweep[pane] and cx.session:surface(pane) then
+        pendingSweep[pane] = nil
+        sweepAgents(cx, pane)
     end
     if not relayed[pane] then relayAll(cx, true) end
 end
@@ -460,6 +470,7 @@ tern.on("pane_closed", function(ev, cx)
         changeUpdatePanes(ev.pane, false)
     end
     pending[ev.pane] = nil
+    pendingSweep[ev.pane] = nil
     relayed[ev.pane] = nil
     retrying[ev.pane] = nil
     placed[ev.pane] = nil
@@ -662,6 +673,25 @@ tern.command({
     title = "Open kata",
     keys = {"f9"},
     run = function(cx) open(cx, nil) end,
+})
+
+-- Tells every running agent to wrap up: the focused tab's kata Pane (or a new one) runs the sweep and shows who has finished.
+tern.command({
+    id = "wrap-up-agents",
+    title = "Wrap up every running agent",
+    run = function(cx)
+        local pane = existingPane(cx)
+        if pane then
+            cx.layout:focus(pane)
+            sweepAgents(cx, pane)
+            return
+        end
+        pane = launch(cx, panecommands.KATA)
+        if not pane then return end
+        launched[pane] = true
+        pendingSweep[pane] = true
+        watch(pane, 20)
+    end,
 })
 
 -- The install one-liners per shell family; the session host's OS is not visible from the window, so the user picks.

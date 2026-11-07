@@ -108,6 +108,14 @@ Work attention is the Issue's own `work.attention`. An open Issue whose `work.at
 - **What it never replaces**: an agent that has not cleared its last message keeps it; the broadcast skips that agent instead of asking.
 - **The outcome**: once every write has answered, the card shows how many agents got the message and each skipped agent with the reason: it holds an unread message, it is not omp, it was started before agents had an address, another actor started it, or kata refused the write (with kata's words). `enter` or `esc` closes it.
 
+#### Wrap up every running agent
+
+The **Wrap up every running agent** palette command ends the working day: it sends the quick reply "wrap up: commit what you have and comment your status" to every running agent this host's Panes started, on whatever Issue each runs, not only one Issue's. The kata Pane in the focused tab runs it (a new one is opened when there is none) and shows the **Wrap-up sweep** card.
+
+- **What it writes**: the broadcast's write, once to each agent's own address on its own Issue. An agent holding an unread message is skipped and its message stays; an agent it cannot reach (not omp, so no address; started before agents had an address; started by another actor) is listed with the same reason `S` gives. With no running agent it opens no card and says so.
+- **Who has finished**: the card lists each agent it wrote to as `finished: exited` (the agent exited or its block is gone), `finished: idle after the wrap-up` (the agent went idle after it was working on it, or was working when the wrap-up arrived), `not yet: waiting for you` (it asks something) or `not yet`, with the first line of its last message. It follows Tern's agent states, so it changes as agents go idle or exit; `enter` or `esc` closes it.
+- **Not covered**: the card does not read a `RESULT:` line or time an agent out; an agent that ignores the wrap-up stays "not yet" until you stop it with `x` on the Agent card.
+
 `kata notify --broadcast --teammates` reaches participants' teammate inboxes, not the running agents' addresses; `S` is the one that does.
 
 #### Quick replies

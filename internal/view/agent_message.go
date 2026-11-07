@@ -15,6 +15,9 @@ func agentMessageLayer(m model.Model) tern.Element {
 	if !f.Open {
 		return nil
 	}
+	if f.Sweep {
+		return sweepLayer(m)
+	}
 	if m.AgentMessageMode() == model.ModeAgentQuickReply {
 		return quickReplyLayer(m)
 	}
@@ -93,4 +96,36 @@ func quickReplyLayer(m model.Model) tern.Element {
 	buttons = append(buttons, cardButton("cancel", model.ModeAgentQuickReply, model.AgentMessageCancel, "Cancel", false))
 	children = append(children, buttonRow(buttons...))
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T("Quick reply to " + f.Agent), Meta: refMeta(f.IssueRef), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, children))
+}
+
+// sweepLayer is the wrap-up sweep's card: how many of the agents it reached have finished, each agent's standing with its last
+// message, then each agent skipped with why. It follows the relay, so it changes as agents go idle or exit.
+func sweepLayer(m model.Model) tern.Element {
+	f := m.AgentMessage
+	var children []tern.Element
+	if f.Sending {
+		children = append(children, toneText("sending", ui.TonePending, "Sending the wrap-up…"))
+	} else {
+		children = append(children, ui.Text{Common: ui.Common{Key: "reached"}, Text: fmt.Sprintf("%d of %d agents have finished the wrap-up.", m.SweepFinished(), f.BroadcastReached())})
+	}
+	for i, t := range f.Targets {
+		if t.Skipped != "" || !t.Answered {
+			continue
+		}
+		status, last := m.SweepStatus(t)
+		text := fmt.Sprintf("%s on %s: %s", t.Agent, t.IssueRef, status)
+		if last != "" {
+			text += " (" + last + ")"
+		}
+		children = append(children, toneText(fmt.Sprintf("agent-%d", i), ui.ToneMuted, text))
+	}
+	for i, t := range f.Targets {
+		if t.Skipped != "" {
+			children = append(children, toneText(fmt.Sprintf("skipped-%d", i), ui.ToneMuted, fmt.Sprintf("Skipped %s on %s: %s", t.Agent, t.IssueRef, t.Skipped)))
+		}
+	}
+	if !f.Sending {
+		children = append(children, buttonRow(cardButton("close", model.ModeAgentBroadcastOutcome, model.AgentMessageCancel, "Close", true)))
+	}
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T("Wrap-up sweep"), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, children))
 }

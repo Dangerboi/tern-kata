@@ -60,6 +60,9 @@ type AgentMessageState struct {
 	Broadcast bool
 	Targets   []BroadcastTarget
 	Outcome   bool
+	// Sweep is the broadcast the wrap-up sweep sends: every running agent of this host's Panes gets the wrap-up text, and the
+	// outcome keeps showing which of them have finished (see sweepAgents).
+	Sweep bool
 }
 
 // SendAgentMessage writes Message to an agent's Address on an Issue as `kata notify` does, as Actor, with Teammate on the slot when

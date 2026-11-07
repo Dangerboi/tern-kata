@@ -36,6 +36,7 @@ const (
 	RetryAction             Action = "retry"
 	SelectIssueAction       Action = "select-issue"
 	AgentStatesAction       Action = "agent-states"
+	WrapUpSweepAction       Action = "wrap-up-sweep"
 	SearchIssues            Action = "search"
 	SearchPage              Action = "search-page"
 	PageSearchKeep          Action = "page-search-keep"
