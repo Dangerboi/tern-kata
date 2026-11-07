@@ -201,6 +201,17 @@ func TestAgentEnv(t *testing.T) {
 	if got, want := agentEnv([]string{"KATA_TEAMMATE=me", "TERN_PANE=42"}, plan("", "", "ann/"+long), false), []string{"TERN_PANE=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/" + long + "-42"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("teammate too long: %q, want %q", got, want)
 	}
+	forward := func(prefix string) LaunchPlan {
+		p := plan("", "", prefix)
+		p.AgentForwardComments = true
+		return p
+	}
+	if got, want := agentEnv([]string{"TERN_KATA_FORWARD_COMMENTS=1", "TERN_PANE=42"}, forward("ann/"+long), false), []string{"TERN_PANE=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/" + long + "-42"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("forward with teammate too long: %q, want %q", got, want)
+	}
+	if got, want := agentEnv([]string{"TERN_PANE=42"}, forward("ann/omp"), false), []string{"TERN_PANE=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42", "TERN_KATA_FORWARD_COMMENTS=1"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("forward with teammate: %q, want %q", got, want)
+	}
 	if got, want := agentEnv([]string{"Kata_Teammate=me", "Tern_Pane=42"}, plan("", "", "ann/omp"), true), []string{"Tern_Pane=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("teammate on Windows: %q, want %q", got, want)
 	}

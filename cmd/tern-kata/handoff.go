@@ -66,8 +66,9 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 // KATA_REF set to plan.AgentRef when it is not empty. An Agent address prefix (the agent loads tern-kata's omp extension) sets
 // KATA_OMP_LIVE_INBOX=0, so kata-omp leaves live delivery to the extension, and in a block KATA_INBOX_USER to the agent's Agent
 // address, from the block id in TERN_PANE, and KATA_TEAMMATE to <name>-<block id>, so its comments and requests carry its own
-// teammate name; a name kata would refuse leaves KATA_TEAMMATE unset. plan.AgentForwardComments with the prefix sets
-// TERN_KATA_FORWARD_COMMENTS=1, which the extension reads; an inherited value is dropped.
+// teammate name; a name kata would refuse leaves KATA_TEAMMATE unset. plan.AgentForwardComments sets
+// TERN_KATA_FORWARD_COMMENTS=1, which the extension reads, only when KATA_TEAMMATE is set (without it the agent's own comments
+// would be forwarded back to it); an inherited value is dropped.
 func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string {
 	dropped := []string{"KATA_REF", "KATA_INBOX_USER", "KATA_TEAMMATE"}
 	if plan.Actor != "" {
@@ -87,33 +88,18 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 	}
 	if plan.AgentAddressPrefix != "" {
 		env = append(env, "KATA_OMP_LIVE_INBOX=0")
-		if plan.AgentForwardComments {
-			env = append(env, "TERN_KATA_FORWARD_COMMENTS=1")
-		}
 		if block != "" {
 			env = append(env, "KATA_INBOX_USER="+data.AgentAddress(plan.AgentAddressPrefix, block))
 			name := plan.AgentAddressPrefix[strings.LastIndex(plan.AgentAddressPrefix, "/")+1:]
-			if teammate := name + "-" + block; validTeammate(teammate) {
+			if teammate := name + "-" + block; model.ValidTeammate(teammate) {
 				env = append(env, "KATA_TEAMMATE="+teammate)
+				if plan.AgentForwardComments {
+					env = append(env, "TERN_KATA_FORWARD_COMMENTS=1")
+				}
 			}
 		}
 	}
 	return env
-}
-
-// validTeammate says kata accepts name as a teammate: ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$.
-func validTeammate(name string) bool {
-	if name == "" || len(name) > 64 {
-		return false
-	}
-	for i := range len(name) {
-		c := name[i]
-		alnum := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
-		if !alnum && (i == 0 || c != '.' && c != '_' && c != '-') {
-			return false
-		}
-	}
-	return true
 }
 
 // envValue is the value of the last entry named name in environ, "" when there is none; names compare case-insensitively when
