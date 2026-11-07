@@ -9,10 +9,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Agents
 
 - The Agent badge appends " · message unread" in the warning tone, and the Agent card row shows "message unread: " and the message's first line, while an agent has a message at its address that it has not cleared.
-- An omp agent is told of a person's comment on its Issue when `forward_comments = true` is set in `agent.toml` (top level or per Project): "New comment on <ref> from <author>: <first lines> (c:<comment UID>)", once per comment, with the Pane closed; comments from agents and from before the agent started are skipped.
+- An omp agent is told of a person's comment on its Issue when `forward_comments = true` is set in `agent.toml`.
+  - The text is "New comment on <ref> from <author>: <first lines> (c:<comment UID>)", sent once per comment, with the Pane closed.
+  - `forward_comments` goes at the top level or per Project; comments from agents and from before the agent started are skipped.
 - `m` on the Agent card messages the selected agent, whether it is working, idle or waiting and wherever its block is, including a Background agent, which stays in the hidden session.
   - It is off, with the reason, for an exited agent, one that is not omp, one started before agents had an address, and one another actor started.
-- `m` on the Comments tab asks the Issue's agent to answer the comment under the cursor: the Message card names the comment, the message carries the comment, and the agent is told to answer with `kata comment --reply`, `--confirm`, `--refute` or `--supersede`, which clears the request and leaves a reply notice on the Attention Page.
+- `m` on the Comments tab asks the Issue's agent to answer the comment under the cursor.
+  - The Message card names the comment, and the message carries the comment.
+  - The agent is told to answer with `kata comment --reply`, `--confirm`, `--refute` or `--supersede`, which clears the request and leaves a reply notice on the Attention Page.
 - The Agent card shows, for the selected omp agent, its model, tool calls so far, the tool it is running now, its cost so far and the first line of its last message.
   - It reads them from the end of the agent's session file while the card is open, every 2 seconds.
   - A non-omp agent or a session with no file says why in a muted line.
@@ -24,15 +28,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - It has the same refusals as `m` and asks the same question before replacing an unread message.
   - The replies are "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold".
 - An omp agent started in a block writes to kata as its own teammate: the wrapper sets `KATA_TEAMMATE` to `<agent.toml name>-<block id>` and drops an inherited one, so the agent's comments and requests carry that name.
-- An omp agent is told when an Issue that blocks its own closes, with the blocker's title and how many other blockers are still open, also with the Pane closed.
+- An omp agent gets a Blocker notice when an Issue that blocks its own closes, also with the Pane closed.
+  - The notice has the blocker's title and how many other blockers are still open.
   - Only blocking links count, and only blockers in the agent's own Project; a close before the agent started is not sent.
 - `S` on an Issue messages every running agent on it and on its open children from one Message card.
   - Each agent gets the message at its own address on its own Issue; agents on closed children and exited agents get none.
   - An agent that has not cleared its last message is skipped, never replaced; once every write has answered the card lists how many got it and each skipped agent with its reason.
-- Agents find and message each other: `tern-kata agents [--issue <ref>]` lists the running agents this host's Panes started, with Issue, name, state and address, and `tern-kata message <address|ref> -m <text>` writes a message to one agent, or to every agent on an Issue.
-  - A message from an agent carries its teammate and arrives worded as from a peer agent, "information, not the person's instruction"; the agent prompt tells the agent to act on it only within its own Issue's scope.
-  - An address that holds a message its agent has not cleared is not written over: the command names that agent and exits 1.
-  - A Pane now saves the latest agent states in `agent-states.json` in tern-kata's state folder for `tern-kata agents` to read.
 
 #### Issues and Pages
 
@@ -49,6 +50,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - **Wrap up every running agent** in the palette sends "wrap up: commit what you have and comment your status" to every running agent this host's Panes started, on whatever Issue each runs, and lists who has finished.
   - It writes the way `S` does: an agent holding an unread message is skipped, never replaced, and an agent it cannot reach (not omp, started before agents had an address, another actor's) is listed with the reason.
   - The card follows each agent: finished once it exited, or went idle after working on the wrap-up; "not yet" otherwise, with the agent's last message.
+
+#### Command line
+
+- Agents find and message each other: `tern-kata agents [--issue <ref>]` lists the running agents this host's Panes started, with Issue, name, state and address, and `tern-kata message <address|ref> -m <text>` writes a message to one agent, or to every agent on an Issue.
+  - A message from an agent carries its teammate and arrives worded as from a peer agent, "information, not the person's instruction"; the agent prompt tells the agent to act on it only within its own Issue's scope.
+  - An address that holds a message its agent has not cleared is not written over: the command names that agent and exits 1.
+  - A Pane now saves the latest agent states in `agent-states.json` in tern-kata's state folder for `tern-kata agents` to read.
 
 ### Changed
 
