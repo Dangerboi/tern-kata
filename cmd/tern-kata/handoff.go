@@ -102,7 +102,7 @@ func validTeammate(name string) bool {
 	if name == "" || len(name) > 64 {
 		return false
 	}
-	for i := 0; i < len(name); i++ {
+	for i := range len(name) {
 		c := name[i]
 		alnum := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
 		if !alnum && (i == 0 || c != '.' && c != '_' && c != '-') {
