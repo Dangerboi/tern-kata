@@ -199,6 +199,9 @@ func agentStarted(m Model, msg AgentStarted) Model {
 func agentsPruned(m Model, msg AgentsPruned) (Model, []Cmd) {
 	next, m := m.keepFresh(msg.Agents, msg.Seq)
 	m.AgentMapping = next
+	m.agentsPruned = true
 	m.Agents = m.Agents.trimmed(m.agentMapped)
-	return raiseAgentAttention(m, false)
+	m, raised := raiseAgentAttention(m, false)
+	m, swept := runPendingSweep(m)
+	return m, append(raised, swept...)
 }

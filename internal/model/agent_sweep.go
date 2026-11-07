@@ -24,6 +24,29 @@ func sweepAgents(m Model) (Model, []Cmd) {
 		m.Notice = "Daemon disconnected; reconnect before sweeping."
 		return m, nil
 	}
+	if !m.agentsKnown() {
+		m.sweepPending = true
+		return m, nil
+	}
+	m.sweepPending = false
+	return sweepKnownAgents(m)
+}
+
+// agentsKnown says the Pane has both the first PruneAgents answer and the first relay: until then the mapping or the states a
+// sweep reads are empty, not the truth.
+func (m Model) agentsKnown() bool {
+	return m.agentsPruned && m.Agents.Received
+}
+
+// runPendingSweep runs a sweep asked for before the mapping and the first relay were in, once both are.
+func runPendingSweep(m Model) (Model, []Cmd) {
+	if !m.sweepPending || !m.agentsKnown() {
+		return m, nil
+	}
+	return sweepAgents(m)
+}
+
+func sweepKnownAgents(m Model) (Model, []Cmd) {
 	var targets []BroadcastTarget
 	for _, e := range m.AgentMapping {
 		if !agentExited(m.Agents.States, e.Block) {

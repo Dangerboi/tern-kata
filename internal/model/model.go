@@ -134,6 +134,10 @@ type Model struct {
 	agentFresh map[string]int64
 	// agentAsks counts the RefreshAgents and PruneAgents the Pane has asked for.
 	agentAsks int64
+	// agentsPruned says the first PruneAgents answer is in; sweepPending holds a wrap-up sweep asked for before it and the first
+	// relay were both in.
+	agentsPruned bool
+	sweepPending bool
 	Project   Project
 	Daemon    Daemon
 	Snapshot  Snapshot
@@ -447,7 +451,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m, flagged := followAgents(m, m.Agents.listedStates())
 		m, raised := raiseAgentAttention(m, true)
 		m, ended := closeFinishedAgents(m, closeOnRelay)
-		return m, append(append(append(append(cmds, back...), flagged...), raised...), ended...)
+		m, swept := runPendingSweep(m)
+		return m, append(append(append(append(append(cmds, back...), flagged...), raised...), ended...), swept...)
 	case AgentSessionsRead:
 		return agentSessionsRead(m, msg)
 	case AgentSessionTick:

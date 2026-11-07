@@ -33,6 +33,39 @@ func TestTheSweepWritesTheWrapUpOnceToEveryRunningAgentOnAnyIssue(t *testing.T) 
 	}
 }
 
+func TestTheSweepWaitsForTheAgentMappingAndTheFirstRelay(t *testing.T) {
+	s := broadcastPane(t, nil)
+	s.Model.AgentMapping = nil
+	s.Model.Agents = model.AgentStatesRelay{}
+	sweep := view.DecodeAction("", string(model.WrapUpSweepAction), "")
+	out := step(t, s, sweep)
+	if len(out.Cmds) != 0 || out.State.Model.Notice == model.NoAgentsToSweepRefusal {
+		t.Fatalf("cmds %v notice %q, want the sweep held without a refusal", out.Cmds, out.State.Model.Notice)
+	}
+
+	out = step(t, out.State, model.AgentsPruned{Agents: []model.AgentEntry{broadcastAgent("p", "31"), broadcastAgent("c1", "33"), broadcastAgent("p", "35")}})
+	if len(out.Cmds) != 0 {
+		t.Fatalf("cmds %v after the mapping alone, want none", out.Cmds)
+	}
+
+	out = step(t, out.State, model.AgentStatesMsg{States: []model.AgentState{{Block: "35", State: model.AgentExited}}})
+	sent := 0
+	for _, c := range out.Cmds {
+		if _, ok := c.(model.SendAgentMessage); ok {
+			sent++
+		}
+	}
+	got := sentMessages(out.Cmds)
+	if sent != 2 || len(got) != 2 || got["dana/omp-31"].Message == "" || got["dana/omp-33"].Message == "" {
+		t.Fatalf("cmds %#v, want one write each to 31 and 33 and none to 35", out.Cmds)
+	}
+
+	out = step(t, out.State, model.AgentStatesMsg{States: []model.AgentState{{Block: "35", State: model.AgentExited}}})
+	if len(sentMessages(out.Cmds)) != 0 {
+		t.Fatalf("cmds %#v, a later relay must not sweep again", out.Cmds)
+	}
+}
+
 func TestTheSweepSkipsAHeldAgentAndListsTheOnesItCannotReach(t *testing.T) {
 	notOmp := broadcastAgent("p", "34")
 	notOmp.Address, notOmp.NoAddress = "", model.AgentNotOmp
