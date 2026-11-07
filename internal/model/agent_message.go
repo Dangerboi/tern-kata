@@ -18,11 +18,13 @@ const (
 	ModeAgentMessageReplace Mode = "agent-message-replace"
 
 	// MessageAgent is `m` on the Attention Page: the Message card for the agent that raised the selected request.
-	MessageAgent        Action = "message-agent"
-	AgentMessageSend    Action = "agent-message-send"
-	AgentMessageCancel  Action = "agent-message-cancel"
-	AgentMessageReplace Action = "agent-message-replace"
-	AgentMessageKeep    Action = "agent-message-keep"
+	MessageAgent Action = "message-agent"
+	// AskAgentAboutComment is `m` on the Comments tab: the Message card asking the Issue's agent to answer the selected comment.
+	AskAgentAboutComment Action = "ask-agent-about-comment"
+	AgentMessageSend     Action = "agent-message-send"
+	AgentMessageCancel   Action = "agent-message-cancel"
+	AgentMessageReplace  Action = "agent-message-replace"
+	AgentMessageKeep     Action = "agent-message-keep"
 )
 
 // Why `m` writes to no agent: the selected request's agent cannot receive a message, or no agent raised the request.
@@ -31,6 +33,7 @@ const (
 	AgentExitedRefusal         = "The agent has exited; no message would reach it."
 	AgentNotOmpRefusal         = "The agent is not omp; messages reach only omp agents, through tern-kata's extension."
 	AgentWithoutAddressRefusal = "The agent was started before messages could reach it; start a new one."
+	NoAgentOnIssueRefusal      = "No agent this host started is running on this Issue."
 	AgentOtherActorRefusal     = "The agent takes messages only from the actor that started it."
 )
 
@@ -46,6 +49,8 @@ type AgentMessageState struct {
 	Caret          Caret
 	Held, Unread   string
 	Err            error
+	// Re is the handle of the comment the message asks the agent to answer, "" for a plain message.
+	Re string
 
 	// Picking is the card as the picker of quick replies, until one is chosen.
 	Picking bool
@@ -61,6 +66,8 @@ type SendAgentMessage struct {
 	Address   string
 	Message   string
 	Replacing string
+	// Re is the handle of the comment the message asks the agent to answer ("" for none), written as `kata notify --re` writes it.
+	Re string
 }
 
 func (SendAgentMessage) cmd() {}
@@ -102,21 +109,10 @@ func (AgentAddressCleared) msg() {}
 // exited, whose entry went with its block, is the exited agent's.
 func (m Model) messageTarget(request AttentionRequest) (AgentEntry, string) {
 	var target AgentEntry
-	found, waiting := false, false
+	found := false
 	ours := request.Slot.Kind == "" && !request.Slot.Broadcast && request.Slot.From == m.Actor
 	if ours {
-		for _, e := range m.AgentMapping {
-			if e.IssueUID != request.IssueUID || e.Teammate != request.Slot.Teammate {
-				continue
-			}
-			if e.Address != "" && addressActor(e.Address) != m.Actor {
-				continue
-			}
-			waits := agentWaiting(m.Agents.States, e.Block)
-			if !found || waits && !waiting || waits == waiting && e.StartedAt.After(target.StartedAt) {
-				target, found, waiting = e, true, waits
-			}
-		}
+		target, found = m.newestAgentOn(request.IssueUID, func(e AgentEntry) bool { return e.Teammate == request.Slot.Teammate })
 	}
 	switch {
 	case !found && ours && request.Slot.Message == agentExitedMessage(request.QualifiedID()):
@@ -125,6 +121,26 @@ func (m Model) messageTarget(request AttentionRequest) (AgentEntry, string) {
 		return AgentEntry{}, NoAgentRaisedRefusal
 	}
 	return target, m.agentMessageRefusal(target)
+}
+
+// newestAgentOn is the agent this host's Panes started on an Issue, among those match accepts, that this Pane's actor may message
+// or whose address is not yet known: the newest that waits, else the newest.
+func (m Model) newestAgentOn(issueUID string, match func(AgentEntry) bool) (AgentEntry, bool) {
+	var target AgentEntry
+	found, waiting := false, false
+	for _, e := range m.AgentMapping {
+		if e.IssueUID != issueUID || !match(e) {
+			continue
+		}
+		if e.Address != "" && addressActor(e.Address) != m.Actor {
+			continue
+		}
+		waits := agentWaiting(m.Agents.States, e.Block)
+		if !found || waits && !waiting || waits == waiting && e.StartedAt.After(target.StartedAt) {
+			target, found, waiting = e, true, waits
+		}
+	}
+	return target, found
 }
 
 // agentMessageRefusal is why a message reaches no omp agent e, "" when it can: the agent exited, it is not omp, or it was started
@@ -188,6 +204,29 @@ func openAgentMessageFor(m Model, picking bool) (Model, []Cmd) {
 	return m, nil
 }
 
+// askAgentAboutComment is `m` on the Comments tab: the Message card for the Issue's agent, asking it to answer the comment under the
+// cursor, or the reason there is none in a Notice. The agent is the one the Attention Page's `m` picks for a plain request: the
+// newest that waits, else the newest.
+func askAgentAboutComment(m Model) (Model, []Cmd) {
+	row, ok := m.withRows().cursorRow()
+	issue := m.shownIssue()
+	if m.tab != TabComments || !ok || row.Kind != RowComment || issue == nil {
+		return m, nil
+	}
+	target, found := m.newestAgentOn(issue.UID, func(AgentEntry) bool { return true })
+	reason := NoAgentOnIssueRefusal
+	if found {
+		reason = m.agentMessageRefusal(target)
+	}
+	if reason != "" {
+		m.Notice = reason
+		return m, nil
+	}
+	m.AgentMessage = AgentMessageState{Open: true, IssueUID: issue.UID, IssueRef: issue.QualifiedID, ProjectID: issue.ProjectID,
+		Agent: target.Teammate, Address: target.Address, Re: CommentHandle(row.Key)}
+	return m, nil
+}
+
 // AgentMessageMode is the keymap mode of the Message card: asking before a replace while kata holds an unread message, or picking
 // a quick reply.
 func (m Model) AgentMessageMode() Mode {
@@ -246,7 +285,7 @@ func sendAgentMessage(m Model, replacing string) (Model, []Cmd) {
 		return m, nil
 	}
 	f.Sending, f.Err = true, nil
-	return m, []Cmd{SendAgentMessage{Workspace: m.Workspace, ProjectID: f.ProjectID, UID: f.IssueUID, Actor: m.Actor, Address: f.Address, Message: text, Replacing: replacing}}
+	return m, []Cmd{SendAgentMessage{Workspace: m.Workspace, ProjectID: f.ProjectID, UID: f.IssueUID, Actor: m.Actor, Address: f.Address, Message: text, Replacing: replacing, Re: f.Re}}
 }
 
 // agentMessageSent applies kata's answer: a failure stays on the card, an unread message held at the address asks before replacing

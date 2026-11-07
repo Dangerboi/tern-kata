@@ -11,6 +11,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Agent badge appends " · message unread" in the warning tone, and the Agent card row shows "message unread: " and the message's first line, while an agent has a message at its address that it has not cleared.
 - `m` on the Agent card messages the selected agent, whether it is working, idle or waiting and wherever its block is, including a Background agent, which stays in the hidden session.
   - It is off, with the reason, for an exited agent, one that is not omp, one started before agents had an address, and one another actor started.
+- `m` on the Comments tab asks the Issue's agent to answer the comment under the cursor: the Message card names the comment, the message carries its handle, and the agent is told to answer with `kata comment --reply`, `--confirm`, `--refute` or `--supersede`, which clears the request and leaves a reply notice on the Attention Page.
 - The Agent card shows, for the selected omp agent, its model, tool calls so far, the tool it is running now, its cost so far and the first line of its last message.
   - It reads them from the end of the agent's session file while the card is open, every 2 seconds.
   - A non-omp agent or a session with no file says why in a muted line.

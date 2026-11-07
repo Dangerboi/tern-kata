@@ -408,6 +408,22 @@ func TestAMessageToAnAgentIsWrittenOnlyOverWhatThePersonAgreedToReplace(t *testi
 	}
 }
 
+func TestAMessageAskingAnAgentToAnswerACommentCarriesTheHandleInTheSlot(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Agent at work")
+	const agent = "dana/omp-31"
+	sent := as[model.AgentMessageSent](t, run(t, f.gateway, model.SendAgentMessage{
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana", Address: agent, Message: "is this still true?", Re: "c:abc123",
+	}))
+	if sent.Err != nil || sent.Held != "" {
+		t.Fatalf("message about a comment: %+v", sent)
+	}
+	got := f.read(t, agent).Requests
+	if len(got) != 1 || got[0].Slot.Message != "is this still true?" || got[0].Slot.Re != "c:abc123" || got[0].CommentHandle() != "c:abc123" {
+		t.Fatalf("requests for the agent: %+v, want one naming c:abc123", got)
+	}
+}
+
 func TestAnExitedAgentsAddressIsClearedWhoeverWroteToIt(t *testing.T) {
 	f := newAttentionFixture(t)
 	uid := createIssue(t, f.gateway, f.work, f.workP, "Agent gone")

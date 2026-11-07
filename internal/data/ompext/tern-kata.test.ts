@@ -174,6 +174,18 @@ describe("createFollower", () => {
     expect(h.delivered[0]).toContain("It is about comment c7.\nThis is a review notice.\nWhen you have handled it");
   });
 
+  test("a request about a comment tells the agent to answer the comment, which clears it", async () => {
+    const h = harness();
+    h.follower.start();
+    h.children[0].push(slotLine(5, { ...hello, re: "c:abc123" }));
+    await flush();
+    expect(h.delivered).toEqual([
+      `Message from dangerboi on ${REF}, sent to you through kata:\n\nhello there\n\n` +
+        `It is about comment c:abc123.\n` +
+        `Answer it with \`kata comment ${REF} --reply|--confirm|--refute|--supersede c:abc123 -m "<your answer>"\`; that answer clears this request and tells dangerboi.`,
+    ]);
+  });
+
   test("replayed events and unchanged values are not delivered again", async () => {
     const h = harness();
     h.follower.start();
