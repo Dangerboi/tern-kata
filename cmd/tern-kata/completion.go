@@ -43,7 +43,7 @@ _tern_kata() {
 		words="%[1]s --issue --as --version --help"
 	else
 		case ${COMP_WORDS[1]} in
-		migrate-attachments | run) [[ $cur == -* ]] && words="--as" ;;
+		migrate-attachments | run | message) [[ $cur == -* ]] && words="--as" ;;
 		recur) [[ $cur == -* ]] && words="%[2]s --stop --as" ;;
 		views)
 			if [[ $COMP_CWORD -eq 2 ]]; then
@@ -118,7 +118,8 @@ func fishCompletion() string {
 	line("-l as -r -d 'author for edits'")
 	line("-l version -d 'print the version and exit'")
 	line("-s h -l help -d 'print the help and exit'")
-	line("-n '__fish_seen_subcommand_from migrate-attachments recur run views completion worker update agent' -f")
+	line("-n '__fish_seen_subcommand_from migrate-attachments recur run views completion worker update agent agents message' -f")
+	line("-n '__fish_seen_subcommand_from agents' -l issue -r -d 'only this Issue'")
 	fishTableFlags(line, agentFlags, "agent; and not contains -- -- (commandline -opc)", "as") // after the lone -- the words are the command's, which bash completion leaves alone too
 	line("-n '__fish_seen_subcommand_from docbank; and not __fish_seen_subcommand_from %[1]s' -f -a '%[1]s'", strings.Join(docbankForms, " "))
 	line("-n '__fish_seen_subcommand_from supervise; and not __fish_seen_subcommand_from on off' -f -a 'on off'")

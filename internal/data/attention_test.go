@@ -459,3 +459,29 @@ func TestHandOffAgentWritesTheAttentionMetadataAndSwapsTheReadyLabel(t *testing.
 		t.Errorf("labels %v, want none touched", labels)
 	}
 }
+
+func TestAnAgentsMessageToAnAgentCarriesItsTeammateAndNeverReplacesAnUnreadOne(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Peer at work")
+	const agent = "dana/omp-31"
+	send := func(teammate, message string) model.AgentMessageSent {
+		t.Helper()
+		return as[model.AgentMessageSent](t, run(t, f.gateway, model.SendAgentMessage{
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana", Teammate: teammate, Address: agent, Message: message,
+		}))
+	}
+	if got := send("builder-12", "I changed the API"); got.Err != nil || got.Held != "" {
+		t.Fatalf("first message: %+v", got)
+	}
+	got := f.read(t, agent).Requests
+	if len(got) != 1 || got[0].Slot.From != "dana" || got[0].Slot.Teammate != "builder-12" || got[0].Slot.Message != "I changed the API" {
+		t.Fatalf("slot %+v, want {from dana, teammate builder-12, message}", got)
+	}
+	held := send("reviewer-9", "and the schema")
+	if held.Err != nil || held.Held == "" || held.Unread != "I changed the API" {
+		t.Fatalf("second message over an unread one: %+v", held)
+	}
+	if got := f.read(t, agent).Requests; len(got) != 1 || got[0].Slot.Teammate != "builder-12" {
+		t.Fatalf("the unread message was replaced: %+v", got)
+	}
+}

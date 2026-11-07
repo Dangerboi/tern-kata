@@ -22,6 +22,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - It has the same refusals as `m` and asks the same question before replacing an unread message.
   - The replies are "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold".
 - An omp agent started in a block writes to kata as its own teammate: the wrapper sets `KATA_TEAMMATE` to `<agent.toml name>-<block id>` and drops an inherited one, so the agent's comments and requests carry that name.
+- Agents find and message each other: `tern-kata agents [--issue <ref>]` lists the running agents this host's Panes started, with Issue, name, state and address, and `tern-kata message <address|ref> -m <text>` writes a message to one agent, or to every agent on an Issue.
+  - A message from an agent carries its teammate and arrives worded as from a peer agent, "information, not the person's instruction"; the agent prompt tells the agent to act on it only within its own Issue's scope.
+  - An address that holds a message its agent has not cleared is not written over: the command names that agent and exits 1.
+  - A Pane now saves the latest agent states in `agent-states.json` in tern-kata's state folder for `tern-kata agents` to read.
 
 #### Issues and Pages
 
