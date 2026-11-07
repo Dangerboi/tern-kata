@@ -23,30 +23,42 @@ type agentStateRecord struct {
 	State model.AgentStateWord `json:"state"`
 }
 
-// saveAgentStates writes the relay's states to agent-states.json, unless the file already holds them.
+// saveAgentStates merges the relay's states into agent-states.json by block. Another Pane's window may see agent blocks this
+// one's does not, so blocks the relay does not list keep the state the file has for them while agents.json still maps them; the
+// file stays bounded by that. The read-merge-write runs under guardedfile.Update, so Panes writing at once lose nothing and a
+// reader never sees a half-written file.
 func (g *Gateway) saveAgentStates(cmd model.SaveAgentStates) model.AgentStatesSaved {
-	dirs, err := g.workerDirs()
-	if err != nil || dirs.State == "" {
-		if err == nil {
-			err = fmt.Errorf("tern-kata's state folder is not known")
-		}
-		return model.AgentStatesSaved{Err: err}
-	}
-	doc := agentStatesDoc{States: make([]agentStateRecord, len(cmd.States))}
-	for i, s := range cmd.States {
-		doc.States[i] = agentStateRecord{Block: s.Block, State: s.State}
-	}
-	raw, err := json.MarshalIndent(doc, "", "  ")
+	file, _, err := g.agentStatePaths()
 	if err != nil {
 		return model.AgentStatesSaved{Err: err}
 	}
-	raw = append(raw, '\n')
-	path := filepath.Join(dirs.State, AgentStatesFile)
-	token, err := guardedfile.Read(path)
-	if err != nil || token.Text() == string(raw) {
+	entries, err := ReadAgents(file)
+	if err != nil {
 		return model.AgentStatesSaved{Err: err}
 	}
-	err = guardedfile.Update(path, 0o700, func(guardedfile.Token) ([]byte, error) { return raw, nil })
+	mapped := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		mapped[e.Block] = true
+	}
+	path := filepath.Join(filepath.Dir(file), AgentStatesFile)
+	err = guardedfile.Update(path, 0o700, func(token guardedfile.Token) ([]byte, error) {
+		doc := agentStatesDoc{States: make([]agentStateRecord, 0, len(cmd.States))}
+		listed := make(map[string]bool, len(cmd.States))
+		for _, s := range cmd.States {
+			listed[s.Block] = true
+			doc.States = append(doc.States, agentStateRecord{Block: s.Block, State: s.State})
+		}
+		var old agentStatesDoc
+		if token.Text() != "" && json.Unmarshal([]byte(token.Text()), &old) == nil {
+			for _, r := range old.States {
+				if !listed[r.Block] && mapped[r.Block] {
+					doc.States = append(doc.States, r)
+				}
+			}
+		}
+		raw, err := json.MarshalIndent(doc, "", "  ")
+		return append(raw, '\n'), err
+	})
 	return model.AgentStatesSaved{Err: err}
 }
 

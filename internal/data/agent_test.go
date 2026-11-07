@@ -2030,11 +2030,22 @@ func TestRunningAgentsAreTheMappedOnesTheSavedRelayHasNotShownExited(t *testing.
 	if err != nil || len(got) != 2 || got[0].Block != "1" || got[0].State != model.AgentWaitingInput || got[1].Block != "3" || got[1].State != "" {
 		t.Fatalf("running %+v, %v, want block 1 waiting and block 3 with no state", got, err)
 	}
-	// A later relay replaces the file.
+	// A later relay replaces the blocks it lists and keeps the other mapped blocks another Pane's relay saved.
 	if saved := as[model.AgentStatesSaved](t, run(t, g, model.SaveAgentStates{States: []model.AgentState{{Block: "1", State: model.AgentExited}}})); saved.Err != nil {
 		t.Fatal(saved.Err)
 	}
-	if got, err := g.ReadRunningAgents(); err != nil || len(got) != 2 || got[0].Block != "2" || got[1].Block != "3" {
-		t.Fatalf("running %+v, %v, want blocks 2 and 3", got, err)
+	if got, err := g.ReadRunningAgents(); err != nil || len(got) != 1 || got[0].Block != "3" {
+		t.Fatalf("running %+v, %v, want block 3 only", got, err)
+	}
+	if saved := as[model.AgentStatesSaved](t, run(t, g, model.SaveAgentStates{States: []model.AgentState{{Block: "3", State: model.AgentIdle}}})); saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	if got, err := g.ReadRunningAgents(); err != nil || len(got) != 1 || got[0].Block != "3" || got[0].State != model.AgentIdle {
+		t.Fatalf("a relay listing only block 3 erased another Pane's saved states: %+v, %v", got, err)
+	}
+	// The exited blocks stay exited: 1 and 2 were not listed by that relay.
+	raw, _ := os.ReadFile(filepath.Join(dirs.State, AgentStatesFile))
+	if !strings.Contains(string(raw), `"block": "2"`) {
+		t.Fatalf("block 2's saved state was erased: %s", raw)
 	}
 }
