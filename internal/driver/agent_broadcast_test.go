@@ -52,7 +52,7 @@ func TestABroadcastWritesOnceToEachRunningAgentOfTheIssueAndItsOpenChildren(t *t
 	s := broadcastPane(t, []model.AgentState{{Block: "35", State: model.AgentExited}},
 		broadcastAgent("p", "31"), broadcastAgent("c1", "32"), broadcastAgent("c1", "33"), notOmp, broadcastAgent("p", "35"), broadcastAgent("c2", "36"))
 
-	open := step(t, s, key("S"))
+	open := step(t, s, tern.Key{Name: "s", Shift: true})
 	if m := open.State.Model; m.TopCard() != model.CardAgentMessage || !m.AgentMessage.Broadcast || len(open.Cmds) != 0 {
 		t.Fatalf("card %v broadcast %v cmds %v, want the Message card as a broadcast", m.TopCard(), m.AgentMessage.Broadcast, open.Cmds)
 	}
@@ -93,14 +93,14 @@ func TestABroadcastWritesOnceToEachRunningAgentOfTheIssueAndItsOpenChildren(t *t
 
 func TestABroadcastFailedWriteIsListedSkipped(t *testing.T) {
 	s := broadcastPane(t, nil, broadcastAgent("p", "31"))
-	s = step(t, step(t, step(t, s, key("S")).State, tern.Key{Text: "hello"}).State, key("enter")).State
+	s = step(t, step(t, step(t, s, tern.Key{Name: "s", Shift: true}).State, tern.Key{Text: "hello"}).State, key("enter")).State
 	s = step(t, s, model.AgentMessageSent{UID: "p", Address: "dana/omp-31", Err: errors.New("daemon down")}).State
 	wantShown(t, "the outcome", s, "No agent got the message.", "daemon down")
 }
 
 func TestABroadcastWithNoRunningAgentOpensNoCard(t *testing.T) {
 	s := broadcastPane(t, []model.AgentState{{Block: "31", State: model.AgentExited}}, broadcastAgent("p", "31"), broadcastAgent("c2", "36"))
-	out := step(t, s, key("S"))
+	out := step(t, s, tern.Key{Name: "s", Shift: true})
 	if m := out.State.Model; m.TopCard() != model.NoCard || m.Notice != model.NoAgentsToBroadcastRefusal {
 		t.Fatalf("card %v notice %q, want no card and the refusal", m.TopCard(), m.Notice)
 	}
