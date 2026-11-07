@@ -189,7 +189,7 @@ func TestAskingTheAgentAboutACommentSendsTheMessageNamingItsHandle(t *testing.T)
 	}
 	wantShown(t, "the Message card", open.State, "Message omp", "work#aa11", "answer comment c:vwxyz0")
 	sending := step(t, step(t, open.State, tern.Key{Text: "is this still true?"}).State, key("enter"))
-	want := model.SendAgentMessage{Workspace: "/repo", ProjectID: 7, UID: "work-aa11", Actor: "dana", Address: "dana/omp-31", Message: "is this still true?", Re: "c:vwxyz0"}
+	want := model.SendAgentMessage{Workspace: "/repo", ProjectID: 7, UID: "work-aa11", Actor: "dana", Address: "dana/omp-31", Message: "is this still true?", Re: namedComment}
 	if got := sentMessage(t, sending.Cmds); got != want {
 		t.Fatalf("sent %+v, want %+v", got, want)
 	}

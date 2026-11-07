@@ -34,7 +34,7 @@ func agentMessageLayer(m model.Model) tern.Element {
 			toneText("note", ui.ToneMuted, "The agent gets it as a message from you at its next step, after you answer anything it asks you, and it stays on "+f.IssueRef+" until the agent clears it."),
 		}
 		if f.Re != "" {
-			children = append([]tern.Element{toneText("re", ui.ToneMuted, "Asks the agent to answer comment "+f.Re+".")}, children...)
+			children = append([]tern.Element{toneText("re", ui.ToneMuted, "Asks the agent to answer comment "+model.CommentHandle(f.Re)+".")}, children...)
 		}
 		buttons = []tern.Element{cardButton("send", model.ModeAgentMessage, model.AgentMessageSend, "Send", true), cardButton("cancel", model.ModeAgentMessage, model.AgentMessageCancel, "Cancel", false)}
 	}

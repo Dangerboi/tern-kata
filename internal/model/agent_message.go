@@ -49,7 +49,7 @@ type AgentMessageState struct {
 	Caret          Caret
 	Held, Unread   string
 	Err            error
-	// Re is the handle of the comment the message asks the agent to answer, "" for a plain message.
+	// Re is the UID of the comment the message asks the agent to answer, "" for a plain message.
 	Re string
 
 	// Picking is the card as the picker of quick replies, until one is chosen.
@@ -66,7 +66,8 @@ type SendAgentMessage struct {
 	Address   string
 	Message   string
 	Replacing string
-	// Re is the handle of the comment the message asks the agent to answer ("" for none), written as `kata notify --re` writes it.
+	// Re is the UID of the comment the message asks the agent to answer ("" for none), as kata stores `kata notify --re`: kata settles
+	// the request only when its answer targets exactly that UID.
 	Re string
 }
 
@@ -223,7 +224,7 @@ func askAgentAboutComment(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, IssueUID: issue.UID, IssueRef: issue.QualifiedID, ProjectID: issue.ProjectID,
-		Agent: target.Teammate, Address: target.Address, Re: CommentHandle(row.Key)}
+		Agent: target.Teammate, Address: target.Address, Re: row.Key}
 	return m, nil
 }
 
