@@ -96,6 +96,16 @@ Work attention is the Issue's own `work.attention`. An open Issue whose `work.at
 - **The extension**: it ships in the binary and is written to `omp/tern-kata.ts` in tern-kata's state folder on each start, replaced when its content changes; a running agent keeps the one it loaded. It needs `kata` on the agent's `PATH`, as the agent does. It loads even under `--no-extensions`.
 - **With kata-omp installed**: kata-omp lists the message in its inbox section of the agent's system prompt too, until the agent clears it, so the agent sees it twice; that does no harm. The wrapper's `KATA_OMP_LIVE_INBOX=0` tells a kata-omp that delivers messages live itself to leave that to tern-kata's extension.
 
+#### Messages to all the agents of an Issue
+
+`S` on the selected Issue (list, Board, Lane view or Issue detail) opens the Message card for every running agent this Pane knows on that Issue and on its open children, for example "schema changed, re-check your branches". Type the message (at most 1024 bytes) and press `enter`; `esc` cancels. With no running agent on the Issue or its open children `S` opens no card and says so.
+
+- **What it writes**: the same message as `m`, once to each agent's own address on that agent's own Issue, so each agent gets it as a message from you and clears it as usual. Agents on a closed child, and agents that have exited, get nothing and are not listed.
+- **What it never replaces**: an agent that has not cleared its last message keeps it; the broadcast skips that agent instead of asking.
+- **The outcome**: once every write has answered, the card shows how many agents got the message and each skipped agent with the reason: it holds an unread message, it is not omp, it was started before agents had an address, another actor started it, or kata refused the write (with kata's words). `enter` or `esc` closes it.
+
+`kata notify --broadcast --teammates` reaches participants' teammate inboxes, not the running agents' addresses; `S` is the one that does.
+
 #### Quick replies
 
 `r` on the Attention Page (on a request an agent raised) and on the Agent card (on the selected agent) opens a picker with three canned replies: `1` "continue", `2` "wrap up: commit what you have and comment your status", `3` "commit and close if the acceptance criteria hold". The key sends at once; `esc` cancels. A quick reply is the typed message with that text: the same address, the same delivery, the same question before replacing an unread message, and `r` is off, with the same reason, wherever `m` is.

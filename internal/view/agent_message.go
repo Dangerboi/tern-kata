@@ -1,6 +1,8 @@
 package view
 
 import (
+	"fmt"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
@@ -16,6 +18,15 @@ func agentMessageLayer(m model.Model) tern.Element {
 	if m.AgentMessageMode() == model.ModeAgentQuickReply {
 		return quickReplyLayer(m)
 	}
+	if f.Outcome {
+		return broadcastOutcomeLayer(m)
+	}
+	head, placeholder, note := "Message "+f.Agent, "Message to "+f.Agent,
+		"The agent gets it as a message from you at its next step, after you answer anything it asks you, and it stays on "+f.IssueRef+" until the agent clears it."
+	if f.Broadcast {
+		head, placeholder = "Message the agents", "Message to the agents"
+		note = "Every running agent on " + f.IssueRef + " and its open children gets it as a message from you at its next step. An agent that has not cleared an earlier message is skipped, never replaced."
+	}
 	var children []tern.Element
 	var buttons []tern.Element
 	if m.AgentMessageMode() == model.ModeAgentMessageReplace {
@@ -30,8 +41,8 @@ func agentMessageLayer(m model.Model) tern.Element {
 		buttons = []tern.Element{cardButton("replace", model.ModeAgentMessageReplace, model.AgentMessageReplace, "Replace it", true), cardButton("keep", model.ModeAgentMessageReplace, model.AgentMessageKeep, "Keep editing", false)}
 	} else {
 		children = []tern.Element{
-			ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Message"}, Field: ui.Field{Text: f.Text, Cursor: caretAt(f.Caret, "", f.Text), Mode: "insert", Placeholder: ui.T("Message to " + f.Agent), Readonly: f.Sending}},
-			toneText("note", ui.ToneMuted, "The agent gets it as a message from you at its next step, after you answer anything it asks you, and it stays on "+f.IssueRef+" until the agent clears it."),
+			ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Message"}, Field: ui.Field{Text: f.Text, Cursor: caretAt(f.Caret, "", f.Text), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: f.Sending}},
+			toneText("note", ui.ToneMuted, note),
 		}
 		buttons = []tern.Element{cardButton("send", model.ModeAgentMessage, model.AgentMessageSend, "Send", true), cardButton("cancel", model.ModeAgentMessage, model.AgentMessageCancel, "Cancel", false)}
 	}
@@ -43,7 +54,28 @@ func agentMessageLayer(m model.Model) tern.Element {
 	} else {
 		children = append(children, buttonRow(buttons...))
 	}
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T("Message " + f.Agent), Meta: refMeta(f.IssueRef), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, children))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T(head), Meta: refMeta(f.IssueRef), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, children))
+}
+
+// broadcastOutcomeLayer is the Message card after a broadcast: how many agents got the message, then each agent skipped with why.
+func broadcastOutcomeLayer(m model.Model) tern.Element {
+	f := m.AgentMessage
+	reached := f.BroadcastReached()
+	summary := "No agent got the message."
+	switch {
+	case reached == 1:
+		summary = "1 agent got the message."
+	case reached > 1:
+		summary = fmt.Sprintf("%d agents got the message.", reached)
+	}
+	children := []tern.Element{ui.Text{Common: ui.Common{Key: "reached"}, Text: summary}}
+	for i, t := range f.Targets {
+		if t.Skipped != "" {
+			children = append(children, toneText(fmt.Sprintf("skipped-%d", i), ui.ToneMuted, fmt.Sprintf("Skipped %s on %s: %s", t.Agent, t.IssueRef, t.Skipped)))
+		}
+	}
+	children = append(children, buttonRow(cardButton("close", model.ModeAgentBroadcastOutcome, model.AgentMessageCancel, "Close", true)))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T("Message the agents"), Meta: refMeta(f.IssueRef), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, children))
 }
 
 // quickReplyLayer is the picker of the three quick replies: each reply's text, a button to send it and a Cancel.

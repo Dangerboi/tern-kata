@@ -49,6 +49,12 @@ type AgentMessageState struct {
 
 	// Picking is the card as the picker of quick replies, until one is chosen.
 	Picking bool
+
+	// Broadcast is the card writing to the agents of IssueUID and its open children (see BroadcastAgents). Targets are the agents it
+	// wrote to or skipped, kept once Send is pressed; Outcome is the card showing them after every write answered.
+	Broadcast bool
+	Targets   []BroadcastTarget
+	Outcome   bool
 }
 
 // SendAgentMessage writes Message to an agent's Address on an Issue as `kata notify` does, as Actor. Replacing is the slot value the
@@ -68,10 +74,12 @@ func (SendAgentMessage) cmd() {}
 // AgentMessageSent answers SendAgentMessage for the Issue with UID. Held is the slot value found at the address in place of
 // nothing or of the value replaced, with its message in Unread ("" when it does not read as a request); nothing was written then.
 type AgentMessageSent struct {
-	UID    string
-	Held   string
-	Unread string
-	Err    error
+	UID string
+	// Address is the address the write was for, which tells a broadcast's writes on one Issue apart.
+	Address string
+	Held    string
+	Unread  string
+	Err     error
 }
 
 func (AgentMessageSent) msg() {}
@@ -192,6 +200,8 @@ func openAgentMessageFor(m Model, picking bool) (Model, []Cmd) {
 // a quick reply.
 func (m Model) AgentMessageMode() Mode {
 	switch {
+	case m.AgentMessage.Outcome:
+		return ModeAgentBroadcastOutcome
 	case m.AgentMessage.Held != "":
 		return ModeAgentMessageReplace
 	case m.AgentMessage.Picking:
@@ -208,6 +218,8 @@ func agentMessageKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	mode := m.AgentMessageMode()
 	binding, bound := LookupBindingForMode(msg.Chord, mode)
 	switch {
+	case bound && binding.Action == AgentMessageSend && f.Broadcast:
+		return sendAgentBroadcast(m)
 	case bound && binding.Action == AgentMessageSend:
 		return sendAgentMessage(m, "")
 	case bound && binding.Action == AgentMessageReplace:
@@ -230,21 +242,30 @@ func agentMessageKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// sendAgentMessage writes the typed message, trimmed, over replacing (the held value the person agreed to replace, "" for none).
-func sendAgentMessage(m Model, replacing string) (Model, []Cmd) {
+// messageText is the typed message, trimmed, or false with the reason on the card when it cannot be sent.
+func (m *Model) messageText() (string, bool) {
 	f := &m.AgentMessage
 	text := strings.TrimSpace(f.Text)
 	switch {
 	case text == "":
 		f.Err = errors.New("Type a message.")
-		return m, nil
 	case len(text) > agentAttentionMaxBytes:
 		f.Err = fmt.Errorf("The message is %d bytes; kata takes at most %d.", len(text), agentAttentionMaxBytes)
-		return m, nil
 	case m.Stale:
 		f.Err = errors.New("Daemon disconnected; reconnect before sending.")
+	default:
+		return text, true
+	}
+	return "", false
+}
+
+// sendAgentMessage writes the typed message, trimmed, over replacing (the held value the person agreed to replace, "" for none).
+func sendAgentMessage(m Model, replacing string) (Model, []Cmd) {
+	text, ok := m.messageText()
+	if !ok {
 		return m, nil
 	}
+	f := &m.AgentMessage
 	f.Sending, f.Err = true, nil
 	return m, []Cmd{SendAgentMessage{Workspace: m.Workspace, ProjectID: f.ProjectID, UID: f.IssueUID, Actor: m.Actor, Address: f.Address, Message: text, Replacing: replacing}}
 }
@@ -253,6 +274,9 @@ func sendAgentMessage(m Model, replacing string) (Model, []Cmd) {
 // it, and a written message closes the card with a Notice.
 func agentMessageSent(m Model, msg AgentMessageSent) Model {
 	f := &m.AgentMessage
+	if f.Open && f.Sending && f.Broadcast {
+		return broadcastSent(m, msg)
+	}
 	if !f.Open || !f.Sending || f.IssueUID != msg.UID {
 		return m
 	}

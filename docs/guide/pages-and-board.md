@@ -135,6 +135,7 @@ Editing from the Pane:
 | `t` | In the Issue detail: timed assignment to you, 1m to 24h (see [Compared with `kata tui`](kata-tui.md#timed-assignment)) |
 | `O` | Recurrence (see [Recurring Issues](recur.md)) |
 | `d` | Dates (see [Dates](dates.md)) |
+| `S` | Message every running agent on the Issue and its open children (see [Messages to an agent](agents.md#messages-to-an-agent)) |
 | `M` | Move the Issue to another Project (see [Moving an Issue](#moving-an-issue)) |
 | `X` | Delete the Issue after typing its id (`project#id` or `DELETE project#id`); restore it with `u` or from the Menu (see [Deleting and restoring an Issue](#deleting-and-restoring-an-issue)) |
 | `@`, `U` | Attach a file; list and unlink Attachments (see [Attachments](attachments.md)) |

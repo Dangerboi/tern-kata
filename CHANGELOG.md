@@ -25,6 +25,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - An omp agent is told when an Issue that blocks its own closes, with the blocker's title and how many other blockers are still open, also with the Pane closed.
   - Only blocking links count, and only blockers in the agent's own Project; a close before the agent started is not sent.
 
+- `S` on an Issue messages every running agent on it and on its open children from one Message card.
+  - Each agent gets the message at its own address on its own Issue; agents on closed children and exited agents get none.
+  - An agent that has not cleared its last message is skipped, never replaced; once every write has answered the card lists how many got it and each skipped agent with its reason.
+
 #### Issues and Pages
 
 - `u` on the Attention Page restores the Issue the Pane just deleted, as `u` does on the other Pages, and the Page reads its requests again; it is offered there only while a delete is the newest change in the undo history.

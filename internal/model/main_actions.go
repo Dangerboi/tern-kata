@@ -309,6 +309,7 @@ var mainRows = []actionEntry{
 	{action: OpenClose, modes: issueModes, keys: keys("x", "x"), help: "close", footer: issueModes, sheet: []sheetLine{{sheetGraph, 14, "close"}}, handle: pure(openClose)},
 	{action: ReopenAction, modes: issueModes, keys: keys("r", "r"), help: "reopen", footer: issueModes, sheet: []sheetLine{{sheetGraph, 15, "reopen"}}, handle: reopenIssue},
 	{action: OpenAgentCardAction, modes: issueModes, keys: keys("w", "w"), help: "agents", sheet: []sheetLine{{sheetGraph, 17, "agents: start one in split/tab/bg, go to one"}}, handle: openAgent},
+	{action: BroadcastAgents, modes: issueModes, keys: keys("shift+s", "S"), help: "message agents", sheet: []sheetLine{{sheetDetail, 32, "message every running agent on the Issue and its open children (Message card)"}}, handle: openAgentBroadcast},
 	{action: SetParentAction, modes: issueModes, keys: keys("p", "p"), help: "parent", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 7, "set parent"}}, handle: fieldFor(SetParentAction)},
 	{action: TimedAssignAction, modes: []Mode{ModeDetail}, keys: keys("t", "t"), help: "timed assignment", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 20, "assign to yourself for a set time (1m..24h)"}}, handle: fieldFor(TimedAssignAction)},
 	{action: AddBlockerAction, modes: []Mode{ModeDetail}, keys: keys("b", "b"), help: "blocks", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 18, "add a Blocking link: this Issue blocks the one you name"}}, handle: fieldFor(AddBlockerAction)},
