@@ -263,6 +263,32 @@ describe("blocker closes", () => {
     expect(h.delivered).toEqual([]);
   });
 
+  test("a blocker added by issue.linked on the other issue delivers when it closes later", async () => {
+    const h = harness();
+    h.follower.start();
+    await flush();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#bbbb", REF)]));
+    h.setShow("demo#bbbb", showJson("demo#bbbb", "Other", []));
+    h.children[0].push(eventLine(31, "issue.linked", "demo#bbbb", true, { from_short_id: "bbbb", to_short_id: REF.slice(REF.indexOf("#") + 1) }));
+    await flush();
+    h.children[0].push(eventLine(32, "issue.closed", "demo#bbbb", true));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    expect(h.delivered[0]).toContain("demo#bbbb closed");
+  });
+
+  test("a blocker removed by issue.unlinked no longer delivers", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#bbbb", REF)]));
+    h.follower.start();
+    await flush();
+    h.setShow(REF, showJson(REF, "mine", []));
+    h.children[0].push(eventLine(30, "issue.unlinked", "demo#bbbb", true, { from_short_id: "bbbb", to_short_id: REF.slice(REF.indexOf("#") + 1) }));
+    h.children[0].push(eventLine(31, "issue.closed", "demo#bbbb", true));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
   test("a restart with the cursor delivers a close missed in the gap and none already delivered", async () => {
     const h = harness();
     h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF), link("blocks", "demo#bbbb", REF)]));
