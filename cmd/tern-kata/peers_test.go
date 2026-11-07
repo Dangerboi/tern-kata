@@ -122,6 +122,17 @@ func TestMessageToAnAddressWritesFromTheActorWithTheSendersTeammate(t *testing.T
 	}
 }
 
+func TestMessageFromAnAgentWithoutATeammateNameWritesNothing(t *testing.T) {
+	s := &sender{}
+	var out bytes.Buffer
+	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_INBOX_USER": "dana/omp-2"}, "dana/omp-1", "-m", "hi")
+	err := runMessage(plan, "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
+	var failed subcommandError
+	if !errors.As(err, &failed) || !strings.Contains(err.Error(), "no teammate name") || len(s.sent) != 0 {
+		t.Errorf("err %v, sent %+v, want a refusal naming the missing teammate and no write", err, s.sent)
+	}
+}
+
 func TestMessageToAnAddressHoldingAnUnreadOneWritesNothingAndExitsNonZero(t *testing.T) {
 	s := &sender{answer: func(c model.SendAgentMessage) model.AgentMessageSent {
 		return model.AgentMessageSent{UID: c.UID, Held: `{"from":"dana"}`, Unread: "rebase first\nthen test"}
