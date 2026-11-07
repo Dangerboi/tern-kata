@@ -30,6 +30,8 @@ type BroadcastTarget struct {
 	Answered           bool
 	// Worked says a sweep saw the agent working after the wrap-up reached it, so an idle agent now has done the wrap-up.
 	Worked bool
+	// Commented says a sweep found a comment by the agent on its Issue since the sweep was sent; Reading says that read is in flight.
+	Commented, Reading bool
 }
 
 // BroadcastTargets are the agents a broadcast on the Issue uid (qualified id ref) goes through: those this Pane knows on it and
@@ -40,13 +42,21 @@ func (m Model) BroadcastTargets(uid, ref string) []BroadcastTarget {
 	for _, child := range m.Relationships.Of(uid).OpenChildren() {
 		refs[child.UID] = child.QualifiedID
 	}
+	return m.runningTargets(func(e AgentEntry) (string, bool) {
+		issueRef, ok := refs[e.IssueUID]
+		return issueRef, ok
+	})
+}
+
+// runningTargets are the agents of the mapping that have not exited and for which issueRef names an Issue, each with that ref.
+func (m Model) runningTargets(issueRef func(AgentEntry) (string, bool)) []BroadcastTarget {
 	var targets []BroadcastTarget
 	for _, e := range m.AgentMapping {
-		issueRef, ok := refs[e.IssueUID]
+		ref, ok := issueRef(e)
 		if !ok || agentExited(m.Agents.States, e.Block) {
 			continue
 		}
-		targets = append(targets, m.broadcastTarget(e, issueRef))
+		targets = append(targets, m.broadcastTarget(e, ref))
 	}
 	return targets
 }

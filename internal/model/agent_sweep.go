@@ -1,6 +1,10 @@
 package model
 
-import "strings"
+import (
+	"slices"
+	"strings"
+	"time"
+)
 
 // The wrap-up sweep is a palette command of the window half: it sends the "wrap up" quick reply to every running agent this
 // host's Panes started, on whatever Issue each runs, through the broadcast's write (each agent at its own address, an unread
@@ -13,9 +17,16 @@ const NoAgentsToSweepRefusal = "No agent is running."
 const (
 	SweepFinishedExited = "finished: exited"
 	SweepFinishedIdle   = "finished: idle after the wrap-up"
+	SweepIdleNoComment  = "not yet: idle, no status comment"
 	SweepWaiting        = "not yet: waiting for you"
 	SweepNotYet         = "not yet"
 )
+
+// SweepStanding is where the sweep stands with one agent: Finished, and Text as the card words it.
+type SweepStanding struct {
+	Finished bool
+	Text     string
+}
 
 // sweepAgents is the wrap-up sweep: the wrap-up text to every agent this host's Panes started that has not exited. An agent that
 // cannot take it, or holds an unread message, is listed with why; the write is the broadcast's.
@@ -47,17 +58,12 @@ func runPendingSweep(m Model) (Model, []Cmd) {
 }
 
 func sweepKnownAgents(m Model) (Model, []Cmd) {
-	var targets []BroadcastTarget
-	for _, e := range m.AgentMapping {
-		if !agentExited(m.Agents.States, e.Block) {
-			targets = append(targets, m.broadcastTarget(e, e.IssueRef))
-		}
-	}
+	targets := m.runningTargets(func(e AgentEntry) (string, bool) { return e.IssueRef, true })
 	if len(targets) == 0 {
 		m.Notice = NoAgentsToSweepRefusal
 		return m, nil
 	}
-	m.AgentMessage = AgentMessageState{Open: true, Broadcast: true, Sweep: true}
+	m.AgentMessage = AgentMessageState{Open: true, Broadcast: true, Sweep: true, SweepSince: m.Now}
 	return writeBroadcast(m, targets, QuickReplyWrapUp)
 }
 
@@ -71,11 +77,12 @@ func (m Model) agentState(block string) AgentStateWord {
 	return ""
 }
 
-// trackSweep notes the agents of an open sweep the latest relay moved to working after the wrap-up reached them.
-func trackSweep(m Model) Model {
+// trackSweep notes the agents of an open sweep the latest relay moved to working after the wrap-up reached them, and reads the
+// Issue's comments of each one idle after it, to see whether it commented since the sweep was sent.
+func trackSweep(m Model) (Model, []Cmd) {
 	f := &m.AgentMessage
 	if !f.Open || !f.Sweep {
-		return m
+		return m, nil
 	}
 	targets := append([]BroadcastTarget(nil), f.Targets...)
 	for i, t := range targets {
@@ -84,29 +91,87 @@ func trackSweep(m Model) Model {
 		}
 	}
 	f.Targets = targets
+	return readSweepComments(m)
+}
+
+// readSweepComments asks, for each agent of an open sweep that is idle after the wrap-up and not yet seen to have commented, for
+// the comments of its Issue. A stream event of a new comment asks again; one read per agent is in flight at a time.
+func readSweepComments(m Model) (Model, []Cmd) {
+	f := &m.AgentMessage
+	if !f.Open || !f.Sweep {
+		return m, nil
+	}
+	targets := append([]BroadcastTarget(nil), f.Targets...)
+	var cmds []Cmd
+	for i, t := range targets {
+		if t.Skipped != "" || !t.Answered || !t.Worked || t.Commented || t.Reading || m.agentState(t.Block) != AgentIdle || !m.agentMapped(t.Block) {
+			continue
+		}
+		targets[i].Reading = true
+		cmds = append(cmds, ReadSweepComments{Workspace: m.Workspace, ProjectID: t.ProjectID, UID: t.IssueUID, Address: t.Address, Teammate: addressName(t.Address), Since: f.SweepSince})
+	}
+	f.Targets = targets
+	return m, cmds
+}
+
+// addressName is the part of an Agent address after its last "/": the teammate its comments carry.
+func addressName(address string) string {
+	return address[strings.LastIndex(address, "/")+1:]
+}
+
+// ReadSweepComments reads the comments of an Issue through the Daemon, to see whether one by Teammate was made at or after Since.
+type ReadSweepComments struct {
+	Workspace string
+	ProjectID int64
+	UID       string
+	Address   string
+	Teammate  string
+	Since     time.Time
+}
+
+func (ReadSweepComments) cmd() {}
+
+// SweepCommentsRead answers ReadSweepComments for the agent at Address on the Issue UID: Commented says the Issue holds a comment
+// by the agent's teammate since the sweep was sent.
+type SweepCommentsRead struct {
+	UID, Address string
+	Commented    bool
+	Err          error
+}
+
+func (SweepCommentsRead) msg() {}
+
+// sweepCommentsRead applies the answer to one read: a comment makes the agent's idle count, a failed read leaves it for the next.
+func sweepCommentsRead(m Model, msg SweepCommentsRead) Model {
+	f := &m.AgentMessage
+	targets := slices.Clone(f.Targets)
+	for i, t := range targets {
+		if t.IssueUID == msg.UID && t.Address == msg.Address {
+			targets[i].Reading = false
+			targets[i].Commented = targets[i].Commented || (msg.Err == nil && msg.Commented)
+		}
+	}
+	f.Targets = targets
 	return m
 }
 
 // SweepStatus is where the sweep stands with a target it wrote to: finished once the agent exited (or its block is gone), or is
-// idle after it worked on the wrap-up; not yet otherwise. Last is the agent's last message, first line only, "" when none.
-func (m Model) SweepStatus(t BroadcastTarget) (status, last string) {
-	state := m.agentState(t.Block)
-	switch {
+// idle after it worked on the wrap-up and has commented on its Issue since; not yet otherwise. Last is the agent's last message,
+// first line only (capped as the Agent card's is), "" when none.
+func (m Model) SweepStatus(t BroadcastTarget) (standing SweepStanding, last string) {
+	switch state := m.agentState(t.Block); {
 	case state == AgentExited || !m.agentMapped(t.Block):
-		status = SweepFinishedExited
+		standing = SweepStanding{true, SweepFinishedExited}
+	case state == AgentIdle && t.Worked && t.Commented:
+		standing = SweepStanding{true, SweepFinishedIdle}
 	case state == AgentIdle && t.Worked:
-		status = SweepFinishedIdle
+		standing = SweepStanding{false, SweepIdleNoComment}
 	case state == AgentWaitingInput:
-		status = SweepWaiting
+		standing = SweepStanding{false, SweepWaiting}
 	default:
-		status = SweepNotYet
+		standing = SweepStanding{false, SweepNotYet}
 	}
-	for _, s := range m.Agents.States {
-		if s.Block == t.Block {
-			last, _, _ = strings.Cut(strings.TrimSpace(s.LastMessage), "\n")
-		}
-	}
-	return status, last
+	return standing, m.AgentLastLine(t.Block)
 }
 
 // SweepFinished counts the agents the sweep wrote to that have finished.
@@ -114,7 +179,7 @@ func (m Model) SweepFinished() int {
 	n := 0
 	for _, t := range m.AgentMessage.Targets {
 		if t.Skipped == "" {
-			if status, _ := m.SweepStatus(t); strings.HasPrefix(status, "finished") {
+			if standing, _ := m.SweepStatus(t); standing.Finished {
 				n++
 			}
 		}

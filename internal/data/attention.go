@@ -209,6 +209,21 @@ func (c *Client) writeAttentionSlot(ctx context.Context, projectID int64, uid, a
 	return daemonError(c.writeMetadataKey(ctx, projectID, uid, actor, key, value))
 }
 
+// ReadSweepComments reads whether the Issue holds a comment by the agent's teammate made at or after the sweep was sent.
+func (c *Client) ReadSweepComments(ctx context.Context, cmd model.ReadSweepComments) (model.SweepCommentsRead, error) {
+	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.UID)
+	if err != nil {
+		return model.SweepCommentsRead{}, daemonError(err)
+	}
+	read := model.SweepCommentsRead{UID: cmd.UID, Address: cmd.Address}
+	for _, comment := range shown.Comments {
+		if comment.Teammate != nil && *comment.Teammate == cmd.Teammate && !comment.CreatedAt.Before(cmd.Since) {
+			read.Commented = true
+		}
+	}
+	return read, nil
+}
+
 // ReadAgentIssue reads the status of the Issue with uid in a Project.
 func (c *Client) ReadAgentIssue(ctx context.Context, cmd model.ReadAgentIssue) (model.AgentIssueRead, error) {
 	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.UID)

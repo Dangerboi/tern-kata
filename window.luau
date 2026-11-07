@@ -294,20 +294,26 @@ local function launch(cx: WindowCx, command: string): number?
     return cx.layout:new_tab({command = command})
 end
 
-local function open(cx: WindowCx, ref: string?)
-    if ref then
+-- The focused tab's kata Pane (when `find`) gets focus and `act`; otherwise a new Pane is launched, `queue` records what it does once
+-- its surface is up, and it is watched for a failing start.
+local function openKata(cx: WindowCx, find: boolean, act: (number) -> (), queue: (number) -> ())
+    if find then
         local pane = existingPane(cx)
         if pane then
             cx.layout:focus(pane)
-            selectIssue(cx, pane, ref)
+            act(pane)
             return
         end
     end
     local pane = launch(cx, panecommands.KATA)
     if not pane then return end
     launched[pane] = true
-    pending[pane] = ref
+    queue(pane)
     watch(pane, 20)
+end
+
+local function open(cx: WindowCx, ref: string?)
+    openKata(cx, ref ~= nil, function(pane) selectIssue(cx, pane, ref :: string) end, function(pane) pending[pane] = ref end)
 end
 
 -- `W` starts an agent in a new tab, which Tern appends as the last tab. The agent's prompt file is named
@@ -680,17 +686,7 @@ tern.command({
     id = "wrap-up-agents",
     title = "Wrap up every running agent",
     run = function(cx)
-        local pane = existingPane(cx)
-        if pane then
-            cx.layout:focus(pane)
-            sweepAgents(cx, pane)
-            return
-        end
-        pane = launch(cx, panecommands.KATA)
-        if not pane then return end
-        launched[pane] = true
-        pendingSweep[pane] = true
-        watch(pane, 20)
+        openKata(cx, true, function(pane) sweepAgents(cx, pane) end, function(pane) pendingSweep[pane] = true end)
     end,
 })
 

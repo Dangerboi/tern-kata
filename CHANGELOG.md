@@ -49,7 +49,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - **Wrap up every running agent** in the palette sends "wrap up: commit what you have and comment your status" to every running agent this host's Panes started, on whatever Issue each runs, and lists who has finished.
   - It writes the way `S` does: an agent holding an unread message is skipped, never replaced, and an agent it cannot reach (not omp, started before agents had an address, another actor's) is listed with the reason.
-  - The card follows each agent: finished once it exited, or went idle after working on the wrap-up; "not yet" otherwise, with the agent's last message.
+  - The card follows each agent: finished once it exited, or went idle after working on the wrap-up and commented on its Issue since the sweep was sent (an idle agent without that comment shows "not yet: idle, no status comment"); "not yet" otherwise, with the agent's last message.
 
 #### Command line
 

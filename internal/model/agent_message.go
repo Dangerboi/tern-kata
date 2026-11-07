@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
 
 // A person messages a running agent from the Attention Page: `m` on a request an agent raised opens the Message card, whose text
@@ -63,6 +64,8 @@ type AgentMessageState struct {
 	// Sweep is the broadcast the wrap-up sweep sends: every running agent of this host's Panes gets the wrap-up text, and the
 	// outcome keeps showing which of them have finished (see sweepAgents).
 	Sweep bool
+	// SweepSince is when the sweep was sent: an agent's status comment counts only when made since.
+	SweepSince time.Time
 }
 
 // SendAgentMessage writes Message to an agent's Address on an Issue as `kata notify` does, as Actor, with Teammate on the slot when
