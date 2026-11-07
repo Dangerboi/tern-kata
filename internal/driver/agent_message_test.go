@@ -166,3 +166,50 @@ func TestAMessagePassesOverAnotherActorsNewerAgentOnTheSameIssue(t *testing.T) {
 		t.Errorf("card %v address %q notice %q, want the Message card for dana/omp-31", m.TopCard(), m.AgentMessage.Address, m.Notice)
 	}
 }
+
+// commentPane is the Comments tab of work#aa11 with the comment named namedComment under the cursor, with agents mapped.
+func commentPane(t *testing.T, agents ...model.AgentEntry) driver.State {
+	t.Helper()
+	s := attentionPane(t)
+	s.Model.AgentMapping = agents
+	issue := &model.Issue{UID: "work-aa11", QualifiedID: "work#aa11", ProjectID: 7}
+	s = step(t, s, model.DetailLoaded{UID: "work-aa11", Selected: &model.IssueDetailData{Issue: issue, Comments: commentsOf("x1", namedComment, "x3")}}).State
+	s = answerAttention(t, step(t, s, key("6")), attentionRequestsNaming(t, "work", 7, "aa11", namedComment), 0)
+	s = step(t, s, key("enter")).State
+	if m := s.Model; m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
+		t.Fatalf("tab %v row %q, want the Comments tab on %s", m.ActiveTab(), detailRowKey(m), namedComment)
+	}
+	return s
+}
+
+func TestAskingTheAgentAboutACommentSendsTheMessageNamingItsHandle(t *testing.T) {
+	open := step(t, commentPane(t, ompAgent), key("m"))
+	if m := open.State.Model; m.TopCard() != model.CardAgentMessage || len(open.Cmds) != 0 {
+		t.Fatalf("card %v cmds %v, want the Message card", m.TopCard(), open.Cmds)
+	}
+	wantShown(t, "the Message card", open.State, "Message omp", "work#aa11", "answer comment c:vwxyz0")
+	sending := step(t, step(t, open.State, tern.Key{Text: "is this still true?"}).State, key("enter"))
+	want := model.SendAgentMessage{Workspace: "/repo", ProjectID: 7, UID: "work-aa11", Actor: "dana", Address: "dana/omp-31", Message: "is this still true?", Re: namedComment}
+	if got := sentMessage(t, sending.Cmds); got != want {
+		t.Fatalf("sent %+v, want %+v", got, want)
+	}
+}
+
+func TestAskingAboutACommentWithoutAnAgentThatCanBeMessagedOnlySaysWhy(t *testing.T) {
+	other := ompAgent
+	other.IssueUID = "other-bb22"
+	for name, c := range map[string]struct {
+		agents []model.AgentEntry
+		reason string
+	}{
+		"no agent on the Issue":       {[]model.AgentEntry{other}, model.NoAgentOnIssueRefusal},
+		"an agent without an address": {[]model.AgentEntry{{IssueUID: "work-aa11", Block: "31", Teammate: "omp"}}, model.AgentWithoutAddressRefusal},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := step(t, commentPane(t, c.agents...), key("m"))
+			if m := got.State.Model; m.TopCard() != model.NoCard || m.Notice != c.reason || len(got.Cmds) != 0 {
+				t.Fatalf("card %v notice %q cmds %v, want only the notice %q", m.TopCard(), m.Notice, got.Cmds, c.reason)
+			}
+		})
+	}
+}

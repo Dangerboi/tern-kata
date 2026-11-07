@@ -44,6 +44,9 @@ func agentMessageLayer(m model.Model) tern.Element {
 			ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Message"}, Field: ui.Field{Text: f.Text, Cursor: caretAt(f.Caret, "", f.Text), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: f.Sending}},
 			toneText("note", ui.ToneMuted, note),
 		}
+		if f.Re != "" {
+			children = append([]tern.Element{toneText("re", ui.ToneMuted, "Asks the agent to answer comment "+model.CommentHandle(f.Re)+".")}, children...)
+		}
 		buttons = []tern.Element{cardButton("send", model.ModeAgentMessage, model.AgentMessageSend, "Send", true), cardButton("cancel", model.ModeAgentMessage, model.AgentMessageCancel, "Cancel", false)}
 	}
 	if f.Err != nil {

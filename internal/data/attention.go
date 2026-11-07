@@ -131,6 +131,9 @@ func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAt
 func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessage) (model.AgentMessageSent, error) {
 	key := model.NotificationKey(cmd.Address)
 	value := map[string]any{"from": cmd.Actor, "message": cmd.Message}
+	if cmd.Re != "" {
+		value["re"] = cmd.Re
+	}
 	var expect *string
 	if cmd.Replacing != "" {
 		expect = &cmd.Replacing

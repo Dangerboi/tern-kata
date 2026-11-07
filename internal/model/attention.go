@@ -52,10 +52,15 @@ func (r AttentionRequest) Tag() string {
 // commentHandleLen is how many characters of a comment's ULID its handle keeps.
 const commentHandleLen = 6
 
-// CommentHandle is the handle of the comment the request names, as kata prints it ("c:" and the last six characters of the ULID in
-// lower case); empty when it names none.
+// CommentHandle is the handle of the comment the request names, as kata prints it; empty when it names none.
 func (r AttentionRequest) CommentHandle() string {
-	handle := strings.ToLower(strings.TrimSpace(r.Slot.Re))
+	return CommentHandle(r.Slot.Re)
+}
+
+// CommentHandle is the handle of the comment with the ULID (or handle) id as kata prints it: "c:" and the last six characters of
+// the ULID in lower case; empty for a blank id.
+func CommentHandle(id string) string {
+	handle := strings.ToLower(strings.TrimSpace(id))
 	if handle == "" {
 		return ""
 	}

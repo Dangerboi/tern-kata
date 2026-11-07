@@ -216,7 +216,13 @@ export function deliveryText(ref: string, address: string, slot: Slot): string {
   const notes: string[] = [];
   if (slot.re) notes.push(`It is about comment ${slot.re}.`);
   if (slot.kind) notes.push(`This is a ${slot.kind} notice.`);
-  notes.push(`When you have handled it, clear it: \`kata notify ${ref} --to ${address} --clear\``);
+  if (slot.re && !slot.kind) {
+    notes.push(
+      `Answer it with \`kata comment ${ref} --reply|--confirm|--refute|--supersede ${slot.re} -m "<your answer>"\`; that answer clears this request and tells ${slot.from}.`,
+    );
+  } else {
+    notes.push(`When you have handled it, clear it: \`kata notify ${ref} --to ${address} --clear\``);
+  }
   return [`Message from ${slot.from} on ${ref}, sent to you through kata:`, slot.message, notes.join("\n")].join("\n\n");
 }
 
