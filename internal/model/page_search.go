@@ -145,6 +145,9 @@ func (m Model) workflowSearchWords(w Workflow) []string {
 
 // searchedRuns are the Runs the list shows: those the search leaves, every one without it.
 func (m Model) searchedRuns() []Run {
+	if m.Runs.Timeline {
+		return m.timelineSelectable()
+	}
 	if !m.searchingPage(PageRuns) {
 		return m.Runs.Runs
 	}

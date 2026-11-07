@@ -38,6 +38,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - `u` on the Attention Page restores the Issue the Pane just deleted, as `u` does on the other Pages, and the Page reads its requests again; it is offered there only while a delete is the newest change in the undo history.
+- `n` on the Runs Page switches to the since-you-last-looked mode: the runs that ended since you last marked them seen with `s` on this machine, newest first above a Now line, then the Project's next runs (native jobs with their next time, adapter jobs listed with no time).
+  - More than eight new runs fold into one row per job; failed runs are never folded.
+  - The mark and the mode are kept per Project in `seen.toml` beside `filters.toml`, so they survive a Pane restart.
 
 #### Jobs and worker
 

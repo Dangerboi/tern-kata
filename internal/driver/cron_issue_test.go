@@ -86,6 +86,28 @@ func TestCronMadeIssueDetailNamesTheJobAndTheScheduledTimeAndUsesTheUidWhenTheJo
 	}
 }
 
+func TestLeavingTheRunsTimelineReadsTheJobsAgainForTheCronJobsName(t *testing.T) {
+	archived := nativeJob("J1", "Weekly report", jobParent("open", false))
+	archived.DeletedAt = &cronRun
+	s, _ := detailOf(t, cronChild(), nil, archived)
+	wantText(t, "the detail", inspectorText(t, s), "Weekly report")
+
+	out := step(t, s, key("3"))
+	out.State = answerRuns(t, out, "", finishedRun("R1"))
+	out = step(t, out.State, key("n"))
+	if load, ok := askedJobs(out.Cmds); !ok || load.Archived {
+		t.Fatalf("the since-you-last-looked mode asked %+v (asked %v), want a read without archived jobs", load, ok)
+	}
+	s = answerJobs(t, out)
+
+	back := step(t, s, key("1"))
+	load, asked := askedJobs(back.Cmds)
+	if !asked || !load.Archived {
+		t.Fatalf("returning to the detail asked %+v (asked %v), want the jobs read again with archived jobs", load, asked)
+	}
+	wantText(t, "the detail", inspectorText(t, answerJobs(t, back, archived)), "Weekly report")
+}
+
 func TestIssueWithoutCronMetadataShowsNothingNewAndReadsNoJobs(t *testing.T) {
 	s, asked := detailOf(t, boardCard("plain"), nil)
 	if asked {

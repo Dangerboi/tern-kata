@@ -127,6 +127,8 @@ func init() {
 		func(cmd model.ShareLanes, err error) model.Msg { return model.LanesShared{Share: cmd, Err: err} },
 		nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveFilters) model.Msg { return g.saveFilters(cmd) }, nil, nil)
+	local(func(g *Gateway, _ context.Context, cmd model.LoadSeen) model.Msg { return g.loadSeen(cmd) }, nil, nil)
+	local(func(g *Gateway, _ context.Context, cmd model.SaveSeen) model.Msg { return g.saveSeen(cmd) }, nil, nil)
 	local(func(g *Gateway, _ context.Context, _ model.LoadViews) model.Msg { return g.readViews() }, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveView) model.Msg { return g.writeView(cmd) }, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.DeleteView) model.Msg { return g.removeView(cmd) }, nil, nil)

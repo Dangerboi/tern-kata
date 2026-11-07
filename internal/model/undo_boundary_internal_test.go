@@ -99,6 +99,8 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{SaveAgentStates{}, false},
 		{SaveDraft{}, false},
 		{SaveFilters{}, false},
+		{LoadSeen{}, false},
+		{SaveSeen{}, false},
 		{SaveJobCmd{}, true},
 		{SaveLanes{}, false},
 		{SaveView{}, false},

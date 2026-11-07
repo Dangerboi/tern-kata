@@ -231,6 +231,8 @@ var runsRows = []actionEntry{
 	{action: OpenRunIssue, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("i", "i"), help: "issue", footer: []Mode{ModeRuns, ModeRunInspector}, sheet: []sheetLine{{sheetRuns, 6, "open the run's Issue"}}, handle: pure(openRunIssue)},
 	{action: FilterRunsByJob, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("f", "f"), help: "job filter", footer: []Mode{ModeRuns}, sheet: []sheetLine{{sheetRuns, 7, "show only the selected run's job, or all runs again"}}, handle: pure(toggleRunJobFilter)},
 	{action: OlderRuns, modes: []Mode{ModeRuns}, keys: keys("m", "m"), help: "older", footer: []Mode{ModeRuns}, sheet: []sheetLine{{sheetRuns, 8, "read the next older runs"}}, handle: olderRuns},
+	{action: ToggleRunsTimeline, modes: []Mode{ModeRuns}, keys: keys("n", "n"), help: "since you looked", footer: []Mode{ModeRuns}, sheet: []sheetLine{{sheetRuns, 17, "switch between every run and the runs that ended since you last looked (remembered)"}}, handle: toggleRunsTimeline},
+	{action: MarkRunsSeen, modes: []Mode{ModeRuns}, keys: keys("s", "s"), help: "mark seen", footer: []Mode{ModeRuns}, sheet: []sheetLine{{sheetRuns, 18, "in the since-you-last-looked mode, mark the runs ended so far as seen on this machine"}}, handle: markRunsSeen, when: canMarkRunsSeen},
 	{action: ReloadRuns, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetRuns, 9, "read the runs again"}}, handle: reloadRuns},
 }
 

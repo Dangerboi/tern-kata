@@ -37,12 +37,22 @@ func (g *Gateway) loadFilters(projectUID string) (model.Filters, error) {
 		return model.Filters{}, err
 	}
 	path := filepath.Join(folder, "filters.toml")
-	var file filtersFile
-	if _, err := toml.DecodeFile(path, &file); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return model.Filters{}, fmt.Errorf("%s: %w", path, err)
+	file, err := readTables[filtersFile](path)
+	if err != nil {
+		return model.Filters{}, err
 	}
 	p := file[projectUID]
 	return model.Filters{ProjectUID: p.Project, Status: p.Status, Owner: p.Owner, Label: p.Label, Relationship: p.Relationship}, nil
+}
+
+// readTables is the TOML table file at path. No file is the zero value; an unreadable one is an error naming it.
+func readTables[T any](path string) (T, error) {
+	var file T
+	if _, err := toml.DecodeFile(path, &file); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		var zero T
+		return zero, fmt.Errorf("%s: %w", path, err)
+	}
+	return file, nil
 }
 
 // saveFilters writes the Project's default filter, keeping every other table and every key of this one it doesn't know. It

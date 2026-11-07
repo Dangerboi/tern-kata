@@ -1,6 +1,7 @@
 # The Runs Page lists a run an executor observed with kata cron run observe: its status, job name, Issue, executor and summary.
 # Enter shows the detail with the token counts, `i` opens the run's Issue on the Issues Page, and `r` on the Jobs Page opens the
-# runs of one job. Own Issue and job; it cleans up.
+# runs of one job. The since-you-last-looked mode (`n`) lists the runs ended since the mark above a Now line, `s` marks them seen,
+# and the mode and mark survive a restart through seen.toml. Own Issue and job; it cleans up.
 rn_dir="$tmp/workspace"
 kata --workspace "$rn_dir" create "Smoke run Issue" --body "Issue of an observed run" --json >"$tmp/runs-issue.json"
 rn_issue=$(jq -r '.issue.uid' "$tmp/runs-issue.json")
@@ -73,6 +74,37 @@ expect_tree "[data-id='main.columns.list.jobs.$rn_job']" '.count == 1'
 ctl click "[data-id='main.columns.list.jobs.$rn_job']"
 ctl key r
 expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.count == 1'
+
+# The since-you-last-looked mode: never marked, so every ended run is new and sits above the Now line, newest first.
+ctl key 3
+ctl key n
+expect_tree "[data-id='main.columns.list.runs.now']" '.ok and .count == 1'
+expect_tree "[data-id^='main.columns.list.runs.']" '.nodes as $n | def y(f): [$n[] | select(.text | f)][0].rect[1]; y(contains("the worker stopped")) as $a | y(contains("the provider answered")) as $b | y(contains("triaged nine items")) as $c | y(contains("triaged four items")) as $d | y(. == "Now") as $now | $a != null and $d != null and $now != null and $a < $b and $b < $c and $c < $d and $d < $now'
+# s marks them seen: the mark is the newest end among the loaded runs.
+ctl key s
+expect_tree "[data-id='main.columns.list.runs.nothing-new']" '.ok and .count == 1 and (.nodes[0].text | contains("Nothing new since"))'
+expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.count == 0'
+rn_seen="$XDG_CONFIG_HOME/tern-kata/seen.toml"
+for ((attempt = 0; attempt < 100; attempt++)); do
+  grep -qs 'timeline = true' "$rn_seen" && grep -qs '^ *seen = 2026-10-08T12:01:00Z' "$rn_seen" && break
+  sleep 0.1
+done
+grep -q '^\[' "$rn_seen"
+grep -q 'timeline = true' "$rn_seen"
+grep -q '^ *seen = 2026-10-08T12:01:00Z' "$rn_seen"
+# A restart opens the Runs Page in the mode, with the mark kept.
+ctl key q
+expect_tree .sf-list '.count == 0'
+ctl --file "$tmp/launch.ctl"
+expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 3'
+ctl key 3
+expect_tree "[data-id='main.columns.list.runs.now']" '.ok and .count == 1'
+expect_tree "[data-id='main.columns.list.runs.nothing-new']" '.ok and .count == 1 and (.nodes[0].text | contains("Nothing new since"))'
+# n leaves the mode and the list of every run is back.
+ctl key n
+expect_tree "[data-id='main.columns.list.runs.now']" '.count == 0'
+expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and .count == 1'
+rm -f "$rn_seen"
 ctl key 1
 kata --workspace "$rn_dir" cron job delete "$rn_job" --expected-event-uid "$rn_event" --json >/dev/null
 kata --workspace "$rn_dir" delete "$rn_issue" --force --confirm "DELETE smoke#$rn_short" --json >/dev/null

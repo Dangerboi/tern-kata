@@ -79,6 +79,8 @@ const (
 	ReloadRuns              Action = "reload-runs"
 	OlderRuns               Action = "older-runs"
 	FilterRunsByJob         Action = "filter-runs-by-job"
+	ToggleRunsTimeline      Action = "toggle-runs-timeline"
+	MarkRunsSeen            Action = "mark-runs-seen"
 	OpenRunIssue            Action = "open-run-issue"
 	RunsOfJob               Action = "runs-of-job"
 	RunJobNowAction         Action = "run-job-now"

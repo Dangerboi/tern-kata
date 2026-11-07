@@ -171,6 +171,16 @@ type RunsState struct {
 	stale bool
 	// refresh makes the next read of the newest page join the Runs held.
 	refresh bool
+	// Timeline says the Page shows the since-you-last-looked mode (see Model.Timeline); Seen is when this machine last marked the
+	// Project's Runs seen, zero for never; SeenErr is why seen.toml could not be read.
+	Timeline bool
+	Seen     time.Time
+	SeenErr  error
+	// seenRead says seen.toml was read for the Project, seenAsked that the read is on its way; timelineSet says the mode was
+	// toggled here, which an answer to the read does not undo.
+	seenRead, seenAsked, timelineSet bool
+	// jobsStale asks for the Project's jobs again, for the timeline's next runs.
+	jobsStale bool
 }
 
 // OnRuns says the Runs Page is current.
@@ -325,14 +335,16 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 func enterRuns(m Model) (Model, []Cmd) {
 	// The Page keeps its selection, loaded pages and filter while another Page is shown; the newest page is read again to join
 	// what is held.
-	m.Runs.refresh, m.Runs.stale = m.Runs.ProjectID != 0, true
+	m.Runs.refresh, m.Runs.stale, m.Runs.jobsStale = m.Runs.ProjectID != 0, true, true
 	m, ask := m.askWorker(0)
 	return m, []Cmd{ask}
 }
 
-// clearRuns drops the Runs Page's loading marker when the Page is left.
+// clearRuns drops the Runs Page's loading marker when the Page is left. The since-you-last-looked mode may have replaced the
+// Jobs list with one that leaves out archived jobs, so the Issue detail's record of its own read is dropped to read again.
 func clearRuns(m Model) Model {
 	m.Runs.Loading = false
+	m.Jobs.cronRead = cronRead{}
 	return m
 }
 
@@ -352,13 +364,26 @@ func (m Model) settleRuns() (Model, []Cmd) {
 	if id != m.Runs.ProjectID {
 		m.Runs.ProjectID, m.Runs.stale = id, true
 	}
+	var cmds []Cmd
+	if !m.Runs.seenAsked {
+		m.Runs.seenAsked = true
+		cmds = append(cmds, LoadSeen{ProjectUID: m.Runs.ProjectUID})
+	}
+	if m.Runs.Timeline && m.Runs.jobsStale {
+		m.Runs.jobsStale = false
+		if m.Jobs.ProjectID != id {
+			m.Jobs.Jobs, m.Jobs.ProjectArchived = nil, false
+		}
+		m.Jobs.ProjectID, m.Jobs.Err, m.Jobs.Loading = id, nil, true
+		cmds = append(cmds, LoadJobs{Workspace: m.Workspace, ProjectID: id, Archived: m.Jobs.ShowArchived, Request: m.Jobs.reads.Ask()})
+	}
 	if !m.Runs.stale {
-		return m, nil
+		return m, cmds
 	}
 	m.Runs.stale, m.Runs.Loading = false, true
 	refresh := m.Runs.refresh
 	m.Runs.refresh = false
-	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: id, JobUID: m.Runs.JobUID, Request: m.Runs.reads.Ask(), Refresh: refresh}}
+	return m, append(cmds, LoadRuns{Workspace: m.Workspace, ProjectID: id, JobUID: m.Runs.JobUID, Request: m.Runs.reads.Ask(), Refresh: refresh})
 }
 
 // runsLoaded applies the answer to the latest read: an older page is appended to the Runs held, the newest replaces them. A
@@ -442,7 +467,7 @@ func moveRun(m Model, action Action) Model {
 
 // reloadRuns reads the newest Runs again.
 func reloadRuns(m Model) (Model, []Cmd) {
-	m.Runs.stale = true
+	m.Runs.stale, m.Runs.jobsStale = true, true
 	m, cmd := m.askWorker(0)
 	return m, []Cmd{cmd}
 }
@@ -546,6 +571,10 @@ func updateRuns(m Model, msg Msg) (Model, []Cmd, bool) {
 			return next, []Cmd{cmd}, true
 		}
 		return m, nil, true
+	case SeenLoaded:
+		return seenLoaded(m, msg), nil, true
+	case SeenSaved:
+		return seenSaved(m, msg), nil, true
 	case RunShown:
 		return runShown(m, msg), nil, true
 	case RunSessionOpened:

@@ -31,8 +31,37 @@ Each card has:
 | `o` | Open the omp session of a finished or held run of this machine in a new Tern tab |
 | `u` | Resume the selected held run through the worker |
 | `A` | Abandon a held run, or cancel a run still running on this machine |
+| `n` | Switch to the [since-you-last-looked mode](#since-you-last-looked), or back to the list of every run |
+| `s` | In that mode, mark the runs that ended so far as seen (offered only once `seen.toml` was read without error) |
 
 `r` on the [Jobs Page](jobs.md) opens the Runs Page filtered to the selected job.
+
+## Since you last looked
+
+`n` switches the Page to a mode that answers "what ran while I was away". `n` again brings back the list of every run, which stays the default. The mode is remembered for each Project, across Pane restarts.
+
+In the mode the list has two halves around a **Now** line:
+
+- Above it, the runs that ended since you last looked on this machine, newest first and highlighted: succeeded, failed, cancelled, `unknown` and held runs alike. A run still running has not ended and is not listed. A run that ended without an end time counts from when kata last updated it. A Project never marked seen lists every ended run it has read, and says "Nothing new yet." when there is none. While the runs are still being read it says "Loading runs…".
+- Below it, the Project's next runs. A native job shows its next time, soonest first, worked out as on the [Jobs Page](jobs.md). An adapter job is listed with no time ("started by the worker"), because only the worker knows when it starts it. A paused, archived or manual job is left out. While the jobs are being read it says "Loading next runs…".
+
+With nothing new the top half is one line, "Nothing new since 08:00." (the time of the last mark, with the date when it was another day).
+
+`s` marks the runs read so far as seen: the highlighted runs leave the list and the mark moves to the end of the newest ended run among them, not to the clock, so a run that ended before the key but was not read yet, or whose executor's clock is behind, still shows as new. With no ended run read the mark stays. The mark is per machine, as kata has nowhere to keep it, so two machines disagree. It is `seen.toml` in tern-kata's config folder, beside `filters.toml`: one table per Project UID.
+
+```toml
+["01JABC..."]
+seen = 2026-11-07T08:00:00Z
+timeline = true
+```
+
+`seen` is the last mark and `timeline = true` is the remembered mode. The file is written atomically. A file that cannot be read is left alone: the Page says why in either view, `s` is not offered and nothing is saved until it is fixed.
+
+### Folding
+
+Up to eight new results are listed one by one. With more than eight, one job's ended runs fold into a single row: the job's name, how many runs, their counts by status and when the newest ended. A failed run is never folded: it stays listed by itself, and so does a job's only run. A folded row cannot be selected; `n` brings back the list of every run, where each run can be opened.
+
+`f` narrows the mode to the selected run's job, like the list, and the next runs to that job. `/` searches the new runs (before they fold) and the next runs by job name. `m` still reads older runs.
 
 ## Detail
 
