@@ -96,8 +96,13 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 			return m, nil
 		}
 		var asked []Cmd
+		if msg.Type == "issue.commented" {
+			m, asked = readSweepComments(m)
+		}
 		if attentionChangesTheCount(msg.Type) {
-			m, asked = askAttention(m)
+			var counted []Cmd
+			m, counted = askAttention(m)
+			asked = append(asked, counted...)
 		}
 		if msg.Type == "sync.reset_required" {
 			m.Stale = true

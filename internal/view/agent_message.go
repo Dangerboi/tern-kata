@@ -106,8 +106,8 @@ func sweepLayer(m model.Model) tern.Element {
 		if t.Skipped != "" || !t.Answered {
 			continue
 		}
-		status, last := m.SweepStatus(t)
-		text := fmt.Sprintf("%s on %s: %s", t.Agent, t.IssueRef, status)
+		standing, last := m.SweepStatus(t)
+		text := fmt.Sprintf("%s on %s: %s", t.Agent, t.IssueRef, standing.Text)
 		if last != "" {
 			text += " (" + last + ")"
 		}

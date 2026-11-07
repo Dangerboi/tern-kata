@@ -95,9 +95,23 @@ func TestTheSweepFollowsAgentsToFinished(t *testing.T) {
 	wantShown(t, "just after sending", s, "0 of 3 agents have finished the wrap-up.")
 	wantNotShown(t, "just after sending", s, "finished: ")
 
-	// 31 was idle and has not worked yet; 33 was working, so its idle is the wrap-up done; 34 goes on working.
-	s = step(t, s, model.AgentStatesMsg{States: []model.AgentState{{Block: "31", State: model.AgentIdle}, {Block: "33", State: model.AgentIdle, LastMessage: "Committed abc\nrest"}, {Block: "34", State: model.AgentWorking}}}).State
-	wantShown(t, "after 33 idled", s, "1 of 3 agents have finished the wrap-up.", "omp on work#c1: finished: idle after the wrap-up (Committed abc)", "not yet")
+	// 31 was idle and has not worked yet; 33 was working, so its idle is the wrap-up done, but it has not commented; 34 goes on working.
+	out := step(t, s, model.AgentStatesMsg{States: []model.AgentState{{Block: "31", State: model.AgentIdle}, {Block: "33", State: model.AgentIdle, LastMessage: "Committed abc\nrest"}, {Block: "34", State: model.AgentWorking}}})
+	s = out.State
+	wantRead := model.ReadSweepComments{Workspace: "/repo", ProjectID: 7, UID: "c1", Address: "dana/omp-33", Teammate: "omp-33", Since: s.Model.AgentMessage.SweepSince}
+	if reads := sweepReads(out.Cmds); len(reads) != 1 || reads[0] != wantRead {
+		t.Fatalf("reads %+v, want one: %+v", reads, wantRead)
+	}
+	wantShown(t, "after 33 idled", s, "0 of 3 agents have finished the wrap-up.", "omp on work#c1: not yet: idle, no status comment (Committed abc)")
+
+	// The read found no comment by omp-33; a new comment on the Issue asks again, and then it has commented.
+	s = step(t, s, model.SweepCommentsRead{UID: "c1", Address: "dana/omp-33"}).State
+	out = step(t, s, model.StreamEvent{Generation: s.Model.StreamGeneration, ID: 1, Type: "issue.commented"})
+	if reads := sweepReads(out.Cmds); len(reads) != 1 || reads[0] != wantRead {
+		t.Fatalf("reads %+v after a comment event, want one: %+v", reads, wantRead)
+	}
+	s = step(t, out.State, model.SweepCommentsRead{UID: "c1", Address: "dana/omp-33", Commented: true}).State
+	wantShown(t, "after 33 commented", s, "1 of 3 agents have finished the wrap-up.", "omp on work#c1: finished: idle after the wrap-up (Committed abc)", "not yet")
 
 	s = step(t, s, model.AgentStatesMsg{States: []model.AgentState{{Block: "31", State: model.AgentWorking}}}).State
 	s = step(t, s, model.AgentStatesMsg{States: []model.AgentState{{Block: "31", State: model.AgentExited}, {Block: "34", State: model.AgentWaitingInput}}}).State
@@ -117,4 +131,14 @@ func TestTheSweepListsAFailedWriteAsSkipped(t *testing.T) {
 	s = step(t, s, view.DecodeAction("", string(model.WrapUpSweepAction), "")).State
 	s = step(t, s, model.AgentMessageSent{UID: "p", Address: "dana/omp-31", Err: errors.New("daemon down")}).State
 	wantShown(t, "the sweep", s, "0 of 0 agents", "daemon down")
+}
+
+func sweepReads(cmds []model.Cmd) []model.ReadSweepComments {
+	var reads []model.ReadSweepComments
+	for _, c := range cmds {
+		if r, ok := c.(model.ReadSweepComments); ok {
+			reads = append(reads, r)
+		}
+	}
+	return reads
 }

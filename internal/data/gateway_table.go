@@ -701,6 +701,16 @@ func init() {
 		nil, nil)
 
 	daemonCall(
+		func(cmd model.ReadSweepComments) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ReadSweepComments) (model.Msg, error) {
+			return ok(c.ReadSweepComments(ctx, cmd))
+		},
+		func(cmd model.ReadSweepComments, err error) model.Msg {
+			return model.SweepCommentsRead{UID: cmd.UID, Address: cmd.Address, Err: err}
+		},
+		nil, nil)
+
+	daemonCall(
 		func(cmd model.ClearAgentAttention) string { return cmd.Workspace },
 		func(ctx context.Context, c *Client, cmd model.ClearAgentAttention) (model.Msg, error) {
 			return ok(model.AgentAttentionWritten{UID: cmd.UID, Clear: true}, c.ClearAgentAttention(ctx, cmd))
