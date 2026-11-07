@@ -62,11 +62,13 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 }
 
 // agentEnv returns environ for the agent plan runs: KATA_AUTHOR set to plan.Actor as childEnv does (left as inherited when it is
-// empty), no inherited KATA_REF or KATA_INBOX_USER (the person's own inbox is not the agent's), and KATA_REF set to plan.AgentRef
-// when it is not empty. An Agent address prefix (the agent loads tern-kata's omp extension) sets KATA_OMP_LIVE_INBOX=0, so kata-omp
-// leaves live delivery to the extension, and in a block KATA_INBOX_USER to the agent's Agent address, from the block id in TERN_PANE.
+// empty), no inherited KATA_REF, KATA_INBOX_USER or KATA_TEAMMATE (the person's own inbox and teammate are not the agent's), and
+// KATA_REF set to plan.AgentRef when it is not empty. An Agent address prefix (the agent loads tern-kata's omp extension) sets
+// KATA_OMP_LIVE_INBOX=0, so kata-omp leaves live delivery to the extension, and in a block KATA_INBOX_USER to the agent's Agent
+// address, from the block id in TERN_PANE, and KATA_TEAMMATE to <name>-<block id>, so its comments and requests carry its own
+// teammate name; a name kata would refuse leaves KATA_TEAMMATE unset.
 func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string {
-	dropped := []string{"KATA_REF", "KATA_INBOX_USER"}
+	dropped := []string{"KATA_REF", "KATA_INBOX_USER", "KATA_TEAMMATE"}
 	if plan.Actor != "" {
 		dropped = append(dropped, "KATA_AUTHOR")
 	}
@@ -86,9 +88,28 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 		env = append(env, "KATA_OMP_LIVE_INBOX=0")
 		if block != "" {
 			env = append(env, "KATA_INBOX_USER="+data.AgentAddress(plan.AgentAddressPrefix, block))
+			name := plan.AgentAddressPrefix[strings.LastIndex(plan.AgentAddressPrefix, "/")+1:]
+			if teammate := name + "-" + block; validTeammate(teammate) {
+				env = append(env, "KATA_TEAMMATE="+teammate)
+			}
 		}
 	}
 	return env
+}
+
+// validTeammate says kata accepts name as a teammate: ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$.
+func validTeammate(name string) bool {
+	if name == "" || len(name) > 64 {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		alnum := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+		if !alnum && (i == 0 || c != '.' && c != '_' && c != '-') {
+			return false
+		}
+	}
+	return true
 }
 
 // envValue is the value of the last entry named name in environ, "" when there is none; names compare case-insensitively when

@@ -187,6 +187,23 @@ func TestAgentEnv(t *testing.T) {
 	if got, want := agentEnv(windows, plan("", "demo#ab12", "ann/omp"), true), []string{"Tern_Pane=42", "KATA_REF=demo#ab12", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Agent address on Windows: %q, want %q", got, want)
 	}
+	teammates := []string{"PATH=/bin", "KATA_TEAMMATE=me", "Tern_Pane=42"}
+	if got, want := agentEnv(teammates, plan("", "", ""), false), []string{"PATH=/bin", "Tern_Pane=42"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("inherited teammate without a prefix: %q, want %q", got, want)
+	}
+	if got, want := agentEnv([]string{"KATA_TEAMMATE=me", "TERN_PANE=42"}, plan("", "", "ann/omp"), false), []string{"TERN_PANE=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("teammate with a prefix: %q, want %q", got, want)
+	}
+	if got, want := agentEnv([]string{"KATA_TEAMMATE=me", "TERN_PANE=42"}, plan("", "", "omp"), false), []string{"TERN_PANE=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=omp-42", "KATA_TEAMMATE=omp-42"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("teammate from a prefix without a slash: %q, want %q", got, want)
+	}
+	long := strings.Repeat("a", 62)
+	if got, want := agentEnv([]string{"KATA_TEAMMATE=me", "TERN_PANE=42"}, plan("", "", "ann/"+long), false), []string{"TERN_PANE=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/" + long + "-42"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("teammate too long: %q, want %q", got, want)
+	}
+	if got, want := agentEnv([]string{"Kata_Teammate=me", "Tern_Pane=42"}, plan("", "", "ann/omp"), true), []string{"Tern_Pane=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("teammate on Windows: %q, want %q", got, want)
+	}
 }
 
 type stubSession struct{}

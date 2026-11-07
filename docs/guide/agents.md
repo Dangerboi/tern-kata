@@ -43,9 +43,9 @@ An unknown key, a relative `checkout` or an empty `command` refuses the start an
 
 The agent always runs through `tern-kata agent [--as <actor>] [--address-prefix <actor>/<name>] --ref <qualified ref> --`. For a daemon other than the default one, the Pane also passes the route flags it needs to reach that daemon: `--home`, `--db`, `--schema`, `--dsn-file`, `--env-file`, `--daemon`, `--server`, `--token-file`, `--auth-file`, `--allow-insecure` and `--trust-private-network`, each only when it has a value. No flag holds a secret: a token or DSN goes through a private file the wrapper reads and deletes. The wrapper:
 
-- sets `KATA_REF` to the Issue, so kata-plugin's todo plan hangs under it, and drops an inherited `KATA_REF` and `KATA_INBOX_USER` (your own inbox is not the agent's);
+- sets `KATA_REF` to the Issue, so kata-plugin's todo plan hangs under it, and drops an inherited `KATA_REF`, `KATA_INBOX_USER` and `KATA_TEAMMATE` (your own inbox and teammate name are not the agent's);
 - sets `KATA_AUTHOR` when there is an `actor`, and otherwise leaves `KATA_AUTHOR` as inherited;
-- for an omp agent (the Pane passes `--address-prefix`), sets `KATA_INBOX_USER` to the agent's own address, `<your actor>/<agent.toml name>-<block id>` (the block id from `TERN_PANE`), and `KATA_OMP_LIVE_INBOX=0`, and omp loads tern-kata's extension with `-e`, or with `--trusted-extension` when the agent's args hold one (see [Messages to an agent](#messages-to-an-agent)).
+- for an omp agent (the Pane passes `--address-prefix`), sets `KATA_INBOX_USER` to the agent's own address, `<your actor>/<agent.toml name>-<block id>` (the block id from `TERN_PANE`), `KATA_TEAMMATE` to `<agent.toml name>-<block id>` (so the agent's comments and requests carry its own teammate name; left unset when kata would refuse the name, for instance over 64 bytes), and `KATA_OMP_LIVE_INBOX=0`, and omp loads tern-kata's extension with `-e`, or with `--trusted-extension` when the agent's args hold one (see [Messages to an agent](#messages-to-an-agent)).
 
 `tern-kata` must be on the `PATH` of Tern's shell on that machine, and must be this version: an older one refuses `--ref` or `--address-prefix` and the agent exits at once.
 

@@ -21,6 +21,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `r` on the Attention Page and on the Agent card opens a picker of three quick replies to the agent, sent with `1`, `2` or `3` as a typed message would be.
   - It has the same refusals as `m` and asks the same question before replacing an unread message.
   - The replies are "continue", "wrap up: commit what you have and comment your status" and "commit and close if the acceptance criteria hold".
+- An omp agent started in a block writes to kata as its own teammate: the wrapper sets `KATA_TEAMMATE` to `<agent.toml name>-<block id>` and drops an inherited one, so the agent's comments and requests carry that name.
 
 #### Issues and Pages
 

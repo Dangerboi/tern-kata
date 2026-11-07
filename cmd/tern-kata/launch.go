@@ -677,7 +677,9 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 any value; without --as it is left as inherited) and KATA_REF
                                 to the qualified Issue ref, with no KATA_INBOX_USER unless
                                 --address-prefix gives <actor>/<name>: then KATA_INBOX_USER is
-                                <actor>/<name>-<block id>, the block id from TERN_PANE; its
+                                <actor>/<name>-<block id>, the block id from TERN_PANE, and
+                                KATA_TEAMMATE is <name>-<block id> (left unset when kata would
+                                refuse it); its
                                 arguments passed on as typed and its exit status as ours;
                                 -- is required. --home sets KATA_HOME; --daemon names a catalog entry
                                 (its url and allow_insecure become KATA_SERVER and KATA_ALLOW_INSECURE,
