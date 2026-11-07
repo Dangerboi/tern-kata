@@ -665,7 +665,8 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
   message <address|ref> -m <text>
                                 write a message to the agent at that Agent address, or to every
                                 agent that can receive one on that Issue, as the --as actor
-                                (default KATA_AUTHOR) and, inside an agent, with its KATA_TEAMMATE
+                                (else, inside an agent, the actor of its own address; else
+                                KATA_AUTHOR) and, inside an agent, with its KATA_TEAMMATE
                                 on it: the receiving agent is told it is from a peer, not the
                                 person's instruction. An address that holds a message its agent
                                 has not cleared is not written over: that agent is named and
