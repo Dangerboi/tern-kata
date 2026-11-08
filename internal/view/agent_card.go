@@ -113,22 +113,45 @@ func agentLayer(m model.Model) tern.Element {
 			children = append(children, toneText("fact-"+strconv.Itoa(i), tone, fact.Text))
 		}
 	}
-	children = append(children,
-		buttonRow(
-			unavailable(cardButton("go", model.ModeAgentCard, model.AgentCardGo, "Go to agent", true), m.AgentCardUnavailable(model.AgentCardGo)),
-			unavailable(cardButton("split", model.ModeAgentCard, model.AgentCardSplit, "New in a split", false), m.AgentCardUnavailable(model.AgentCardSplit)),
-			unavailable(cardButton("tab", model.ModeAgentCard, model.AgentCardTab, "New in a tab", false), m.AgentCardUnavailable(model.AgentCardTab)),
-			unavailable(cardButton("new-background", model.ModeAgentCard, model.AgentCardNewBackground, "New in the background", false), m.AgentCardUnavailable(model.AgentCardNewBackground)),
-			unavailable(cardButton("background", model.ModeAgentCard, model.AgentCardBackground, "Send to background", false), m.AgentCardUnavailable(model.AgentCardBackground)),
-			unavailable(cardButton("team", model.ModeAgentCard, model.AgentCardTeam, "Start a team", false), m.AgentCardUnavailable(model.AgentCardTeam)),
-			unavailable(cardButton("pause", model.ModeAgentCard, model.AgentCardPause, pauseLabel(m), false), m.AgentCardUnavailable(model.AgentCardPause)),
-			unavailable(cardButton("message", model.ModeAgentCard, model.AgentCardMessage, "Message", false), m.AgentCardUnavailable(model.AgentCardMessage)),
-			unavailable(cardButton("interrupt", model.ModeAgentCard, model.AgentCardInterrupt, "Interrupt", false), m.AgentCardUnavailable(model.AgentCardInterrupt)),
-			unavailable(cardButton("stop", model.ModeAgentCard, model.AgentCardStop, "Stop", false), m.AgentCardUnavailable(model.AgentCardStop)),
-			unavailable(cardButton("quick-reply", model.ModeAgentCard, model.AgentCardQuickReply, "Quick reply", false), m.AgentCardUnavailable(model.AgentCardQuickReply)),
-			unavailable(cardButton("forget", model.ModeAgentCard, model.AgentCardForget, "Forget", false), m.AgentCardUnavailable(model.AgentCardForget)),
-			cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)))
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Agents"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeLG}, children))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Agents"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeLG, Foot: agentFoot(m)}, children))
+}
+
+// agentFoot groups the Agent card's buttons by what they act on, one row each: a new agent on the Issue (and its team), then the
+// selected agent. The row's label names the object, so a button says only what happens to it. Forget acts only on an agent
+// record from another host, so it is drawn only while the card lists one.
+func agentFoot(m model.Model) tern.Element {
+	b := func(key string, action model.Action, words string, primary bool) tern.Element {
+		return unavailable(cardButton(key, model.ModeAgentCard, action, words, primary), m.AgentCardUnavailable(action))
+	}
+	selected := []tern.Element{
+		b("go", model.AgentCardGo, "Go to", true),
+		b("background", model.AgentCardBackground, "Background", false),
+		b("message", model.AgentCardMessage, "Message", false),
+		b("quick-reply", model.AgentCardQuickReply, "Quick reply", false),
+		b("interrupt", model.AgentCardInterrupt, "Interrupt", false),
+		b("stop", model.AgentCardStop, "Stop", false),
+	}
+	if len(m.AgentCardRemoteRows()) > 0 {
+		selected = append(selected, b("forget", model.AgentCardForget, "Forget", false))
+	}
+	return ui.Col{Common: ui.Common{Key: footKey}, Gap: ui.GapSM, Children: ui.Nodes(
+		footGroup("new", "New agent", []tern.Element{
+			b("split", model.AgentCardSplit, "Split", false),
+			b("tab", model.AgentCardTab, "Tab", false),
+			b("new-background", model.AgentCardNewBackground, "Background", false),
+			b("team", model.AgentCardTeam, "Team", false),
+			b("pause", model.AgentCardPause, pauseLabel(m), false),
+		}, cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)),
+		footGroup("agent", "Selected", selected),
+	)}
+}
+
+// footGroup is a labeled row of buttons; end is drawn at the row's end.
+func footGroup(key, label string, buttons []tern.Element, end ...tern.Element) tern.Element {
+	head := toneText("label", ui.ToneMuted, label)
+	head.Shrink, head.Min, head.Wrap = new(float64), &ui.Bounds{W: ui.Ch(9)}, ui.WrapNone
+	group := ui.Row{Common: ui.Common{Key: "buttons", Grow: 1}, Gap: ui.GapSM, Wrap: true, Children: buttons}
+	return ui.Row{Common: ui.Common{Key: key}, Gap: ui.GapMD, Children: append(ui.Nodes(head, group), end...)}
 }
 
 func pauseLabel(m model.Model) string {

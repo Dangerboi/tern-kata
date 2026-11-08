@@ -154,8 +154,9 @@ func TestReplyDraftNamesItsKindAndOffersTheKindKeyAndSendAnyway(t *testing.T) {
 func TestAgentCardEndsInButtonsAndSaysWhenThereAreNoAgents(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	m = press(m, "w")
-	cardButtons(t, m, "layer.agent.foot", []button{{"go", "Go to agent"}, {"split", "New in a split"}, {"tab", "New in a tab"},
-		{"new-background", "New in the background"}, {"background", "Send to background"}, {"message", "Message"}, {"interrupt", "Interrupt"}, {"stop", "Stop"}, {"quick-reply", "Quick reply"}, {"cancel", "Cancel"}}, "")
+	cardButtons(t, m, agentNew, []button{{"split", "Split"}, {"tab", "Tab"}, {"new-background", "Background"}, {"team", "Team"}, {"pause", "Pause the team"}}, "")
+	cardButtons(t, m, "layer.agent.foot.new", []button{{"cancel", "Cancel"}}, "")
+	cardButtons(t, m, agentSelected, []button{{"go", "Go to"}, {"background", "Background"}, {"message", "Message"}, {"quick-reply", "Quick reply"}, {"interrupt", "Interrupt"}, {"stop", "Stop"}}, "")
 	if got := text(pickerNodes(t, m)["layer.agent.none"]); got != "No agents on this Issue yet." {
 		t.Errorf("empty card says %q", got)
 	}
@@ -208,13 +209,31 @@ func TestAgentCardDisablesWhatCannotRunWithAReason(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	nodes := pickerNodes(t, press(m, "w"))
 	for _, id := range []string{"go", "background", "interrupt", "stop"} {
-		node := nodes["layer.agent.foot."+id]
+		node := nodes[agentSelected+"."+id]
 		if node.P["disabled"] != "No agent on this Issue yet." || node.P["variant"] == "primary" {
 			t.Errorf("%s: disabled %v, variant %v", id, node.P["disabled"], node.P["variant"])
 		}
 	}
-	if nodes["layer.agent.foot.split"].P["disabled"] != nil || nodes["layer.agent.foot.cancel"].P["disabled"] != nil {
+	if nodes[agentNew+".split"].P["disabled"] != nil || nodes["layer.agent.foot.new.cancel"].P["disabled"] != nil {
 		t.Error("buttons that can run are disabled")
+	}
+}
+
+// The Agent card's button ids: a new agent's row, and the selected agent's.
+const (
+	agentNew      = "layer.agent.foot.new.buttons"
+	agentSelected = "layer.agent.foot.agent.buttons"
+)
+
+func TestAgentCardOffersForgetOnlyWhileItListsAnAgentOnAnotherHost(t *testing.T) {
+	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a", HostID: "a0a0a0a0", Actor: "dana"}
+	if _, drawn := pickerNodes(t, press(m, "w"))[agentSelected+".forget"]; drawn {
+		t.Error("Forget is drawn with no agent on another host")
+	}
+	record := model.AgentRecord{Address: "dana/omp-8", Host: "desk", HostID: "b1b1b1b1", Block: "8", Name: "omp", Actor: "dana", MessageFrom: []string{}}
+	m.Issues[0].Metadata = map[string]any{model.AgentRecordKey(record.HostID, record.Block): record}
+	if node := pickerNodes(t, press(m, "w"))[agentSelected+".forget"]; node.K != "button" || node.P["disabled"] != nil {
+		t.Errorf("Forget with the desk agent selected: %s, disabled %v; want an enabled button", node.K, node.P["disabled"])
 	}
 }
 
@@ -248,12 +267,12 @@ func teamCardModel() model.Model {
 
 func TestAgentCardOffersATeamAndDisablesItWithTheReason(t *testing.T) {
 	nodes := pickerNodes(t, press(teamCardModel(), "w"))
-	if node := nodes["layer.agent.foot.team"]; node.K != "button" || text(node) != "Start a team" || node.P["disabled"] != nil {
+	if node := nodes[agentNew+".team"]; node.K != "button" || text(node) != "Team" || node.P["disabled"] != nil {
 		t.Errorf("team button: %s %q disabled %v", node.K, text(node), node.P["disabled"])
 	}
 	bare := teamCardModel()
 	bare.Snapshot = model.Snapshot{}
-	if got := pickerNodes(t, press(bare, "w"))["layer.agent.foot.team"].P["disabled"]; got != model.TeamNoChildReason {
+	if got := pickerNodes(t, press(bare, "w"))[agentNew+".team"].P["disabled"]; got != model.TeamNoChildReason {
 		t.Errorf("a team with no child: disabled %v, want %q", got, model.TeamNoChildReason)
 	}
 }

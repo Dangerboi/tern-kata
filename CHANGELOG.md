@@ -124,6 +124,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `m` on the Attention Page messages the agent this actor started and passes over another actor's agent with the same name on the Issue.
   - Released 0.9.0 sent the message to the newest agent of that name, whose extension dropped it when another actor had started it.
 - The kata skill is written against kata v0.22 and tells agents that `kata cron job edit` and `kata cron workflow edit` need a terminal, so they change a definition with `update --file`.
+- The Agent card's buttons sit in two labeled rows: "New agent" (Split, Tab, Background, Team, Pause the team, and Cancel at the end) and "Selected" (Go to, Background, Message, Quick reply, Interrupt, Stop), in place of one row that wrapped onto three.
+  - Forget appears in the Selected row only while the card lists an agent on another host, the only kind it acts on.
 
 #### Issues and Pages
 
