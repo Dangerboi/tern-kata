@@ -129,9 +129,10 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 	if err != nil {
 		return subcommandError{err}
 	}
+	verified := daemonVerified(workspace, send)
 	missed := 0
 	for _, a := range targets {
-		line, written := writeSlot(plan, workspace, a, text, send)
+		line, written := writeSlot(plan, workspace, a, text, verified, send)
 		if !written {
 			missed++
 		}
@@ -145,10 +146,28 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 	return nil
 }
 
-// writeSlot writes text to agent a's slot and says what came of it, and whether it was written.
-func writeSlot(plan LaunchPlan, workspace string, a model.IssueAgent, text string, send func(model.Cmd) model.Msg) (line string, written bool) {
-	if owner := model.AgentAddressActor(a.Address); owner != plan.Actor {
-		return fmt.Sprintf("Cannot message %s on %s: it acts for %s, and only that actor's messages reach it (you are %s).", a.Address, a.IssueRef, owner, plan.Actor), false
+// daemonVerified reads, once and only when a target needs it, whether the daemon verifies the actor of every write: the Pane's own
+// capability read, through send. A failed read is not verified.
+func daemonVerified(workspace string, send func(model.Cmd) model.Msg) func() bool {
+	var answered, verified bool
+	return func() bool {
+		if !answered {
+			read := send(model.LoadAuthCapabilities{Workspace: workspace, Account: true}).(model.AuthCapabilitiesLoaded)
+			answered, verified = true, read.Err == nil && read.VerifiedSenders
+		}
+		return verified
+	}
+}
+
+// writeSlot writes text to agent a's slot and says what came of it, and whether it was written. The sender rule
+// (model.MessageSenderRefusal) decides first; verified asks the daemon, which happens only when its answer can change the rule's
+// result: a listed sender who is not the agent's own actor.
+func writeSlot(plan LaunchPlan, workspace string, a model.IssueAgent, text string, verified func() bool, send func(model.Cmd) model.Msg) (line string, written bool) {
+	owner := model.AgentAddressActor(a.Address)
+	listed := a.MessageFromActors()
+	known := plan.Actor == owner || !model.MayMessage(plan.Actor, owner, listed) || verified()
+	if refusal := model.MessageSenderRefusal(plan.Actor, owner, listed, false, known); refusal != "" {
+		return fmt.Sprintf("Cannot message %s on %s: %s (you are %s).", a.Address, a.IssueRef, refusal, plan.Actor), false
 	}
 	if a.ProjectID == 0 {
 		return fmt.Sprintf("Cannot message %s on %s: its entry does not name the Issue's Project (it started with an older tern-kata).", a.Address, a.IssueRef), false

@@ -67,6 +67,9 @@ type Model struct {
 	// IssueScoped says the connection's credential is limited to one Issue, as the daemon's auth capabilities report. kata refuses
 	// delete and restore to such an account, so the Pane does not offer them. It stays false until the answer arrives, and when the read fails.
 	IssueScoped bool
+	// VerifiedSenders says the daemon derives the actor of every write from the credential (kata's identity mode), as the Pane's own
+	// capability read reports. A message from another actor or to another host is refused until it does; false until the answer arrives.
+	VerifiedSenders bool
 	// accountReads numbers the asks for the connection's own capabilities; the Credentials Page numbers its own.
 	accountReads Latest
 	// accountAnswered says a read of them succeeded on this connection, so the stream opening again asks no more.

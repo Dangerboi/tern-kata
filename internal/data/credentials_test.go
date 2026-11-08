@@ -195,3 +195,40 @@ func TestGatewayEchoesWhoAskedWhenTheCapabilityReadFails(t *testing.T) {
 		t.Errorf("failure %#v", got)
 	}
 }
+
+// instanceOf is a daemon whose /api/v1/instance reports auth kind kind.
+func instanceOf(t *testing.T, kind string) *kataServer {
+	t.Helper()
+	return serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/instance" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"instance_uid": "u", "version": "0.22.0", "auth": map[string]any{"kind": kind}})
+	}), "0.22.0")
+}
+
+func TestADaemonIsVerifiedWhenItDerivesTheActorFromTheCredential(t *testing.T) {
+	for kind, want := range map[string]bool{"db_token": true, "bootstrap": true, "trusted_proxy": true, "none": false, "local": false, "static_token": false, "": false} {
+		daemon := instanceOf(t, kind)
+		locate := newLocator(daemon.target()).locate
+		verified, err := ReadVerifiedSenders(context.Background(), locate, t.TempDir())
+		if err != nil || verified != want {
+			t.Errorf("auth kind %q: verified %v, %v; want %v", kind, verified, err, want)
+		}
+		capabilities := as[model.AuthCapabilitiesLoaded](t, run(t, newGateway(t, newLocator(daemon.target())), model.LoadAuthCapabilities{Workspace: t.TempDir(), Account: true}))
+		if capabilities.Err != nil || capabilities.VerifiedSenders != want {
+			t.Errorf("auth kind %q: capabilities %+v, want VerifiedSenders %v", kind, capabilities, want)
+		}
+	}
+}
+
+func TestReadingVerifiedSendersFailsWhenTheDaemonCannotBeReached(t *testing.T) {
+	l := newLocator(Target{})
+	boom := context.DeadlineExceeded
+	l.err.Store(&boom)
+	if verified, err := ReadVerifiedSenders(context.Background(), l.locate, t.TempDir()); verified || err == nil {
+		t.Errorf("verified %v, %v; want not verified and the error", verified, err)
+	}
+}

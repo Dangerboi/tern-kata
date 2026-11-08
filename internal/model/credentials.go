@@ -34,13 +34,14 @@ type LoadAuthCapabilities struct {
 func (LoadAuthCapabilities) cmd() {}
 
 // AuthCapabilitiesLoaded answers LoadAuthCapabilities and echoes its Account. TokenAuditRead says the account may list tokens;
-// IssueScoped that its credential is limited to one Issue.
+// IssueScoped that its credential is limited to one Issue; VerifiedSenders that the daemon verifies the actor of every write.
 type AuthCapabilitiesLoaded struct {
-	Request        int64
-	Account        bool
-	TokenAuditRead bool
-	IssueScoped    bool
-	Err            error
+	Request         int64
+	Account         bool
+	TokenAuditRead  bool
+	IssueScoped     bool
+	VerifiedSenders bool
+	Err             error
 }
 
 func (AuthCapabilitiesLoaded) msg() {}
@@ -120,6 +121,7 @@ func reaskAccount(m *Model) []Cmd {
 func accountCapabilities(m Model, msg AuthCapabilitiesLoaded) Model {
 	if m.accountReads.IsCurrent(msg.Request) {
 		m.IssueScoped = msg.Err == nil && msg.IssueScoped
+		m.VerifiedSenders = msg.Err == nil && msg.VerifiedSenders
 		m.accountAnswered = msg.Err == nil
 	}
 	return m

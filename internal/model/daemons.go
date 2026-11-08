@@ -178,7 +178,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.Attention = AttentionState{reads: m.Attention.reads.Discarded()}
 	m.AgentClose = m.AgentClose.forDaemon()
 	m = clearCredentials(clearFederation(m))
-	m.IssueScoped, m.accountAnswered, m.accountReads = false, false, m.accountReads.Discarded()
+	m.IssueScoped, m.VerifiedSenders, m.accountAnswered, m.accountReads = false, false, false, m.accountReads.Discarded()
 	m.Undo = UndoHistory{nextID: m.Undo.nextID}.cleared("connected to a different daemon")
 	m.LiveState = LiveState{
 		StreamGeneration: m.StreamGeneration + 1, snapshotReads: m.snapshotReads.Discarded(),

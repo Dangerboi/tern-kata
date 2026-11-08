@@ -199,3 +199,34 @@ func TestMOnTheAgentCardMessagesTheSelectedRunningAgentWhereverItIs(t *testing.T
 		}
 	}
 }
+
+func TestMOnTheAgentCardFollowsTheSenderRuleForAListedActor(t *testing.T) {
+	at := time.Date(2026, 10, 30, 9, 5, 0, 0, time.UTC)
+	entries := []model.AgentEntry{
+		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "31", Teammate: "omp", Address: "dana/omp-31", MessageFrom: "dana-laptop", StartedAt: at},
+		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "32", Teammate: "omp", Address: "dana/omp-32", StartedAt: at.Add(time.Hour)},
+	}
+	states := model.AgentStatesRelay{Received: true, States: []model.AgentState{{Block: "31", State: model.AgentWorking}, {Block: "32", State: model.AgentWorking}}}
+	for name, tc := range map[string]struct {
+		verified bool
+		row      int
+		wantCard model.Card
+		notice   string
+	}{
+		"listed, daemon not verified":     {false, 0, model.CardAgent, model.AgentUnverifiedRefusal},
+		"listed, daemon verified":         {true, 0, model.CardAgentMessage, ""},
+		"not listed, daemon verified":     {true, 1, model.CardAgent, model.AgentOtherActorRefusal},
+		"not listed, daemon not verified": {false, 1, model.CardAgent, model.AgentOtherActorRefusal},
+	} {
+		pane := withAgentRows(agentPanes(t, agentIssue("t1"))["list"])
+		pane.Model.AgentMapping, pane.Model.Actor, pane.Model.Agents, pane.Model.VerifiedSenders = entries, "dana-laptop", states, tc.verified
+		s := step(t, pane, key("w")).State
+		for range tc.row {
+			s = step(t, s, key("down")).State
+		}
+		got := step(t, s, key("m"))
+		if m := got.State.Model; m.TopCard() != tc.wantCard || m.Notice != tc.notice || len(got.Cmds) != 0 {
+			t.Errorf("%s: card %v notice %q cmds %v, want card %v notice %q", name, m.TopCard(), m.Notice, got.Cmds, tc.wantCard, tc.notice)
+		}
+	}
+}

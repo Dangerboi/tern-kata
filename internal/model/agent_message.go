@@ -35,7 +35,8 @@ const (
 	AgentNotOmpRefusal         = "The agent is not omp; messages reach only omp agents, through tern-kata's extension."
 	AgentWithoutAddressRefusal = "The agent was started before messages could reach it; start a new one."
 	NoAgentOnIssueRefusal      = "No agent this host started is running on this Issue."
-	AgentOtherActorRefusal     = "The agent takes messages only from the actor that started it."
+	AgentOtherActorRefusal     = "The agent takes messages only from the actor that started it and the actors in its message_from."
+	AgentUnverifiedRefusal     = "A message from another actor or to an agent on another host needs kata's identity mode: set [auth] require_token_identity = true on the daemon."
 )
 
 // AgentMessageState is the Message card: the agent it writes to and the text typed. Held is the value kata holds at the agent's
@@ -149,7 +150,7 @@ func (m Model) newestAgentOn(issueUID string, match func(AgentEntry) bool) (Agen
 		if e.IssueUID != issueUID || !match(e) {
 			continue
 		}
-		if e.Address != "" && AgentAddressActor(e.Address) != m.Actor {
+		if e.Address != "" && !MayMessage(m.Actor, AgentAddressActor(e.Address), e.MessageFromActors()) {
 			continue
 		}
 		waits := agentWaiting(m.Agents.States, e.Block)
@@ -170,8 +171,26 @@ func (m Model) agentMessageRefusal(e AgentEntry) string {
 		return AgentNotOmpRefusal
 	case e.Address == "":
 		return AgentWithoutAddressRefusal
-	case AgentAddressActor(e.Address) != m.Actor:
+	}
+	return MessageSenderRefusal(m.Actor, AgentAddressActor(e.Address), e.MessageFromActors(), false, m.VerifiedSenders)
+}
+
+// MayMessage is whether sender's actor is one the agent acts on: its own actor (owner, the actor in its Agent address) or one of
+// its message_from.
+func MayMessage(sender, owner string, messageFrom []string) bool {
+	return sender == owner || slices.Contains(messageFrom, sender)
+}
+
+// MessageSenderRefusal is the sender rule, one for the Pane and `tern-kata message`: why a message from sender reaches the agent
+// whose own actor is owner and whose message_from is messageFrom, "" when it does. The sender must be the owner or listed; and
+// when it is not the owner, or the agent runs on another host (remote), the daemon must verify actors (verified), for without it
+// the actor on a slot is whatever its writer claims.
+func MessageSenderRefusal(sender, owner string, messageFrom []string, remote, verified bool) string {
+	switch {
+	case !MayMessage(sender, owner, messageFrom):
 		return AgentOtherActorRefusal
+	case (sender != owner || remote) && !verified:
+		return AgentUnverifiedRefusal
 	}
 	return ""
 }

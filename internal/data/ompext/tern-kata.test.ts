@@ -157,10 +157,12 @@ function inboxWith(...requests: Array<Record<string, unknown>>): string {
   return JSON.stringify({ kata_api_version: 1, recipient: ADDRESS, requests });
 }
 
-function slotLine(id: number, to: Record<string, unknown> | null, key = KEY): string {
+/** A slot write as the stream reports it; the event's actor is the slot's `from` unless a test says another wrote it. */
+function slotLine(id: number, to: Record<string, unknown> | null, key = KEY, actor: string | null = (to?.from as string | undefined) ?? null): string {
   return JSON.stringify({
     event_id: id,
     type: "issue.metadata_updated",
+    actor: actor ?? undefined,
     project_name: "demo",
     issue_short_id: "3909",
     payload: { diff: { [key]: { from: null, to } } },
@@ -531,6 +533,56 @@ describe("createFollower", () => {
     expect(h.delivered).toEqual([]);
   });
 
+  test("a live slot is delivered only when the event's actor is its from, the agent's own actor included", async () => {
+    const h = harness();
+    h.follower.start();
+    const c = h.children[0];
+    c.push(slotLine(5, hello, KEY, "mallory"));
+    c.push(slotLine(6, hello, KEY, null));
+    await flush();
+    expect(h.delivered).toEqual([]);
+    // The forged write left no trace: the real message with the same text still arrives.
+    c.push(slotLine(7, hello));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+  });
+
+  test("a message_from actor's slot is delivered only with verified senders, worded as from that person", async () => {
+    const dana = { from: "dana", message: "use the new API" };
+    const unverified = harness(() => emptyInbox(), { messageFrom: ["dana"] });
+    unverified.follower.start();
+    unverified.children[0].push(slotLine(5, dana));
+    await flush();
+    expect(unverified.delivered).toEqual([]);
+
+    const verified = harness(() => emptyInbox(), { messageFrom: ["dana"], verifiedSenders: true });
+    verified.follower.start();
+    const c = verified.children[0];
+    c.push(slotLine(5, dana));
+    c.push(slotLine(6, { from: "eve", message: "also me" }));
+    c.push(slotLine(7, { from: "dana", message: "forged", teammate: undefined }, KEY, "eve"));
+    await flush();
+    expect(verified.delivered).toEqual([
+      `Message from dana on ${REF}, sent to you through kata:\n\nuse the new API\n\n` +
+        `When you have handled it, clear it: \`kata notify ${REF} --to ${ADDRESS} --clear\``,
+    ]);
+  });
+
+  test("the start read delivers only the agent's own actor's slots, even a listed actor's with verified senders", async () => {
+    const h = harness(
+      () =>
+        inboxWith(
+          { ref: "3909", from: "dana", message: "from the list" },
+          { ref: "other#1", from: "dangerboi", message: "mine" },
+        ),
+      { messageFrom: ["dana"], verifiedSenders: true },
+    );
+    h.follower.start();
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    expect(h.delivered[0]).toContain("on other#1,");
+  });
+
   test("the start read delivers open trusted slots, qualifies bare refs, and dedupes against the stream", async () => {
     const h = harness(() =>
       inboxWith(
@@ -684,6 +736,15 @@ describe("readConfig", () => {
     expect(readConfig({ ...base, TERN_KATA_FORWARD_COMMENTS: "1" })?.forwardComments).toBe(true);
     expect(readConfig({ ...base, TERN_KATA_FORWARD_COMMENTS: "0" })?.forwardComments).toBeUndefined();
     expect(readConfig(base)?.forwardComments).toBeUndefined();
+  });
+
+  test("TERN_KATA_MESSAGE_FROM lists the actors, TERN_KATA_VERIFIED_SENDERS=1 marks verified senders", () => {
+    const base = { KATA_INBOX_USER: ADDRESS, KATA_REF: "p#1" };
+    const config = readConfig({ ...base, TERN_KATA_MESSAGE_FROM: " dana, dana-laptop ,,", TERN_KATA_VERIFIED_SENDERS: "1" });
+    expect(config?.messageFrom).toEqual(["dana", "dana-laptop"]);
+    expect(config?.verifiedSenders).toBe(true);
+    expect(readConfig({ ...base, TERN_KATA_VERIFIED_SENDERS: "0" })?.verifiedSenders).toBeUndefined();
+    expect(readConfig(base)?.messageFrom).toBeUndefined();
   });
 
   test("blank address, missing project or an address without / yields nothing", () => {

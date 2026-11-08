@@ -255,7 +255,7 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 		t.Fatalf("the extension file holds %d bytes, %v; want the embedded %d", len(text), err, len(ompext.Source))
 	}
 	text, err := os.ReadFile(e.PromptFile)
-	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana") {
+	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana", nil) {
 		t.Fatalf("prompt %q, %v", text, err)
 	}
 	if stored, err := ReadAgents(filepath.Join(dirs.State, AgentsFile)); err != nil || len(stored) != 1 || stored[0] != e {
@@ -294,7 +294,7 @@ func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnAgentAddressAndSaysWhy(
 			t.Errorf("%s: ran %q, want no Agent address and no extension", c.command, ran)
 		}
 		text, err := os.ReadFile(got.Entry.PromptFile)
-		if err != nil || string(text) != AgentPrompt("demo#ab12", "", "") {
+		if err != nil || string(text) != AgentPrompt("demo#ab12", "", "", nil) {
 			t.Errorf("%s: prompt %q, %v; want the prompt without messages", c.command, text, err)
 		}
 	}
@@ -510,26 +510,30 @@ func TestPruningKeepsAnEntryAddedAfterTheEntriesItChecked(t *testing.T) {
 }
 
 func TestTheAgentPromptIsStable(t *testing.T) {
-	if without := AgentPrompt("demo#ab12", "Fix it", ""); strings.Contains(without, "message") {
+	if without := AgentPrompt("demo#ab12", "Fix it", "", nil); strings.Contains(without, "message") {
 		t.Errorf("an agent no message reaches is told about messages:\n%s", without)
 	}
-	got := AgentPrompt("demo#ab12", "  Fix the\n# crash\tnow ", "dana")
-	path := "testdata/agent_prompt.golden"
-	if *update {
-		if err := os.MkdirAll("testdata", 0o755); err != nil {
+	check := func(path, got string) {
+		t.Helper()
+		if *update {
+			if err := os.MkdirAll("testdata", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		want, err := os.ReadFile(path)
+		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
+		if string(want) != got {
+			t.Fatalf("prompt differs from %s (run with -update to rewrite):\n%s", path, got)
 		}
 	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(want) != got {
-		t.Fatalf("prompt differs from %s (run with -update to rewrite):\n%s", path, got)
-	}
+	const title = "  Fix the\n# crash\tnow "
+	check("testdata/agent_prompt.golden", AgentPrompt("demo#ab12", title, "dana", nil))
+	check("testdata/agent_prompt_message_from.golden", AgentPrompt("demo#ab12", title, "dana", []string{"dana-laptop", "dana-phone"}))
 }
 
 func lsOf(blocks ...string) []byte {
@@ -1418,6 +1422,65 @@ func TestAgentCommandLinePassesForwardCommentsOnlyWithAnAddress(t *testing.T) {
 	}
 	if line := AgentCommandLine("me", "demo#ab12", AgentMessaging{ForwardComments: true}, AgentRoute{}, []string{"codex"}, "/p.md"); slices.Contains(line, "--forward-comments") {
 		t.Errorf("no address: %q holds --forward-comments", line)
+	}
+}
+
+func TestAgentConfigMessageFromIsPerProjectAndValidated(t *testing.T) {
+	cfg, err := ReadAgentConfig(writeAgentFile(t, filepath.Join(t.TempDir(), "agent.toml"),
+		"message_from = [\"dana\", \"dana-laptop\"]\n[projects.alone]\nmessage_from = []\n[projects.other]\nmessage_from = [\"eve\"]\n[projects.plain]\nname = \"x\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for project, want := range map[string][]string{"unlisted": {"dana", "dana-laptop"}, "plain": {"dana", "dana-laptop"}, "alone": {}, "other": {"eve"}} {
+		if got := cfg.For(project).MessageFrom; !slices.Equal(got, want) {
+			t.Errorf("message_from for %s = %q, want %q", project, got, want)
+		}
+	}
+	if none, err := ReadAgentConfig(filepath.Join(t.TempDir(), "missing.toml")); err != nil || len(none.For("demo").MessageFrom) != 0 {
+		t.Errorf("no file: %v, %v; want no actors", none.For("demo").MessageFrom, err)
+	}
+	for _, text := range []string{"message_from = \"dana\"\n", "message_from = [\"\"]\n", "message_from = [\"a,b\"]\n", "[projects.p]\nmessage_from = [\"a b\"]\n"} {
+		if _, err := ReadAgentConfig(writeAgentFile(t, filepath.Join(t.TempDir(), "agent.toml"), text)); err == nil || !strings.Contains(err.Error(), "message_from") {
+			t.Errorf("%q: err %v; want a refusal naming the key", text, err)
+		}
+	}
+}
+
+func TestAgentCommandLinePassesEveryMessageFromActorOnlyWithAnAddress(t *testing.T) {
+	line := AgentCommandLine("me", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", MessageFrom: []string{"dana-laptop", "eve"}}, AgentRoute{}, []string{"omp"}, "/p.md")
+	if want := []string{"tern-kata", "agent", "--as", "me", "--address-prefix", "dana/omp", "--message-from", "dana-laptop", "--message-from", "eve", "--ref", "demo#ab12", "--", "omp", "@/p.md"}; !slices.Equal(line, want) {
+		t.Errorf("with an address: %q, want %q", line, want)
+	}
+	if line := AgentCommandLine("me", "demo#ab12", AgentMessaging{MessageFrom: []string{"eve"}}, AgentRoute{}, []string{"codex"}, "/p.md"); slices.Contains(line, "--message-from") {
+		t.Errorf("no address: %q holds --message-from", line)
+	}
+}
+
+func TestStartingAnAgentRecordsAndPassesItsMessageFrom(t *testing.T) {
+	for _, name := range []string{"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE"} {
+		t.Setenv(name, "")
+	}
+	g, dirs := agentGateway(t)
+	writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "message_from = [\"dana-laptop\"]\n[projects.demo]\ncheckout = \"/work/demo\"\n")
+	var ran []string
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		ran = args
+		return []byte(`{"session": 1, "tab": 2, "block": 31}`), nil
+	}
+	got := as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentSplit, IssueUID: "U1", IssueRef: "demo#ab12", IssueTitle: "Fix it",
+		ProjectName: "demo", PaneBlock: "7", Actor: "dana"}))
+	if got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if got.Entry.MessageFrom != "dana-laptop" {
+		t.Errorf("entry message_from %q", got.Entry.MessageFrom)
+	}
+	if i := slices.Index(ran, "--message-from"); i < 0 || ran[i+1] != "dana-laptop" {
+		t.Errorf("ran %q, want --message-from dana-laptop", ran)
+	}
+	text, err := os.ReadFile(got.Entry.PromptFile)
+	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana", []string{"dana-laptop"}) {
+		t.Errorf("prompt %q, %v", text, err)
 	}
 }
 

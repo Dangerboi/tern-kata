@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"maps"
+	"strings"
 	"time"
 )
 
@@ -60,6 +61,18 @@ type AgentEntry struct {
 	Address string `json:"address,omitempty"`
 	// NoAddress says why an agent has no Address; "" in an entry that has one or was written before it was kept.
 	NoAddress AgentNoAddress `json:"no_address,omitempty"`
+	// MessageFrom is the actors, besides the agent's own, whose messages it acts on (agent.toml's message_from when it started),
+	// comma-separated as the wrapper passes them to its extension, so an entry stays comparable; MessageFromActors lists them. The
+	// sender rule checks a message's sender against them.
+	MessageFrom string `json:"message_from,omitempty"`
+}
+
+// MessageFromActors is the actors in MessageFrom, none for ""; a zero or legacy entry takes messages from its own actor only.
+func (e AgentEntry) MessageFromActors() []string {
+	if e.MessageFrom == "" {
+		return nil
+	}
+	return strings.Split(e.MessageFrom, ",")
 }
 
 // AgentNoAddress is why an agent started without tern-kata's omp extension, so has no Agent address and no message reaches it.

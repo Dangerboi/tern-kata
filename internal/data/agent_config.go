@@ -20,6 +20,7 @@ import (
 //	name = "builder"
 //	command = ["omp"]
 //	forward_comments = true
+//	message_from = ["dana", "dana-laptop"]
 //	[projects.tern-kata]
 //	actor = "..."
 //	name = "..."
@@ -36,8 +37,10 @@ type AgentConfig struct {
 	Name    string   `toml:"name"`
 	Command []string `toml:"command"`
 	// ForwardComments turns on telling the agent about a person's comment on its Issue; unset is off.
-	ForwardComments *bool                   `toml:"forward_comments"`
-	Projects        map[string]AgentProject `toml:"projects"`
+	ForwardComments *bool `toml:"forward_comments"`
+	// MessageFrom lists the actors, besides the agent's own, whose messages the agent acts on; unset and empty are none.
+	MessageFrom []string                `toml:"message_from"`
+	Projects    map[string]AgentProject `toml:"projects"`
 }
 
 // AgentProject is one [projects.<name>] table; its values override the top-level ones.
@@ -48,6 +51,8 @@ type AgentProject struct {
 	Checkout string   `toml:"checkout"`
 	// ForwardComments overrides the top-level value when set.
 	ForwardComments *bool `toml:"forward_comments"`
+	// MessageFrom overrides the top-level list when set, an empty list included.
+	MessageFrom []string `toml:"message_from"`
 }
 
 // ReadAgentConfig reads and validates path; a missing file is an empty configuration. Any other failure names the file.
@@ -77,6 +82,9 @@ func ReadAgentConfig(path string) (AgentConfig, error) {
 			return AgentConfig{}, fmt.Errorf("%s: command: %w", path, err)
 		}
 	}
+	if err := checkMessageFrom(c.MessageFrom); err != nil {
+		return AgentConfig{}, fmt.Errorf("%s: message_from: %w", path, err)
+	}
 	for _, name := range slices.Sorted(maps.Keys(c.Projects)) {
 		p := c.Projects[name]
 		if meta.IsDefined("projects", name, "name") {
@@ -92,8 +100,21 @@ func ReadAgentConfig(path string) (AgentConfig, error) {
 		if meta.IsDefined("projects", name, "checkout") && !filepath.IsAbs(p.Checkout) {
 			return AgentConfig{}, fmt.Errorf("%s: projects.%s.checkout: %q is not an absolute directory", path, name, p.Checkout)
 		}
+		if err := checkMessageFrom(p.MessageFrom); err != nil {
+			return AgentConfig{}, fmt.Errorf("%s: projects.%s.message_from: %w", path, name, err)
+		}
 	}
 	return c, nil
+}
+
+// checkMessageFrom refuses an actor that is empty or holds a comma, which TERN_KATA_MESSAGE_FROM uses to separate them.
+func checkMessageFrom(actors []string) error {
+	for _, actor := range actors {
+		if strings.TrimSpace(actor) == "" || strings.ContainsAny(actor, ", \t\r\n") {
+			return fmt.Errorf("%q is not an actor (not empty, no commas or spaces)", actor)
+		}
+	}
+	return nil
 }
 
 // checkTeammate refuses a name that is no teammate name; the rule is model.ValidTeammate's.
@@ -122,11 +143,13 @@ type AgentSettings struct {
 	Checkout string
 	// ForwardComments is whether the agent is told of a person's comment on its Issue.
 	ForwardComments bool
+	// MessageFrom is the actors, besides Actor, whose messages the agent acts on.
+	MessageFrom []string
 }
 
 // For is the settings for a Project: its table's values over the top-level ones over the defaults.
 func (c AgentConfig) For(project string) AgentSettings {
-	s := AgentSettings{Actor: c.Actor, Name: c.Name, Command: c.Command, ForwardComments: c.ForwardComments != nil && *c.ForwardComments}
+	s := AgentSettings{Actor: c.Actor, Name: c.Name, Command: c.Command, ForwardComments: c.ForwardComments != nil && *c.ForwardComments, MessageFrom: c.MessageFrom}
 	if p, ok := c.Projects[project]; ok {
 		if p.Actor != "" {
 			s.Actor = p.Actor
@@ -140,6 +163,9 @@ func (c AgentConfig) For(project string) AgentSettings {
 		s.Checkout = p.Checkout
 		if p.ForwardComments != nil {
 			s.ForwardComments = *p.ForwardComments
+		}
+		if p.MessageFrom != nil {
+			s.MessageFrom = p.MessageFrom
 		}
 	}
 	if len(s.Command) == 0 {

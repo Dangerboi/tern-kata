@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"runtime"
@@ -338,5 +341,64 @@ func TestAgentWrapperSetsTheCredentialVariablesUnderTheirOwnNamesAndDeletesTheFi
 	}
 	if _, err := os.Stat(envFile); err == nil {
 		t.Error("the env file outlived the agent's start")
+	}
+}
+
+func TestPlanAgentCollectsEveryMessageFromActor(t *testing.T) {
+	plan, err := PlanLaunch([]string{"agent", "--address-prefix", "dana/omp", "--message-from", "dana-laptop", "--message-from=eve", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
+	if err != nil || !slices.Equal(plan.AgentMessageFrom, []string{"dana-laptop", "eve"}) {
+		t.Errorf("AgentMessageFrom = %q, err %v", plan.AgentMessageFrom, err)
+	}
+	if _, err := PlanLaunch([]string{"agent", "--message-from", "--", "omp"}, func(string) (string, bool) { return "", false }, "v"); err == nil {
+		t.Error("--message-from without a value was accepted")
+	}
+}
+
+// fakeInstance is a kata daemon that answers ping and an /api/v1/instance reporting auth kind kind.
+func fakeInstance(t *testing.T, kind string) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/ping":
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "kata", "version": "0.22.0"})
+		case "/api/v1/instance":
+			_ = json.NewEncoder(w).Encode(map[string]any{"instance_uid": "u", "version": "0.22.0", "auth": map[string]any{"kind": kind}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func TestAgentWrapperSetsMessageFromAndVerifiedSendersFromTheDaemonOnItsRoute(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	script := `printf '%s|%s' "${TERN_KATA_MESSAGE_FROM-unset}" "${TERN_KATA_VERIFIED_SENDERS-unset}"`
+	closed := fakeInstance(t, "db_token")
+	closed.Close()
+	for _, tc := range []struct {
+		name   string
+		server string
+		flags  []string
+		want   string
+	}{
+		{"a db token daemon", fakeInstance(t, "db_token").URL, []string{"--address-prefix", "dana/omp", "--message-from", "dana-laptop", "--message-from", "eve"}, "dana-laptop,eve|1"},
+		{"the bootstrap token", fakeInstance(t, "bootstrap").URL, []string{"--address-prefix", "dana/omp"}, "unset|1"},
+		{"a trusted proxy", fakeInstance(t, "trusted_proxy").URL, []string{"--address-prefix", "dana/omp"}, "unset|1"},
+		{"a daemon that takes the writer's word", fakeInstance(t, "none").URL, []string{"--address-prefix", "dana/omp", "--message-from", "eve"}, "eve|unset"},
+		{"a daemon that cannot be reached", closed.URL, []string{"--address-prefix", "dana/omp"}, "unset|unset"},
+		{"no address prefix drops inherited ones", fakeInstance(t, "db_token").URL, nil, "unset|unset"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			block := agentBlockEnv + "=KATA_SERVER=" + tc.server + "\nKATA_ALLOW_INSECURE=1\nKATA_HOME=" + t.TempDir() + "\nTERN_KATA_MESSAGE_FROM=mallory\nTERN_KATA_VERIFIED_SENDERS=1"
+			args := append(append([]string{"agent", "--as", "claude"}, tc.flags...), "--ref", "demo#ab12", "--", "sh", "-c", script)
+			out, status, stderr := runAgent(t, []string{block, "TERN_PANE=18494129176579"}, args...)
+			if status != 0 || out != tc.want {
+				t.Errorf("status %d, output %q, stderr %q; want %q", status, out, stderr, tc.want)
+			}
+		})
 	}
 }

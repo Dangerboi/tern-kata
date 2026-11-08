@@ -34,6 +34,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `S` on an Issue messages every running agent on it and on its open children from one Message card.
   - Each agent gets the message at its own address on its own Issue; agents on closed children and exited agents get none.
   - An agent that has not cleared its last message is skipped, never replaced; once every write has answered the card lists how many got it and each skipped agent with its reason.
+- An agent can take messages from more actors than its own: `message_from` in `agent.toml` (top level or per Project) lists them.
+  - The Pane passes `--message-from <actor>` to `tern-kata agent`, which sets `TERN_KATA_MESSAGE_FROM`; the agent's first message names every such actor.
+  - A message from an actor other than the agent's own needs kata's identity mode (`[auth] require_token_identity`); the Message card and `tern-kata message` say so when it is off. `tern-kata agent` checks the daemon at start and sets `TERN_KATA_VERIFIED_SENDERS=1`.
 
 #### Issues and Pages
 
@@ -75,6 +78,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `m` on the Attention Page messages the agent this actor started and passes over another actor's agent with the same name on the Issue.
   - Released 0.9.0 sent the message to the newest agent of that name, whose extension dropped it when another actor had started it.
 - The kata skill is written against kata v0.22 and tells agents that `kata cron job edit` and `kata cron workflow edit` need a terminal, so they change a definition with `update --file`.
+- The agent's extension delivers a message only when the event that wrote it was by the actor in the message's `from`.
+  - A `kata meta set notify.*` forgery by another actor is no longer delivered.
+  - The read at start, and after a gap the stream cannot resume, delivers only the agent's own actor's messages.
 
 #### Issues and Pages
 

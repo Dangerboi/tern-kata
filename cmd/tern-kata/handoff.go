@@ -68,9 +68,11 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 // address, from the block id in TERN_PANE, and KATA_TEAMMATE to <name>-<block id>, so its comments and requests carry its own
 // teammate name; a name kata would refuse leaves KATA_TEAMMATE unset. plan.AgentForwardComments sets
 // TERN_KATA_FORWARD_COMMENTS=1, which the extension reads, only when KATA_TEAMMATE is set (without it the agent's own comments
-// would be forwarded back to it); an inherited value is dropped.
+// would be forwarded back to it); an inherited value is dropped. plan.AgentMessageFrom sets TERN_KATA_MESSAGE_FROM (comma-separated)
+// and plan.AgentVerifiedSenders TERN_KATA_VERIFIED_SENDERS=1, which the extension reads for whose messages it acts on; inherited values
+// of both are dropped, so a person's shell cannot widen what the agent trusts.
 func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string {
-	dropped := []string{"KATA_REF", "KATA_INBOX_USER", "KATA_TEAMMATE"}
+	dropped := []string{"KATA_REF", "KATA_INBOX_USER", "KATA_TEAMMATE", "TERN_KATA_MESSAGE_FROM", "TERN_KATA_VERIFIED_SENDERS"}
 	if plan.Actor != "" {
 		dropped = append(dropped, "KATA_AUTHOR")
 	}
@@ -88,6 +90,12 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 	}
 	if plan.AgentAddressPrefix != "" {
 		env = append(env, "KATA_OMP_LIVE_INBOX=0")
+		if len(plan.AgentMessageFrom) > 0 {
+			env = append(env, "TERN_KATA_MESSAGE_FROM="+strings.Join(plan.AgentMessageFrom, ","))
+		}
+		if plan.AgentVerifiedSenders {
+			env = append(env, "TERN_KATA_VERIFIED_SENDERS=1")
+		}
 		if block != "" {
 			env = append(env, "KATA_INBOX_USER="+data.AgentAddress(plan.AgentAddressPrefix, block))
 			name := plan.AgentAddressPrefix[strings.LastIndex(plan.AgentAddressPrefix, "/")+1:]

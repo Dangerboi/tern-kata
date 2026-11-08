@@ -286,3 +286,28 @@ func TestPaneClosableFollowsConfirmQuit(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentEnvSetsWhoseMessagesTheExtensionActsOn(t *testing.T) {
+	plan := func(prefix string, from []string, verified bool) LaunchPlan {
+		return LaunchPlan{AgentAddressPrefix: prefix, AgentMessageFrom: from, AgentVerifiedSenders: verified}
+	}
+	inherited := []string{"TERN_KATA_MESSAGE_FROM=mallory", "TERN_KATA_VERIFIED_SENDERS=1", "TERN_PANE=42"}
+	for _, tc := range []struct {
+		name string
+		plan LaunchPlan
+		want []string
+	}{
+		{"listed actors on a verified daemon", plan("ann/omp", []string{"dana", "dana-laptop"}, true),
+			[]string{"TERN_PANE=42", "KATA_OMP_LIVE_INBOX=0", "TERN_KATA_MESSAGE_FROM=dana,dana-laptop", "TERN_KATA_VERIFIED_SENDERS=1", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42"}},
+		{"listed actors on an unverified daemon", plan("ann/omp", []string{"dana"}, false),
+			[]string{"TERN_PANE=42", "KATA_OMP_LIVE_INBOX=0", "TERN_KATA_MESSAGE_FROM=dana", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42"}},
+		{"none listed drops the inherited values", plan("ann/omp", nil, false),
+			[]string{"TERN_PANE=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42"}},
+		{"without an address prefix the inherited values are dropped", plan("", []string{"dana"}, true),
+			[]string{"TERN_PANE=42"}},
+	} {
+		if got := agentEnv(inherited, tc.plan, false); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

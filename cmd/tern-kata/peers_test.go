@@ -23,13 +23,20 @@ func omp(ref, block, address string) model.AgentEntry {
 	return model.AgentEntry{IssueUID: "uid-" + short, IssueRef: ref, ProjectID: 3, Block: block, Teammate: "omp", Address: address}
 }
 
-// sender records the SendAgentMessage commands and answers each as answer says.
+// sender records the SendAgentMessage commands and answers each as answer says; it answers the auth capability read as verified
+// says and counts the reads.
 type sender struct {
-	sent   []model.SendAgentMessage
-	answer func(model.SendAgentMessage) model.AgentMessageSent
+	sent     []model.SendAgentMessage
+	answer   func(model.SendAgentMessage) model.AgentMessageSent
+	verified bool
+	reads    int
 }
 
 func (s *sender) send(cmd model.Cmd) model.Msg {
+	if _, ok := cmd.(model.LoadAuthCapabilities); ok {
+		s.reads++
+		return model.AuthCapabilitiesLoaded{Account: true, VerifiedSenders: s.verified}
+	}
 	c := cmd.(model.SendAgentMessage)
 	s.sent = append(s.sent, c)
 	if s.answer == nil {
@@ -204,7 +211,7 @@ func TestMessageRefusesWhatReachesNobodyBeforeWritingAnything(t *testing.T) {
 		"agent without an omp": {"demo#bb22", "hi", "dana", "can receive a message"},
 		"empty text":           {"dana/omp-1", "  ", "dana", "Type a message."},
 		"too long":             {"dana/omp-1", strings.Repeat("a", 1025), "dana", "kata takes at most 1024"},
-		"another actor's":      {"dana/omp-1", "hi", "bob", "acts for dana"},
+		"another actor's":      {"dana/omp-1", "hi", "bob", "message_from"},
 		"an older entry":       {"dana/omp-3", "hi", "dana", "does not name the Issue's Project"},
 	} {
 		s := &sender{}
@@ -213,6 +220,32 @@ func TestMessageRefusesWhatReachesNobodyBeforeWritingAnything(t *testing.T) {
 		err := runMessage(plan, "/w", list, s.send, &out)
 		if err == nil || !strings.Contains(err.Error()+out.String(), tc.want) || len(s.sent) != 0 {
 			t.Errorf("%s: err %v, output %q, sent %+v, want a refusal naming %q", name, err, out.String(), s.sent, tc.want)
+		}
+	}
+}
+
+func TestMessageFromAnotherActorFollowsTheSenderRule(t *testing.T) {
+	listed := omp("demo#aa11", "1", "dana/omp-1")
+	listed.MessageFrom = "dana-laptop"
+	for name, tc := range map[string]struct {
+		actor     string
+		verified  bool
+		wantSent  bool
+		wantReads int
+		wantText  string
+	}{
+		"the agent's own actor, unverified daemon":  {"dana", false, true, 0, "Sent the message"},
+		"a listed actor on a verified daemon":       {"dana-laptop", true, true, 1, "Sent the message"},
+		"a listed actor on an unverified daemon":    {"dana-laptop", false, false, 1, "[auth] require_token_identity"},
+		"an unlisted actor on a verified daemon":    {"bob", true, false, 0, "message_from"},
+		"an unlisted actor on an unverified daemon": {"bob", false, false, 0, "message_from"},
+	} {
+		s := &sender{verified: tc.verified}
+		var out bytes.Buffer
+		plan := message(t, map[string]string{"KATA_AUTHOR": tc.actor}, "dana/omp-1", "-m", "hi")
+		err := runMessage(plan, "/w", running(listed), s.send, &out)
+		if (err == nil) != tc.wantSent || (len(s.sent) == 1) != tc.wantSent || s.reads != tc.wantReads || !strings.Contains(out.String(), tc.wantText) {
+			t.Errorf("%s: err %v, output %q, sent %+v, reads %d", name, err, out.String(), s.sent, s.reads)
 		}
 	}
 }

@@ -88,6 +88,9 @@ func run() error {
 		if err != nil {
 			return err
 		}
+		if plan.AgentAddressPrefix != "" {
+			plan.AgentVerifiedSenders = verifyAgentRoute(environ)
+		}
 		return execAgent(plan, environ)
 	}
 	if plan.Subcommand != "" {

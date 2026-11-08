@@ -29,7 +29,7 @@ const (
 const AgentWrapperProgram = "tern-kata"
 
 // AgentCommandLine is the command an agent block runs: command with @promptFile appended (omp reads it as the first message),
-// run through `tern-kata agent [--as actor] [--address-prefix prefix [--forward-comments]] [route flags] --ref ref --`. ref is the Issue's qualified
+// run through `tern-kata agent [--as actor] [--address-prefix prefix [--forward-comments] [--message-from actor]...] [route flags] --ref ref --`. ref is the Issue's qualified
 // ref, which the wrapper sets as the agent's KATA_REF; --as is left out when no actor is set, so KATA_AUTHOR stays as inherited.
 // Messaging adds --address-prefix and the flag that loads the extension (ompext.Argv) before the prompt, so omp loads it even under
 // --no-extensions.
@@ -43,6 +43,9 @@ func AgentCommandLine(actor, ref string, messaging AgentMessaging, route AgentRo
 		line = append(line, "--address-prefix", messaging.AddressPrefix)
 		if messaging.ForwardComments {
 			line = append(line, "--forward-comments")
+		}
+		for _, actor := range messaging.MessageFrom {
+			line = append(line, "--message-from", actor)
 		}
 	}
 	line = append(line, route.Args()...)
@@ -453,10 +456,11 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		if err != nil {
 			return failed(fmt.Errorf("write the agent's omp extension: %w", err))
 		}
-		messaging = AgentMessaging{AddressPrefix: cmd.Actor + "/" + settings.Name, ExtensionArgs: ompext.Argv(extension, settings.Command[1:], false), ForwardComments: settings.ForwardComments}
+		messaging = AgentMessaging{AddressPrefix: cmd.Actor + "/" + settings.Name, ExtensionArgs: ompext.Argv(extension, settings.Command[1:], false), ForwardComments: settings.ForwardComments,
+			MessageFrom: settings.MessageFrom}
 		sender = cmd.Actor
 	}
-	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle, sender))
+	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle, sender, messaging.MessageFrom))
 	if err != nil {
 		return failed(err)
 	}
@@ -490,6 +494,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		NoAddress: noAddress}
 	if messaging.AddressPrefix != "" {
 		entry.Address = AgentAddress(messaging.AddressPrefix, block)
+		entry.MessageFrom = strings.Join(messaging.MessageFrom, ",")
 	}
 	if _, err := UpdateAgents(filepath.Join(dirs.State, AgentsFile), func(list []model.AgentEntry) []model.AgentEntry {
 		return append(slices.DeleteFunc(list, func(e model.AgentEntry) bool { return e.Block == block }), entry)

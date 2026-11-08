@@ -20,6 +20,10 @@ export interface FollowerDeps {
   ref: string;
   /** Deliver a person's comment on the agent's Issue (TERN_KATA_FORWARD_COMMENTS=1); off when absent. */
   forwardComments?: boolean;
+  /** Other actors whose messages the agent acts on (TERN_KATA_MESSAGE_FROM, `message_from` in agent.toml). */
+  messageFrom?: string[];
+  /** The daemon verifies the actor of every write (TERN_KATA_VERIFIED_SENDERS=1, set by the wrapper at start); a messageFrom actor's slot is delivered only then. */
+  verifiedSenders?: boolean;
   /** Starts a long-running kata command; args exclude "kata". */
   spawn(args: string[]): Spawned;
   /** Runs a one-shot kata command; args exclude "kata". */
@@ -49,7 +53,8 @@ export interface Slot {
 /** What a stream line means to the follower. */
 export type StreamEvent =
   | { type: "reset"; after: number }
-  | { type: "slot"; ref: string; eventId: number; to: Slot | null };
+  /** actor is the `actor` of the issue.metadata_updated event that wrote the slot. */
+  | { type: "slot"; ref: string; eventId: number; actor: string | undefined; to: Slot | null };
 
 /** The agent's Issue and address read from the environment. */
 export interface Config {
@@ -57,6 +62,8 @@ export interface Config {
   project: string;
   ref: string;
   forwardComments?: boolean;
+  messageFrom?: string[];
+  verifiedSenders?: boolean;
 }
 
 /** A stream event other than a slot write, with the fields reactions read. */
@@ -97,14 +104,25 @@ export function trustedSender(address: string): string | undefined {
   return i > 0 ? address.slice(0, i) : undefined;
 }
 
-/** Reads KATA_INBOX_USER and KATA_REF, and TERN_KATA_FORWARD_COMMENTS; undefined means the extension must do nothing. */
+/** Reads KATA_INBOX_USER and KATA_REF, TERN_KATA_FORWARD_COMMENTS, TERN_KATA_MESSAGE_FROM and TERN_KATA_VERIFIED_SENDERS; undefined means the extension must do nothing. */
 export function readConfig(env: Record<string, string | undefined>): Config | undefined {
   const address = (env.KATA_INBOX_USER ?? "").trim();
   const ref = (env.KATA_REF ?? "").trim();
   const hash = ref.indexOf("#");
   const project = hash > 0 ? ref.slice(0, hash).trim() : "";
   if (address === "" || project === "" || trustedSender(address) === undefined) return undefined;
-  return { address, project, ref, forwardComments: env.TERN_KATA_FORWARD_COMMENTS === "1" || undefined };
+  const messageFrom = (env.TERN_KATA_MESSAGE_FROM ?? "")
+    .split(",")
+    .map((actor) => actor.trim())
+    .filter((actor) => actor !== "");
+  return {
+    address,
+    project,
+    ref,
+    forwardComments: env.TERN_KATA_FORWARD_COMMENTS === "1" || undefined,
+    messageFrom: messageFrom.length > 0 ? messageFrom : undefined,
+    verifiedSenders: env.TERN_KATA_VERIFIED_SENDERS === "1" || undefined,
+  };
 }
 
 function asRecord(v: unknown): Record<string, unknown> | undefined {
@@ -150,9 +168,10 @@ export function parseStreamLine(line: string, key: string): StreamEvent | undefi
   if (!change || typeof parsed.event_id !== "number") return undefined;
   if (typeof parsed.project_name !== "string" || typeof parsed.issue_short_id !== "string") return undefined;
   const ref = `${parsed.project_name}#${parsed.issue_short_id}`;
-  if (change.to === null) return { type: "slot", ref, eventId: parsed.event_id, to: null };
+  const actor = typeof parsed.actor === "string" ? parsed.actor : undefined;
+  if (change.to === null) return { type: "slot", ref, eventId: parsed.event_id, actor, to: null };
   const to = toSlot(change.to);
-  return to ? { type: "slot", ref, eventId: parsed.event_id, to } : undefined;
+  return to ? { type: "slot", ref, eventId: parsed.event_id, actor, to } : undefined;
 }
 
 /** Interprets one stream line as an event of one of `types`; undefined for any other line. */
@@ -206,6 +225,29 @@ export function parseTitle(stdout: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** Where a slot value was read: a live stream event, whose actor kata recorded, or the inbox read, which has none. */
+export type SlotSource = { live: true; actor: string | undefined } | { live: false };
+
+/** Whose messages the agent acts on: its own actor, and the `message_from` actors when the daemon verifies senders. */
+export interface SlotPolicy {
+  own: string;
+  messageFrom: readonly string[];
+  verifiedSenders: boolean;
+}
+
+/**
+ * The one decision whether a slot value is delivered. A slot's `from` is whatever its writer put in it (`kata meta set notify.*`
+ * can write any), so a live slot counts only when the event's actor is that `from`; a `message_from` actor's also needs a
+ * daemon that verifies actors. The inbox read has no event actor, so it delivers only the agent's own actor's slots.
+ */
+export function mayDeliver(slot: Slot, source: SlotSource, policy: SlotPolicy): boolean {
+  if (slot.message.trim() === "") return false;
+  if (!source.live) return slot.from === policy.own;
+  if (source.actor === undefined || source.actor !== slot.from) return false;
+  if (slot.from === policy.own) return true;
+  return policy.verifiedSenders && policy.messageFrom.includes(slot.from);
 }
 
 const COMMENT_EXCERPT_LINES = 3;
@@ -278,7 +320,8 @@ export function parseInbox(stdout: string, project: string): Array<{ ref: string
  */
 export function createFollower(deps: FollowerDeps): Follower {
   const key = slotKey(deps.address);
-  const trusted = trustedSender(deps.address);
+  const trusted = trustedSender(deps.address) ?? "";
+  const policy: SlotPolicy = { own: trusted, messageFrom: deps.messageFrom ?? [], verifiedSenders: deps.verifiedSenders === true };
   const states = new Map<string, RefState>();
   let running = false;
   let generation = 0;
@@ -367,9 +410,11 @@ export function createFollower(deps: FollowerDeps): Follower {
     enqueue(gen, () => reactions[event.type](event, gen));
   }
 
-  function handle(ref: string, eventId: number | undefined, slot: Slot | null): void {
+  function handle(ref: string, eventId: number | undefined, actor: string | undefined, slot: Slot | null): void {
     const stored = states.get(ref);
     if (eventId !== undefined && stored?.eventId !== undefined && eventId <= stored.eventId) return;
+    // A slot nobody may act on leaves no trace, so the real message with the same text later is still delivered.
+    if (slot !== null && !mayDeliver(slot, eventId === undefined ? { live: false } : { live: true, actor }, policy)) return;
     const seen = eventId === undefined ? (stored?.streamed ?? 0) : ++streamed;
     const identity = slot === null ? null : identityOf(slot);
     if (stored && stored.value === identity) {
@@ -378,8 +423,7 @@ export function createFollower(deps: FollowerDeps): Follower {
       return;
     }
     states.set(ref, { eventId: eventId ?? stored?.eventId, value: identity, streamed: seen });
-    if (slot === null || slot.from !== trusted || slot.message.trim() === "") return;
-    deps.deliver(deliveryText(ref, deps.address, slot));
+    if (slot !== null) deps.deliver(deliveryText(ref, deps.address, slot));
   }
 
   // applyInbox takes a read that began when streamed was since: a ref the stream changed after that holds newer news than the read.
@@ -388,7 +432,7 @@ export function createFollower(deps: FollowerDeps): Follower {
     const listed = new Set<string>();
     for (const { ref, slot } of entries) {
       listed.add(ref);
-      if (!newer(ref)) handle(ref, undefined, slot);
+      if (!newer(ref)) handle(ref, undefined, undefined, slot);
     }
     for (const [ref, state] of states) {
       if (state.value !== null && !listed.has(ref) && !newer(ref)) state.value = null;
@@ -440,7 +484,7 @@ export function createFollower(deps: FollowerDeps): Follower {
       enqueue(gen, async () => void (await readBlockers(gen)));
       return;
     }
-    handle(event.ref, event.eventId, event.to);
+    handle(event.ref, event.eventId, event.actor, event.to);
   }
 
   function spawnStream(): Spawned | undefined {

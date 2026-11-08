@@ -10,11 +10,13 @@ const OmpExtensionFolder = "omp"
 
 // AgentMessaging is how an agent hears the messages written to it: AddressPrefix is its Agent address up to the block id
 // (<actor>/<name>), which the wrapper completes from the block it runs in, and ExtensionArgs the omp flag and path (-e <path>) that load the
-// extension delivering them (ompext.Argv). ForwardComments turns on the extension's delivery of a person's comment on the agent's Issue. The zero value is an agent no message reaches.
+// extension delivering them (ompext.Argv). ForwardComments turns on the extension's delivery of a person's comment on the agent's Issue.
+// MessageFrom is the actors, besides the agent's own, whose messages it acts on. The zero value is an agent no message reaches.
 type AgentMessaging struct {
 	AddressPrefix   string
 	ExtensionArgs   []string
 	ForwardComments bool
+	MessageFrom     []string
 }
 
 // AgentAddress is the Agent address of the agent in block whose address prefix is prefix: the one spelling the Pane records and
