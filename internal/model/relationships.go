@@ -7,12 +7,10 @@ import (
 	"strings"
 )
 
-// RelationshipRef is the other end of a Relationship: the Issue's UID, its qualified id (project#id) and its status.
 type RelationshipRef struct {
 	UID, QualifiedID, Status string
 }
 
-// Open says the Issue on the other end is open.
 func (r RelationshipRef) Open() bool { return r.Status == "open" }
 
 // ID is the Issue's id as shown from project: the short id inside it, the qualified id outside.
@@ -32,20 +30,16 @@ type Relationships struct {
 	Related   []RelationshipRef
 }
 
-// OpenBlockers are the Issues that block this one and are still open.
 func (r Relationships) OpenBlockers() []RelationshipRef { return openRefs(r.BlockedBy) }
 
-// OpenChildren are the children that are still open.
 func (r Relationships) OpenChildren() []RelationshipRef { return openRefs(r.Children) }
 
-// OpenBlocked are the Issues this one blocks that are still open.
 func (r Relationships) OpenBlocked() []RelationshipRef { return openRefs(r.Blocks) }
 
 func openRefs(refs []RelationshipRef) []RelationshipRef {
 	return slices.DeleteFunc(slices.Clone(refs), func(r RelationshipRef) bool { return !r.Open() })
 }
 
-// RelationshipIndex is every Issue's Relationships, built once from the Collection snapshot's links.
 type RelationshipIndex map[string]*Relationships
 
 // NewRelationshipIndex reads links: a parent link runs from the child to the parent, a blocks link from the blocker to the Issue
@@ -88,7 +82,6 @@ func (x RelationshipIndex) of(uid string) *Relationships {
 	return x[uid]
 }
 
-// Of is uid's Relationships; an Issue with none has the zero value.
 func (x RelationshipIndex) Of(uid string) Relationships {
 	if r := x[uid]; r != nil {
 		return *r
@@ -103,7 +96,6 @@ func addRef(refs []RelationshipRef, ref RelationshipRef) []RelationshipRef {
 	return append(refs, ref)
 }
 
-// Highlight is how an Issue relates to the selected one, named from the selected Issue's side.
 type Highlight string
 
 // Highlights, in ring precedence: the first one an Issue has gives its ring.
@@ -134,7 +126,6 @@ func (r Relationships) Find(uid string) []Found {
 	return out
 }
 
-// Found is one Relationship of an Issue to another: how they relate and the other Issue.
 type Found struct {
 	Highlight Highlight
 	Ref       RelationshipRef
@@ -183,7 +174,6 @@ func (m Model) placeCard(uid string, jump bool) Model {
 	return m
 }
 
-// selectParent is `^`: the selected card's parent's card, or the Notice that it has none.
 func selectParent(m Model) (Model, []Cmd) {
 	issue := m.issueByUID(m.SelectedUID)
 	if issue == nil {

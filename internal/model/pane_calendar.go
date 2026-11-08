@@ -24,18 +24,14 @@ func (c PaneCalendar) location() *time.Location {
 	return c.loc
 }
 
-// Zone is the name of the time zone the Pane reads dates in.
 func (c PaneCalendar) Zone() string { return c.location().String() }
 
 func (c PaneCalendar) in(t time.Time) time.Time { return t.In(c.location()) }
 
-// DayOf is the local day an instant falls on, YYYY-MM-DD.
 func (c PaneCalendar) DayOf(t time.Time) string { return c.in(t).Format("2006-01-02") }
 
-// Stamp reads an instant as date and time.
 func (c PaneCalendar) Stamp(t time.Time) string { return c.in(t).Format("2006-01-02 15:04") }
 
-// Read reads an instant as the time alone when it falls on the local day of now, else as date and time.
 func (c PaneCalendar) Read(t, now time.Time) string {
 	if c.DayOf(t) == c.DayOf(now) {
 		return c.in(t).Format("15:04")
@@ -49,7 +45,6 @@ func (c PaneCalendar) DayEnds(now time.Time) time.Time {
 	return time.Date(y, mo, d+1, 0, 0, 0, 0, c.location())
 }
 
-// EndOfDate is when the local day named by Date ends; an empty or unreadable Date has none.
 func (c PaneCalendar) EndOfDate() (time.Time, bool) {
 	day, err := time.ParseInLocation("2006-01-02", c.Date, c.location())
 	if err != nil {

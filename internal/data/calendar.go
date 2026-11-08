@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// calendar is the local calendar the dated Collections need: today's date in the user's IANA zone. Env and Zone are injected so
-// tests need neither the process environment nor a system zone; Zone is the OS zone source (see osZone).
 type calendar struct {
 	Now  func() time.Time
 	Env  func(string) string
@@ -37,7 +35,6 @@ func (c calendar) Today() (date, zone, note string) {
 	return c.Now().In(location).Format(time.DateOnly), zone, ""
 }
 
-// zoneFromPath is the zone name in a zone file path: what follows "zoneinfo/", empty when the path has no such part.
 func zoneFromPath(path string) string {
 	_, zone, _ := strings.Cut(path, "zoneinfo/")
 	return zone

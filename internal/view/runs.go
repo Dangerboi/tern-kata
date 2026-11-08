@@ -11,13 +11,8 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// RunListID is the Runs Page's list of run cards; a card is the Run's uid under it.
 const RunListID = "main.columns.list.runs"
 
-// RunID is the id of the card of the Run with uid.
-func RunID(uid string) string { return itemID(RunListID, uid) }
-
-// runTone is the tone of a Run's status: running blue, succeeded green, failed red, cancelled muted, unknown amber.
 func runTone(status cronjob.RunStatus) ui.Tone {
 	switch status {
 	case cronjob.RunRunning:
@@ -32,7 +27,6 @@ func runTone(status cronjob.RunStatus) ui.Tone {
 	return ui.ToneWarning
 }
 
-// runs is the Runs Page's list column: a heading, then one card per Run, newest first.
 func runs(m model.Model, now time.Time) tern.Element {
 	if m.Runs.Timeline {
 		return runsTimeline(m, now)
@@ -67,7 +61,6 @@ func runs(m model.Model, now time.Time) tern.Element {
 	return runsPanel(m, children)
 }
 
-// runsJobWords is the job the Runs are narrowed to, as the heading calls it.
 func runsJobWords(m model.Model) string {
 	if m.Runs.JobName == "" {
 		return "job " + m.Runs.JobUID
@@ -75,52 +68,44 @@ func runsJobWords(m model.Model) string {
 	return "job " + m.Runs.JobName
 }
 
-// runsHeading is the Page's heading after "Runs" and the spans that count and scope it, with the marks of older runs to read and
-// of a read on its way, as the first child of the list column.
 func runsHeading(m model.Model, spans ...ui.Span) []tern.Element {
-	heading := append([]ui.Span{{T: "Runs", S: "strong"}}, spans...)
+	spans = append([]ui.Span{{T: "Runs", S: "strong"}}, spans...)
 	if m.Runs.More != "" {
-		heading = append(heading, ui.Span{T: " · older runs: m", S: "muted"})
+		spans = append(spans, ui.Span{T: " · older runs: m", S: "muted"})
 	}
 	if m.Runs.Loading {
-		heading = append(heading, loadingMarker)
+		spans = append(spans, loadingMarker)
 	}
-	return ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Spans: heading, Wrap: ui.WrapNone})
+	return ui.Nodes(heading(spans...))
 }
 
-// runsNotices are what the Page says under its heading in either view: an archived Project, why the Runs could not be read and why
-// seen.toml could not.
 func runsNotices(m model.Model) []tern.Element {
 	var notices []tern.Element
 	if m.Runs.ProjectArchived {
-		notices = append(notices, ui.Text{Common: ui.Common{Key: "archived-project", Tone: ui.ToneWarning}, Text: "This Project is archived: kata answers none of its runs."})
+		notices = append(notices, plainText("archived-project", ui.ToneWarning, "This Project is archived: kata answers none of its runs."))
 	}
 	if m.Runs.Err != nil {
-		notices = append(notices, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Runs.Err.Error()})
+		notices = append(notices, plainText("error", ui.ToneError, m.Runs.Err.Error()))
 	}
 	if m.Runs.SeenErr != nil {
-		notices = append(notices, ui.Text{Common: ui.Common{Key: "seen-error", Tone: ui.ToneError}, Text: m.Runs.SeenErr.Error()})
+		notices = append(notices, plainText("seen-error", ui.ToneError, m.Runs.SeenErr.Error()))
 	}
 	return notices
 }
 
-// runsPanel is the Runs Page's list column around children.
 func runsPanel(m model.Model, children []tern.Element) tern.Element {
-	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
+	return listPanel(m, 0.5, children)
 }
 
-// runCard is one Run on three lines: its status and what it ran, the Issue and who ran it, then when it started, how long it took
-// and the summary. A held Run of this machine adds its hold, and another Run whose summary leads with a reason its code. A part
-// that can't be worked out is left off its line.
 func runCard(row model.RunRow, selected, fresh bool) tern.Element {
 	tone := runTone(row.Run.Status)
 	if row.Held {
 		tone = ui.ToneWarning
 	}
-	head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Wrap: true, Children: ui.Nodes(
+	head := headRow(
 		ui.Badge{Common: ui.Common{Key: "status", Tone: tone}, Text: row.State},
 		ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: row.Name, S: "strong"}}},
-	)}
+	)
 	body := ui.Nodes(head)
 	var who []string
 	if row.Issue != "" {
@@ -134,9 +119,9 @@ func runCard(row model.RunRow, selected, fresh bool) tern.Element {
 	}
 	switch {
 	case row.Held:
-		body = append(body, ui.Text{Common: ui.Common{Key: "hold", Tone: ui.ToneWarning}, Text: "held: " + row.Hold})
+		body = append(body, plainText("hold", ui.ToneWarning, "held: "+row.Hold))
 	case row.Reason != "":
-		body = append(body, ui.Text{Common: ui.Common{Key: "reason", Tone: tone}, Text: "reason: " + row.Reason})
+		body = append(body, plainText("reason", tone, "reason: "+row.Reason))
 	}
 	when := []ui.Span{{T: "started ", S: "muted"}, {T: row.Start, S: mono("muted")}}
 	if row.Duration != "" {
@@ -156,7 +141,6 @@ func runCard(row model.RunRow, selected, fresh bool) tern.Element {
 	return ui.Card{Common: ui.Common{Key: row.Run.UID, Tone: cardTone, Actions: &ui.Actions{Click: RunClick(row.Run.UID), DblClick: RunOpenClick(row.Run.UID)}}, Selected: selected, Children: body}
 }
 
-// runInspector is the Runs Page's second column: the selected Run's detail.
 func runInspector(m model.Model, now time.Time) tern.Element {
 	facts := m.RunFacts(now)
 	if len(facts) == 0 {
@@ -175,8 +159,6 @@ func runInspector(m model.Model, now time.Time) tern.Element {
 	return factInspector(m, lines)
 }
 
-// runsTimeline is the Runs Page's since-you-last-looked mode: the Runs ended since the user last looked, highlighted, above a Now
-// line and the Project's next runs. With nothing new it says so in one line.
 func runsTimeline(m model.Model, now time.Time) tern.Element {
 	t := m.Timeline(now)
 	loadingRuns, loadingNext := m.TimelineLoading()
@@ -210,7 +192,7 @@ func runsTimeline(m model.Model, now time.Time) tern.Element {
 		case !t.Seen.IsZero():
 			words = "Nothing new since " + m.Calendar.Read(t.Seen, now) + "."
 		}
-		items = append(items, ui.Text{Common: ui.Common{Key: "nothing-new", Tone: ui.ToneMuted}, Text: words})
+		items = append(items, plainText("nothing-new", ui.ToneMuted, words))
 	}
 	items = append(items, ui.Rule{Common: ui.Common{Key: "now"}, Label: ui.T("Now")})
 	for _, next := range t.Upcoming {
@@ -221,21 +203,19 @@ func runsTimeline(m model.Model, now time.Time) tern.Element {
 		if loadingNext {
 			words = "Loading next runs…"
 		}
-		items = append(items, ui.Text{Common: ui.Common{Key: "nothing-next", Tone: ui.ToneMuted}, Text: words})
+		items = append(items, plainText("nothing-next", ui.ToneMuted, words))
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: fillMax, Empty: ui.T("Loading runs…"), Children: items}
 	return runsPanel(m, append(children, list))
 }
 
-// foldedRuns is one job's ended Runs as a single row: the job, how many Runs and their counts by status, and when the newest
-// ended. It can't be selected; the list of every run holds the Runs themselves.
 func foldedRuns(m model.Model, group model.RunGroup, now time.Time) tern.Element {
 	latest := group.Latest()
 	ended, _ := latest.Ended()
-	head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Wrap: true, Children: ui.Nodes(
+	head := headRow(
 		ui.Badge{Common: ui.Common{Key: "count", Tone: ui.ToneInfo}, Text: strconv.Itoa(len(group.Runs)) + " runs"},
 		ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: latest.Name(), S: "strong"}}},
-	)}
+	)
 	when := []ui.Span{{T: group.Counts(), S: "muted"}, {T: " · last ended ", S: "muted"}, {T: m.Calendar.Read(ended, now), S: mono("muted")}}
 	return ui.Card{Common: ui.Common{Key: "fold-" + latest.UID, Tone: ui.ToneInfo}, Children: ui.Nodes(head, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})}
 }
@@ -247,17 +227,16 @@ func skippedJob(m model.Model, s model.JobSkips, now time.Time) tern.Element {
 	if s.Count == 1 {
 		noun = " skip"
 	}
-	head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Wrap: true, Children: ui.Nodes(
+	head := headRow(
 		ui.Badge{Common: ui.Common{Key: "count", Tone: ui.ToneWarning}, Text: strconv.Itoa(s.Count) + noun},
 		ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: s.Name, S: "strong"}}},
-	)}
+	)
 	latest := []ui.Span{{T: "latest ", S: "muted"}, {T: s.LatestCondition, S: mono("muted")}, {T: ": " + s.LatestReason, S: "muted"}}
 	when := []ui.Span{{T: "not run · skipped ", S: "muted"}, {T: m.Calendar.Read(s.LatestAt, now), S: mono("muted")}}
 	return ui.Card{Common: ui.Common{Key: "skips-" + s.UID, Tone: ui.ToneWarning}, Children: ui.Nodes(head,
 		ui.Text{Common: ui.Common{Key: "latest"}, Spans: latest}, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})}
 }
 
-// upcomingRun is one of the Project's next runs: a native job with its next time, an adapter job as started by the worker.
 func upcomingRun(m model.Model, next model.UpcomingRun) tern.Element {
 	when := "started by the worker"
 	if next.Next != "" {

@@ -12,7 +12,6 @@ import (
 // sets it in the worker's environment as TERN_KATA_SUPERVISOR.
 const SupervisorTern = "tern"
 
-// Status is what `worker status` shows: what runs, what is served and what is missing.
 type Status struct {
 	Executor    string
 	Actor       string
@@ -33,7 +32,6 @@ type Status struct {
 	InFlight int
 }
 
-// ProjectStatus is one served Project.
 type ProjectStatus struct {
 	Name        string
 	Capacity    int
@@ -61,7 +59,6 @@ type ProjectStatus struct {
 	Spent []JobSpend
 }
 
-// RunStatus is one run of this machine.
 type RunStatus struct {
 	UID     string
 	Project string
@@ -88,7 +85,6 @@ type RunStatus struct {
 	EndedAt       time.Time
 }
 
-// Status reports the worker as it is now.
 func (w *Worker) Status() Status {
 	s := Status{Executor: w.opt.Config.Executor, Actor: cmp.Or(w.opt.Config.Actor, w.opt.Actor), Version: w.opt.Version, Supervisor: w.opt.Supervisor, PID: w.pid, Started: w.started, Now: w.clock.Now()}
 	w.mu.Lock()
@@ -174,7 +170,6 @@ func runStatus(j *Journal) RunStatus {
 	return r
 }
 
-// String is the text of `worker status`.
 func (s Status) String() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Worker %q running as %s (process %d, up %s", s.Executor, s.Actor, s.PID, s.Now.Sub(s.Started).Round(time.Second))
@@ -266,7 +261,7 @@ func (s Status) String() string {
 			fmt.Fprintf(&b, "    %s\n", r.Detail)
 			switch {
 			case r.Resumable:
-				fmt.Fprintf(&b, "    Resume it with `tern-kata worker resume %s` or abandon it with `tern-kata worker abandon %s`.\n", r.UID, r.UID)
+				b.WriteString("    " + resumeOrAbandon(r.UID) + "\n")
 			case r.Abandonable:
 				fmt.Fprintf(&b, "    It cannot be resumed: %s. Abandon it with `tern-kata worker abandon %s`.\n", r.ResumeRefusal, r.UID)
 			default:
@@ -283,7 +278,6 @@ func (s Status) String() string {
 	return b.String()
 }
 
-// supervision says what keeps the worker running and how to turn that off.
 func (s Status) supervision() string {
 	switch s.Supervisor {
 	case "":

@@ -14,27 +14,17 @@ const (
 	// PageIssues is the Issue list with the Issue detail, the Pane's main surface. Its state is the list's: the Collection,
 	// the Issues, the selection and the filters, which the Board Page shares because it draws the same Issues.
 	PageIssues Page = iota
-	// PageJobs is the Project's Cron jobs; its state is Model.Jobs.
 	PageJobs
-	// PageRuns is the Project's Runs, newest first; its state is Model.Runs.
 	PageRuns
-	// PageWorkflows is the Project's kata workflows beside an inspector; its state is Model.Workflows.
 	PageWorkflows
-	// PageBoard is the Project's Issues in Lanes; its state is Model.Board.
 	PageBoard
-	// PageAttention is the Attention requests addressed to the Pane's Inbox address, across every Project; its state is Model.Attention.
 	PageAttention
-	// PageCredentials is the Lettered Page of the daemon's API tokens; its state is Model.Credentials.
 	PageCredentials
-	// PageFederation is the Lettered Page of this daemon's spoke federations; its state is Model.Federation.
 	PageFederation
-	// PageDaemons is the Lettered Page of the daemons kata's configuration names; its state is Model.Daemons.
 	PageDaemons
-	// PageConfig is the Lettered Page of tern-kata's config files; its state is Model.ConfigPage.
 	PageConfig
 )
 
-// SecondColumn says what a Page's second column is. A Page declares it in pageDefs, and the one leave rule reads it.
 type SecondColumn uint8
 
 const (
@@ -46,34 +36,22 @@ const (
 	SecondInspector
 )
 
-// SecondColumn is what the current Page's second column is.
 func (m Model) SecondColumn() SecondColumn { return pageDefs[m.Page].second }
 
-// ListNode names which of the Pane's list nodes a Page's list is, for the scroll keys: the view maps it to the node it draws.
 type ListNode uint8
 
 const (
-	// ListNodeIssues is the Issue list's node, which the Lane view scrolls too.
 	ListNodeIssues ListNode = iota
-	// ListNodeJobs is the Jobs Page's list node.
 	ListNodeJobs
-	// ListNodeRuns is the Runs Page's list node.
 	ListNodeRuns
-	// ListNodeWorkflows is the Workflows Page's list node.
 	ListNodeWorkflows
-	// ListNodeAttention is the Attention Page's list node.
 	ListNodeAttention
-	// ListNodeCredentials is the Credentials Page's list node.
 	ListNodeCredentials
-	// ListNodeFederation is the Federation Page's list node.
 	ListNodeFederation
-	// ListNodeDaemons is the Daemons Page's list node.
 	ListNodeDaemons
-	// ListNodeConfig is the Config Page's list node.
 	ListNodeConfig
 )
 
-// ListNode is the current Page's list node.
 func (m Model) ListNode() ListNode { return pageDefs[m.Page].list }
 
 type pageDef struct {
@@ -84,11 +62,9 @@ type pageDef struct {
 	// lettered marks a Lettered Page: it has a letter for its chord and no number, is listed in the Menu, and is drawn in the Page
 	// bar only while shown. It does not act on the Pane's Project and has no reset rule. Its back key returns to the Page shown before.
 	lettered bool
-	// also are further keys that open the Page, as kata's T for the Attention Page.
-	also   []Key
-	action Action
-	// second is what the Page's second column is; leavePage reads it.
-	second SecondColumn
+	also     []Key
+	action   Action
+	second   SecondColumn
 	// needs is the Page as the notice words it when the Pane has no Project; "" for the Issues Page, which needs none.
 	needs string
 	// enter is the Page's own work once switchPage has made it current (see there); nil for the Issues Page.
@@ -108,12 +84,9 @@ type pageDef struct {
 	// keymap is the Page's contribution to the main actions, in the order its footer reads: its generated movement and scroll keys
 	// and its own rows. Rows several Pages share are values the declarations reference. keymapRows assembles them in table order.
 	keymap []keySegment
-	// moves is the Page's list's six movement keys, generated into the main actions; the zero value binds none.
-	moves pageMoves
-	// scroll is the Page's inspector's four scroll keys, generated into the main actions; the zero value binds none.
+	moves  pageMoves
 	scroll pageScroll
-	// list is the node the scroll keys of the Page's list go to.
-	list ListNode
+	list   ListNode
 	// settleSearch is what a search changing the Page's rows does to its selection, given the row the selection stood on (see
 	// settlePageSelection); non-nil marks a Page whose rows "/" searches, and id is what its search input calls them.
 	settleSearch func(m Model, row int) Model
@@ -136,7 +109,6 @@ type pageScroll struct {
 	sheet sheetLine
 }
 
-// issueMoves is the Issue list's movement keys, in the mode that shows the list: the Issues Page's list and the Board Page's Lane view.
 func issueMoves(mode Mode) pageMoves {
 	return pageMoves{mode: mode, noun: "Issue", move: moveSelection, sheet: [6]sheetLine{
 		{sheetGraph, 2, "down"}, {sheetGraph, 1, "up"}, {sheetGraph, 5, "first"}, {sheetGraph, 6, "last"}, {sheetGraph, 3, "page up"}, {sheetGraph, 4, "page down"},
@@ -146,19 +118,10 @@ func issueMoves(mode Mode) pageMoves {
 // pageDefs lists the Pages in Page bar order, indexed by Page. It is filled in init, as the Pages' rows reach back to the table.
 var pageDefs []pageDef
 
-// keySegment is one run of a Page's main actions.
 type keySegment func(pageDef) []actionEntry
 
-// movementKeys is the Page's generated movement rows.
-func movementKeys(def pageDef) []actionEntry { return pageMoveActions(def) }
-
-// scrollKeys is the Page's generated inspector scroll rows.
-func scrollKeys(def pageDef) []actionEntry { return pageScrollActions(def) }
-
-// rowsOf is a fixed run of rows.
 func rowsOf(rows []actionEntry) keySegment { return func(pageDef) []actionEntry { return rows } }
 
-// keymapRows is every Page's main actions, in table order.
 func keymapRows() []actionEntry {
 	var rows []actionEntry
 	for _, def := range pageDefs {
@@ -172,51 +135,48 @@ func keymapRows() []actionEntry {
 func init() {
 	pageDefs = []pageDef{
 		{page: PageIssues, id: "issues", label: "Issues", chord: "1", action: ShowIssuesPage, moves: issueMoves(ModeList),
-			keymap: []keySegment{movementKeys}},
+			keymap: []keySegment{pageMoveActions}},
 		{page: PageJobs, id: "jobs", label: "Jobs", chord: "2", action: ShowJobsPage, needs: "Jobs Page", second: SecondInspector, enter: enterJobs, clear: clearJobs,
 			filledFor: jobsFilledFor, reset: resetJobs, mode: inspectorMode(ModeJobs, ModeJobInspector), update: updateJobs, list: ListNodeJobs, settleSearch: func(m Model, _ int) Model { return m.settleJobSelection() },
 			moves:  pageMoves{mode: ModeJobs, noun: "job", move: moveJob, sheet: [6]sheetLine{{sheetJobs, 1, "next job"}, {sheetJobs, 2, "previous job"}, {sheetJobs, 3, "first job"}, {sheetJobs, 4, "last job"}}},
 			scroll: pageScroll{mode: ModeJobInspector, sheet: sheetLine{sheetJobs, 9, "scroll the inspector"}},
-			keymap: []keySegment{movementKeys, rowsOf(jobsRows), scrollKeys, rowsOf(jobsRowsAfterScroll)}},
+			keymap: []keySegment{pageMoveActions, rowsOf(jobsRows), pageScrollActions, rowsOf(jobsRowsAfterScroll)}},
 		{page: PageRuns, id: "runs", label: "Runs", chord: "3", action: ShowRunsPage, needs: "Runs Page", second: SecondInspector, enter: enterRuns, clear: clearRuns,
 			filledFor: runsFilledFor, reset: resetRuns, mode: inspectorMode(ModeRuns, ModeRunInspector), update: updateRuns, list: ListNodeRuns, settleSearch: func(m Model, _ int) Model { return m.settleRunSelection() },
 			moves:  pageMoves{mode: ModeRuns, noun: "run", move: moveRun, sheet: [6]sheetLine{{sheetRuns, 1, "next run"}, {sheetRuns, 2, "previous run"}, {sheetRuns, 3, "first run"}, {sheetRuns, 4, "last run"}}},
 			scroll: pageScroll{mode: ModeRunInspector, sheet: sheetLine{sheetRuns, 10, "scroll the detail"}},
-			// mainRows are the Runs inspector's back key and every row after it, which no Page owns (layout, back, Menu, help, quit).
-			keymap: []keySegment{rowsOf(runsRowsBeforeMovement), movementKeys, rowsOf(runsRows), scrollKeys, rowsOf(mainRows)}},
+			keymap: []keySegment{rowsOf(runsRowsBeforeMovement), pageMoveActions, rowsOf(runsRows), pageScrollActions, rowsOf(mainRows)}},
 		{page: PageWorkflows, id: "workflows", label: "Workflows", chord: "4", action: ShowWorkflowsPage, needs: "Workflows Page", second: SecondIssueDetail, enter: enterWorkflows, clear: clearWorkflows,
 			filledFor: workflowsFilledFor, reset: resetWorkflows, mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows, settleSearch: Model.selectWorkflow,
 			moves:  pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "next workflow"}, {sheetWorkflows, 2, "previous workflow"}}},
-			keymap: []keySegment{movementKeys, rowsOf(workflowActions())}},
+			keymap: []keySegment{pageMoveActions, rowsOf(workflowActions())}},
 		{page: PageBoard, id: "board", label: "Board", chord: "5", action: ShowBoardPage, needs: "Board", second: SecondIssueDetail, enter: enterBoard, clear: clearBoard,
 			mode: boardMode, update: updateBoard, moves: issueMoves(ModeLane),
-			// listRows are the Issue list's and the Lane view's rows, which follow the Board's movement keys.
-			keymap: []keySegment{movementKeys, rowsOf(listRows)}},
+			keymap: []keySegment{pageMoveActions, rowsOf(listRows)}},
 		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, also: keys("shift+t", "T"), second: SecondInspector, enter: enterAttention,
 			mode: func(Model) Mode { return ModeAttention }, update: updateAttention, list: ListNodeAttention,
 			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "next request"}, {sheetAttention, 2, "previous request"}}},
-			keymap: []keySegment{movementKeys, rowsOf(attentionRows)}},
+			keymap: []keySegment{pageMoveActions, rowsOf(attentionRows)}},
 		{page: PageCredentials, id: "credentials", label: "Credentials", chord: "C", press: "shift+c", lettered: true, action: ShowCredentialsPage, second: SecondInspector, enter: enterCredentials, clear: clearCredentials,
 			mode: credentialsMode, update: updateCredentials, list: ListNodeCredentials,
 			moves:  pageMoves{mode: ModeCredentials, noun: "credential", move: moveCredential, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
-			keymap: []keySegment{movementKeys, rowsOf(credentialsRows)}},
+			keymap: []keySegment{pageMoveActions, rowsOf(credentialsRows)}},
 		{page: PageFederation, id: "federation", label: "Federation", chord: "F", press: "shift+f", lettered: true, action: ShowFederationPage, second: SecondInspector, enter: enterFederation, clear: clearFederation,
 			mode: federationMode, update: updateFederation, list: ListNodeFederation,
 			moves:  pageMoves{mode: ModeFederation, noun: "spoke", move: moveFederation, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
-			keymap: []keySegment{movementKeys, rowsOf(federationRows), rowsOf(federationLeaveRows), federationChoiceMoves, rowsOf(federationEnrollRows)}},
+			keymap: []keySegment{pageMoveActions, rowsOf(federationRows), rowsOf(federationLeaveRows), federationChoiceMoves, rowsOf(federationEnrollRows)}},
 		{page: PageDaemons, id: "daemons", label: "Daemons", chord: "D", press: "shift+d", lettered: true, action: ShowDaemonsPage, second: SecondInspector, enter: enterDaemons, clear: clearDaemons,
 			mode: daemonsMode, update: updateDaemons, list: ListNodeDaemons,
 			moves:  pageMoves{mode: ModeDaemons, noun: "daemon", move: moveDaemon, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
-			keymap: []keySegment{movementKeys, rowsOf(daemonsRows)}},
+			keymap: []keySegment{pageMoveActions, rowsOf(daemonsRows)}},
 		{page: PageConfig, id: "config", label: "Config", chord: "K", press: "shift+k", lettered: true, action: ShowConfigPage, second: SecondInspector, enter: enterConfig, clear: clearConfig,
 			mode: configMode, update: updateConfig, list: ListNodeConfig,
 			moves:  pageMoves{mode: ModeConfig, noun: "file", move: moveConfig, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
-			keymap: []keySegment{movementKeys, rowsOf(configRows)}},
+			keymap: []keySegment{pageMoveActions, rowsOf(configRows)}},
 	}
 	buildKeymap()
 }
 
-// pageMode is the current Page's mode from its declaration, "" when the Page has none or leaves it to the focus.
 func pageMode(m Model) Mode {
 	if mode := pageDefs[m.Page].mode; mode != nil {
 		return mode(m)
@@ -224,7 +184,6 @@ func pageMode(m Model) Mode {
 	return ""
 }
 
-// updatePages offers a message to each Page's update hook in table order and stops at the first that handles it.
 func updatePages(m Model, msg Msg) (Model, []Cmd, bool) {
 	for _, def := range pageDefs {
 		if def.update != nil {
@@ -236,7 +195,6 @@ func updatePages(m Model, msg Msg) (Model, []Cmd, bool) {
 	return m, nil, false
 }
 
-// boardMode is the Board Page's mode: the Board, or the Lane view unless the detail has focus.
 func boardMode(m Model) Mode {
 	switch {
 	case m.BoardShown():
@@ -247,7 +205,6 @@ func boardMode(m Model) Mode {
 	return ""
 }
 
-// inspectorMode is the mode of a Page whose second column is its own inspector: the inspector's when it has focus, the list's otherwise.
 func inspectorMode(list, inspector Mode) func(Model) Mode {
 	return func(m Model) Mode {
 		if m.Focus == ColumnDetail {
@@ -257,7 +214,6 @@ func inspectorMode(list, inspector Mode) func(Model) Mode {
 	}
 }
 
-// workflowsMode is the Workflows Page's list mode; the detail beside it takes the Issue detail's by focus.
 func workflowsMode(m Model) Mode {
 	if m.Focus == ColumnList {
 		return ModeWorkflows
@@ -265,7 +221,6 @@ func workflowsMode(m Model) Mode {
 	return ""
 }
 
-// pageMoveActions is the main actions of a Page's movement keys, from its declaration.
 func pageMoveActions(def pageDef) []actionEntry {
 	p := def.moves
 	if p.mode == "" {
@@ -299,7 +254,6 @@ func pageMoveActions(def pageDef) []actionEntry {
 	return entries
 }
 
-// pageScrollActions is the main actions of a Page's inspector's scroll keys, from its declaration.
 func pageScrollActions(def pageDef) []actionEntry {
 	p := def.scroll
 	if p.mode == "" {
@@ -321,15 +275,12 @@ func pageScrollActions(def pageDef) []actionEntry {
 var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials,
 	ModeFederation, ModeFederationLeave, ModeFederationResult, ModeFederationPick, ModeFederationBrowse, ModeFederationPreview, ModeFederationRecovery, ModeDaemons, ModeConfig}
 
-// PageBarEntry is one entry of the Page bar. Press is the chord a click on it sends.
 type PageBarEntry struct {
 	ID, Label, Chord, Press string
 	Current                 bool
-	// Count is how many things wait on the Page, drawn as a badge after the label when above zero.
-	Count int
+	Count                   int
 }
 
-// pressed is the Tern chord that stands for the Page's key.
 func (def pageDef) pressed() string {
 	if def.press != "" {
 		return def.press
@@ -337,7 +288,6 @@ func (def pageDef) pressed() string {
 	return def.chord
 }
 
-// PageBar is the Page bar's entries, left to right: every numbered Page, and a Lettered Page only while it is shown.
 func (m Model) PageBar() []PageBarEntry {
 	entries := make([]PageBarEntry, 0, len(pageDefs))
 	for _, def := range pageDefs {
@@ -437,7 +387,6 @@ func (m Model) leavePage() Model {
 	return m.revealInList(m.SelectedUID).WithVisibleSelection()
 }
 
-// pageActions are the Page keys as main-surface entries, so keys, help sheet and click targets come from one place.
 func pageActions() []actionEntry {
 	entries := make([]actionEntry, len(pageDefs))
 	for i, def := range pageDefs {

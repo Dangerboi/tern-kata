@@ -22,8 +22,7 @@ type AgentResult struct {
 	FinalText string `json:"final_text,omitempty"`
 	// StopReason is that message's stopReason: "stop" for a finished turn; "error" and "aborted" otherwise.
 	StopReason string `json:"stop_reason,omitempty"`
-	// ErrorText is that message's errorMessage, the last error text omp reported.
-	ErrorText string `json:"error_text,omitempty"`
+	ErrorText  string `json:"error_text,omitempty"`
 	// ErrorStatus is that message's errorStatus (the provider's HTTP status), 0 when it had none.
 	ErrorStatus int `json:"error_status,omitempty"`
 	// Terminal is true once an agent_end with isTerminal absent or true arrived. No agent_end is a failure whatever the exit code.
@@ -31,19 +30,16 @@ type AgentResult struct {
 	InputTokens  *int64 `json:"input_tokens,omitempty"`
 	OutputTokens *int64 `json:"output_tokens,omitempty"`
 	// CostUSD is the sum of the cost omp reported (usage.cost.total) for the attempt; nil when it reported none.
-	CostUSD *float64 `json:"cost_usd,omitempty"`
-	// StderrTail is the last of the process's stderr, kept for the reason of a failure.
-	StderrTail string `json:"stderr_tail,omitempty"`
+	CostUSD    *float64 `json:"cost_usd,omitempty"`
+	StderrTail string   `json:"stderr_tail,omitempty"`
 }
 
-// agentParser folds omp's output lines into an AgentResult.
 type agentParser struct {
-	res      AgentResult
-	in, out  int64
-	sawUsage bool
-	cost     float64
-	sawCost  bool
-	// onSession is called once, with the session id, when it first appears.
+	res       AgentResult
+	in, out   int64
+	sawUsage  bool
+	cost      float64
+	sawCost   bool
 	onSession func(id string)
 }
 
@@ -125,7 +121,6 @@ func (p *agentParser) Line(line []byte) {
 			return
 		}
 		p.res.Terminal = true
-		// The last assistant turn decides the run even when it does not decode (agentEnd).
 		for i := len(event.Messages) - 1; i >= 0; i-- {
 			var head struct {
 				Role string `json:"role"`
@@ -216,7 +211,6 @@ func (p *agentParser) Result() AgentResult {
 	return r
 }
 
-// sessionFolder is where omp keeps the run's sessions: directly in --session-dir.
 func sessionFolder(runDir string) string { return filepath.Join(runDir, "session") }
 
 // args is the omp command line for a run (ADR-0009): headless JSON, the run's session folder, the profile's model
@@ -252,7 +246,6 @@ func agentArgs(p Profile, runDir, promptFile, resume, extension string) []string
 // MaxPromptBytes bounds the expanded prompt (ADR-0009).
 const MaxPromptBytes = 256 << 10
 
-// PromptInput is what a prompt step's text is built from.
 type PromptInput struct {
 	Actor         string
 	IssueRef      string // qualified: <project>#<short id>
@@ -265,8 +258,7 @@ type PromptInput struct {
 	Task          string
 	// Attempt is the step's attempt, 1 for the first. Resumed is set from the second on: the previous attempt's
 	// turn may have partly run, and the new prompt says so.
-	Attempt int
-	// NewCommits is the list of commits the job's New commits condition found, empty for none.
+	Attempt    int
 	NewCommits string
 	Resumed    *ResumeNote
 	// Step is set for a workflow's prompt step; a prompt job's single step needs none.
@@ -280,11 +272,9 @@ type StepInput struct {
 	Key      string
 	Number   int // 1-based
 	Count    int
-	// Failure is why the step's previous attempt failed; empty on the first attempt.
-	Failure string
+	Failure  string
 }
 
-// ResumeNote says why a resumed attempt exists.
 type ResumeNote struct {
 	Hold   string // the hold reason that was lifted
 	Detail string // the hold's summary after its reason
@@ -360,7 +350,6 @@ func BuildPrompt(in PromptInput) (string, error) {
 // maxSummaryBytes is kata's summary bound, leaving room for the reason kept first.
 const maxSummaryBytes = 60 << 10
 
-// truncate cuts s to n bytes on a rune boundary.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

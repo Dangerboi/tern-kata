@@ -93,7 +93,6 @@ func (e OmpEnv) layout(argProfile string, hasArg bool) (plugins, agent string, o
 	return plugins, agent, true
 }
 
-// pluginScan looks for kata-plugin's omp extension, reading each plugins root's lock file at most once.
 type pluginScan struct {
 	env   OmpEnv
 	locks map[string]lockState
@@ -149,7 +148,6 @@ func (s *pluginScan) kataPlugin(argProfile string, hasArg bool) string {
 	return ""
 }
 
-// lock reads root's omp-plugins.lock.json entry for kata-omp: whether it is listed, and whether it is disabled.
 func (s *pluginScan) lock(root string) lockState {
 	if st, ok := s.locks[root]; ok {
 		return st

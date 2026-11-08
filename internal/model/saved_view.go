@@ -18,7 +18,6 @@ type ViewFieldError struct {
 func (e ViewFieldError) Error() string { return e.Err.Error() }
 func (e ViewFieldError) Unwrap() error { return e.Err }
 
-// MaxViewNameLen is the longest a saved view's name may be, in characters.
 const MaxViewNameLen = 64
 
 // OwnerMe is the owner filter value that means the Pane's actor; it is saved as typed and resolved when the view opens.
@@ -35,13 +34,11 @@ type SavedView struct {
 	Filters Filters
 }
 
-// ViewRef is what a name given to `views show` or `views rm` resolves to: a fixed Collection or a saved view.
 type ViewRef struct {
 	Collection *Collection
 	View       *SavedView
 }
 
-// FixedCollectionNamed is the fixed Collection whose title or key equals name, ignoring case.
 func FixedCollectionNamed(name string) (Collection, bool) {
 	name = strings.TrimSpace(name)
 	for _, c := range FixedCollections() {
@@ -64,7 +61,6 @@ func ResolveViewName(name string, views []SavedView) (ViewRef, bool) {
 	return ViewRef{}, false
 }
 
-// SavedViewNamed is the saved view called name, ignoring case and surrounding space.
 func SavedViewNamed(views []SavedView, name string) (SavedView, bool) {
 	if i := viewIndex(views, name); i >= 0 {
 		return views[i], true
@@ -101,7 +97,6 @@ func CheckViewName(name string, others []SavedView, self string) (string, error)
 	return name, nil
 }
 
-// CheckViewFilters trims the text fields and says which filter value the Filter card would not accept.
 func CheckViewFilters(f Filters) (Filters, error) {
 	f.ProjectUID = strings.TrimSpace(f.ProjectUID)
 	f.Owner = strings.TrimSpace(f.Owner)
@@ -117,15 +112,9 @@ func CheckViewFilters(f Filters) (Filters, error) {
 }
 
 func hasChoice(choices []FilterChoice, value string) bool {
-	for _, c := range choices {
-		if c.Value == value {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(choices, func(c FilterChoice) bool { return c.Value == value })
 }
 
-// CheckViewBase says why c cannot be a saved view's base: a fixed Collection by key, or a Project with a UID.
 func CheckViewBase(c Collection) (Collection, error) {
 	if c.IsProject() {
 		c.ProjectUID = strings.TrimSpace(c.ProjectUID)
@@ -176,7 +165,6 @@ func CheckSavedViewIn(v SavedView, others []SavedView, self string, projectName 
 	return v, nil
 }
 
-// FiltersFor is the view's filters with an owner of @me replaced by actor, which is when the view opens.
 func (v SavedView) FiltersFor(actor string) Filters {
 	f := v.Filters
 	if strings.TrimSpace(f.Owner) == OwnerMe {

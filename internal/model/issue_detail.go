@@ -15,17 +15,15 @@ type IssueDetail struct {
 	loading bool
 	err     error
 	// linkOn is the comment `]` and `[` last stepped the link cursor on, and link where it stands; any other comment starts at its first link.
-	linkOn rowID
-	link   int
-	tab    ActivityTab
-	cursor int // an index into rows.items
-	rows   detailRows
-	back   []jumpEntry
-	// landing is where the cursor goes once the detail of the Issue it names arrives.
+	linkOn  rowID
+	link    int
+	tab     ActivityTab
+	cursor  int // an index into rows.items
+	rows    detailRows
+	back    []jumpEntry
 	landing *jumpEntry
 	// landedOn is the Issue the last jump landed on; the history ends once the detail shows another one.
-	landedOn string
-	// openRef is a reference being opened; openedUID is the Issue it opened, which may be outside the Collection.
+	landedOn           string
 	openRef, openedUID string
 	// recurrenceWanted is the Issue whose recurrence `O` waits for: the detail loads even while hidden, and the Recurrence card
 	// opens once the loaded detail has it.
@@ -36,7 +34,6 @@ type IssueDetail struct {
 	listJump bool
 }
 
-// cleared is the detail with nothing shown or remembered but whether the column is hidden.
 func (d IssueDetail) cleared() IssueDetail { return IssueDetail{hidden: d.hidden} }
 
 func (d IssueDetail) DetailAuthority() *IssueDetailData { return d.authority }
@@ -48,8 +45,6 @@ func (d IssueDetail) ActiveTab() ActivityTab            { return d.tab }
 func (d IssueDetail) OpenedIssueUID() string            { return d.openedUID }
 func (d IssueDetail) OpenIssueRef() string              { return d.openRef }
 
-// updateWithDetail runs one Model step and then settles the detail: tab and Issue changes become intents, the jump history ends
-// whenever focus is not on the detail or it shows an Issue no jump landed on, and a changed selection or a stale detail loads.
 func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	shown, tab, boardWasOn := m.DetailIssueUID(), m.tab, m.OnBoard()
 	m, cmds := update(m, msg)
@@ -103,13 +98,10 @@ func (m Model) wantRecurrence(uid string) Model {
 	return m
 }
 
-// detailCurrent says the detail shows uid, loaded and not known to be out of date.
 func (m Model) detailCurrent(uid string) bool {
 	return m.authority != nil && m.authority.Issue != nil && m.authority.Issue.UID == uid && !m.stale && !m.loading
 }
 
-// settleWantedRecurrence opens the card the wanted recurrence waits for, or drops the wish when the selection moved on or the
-// detail failed to load.
 func (m Model) settleWantedRecurrence() Model {
 	uid := m.recurrenceWanted
 	switch {
@@ -123,7 +115,6 @@ func (m Model) settleWantedRecurrence() Model {
 	return m
 }
 
-// shownIssue is the loaded Issue of the detail when it is the selected one, else nil.
 func (m Model) shownIssue() *Issue {
 	if m.authority != nil && m.authority.Issue != nil && m.authority.Issue.UID == m.SelectedUID {
 		return m.authority.Issue
@@ -131,13 +122,11 @@ func (m Model) shownIssue() *Issue {
 	return nil
 }
 
-// endJumpHistory is the one way the jump history ends.
 func (m Model) endJumpHistory() Model {
 	m.back, m.landing, m.listJump = nil, nil, false
 	return m
 }
 
-// loadDetail loads the selected Issue's detail when the selection changed or the detail went stale.
 func (m Model) loadDetail() (Model, []Cmd) {
 	if m.Quitting || (m.hidden && m.recurrenceWanted == "") || (m.SelectedUID == m.uid && !m.stale) {
 		return m, nil
@@ -160,14 +149,12 @@ func (m Model) loadDetail() (Model, []Cmd) {
 	return m, []Cmd{LoadDetail{Workspace: m.Workspace, UID: m.SelectedUID}}
 }
 
-// focusDetail gives the detail the keys and shows it.
 func (m Model) focusDetail() Model {
 	m.Focus = ColumnDetail
 	m.hidden = false
 	return m
 }
 
-// toggleDetail hides or shows the column; hiding it takes focus back to the list.
 func (m Model) toggleDetail() Model {
 	m.hidden = !m.hidden
 	if m.hidden && m.Focus == ColumnDetail {
@@ -185,7 +172,6 @@ func (m Model) issueWritten(uid string) Model {
 	return m
 }
 
-// conflictResolved shows the stored Issue a Draft conflicted with.
 func (m Model) conflictResolved(uid string, stored *Issue) Model {
 	if uid == m.uid && m.authority != nil {
 		detail := *m.authority
@@ -195,14 +181,15 @@ func (m Model) conflictResolved(uid string, stored *Issue) Model {
 	return m
 }
 
-// detailLoaded and detailFailed apply the result of a LoadDetail; one for an Issue no longer asked for is dropped.
+func (m Model) adopt(authority *IssueDetailData) Model {
+	m.authority, m.loading, m.err = authority, false, nil
+	return m
+}
+
 func (m Model) detailLoaded(msg DetailLoaded) Model {
 	if msg.UID == m.SelectedUID && msg.UID == m.uid {
 		anchor, anchored := m.cursorRowID()
-		m.authority = msg.Selected
-		m.loading = false
-		m.err = nil
-		m = m.arrived(anchor, anchored)
+		m = m.adopt(msg.Selected).arrived(anchor, anchored)
 	}
 	return m
 }
@@ -225,12 +212,8 @@ func (m Model) snapshotArrived(authority *IssueDetailData, selected string, anch
 		m.SelectedUID = selected // the Issue jumped to stays shown
 	}
 	if authority != nil && authority.Issue != nil && authority.Issue.UID == m.SelectedUID {
-		m.authority = authority
-		m.uid = m.SelectedUID
-		m.stale = false
-		m.loading = false
-		m.err = nil
-		m = m.arrived(anchor, anchored)
+		m.uid, m.stale = m.SelectedUID, false
+		m = m.adopt(authority).arrived(anchor, anchored)
 	} else if m.uid == m.SelectedUID {
 		m.stale = true
 	}
@@ -247,24 +230,21 @@ func (m Model) openByReference(ref string, authority *IssueDetailData) (Model, [
 	if target, across := m.otherProjectNamed(authority.Issue.ProjectName); across {
 		m, cmds := m.crossJump(authority.Issue.UID, target, nil)
 		if !m.OnBoard() {
-			m.uid, m.stale, m.authority, m.loading, m.err = m.SelectedUID, false, authority, false, nil
+			m.uid, m.stale = m.SelectedUID, false
+			m = m.adopt(authority)
 		}
 		return m, cmds
 	}
 	m.SelectedUID = authority.Issue.UID
 	m.openedUID = m.SelectedUID
-	m.uid = m.SelectedUID
-	m.stale = false
-	m.authority = authority
-	m.loading = false
-	m.err = nil
+	m.uid, m.stale = m.SelectedUID, false
+	m = m.adopt(authority)
 	m.hidden = false
 	m.cursor = 0
 	m.Focus = ColumnDetail
 	return m, nil
 }
 
-// openRequested records a reference to open; openFailed drops it.
 func (m Model) openRequested(ref string) Model {
 	m.openRef = ref
 	return m
@@ -273,13 +253,10 @@ func (m Model) openRequested(ref string) Model {
 func (m Model) openFailed(ref string) Model {
 	if ref == m.openRef {
 		m.openRef = ""
-		return m
 	}
 	return m
 }
 
-// jumpEntry is a place in an Issue's detail: the Issue, its Activity tab and a row. A jump history entry records where the
-// jump left from; a landing is where the detail puts the cursor once the Issue arrives.
 type jumpEntry struct {
 	uid    string
 	tab    ActivityTab
@@ -321,7 +298,6 @@ func (m Model) jumpTo(uid string, landing *jumpEntry) (Model, []Cmd) {
 	return m.jumpWithin(uid, landing), nil
 }
 
-// jumpWithin is jumpTo inside the Pane's Collection: the Collection never changes.
 func (m Model) jumpWithin(uid string, landing *jumpEntry) Model {
 	if uid == "" || uid == m.SelectedUID {
 		return m
@@ -354,16 +330,18 @@ func (m Model) jumpBack() (Model, []Cmd, bool) {
 	return m, nil, true
 }
 
-// chooseTab shows an Activity tab with the cursor on its first row.
 func (m Model) chooseTab(tab ActivityTab) Model {
-	m.Focus = ColumnDetail
-	m.tab = tab
-	m = m.withRows()
+	m = m.showTab(tab)
 	m.cursor = m.firstActivityIndex()
 	return m
 }
 
-// cycleTab moves to the next or previous Activity tab.
+func (m Model) showTab(tab ActivityTab) Model {
+	m.Focus = ColumnDetail
+	m.tab = tab
+	return m.withRows()
+}
+
 func (m Model) cycleTab(next bool) Model {
 	if next {
 		return m.chooseTab((m.tab + 1) % TabCount)
@@ -373,9 +351,7 @@ func (m Model) cycleTab(next bool) Model {
 
 // chooseRow puts the cursor on the row with the key in a tab; an unknown key leaves it where it was.
 func (m Model) chooseRow(tab ActivityTab, key string) Model {
-	m.Focus = ColumnDetail
-	m.tab = tab
-	m = m.withRows()
+	m = m.showTab(tab)
 	if i := slices.IndexFunc(m.rows.items, func(r DetailItem) bool { return r.Kind == tab.kind() && r.Key == key }); i >= 0 {
 		m.cursor = i
 	}
@@ -406,7 +382,7 @@ func (m Model) openCursorRow() (Model, []Cmd) {
 		}
 		var landing *jumpEntry
 		if row.ReferenceKey != "" {
-			landing = &jumpEntry{tab: TabComments, row: rowID{RowComment, row.ReferenceKey}, hasRow: true}
+			landing = commentLanding(row.ReferenceKey)
 		} else if row.Kind == RowComment {
 			landing = &jumpEntry{tab: TabComments}
 		}
@@ -415,7 +391,6 @@ func (m Model) openCursorRow() (Model, []Cmd) {
 	return m, nil
 }
 
-// moveCursor walks the cursor over the children and the active tab's rows.
 func (m Model) moveCursor(action Action) Model {
 	m.linkOn = rowID{}
 	m = m.withRows()

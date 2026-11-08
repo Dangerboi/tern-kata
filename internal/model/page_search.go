@@ -16,10 +16,8 @@ type PageSearchState struct {
 	Caret Caret
 }
 
-// PageSearchShown says the Page draws its search input above the list.
 func (m Model) PageSearchShown() bool { return m.PageSearch.Open || m.PageSearch.Text != "" }
 
-// PageSearching says the rows of the current Page are narrowed by a search text.
 func (m Model) PageSearching() bool { return m.searchingPage(m.Page) }
 
 // EscEndsSearch says esc on the current Page ends its search now: the rows are narrowed and no inner layer is open for esc to
@@ -34,12 +32,10 @@ func (m Model) innerEscOpen() bool {
 	return m.Page == PageWorkflows && m.Workflows.Inspecting
 }
 
-// searchingPage says page is the current Page and its rows are narrowed by a search text.
 func (m Model) searchingPage(page Page) bool {
 	return m.Page == page && m.PageSearch.Text != "" && pageDefs[page].settleSearch != nil
 }
 
-// PageSearchNoun is what the current Page lists, for the search input's placeholder and the empty result.
 func (m Model) PageSearchNoun() string { return pageDefs[m.Page].id }
 
 // matchesSearch says a row with these words is listed under the current search: kata's match, the query is a case-insensitive
@@ -53,13 +49,11 @@ func openPageSearch(m Model) Model {
 	return m
 }
 
-// pageSearchKeep is enter in the input: the keys go back to the list, which stays narrowed.
 func pageSearchKeep(m Model) Model {
 	m.PageSearch.Open = false
 	return m
 }
 
-// clearPageSearch ends the search: every row comes back.
 func clearPageSearch(m Model) Model {
 	if m.PageSearch == (PageSearchState{}) {
 		return m
@@ -69,7 +63,6 @@ func clearPageSearch(m Model) Model {
 	return m.settlePageSelection(row)
 }
 
-// pageSearchEdit sets the search text, as typing, backspace and ctrl+u do.
 func (m Model) pageSearchEdit(text string) Model {
 	row := m.selectedRow()
 	m.PageSearch.Text = text
@@ -95,12 +88,10 @@ func pageSearchErasing(action Action) func(Model) (Model, []Cmd) {
 	})
 }
 
-// pageSearchMoving is a row or page key in the input: it moves through the rows the search lists.
 func pageSearchMoving(action Action) func(Model) (Model, []Cmd) {
 	return pure(func(m Model) Model { return pageDefs[m.Page].moves.move(m, action) })
 }
 
-// updatePageSearchText types a key into the search.
 func updatePageSearchText(m Model, msg KeyMsg) (Model, []Cmd) {
 	text, edited := editText(m.PageSearch.Text, &m.PageSearch.Caret, "", false, msg)
 	if !edited { // the caret may still have moved
@@ -109,7 +100,6 @@ func updatePageSearchText(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m.pageSearchEdit(text), nil
 }
 
-// pageSearchEscape is esc on a Page's list: with a search set it ends the search, else it goes back as esc does.
 func pageSearchEscape(m Model) (Model, []Cmd) {
 	if m.PageSearching() {
 		return clearPageSearch(m), nil
@@ -117,18 +107,14 @@ func pageSearchEscape(m Model) (Model, []Cmd) {
 	return drillOut(m)
 }
 
-// jobSearchWords are the words of a job's row that the search reads: its name, state, kind, schedule, profile and last run.
 func (m Model) jobSearchWords(job CronJob) []string {
 	return []string{job.Name, m.JobPause(job).StateText(), job.Kind(), triggerWords(job.Definition.Trigger), job.Definition.Profile, m.lastActivity(job, m.Now)}
 }
 
-// runSearchWords are the words of a Run's row that the search reads.
 func runSearchWords(row RunRow) []string {
 	return []string{row.State, row.Name, row.Issue, row.Executor, row.Start, row.Duration, row.Reason, row.Hold, row.Summary}
 }
 
-// workflowSearchWords are the words of a workflow's row that the search reads: its name, steps, the jobs that use it and its
-// latest run.
 func (m Model) workflowSearchWords(w Workflow) []string {
 	words := []string{w.Name, strconv.Itoa(len(w.Steps)) + " steps"}
 	if w.Archived {
@@ -143,7 +129,6 @@ func (m Model) workflowSearchWords(w Workflow) []string {
 	return words
 }
 
-// searchedRuns are the Runs the list shows: those the search leaves, every one without it.
 func (m Model) searchedRuns() []Run {
 	if m.Runs.Timeline {
 		return m.timelineSelectable()

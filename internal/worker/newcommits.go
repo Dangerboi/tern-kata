@@ -27,8 +27,7 @@ import (
 const (
 	// gitTimeout bounds one git command and, as the deadline of a whole gate check, all the commands of that check, so a
 	// stuck checkout holds up its Project's admission for at most this long.
-	gitTimeout = 30 * time.Second
-	// maxPromptCommits, maxCommitSubject and maxCommitListBytes bound the commit list handed to the agent.
+	gitTimeout         = 30 * time.Second
 	maxPromptCommits   = 30
 	maxCommitSubject   = 200
 	maxCommitListBytes = 8 << 10
@@ -50,7 +49,6 @@ func (w *Worker) commitPath(projectUID, jobUID string) string {
 	return filepath.Join(w.opt.Dirs.ProjectDir(projectUID), "commits", jobUID+".json")
 }
 
-// loadCommit reads the job's saved commit; ok is false when it has none yet.
 func (w *Worker) loadCommit(projectUID, jobUID string) (c savedCommit, ok bool, err error) {
 	raw, err := readFile(w.commitPath(projectUID, jobUID))
 	if errors.Is(err, fs.ErrNotExist) {
@@ -67,12 +65,7 @@ func (w *Worker) loadCommit(projectUID, jobUID string) (c savedCommit, ok bool, 
 
 func (w *Worker) saveCommit(projectUID, jobUID string, c savedCommit) error {
 	c.Version = 1
-	raw, _ := json.Marshal(c)
-	path := w.commitPath(projectUID, jobUID)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	return replaceFile(path, raw)
+	return saveJSON(w.commitPath(projectUID, jobUID), c)
 }
 
 // noteCommit moves the job's saved commit to the commit a succeeded run started at. It is idempotent per run and keeps
@@ -95,7 +88,6 @@ func (w *Worker) noteCommit(j *Journal) {
 	}
 }
 
-// checkoutFor is the folder of a checkout key the Project may use, as the worker resolves a job's checkout.
 func (w *Worker) checkoutFor(ps *projectState, key string) (string, bool) {
 	dir, ok := w.opt.Config.Checkouts[key]
 	return dir, ok && ps.cfg.allowsCheckout(key)
@@ -109,7 +101,6 @@ type gitError struct {
 
 func (e *gitError) Error() string { return e.Msg }
 
-// git runs git in dir and returns its standard output.
 func git(ctx context.Context, dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
@@ -150,7 +141,6 @@ var (
 	statDir       = os.Stat
 )
 
-// startStat returns the running stat of dir, starting one when there is none.
 func startStat(dir string) *dirStat {
 	statsMu.Lock()
 	defer statsMu.Unlock()
@@ -170,7 +160,6 @@ func startStat(dir string) *dirStat {
 	return s
 }
 
-// headCommit is the commit the checkout's branch is at.
 func headCommit(ctx context.Context, dir string) (string, error) {
 	stat := startStat(dir)
 	select {
@@ -220,8 +209,6 @@ func folderSpecs(folders []string) []string {
 	return specs
 }
 
-// newCommits counts the commits in since..HEAD (under the folders, when given) and lists the newest as bounded lines of
-// abbreviated id and subject.
 func newCommits(ctx context.Context, dir, since string, folders []string) (count int, list string, err error) {
 	specs := folderSpecs(folders)
 	out, err := git(ctx, dir, append([]string{"rev-list", "--count", since + "..HEAD"}, specs...)...)
@@ -254,7 +241,6 @@ func newCommits(ctx context.Context, dir, since string, folders []string) (count
 	return count, b.String(), nil
 }
 
-// folderWords names the folders a reason is about: "" for the whole checkout, else " under docs, src".
 func folderWords(folders []string) string {
 	if len(folders) == 0 {
 		return ""

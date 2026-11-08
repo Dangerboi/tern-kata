@@ -20,7 +20,6 @@ func derefString(s *string) string {
 	return *s
 }
 
-// localFailure is a failure before anything was sent to the daemon.
 type localFailure struct{ error }
 
 func (e localFailure) Unwrap() error { return e.error }
@@ -41,7 +40,6 @@ func ambiguousWrite(err error) bool {
 	return status < 400 || status >= 500
 }
 
-// daemonAccount is who the daemon says it is and who it says the request acts as.
 type daemonAccount struct {
 	instanceUID, principal string
 	closeRequiresEvidence  bool
@@ -51,6 +49,9 @@ func (c *Client) account(ctx context.Context) (daemonAccount, error) {
 	r, err := c.InstanceWithResponse(ctx)
 	if err != nil {
 		return daemonAccount{}, err
+	}
+	if r.JSON200 == nil {
+		return daemonAccount{}, errors.New("kata daemon returned no instance")
 	}
 	principal, err := json.Marshal(r.JSON200.Auth)
 	if err != nil {
@@ -119,7 +120,6 @@ func (c *Client) recorder(ctx context.Context, kind model.UndoKind, projectID in
 	}
 }
 
-// undoBoundary is why a change that completed cannot be taken back, "" when it can.
 func undoBoundary(kind model.UndoKind, before *g.ShowIssueResponseBody, res issueWrite) string {
 	issue := before.Issue
 	switch kind {
@@ -168,13 +168,11 @@ func sameLinkEndpoints(l g.LinkOut, e *model.UndoLink) bool {
 	return e != nil && l.Type == e.Type && l.From.UID == e.FromUID && l.To.UID == e.ToUID
 }
 
-// dateOf is the day an Issue holds under a metadata key, "" when it holds none.
 func dateOf(i g.ShowIssueOut, key string) string {
 	s, _ := i.Metadata[key].(string)
 	return s
 }
 
-// restored says the Issue already holds what the entry's change took away.
 func restored(e model.UndoEntry, shown *g.ShowIssueResponseBody) bool {
 	i := shown.Issue
 	switch e.Kind {
@@ -225,8 +223,6 @@ func restored(e model.UndoEntry, shown *g.ShowIssueResponseBody) bool {
 	return false
 }
 
-// undoneLabels is the label set a Lane Move's undo leaves: the set the move left, without the labels it added and with the
-// ones it removed.
 func undoneLabels(e model.UndoEntry) []string {
 	out := slices.DeleteFunc(slices.Clone(e.Labels), func(l string) bool { return slices.Contains(e.Added, l) })
 	for _, l := range e.Removed {
@@ -265,7 +261,6 @@ func laneMoveReachable(e model.UndoEntry, labels []string) bool {
 	return true
 }
 
-// moved is the refusal when the Issue is no longer as the entry's change left it, "" when it is.
 func moved(e model.UndoEntry, shown *g.ShowIssueResponseBody) string {
 	i := shown.Issue
 	atRevision := i.Revision == e.Revision
@@ -415,7 +410,6 @@ func (c *Client) Undo(ctx context.Context, cmd model.UndoChange) model.ChangeUnd
 	return out
 }
 
-// invert sends the inverse of the entry's change.
 func (c *Client) invert(ctx context.Context, cmd model.UndoChange, account daemonAccount, shown *g.ShowIssueResponseBody) (issueWrite, error) {
 	e := cmd.Entry
 	field := model.WriteField{UID: e.UID, ProjectID: e.ProjectID, Actor: e.Actor}
@@ -509,6 +503,9 @@ func (c *Client) editBody(ctx context.Context, e model.UndoEntry, body string) (
 	r, err := c.EditIssueWithResponse(ctx, &g.EditIssueRequestOptions{PathParams: &g.EditIssuePath{ProjectID: fmt.Sprint(e.ProjectID), Ref: e.UID}, Body: &g.EditIssueBody{Body: &body, Actor: &actor}})
 	if err != nil {
 		return issueWrite{}, err
+	}
+	if r.JSON200 == nil {
+		return issueWrite{}, errors.New("kata daemon returned no edit")
 	}
 	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
 }

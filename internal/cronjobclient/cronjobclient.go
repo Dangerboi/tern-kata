@@ -8,7 +8,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
-// Str reads a value kata leaves out as empty.
 func Str(s *string) string {
 	if s == nil {
 		return ""
@@ -16,7 +15,6 @@ func Str(s *string) string {
 	return *s
 }
 
-// Int reads a value kata leaves out as zero.
 func Int(n *int64) int64 {
 	if n == nil {
 		return 0
@@ -24,7 +22,6 @@ func Int(n *int64) int64 {
 	return *n
 }
 
-// Job is kata's Cron job as the cronjob package holds it.
 func Job(j g.CronJob) cronjob.Job {
 	d := j.Definition
 	def := cronjob.Definition{
@@ -79,7 +76,6 @@ func WorkflowDefinition(d g.CronWorkflowDefinitionResponse) cronjob.WorkflowDefi
 	return out
 }
 
-// options is a definition's options, nil when kata sends none.
 func options(m map[string]any) any {
 	if m == nil {
 		return nil

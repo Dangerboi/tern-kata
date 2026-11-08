@@ -74,8 +74,6 @@ func (c *Client) datesConflictRead(ctx context.Context, cmd model.SetDatesCmd, c
 	return datesConflict(shown.Issue, change)
 }
 
-// datesConflict is the refusal for a date key that moved since the Dates card opened, carrying the value the Issue holds now so
-// the card can show it.
 func datesConflict(issue g.ShowIssueOut, change model.DateChange) model.DatesConflict {
 	conflict := model.DatesConflict{Label: change.Label, Key: change.Key}
 	conflict.Held, _ = issue.Metadata[change.Key].(string)

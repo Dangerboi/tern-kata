@@ -31,23 +31,18 @@ type Client struct {
 	deadline time.Duration
 }
 
-// Target is a client for the daemon that serves a workspace.
 type Target struct {
 	Client *client.Client
 	// Remote reports whether the daemon is remote; a client built from an explicit endpoint reads as local.
 	Remote bool
 }
 
-// Locator finds the daemon that serves workspace.
 type Locator func(ctx context.Context, workspace string) (Target, error)
 
-// connectDeadline is how long locating and connecting to the daemon may take.
 const connectDeadline = 10 * time.Second
 
-// noDaemonHint is what tern-kata adds when no daemon answers.
 const noDaemonHint = "start the kata daemon (kata daemon start) or run `kata doctor`"
 
-// LocateWithKata is the production Locator: kata's own discovery for the workspace, which also says whether the daemon is remote.
 func LocateWithKata(ctx context.Context, workspace string) (Target, error) {
 	c, err := client.Discover(ctx, client.DiscoverOptions{Workspace: workspace})
 	if err != nil {
@@ -60,7 +55,6 @@ func LocateWithKata(ctx context.Context, workspace string) (Target, error) {
 	return Target{Client: c, Remote: discovered.Remote}, nil
 }
 
-// connect applies the version gate to target's daemon.
 func connect(ctx context.Context, target Target) (*Client, error) {
 	c := target.Client
 	ping, err := c.PingWithResponse(ctx)
@@ -132,7 +126,6 @@ func daemonError(err error) error {
 	return errors.New(message)
 }
 
-// daemonCode is the error code kata gave the failure, empty when it gave none.
 func daemonCode(err error) string {
 	envelope, _ := errors.AsType[g.ErrorEnvelope](err)
 	return envelope.ErrorData.Code

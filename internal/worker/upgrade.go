@@ -16,11 +16,8 @@ import (
 
 var projectsHeader = regexp.MustCompile(`^\s*\[\[\s*projects\s*\]\]\s*(#.*)?$`)
 
-// errInlineProjects is Upgrade's refusal for a worker.toml that lists its Projects some way other than [[projects]] tables.
 var errInlineProjects = errors.New("worker.toml lists its Projects some way other than [[projects]] tables, so `worker upgrade` cannot edit it; add `secrets` and `commands` to each Project by hand")
 
-// jobNeeds is what a Project's jobs ask of worker.toml: the secrets they name and whether a workflow they run has a
-// command step.
 type jobNeeds struct {
 	secrets  map[string]bool
 	commands bool
@@ -93,13 +90,7 @@ func projectTables(lines []string) ([]*projectTable, error) {
 		if !projectsHeader.MatchString(strings.TrimRight(lines[i], "\r\n")) {
 			continue
 		}
-		end, last := i+1, i
-		for end < len(lines) && !strings.HasPrefix(strings.TrimSpace(lines[end]), "[") {
-			if t := strings.TrimSpace(lines[end]); t != "" && !strings.HasPrefix(t, "#") {
-				last = end
-			}
-			end++
-		}
+		end, last := tableEnd(lines, i)
 		var block struct {
 			Projects []struct {
 				Name     string    `toml:"name"`
@@ -128,10 +119,7 @@ func Upgrade(ctx context.Context, k *Kata, cfg Config, text string) (newText str
 	if len(cfg.Projects) == 0 {
 		return text, nil, nil
 	}
-	lines := strings.SplitAfter(text, "\n")
-	if lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
+	lines := configLines(text)
 	tables, err := projectTables(lines)
 	if err != nil {
 		return "", nil, err

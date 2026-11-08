@@ -9,6 +9,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/worker"
 	"go.kenn.io/kata/pkg/client"
 )
 
@@ -159,7 +160,7 @@ func TestGatewayReadsTheWorkersProfilesAndCheckoutsForThePickers(t *testing.T) {
 	t.Setenv("HOME", dir)
 	t.Setenv("AppData", dir)
 	askedFor := func() model.WorkerPickers {
-		return as[model.WorkerPickersLoaded](t, run(t, &Gateway{}, model.LoadWorkerPickers{})).Pickers
+		return as[model.WorkerPickersLoaded](t, run(t, &Gateway{workerDirs: worker.DefaultDirs}, model.LoadWorkerPickers{})).Pickers
 	}
 	if got := askedFor(); got.Read || got.Note != "" || len(got.Profiles) != 0 {
 		t.Fatalf("no worker.toml: %+v, want free text and no complaint", got)

@@ -33,7 +33,6 @@ type WakeAt struct {
 
 func (WakeAt) cmd() {}
 
-// DayEnded is the wake for the end of local day Day.
 type DayEnded struct{ Day string }
 
 func (DayEnded) msg() {}
@@ -74,6 +73,13 @@ func startStream(m Model, delay time.Duration) (Model, []Cmd) {
 	m.StreamGeneration++
 	m.StreamConnected = false
 	return m, []Cmd{Subscribe{Workspace: m.Workspace, AfterID: m.Cursor, Generation: m.StreamGeneration, Delay: delay}}
+}
+
+func streamLost(m Model, err error) (Model, []Cmd) {
+	m.Stale = true
+	m.StreamErr = err
+	m.ReconnectAttempt++
+	return startStream(m, time.Second<<min(m.ReconnectAttempt-1, 5))
 }
 
 func updateLive(m Model, msg Msg) (Model, []Cmd) {
@@ -136,10 +142,7 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		if msg.Generation != m.StreamGeneration {
 			return m, nil
 		}
-		m.Stale = true
-		m.StreamErr = msg.Err
-		m.ReconnectAttempt++
-		return startStream(m, time.Second<<min(m.ReconnectAttempt-1, 5))
+		return streamLost(m, msg.Err)
 	case DayEnded:
 		if msg.Day != m.Calendar.Date {
 			return m, nil

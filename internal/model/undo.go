@@ -11,12 +11,10 @@ import (
 // when it completes, or is a boundary that clears it with its reason; a write whose Cmd is in neither list is a boundary, so a
 // write added later never lets `u` reach past it unless it is given an inverse.
 
-// UndoLimit is how many completed changes the history holds.
 const UndoLimit = 20
 
 const UndoAction Action = "undo"
 
-// UndoKind says which change an entry takes back.
 type UndoKind string
 
 const (
@@ -33,7 +31,6 @@ const (
 	UndoDelete      UndoKind = "delete"
 )
 
-// IssueState is the part of an Issue an undo compares and restores.
 type IssueState struct {
 	Status       string
 	ClosedReason *string
@@ -43,7 +40,6 @@ type IssueState struct {
 	Revision     int64
 }
 
-// UndoLink is the link a link change created.
 type UndoLink struct {
 	ID                   int64
 	Type, FromUID, ToUID string
@@ -59,32 +55,23 @@ type UndoEntry struct {
 	Actor                    string
 	InstanceUID, Principal   string
 	Before, After            IssueState
-	// Revision is the Issue revision the change produced.
-	Revision int64
-	Label    string
-	Link     *UndoLink
-	// Added and Removed are the labels a Lane Move added and removed.
-	Added, Removed []string
-	// Labels is the Issue's full label set right after a Lane Move, nil when not recorded.
-	Labels []string
-	// Dates are the date keys a Dates card change wrote, as written.
-	Dates []DateChange
+	Revision                 int64
+	Label                    string
+	Link                     *UndoLink
+	Added, Removed           []string
+	Labels                   []string
+	Dates                    []DateChange
 }
 
-// WriteRecord is what a write to an Issue says about the Undo history: the entry it completed, the reason it cannot be undone,
-// or that its outcome is unknown.
 type WriteRecord struct {
 	Entry    *UndoEntry
 	Boundary string
 	Unknown  bool
 }
 
-// UndoHistory is the Pane's Undo history.
 type UndoHistory struct {
-	Entries []UndoEntry
-	// Boundary is why the history was last cleared, "" when it never was.
+	Entries  []UndoEntry
 	Boundary string
-	// InFlight says an undo is out; another waits for it.
 	InFlight bool
 	// out is the entry the undo in flight takes back, kept for when the history no longer holds it at the answer.
 	out    UndoEntry
@@ -136,7 +123,6 @@ type UndoChange struct {
 
 func (UndoChange) cmd() {}
 
-// UndoResult is how an undo ended.
 type UndoResult int
 
 const (
@@ -148,8 +134,6 @@ const (
 	UndoUnknown
 )
 
-// ChangeUndone answers UndoChange. Conflict is the refusal's reason, Ref the Issue as the daemon names it, and FromRevision and
-// ToRevision the Issue's revision before and after the inverse was written.
 type ChangeUndone struct {
 	EntryID                  uint64
 	Result                   UndoResult
@@ -223,7 +207,6 @@ func undoBoundary(cmd Cmd) (string, bool) {
 	return undoUnknownBoundary, true
 }
 
-// noteWrites clears the Undo history for each Cmd that is a boundary.
 func (m Model) noteWrites(cmds []Cmd) Model {
 	for _, cmd := range cmds {
 		if reason, clears := undoBoundary(cmd); clears {
@@ -233,7 +216,6 @@ func (m Model) noteWrites(cmds []Cmd) Model {
 	return m
 }
 
-// recordWrite enters the change a write answer reports into the Undo history, or clears it.
 func (m Model) recordWrite(msg Msg) Model {
 	var record WriteRecord
 	switch msg := msg.(type) {
@@ -265,7 +247,6 @@ func (m Model) recordWrite(msg Msg) Model {
 	return m
 }
 
-// startUndo is `u`.
 func startUndo(m Model) (Model, []Cmd) {
 	h := m.Undo
 	switch {
@@ -289,14 +270,12 @@ func newestUndoIsDelete(m Model) bool {
 	return n > 0 && m.Undo.Entries[n-1].Kind == UndoDelete
 }
 
-// sendUndo marks the undo in flight for entry and sends it, with the close the Close card collected when the inverse is a close.
 func (m Model) sendUndo(entry UndoEntry, closeCmd *CloseIssueCmd) (Model, []Cmd) {
 	m.Undo.InFlight = true
 	m.Undo.out = entry
 	return m, []Cmd{UndoChange{Workspace: m.Workspace, Entry: entry, Close: closeCmd}}
 }
 
-// undoTarget names the Issue of an entry the way the Pane shows it: project#id when the Pane lists it, else #id.
 func (m Model) undoTarget(e UndoEntry, ref string) string {
 	if ref == "" {
 		ref = e.ShortID
@@ -313,7 +292,6 @@ func (m Model) undoTarget(e UndoEntry, ref string) string {
 	return "#" + ref
 }
 
-// openUndoClose opens the Close card for an evidence-requiring reopen's inverse: it completes the Issue as done.
 func openUndoClose(m Model, e UndoEntry) Model {
 	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[1].Name, UID: e.UID, ProjectID: e.ProjectID, UndoEntry: e.ID}
 	m.CloseForm.Values.Reason = string(ReasonDone)
@@ -387,7 +365,6 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 	return refreshAfterUndo(m, entry)
 }
 
-// refreshAfterUndo reads the Issues an undo may have changed again.
 func refreshAfterUndo(m Model, e UndoEntry) (Model, []Cmd) {
 	m = m.issueWritten(e.UID)
 	if e.Link != nil {

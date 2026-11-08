@@ -15,7 +15,6 @@ import (
 // file's bytes in Docbank.
 const attachmentKeyPrefix = "attachment."
 
-// DocbankOffMessage is what the Pane and the commands say when the kata daemon has no Docbank configured.
 const DocbankOffMessage = "This kata daemon has no Docbank configured, so it cannot store attachments. Add a [docbank] section to kata's config.toml and restart the daemon; the Attachments guide says how."
 
 // MaxAttachmentBytes is the largest file kata accepts as an Attachment.
@@ -32,7 +31,6 @@ type Attachment struct {
 // attachmentID is the shape of an id this program reads: it ends up in a cache path and a request path.
 var attachmentID = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 
-// AttachmentKey is the kata meta key of the Attachment with id.
 func AttachmentKey(id string) string { return attachmentKeyPrefix + id }
 
 // validAttachmentName is kata's rule for the name of an Attachment: 1 to 255 bytes of UTF-8 with no slash, backslash or control
@@ -112,7 +110,6 @@ func AttachmentLabels(list []Attachment) []string {
 // a prefix no fixed Issue detail key uses.
 func AttachmentRowKey(id string) string { return "attachment-" + hex.EncodeToString([]byte(id)) }
 
-// FormatSize is a byte count as people read it: 512 B, 1.5 KB, 12.0 MB.
 func FormatSize(n int64) string {
 	const unit = 1024
 	if n < unit {
@@ -128,5 +125,4 @@ func FormatSize(n int64) string {
 	return fmt.Sprintf("%.1f %s", size, suffix)
 }
 
-// Description is the Attachment as its row shows it after the name: media type and size.
 func (a Attachment) Description() string { return a.MediaType + ", " + FormatSize(a.Size) }

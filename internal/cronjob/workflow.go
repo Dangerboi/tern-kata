@@ -11,7 +11,6 @@ import (
 // validator's kind rule.
 type StepKind string
 
-// The step kinds kata knows.
 const (
 	StepCommand StepKind = "command"
 	StepPrompt  StepKind = "prompt"
@@ -37,7 +36,6 @@ type WorkflowDefinition struct {
 	Steps   []WorkflowStep
 }
 
-// WorkflowStep is one step of a definition. A command step carries Command, a prompt step Prompt; After names earlier steps.
 type WorkflowStep struct {
 	Key     string
 	Kind    StepKind
@@ -49,7 +47,6 @@ type WorkflowStep struct {
 	Options any
 }
 
-// RetryCount is how many times the step runs again after a failure: Retries, or zero when it is left out.
 func (s WorkflowStep) RetryCount() int64 {
 	if s.Retries == nil {
 		return 0
@@ -57,10 +54,8 @@ func (s WorkflowStep) RetryCount() int64 {
 	return *s.Retries
 }
 
-// WorkflowRule names the rule of kata's Workflow format a definition breaks.
 type WorkflowRule string
 
-// The rules, in the order ValidateWorkflow checks them.
 const (
 	RuleVersion      WorkflowRule = "version"
 	RuleNoSteps      WorkflowRule = "no-steps"
@@ -93,7 +88,6 @@ func (p WorkflowProblem) Message() string {
 	return fmt.Sprintf("Step %d: %s", p.Step, p.Detail)
 }
 
-// Error makes a problem usable as an error; it is Message.
 func (p *WorkflowProblem) Error() string { return p.Message() }
 
 // ValidateWorkflow checks a definition against kata's rules in kata's order: the version, at least one step, then each step
@@ -161,8 +155,6 @@ func PortableName(s string) bool {
 	return true
 }
 
-// optionsProblem is kata's rule for adapter options: an object that carries no credential or local path under any key.
-// It returns the problem's wording, empty when the options are fine.
 func optionsProblem(options any) string {
 	if options == nil {
 		return ""
@@ -177,7 +169,6 @@ func optionsProblem(options any) string {
 	return ""
 }
 
-// forbiddenOption reports a credential or local-path key anywhere under value.
 func forbiddenOption(value any) bool {
 	switch v := value.(type) {
 	case map[string]any:

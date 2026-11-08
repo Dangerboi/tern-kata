@@ -15,12 +15,9 @@ import (
 // ErrViewsChanged is a write finding views.toml no longer as the read it was given. Nothing was written; read again.
 var ErrViewsChanged = errors.New("views.toml changed since it was read")
 
-// ErrViewNotFound is a write naming a view the file does not have (any more).
 var ErrViewNotFound = errors.New("no such saved view")
 
-// ViewsRead is one read of views.toml.
 type ViewsRead struct {
-	// Views are the saved views the file holds that pass model.CheckSavedView, in file order.
 	Views []model.SavedView
 	// Problems are the entries left out of Views, each saying which [[view]] and why. They stay in the file.
 	Problems []error
@@ -33,12 +30,10 @@ type ViewsRead struct {
 // one.
 type ViewsStore struct{ Path string }
 
-// NewViewsStore is the store of the config folder (tern-kata's, from worker.DefaultDirs).
 func NewViewsStore(configFolder string) ViewsStore {
 	return ViewsStore{Path: filepath.Join(configFolder, "views.toml")}
 }
 
-// ViewsStore is the gateway's store, in the same folder as filters.toml.
 func (g *Gateway) ViewsStore() (ViewsStore, error) {
 	folder, err := g.configFolder()
 	if err != nil {
@@ -61,7 +56,6 @@ type viewRecord struct {
 	Search       string `toml:"search"`
 }
 
-// projectBase is the base value of a view on one Project.
 const projectBase = "project"
 
 func (r viewRecord) view() model.SavedView {
@@ -81,7 +75,6 @@ var owned = func() []string {
 	return keys
 }()
 
-// filterPairs are the filter keys of a [[view]] table with the values f gives them, in the order they are written.
 func filterPairs(f model.Filters) [][2]string {
 	return [][2]string{{"project", f.ProjectUID}, {"status", f.Status}, {"owner", f.Owner}, {"label", f.Label}, {"relationship", f.Relationship}, {"search", f.Search}}
 }
@@ -113,7 +106,6 @@ func (s ViewsStore) Read() (ViewsRead, error) {
 	return out, nil
 }
 
-// Add appends v to the file. It refuses a name another view has, with the model's message.
 func (s ViewsStore) Add(token guardedfile.Token, v model.SavedView) error {
 	return s.edit(token, func(p *viewsText) (string, error) {
 		v, err := model.CheckSavedView(v, p.others(-1), "")
@@ -140,7 +132,6 @@ func (s ViewsStore) Replace(token guardedfile.Token, self string, v model.SavedV
 	})
 }
 
-// Delete removes the view called name (ignoring case).
 func (s ViewsStore) Delete(token guardedfile.Token, name string) error {
 	return s.edit(token, func(p *viewsText) (string, error) {
 		i := p.find(name)
@@ -172,7 +163,6 @@ func (s ViewsStore) edit(token guardedfile.Token, change func(*viewsText) (strin
 	return err
 }
 
-// viewsText is the file's text split into lines, with where each [[view]] table starts and ends.
 type viewsText struct {
 	lines   []string
 	records []viewRecord
@@ -311,7 +301,6 @@ func ownedLine(line string) bool {
 	return false
 }
 
-// viewLines are the owned key lines of v; an empty filter is not written.
 func viewLines(v model.SavedView) []string {
 	out := []string{"name = " + quote(v.Name)}
 	if v.Base.IsProject() {
@@ -327,7 +316,6 @@ func viewLines(v model.SavedView) []string {
 	return out
 }
 
-// quote is s as a TOML basic string.
 func quote(s string) string {
 	var b strings.Builder
 	b.WriteByte('"')

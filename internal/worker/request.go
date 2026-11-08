@@ -113,7 +113,6 @@ func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, cro
 	if ps, j, ok := lookup(); ok {
 		return ps, j, nil
 	}
-	// Name the Project when it exists but isn't served, and each served Project that can't answer.
 	var notes []string
 	if projects, err := w.opt.Kata.Projects(ctx); err == nil {
 		for _, p := range projects {
@@ -148,7 +147,6 @@ func (w *Worker) admitsNothing(ps *projectState) string {
 	return w.admitsNothingLocked(ps)
 }
 
-// admitsNothingLocked is admitsNothing with w.mu held.
 func (w *Worker) admitsNothingLocked(ps *projectState) string {
 	if w.stopping != "" {
 		return errStopping.Error()
@@ -163,7 +161,6 @@ func (w *Worker) blockedReason(ps *projectState) string {
 	return blockedReasonLocked(ps)
 }
 
-// blockedReasonLocked reads the Project's own state; w.mu is held.
 func blockedReasonLocked(ps *projectState) string {
 	switch {
 	case ps.blocked != "":

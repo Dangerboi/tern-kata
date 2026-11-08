@@ -2,7 +2,6 @@ package model
 
 import "slices"
 
-// Key is one chord of a main-surface action and the label the footer and the help sheet show for it.
 type Key struct{ Chord, Label string }
 
 // actionEntry is everything the model knows about one main-surface action in the modes it is bound
@@ -48,7 +47,6 @@ func boardMoving(action Action) func(Model) (Model, []Cmd) {
 	return pure(func(m Model) Model { return moveOnBoard(m, action) })
 }
 
-// laneMoving is `←` and `→`: the selection to the neighbouring Lane's card on the Board, the neighbouring Lane in the Lane view.
 func laneMoving(action Action, step int) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
 		if m.LaneViewShown() {
@@ -58,7 +56,6 @@ func laneMoving(action Action, step int) func(Model) (Model, []Cmd) {
 	}
 }
 
-// cardMoving is `<` and `>`: a Move of the selected card, which in the Lane view also picks the next selection.
 func cardMoving(dir int) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
 		if m.LaneViewShown() {
@@ -92,7 +89,6 @@ func cursorMoving(action Action) func(Model) (Model, []Cmd) {
 	return pure(func(m Model) Model { return m.moveCursor(action) })
 }
 
-// moveSidebar moves the Menu sidebar's cursor by a row or to either end.
 func moveSidebar(m Model, action Action) Model {
 	entries := m.SidebarEntries()
 	if len(entries) == 0 {
@@ -112,7 +108,6 @@ func moveSidebar(m Model, action Action) Model {
 	return m
 }
 
-// sidebarOpen is enter in the Menu sidebar: it opens the entry under the cursor, or hands focus to the list when there is none.
 func sidebarOpen(m Model) (Model, []Cmd) {
 	entries := m.SidebarEntries()
 	if len(entries) == 0 {
@@ -122,7 +117,6 @@ func sidebarOpen(m Model) (Model, []Cmd) {
 	return openEntry(m, entries[min(m.CollectionCursor, len(entries)-1)], false)
 }
 
-// menuBack is esc in the Menu sidebar: it leaves the Views or Projects level, and does nothing at the top.
 func menuBack(m Model) Model {
 	if len(m.SidebarEntries()) > 0 {
 		m, _ = menuUp(m, false)
@@ -131,20 +125,14 @@ func menuBack(m Model) Model {
 }
 
 var (
-	// issueModes are the modes whose keys act on the selected Issue: the list, the Board and the detail.
-	issueModes   = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail}
-	listAndBoard = []Mode{ModeList, ModeBoard, ModeLane}
-	// boardAndDetail are the modes whose footer lists the label and owner keys.
+	issueModes     = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail}
+	listAndBoard   = []Mode{ModeList, ModeBoard, ModeLane}
 	boardAndDetail = []Mode{ModeBoard, ModeLane, ModeDetail}
-	// listModes are the modes with the list's rows: the list and the Lane view.
-	listModes = []Mode{ModeList, ModeLane}
-	// laneModes are the modes that show Lanes: the Board and the Lane view.
-	laneModes = []Mode{ModeBoard, ModeLane}
-	// jobsModes are the modes of the Jobs Page, whose keys act on the selected job.
-	jobsModes = []Mode{ModeJobs, ModeJobInspector}
-	// runsModes are the modes of the Runs Page, whose keys act on the selected Run.
-	runsModes = []Mode{ModeRuns, ModeRunInspector}
-	searching = []Mode{ModeSearch, ModeSearchResults}
+	listModes      = []Mode{ModeList, ModeLane}
+	laneModes      = []Mode{ModeBoard, ModeLane}
+	jobsModes      = []Mode{ModeJobs, ModeJobInspector}
+	runsModes      = []Mode{ModeRuns, ModeRunInspector}
+	searching      = []Mode{ModeSearch, ModeSearchResults}
 )
 
 // The Emacs key sets every mode shares. The headless Tern the smoke harness drives delivers its Ctrl+<key> as
@@ -168,9 +156,7 @@ var global = []Mode{""}
 // rows are generated from the Page table, which lists each Page's rows in footer order (see keymapRows).
 var mainActions []actionEntry
 
-// listRows are the Issue list's and the Board's rows outside the generated movement rows.
 var listRows = []actionEntry{
-	// Moving and opening in the Issue list.
 	{action: DrillIn, modes: listModes, keys: keys("enter", "enter"), help: "open", footer: listModes, footerKey: "↵", sheet: []sheetLine{{sheetGraph, 7, "open detail"}}, handle: drillIn},
 	{action: FocusDetail, modes: listModes, keys: keys("tab", "tab"), help: "detail", footer: listModes, handle: pure(func(m Model) Model {
 		if m.CanFocusDetail() {
@@ -182,7 +168,6 @@ var listRows = []actionEntry{
 	{action: ToggleAllExpansion, modes: []Mode{ModeList}, keys: keys("shift+e", "E"), help: "all", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetGraph, 11, "expand/collapse all"}}, handle: hierarchy(ToggleAllExpansion)},
 	{action: ExpandIssue, modes: []Mode{ModeList}, keys: keys("right", "right"), help: "expand", sheet: []sheetLine{{sheetGraph, 9, "expand"}}, handle: hierarchy(ExpandIssue)},
 	{action: CollapseIssue, modes: []Mode{ModeList}, keys: keys("left", "left"), help: "collapse", sheet: []sheetLine{{sheetGraph, 10, "collapse"}}, handle: hierarchy(CollapseIssue)},
-	// Board Page: the Board takes the list's place, with the cards in Lanes.
 	{action: ToggleBoard, modes: []Mode{ModeList, ModeCollections}, keys: keys("b", "b"), help: "Board", footer: []Mode{ModeList}, sheet: []sheetLine{{sheetBoard, 1, "toggle Issues and Board Pages"}}, handle: toggleBoard},
 	{action: ToggleBoard, modes: laneModes, keys: keys("b", "b"), help: "list", footer: laneModes, sheet: []sheetLine{{sheetBoard, 1, "toggle Issues and Board Pages"}}, handle: toggleBoard},
 	{action: OpenLanes, modes: laneModes, keys: keys("shift+b", "B"), help: "Lanes", sheet: []sheetLine{{sheetBoard, 9, "edit the Lane list (Lanes card)"}}, handle: pure(openLanesForm)},
@@ -196,16 +181,13 @@ var listRows = []actionEntry{
 	{action: OpenLane, modes: []Mode{ModeBoard}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeBoard}, sheet: []sheetLine{{sheetBoard, 8, "open the Lane view"}}, handle: pure(openLane)},
 }
 
-// jobsRows are the Jobs Page's rows outside its generated movement rows, up to its inspector's scroll rows.
 var jobsRows = []actionEntry{
-	// Jobs Page: the Project's Cron jobs, with the selected job's inspector beside them.
 	{action: FocusJobInspector, modes: []Mode{ModeJobs}, keys: keys("enter", "↵", "tab", "tab"), help: "inspect", footer: []Mode{ModeJobs}, footerKey: "↵", sheet: []sheetLine{{sheetJobs, 5, "inspect the job (definition and parent)"}}, handle: pure(focusInspector)},
 	{action: ToggleArchivedJobs, modes: []Mode{ModeJobs}, keys: keys("a", "a"), help: "archived", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 6, "show or hide archived jobs"}}, handle: pure(toggleArchivedJobs)},
 	{action: ReloadJobs, modes: []Mode{ModeJobs, ModeJobInspector}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetJobs, 7, "read the jobs again"}}, handle: reloadJobs},
 	{action: OpenJobParent, modes: []Mode{ModeJobInspector}, keys: keys("enter", "↵"), help: "open parent", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 8, "open a native job's parent Issue"}}, handle: pure(openJobParent)},
 }
 
-// jobsRowsAfterScroll are the Jobs Page's rows from its inspector's back key on.
 var jobsRowsAfterScroll = []actionEntry{
 	{action: JobInspectorBack, modes: []Mode{ModeJobInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeJobInspector}, sheet: []sheetLine{{sheetJobs, 10, "back to the job list"}}, handle: pure(inspectorBack)},
 	{action: NewJobAction, modes: jobsModes, keys: keys("n", "n"), help: "new job", footer: []Mode{ModeJobs}, sheet: []sheetLine{{sheetJobs, 12, "new job (Job card)"}}, handle: openNewJob},
@@ -219,15 +201,12 @@ var jobsRowsAfterScroll = []actionEntry{
 	{action: ResumeJobAction, modes: jobsModes, keys: keys("u", "u"), help: "resume failed", sheet: []sheetLine{{sheetJobs, 20, "resume the selected job the worker paused after repeated failed runs (this machine's worker)"}}, handle: resumePausedJob},
 }
 
-// runsRowsBeforeMovement are the Runs Page's session, resume and abandon rows, which read ahead of its movement keys.
 var runsRowsBeforeMovement = []actionEntry{
-	// Runs Page: the Project's Runs newest first, with the selected Run's detail beside them.
 	{action: OpenRunSessionAction, modes: runsModes, keys: keys("o", "o"), help: "session", footer: runsModes, sheet: []sheetLine{{sheetRuns, 13, "open the run's omp session in a new Tern tab (this machine's finished or held runs)"}}, handle: openRunSession},
 	{action: ResumeRunAction, modes: runsModes, keys: keys("u", "u"), help: "resume", footer: runsModes, sheet: []sheetLine{{sheetRuns, 14, "resume the selected held run (this machine's worker)"}}, handle: moveHeldRun(true)},
 	{action: AbandonRunAction, modes: runsModes, keys: keys("shift+a", "A"), help: "abandon", footer: runsModes, sheet: []sheetLine{{sheetRuns, 15, "abandon the selected held run, or cancel a running one (this machine's worker)"}}, handle: moveHeldRun(false)},
 }
 
-// runsRows are the Runs Page's rows outside its generated movement rows, up to its inspector's scroll rows.
 var runsRows = []actionEntry{
 	{action: FocusJobInspector, modes: []Mode{ModeRuns}, keys: keys("enter", "↵", "tab", "tab"), help: "detail", footer: []Mode{ModeRuns}, footerKey: "↵", sheet: []sheetLine{{sheetRuns, 5, "show the run's detail"}}, handle: inspectRun},
 	{action: OpenRunIssue, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("i", "i"), help: "issue", footer: []Mode{ModeRuns, ModeRunInspector}, sheet: []sheetLine{{sheetRuns, 6, "open the run's Issue"}}, handle: pure(openRunIssue)},
@@ -238,10 +217,8 @@ var runsRows = []actionEntry{
 	{action: ReloadRuns, modes: []Mode{ModeRuns, ModeRunInspector}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetRuns, 9, "read the runs again"}}, handle: reloadRuns},
 }
 
-// mainRows are the Runs inspector's back key and every row after the Runs Page's; the Runs Page declares them.
 var mainRows = []actionEntry{
 	{action: RunInspectorBack, modes: []Mode{ModeRunInspector}, keys: keys("escape", "esc", "tab", "tab", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeRunInspector}, sheet: []sheetLine{{sheetRuns, 11, "back to the run list"}}, handle: pure(runInspectorBack)},
-	// Moving and opening in the Issue detail.
 	{action: ScrollDown, modes: []Mode{ModeDetail}, keys: keys("down", "↓"), help: "scroll", footer: []Mode{ModeDetail}, footerKey: "↑↓", sheet: []sheetLine{{sheetChildren, 5, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineDown)},
 	{action: ScrollUp, modes: []Mode{ModeDetail}, keys: keys("up", "↑"), help: "scroll up", sheet: []sheetLine{{sheetChildren, 4, "scroll detail viewport"}}, handle: scrolling(ColumnDetail, ScrollLineUp)},
 	{action: MoveDown, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("j", "j/k"), emacsDown), help: "row", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetChildren, 2, "move child cursor"}}, handle: cursorMoving(MoveDown)},
@@ -253,7 +230,6 @@ var mainRows = []actionEntry{
 	{action: PageDown, modes: []Mode{ModeDetail}, keys: pageDownKeys, help: "page", footer: []Mode{ModeDetail}, footerKey: "pgup/pgdn", handle: scrolling(ColumnDetail, ScrollPageDown)},
 	{action: MoveFirst, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("g", "g", "home", "home"), firstRowKeys), help: "first row", handle: cursorMoving(MoveFirst)},
 	{action: MoveLast, modes: []Mode{ModeDetail}, keys: slices.Concat(keys("shift+g", "G", "end", "end"), lastRowKeys), help: "last row", handle: cursorMoving(MoveLast)},
-	// Moving and opening in the Menu sidebar.
 	{action: MoveDown, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), help: "next Collection", footer: []Mode{ModeCollections}, handle: sidebarMoving(MoveDown)},
 	{action: MoveUp, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), help: "previous Collection", footer: []Mode{ModeCollections}, handle: sidebarMoving(MoveUp)},
 	{action: MoveFirst, modes: []Mode{ModeCollections}, keys: slices.Concat(keys("g", "g", "home", "home"), firstRowKeys), help: "first Collection", handle: sidebarMoving(MoveFirst)},
@@ -264,7 +240,6 @@ var mainRows = []actionEntry{
 	{action: MenuBack, modes: []Mode{ModeCollections}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeCollections}, handle: pure(menuBack)},
 	{action: EditViewAction, modes: []Mode{ModeCollections}, keys: keys("f2", "f2"), help: "edit view", footer: []Mode{ModeCollections}, sheet: []sheetLine{{sheetGlobal, 8, "edit the saved view under the Menu cursor"}}, handle: pure(func(m Model) Model { return editSavedView(m, false) })},
 	{action: AskDeleteView, modes: []Mode{ModeCollections}, keys: keys("ctrl+d", "ctrl+d", "meta+d", ""), help: "delete view", footer: []Mode{ModeCollections}, sheet: []sheetLine{{sheetGlobal, 9, "delete the saved view under the Menu cursor (asks y/n)"}}, handle: pure(func(m Model) Model { return askDeleteView(m, false) })},
-	// Searching.
 	{action: SearchEnter, modes: []Mode{ModeSearch}, keys: keys("enter", "enter"), help: "results", footer: []Mode{ModeSearch}, handle: pure(searchEnter)},
 	{action: SearchBack, modes: []Mode{ModeSearch}, keys: keys("escape", "esc"), help: "cancel search", footer: []Mode{ModeSearch}, handle: searchBack},
 	{action: MoveUp, modes: []Mode{ModeSearch}, keys: slices.Concat(keys("up", "up"), emacsUp), help: "previous result", handle: searchMoving(MoveUp)},
@@ -278,7 +253,6 @@ var mainRows = []actionEntry{
 	{action: SearchEnter, modes: []Mode{ModeSearchResults}, keys: keys("enter", "enter"), help: "commit search", footer: []Mode{ModeSearchResults}, handle: pure(searchEnter)},
 	{action: SearchBack, modes: []Mode{ModeSearchResults}, keys: keys("escape", "esc"), help: "edit query", footer: []Mode{ModeSearchResults}, handle: searchBack},
 	{action: SearchQuery, modes: []Mode{ModeSearchResults}, keys: keys("/", "/"), help: "edit query", handle: pure(func(m Model) Model { m.Search.Results = false; return m })},
-	// Searching the rows of the Jobs, Runs and Workflows Pages.
 	{action: SearchPage, modes: []Mode{ModeJobs}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetJobs, 19, "search the jobs (esc ends the search)"}}, handle: pure(openPageSearch)},
 	{action: SearchPage, modes: []Mode{ModeRuns}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetRuns, 16, "search the runs (esc ends the search)"}}, handle: pure(openPageSearch)},
 	{action: SearchPage, modes: []Mode{ModeWorkflows}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetWorkflows, 10, "search the workflows (esc ends the search)"}}, handle: pure(openPageSearch)},
@@ -290,7 +264,6 @@ var mainRows = []actionEntry{
 	{action: PageDown, modes: []Mode{ModePageSearch}, keys: pageDownKeys, help: "page down", handle: pageSearchMoving(PageDown)},
 	{action: DeleteInput, modes: []Mode{ModePageSearch}, keys: keys("backspace", "backspace"), help: "delete", handle: pageSearchErasing(DeleteInput)},
 	{action: ClearInput, modes: []Mode{ModePageSearch}, keys: keys("ctrl+u", "ctrl+u"), help: "clear search", handle: pageSearchErasing(ClearInput)},
-	// Acting on the Issues.
 	{action: NewIssue, modes: issueModes, keys: keys("n", "n"), help: "new", footer: listAndBoard, sheet: []sheetLine{{sheetGraph, 12, "new issue (form)"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, false) }},
 	{action: SearchIssues, modes: listAndBoard, keys: keys("/", "/"), help: "search", footer: listAndBoard, sheet: []sheetLine{{sheetFilters, 1, "search"}}, handle: pure(openSearch)},
 	{action: OpenFilterForm, modes: listAndBoard, keys: keys("f", "f"), help: "filter", footer: listAndBoard, sheet: []sheetLine{{sheetFilters, 3, "filter (form)"}}, handle: pure(openFilterForm)},
@@ -325,7 +298,6 @@ var mainRows = []actionEntry{
 	{action: OpenDelete, modes: issueModes, keys: keys("shift+x", "X"), help: "delete", sheet: []sheetLine{{sheetDetail, 31, "delete the Issue after typing its id (Delete card; u restores it)"}}, handle: pure(openDelete), when: notIssueScoped},
 	{action: OpenRecurrenceAction, modes: issueModes, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 16, "make or change recurrence"}}, handle: pure(openRecurrence)},
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
-	// Layout, back, help and quit.
 	{action: ToggleDetail, modes: []Mode{ModeList, ModeLane, ModeDetail}, keys: keys("shift+l", "L"), help: "layout", footer: []Mode{ModeList, ModeLane, ModeDetail}, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
 	{action: ShowMenu, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, sheet: []sheetLine{{sheetGlobal, 5, "menu, or end the search of the Jobs and Runs Pages"}}, handle: pageSearchEscape},
 	{action: DrillOut, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("backspace", "⌫"), help: "back", handle: backWithoutMenu},
@@ -338,11 +310,9 @@ var mainRows = []actionEntry{
 	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: global, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},
 	{action: QuitAction, keys: keys("q", "q"), help: "quit", footer: global, sheet: []sheetLine{{sheetGlobal, 2, "quit (q asks y/n first, ctrl+c quits at once)"}}, handle: pure(askQuit)},
 	{action: QuitNowAction, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", sheet: []sheetLine{{sheetGlobal, 2, "quit (q asks y/n first, ctrl+c quits at once)"}}, handle: pure(quitNow)},
-	// The question "Delete view <name>? y/n".
 	{action: ConfirmDeleteViewAction, modes: []Mode{ModeDeleteView}, keys: keys("y", "y"), help: "delete view", footer: []Mode{ModeDeleteView}, handle: confirmDeleteView},
 	{action: KeepViewAction, modes: []Mode{ModeDeleteView}, keys: keys("n", "n", "escape", "esc"), help: "keep view", footer: []Mode{ModeDeleteView}, handle: pure(dismissDeleteQuestion)},
 	{action: QuitNowAction, modes: []Mode{ModeDeleteView}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},
-	// The question "Quit tern-kata? y/n".
 	{action: ConfirmQuitAction, modes: []Mode{ModeQuit}, keys: keys("y", "y"), help: "quit", footer: []Mode{ModeQuit}, handle: pure(quitNow)},
 	{action: QuitNowAction, modes: []Mode{ModeQuit}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},
 	{action: StayAction, modes: []Mode{ModeQuit}, keys: keys("n", "n", "escape", "esc"), help: "stay", footer: []Mode{ModeQuit}, handle: pure(func(m Model) Model { m.AskQuit = false; return m })},
@@ -356,7 +326,7 @@ var Keymap []Binding
 func buildKeymap() {
 	mainActions = slices.Concat(keymapRows(), pageActions())
 	cards = buildCards()
-	Keymap = withFieldEditing(cardBindings)
+	Keymap = withFieldEditing(withHeadlessTwins(cardBindings))
 	for i := range mainActions {
 		entry := &mainActions[i]
 		for _, mode := range orGlobal(entry.modes) {
@@ -387,7 +357,6 @@ func quitNow(m Model) Model {
 	return m
 }
 
-// askQuit is q: it asks "Quit tern-kata? y/n", or quits at once when kata's [tui].confirm_quit is false.
 func askQuit(m Model) Model {
 	if m.QuitAtOnce {
 		return quitNow(m)
@@ -396,10 +365,8 @@ func askQuit(m Model) Model {
 	return m
 }
 
-// QuitQuestion is the question asked before q quits.
 const QuitQuestion = "Quit tern-kata? y/n"
 
-// openInbox is `I`: it opens the Inbox Collection wherever the Menu is, like picking it in the sidebar.
 func openInbox(m Model) (Model, []Cmd) {
 	return openEntry(m, PickerEntry{Collection: InboxCollection()}, false)
 }

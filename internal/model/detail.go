@@ -4,13 +4,11 @@ import "slices"
 
 type ActivityTab uint8
 
-// The Activity tabs under the fixed header; the active one is Model.ActivityTab.
 const (
 	TabComments ActivityTab = iota
 	TabEvents
 	TabLinks
 	TabAttachments
-	// TabCount is the number of tabs.
 	TabCount
 )
 
@@ -73,7 +71,6 @@ var tabTable = [TabCount]tabSpec{
 
 func (s ActivityTab) String() string { return tabTable[s].label }
 
-// EmptyText is what the tab says when it has no rows.
 func (s ActivityTab) EmptyText() string { return tabTable[s].empty }
 
 // EmptyDetailText is what the active tab says when it has no rows: the Attachments tab of an Issue on a daemon without Docbank
@@ -96,19 +93,15 @@ type DetailRow struct {
 	Relation, Ref, RefTitle string
 	// Qualified and Status are the referenced Issue's qualified id and status as its Link carries them (empty for an event row).
 	Qualified, Status string
-	// File is an Attachment row's Attachment.
-	File    Attachment
-	History *HistorySentence
+	File              Attachment
+	History           *HistorySentence
 	// Reply says what a comment answers ("confirms dana's comment in #bbbb") and Replies how many comments answer it; both
 	// are empty without reply information.
 	Reply, Replies string
-	// Head is a comment row's heading as styled parts: its Author, Time and the reply notes.
-	Head []RowSpan
-	// Tags are a comment row's confirm and refute tags, drawn on a line of their own.
-	Tags []RowSpan
+	Head           []RowSpan
+	Tags           []RowSpan
 }
 
-// RowSpan is a part of a row's heading with its style.
 type RowSpan struct {
 	Text  string
 	Style SpanStyle
@@ -151,9 +144,7 @@ func (m Model) DetailRowCount(tab ActivityTab) int {
 
 // Width tiers, in Pane columns, matching kata's own TUI.
 const (
-	// MinCols is the narrowest Pane that lays out; below it nothing shows but a notice.
-	MinCols = 80
-	// SideBySideCols is the narrowest Pane that shows the list and detail together.
+	MinCols        = 80
 	SideBySideCols = 140
 )
 
@@ -164,8 +155,6 @@ func (m Model) SidebarShown() bool {
 	return !m.Bound && !m.Collection.IsProject()
 }
 
-// VisibleColumns is every column from SideBySideCols, only the focused column
-// from MinCols, and none below. See SidebarShown for the Collections column.
 func (m Model) VisibleColumns() []Column {
 	if m.Cols < MinCols {
 		return nil
@@ -183,14 +172,10 @@ func (m Model) VisibleColumns() []Column {
 	return columns
 }
 
-// CanFocusDetail is whether list-mode tab moves to the detail: the list and detail
-// are both visible and an Issue is selected.
 func (m Model) CanFocusDetail() bool {
 	return m.SelectedUID != "" && slices.Contains(m.VisibleColumns(), ColumnList) && slices.Contains(m.VisibleColumns(), ColumnDetail)
 }
 
-// drillIn is enter on whichever column has focus: the Menu hands focus to the list, the list to the
-// detail of the selected Issue, the detail opens the row under its cursor.
 func drillIn(m Model) (Model, []Cmd) {
 	switch {
 	case m.BoardShown():
@@ -205,8 +190,6 @@ func drillIn(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// drillOut is esc or left: the detail goes back through the jump history or to the list, the list
-// to the Menu.
 func drillOut(m Model) (Model, []Cmd) {
 	switch m.Focus {
 	case ColumnDetail:

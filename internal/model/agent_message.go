@@ -15,9 +15,7 @@ import (
 // delivers it; the agent clears it once handled, and the Pane clears what is left when the agent exits.
 
 const (
-	// ModeAgentMessage is the Message card while the message is typed or sent.
-	ModeAgentMessage Mode = "agent-message"
-	// ModeAgentMessageReplace is the Message card asking before it replaces a message the agent has not cleared.
+	ModeAgentMessage        Mode = "agent-message"
 	ModeAgentMessageReplace Mode = "agent-message-replace"
 
 	// MessageAgent is `m` on the Attention Page: the Message card for the agent that raised the selected request.
@@ -47,18 +45,16 @@ type AgentMessageState struct {
 	Open, Sending      bool
 	IssueUID, IssueRef string
 	ProjectID          int64
-	// Agent is the agent's name, its agent.toml name; Address is its Agent address.
-	Agent, Address string
-	Text           string
-	Caret          Caret
-	Held, Unread   string
+	Agent, Address     string
+	Text               string
+	Caret              Caret
+	Held, Unread       string
 	// UnreadFrom is the actor that wrote the held message ("" when it does not read as one).
 	UnreadFrom string
 	Err        error
 	// Re is the UID of the comment the message asks the agent to answer, "" for a plain message.
 	Re string
 
-	// Picking is the card as the picker of quick replies, until one is chosen.
 	Picking bool
 
 	// Broadcast is the card writing to the agents of IssueUID and its open children (see BroadcastAgents). Targets are the agents it
@@ -95,8 +91,7 @@ func (SendAgentMessage) cmd() {}
 // AgentMessageSent answers SendAgentMessage for the Issue with UID. Held is the slot value found at the address in place of
 // nothing or of the value replaced, with its message in Unread ("" when it does not read as a request); nothing was written then.
 type AgentMessageSent struct {
-	UID string
-	// Address is the address the write was for, which tells a broadcast's writes on one Issue apart.
+	UID     string
 	Address string
 	Held    string
 	Unread  string
@@ -121,7 +116,6 @@ type ClearAgentAddress struct {
 
 func (ClearAgentAddress) cmd() {}
 
-// AgentAddressCleared answers ClearAgentAddress for the Issue with UID.
 type AgentAddressCleared struct {
 	UID   string
 	Block string
@@ -243,13 +237,10 @@ func openAgentCardMessage(m Model, picking bool) (Model, []Cmd) {
 	return m, nil
 }
 
-// openAgentMessage is `m`: the Message card for the agent behind the selected request, or the reason there is none in a Notice.
 func openAgentMessage(m Model) (Model, []Cmd) {
 	return openAgentMessageFor(m, false)
 }
 
-// openAgentMessageFor opens the Message card for the agent behind the selected request, as the picker of quick replies when
-// picking.
 func openAgentMessageFor(m Model, picking bool) (Model, []Cmd) {
 	request, ok := m.SelectedAttention()
 	if !ok || m.attentionClearing(request.IssueUID) {
@@ -337,7 +328,6 @@ func agentMessageKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// messageText is the typed message, trimmed, or false with the reason on the card when it cannot be sent.
 func (m *Model) messageText() (string, bool) {
 	f := &m.AgentMessage
 	text, err := CheckAgentMessage(f.Text)
@@ -352,7 +342,6 @@ func (m *Model) messageText() (string, bool) {
 	return "", false
 }
 
-// sendAgentMessage writes the typed message, trimmed, over replacing (the held value the person agreed to replace, "" for none).
 func sendAgentMessage(m Model, replacing string) (Model, []Cmd) {
 	text, ok := m.messageText()
 	if !ok {
@@ -387,7 +376,6 @@ func agentMessageSent(m Model, msg AgentMessageSent) (Model, []Cmd) {
 	return m, nil
 }
 
-// goneAgentClear is how far the clear for one exited agent has got.
 type goneAgentClear int
 
 const (
@@ -395,7 +383,6 @@ const (
 	clearDone
 )
 
-// clonedGoneAgentClears is a copy of the gone-agent notes, never nil, for a change that must not touch the Model it came from.
 func (m Model) clonedGoneAgentClears() map[string]goneAgentClear {
 	if clears := maps.Clone(m.goneAgentClears); clears != nil {
 		return clears
@@ -434,7 +421,6 @@ func sweepGoneAgents(m Model) (Model, []Cmd) {
 	return m, cmds
 }
 
-// addressForgotten says the agent with block is neither mapped nor gone, so its cleared address needs no note.
 func (m Model) addressForgotten(block string) bool {
 	return !m.agentMapped(block) && !slices.ContainsFunc(m.AgentGone, func(g AgentEntry) bool { return g.Block == block })
 }

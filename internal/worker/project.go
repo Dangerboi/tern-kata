@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
-// jitter is a random duration between lo and hi.
 func jitter(lo, hi time.Duration) time.Duration {
 	if hi <= lo {
 		return lo
@@ -19,7 +19,6 @@ func jitter(lo, hi time.Duration) time.Duration {
 	return lo + rand.N(hi-lo) //nolint:gosec // G404: spreads refresh times, nothing to guess
 }
 
-// sleep waits d on the worker's clock; false means ctx ended first.
 func (w *Worker) sleep(ctx context.Context, d time.Duration) bool {
 	select {
 	case <-ctx.Done():
@@ -54,6 +53,13 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 	}
 	held := true
 	defer func() { starting() }()
+	// failingOr is next, or the instant a failing route is looked at again when it is failing.
+	failingOr := func(next time.Time) time.Time {
+		if at, failing := w.routeFailing(ps); failing {
+			return at
+		}
+		return next
+	}
 	for ctx.Err() == nil {
 		now := w.clock.Now()
 		tried := false
@@ -117,25 +123,16 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			recovered = w.recoverProject(ctx, ps, recoveredRuns)
 		}
 		if ps.resolved {
-			if nextRoute.IsZero() {
-				nextRoute = now.Add(routeIdle)
-			}
-			if at, failing := w.routeFailing(ps); failing {
-				nextRoute = at
-			}
+			nextRoute = failingOr(cmp.Or(nextRoute, now.Add(routeIdle)))
 			if !now.Before(nextRoute) {
 				_ = w.checkRoute(ctx, ps, true)
-				nextRoute = now.Add(routeIdle)
-				if at, failing := w.routeFailing(ps); failing {
-					nextRoute = at
-				}
+				nextRoute = failingOr(now.Add(routeIdle))
 			}
 		}
 		if w.leaseHeld(ps) {
 			if !started {
 				started = true
-				w.runs.Add(1)
-				go func() { defer w.runs.Done(); w.follow(ctx, ps) }()
+				w.runs.Go(func() { w.follow(ctx, ps) })
 			}
 			select {
 			case <-ps.wake:
@@ -194,7 +191,6 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 // answers an Issue event may reuse a listing this young; due-time and freed-slot admission always lists again.
 const jobRefreshDebounce = 2 * time.Second
 
-// jobsListedAt is when the Project's job list was last read, the zero time before the first read.
 func (w *Worker) jobsListedAt(ps *projectState) time.Time {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -342,7 +338,6 @@ func (w *Worker) slotsInUse() int {
 	return n
 }
 
-// bind turns a pending reservation into the run's slot: the slot map takes the Run its journal says occupies one.
 func (w *Worker) bind(ps *projectState, j *Journal) {
 	occupies := w.life(j).occupiesSlot(j)
 	w.mu.Lock()
@@ -351,7 +346,6 @@ func (w *Worker) bind(ps *projectState, j *Journal) {
 	ps.setSlot(j, occupies)
 }
 
-// unreserve gives a reservation back; a drain that was waiting on it may now be done.
 func (w *Worker) unreserve(ps *projectState) {
 	w.mu.Lock()
 	ps.pending = max(ps.pending-1, 0)
@@ -359,7 +353,6 @@ func (w *Worker) unreserve(ps *projectState) {
 	w.finishDrain()
 }
 
-// syncSlot puts the Run in the slot map or takes it out as the lifecycle says it occupies a slot of ps.
 func (w *Worker) syncSlot(ps *projectState, j *Journal) {
 	occupies := w.life(j).occupiesSlot(j)
 	w.mu.Lock()
@@ -376,7 +369,6 @@ func (ps *projectState) setSlot(j *Journal, occupies bool) {
 	}
 }
 
-// holdsSlotOf reports whether uid is bound to a slot of ps.
 func (w *Worker) holdsSlotOf(ps *projectState, uid string) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -430,17 +422,14 @@ func (w *Worker) recoverProject(ctx context.Context, ps *projectState, done map[
 			w.handedOn(j.RunUID)
 			continue
 		}
-		w.runs.Add(1)
-		go func() {
-			defer w.runs.Done()
+		w.runs.Go(func() {
 			defer w.handedOn(j.RunUID) // after recoverRun spawned it, so the run is always counted in one place
 			w.recoverRun(ctx, ps, j.RunUID)
-		}()
+		})
 	}
 	return err == nil
 }
 
-// leaseHeld reports whether this worker holds the Project's lease.
 func (w *Worker) leaseHeld(ps *projectState) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()

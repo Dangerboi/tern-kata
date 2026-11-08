@@ -23,7 +23,6 @@ const (
 	RecurrenceStopKeep    Action = "recurrence-stop-keep"
 )
 
-// The Recurrence card's fields.
 const (
 	RecurrenceFrequency Field = "frequency"
 	RecurrenceEvery     Field = "every"
@@ -36,36 +35,31 @@ const (
 	RecurrenceZone      Field = "zone"
 )
 
-// RecurrenceFields is the Recurrence card's field list in tab order.
 var RecurrenceFields = recurrenceTable.specs()
 
-// RecurrenceEndKinds are the choices of the Ends field, in cycling order; the Frequency field cycles Frequencies.
 var RecurrenceEndKinds = []EndKind{EndNever, EndUntil, EndCount}
 
 // RecurrenceFormState is the Recurrence card. The text fields hold what was typed and the card reads it into a Schedule only
 // when saving, so every validation message comes from one place.
 type RecurrenceFormState struct {
-	Open, Saving bool
-	Field        Field
-	UID          string
+	formCard
+	UID string
 	// Change says the Issue already recurs: the card changes Opened, the recurrence it read, instead of making a new one.
 	// Raw is the rule text when the form cannot express it. StopConfirm asks y/n before stopping; Stopping says the pending
 	// write is the stop. Refused says nothing can be changed: the card only reports Err, and esc closes it.
 	Change, StopConfirm, Stopping, Refused bool
 	Opened                                 Recurrence
 	Raw                                    string
-	Caret                                  Caret
 	ProjectID                              int64
 	Frequency                              Frequency
 	Every                                  string
 	Weekdays                               [7]bool // indexed by time.Weekday
 	WeekdayAt                              int     // the weekday under the cursor, an index into MondayFirst: the field lists Monday first
 	Day                                    string  // "15", "last" (monthly only), "2nd tue"
-	Month                                  int     // 1 to 12
+	Month                                  int
 	Ends                                   EndKind
 	Until, Count                           string
 	Start, Zone                            string
-	Err                                    error
 }
 
 // localZoneNote says a stored Local zone, which the card cannot save, is replaced by zone on saving; "" for any other zone.
@@ -76,7 +70,6 @@ func localZoneNote(stored, zone string) string {
 	return "The stored time zone is Local (the daemon's own zone); saving sets " + zone + "."
 }
 
-// ZoneNote is the note the card shows when it opened a recurrence stored with the Local zone; it follows the Zone field.
 func (f RecurrenceFormState) ZoneNote() string {
 	if !f.Change {
 		return ""
@@ -84,7 +77,6 @@ func (f RecurrenceFormState) ZoneNote() string {
 	return localZoneNote(f.Opened.TimeZone, strings.TrimSpace(f.Zone))
 }
 
-// Shows says the field applies to the card as it stands; the others are hidden and tab skips them.
 func (f RecurrenceFormState) Shows(name Field) bool {
 	switch name {
 	case RecurrenceWeekdays:
@@ -99,7 +91,6 @@ func (f RecurrenceFormState) Shows(name Field) bool {
 	return true
 }
 
-// EndText is what the End date or count field holds: the date for an end on a date, the count for an end after N occurrences.
 func (f RecurrenceFormState) EndText() string {
 	if f.Ends == EndCount {
 		return f.Count
@@ -124,7 +115,6 @@ func newRecurrenceForm(cal PaneCalendar, issue *Issue) RecurrenceFormState {
 	return f
 }
 
-// startDay is the start date's day of the month, "" while the start date is not a date.
 func (f RecurrenceFormState) startDay() string {
 	if start, err := time.Parse(time.DateOnly, strings.TrimSpace(f.Start)); err == nil {
 		return strconv.Itoa(start.Day())
@@ -236,7 +226,6 @@ func realZone(zone, fallback string) string {
 	return zone
 }
 
-// checkZone refuses a zone kata cannot take: empty, Local or unknown.
 func checkZone(zone string) error {
 	if _, err := time.LoadLocation(zone); err != nil || zone == "" || zone == localZone {
 		return fmt.Errorf("Unknown time zone %q.", zone)
@@ -244,7 +233,6 @@ func checkZone(zone string) error {
 	return nil
 }
 
-// parseDate reads a YYYY-MM-DD date, trimmed, or says bad.
 func parseDate(text string, bad error) (time.Time, error) {
 	day, err := time.Parse(time.DateOnly, strings.TrimSpace(text))
 	if err != nil {
@@ -253,7 +241,6 @@ func parseDate(text string, bad error) (time.Time, error) {
 	return day, nil
 }
 
-// terms reads the card into the terms it would send, or says what is wrong with it. Nothing leaves the card until it does.
 func (f RecurrenceFormState) terms() (RecurrenceTerms, error) {
 	start, zone := strings.TrimSpace(f.Start), strings.TrimSpace(f.Zone)
 	s := Schedule{Frequency: f.Frequency, End: f.Ends}
@@ -337,7 +324,6 @@ func parseDay(text string, s *Schedule) error {
 	return nil
 }
 
-// nthOf reads "1" to "5", "1st" to "5th" or "last" as the ordinal an NthWeekday takes.
 func nthOf(word string) (int, bool) {
 	if word == "last" {
 		return -1, true
@@ -346,7 +332,6 @@ func nthOf(word string) (int, bool) {
 	return n, err == nil && n >= 1 && n <= 5
 }
 
-// weekdayNamed reads a weekday by its first three or more letters.
 func weekdayNamed(word string) (time.Weekday, bool) {
 	for d := time.Sunday; d <= time.Saturday; d++ {
 		if len(word) >= 3 && strings.HasPrefix(strings.ToLower(d.String()), word) {
@@ -358,11 +343,7 @@ func weekdayNamed(word string) (time.Weekday, bool) {
 
 func submitRecurrence(m Model) (Model, []Cmd) {
 	f := &m.RecurrenceForm
-	if !f.Open || f.Saving || f.Refused {
-		return m, nil
-	}
-	if m.Stale {
-		f.Err = errors.New("Daemon disconnected; reconnect before making this Issue recur.")
+	if f.Refused || f.refuseSubmit(m, "making this Issue recur") {
 		return m, nil
 	}
 	terms, err := f.terms()
@@ -401,7 +382,6 @@ func updateRecurrence(m Model, msg Msg) (Model, []Cmd) {
 	return m, nil
 }
 
-// chooseFrequency gives the Frequency field its choice at i, in the order of Frequencies. An index out of range changes nothing.
 func chooseFrequency(f *RecurrenceFormState, i int) bool {
 	if i < 0 || i >= len(Frequencies) {
 		return false
@@ -413,7 +393,6 @@ func chooseFrequency(f *RecurrenceFormState, i int) bool {
 	return true
 }
 
-// chooseEnds gives the Ends field its choice at i, in the order of RecurrenceEndKinds. An index out of range changes nothing.
 func chooseEnds(f *RecurrenceFormState, i int) bool {
 	if i < 0 || i >= len(RecurrenceEndKinds) {
 		return false
@@ -422,7 +401,6 @@ func chooseEnds(f *RecurrenceFormState, i int) bool {
 	return true
 }
 
-// chooseMonth gives the Month field its choice at i, January first. An index out of range changes nothing.
 func chooseMonth(f *RecurrenceFormState, i int) bool {
 	if i < 0 || i >= 12 {
 		return false
@@ -431,8 +409,6 @@ func chooseMonth(f *RecurrenceFormState, i int) bool {
 	return true
 }
 
-// toggleWeekday puts the weekday cursor on the day at i, in the order the card shows them (MondayFirst), and toggles that
-// day. An index out of range changes nothing.
 func toggleWeekday(f *RecurrenceFormState, i int) bool {
 	if i < 0 || i >= len(MondayFirst) {
 		return false
@@ -442,15 +418,10 @@ func toggleWeekday(f *RecurrenceFormState, i int) bool {
 	return true
 }
 
-// recurrenceTable declares the Recurrence card's fields, in tab order, and its busy condition. Which of them apply depends on
-// the frequency and the end: tab skips the ones Shows says do not. Left and right move the weekday cursor in the Weekdays
-// field, which picks the day under the cursor by index.
+// Left and right move the weekday cursor in the Weekdays field, which picks the day under the cursor by index.
 var recurrenceTable = fieldTable[RecurrenceFormState]{
 	form:   func(m *Model) *RecurrenceFormState { return &m.RecurrenceForm },
 	busy:   func(f RecurrenceFormState) bool { return f.Saving || f.StopConfirm || f.Refused },
-	focus:  func(f *RecurrenceFormState) *Field { return &f.Field },
-	caret:  func(f *RecurrenceFormState) *Caret { return &f.Caret },
-	err:    func(f *RecurrenceFormState) *error { return &f.Err },
 	hidden: func(m Model, name Field) bool { return !m.RecurrenceForm.Shows(name) },
 	fields: []formField[RecurrenceFormState]{
 		choiceField(RecurrenceFrequency,
@@ -482,13 +453,8 @@ var recurrenceTable = fieldTable[RecurrenceFormState]{
 	},
 }
 
-// recurrenceKey is one key for the Recurrence card on top. Left, right and space move through a choice field's choices; in the
-// Weekdays field left and right move the cursor and space toggles the day under it, and in a text field space is typed.
 func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	f := &m.RecurrenceForm
-	if f.Saving {
-		return m, nil
-	}
 	if f.StopConfirm {
 		return answerStop(m, msg)
 	}
@@ -509,19 +475,11 @@ func recurrenceKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == InputSpace && field == nil:
 		recurrenceTable.stepFocused(&m, false)
 	case field != nil:
-		var edited bool
-		if bound && binding.Action == InputSpace {
-			bound = false // a space in a text field is typed
-		}
-		if *field, edited = editText(*field, &f.Caret, f.Field, bound, msg); edited {
-			f.Err = nil
-		}
+		recurrenceTable.typeKey(&m, binding, bound, msg)
 	}
 	return m, nil
 }
 
-// answerStop is one key while the card asks whether to stop the recurrence: the confirm binding stops it at the recurrence's
-// current revision, the keep binding goes back to the form, and any other key is swallowed.
 func answerStop(m Model, msg KeyMsg) (Model, []Cmd) {
 	f := &m.RecurrenceForm
 	binding, bound := LookupBindingForMode(msg.Chord, ModeRecurrenceStop)
@@ -530,8 +488,7 @@ func answerStop(m Model, msg KeyMsg) (Model, []Cmd) {
 		f.StopConfirm = false
 	case bound && binding.Action == RecurrenceStopConfirm:
 		f.StopConfirm = false
-		if m.Stale {
-			f.Err = errors.New("Daemon disconnected; reconnect before stopping this recurrence.")
+		if f.refuseStale(m, "stopping this recurrence") {
 			return m, nil
 		}
 		f.Saving, f.Stopping, f.Err = true, true, nil

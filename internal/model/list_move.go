@@ -21,5 +21,4 @@ func movedIndex(at, n, page int, action Action) int {
 	return max(0, min(at, n-1))
 }
 
-// listPage is how many rows a page key moves on the Jobs and Runs Pages.
 const listPage = 10

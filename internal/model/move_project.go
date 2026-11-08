@@ -15,7 +15,6 @@ import (
 
 const (
 	ModeMoveProject Mode = "move-project"
-	// ModeMoveConfirm is the card after a Project is chosen: previewing, previewed, or showing a conflict.
 	ModeMoveConfirm Mode = "move-confirm"
 
 	OpenMoveProject   Action = "open-move-project"
@@ -23,11 +22,9 @@ const (
 	MoveProjectSend   Action = "move-project-send"
 	MoveProjectBack   Action = "move-project-back"
 	MoveProjectClose  Action = "move-project-close"
-	// MoveProjectSingle toggles "Only this Issue" on the card that previews a move.
 	MoveProjectSingle Action = "move-project-single"
 )
 
-// moveListLimit is how many descendants the preview names before it counts the rest.
 const moveListLimit = 8
 
 // MoveToProjectCmd is one request to kata's move action. A DryRun changes nothing; Revision is the revision the card opened
@@ -42,7 +39,6 @@ type MoveToProjectCmd struct {
 	Revision              int64
 }
 
-// MovedIssue is a descendant that moves with the Issue: its short id and the uid of the Project it lives in now.
 type MovedIssue struct{ ShortID, ProjectUID string }
 
 func (MoveToProjectCmd) cmd() {}
@@ -65,38 +61,27 @@ type ProjectMoveAnswer struct {
 
 func (ProjectMoveAnswer) msg() {}
 
-// MoveProjectState is the Move card.
 type MoveProjectState struct {
-	Open bool
-	// Sending says a request is out; the card takes no keys until it answers.
-	Sending bool
-	UID     string
-	// ProjectID, ShortID and From are the Issue's Project and short id and the Project's name when the card opened.
-	ProjectID int64
-	ShortID   string
-	From      string
-	// Revision is what the card opened with, the guard of the move.
-	Revision int64
-	Filter   string
-	Caret    Caret
-	Cursor   int
-	// Target is the Project chosen, zero while the card still lists Projects.
-	Target Project
-	// Single is the "Only this Issue" switch: move the Issue without its descendants.
-	Single bool
-	// Previewed says kata accepted the dry run for Target, so Enter moves.
-	Previewed bool
-	// Descendants are the Issues below this one that the accepted preview says move with it.
+	Open        bool
+	Sending     bool
+	UID         string
+	ProjectID   int64
+	ShortID     string
+	From        string
+	Revision    int64
+	Filter      string
+	Caret       Caret
+	Cursor      int
+	Target      Project
+	Single      bool
+	Previewed   bool
 	Descendants []MovedIssue
-	// Conflict says kata refused the revision: Enter asks for a fresh preview.
-	Conflict bool
-	Err      error
+	Conflict    bool
+	Err         error
 }
 
-// NoticeLink is the part of the Notice that is a link opening an Issue; Ref is <project>/<short id>.
 type NoticeLink struct{ Text, Ref string }
 
-// OpenNoticeLinkMsg is a click on the Notice's link.
 type OpenNoticeLinkMsg struct{}
 
 func (OpenNoticeLinkMsg) msg() {}
@@ -117,7 +102,6 @@ func (m Model) MoveTargets() []Project {
 	return targets
 }
 
-// MoveCardMode is the keymap mode of the open card.
 func (m Model) MoveCardMode() Mode {
 	if m.MoveProject.Target.UID != "" {
 		return ModeMoveConfirm
@@ -140,7 +124,6 @@ func (m Model) MovePreview() string {
 	return ""
 }
 
-// descendantCount is "1 descendant" or "N descendants".
 func descendantCount(n int) string {
 	if n == 1 {
 		return "1 descendant"
@@ -174,7 +157,6 @@ func (m Model) descendantRefs() string {
 	return strings.Join(refs, ", ")
 }
 
-// openMoveProject is `M`.
 func openMoveProject(m Model) Model {
 	if m.Stale || m.MoveProject.Sending {
 		return m
@@ -187,7 +169,6 @@ func openMoveProject(m Model) Model {
 	return m
 }
 
-// sendMoveProject sends the dry run or the move for the chosen Project.
 func sendMoveProject(m Model, dryRun bool) (Model, []Cmd) {
 	f := &m.MoveProject
 	if m.Stale {
@@ -202,7 +183,6 @@ func sendMoveProject(m Model, dryRun bool) (Model, []Cmd) {
 	return m, []Cmd{cmd}
 }
 
-// chooseMoveTarget is Enter in the list: preview the Project under the cursor.
 func chooseMoveTarget(m Model) (Model, []Cmd) {
 	targets := m.MoveTargets()
 	if len(targets) == 0 {
@@ -222,7 +202,6 @@ func confirmMove(m Model) (Model, []Cmd) {
 	return sendMoveProject(m, true)
 }
 
-// MoveSingleMsg is the pointer flipping the card's "Only this Issue" switch to On.
 type MoveSingleMsg struct{ On bool }
 
 func (MoveSingleMsg) msg() {}
@@ -238,7 +217,6 @@ func setMoveSingle(m Model, on bool) (Model, []Cmd) {
 	return sendMoveProject(m, true)
 }
 
-// updateMoveProject applies kata's answer to the card: a stale one is dropped.
 func updateMoveProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 	f := &m.MoveProject
 	if !f.Open || !f.Sending || f.UID != msg.UID || f.Target.UID != msg.ToProjectUID {
@@ -294,7 +272,6 @@ func issueGone(m Model, uid string) Model {
 	return m
 }
 
-// movedIssue is the Issue just moved and the row beside it, which takes the selection when a snapshot no longer lists the Issue.
 type movedIssue struct{ UID, Next string }
 
 // neighbourRow is the uid of the row after uid in the visible rows, else the one before it; empty when uid is the only row.
@@ -313,7 +290,6 @@ func (m Model) neighbourRow(uid string) string {
 	return ""
 }
 
-// afterMoveSelection puts the selection on the row beside a moved Issue once a snapshot no longer lists the Issue.
 func (m Model) afterMoveSelection() Model {
 	moved := m.afterMove
 	if moved == nil || m.SelectedUID != moved.UID {
@@ -336,7 +312,6 @@ func (m Model) afterMoveSelection() Model {
 	return m
 }
 
-// openNoticeLink is a click on the Notice's link: the Issue it names opens.
 func openNoticeLink(m Model) (Model, []Cmd) {
 	link := m.NoticeLink
 	if link == nil || m.Notice == "" {
@@ -346,7 +321,6 @@ func openNoticeLink(m Model) (Model, []Cmd) {
 	return openIssue(m, link.Ref)
 }
 
-// moveProjectKey is one key for the card on top, in either of its modes.
 func moveProjectKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	f := &m.MoveProject
 	if f.Sending {
@@ -388,7 +362,6 @@ func moveProjectKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// MoveTargetSelected is a click on a Project of the card's list; Key is its UID.
 type MoveTargetSelected struct{ Key string }
 
 func (MoveTargetSelected) msg() {}

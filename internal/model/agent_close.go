@@ -32,7 +32,6 @@ type ReadAgentIssue struct {
 
 func (ReadAgentIssue) cmd() {}
 
-// AgentIssueRead answers ReadAgentIssue with the Issue's Status, "" when the read failed.
 type AgentIssueRead struct {
 	UID    string
 	Status string
@@ -41,14 +40,12 @@ type AgentIssueRead struct {
 
 func (AgentIssueRead) msg() {}
 
-// agentCloseState is what the rule for ending a finished Background agent remembers.
 type agentCloseState struct {
 	// tried are the blocks whose close is in flight or has failed; none is closed twice.
 	tried []string
 	// refused are the blocks the gateway kept because the file did not call them background agents; one is asked about again
 	// as soon as the mapping shows it as one, by whatever path the mapping changed.
 	refused []string
-	// reading are the Issues (by UID) a status read is in flight for.
 	reading []string
 	// unreadable are the Issues (by UID) whose last status read failed; none is read again until the event stream reconnects or the Pane
 	// switches Daemon.
@@ -73,11 +70,8 @@ func (s agentCloseState) forDaemon() agentCloseState {
 type agentCloseTrigger int
 
 const (
-	// closeOnRelay is a relayed agent list.
 	closeOnRelay agentCloseTrigger = iota
-	// closeOnIssues is the Issues changing: a snapshot or a stream event.
 	closeOnIssues
-	// closeOnRead is a status read coming back.
 	closeOnRead
 )
 
@@ -185,7 +179,6 @@ type InterruptAgent struct {
 
 func (InterruptAgent) cmd() {}
 
-// AgentInterrupted answers InterruptAgent; Err says tern could not type into the block.
 type AgentInterrupted struct {
 	Block string
 	Err   error
@@ -193,7 +186,6 @@ type AgentInterrupted struct {
 
 func (AgentInterrupted) msg() {}
 
-// AgentStopHandOffMessage is the reason written to an open Issue whose agent was stopped from the Agent card.
 const AgentStopHandOffMessage = "Stopped from the Agent card; unsaved work in its block was dropped."
 
 // HandOffAgent writes what an agent that stops without closing its Issue writes, for an agent that was stopped and cannot: the
@@ -209,7 +201,6 @@ type HandOffAgent struct {
 
 func (HandOffAgent) cmd() {}
 
-// AgentHandedOff answers HandOffAgent for the Issue with UID.
 type AgentHandedOff struct {
 	UID string
 	Err error

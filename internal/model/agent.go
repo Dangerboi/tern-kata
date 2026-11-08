@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// AgentPlacement is where a started agent's block goes.
 type AgentPlacement string
 
 const (
@@ -30,7 +29,6 @@ func (p AgentPlacement) words() (name, notice string) {
 	return string(AgentSplit), "a split beside this Pane"
 }
 
-// AgentSession is the name of the hidden Tern session background agents live in.
 const AgentSession = "kata agents"
 
 // OpenAgentCardAction is `w`: it opens the Agent card on the selected Issue.
@@ -108,7 +106,6 @@ type StartAgent struct {
 
 func (StartAgent) cmd() {}
 
-// AgentStarted answers StartAgent.
 type AgentStarted struct {
 	Placement AgentPlacement
 	IssueRef  string
@@ -144,7 +141,6 @@ func (AgentsPruned) msg() {}
 // ClosedIssueRefusal is the Notice `w` shows on a closed Issue, and the reason the buttons that start an agent on one are off.
 const ClosedIssueRefusal = "This Issue is closed; reopen it first (r)."
 
-// ClosedAlreadyRefusal is the reason Close is off on a closed Issue.
 const ClosedAlreadyRefusal = "This Issue is already closed."
 
 // IssueRefusal is why action cannot run on issue, or "" when it can: the closed-Issue rules that the Notices of `w` and `x`, the
@@ -186,8 +182,6 @@ func openAgent(m Model) (Model, []Cmd) {
 	return m, append([]Cmd{ask}, sessions...)
 }
 
-// startAgent starts an agent on the Agent card's Issue where the card's key (action) says; the card closes first, and a refusal
-// of the card's rules is the Notice.
 func startAgent(m Model, action Action, placement AgentPlacement) (Model, []Cmd) {
 	reason := m.AgentCardUnavailable(action)
 	issue := m.issueByUID(m.AgentCard.IssueUID)

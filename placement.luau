@@ -14,7 +14,6 @@ export type Snapshot = {
     tabs: { TabRec },
     panes: { PaneRec },
     agents: { AgentRec },
-    -- The tabs that are in the hidden agent session.
     hidden: { [number]: boolean },
     -- Panes handled before: never tried again.
     placed: { [number]: boolean },
@@ -25,7 +24,6 @@ export type Move = { tab: number, position: number }
 export type Plan = {
     -- Panes tried in this pass, whatever the result; the caller remembers them as placed.
     tried: { number },
-    -- In the order to make them.
     moves: { Move },
 }
 
@@ -97,7 +95,6 @@ local function unplacedTabs(
     return ids
 end
 
--- Reorders `tabs` as moving `tab` to `position` does: the tabs it passes shift by one.
 local function applyMove(tabs: { TabRec }, tab: TabRec, position: number)
     local from = tab.position
     for _, other in tabs do

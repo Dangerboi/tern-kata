@@ -47,10 +47,8 @@ type FederationName struct {
 	Err           error
 }
 
-// SpokeLabel is the spoke's name as the list and detail show it: the name, "-" when the hub gives none.
 func (s FederationSpoke) SpokeLabel() string { return dashLine(s.SpokeName) }
 
-// openFederationNameForSpoke is N on a spoke, in the list or its detail.
 func openFederationNameForSpoke(m Model) (Model, []Cmd) {
 	spoke := m.SelectedSpoke()
 	if spoke == nil || (m.Federation.Screen != FederationList && m.Federation.Screen != FederationDetail) {
@@ -60,7 +58,6 @@ func openFederationNameForSpoke(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// openFederationNameForEnroll is N on the enrollment preview.
 func openFederationNameForEnroll(m Model) (Model, []Cmd) {
 	f := &m.Federation
 	if f.Enrolling {

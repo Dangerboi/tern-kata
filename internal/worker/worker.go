@@ -22,8 +22,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
-// Options is everything a Worker needs from outside, so a test runs the whole worker against kata in process with
-// its own folders, clock and agent program.
 type Options struct {
 	Config Config
 	Dirs   Dirs
@@ -43,7 +41,6 @@ type Options struct {
 	Log func(format string, args ...any)
 }
 
-// Worker is the adapter process. Build it with New and run it with Run.
 type Worker struct {
 	opt     Options
 	store   *Store
@@ -76,7 +73,6 @@ type Worker struct {
 	cancels   map[string]*cancelSignal // guarded by mu: wakes the goroutine supervising a run that was asked to stop
 }
 
-// projectState is one served Project: its config, what kata resolved it to, its lease, its definitions and its slots.
 type projectState struct {
 	cfg   ProjectConfig
 	actor string
@@ -133,7 +129,6 @@ type projectState struct {
 	aside, warnings []JobNote
 }
 
-// New checks opts and builds a worker.
 func New(opts Options) (*Worker, error) {
 	if opts.Kata == nil {
 		return nil, errors.New("worker: no kata client")
@@ -147,7 +142,8 @@ func New(opts Options) (*Worker, error) {
 	if opts.Config.Executor == "" {
 		return nil, errors.New("worker: no executor label")
 	}
-	w := &Worker{opt: opts, clock: opts.Clock, store: NewStore(opts.Dirs, opts.Hooks), ready: make(chan struct{}), pid: os.Getpid(), starting: make(chan struct{}, startingProjects)}
+	w := &Worker{opt: opts, clock: opts.Clock, store: NewStore(opts.Dirs, opts.Hooks), ready: make(chan struct{}), pid: os.Getpid(), starting: make(chan struct{}, startingProjects),
+		flight: map[string]flight{}, cancels: map[string]*cancelSignal{}}
 	for _, p := range opts.Config.Projects {
 		cfg, _ := opts.Config.project(p.Name)
 		actor := cmp.Or(cfg.Actor, opts.Config.Actor, opts.Actor)
@@ -254,7 +250,6 @@ func validUID(uid string) bool {
 	return err == nil
 }
 
-// projectNamed is the served Project called name.
 func (w *Worker) projectNamed(name string) *projectState {
 	for _, ps := range w.projects {
 		if ps.cfg.Name == name {
@@ -365,11 +360,7 @@ func pinDifferences(prev, now pin) []string {
 }
 
 func (w *Worker) savePin(path string, p pin) string {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Sprintf("its pin cannot be saved, so the worker would not notice a changed route: %v", err)
-	}
-	raw, _ := json.Marshal(p)
-	if err := replaceFile(path, raw); err != nil {
+	if err := saveJSON(path, p); err != nil {
 		return fmt.Sprintf("its pin cannot be saved, so the worker would not notice a changed route: %v", err)
 	}
 	return ""

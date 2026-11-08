@@ -49,7 +49,6 @@ var listNodes = map[model.ListNode]struct {
 	model.ListNodeAttention: {AttentionListID, func(m model.Model) string { return selectedItem(AttentionListID, m.Attention.Selected) }},
 }
 
-// TextFocusID is the node that should hold Tern's caret, "" for none.
 func TextFocusID(m model.Model) string {
 	if card, field, ok := m.TextCaret(); ok {
 		return FieldID(card, field)
@@ -86,7 +85,6 @@ func ScrollTarget(m model.Model, c model.Column) string {
 	return IssueListID
 }
 
-// ActivityReveals are the nodes to reveal to bring the active Activity tab into view, none while the detail draws no Issue.
 func ActivityReveals(m model.Model) []string {
 	if !m.DetailDrawn() {
 		return nil

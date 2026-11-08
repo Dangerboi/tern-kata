@@ -20,10 +20,9 @@ type CreateState struct {
 	Open                                      bool
 	Field                                     Field
 	Title, Labels, Owner, Priority, ParentUID string
-	// Dates are the typed scheduled date and deadline, read when saving.
-	Dates      DatesPair
-	Completion FieldFormState
-	Caret      Caret
+	Dates                                     DatesPair
+	Completion                                FieldFormState
+	Caret                                     Caret
 }
 type CreateIssueCmd struct {
 	Workspace, Actor, Title, Body, Owner, ParentUID string
@@ -81,7 +80,6 @@ func (m Model) CreateSuggestions() []string {
 	return m.FieldSuggestions()
 }
 
-// The Create card's fields.
 const (
 	CreateTitle     Field = "title"
 	CreateBody      Field = "body"
@@ -111,10 +109,8 @@ var createTable = fieldTable[CreateState]{
 	},
 }
 
-// CreateFields is the Create card's field list, in tab order.
 var CreateFields = createTable.specs()
 
-// CreatePreview is the muted line under a date field of the Create card.
 func (m Model) CreatePreview(name Field) string {
 	return datePreview(m.Create.Dates.Of(name), m.Calendar.Date)
 }
@@ -199,8 +195,6 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 	return m, nil, false
 }
 
-// createCard is the Create card's part of the shared Draft key handler: its text is the title, body
-// and the single-line fields, and saving sends an issue.
 var createCard = draftCardKeys{
 	draft: func(m Model) Draft { return m.Create.Draft },
 	set:   func(m Model, d Draft) Model { m.Create.Draft = d; return m },

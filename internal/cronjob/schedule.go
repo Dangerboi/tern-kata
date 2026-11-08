@@ -13,7 +13,6 @@ import (
 // MaxIntervalSeconds is the longest interval kata accepts, which a Duration holds without wrapping.
 const MaxIntervalSeconds = int64(1<<63-1) / 1e9
 
-// HighRatePerDay is the most Issues a day a job may create before it is warned about.
 const HighRatePerDay = 24
 
 // maxPerWeek stops counting a week's occurrences: a count beyond it only needs to read as large.
@@ -22,7 +21,6 @@ const maxPerWeek = 100_000
 // parser is kata's own: five fields, descriptors and crontab's either-day rule, never seconds, so an expression parses here as it does there.
 var parser = cron.MustNewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor | cron.DowOrDom)
 
-// Step is an interval's period; false when it is not positive or longer than kata accepts.
 func Step(seconds int64) (time.Duration, bool) {
 	if seconds <= 0 || seconds > MaxIntervalSeconds {
 		return 0, false
@@ -41,7 +39,6 @@ func Zone(expression, timezone string) (zone, bare string) {
 	return cmp.Or(directive, "UTC"), bare
 }
 
-// directiveOf splits off an embedded TZ= or CRON_TZ= directive: its zone, "" when there is none, and the bare expression.
 func directiveOf(expression string) (zone, bare string) {
 	expression = strings.TrimSpace(expression)
 	for _, prefix := range []string{"CRON_TZ=", "TZ="} {
@@ -56,14 +53,12 @@ func directiveOf(expression string) (zone, bare string) {
 	return "", expression
 }
 
-// ZoneConflictError is a cron expression whose embedded directive names another zone than the trigger's timezone.
 type ZoneConflictError struct{ Directive, Timezone string }
 
 func (e *ZoneConflictError) Error() string {
 	return fmt.Sprintf("its cron expression names zone %s but the trigger's timezone is %s", e.Directive, e.Timezone)
 }
 
-// Schedule yields the occurrences of one trigger: a cron expression in its zone, or an interval counting from an anchor.
 type Schedule struct {
 	cron   cron.Schedule
 	loc    *time.Location
@@ -71,11 +66,8 @@ type Schedule struct {
 	anchor time.Time
 }
 
-// Zone is the zone a cron expression is read in, for showing its occurrences as the expression means them. False for an
-// interval, which has no zone of its own.
 func (s Schedule) Zone() (zone *time.Location, ok bool) { return s.loc, s.loc != nil }
 
-// Interval counts from anchor in steps of seconds: the first occurrence is anchor + one step.
 func Interval(seconds int64, anchor time.Time) (Schedule, error) {
 	step, ok := Step(seconds)
 	if !ok {
@@ -108,7 +100,6 @@ func Cron(expression, timezone string, createdAt time.Time) (Schedule, error) {
 	return Schedule{cron: schedule, loc: loc}, nil
 }
 
-// Next is the first occurrence strictly after t, in UTC; the zero time when there is none.
 func (s Schedule) Next(t time.Time) time.Time {
 	if s.step > 0 {
 		if t.Before(s.anchor) {
@@ -157,7 +148,6 @@ func (s Schedule) PerDay(now time.Time) int {
 	return (s.Between(now, now.Add(7*24*time.Hour), maxPerWeek) + 3) / 7
 }
 
-// HighRateWarning is the line for a job that makes perDay Issues a day: "" unless that is more than 24.
 func HighRateWarning(perDay int) string {
 	if perDay <= HighRatePerDay {
 		return ""

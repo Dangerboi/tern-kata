@@ -1,6 +1,5 @@
 // Package ompext holds tern-kata's omp extension, tern-kata.ts, and the one rule for loading it: the Pane's agents and the
-// worker's runs both ask here whether a program is omp, which flag loads the extension, and where the file goes. Its Bun
-// tests sit beside it.
+// worker's runs both ask here whether a program is omp, which flag loads the extension, and where the file goes.
 package ompext
 
 import (
@@ -20,13 +19,10 @@ import (
 //go:embed tern-kata.ts
 var Source []byte
 
-// FileName is the name the extension is written under; omp loads it by path.
 const FileName = "tern-kata.ts"
 
-// Program is the name of omp, the only program the extension is for.
 const Program = "omp"
 
-// IsOmp is true when program (a name or a path, with or without .exe) is omp.
 func IsOmp(program string) bool {
 	base := filepath.Base(program)
 	return strings.TrimSuffix(base, filepath.Ext(base)) == Program

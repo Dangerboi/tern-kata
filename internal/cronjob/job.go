@@ -25,14 +25,12 @@ type Trigger struct {
 	Timezone    string
 }
 
-// Action is what a Cron job does when it fires.
 type Action struct {
 	Kind ActionKind
 	// Message and Recipient belong to a notify action, Prompt or WorkflowUID to an execute action.
 	Message, Recipient, Prompt, WorkflowUID string
 }
 
-// IssuePolicy is which Issue a Cron job's run or notification belongs to: a fresh one per run, or an existing one.
 type IssuePolicy struct {
 	Kind IssuePolicyKind
 	// UID is the existing Issue; ParentUID the parent of a Native job's children.
@@ -42,7 +40,6 @@ type IssuePolicy struct {
 	ScheduledOffsetSeconds, DeadlineOffsetSeconds *int64
 }
 
-// Definition is the part of a Cron job a Job card edits.
 type Definition struct {
 	Enabled bool
 	Trigger Trigger
@@ -61,7 +58,6 @@ type Definition struct {
 	Profile string
 }
 
-// Job is a Cron job as kata stores it: one per Project.
 type Job struct {
 	UID, Name, Author string
 	Revision          int64
@@ -91,10 +87,8 @@ func NewNative(createdAt time.Time, trigger Trigger) Job {
 	}}
 }
 
-// Notifies says the job's action is a notification.
 func (j Job) Notifies() bool { return j.Definition.Action.Kind == ActionNotify }
 
-// RunsWorkflow says the job executes a Workflow rather than a prompt.
 func (j Job) RunsWorkflow() bool {
 	a := j.Definition.Action
 	return a.Kind == ActionExecute && a.WorkflowUID != ""
@@ -109,7 +103,6 @@ func (j Job) OtherAdapter() string {
 	return ""
 }
 
-// Adapter is the text of the job's options.adapter key without surrounding spaces, "" when it is absent.
 func (j Job) Adapter() string {
 	v, ok := j.Definition.Options["adapter"]
 	if !ok || v == nil {
@@ -121,10 +114,8 @@ func (j Job) Adapter() string {
 	return strings.TrimSpace(fmt.Sprint(v))
 }
 
-// Archived says the job is archived, which stops it until restored.
 func (j Job) Archived() bool { return j.DeletedAt != nil }
 
-// ParentUID is the Issue a Native job's children hang from, empty for an Adapter job.
 func (j Job) ParentUID() string {
 	if j.Native() {
 		return j.Definition.Issue.ParentUID

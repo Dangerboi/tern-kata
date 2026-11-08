@@ -24,7 +24,7 @@ func dailyLimitSkips(uid, name string, count int) model.JobSkips {
 // skipRowNodes are the wire nodes of the skip row of job uid and of everything under it.
 func skipRowNodes(t *testing.T, s driver.State, uid string) (text string, nodes int) {
 	t.Helper()
-	id := view.RunID("skips-" + uid)
+	id := view.RunListID + ".skips-" + uid
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id || strings.HasPrefix(n.ID, id+".") {
 			text += wireText(n)
@@ -46,7 +46,7 @@ func TestRunsPageShowsAJobsSkipsAsOneRowOfTheWorkersStatusWithItsCountAndLatestR
 
 	rows := 0
 	for _, n := range wireNodes(t, view.Render(out.State.Model, now)) {
-		if strings.HasPrefix(n.ID, view.RunID("skips-J1")) && strings.Count(n.ID, ".") == strings.Count(view.RunID("skips-J1"), ".") {
+		if strings.HasPrefix(n.ID, view.RunListID+".skips-J1") && strings.Count(n.ID, ".") == strings.Count(view.RunListID+".skips-J1", ".") {
 			rows++
 		}
 	}

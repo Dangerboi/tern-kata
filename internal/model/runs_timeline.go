@@ -17,7 +17,6 @@ import (
 // foldOver is how many new results the mode lists one by one; more than this many fold into one row per job.
 const foldOver = 8
 
-// LoadSeen asks for the seen.toml table of the Project with ProjectUID.
 type LoadSeen struct{ ProjectUID string }
 
 func (LoadSeen) cmd() {}
@@ -43,7 +42,6 @@ type SaveSeen struct {
 
 func (SaveSeen) cmd() {}
 
-// SeenSaved answers SaveSeen.
 type SeenSaved struct {
 	ProjectUID string
 	Err        error
@@ -80,7 +78,6 @@ func endedSince(runs []Run, seen time.Time) []Run {
 	return out
 }
 
-// newestEnd is the latest end among runs, no earlier than floor. With no ended Run it is floor.
 func newestEnd(runs []Run, floor time.Time) time.Time {
 	for _, run := range runs {
 		if at, ok := run.Ended(); ok && at.After(floor) {
@@ -90,13 +87,10 @@ func newestEnd(runs []Run, floor time.Time) time.Time {
 	return floor
 }
 
-// RunGroup is one row of the mode: one Run, or the ended Runs of one job folded into a summary. Runs are newest first.
 type RunGroup struct{ Runs []Run }
 
-// Folded says the row is a summary of several Runs.
 func (g RunGroup) Folded() bool { return len(g.Runs) > 1 }
 
-// Latest is the newest Run of the row.
 func (g RunGroup) Latest() Run { return g.Runs[0] }
 
 // Counts words the folded Runs by status, "3 succeeded · 1 cancelled".
@@ -169,18 +163,13 @@ type UpcomingRun struct {
 	at   time.Time
 }
 
-// Timeline is the Runs Page's since-you-last-looked mode as the list draws it.
 type Timeline struct {
-	// Rows are the entries above the Now line, newest first.
-	Rows []TimelineEntry
-	// RunCount counts the ended Runs listed, folded ones included.
+	Rows     []TimelineEntry
 	RunCount int
-	// Seen is when the Runs were last marked seen on this machine; zero for never.
 	Seen     time.Time
 	Upcoming []UpcomingRun
 }
 
-// timelineRuns are the ended Runs the mode lists, whatever the search is not leaving out.
 func (m Model) timelineRuns() []Run {
 	runs := m.Runs.Runs
 	if m.searchingPage(PageRuns) {
@@ -192,7 +181,6 @@ func (m Model) timelineRuns() []Run {
 	return endedSince(runs, m.Runs.Seen)
 }
 
-// timelineSelectable are the Runs the mode lists one by one, the ones a key can select.
 func (m Model) timelineSelectable() []Run {
 	var out []Run
 	for _, group := range foldRuns(m.timelineRuns()) {
@@ -252,7 +240,6 @@ func (m Model) upcoming(now time.Time) []UpcomingRun {
 	return append(sortedByNext(native), adapter...)
 }
 
-// sortedByNext orders native rows by when their job fires next, then by name.
 func sortedByNext(rows []UpcomingRun) []UpcomingRun {
 	slices.SortStableFunc(rows, func(a, b UpcomingRun) int {
 		if c := a.at.Compare(b.at); c != 0 {
@@ -307,7 +294,6 @@ func seenLoaded(m Model, msg SeenLoaded) Model {
 	return m.settleRunSelection()
 }
 
-// seenSaved shows a refusal of seen.toml as the Notice.
 func seenSaved(m Model, msg SeenSaved) Model {
 	if msg.Err != nil {
 		m.Notice = "Not saved to seen.toml: " + msg.Err.Error()

@@ -15,7 +15,6 @@ const (
 	LanesStopSharing Action = "lanes-stop-sharing"
 )
 
-// The Lanes card's fields.
 const (
 	LanesNames Field = "names"
 	LanesDays  Field = "days"
@@ -24,14 +23,9 @@ const (
 	LanesShare Field = "share"
 )
 
-// lanesTable declares the Lanes card's fields, in tab order, and its busy condition. Save to is a choice: 0 is this
-// machine, 1 the Project.
+// Save to is a choice: 0 is this machine, 1 the Project.
 var lanesTable = fieldTable[LanesFormState]{
-	form:  func(m *Model) *LanesFormState { return &m.LanesForm },
-	busy:  func(f LanesFormState) bool { return f.Saving },
-	focus: func(f *LanesFormState) *Field { return &f.Field },
-	caret: func(f *LanesFormState) *Caret { return &f.Caret },
-	err:   func(f *LanesFormState) *error { return &f.Err },
+	form: func(m *Model) *LanesFormState { return &m.LanesForm },
 	fields: []formField[LanesFormState]{
 		textField(LanesNames, func(f *LanesFormState) *string { return &f.Text }),
 		textField(LanesDays, func(f *LanesFormState) *string { return &f.Days }),
@@ -40,29 +34,21 @@ var lanesTable = fieldTable[LanesFormState]{
 	},
 }
 
-// LanesFields is the Lanes card's field list, in tab order.
 var LanesFields = lanesTable.specs()
 
-// LanesFormState is the Lanes card: the Lane list typed as comma-separated names, then Done's days and card count, then where
-// a save writes. Saving to this machine writes the Lane list file; sharing writes the Project's tern.lanes metadata.
+// LanesFormState writes to the Lane list file when saving to this machine and to the Project's tern.lanes metadata when sharing.
 type LanesFormState struct {
-	Open, Saving bool
-	Field        Field
-	// Text is the Lane list; Days and Cards are Done's limits, blank for the default.
+	formCard
 	Text, Days, Cards string
-	Caret             Caret
-	// Share says a save writes the Project's shared list; it starts on the source in use.
-	Share bool
+	Share             bool
 	// ProjectID and Revision are the Project as read with the list when the card opened; a shared write is guarded on
 	// Revision, which a conflict moves to the revision read with the Project's list as it stands.
 	ProjectID, Revision int64
-	Err                 error
 	// Sent and SentShare are the write the card is waiting on, so only its own result closes or fails the card.
 	Sent      SaveLanes
 	SentShare ShareLanes
 }
 
-// Value is the text the field called name holds.
 func (f LanesFormState) Value(name Field) string { return lanesTable.value(f, name) }
 
 // openLanesForm is `B`. It waits for the saved Lane list to load: a card prefilled with the default would overwrite it on save.
@@ -94,7 +80,6 @@ func (m Model) SharesLanes() bool {
 	return m.Board.Shared || m.Board.projectID != 0 && m.Board.sharedErr != nil
 }
 
-// UnusedLabels are the labels on the loaded Issues that are not in the Lane list, sorted.
 func (m Model) UnusedLabels() []string {
 	lanes := m.LaneList()
 	var unused []string
@@ -133,7 +118,6 @@ func parseLanes(text string) ([]string, error) {
 	return lanes, nil
 }
 
-// The largest Done limits the card accepts and the Lane list file counts as set.
 const (
 	maxDoneDays  = 3650
 	maxDoneCards = 500
@@ -166,8 +150,6 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	form := &m.LanesForm
 	binding, bound := LookupBindingForMode(msg.Chord, ModeLanesForm)
 	switch {
-	case form.Saving && !(bound && binding.Action == LanesCancel):
-		// The save has not answered: the text stays as sent.
 	case bound && binding.Action == LanesSubmit:
 		lanes, err := parseLanes(form.Text)
 		var days, cards int
@@ -199,21 +181,10 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 		return m.shareLaneList(nil, 0, 0, true)
 	case bound && binding.Action == LanesCancel:
-		m.LanesForm = LanesFormState{}
+		lanesTable.clear(&m)
 	default:
-		text := lanesTable.textAt(form, form.Field)
-		if text == nil { // the Save to field takes no text; space steps its choice
-			if bound && binding.Action == InputSpace {
-				lanesTable.stepFocused(&m, false)
-			}
-			break
-		}
-		if bound && binding.Action == InputSpace {
-			bound = false // a space in a text field is typed
-		}
-		var edited bool
-		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
-			form.Err = nil
+		if !lanesTable.typeKey(&m, binding, bound, msg) && bound && binding.Action == InputSpace {
+			lanesTable.stepFocused(&m, false)
 		}
 	}
 	return m, nil

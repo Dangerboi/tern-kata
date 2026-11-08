@@ -8,9 +8,7 @@ type Start struct{ Workspace, IssueRef, Nonce string }
 
 func (Start) msg() {}
 
-// ProjectLoaded is the Project the workspace resolves to; its first Collection snapshot is read next.
 type ProjectLoaded struct {
-	// Connection is the number of the connection LoadProject was asked on.
 	Connection int
 	Project    Project
 	Daemon     Daemon
@@ -61,10 +59,8 @@ type PaneRowsMsg struct{ Rows int }
 
 func (PaneRowsMsg) msg() {}
 
-// LoadProject reads the Project the workspace is bound to.
-//
-// Switched says the Pane just switched to another daemon: a Project the workspace is bound to but that daemon does not know is then
-// not a failure, and the Pane starts on its Inbox.
+// LoadProject reads the Project the workspace is bound to. Switched says the Pane just switched to another daemon: a Project the
+// workspace is bound to but that daemon does not know is then not a failure, and the Pane starts on its Inbox.
 type LoadProject struct {
 	Workspace  string
 	Connection int

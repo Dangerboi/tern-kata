@@ -106,7 +106,6 @@ func (c *Client) StopRecurrence(ctx context.Context, cmd model.StopRecurrenceCmd
 	})
 }
 
-// ReadRecurTarget reads the Issue a ref names, refused outside the workspace's Binding, with its Recurrence as it stands now.
 func (c *Client) ReadRecurTarget(ctx context.Context, cmd model.LoadRecurTarget) (model.RecurTarget, error) {
 	target, err := c.readIssueTarget(ctx, cmd.Workspace, cmd.Ref)
 	if err != nil {

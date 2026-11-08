@@ -24,7 +24,6 @@ const (
 	oldStoreName            = ".kata-attachments"
 )
 
-// oldPointer is the host and path of an old Attachment key's value, false when the value is not a {"host", "path"} object of strings.
 func oldPointer(value any) (host, path string, ok bool) {
 	object, isObject := value.(map[string]any)
 	if !isObject {
@@ -70,8 +69,6 @@ func inOldStore(root, uid, path string) bool {
 	return err == nil && rel != "." && filepath.IsLocal(rel)
 }
 
-// tidyOldStore removes the Issue folders of the old store that the migration emptied, and the store itself once only its own
-// .gitignore is left.
 func tidyOldStore(root string, uids []string) {
 	store := filepath.Join(root, oldStoreName)
 	for _, uid := range uids {
@@ -137,7 +134,6 @@ func (c *Client) MigrateAttachments(ctx context.Context, host string, cmd model.
 	return c.migrated(root, touched, out)
 }
 
-// migrated finishes a migration: it tidies the old store and sets Err when a key failed to move.
 func (c *Client) migrated(root string, touched []string, out model.AttachmentsMigrated) model.AttachmentsMigrated {
 	tidyOldStore(root, touched)
 	if failed := countFailed(out.Left); failed > 0 && out.Err == nil {
@@ -156,8 +152,6 @@ func countFailed(left []model.MigratedAttachment) int {
 	return n
 }
 
-// oldKey is one metadata key that may hold an old pointer: the Attachment name, the full key it came from, and the parsed
-// pointer when the value has the {"host", "path"} shape (shaped false otherwise).
 type oldKey struct {
 	name, key  string
 	host, path string
@@ -184,23 +178,21 @@ func oldKeys(metadata map[string]any) []oldKey {
 	return keys
 }
 
-// migrateIssue moves the old keys of one Issue into out, reporting whether it deleted a copy under the Issue's folder.
 func (c *Client) migrateIssue(ctx context.Context, host, root, actor string, issue g.IssueOut, out *model.AttachmentsMigrated) bool {
 	deleted := false
 	for _, old := range oldKeys(issue.Metadata) {
-		name, key := old.name, old.key
-		pointerHost, path, shaped := old.host, old.path, old.shaped
-		item := model.MigratedAttachment{ShortID: issue.ShortID, Name: name, Host: pointerHost, Path: path}
+		name, key, path := old.name, old.key, old.path
+		item := model.MigratedAttachment{ShortID: issue.ShortID, Name: name, Host: old.host, Path: path}
 		left := func(reason string, failed bool) {
 			item.Reason, item.Failed = reason, failed
 			out.Left = append(out.Left, item)
 		}
 		switch {
-		case !shaped:
+		case !old.shaped:
 			left("the key does not hold a {host, path} pointer, so it is not an old attachment", false)
 			continue
-		case host == "" || pointerHost == "" || !strings.EqualFold(pointerHost, host):
-			left(fmt.Sprintf("the file is on %s at %s; run this command there", pointerHost, path), false)
+		case host == "" || old.host == "" || !strings.EqualFold(old.host, host):
+			left(fmt.Sprintf("the file is on %s at %s; run this command there", old.host, path), false)
 			continue
 		case !inOldStore(root, issue.UID, path):
 			left(fmt.Sprintf("the file %s is outside this Project's old attachment folder; add it with `kata docbank attachments add` and unset the key `%s` by hand", path, key), false)

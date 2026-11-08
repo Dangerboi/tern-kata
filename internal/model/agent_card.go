@@ -3,7 +3,6 @@ package model
 // The Agent card opens when `w` is pressed on an Issue: it lists the Issue's agents, goes to one, sends one to the background, or
 // starts a new agent in a split, a tab or the background.
 
-// ModeAgentCard is the mode of the Agent card.
 const ModeAgentCard Mode = "agent-card"
 
 // The Agent card's own actions; its cursor keys are MoveDown, MoveUp, MoveFirst and MoveLast. The three that start an agent
@@ -44,7 +43,6 @@ const (
 	agentCardInterruptSent = "Interrupt sent."
 )
 
-// AgentCardState is the Agent card.
 type AgentCardState struct {
 	Open     bool
 	IssueUID string
@@ -58,7 +56,6 @@ type AgentCardState struct {
 	Team TeamDialog
 }
 
-// AgentCardRows are the agents the card lists: the Issue's mapped agents, in the mapping's order.
 func (m Model) AgentCardRows() []IssueAgent {
 	if !m.AgentCard.Open {
 		return nil
@@ -66,7 +63,6 @@ func (m Model) AgentCardRows() []IssueAgent {
 	return m.IssueAgents(m.AgentCard.IssueUID)
 }
 
-// AgentCardRemoteRows are the agents on other hosts the card lists after the local ones, from the Issue's Agent records.
 func (m Model) AgentCardRemoteRows() []RemoteAgent {
 	if !m.AgentCard.Open {
 		return nil
@@ -74,12 +70,10 @@ func (m Model) AgentCardRemoteRows() []RemoteAgent {
 	return m.RemoteAgents(m.AgentCard.IssueUID)
 }
 
-// AgentCardCursor is the selected row, kept inside the list (local rows, then remote ones) as agents come and go.
 func (m Model) AgentCardCursor() int {
 	return max(0, min(m.AgentCard.Cursor, len(m.AgentCardRows())+len(m.AgentCardRemoteRows())-1))
 }
 
-// AgentCardSelectedLocal is the selected row's agent when it is one this host started.
 func (m Model) AgentCardSelectedLocal() (IssueAgent, bool) {
 	rows := m.AgentCardRows()
 	if i := m.AgentCardCursor(); i < len(rows) {
@@ -88,7 +82,6 @@ func (m Model) AgentCardSelectedLocal() (IssueAgent, bool) {
 	return IssueAgent{}, false
 }
 
-// AgentCardSelectedRemote is the selected row's agent when it runs on another host.
 func (m Model) AgentCardSelectedRemote() (RemoteAgent, bool) {
 	remote := m.AgentCardRemoteRows()
 	if i := m.AgentCardCursor() - len(m.AgentCardRows()); i >= 0 && i < len(remote) {
@@ -97,7 +90,6 @@ func (m Model) AgentCardSelectedRemote() (RemoteAgent, bool) {
 	return RemoteAgent{}, false
 }
 
-// AgentCardForgetTarget is the remote agent the card asks about forgetting.
 func (m Model) AgentCardForgetTarget() (RemoteAgent, bool) {
 	for _, r := range m.AgentCardRemoteRows() {
 		if r.Key() == m.AgentCard.Forgetting {
@@ -107,8 +99,6 @@ func (m Model) AgentCardForgetTarget() (RemoteAgent, bool) {
 	return RemoteAgent{}, false
 }
 
-// AgentWhere says where an agent's block is: "open" for a background agent that is out of the hidden session, "background" for one
-// in it, "tab" for one started in a tab, "split" otherwise.
 func AgentWhere(a AgentEntry) string {
 	if a.Background && a.Open {
 		return "open"
@@ -121,13 +111,11 @@ func AgentWhere(a AgentEntry) string {
 	return name
 }
 
-// openAgentCard opens the card for the Issue.
 func openAgentCard(m Model, issue Issue) Model {
 	m.AgentCard = AgentCardState{Open: true, IssueUID: issue.UID, IssueRef: issue.QualifiedID}
 	return m
 }
 
-// AgentCardMode is the keymap mode of the Agent card: asking before a stop, or showing the list.
 func (m Model) AgentCardMode() Mode {
 	if m.AgentCard.Team.Open {
 		return ModeAgentCardTeam
@@ -141,7 +129,6 @@ func (m Model) AgentCardMode() Mode {
 	return ModeAgentCard
 }
 
-// AgentCardStopTarget is the agent the card asks about stopping.
 func (m Model) AgentCardStopTarget() (AgentEntry, bool) {
 	for _, e := range m.AgentMapping {
 		if e.Block == m.AgentCard.Stopping {
@@ -236,7 +223,6 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// updateLocalAgentKey is Go, Background, Interrupt and Stop on a row of an agent this host started.
 func updateLocalAgentKey(m Model, action Action) (Model, []Cmd) {
 	rows := m.AgentCardRows()
 	cursor := m.AgentCardCursor()

@@ -17,7 +17,6 @@ type SaveFilters struct {
 
 func (SaveFilters) cmd() {}
 
-// FiltersSaved answers SaveFilters.
 type FiltersSaved struct {
 	ProjectUID string
 	Default    Filters

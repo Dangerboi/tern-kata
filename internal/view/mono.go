@@ -15,14 +15,10 @@ const MonoRole = "tern-kata.mono"
 // spans (12.5px) to its 14px sans text, so a mono badge reads no larger than the sans badges beside it.
 const MonoCSS = `.sf-badge[data-role~='` + MonoRole + `'] { font-family: var(--mono); font-size: 10px; }`
 
-// mono adds the mono span token to a style.
 func mono(style string) string { return strings.TrimSpace(style + " mono") }
 
-// machineString matches the machine strings inside prose: a day with its time, and a word with a digit in it (a count, an id, a
-// duration, a version) with the "ago" of a relative time.
 var machineString = regexp.MustCompile(`\d{4}-\d\d-\d\d(?: \d\d:\d\d)?|\d+[smhd](?: \d+[smhd])*(?: ago)?|#?[\w.:/\-]*\d[\w.:/\-]*(?: ago)?`)
 
-// monoSpans is text as spans of style, with its machine strings also in the mono face; the spans' text joins to text.
 func monoSpans(text, style string) []ui.Span {
 	var spans []ui.Span
 	at := 0

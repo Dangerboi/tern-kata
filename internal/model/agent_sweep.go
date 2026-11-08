@@ -10,7 +10,6 @@ import (
 // host's Panes started, on whatever Issue each runs, through the broadcast's write (each agent at its own address, an unread
 // message never replaced), and keeps the broadcast's outcome card open to show which agents have finished since.
 
-// NoAgentsToSweepRefusal is why a sweep opens no card.
 const NoAgentsToSweepRefusal = "No agent is running."
 
 // Where an agent of a sweep stands, as the outcome card words it.
@@ -70,7 +69,6 @@ func sweepKnownAgents(m Model) (Model, []Cmd) {
 	return writeBroadcast(m, targets, QuickReplyWrapUp)
 }
 
-// agentState is the state the relay gave the block, "" when no relay listed it.
 func (m Model) agentState(block string) AgentStateWord {
 	for _, s := range m.Agents.States {
 		if s.Block == block {
@@ -121,7 +119,6 @@ func readSweepComments(m Model) (Model, []Cmd) {
 	return m, cmds
 }
 
-// addressName is the part of an Agent address after its last "/": the teammate its comments carry.
 func addressName(address string) string {
 	return address[strings.LastIndex(address, "/")+1:]
 }
@@ -148,7 +145,6 @@ type SweepCommentsRead struct {
 
 func (SweepCommentsRead) msg() {}
 
-// sweepCommentsRead applies the answer to one read: a comment makes the agent's idle count, a failed read leaves it for the next.
 func sweepCommentsRead(m Model, msg SweepCommentsRead) Model {
 	f := &m.AgentMessage
 	targets := slices.Clone(f.Targets)
@@ -193,7 +189,6 @@ func (m Model) remoteSweepStatus(t BroadcastTarget) SweepStanding {
 	return SweepStanding{false, "on " + t.Host + ": not yet"}
 }
 
-// remoteRecordGone says the Issue of the remote target is loaded and no longer holds the agent's record.
 func (m Model) remoteRecordGone(t BroadcastTarget) bool {
 	if m.issueByUID(t.IssueUID) == nil {
 		return false
@@ -201,7 +196,6 @@ func (m Model) remoteRecordGone(t BroadcastTarget) bool {
 	return !slices.ContainsFunc(m.RemoteAgents(t.IssueUID), func(r RemoteAgent) bool { return r.HostID == t.HostID && r.Block == t.Block })
 }
 
-// SweepFinished counts the agents the sweep wrote to that have finished.
 func (m Model) SweepFinished() int {
 	n := 0
 	for _, t := range m.AgentMessage.Targets {

@@ -11,8 +11,7 @@ import (
 // The Project lease (ADR-0003): the `tern_kata.lease` key of the Project's metadata, written with a conditional write
 // against the Project's revision. Another machine's live lease means this worker admits nothing for the Project.
 const (
-	leaseKey = "tern_kata.lease"
-	// LeaseRenew is how often the owner renews; LeaseExpiry is how long an unrenewed lease lives.
+	leaseKey    = "tern_kata.lease"
 	LeaseRenew  = 3 * time.Minute
 	LeaseExpiry = 10 * time.Minute
 )
@@ -99,7 +98,19 @@ func claimLease(ctx context.Context, k *Kata, clock Clock, executor, actor strin
 	return LeaseState{Unknown: true, Reason: "the Project's metadata kept changing while taking its lease"}
 }
 
-// readLease is the lease as it stands, without writing, for `worker doctor`.
+// renewLease claims the Project's lease right before a run is admitted or resumed (ADR-0003); the cached lease can
+// predate another machine's takeover. A transient kata failure says nothing about the lease, so the state the loop
+// knew is kept then.
+func (w *Worker) renewLease(ctx context.Context, ps *projectState, projectID int64) LeaseState {
+	state := claimLease(ctx, w.opt.Kata, w.clock, w.opt.Config.Executor, ps.actor, projectID, false)
+	if !state.Unknown {
+		w.mu.Lock()
+		ps.lease = state
+		w.mu.Unlock()
+	}
+	return state
+}
+
 func readLease(ctx context.Context, k *Kata, clock Clock, projectID int64) (owner string, generation int64, live bool, err error) {
 	p, err := k.Project(ctx, projectID)
 	if err != nil {

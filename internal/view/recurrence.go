@@ -16,11 +16,8 @@ var recurrenceTitles = map[model.Field]string{
 	model.RecurrenceZone:      "Time zone",
 }
 
-// everyUnits is what the Every field counts at each frequency.
 var everyUnits = map[model.Frequency]string{model.Daily: "days", model.Weekly: "weeks", model.Monthly: "months", model.Yearly: "years"}
 
-// recurrenceTitle is the label of the field called name as the card stands: Every names what it counts, and the end field
-// asks for a date or a count by the end chosen.
 func recurrenceTitle(f model.RecurrenceFormState, name model.Field) string {
 	switch {
 	case name == model.RecurrenceEvery:
@@ -33,7 +30,6 @@ func recurrenceTitle(f model.RecurrenceFormState, name model.Field) string {
 	return recurrenceTitles[name]
 }
 
-// recurrenceText is what the card shows in the text field called name.
 func recurrenceText(f model.RecurrenceFormState, name model.Field) string {
 	switch name {
 	case model.RecurrenceEvery:

@@ -10,7 +10,6 @@ import (
 // The Attention Page lists the Attention requests kata holds for the Pane's Inbox address, across every Project on the daemon,
 // newest first. It acts on no Project: its state survives Project and Collection changes, and it is one full-width list.
 
-// AttentionRequest is one Attention request: the open Issue it sits on and the slot kata holds for the Inbox address.
 type AttentionRequest struct {
 	IssueUID    string
 	ProjectID   int64
@@ -22,10 +21,8 @@ type AttentionRequest struct {
 	Slot NotificationSlot
 }
 
-// QualifiedID is the Issue as kata names it across Projects: project#short.
 func (r AttentionRequest) QualifiedID() string { return r.ProjectName + "#" + r.ShortID }
 
-// Sender is who asked: the actor, or actor/teammate.
 func (r AttentionRequest) Sender() string {
 	if r.Slot.Teammate == "" {
 		return r.Slot.From
@@ -49,10 +46,8 @@ func (r AttentionRequest) Tag() string {
 	return strings.Join(tags, " ")
 }
 
-// commentHandleLen is how many characters of a comment's ULID its handle keeps.
 const commentHandleLen = 6
 
-// CommentHandle is the handle of the comment the request names, as kata prints it; empty when it names none.
 func (r AttentionRequest) CommentHandle() string {
 	return CommentHandle(r.Slot.Re)
 }
@@ -70,13 +65,11 @@ func CommentHandle(id string) string {
 	return "c:" + handle
 }
 
-// FirstLine is the first line of the message.
 func (r AttentionRequest) FirstLine() string {
 	line, _, _ := strings.Cut(strings.TrimSpace(r.Slot.Message), "\n")
 	return strings.TrimSpace(line)
 }
 
-// OrderAttention puts the requests newest Issue update first, ties by qualified id.
 func OrderAttention(requests []AttentionRequest) {
 	slices.SortFunc(requests, func(a, b AttentionRequest) int {
 		if c := b.Updated.Compare(a.Updated); c != 0 {
@@ -96,7 +89,6 @@ type LoadAttention struct {
 
 func (LoadAttention) cmd() {}
 
-// AttentionLoaded answers LoadAttention: the requests newest first, and how many slots did not read.
 type AttentionLoaded struct {
 	Request  int64
 	Requests []AttentionRequest
@@ -131,28 +123,23 @@ type AttentionCleared struct {
 
 func (AttentionCleared) msg() {}
 
-// AttentionChangedNotice is the Notice for a request rewritten between the Page's read and the clear.
 const AttentionChangedNotice = "The request changed meanwhile; nothing was cleared"
 
-// AttentionSelectMsg is a click on a request's row; UID is its Issue's.
 type AttentionSelectMsg struct{ UID string }
 
 func (AttentionSelectMsg) msg() {}
 
-// AttentionOpenMsg is a double click on a request's row; UID is its Issue's.
 type AttentionOpenMsg struct{ UID string }
 
 func (AttentionOpenMsg) msg() {}
 
 // AttentionState is the Attention Page's state. It is not saved: a Pane starts on the Issues Page.
 type AttentionState struct {
-	// Requests are the requests of the last good read, newest first.
 	Requests []AttentionRequest
 	Skipped  int
 	// Loaded says a read has answered well; Err is the last read's failure, with Requests kept.
-	Loaded bool
-	Err    error
-	// Selected is the Issue uid of the selected request.
+	Loaded   bool
+	Err      error
 	Selected string
 	Loading  bool
 	// Clearing holds the Issue uids of the requests whose clear is out; keys on those rows wait.
@@ -161,7 +148,6 @@ type AttentionState struct {
 	reads Latest
 }
 
-// OnAttention says the Attention Page is current.
 func (m Model) OnAttention() bool { return m.Page == PageAttention }
 
 // InboxAddress is the address whose requests the Page reads: KATA_INBOX_USER when it is not blank, else the Pane's actor, checked
@@ -192,7 +178,6 @@ func (m Model) AttentionHeader() string {
 	return header
 }
 
-// SelectedAttention is the selected request, false when the list holds none.
 func (m Model) SelectedAttention() (AttentionRequest, bool) {
 	i := m.attentionIndex()
 	if i < 0 {
@@ -226,7 +211,6 @@ func attentionChangesTheCount(eventType string) bool {
 	return strings.HasPrefix(eventType, "issue.") || strings.HasPrefix(eventType, "project.") || eventType == "sync.reset_required"
 }
 
-// enterAttention is the Attention Page's own work on entry (see switchPage): the state as the Page left it, read again.
 func enterAttention(m Model) (Model, []Cmd) { return askAttention(m) }
 
 // attentionLoaded applies the answer to the latest read. A failed read keeps the requests held; a good one replaces them and
@@ -252,7 +236,6 @@ func attentionLoaded(m Model, msg AttentionLoaded) (Model, []Cmd) {
 	return m, nil
 }
 
-// settleAttentionSelection keeps the selection on a listed request: the one selected, else the one now at row, else the last.
 func (m Model) settleAttentionSelection(row int) Model {
 	switch {
 	case len(m.Attention.Requests) == 0:
@@ -263,7 +246,6 @@ func (m Model) settleAttentionSelection(row int) Model {
 	return m
 }
 
-// moveAttention moves the selection by action: one row, to either end, or a page.
 func moveAttention(m Model, action Action) Model {
 	count := len(m.Attention.Requests)
 	if count == 0 {
@@ -288,7 +270,6 @@ func moveAttention(m Model, action Action) Model {
 	return m
 }
 
-// clearAttention is c: the selected request is cleared, guarded on the value the Page shows, unless its clear is already out.
 func clearAttention(m Model) (Model, []Cmd) {
 	request, ok := m.SelectedAttention()
 	address, err := m.InboxAddress()
@@ -321,10 +302,8 @@ func attentionCleared(m Model, msg AttentionCleared) (Model, []Cmd) {
 	return askAttention(m)
 }
 
-// reloadAttention is ctrl+r.
 func reloadAttention(m Model) (Model, []Cmd) { return askAttention(m) }
 
-// openAttention is enter: the request's Issue opens on the Issues Page with its detail focused, in whichever Project it is.
 func openAttention(m Model) (Model, []Cmd) {
 	request, ok := m.SelectedAttention()
 	if !ok || m.attentionClearing(request.IssueUID) {
@@ -365,12 +344,10 @@ func (m Model) landHere(landing *jumpEntry) Model {
 	return m.arrived(rowID{}, false)
 }
 
-// hasRow says the detail's rows on the current tab include the row.
 func (m Model) hasRow(id rowID) bool {
 	return slices.ContainsFunc(m.rows.items, func(r DetailItem) bool { return r.Kind == id.kind && r.Key == id.key })
 }
 
-// catalogProject is the catalog's entry for the Project with id.
 func (m Model) catalogProject(id int64) (CatalogProject, bool) {
 	for _, entry := range m.Snapshot.Catalog {
 		if entry.Project.ID == id {
@@ -380,7 +357,6 @@ func (m Model) catalogProject(id int64) (CatalogProject, bool) {
 	return CatalogProject{}, false
 }
 
-// updateAttention applies the Attention Page's results and selections, whichever Page is current.
 func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case AttentionLoaded:
@@ -406,7 +382,6 @@ func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 	return m, nil, false
 }
 
-// attentionRows are the Attention Page's rows outside its generated movement rows.
 var attentionRows = []actionEntry{
 	{action: OpenAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeAttention}, footerKey: "↵", sheet: []sheetLine{{sheetAttention, 3, "open the request's Issue, in any Project"}}, handle: openAttention},
 	{action: ClearAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("c", "c"), help: "clear", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 4, "clear the request, if it still reads as shown"}}, handle: clearAttention},

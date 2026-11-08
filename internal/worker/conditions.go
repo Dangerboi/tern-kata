@@ -46,7 +46,6 @@ type skipStore interface {
 	Recent(now time.Time) []Skip
 }
 
-// skipFile is the content of a Project's skip record file.
 type skipFile struct {
 	Version int    `json:"version"`
 	Skips   []Skip `json:"skips"`
@@ -108,7 +107,6 @@ func (f *fileSkips) Add(s Skip) error {
 	return replaceFile(f.path, raw)
 }
 
-// trim keeps the newest maxSkipsPerJob records of the job; each record dropped is counted in the next oldest one.
 func (f *fileSkips) trim(jobUID string) {
 	n := 0
 	for _, o := range f.skips {
@@ -150,7 +148,6 @@ func (f *fileSkips) Recent(now time.Time) []Skip {
 	return slices.Clone(f.skips)
 }
 
-// JobSkips is one job's recent skips as `worker status` shows them: how many, and the latest.
 type JobSkips struct {
 	UID  string
 	Name string
@@ -163,7 +160,6 @@ type JobSkips struct {
 	LatestAt         time.Time
 }
 
-// jobSkips groups skip records by job, jobs by name.
 func jobSkips(skips []Skip) []JobSkips {
 	byJob := map[string]*JobSkips{}
 	var out []*JobSkips
@@ -200,7 +196,6 @@ func readConditions(job cronjob.Job) (c cronjob.Conditions, problem string) {
 	return c, ""
 }
 
-// windowStart is the start of the calendar day, or of the Monday-first week, that contains now in loc.
 func windowStart(now time.Time, loc *time.Location, week bool) time.Time {
 	n := now.In(loc)
 	start := time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, loc)
@@ -210,7 +205,6 @@ func windowStart(now time.Time, loc *time.Location, week bool) time.Time {
 	return start
 }
 
-// gated reports whether admission looks at the job's conditions at all.
 func (st *jobSchedule) gated() bool { return st.conditions.Any() || st.conditionsProblem != "" }
 
 // gate checks the conditions of a scheduled occurrence that is about to be admitted. skip is set when a condition says
@@ -229,19 +223,11 @@ func (s *projectSchedule) gate(ctx context.Context, st *jobSchedule, jobUID stri
 		return nil, fmt.Sprintf("its conditions cannot be checked: %s", st.conditionsProblem)
 	}
 	now := s.now()
-	limits := []struct {
-		condition string
-		max       int
-		week      bool
-		per       string
-	}{
-		{cronjob.ConditionRunsPerDay, st.conditions.RunsPerDay, false, "day"},
-		{cronjob.ConditionRunsPerWeek, st.conditions.RunsPerWeek, true, "week"},
-	}
+	limits := st.conditions.Limits()
 	var starts []time.Time
 	counted := false
 	for _, l := range limits {
-		if l.max == 0 {
+		if l.Runs == 0 {
 			continue
 		}
 		if !counted {
@@ -250,16 +236,16 @@ func (s *projectSchedule) gate(ctx context.Context, st *jobSchedule, jobUID stri
 			}
 			counted = true
 		}
-		from := windowStart(now, st.zone, l.week)
+		from := windowStart(now, st.zone, l.Week)
 		n := 0
 		for _, t := range starts {
 			if !t.Before(from) {
 				n++
 			}
 		}
-		if n >= l.max {
-			reason := fmt.Sprintf("limit of %d %s per %s reached: %d started since %s", l.max, plural(l.max, "run", "runs"), l.per, n, from.Format("2006-01-02 15:04 MST"))
-			return st.newSkip(jobUID, at, l.condition, reason, now), ""
+		if n >= l.Runs {
+			reason := fmt.Sprintf("limit of %d %s per %s reached: %d started since %s", l.Runs, plural(l.Runs, "run", "runs"), l.Per, n, from.Format("2006-01-02 15:04 MST"))
+			return st.newSkip(jobUID, at, l.Condition, reason, now), ""
 		}
 	}
 	if skip, blocked := s.gateSpend(st, jobUID, at, now); skip != nil || blocked != "" {
@@ -277,7 +263,6 @@ func (s *projectSchedule) gate(ctx context.Context, st *jobSchedule, jobUID stri
 	return nil, ""
 }
 
-// newSkip is the record of the job's occurrence at being skipped by condition, stamped now.
 func (st *jobSchedule) newSkip(jobUID string, at time.Time, condition, reason string, now time.Time) *Skip {
 	return &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: condition, Reason: reason, At: now.UTC()}
 }
@@ -305,25 +290,19 @@ func spentSince(runs []RunSpend, from time.Time) (spent float64, unreported int)
 	return math.Round(spent*1e6) / 1e6, unreported
 }
 
-// spendWindows are the job's spend limits with what each window has spent so far: day first, then week.
 func spendWindows(c cronjob.Conditions, loc *time.Location, now time.Time, runs []RunSpend) []SpendWindow {
 	var out []SpendWindow
-	for _, l := range []struct {
-		limit float64
-		week  bool
-		per   string
-	}{{c.SpendPerDay, false, "day"}, {c.SpendPerWeek, true, "week"}} {
-		if l.limit == 0 {
+	for _, l := range c.Limits() {
+		if l.Spend == 0 {
 			continue
 		}
-		from := windowStart(now, loc, l.week)
+		from := windowStart(now, loc, l.Week)
 		spent, unreported := spentSince(runs, from)
-		out = append(out, SpendWindow{Per: l.per, Limit: l.limit, Spent: spent, Since: from, Unreported: unreported})
+		out = append(out, SpendWindow{Condition: l.Condition, Per: l.Per, Limit: l.Spend, Spent: spent, Since: from, Unreported: unreported})
 	}
 	return out
 }
 
-// formatDollars writes an amount as cents, or to the significant digits of a smaller one.
 func formatDollars(x float64) string {
 	if x != 0 && x < 0.01 {
 		return fmt.Sprintf("$%.4f", x)
@@ -331,7 +310,6 @@ func formatDollars(x float64) string {
 	return fmt.Sprintf("$%.2f", x)
 }
 
-// partialNote says a total leaves out runs that reported no cost.
 func partialNote(unreported int) string {
 	if unreported == 0 {
 		return ""
@@ -339,7 +317,6 @@ func partialNote(unreported int) string {
 	return fmt.Sprintf("partial: %d %s reported no cost and count as $0", unreported, plural(unreported, "run", "runs"))
 }
 
-// gateSpend skips the occurrence when a window's spend has reached the job's spend limit.
 func (s *projectSchedule) gateSpend(st *jobSchedule, jobUID string, at, now time.Time) (skip *Skip, blocked string) {
 	if st.conditions.SpendPerDay == 0 && st.conditions.SpendPerWeek == 0 {
 		return nil, ""
@@ -352,20 +329,15 @@ func (s *projectSchedule) gateSpend(st *jobSchedule, jobUID string, at, now time
 		if w.Spent < w.Limit {
 			continue
 		}
-		condition := cronjob.ConditionSpendPerDay
-		if w.Per == "week" {
-			condition = cronjob.ConditionSpendPerWeek
-		}
 		reason := fmt.Sprintf("limit of %s per %s reached: %s spent since %s", formatDollars(w.Limit), w.Per, formatDollars(w.Spent), w.Since.Format("2006-01-02 15:04 MST"))
 		if note := partialNote(w.Unreported); note != "" {
 			reason += " (" + note + ")"
 		}
-		return st.newSkip(jobUID, at, condition, reason, now), ""
+		return st.newSkip(jobUID, at, w.Condition, reason, now), ""
 	}
 	return nil, ""
 }
 
-// JobSpend is one limited job's spend in each window it has a spend limit for, as `worker status` shows it.
 type JobSpend struct {
 	UID     string
 	Name    string
@@ -375,6 +347,7 @@ type JobSpend struct {
 // SpendWindow is one window of a JobSpend: the limit, what omp reported spent since the window began, and how many
 // runs of the window reported no cost, so that the total is partial.
 type SpendWindow struct {
+	Condition  string // the spend condition that limits the window
 	Per        string // "day" or "week"
 	Limit      float64
 	Spent      float64
@@ -456,7 +429,6 @@ func (l *runLedger) runSpend(jobUID string) ([]RunSpend, error) {
 	return runs, nil
 }
 
-// runStarts is when each run journal of the Project's job was prepared, whoever asked for the run.
 func (l *runLedger) runStarts(jobUID string) ([]time.Time, error) {
 	journals, err := l.read()
 	if err != nil {
@@ -471,7 +443,6 @@ func (l *runLedger) runStarts(jobUID string) ([]time.Time, error) {
 	return starts, nil
 }
 
-// journalExists says whether the run has a journal here.
 func (w *Worker) journalExists(runUID string) (bool, error) {
 	_, err := w.store.Load(runUID)
 	if errors.Is(err, ErrNoJournal) {

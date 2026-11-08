@@ -20,8 +20,7 @@ type AgentRecord struct {
 	// Host is the display name of the host (agent.toml's host, default the machine's host name); HostID is what identifies it.
 	Host   string `json:"host"`
 	HostID string `json:"host_id"`
-	// Block is the agent's Tern block id on its host.
-	Block string `json:"block"`
+	Block  string `json:"block"`
 	// Name is the agent's teammate name, Actor the actor the Pane started it as.
 	Name      string         `json:"name"`
 	Actor     string         `json:"actor"`
@@ -31,7 +30,6 @@ type AgentRecord struct {
 	MessageFrom []string `json:"message_from"`
 }
 
-// AgentRecordKey is the metadata key of the record of the agent in block on the host with hostID.
 func AgentRecordKey(hostID, block string) string { return AgentRecordPrefix + hostID + "-" + block }
 
 // ParseAgentRecordKey splits an Agent record's key into the Host id (which holds no hyphen) and the block id.

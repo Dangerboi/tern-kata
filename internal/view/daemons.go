@@ -6,32 +6,16 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// DaemonListID is the Daemons Page's list of daemon cards; a card is the daemon's name under it.
 const DaemonListID = "main.columns.list.daemons"
 
-// daemons is the Daemons Page's list column: the title with its count, the header in kata tui's columns, then what stands in place of
-// the list or one card per daemon with the selected one's name and endpoint under the list.
 func daemons(m model.Model) tern.Element {
 	d := m.Daemons
 	children := ui.Nodes(
-		ui.Text{Common: ui.Common{Key: "heading"}, Spans: []ui.Span{{T: "Daemons", S: "strong"}}, Wrap: ui.WrapNone},
+		heading(ui.Span{T: "Daemons", S: "strong"}),
 		ui.Text{Common: ui.Common{Key: "summary", Tone: ui.ToneMuted}, Text: d.Summary(), Wrap: ui.WrapNone},
 	)
-	column := func() tern.Element {
-		return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
-	}
 	if notice, shown := d.Notice(); shown {
-		tone := ui.TonePending
-		if notice.Err {
-			tone = ui.ToneError
-		} else if !d.Loading {
-			tone = ui.ToneMuted
-		}
-		children = append(children, ui.Text{Common: ui.Common{Key: "notice", Tone: tone}, Text: notice.Text})
-		if notice.Detail != "" {
-			children = append(children, ui.Text{Common: ui.Common{Key: "detail", Tone: ui.ToneMuted}, Text: notice.Detail})
-		}
-		return column()
+		return listPanel(m, 0.5, append(children, noticeLines(notice.Err, !d.Loading, notice.Text, notice.Detail)...))
 	}
 	children = append(children, ui.Text{Common: ui.Common{Key: "header", Tone: ui.ToneMuted}, Text: model.DaemonsHeader(), Wrap: ui.WrapNone})
 	cards := make([]tern.Element, len(d.Entries))
@@ -45,10 +29,10 @@ func daemons(m model.Model) tern.Element {
 	}
 	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("daemons"), Max: fillMax, Children: cards})
 	if entry := m.SelectedDaemon(); entry != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "footer", Tone: ui.ToneMuted}, Text: entry.Footer()})
+		children = append(children, plainText("footer", ui.ToneMuted, entry.Footer()))
 	}
 	if line := d.SwitchingLine(); line != "" {
-		children = append(children, ui.Text{Common: ui.Common{Key: "switching", Tone: ui.TonePending}, Text: line})
+		children = append(children, plainText("switching", ui.TonePending, line))
 	}
-	return column()
+	return listPanel(m, 0.5, children)
 }

@@ -43,7 +43,6 @@ func docbankHome() (string, error) {
 	return filepath.Abs(home)
 }
 
-// ManualPath is the supervision marker.
 func (e Env) ManualPath() string { return filepath.Join(e.ConfigDir, ManualFileName) }
 
 // Supervised is whether the plugin keeps Docbank running, and when it does not, why (one sentence naming what is missing).
@@ -96,7 +95,6 @@ func (e Env) Supervised() (on bool, why string) {
 	return true, ""
 }
 
-// portOf is the port a URL names, its scheme's default when it names none.
 func portOf(u *url.URL) (int, error) {
 	if p := u.Port(); p != "" {
 		return strconv.Atoi(p)

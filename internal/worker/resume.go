@@ -15,7 +15,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
-// RunTransition is what a resume or an abandon answers once the run's journal records it.
 type RunTransition struct {
 	RunUID  string
 	Project string
@@ -69,13 +68,7 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 			w.unreserve(ps)
 		}
 	}()
-	// The lease is renewed right before the agent may start (ADR-0003); the cached one can predate another machine's takeover.
-	state := claimLease(ctx, w.opt.Kata, w.clock, w.opt.Config.Executor, ps.actor, j.ProjectID, false)
-	if !state.Unknown { // a transient kata failure says nothing about the lease; keep what the loop knew
-		w.mu.Lock()
-		ps.lease = state
-		w.mu.Unlock()
-	}
+	state := w.renewLease(ctx, ps, j.ProjectID) // right before the agent may start (ADR-0003)
 	if !state.Held {
 		return RunTransition{}, fmt.Errorf("run %s cannot be resumed: Project %s's lease is not held: %s", uid, ps.cfg.Name, state.Why())
 	}
@@ -166,6 +159,12 @@ func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, er
 	return transition(updated), nil
 }
 
+// resumeOrAbandon is the sentence that tells a user how to act on a held run, in its Issue comment, its inbox request
+// and `worker status`.
+func resumeOrAbandon(uid string) string {
+	return "Resume it with `tern-kata worker resume " + uid + "` or abandon it with `tern-kata worker abandon " + uid + "`."
+}
+
 func transition(j *Journal) RunTransition {
 	t := RunTransition{RunUID: j.RunUID, Project: j.ProjectName, Job: j.JobName, State: j.stateName()}
 	if j.Issue != nil {
@@ -187,16 +186,23 @@ func (e *noRunError) Error() string {
 	return fmt.Sprintf("this worker has no run %s", e.uid)
 }
 
-// heldRun loads a run this worker owns and the Project state serving it.
-func (w *Worker) heldRun(uid string) (*Journal, *projectState, error) {
+func (w *Worker) ownRun(uid string) (*Journal, error) {
 	j, err := w.store.Load(uid)
 	switch {
 	case errors.Is(err, ErrNoJournal):
-		return nil, nil, &noRunError{uid: uid, quarantined: w.store.IsQuarantined(uid)}
+		return nil, &noRunError{uid: uid, quarantined: w.store.IsQuarantined(uid)}
 	case err != nil:
-		return nil, nil, err
+		return nil, err
 	case j.Executor != w.opt.Config.Executor:
-		return nil, nil, fmt.Errorf("run %s belongs to worker %q, not %q", uid, j.Executor, w.opt.Config.Executor)
+		return nil, fmt.Errorf("run %s belongs to worker %q, not %q", uid, j.Executor, w.opt.Config.Executor)
+	}
+	return j, nil
+}
+
+func (w *Worker) heldRun(uid string) (*Journal, *projectState, error) {
+	j, err := w.ownRun(uid)
+	if err != nil {
+		return nil, nil, err
 	}
 	for _, ps := range w.projects {
 		w.mu.Lock()
@@ -264,7 +270,6 @@ func (w *Worker) finishedItsTurn(j *Journal) bool {
 	return readOutput(filepath.Join(w.attemptDir(j), "output.jsonl")).Terminal
 }
 
-// readOutput folds a saved output.jsonl through the same parser the live run used.
 func readOutput(path string) AgentResult {
 	f, err := os.Open(path)
 	if err != nil {

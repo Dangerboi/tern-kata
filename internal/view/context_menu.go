@@ -5,8 +5,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// contextMenuRow is one row of an Issue's context menu: the action whose key it runs, its label and, from the Pane's keymap, the
-// keycaps and chord it shows and presses.
 type contextMenuRow struct {
 	action model.Action
 	label  string
@@ -14,15 +12,11 @@ type contextMenuRow struct {
 	chord  string
 }
 
-// contextMenuKeys are the context menu rows of every Issue shown in mode, with the keys of each worked out once: Open, Agent…, Close,
-// Reopen, Priority…, Dates… and Move to Project. A row's keycaps are its action's key labels, so a rebind moves them; an action with
-// no key in mode has no row.
 type contextMenuKeys struct {
 	mode model.Mode
 	rows []contextMenuRow
 }
 
-// newContextMenuKeys is the menu rows for mode; open is the action that Open runs.
 func newContextMenuKeys(mode model.Mode, open model.Action) contextMenuKeys {
 	menu := contextMenuKeys{mode: mode}
 	for _, row := range []contextMenuRow{
@@ -41,8 +35,6 @@ func newContextMenuKeys(mode model.Mode, open model.Action) contextMenuKeys {
 	return menu
 }
 
-// of is the right-click menu of issue's row or card. Each row's id picks the Issue and runs the chord of the action's first key in
-// the menu's mode, and a row the model refuses on this Issue is off with its reason. Reopen is there only on a closed Issue.
 func (k contextMenuKeys) of(issue model.Issue) []ui.MenuEntry {
 	closed := model.IsClosed(issue)
 	menu := make([]ui.MenuEntry, 0, len(k.rows))
@@ -59,7 +51,6 @@ func (k contextMenuKeys) of(issue model.Issue) []ui.MenuEntry {
 	return menu
 }
 
-// rowMode is the mode the list's rows are keyed in: the Lane view's or the list's.
 func rowMode(m model.Model) model.Mode {
 	if m.LaneViewShown() {
 		return model.ModeLane

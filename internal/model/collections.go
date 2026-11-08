@@ -2,10 +2,8 @@ package model
 
 type Collection struct{ View, ProjectUID, Title string }
 
-// IsProject says the Collection is one Project's Issues, not a named view.
 func (c Collection) IsProject() bool { return c.View == projectDef.Key }
 
-// CatalogEntry is the snapshot's catalog entry for the Project with uid.
 func CatalogEntry(snapshot Snapshot, uid string) (CatalogProject, bool) {
 	for _, entry := range snapshot.Catalog {
 		if entry.Project.UID == uid {
@@ -48,7 +46,6 @@ func updateCollection(m Model, msg CollectionSelected) (Model, []Cmd) {
 	return m, nil
 }
 
-// collectionChosen reads the snapshot of the Collection the Pane just switched to.
 func (m Model) collectionChosen() (Model, []Cmd) {
 	m = m.syncSidebarCursor()
 	m.Loading = true

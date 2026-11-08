@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// DateInputHint says which forms ParseDateInput reads, for a message that refuses anything else.
 const DateInputHint = "YYYY-MM-DD, YYYY-MM-DDTHH:MM[:SS], YYYY-MM-DDTHH:MM:SSZ, today, tomorrow, +Nd or +Nw"
 
 var relativeDate = regexp.MustCompile(`^\+(\d{1,4})([dw])$`)
@@ -51,7 +50,6 @@ func ParseDateInput(input, today string) (string, error) {
 	return base.AddDate(0, 0, days).Format(dayLayout), nil
 }
 
-// timedDate says text is a date-time kata accepts: a local time to the minute or second, or an RFC 3339 UTC instant with Z.
 func timedDate(text string) bool {
 	for _, layout := range []string{"2006-01-02T15:04", "2006-01-02T15:04:05"} {
 		if _, err := time.Parse(layout, text); err == nil {

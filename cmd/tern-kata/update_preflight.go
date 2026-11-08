@@ -29,7 +29,6 @@ const (
 	refusalFailed = "failed"
 )
 
-// errInterrupted ends an update the user cancelled before the swap.
 var errInterrupted = errors.New("interrupted; nothing was installed")
 
 // preflightTimeout is how long the old binary lets the new one check this machine; kataTimeout is how long the new one
@@ -49,18 +48,14 @@ type preflightAnswer struct {
 	Warnings []string           `json:"warnings"`
 }
 
-// preflightEnv is what the new binary's side reads from the machine.
 type preflightEnv struct {
-	Locate data.Locator
-	Dirs   worker.Dirs
-	// Version is this binary's version, which the daemon must satisfy.
+	Locate  data.Locator
+	Dirs    worker.Dirs
 	Version string
 	// KataTimeout is how long locating and pinging the daemon may take; zero is kataTimeout.
 	KataTimeout time.Duration
 }
 
-// preflightAnswerFor checks this machine against this binary's requirements: the kata daemon's version, and worker.toml when
-// there is one. Nothing it reads is changed.
 func preflightAnswerFor(ctx context.Context, env preflightEnv) preflightAnswer {
 	answer := preflightAnswer{Refusals: []preflightRefusal{}, Warnings: []string{}}
 	timeout := env.KataTimeout
@@ -92,8 +87,6 @@ func preflightAnswerFor(ctx context.Context, env preflightEnv) preflightAnswer {
 	return answer
 }
 
-// runPreflight is `tern-kata update --preflight`: it writes the answer's JSON and returns a subcommandError (exit 1) when
-// there is a refusal.
 func runPreflight(ctx context.Context, env preflightEnv, out io.Writer) error {
 	answer := preflightAnswerFor(ctx, env)
 	if err := json.NewEncoder(out).Encode(answer); err != nil {

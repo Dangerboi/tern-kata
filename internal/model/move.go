@@ -15,14 +15,12 @@ type MoveIssueCmd struct {
 	Workspace, UID, Actor string
 	ProjectID             int64
 	// Add is the target Lane's label, empty when the Issue already has it or the target is No lane.
-	Add string
-	// Remove are the Lane labels the Issue has besides the target.
+	Add    string
 	Remove []string
 }
 
 func (MoveIssueCmd) cmd() {}
 
-// MoveResultMsg is the one answer to a MoveIssueCmd.
 type MoveResultMsg struct {
 	UID    string
 	Err    error

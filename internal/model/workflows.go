@@ -12,25 +12,19 @@ import (
 // The Workflows Page lists the Pane's Project's kata workflows beside an inspector of the selected one. Like the Board it takes the
 // list column and hides the detail column. Its state is WorkflowsState; it is not saved.
 
-// WorkflowDraftUID is the key of the $EDITOR round trip of the Workflow card's text.
 const WorkflowDraftUID = "workflow-draft"
 
-// WorkflowsState is the Workflows Page's state.
 type WorkflowsState struct {
-	// ProjectUID and ProjectID are the Project the list belongs to.
 	ProjectUID string
 	ProjectID  int64
 	// List is every workflow the Project has, archived ones included; VisibleWorkflows leaves the archived out unless ShowArchived.
 	List         []Workflow
 	ShowArchived bool
-	// Selected is the UID of the selected workflow, "" while there is none.
-	Selected string
-	// Inspecting says the inspector is open: beside the list, or in place of it in a Pane too narrow for both.
-	Inspecting bool
-	// Loading says a read is in flight; Err is why the last one failed.
-	Loading bool
-	Err     error
-	Card    WorkflowCard
+	Selected     string
+	Inspecting   bool
+	Loading      bool
+	Err          error
+	Card         WorkflowCard
 	// jobs are the Project's live Cron jobs as last read, to say which use each workflow; jobsReads numbers the read (below zero on
 	// the wire, see workflowRead, so no answer to the Jobs Page's reads can be taken for it).
 	jobs      []CronJob
@@ -75,7 +69,6 @@ type WorkflowCard struct {
 	askNow    bool
 }
 
-// WorkflowOp is which write a WorkflowWritten answers.
 type WorkflowOp uint8
 
 const (
@@ -84,7 +77,6 @@ const (
 	WorkflowOpRestore
 )
 
-// LoadWorkflows asks for every workflow of the Project, archived ones included.
 type LoadWorkflows struct {
 	Workspace  string
 	ProjectID  int64
@@ -93,7 +85,6 @@ type LoadWorkflows struct {
 
 func (LoadWorkflows) cmd() {}
 
-// WorkflowsLoaded answers LoadWorkflows, in kata's order (name, then uid).
 type WorkflowsLoaded struct {
 	ProjectUID string
 	Workflows  []Workflow
@@ -121,7 +112,6 @@ type ArchiveWorkflow struct {
 
 func (ArchiveWorkflow) cmd() {}
 
-// RestoreWorkflow brings an archived workflow back, guarded on Expected.
 type RestoreWorkflow struct {
 	Workspace, Actor, ProjectUID, UID, Name, Expected string
 	ProjectID                                         int64
@@ -145,7 +135,6 @@ type WorkflowWritten struct {
 
 func (WorkflowWritten) msg() {}
 
-// OnWorkflows says the Workflows Page is current.
 func (m Model) OnWorkflows() bool { return m.Page == PageWorkflows }
 
 // VisibleWorkflows is the list the Page draws: the live workflows, and the archived ones too once they are asked for, those the
@@ -174,7 +163,6 @@ func (m Model) WorkflowJobs(uid string) []CronJob {
 	return jobs
 }
 
-// WorkflowRunsShown is how many of a workflow's runs the inspector lists.
 const WorkflowRunsShown = 5
 
 // workflowRunPagesMax bounds how many pages of the Project's Runs the Page reads to find each workflow's runs.
@@ -193,7 +181,6 @@ func (m Model) WorkflowRuns(uid string) []Run {
 	return runs
 }
 
-// LatestWorkflowRun is the newest Run of the workflow, false when none was read.
 func (m Model) LatestWorkflowRun(uid string) (Run, bool) {
 	runs := m.WorkflowRuns(uid)
 	if len(runs) == 0 {
@@ -202,7 +189,6 @@ func (m Model) LatestWorkflowRun(uid string) (Run, bool) {
 	return runs[0], true
 }
 
-// SelectedWorkflow is the selected workflow, false when the list is empty.
 func (m Model) SelectedWorkflow() (Workflow, bool) {
 	for _, w := range m.VisibleWorkflows() {
 		if w.UID == m.Workflows.Selected {
@@ -260,7 +246,6 @@ func (m Model) settleWorkflowRuns() (Model, []Cmd) {
 	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: w.ProjectID, Before: w.runsMore, Request: workflowRead(w.runsReads.Newest())}}
 }
 
-// clearWorkflows closes the Workflows Page's inspector and drops its loading marker when the Page is left.
 func clearWorkflows(m Model) Model {
 	m.Workflows.Inspecting = false
 	m.Workflows.Loading = false
@@ -296,7 +281,6 @@ func (m Model) selectedRow() int {
 	return slices.IndexFunc(m.VisibleWorkflows(), func(w Workflow) bool { return w.UID == m.Workflows.Selected })
 }
 
-// moveWorkflow moves the selection by a row, a page or to either end.
 func moveWorkflow(m Model, action Action) Model {
 	visible := m.VisibleWorkflows()
 	if len(visible) == 0 {
@@ -401,7 +385,6 @@ func changeWorkflowState(restore bool) func(Model) (Model, []Cmd) {
 	}
 }
 
-// withWorkflow puts w in the list, in kata's order, replacing the workflow with its uid.
 func (s WorkflowsState) withWorkflow(w Workflow) WorkflowsState {
 	list := slices.Clone(s.List)
 	if i := slices.IndexFunc(list, func(x Workflow) bool { return x.UID == w.UID }); i >= 0 {
@@ -414,7 +397,6 @@ func (s WorkflowsState) withWorkflow(w Workflow) WorkflowsState {
 	return s
 }
 
-// withReading is readings with the reading of uid put in, on a map of its own.
 func withReading(readings map[string]WorkerReading, uid string, reading WorkerReading) map[string]WorkerReading {
 	out := make(map[string]WorkerReading, len(readings)+1)
 	maps.Copy(out, readings)
@@ -430,14 +412,12 @@ func readingOf(readings map[string]WorkerReading, uid string, reading *WorkerRea
 	return withReading(readings, uid, *reading)
 }
 
-// withoutReading is readings without the reading of uid, on a map of its own.
 func withoutReading(readings map[string]WorkerReading, uid string) map[string]WorkerReading {
 	out := maps.Clone(readings)
 	delete(out, uid)
 	return out
 }
 
-// updateWorkflows applies the Workflows Page's results and the $EDITOR round trip of its card.
 func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case WorkflowsLoaded:
@@ -634,7 +614,6 @@ func saveWorkflowCard(m Model) (Model, []Cmd) {
 	return m, []Cmd{SaveWorkflow{Workspace: m.Workspace, Actor: m.Actor, ProjectID: s.ProjectID, ProjectUID: s.ProjectUID, UID: c.UID, Expected: c.Base, Name: doc.Name, Definition: doc.Definition}}
 }
 
-// workflowMode is the keymap mode of the Workflow card.
 func workflowMode(m Model) Mode {
 	switch c := m.Workflows.Card; {
 	case c.Conflict != nil:
@@ -645,10 +624,8 @@ func workflowMode(m Model) Mode {
 	return ModeEditor
 }
 
-// workflowModes is where the Page's keys are bound.
 var workflowModes = []Mode{ModeWorkflows}
 
-// workflowActions are the Workflows Page's main-surface actions.
 func workflowActions() []actionEntry {
 	return []actionEntry{
 		{action: OpenWorkflow, modes: workflowModes, keys: keys("enter", "↵"), help: "steps", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 3, "show the steps"}}, handle: pure(inspectWorkflow)},
@@ -662,12 +639,10 @@ func workflowActions() []actionEntry {
 	}
 }
 
-// WorkflowSelectMsg is a click on a workflow's row.
 type WorkflowSelectMsg struct{ UID string }
 
 func (WorkflowSelectMsg) msg() {}
 
-// WorkflowOpenMsg is a double click on a workflow's row.
 type WorkflowOpenMsg struct{ UID string }
 
 func (WorkflowOpenMsg) msg() {}

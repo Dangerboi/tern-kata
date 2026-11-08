@@ -8,19 +8,14 @@ package model
 // A Page whose reads are independent uses Ask, which supersedes whatever is out. A change that makes every read out older than
 // its own effect uses Supersede, which drops those answers and asks for one more read.
 type Latest struct {
-	// next is the number the next read gets.
 	next int64
-	// last is the number of the newest read asked for.
 	last int64
 	// live says last has not been superseded or discarded, so its answer is the one to apply.
-	live bool
-	// out says the newest read has not answered.
-	out bool
-	// queued says a read is wanted once the one out answers.
+	live   bool
+	out    bool
 	queued bool
 }
 
-// Ask numbers a new read, which supersedes any read out.
 func (l *Latest) Ask() int64 {
 	n := l.next
 	l.next++
@@ -52,10 +47,8 @@ func (l *Latest) Discard() {
 	l.out, l.queued = false, false
 }
 
-// Asked says some read has been asked for.
 func (l Latest) Asked() bool { return l.next > 0 }
 
-// Discarded is l after Discard, for a Page that keeps its read numbers while it starts over.
 func (l Latest) Discarded() Latest {
 	l.Discard()
 	return l
@@ -83,5 +76,4 @@ func (l *Latest) Answer(n int64) (current, again bool) {
 	return false, false
 }
 
-// Newest is the number of the newest read asked for, superseded or not; 0 before any.
 func (l Latest) Newest() int64 { return l.last }

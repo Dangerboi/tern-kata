@@ -18,7 +18,6 @@ import (
 	"testing"
 )
 
-// Key is the API key the fake accepts.
 const Key = "test-key"
 
 // Fake keeps uploaded bytes in memory.
@@ -34,7 +33,6 @@ type Fake struct {
 	uploads int
 }
 
-// New starts a fake and stops it when the test ends.
 func New(t testing.TB) *Fake {
 	t.Helper()
 	return start(t, "", Key)
@@ -66,7 +64,6 @@ func start(t testing.TB, addr, key string) *Fake {
 	return f
 }
 
-// Uploads is how many files the fake has been sent.
 func (f *Fake) Uploads() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -80,7 +77,6 @@ func (f *Fake) Forget() {
 	clear(f.content)
 }
 
-// Stop shuts the fake down, so kata cannot reach it.
 func (f *Fake) Stop() { f.server.Close() }
 
 func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {

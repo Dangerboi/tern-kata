@@ -6,10 +6,8 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// MoveListID is the id of the Move card's list of Projects.
 var MoveListID = LayerID(model.CardMove) + ".list"
 
-// MoveSingleID is the id of the Move card's "Only this Issue" switch.
 var MoveSingleID = LayerID(model.CardMove) + ".single." + choiceControlKey
 
 func moveLayer(m model.Model) tern.Element {
@@ -26,7 +24,6 @@ func moveLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardMove)}, Head: ui.T("Move to another Project"), Meta: refMeta("#" + f.ShortID), Icon: ui.IconFolderGo, Modal: true, Size: ui.SizeMD}, children))
 }
 
-// moveChoosing is the card while it lists Projects: the filter, the list and kata's refusal of the last preview.
 func moveChoosing(m model.Model) []tern.Element {
 	f := m.MoveProject
 	targets := m.MoveTargets()
@@ -48,7 +45,6 @@ func moveChoosing(m model.Model) []tern.Element {
 	return append(children, buttonRow(cardButton("cancel", model.ModeMoveProject, model.MoveProjectClose, "Cancel", false)))
 }
 
-// moveConfirming is the card once a Project is chosen: the preview kata accepted, the conflict, or kata's refusal of the move.
 func moveConfirming(m model.Model) []tern.Element {
 	f := m.MoveProject
 	children := []tern.Element{toneText("target", ui.ToneAccent, "To "+f.Target.Name)}

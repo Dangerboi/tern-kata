@@ -69,7 +69,6 @@ type workflowStep struct {
 	Options json.RawMessage  `json:"options,omitempty"`
 }
 
-// NewWorkflowText is the text a new workflow starts from: one prompt step to fill in.
 const NewWorkflowText = `{
   "name": "",
   "definition": {
@@ -85,7 +84,6 @@ const NewWorkflowText = `{
 }
 `
 
-// Text is the workflow as the JSON document the editor shows: its name and its definition, in the shape kata takes.
 func (w Workflow) Text() string {
 	file := workflowFile{Name: w.Name, Definition: w.wire()}
 	var text bytes.Buffer
@@ -97,7 +95,6 @@ func (w Workflow) Text() string {
 	return text.String()
 }
 
-// wire is the workflow as the definition kata takes; a zero Retries is left out.
 func (w Workflow) wire() workflowDefinition {
 	out := workflowDefinition{Version: 1, About: w.About, Input: w.Input, Options: w.Options, Steps: make([]workflowStep, len(w.Steps))}
 	for i, s := range w.Steps {
@@ -110,7 +107,6 @@ func (w Workflow) wire() workflowDefinition {
 	return out
 }
 
-// WorkflowDocument is a workflow text that passed the local check: the name and the definition to send, compact.
 type WorkflowDocument struct {
 	Name       string
 	Definition string

@@ -16,7 +16,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
-// Check is one line of `worker doctor`.
 type Check struct {
 	// Level is "ok", "FAIL", "warn" (something to fix that stops nothing) or "note" (information that needs no fix).
 	Level   string
@@ -25,14 +24,13 @@ type Check struct {
 	Fix     string
 }
 
-// Report is the doctor's findings.
 type Report struct{ Checks []Check }
 
-// Problems counts the failed checks.
-func (r Report) Problems() int {
-	n := 0
+func (r Report) Problems() int { return r.count("FAIL") }
+
+func (r Report) count(level string) (n int) {
 	for _, c := range r.Checks {
-		if c.Level == "FAIL" {
+		if c.Level == level {
 			n++
 		}
 	}
@@ -50,13 +48,7 @@ func (r Report) String() string {
 		}
 	}
 	if r.Problems() == 0 {
-		warnings := 0
-		for _, c := range r.Checks {
-			if c.Level == "warn" {
-				warnings++
-			}
-		}
-		if warnings > 0 {
+		if warnings := r.count("warn"); warnings > 0 {
 			fmt.Fprintf(&b, "Nothing is missing; %d %s above, and none stops anything.\n", warnings, plural(warnings, "warning", "warnings"))
 		} else {
 			b.WriteString("Nothing is missing.\n")
@@ -138,7 +130,11 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 		}
 	}
 	if o.Kata == nil {
-		add("FAIL", "kata", cmp.Or(errString(o.KataErr), "no daemon"), "Start the kata daemon (`kata daemon start`) or run `kata doctor`.")
+		why := "no daemon"
+		if o.KataErr != nil {
+			why = o.KataErr.Error()
+		}
+		add("FAIL", "kata", why, "Start the kata daemon (`kata daemon start`) or run `kata doctor`.")
 		return r
 	}
 	version, err := o.Kata.Ping(ctx)
@@ -279,11 +275,4 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 		}
 	}
 	return upgrade
-}
-
-func errString(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
 }

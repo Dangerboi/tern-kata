@@ -11,8 +11,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// cardHelp is the lines of the help sheet that come from the Popup cards' own keys, by group title: the Keymap bindings
-// (mode + actions) that supply the keys, in the order shown after the group's main-surface lines.
 // from are the Pages the card opens from, the only ones whose sheet lists the line.
 var cardHelp = map[string][]struct {
 	text    string
@@ -34,8 +32,6 @@ var cardHelp = map[string][]struct {
 	},
 }
 
-// helpGroups is the sheet opened over a Page: the main-surface groups from the action entries, each followed by the card lines of
-// the cards that open from the Page.
 func helpGroups(m model.Model) []model.SheetGroup {
 	page := m.Page
 	groups := model.HelpSheetOn(page, m)
@@ -65,14 +61,8 @@ func helpGroups(m model.Model) []model.SheetGroup {
 	return groups
 }
 
-// helpColumnCols is the narrowest the help sheet lets a column of cards be, in the Pane's columns: wide enough for most lines
-// on one row; a longer action wraps under itself inside its card.
 const helpColumnCols = 64
 
-// help is the keybinding sheet that fills the Pane while help is open: a Card per group, set in as many equal-width columns as
-// the Pane fits (one to three). Groups go in order to the shortest column so far, so the columns end close together and every
-// card in a column has its width. A card lists each binding as its keys in the mono face and the action beside them; the keys
-// of every card in a column are padded to that column's longest, so the actions line up down the column.
 func help(m model.Model) tern.Nodes {
 	var groups []model.SheetGroup
 	for _, group := range helpGroups(m) {
@@ -116,8 +106,6 @@ func help(m model.Model) tern.Nodes {
 	})})
 }
 
-// helpCard is one group of the help sheet: its title as the head, then a row per binding with the keys in an accent mono
-// column keyCols wide and the action beside them, wrapping under itself.
 func helpCard(key string, group model.SheetGroup, keyCols int) tern.Element {
 	rows := make([]tern.Element, len(group.Lines))
 	for i, l := range group.Lines {

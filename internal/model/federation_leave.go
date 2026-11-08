@@ -11,7 +11,6 @@ import (
 
 // FederationLeaveDraft is one spoke's leave as the preview shows it, set when `x` is pressed.
 type FederationLeaveDraft struct {
-	// ProjectID is the spoke Project on this daemon; HubURL and HubProjectID name what it replicates.
 	ProjectID    int64
 	ProjectName  string
 	HubURL       string
@@ -19,14 +18,11 @@ type FederationLeaveDraft struct {
 	// InstanceUID is this daemon's instance, which the hub's enrollments for this spoke carry.
 	InstanceUID   string
 	AllowInsecure bool
-	// Archive archives the replica instead of detaching it, which keeps the Project standalone with all its Issues.
-	Archive bool
-	Actor   string
-	// LocalOnly skips the hub's revoke and leaves the enrollment token valid.
-	LocalOnly bool
+	Archive       bool
+	Actor         string
+	LocalOnly     bool
 }
 
-// Disposition is how kata names what becomes of the local Project: detach or archive.
 func (d FederationLeaveDraft) Disposition() string {
 	if d.Archive {
 		return "archive"
@@ -34,7 +30,6 @@ func (d FederationLeaveDraft) Disposition() string {
 	return "detach"
 }
 
-// FederationLeaveOutcome is what a successful leave did.
 type FederationLeaveOutcome struct {
 	Draft    FederationLeaveDraft
 	Archived bool
@@ -66,7 +61,6 @@ type FederationLeft struct {
 
 func (FederationLeft) msg() {}
 
-// startFederationLeave is x on a spoke, from the list or its detail: the preview.
 func startFederationLeave(m Model) (Model, []Cmd) {
 	spoke := m.SelectedSpoke()
 	if spoke == nil {
@@ -81,13 +75,11 @@ func startFederationLeave(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// toggleFederationArchive is d: between detaching and archiving.
 func toggleFederationArchive(m Model) (Model, []Cmd) {
 	m.Federation.Leave.Archive = !m.Federation.Leave.Archive
 	return m, nil
 }
 
-// toggleFederationLocalOnly is l.
 func toggleFederationLocalOnly(m Model) (Model, []Cmd) {
 	m.Federation.Leave.LocalOnly = !m.Federation.Leave.LocalOnly
 	return m, nil
@@ -112,7 +104,6 @@ func cancelFederationLeave(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// dismissFederationLeave is Enter, esc and backspace on the result: back to the list.
 func dismissFederationLeave(m Model) (Model, []Cmd) {
 	m.Federation.Screen = FederationList
 	return m, nil
@@ -190,7 +181,6 @@ func (o FederationLeaveOutcome) ResultLines() (lines []string, warning int) {
 	return lines, warning
 }
 
-// federationLeaveRows are the leave preview's keys and the keys of the result screens, which a leave and an enrollment share.
 var federationLeaveRows = []actionEntry{
 	{action: RunFederationLeave, modes: []Mode{ModeFederationLeave}, keys: keys("enter", "↵"), help: "confirm", footer: []Mode{ModeFederationLeave}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 7, "run the leave in its preview"}}, handle: runFederationLeave},
 	{action: ToggleFederationArchive, modes: []Mode{ModeFederationLeave}, keys: keys("d", "d"), help: "keep / archive", footer: []Mode{ModeFederationLeave}, sheet: []sheetLine{{sheetLettered, 8, "switch the leave between detaching and archiving"}}, handle: toggleFederationArchive},

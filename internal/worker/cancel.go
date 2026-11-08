@@ -8,7 +8,6 @@ import (
 // errRunCancelled stops an attempt that was about to start: a cancel request was saved first, so nothing is started.
 var errRunCancelled = errors.New("the run was cancelled before its process started")
 
-// cancelSignal wakes the goroutine supervising a run when a cancel request for it is saved.
 type cancelSignal struct {
 	ch   chan struct{}
 	once sync.Once
@@ -16,13 +15,9 @@ type cancelSignal struct {
 
 func (c *cancelSignal) fire() { c.once.Do(func() { close(c.ch) }) }
 
-// cancelSignalOf is the run's signal, created on first use.
 func (w *Worker) cancelSignalOf(uid string) *cancelSignal {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.cancels == nil {
-		w.cancels = map[string]*cancelSignal{}
-	}
 	if w.cancels[uid] == nil {
 		w.cancels[uid] = &cancelSignal{ch: make(chan struct{})}
 	}
@@ -53,8 +48,5 @@ func (w *Worker) cancelRunning(ps *projectState, uid, by string) (*Journal, erro
 // concludeCancel ends a cancelled run: its outcome is `cancelled` and the steps that never ran are skipped. The
 // tokens the stopped attempt and its resumed predecessors used are kept.
 func (w *Worker) concludeCancel(j *Journal) error {
-	_, err := w.store.Update(j.RunUID, "cancelled", func(j *Journal) error {
-		return j.concludeCancel(w.clock.Now().UTC())
-	})
-	return err
+	return w.record(j.RunUID, "cancelled", (*Journal).concludeCancel)
 }

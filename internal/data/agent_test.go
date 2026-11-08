@@ -766,14 +766,14 @@ func TestFocusingAnAgentRunsTernFocusAndReportsItsOutput(t *testing.T) {
 func TestTheBackgroundArgvBuilders(t *testing.T) {
 	line := []string{"omp", "@/p.md"}
 	for name, c := range map[string]struct{ got, want []string }{
-		"new session": {AgentBackgroundSessionArgs("/work", line), []string{"new", "session", "kata agents", "--cwd", "/work", "--json", "--", "omp", "@/p.md"}},
-		"new tab":     {AgentBackgroundTabArgs("/work", line), []string{"new", "tab", "kata agents", "--cwd", "/work", "--json", "--", "omp", "@/p.md"}},
+		"new session": {agentNewArgs(false, launchArgs("/work", line)...), []string{"new", "session", "kata agents", "--cwd", "/work", "--json", "--", "omp", "@/p.md"}},
+		"new tab":     {agentNewArgs(true, launchArgs("/work", line)...), []string{"new", "tab", "kata agents", "--cwd", "/work", "--json", "--", "omp", "@/p.md"}},
 		"rename":      {RenameAgentArgs("31", "demo#ab12"), []string{"rename", "31", "demo#ab12"}},
 		"open":        {MoveRightOfArgs("31", "7"), []string{"move", "31", "right-of", "7", "--json"}},
 		"open focus":  {MoveRightOfArgs("31", ""), []string{"move", "31", "right-of", "@focused", "--json"}},
 		"new-tab":     {MoveNewTabArgs("31"), []string{"move", "31", "new-tab", "--json"}},
-		"shell tab":   {AgentShellTabArgs(true), []string{"new", "tab", "kata agents", "--json"}},
-		"shell sess":  {AgentShellTabArgs(false), []string{"new", "session", "kata agents", "--json"}},
+		"shell tab":   {agentNewArgs(true, "--json"), []string{"new", "tab", "kata agents", "--json"}},
+		"shell sess":  {agentNewArgs(false, "--json"), []string{"new", "session", "kata agents", "--json"}},
 		"close":       {CloseBlockArgs("40"), []string{"close", "40", "--json"}},
 	} {
 		if !slices.Equal(c.got, c.want) {

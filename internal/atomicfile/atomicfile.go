@@ -21,7 +21,6 @@ const (
 	renameDelay    = 50 * time.Millisecond
 )
 
-// retryRename calls rename until it succeeds, fails with an error retryable rejects, or renameAttempts calls were made.
 func retryRename(rename func() error, retryable func(error) bool) error {
 	err := rename()
 	for i := 1; err != nil && i < renameAttempts && retryable(err); i++ {
@@ -31,7 +30,6 @@ func retryRename(rename func() error, retryable func(error) bool) error {
 	return err
 }
 
-// Options are the caller's choices for Write.
 type Options struct {
 	// Mode is the file's mode. It is not applied on Windows, which has no such modes.
 	Mode fs.FileMode
@@ -42,15 +40,8 @@ type Options struct {
 	Check func(tmp string) error
 }
 
-// RenameError is the failure of the final rename. The old file may still be there, or another writer may have put its own
-// file there first, which a caller can tell by looking.
-type RenameError struct{ Err error }
-
-func (e *RenameError) Error() string { return e.Err.Error() }
-func (e *RenameError) Unwrap() error { return e.Err }
-
-// Write puts data at path. On any failure the temporary file is removed and the old file is untouched; a failure of the
-// rename itself is a *RenameError.
+// Write puts data at path. On any failure the temporary file is removed and the old file is untouched; after a failed rename the
+// old file may still be there, or another writer may have put its own file there first.
 func Write(path string, data []byte, opts Options) error {
 	dir := filepath.Dir(path)
 	if opts.DirMode != 0 {
@@ -75,12 +66,11 @@ func Write(path string, data []byte, opts Options) error {
 	}
 	if err := rename(name, path); err != nil {
 		_ = os.Remove(name)
-		return &RenameError{Err: err}
+		return err
 	}
 	return nil
 }
 
-// fill writes data to tmp, sets mode (not on Windows) and closes it, which the rename needs on Windows.
 func fill(tmp *os.File, data []byte, mode fs.FileMode) error {
 	var err error
 	if filepath.Separator == '/' {

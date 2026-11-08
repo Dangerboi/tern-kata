@@ -71,7 +71,6 @@ func nameSpokes(ctx context.Context, spokes []model.FederationSpoke, instanceUID
 	}
 }
 
-// hubSpokeName is the name the hub at hubURL gives the instance, "" when it gives none or cannot be read.
 func hubSpokeName(ctx context.Context, hubURL string, allowInsecure bool, instanceUID string) string {
 	ctx, cancel := context.WithTimeout(ctx, hubReadBudget)
 	defer cancel()

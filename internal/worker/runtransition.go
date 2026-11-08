@@ -27,7 +27,6 @@ import (
 //	abandon                      from a settled hold that may be abandoned (mayAbandon)
 //	requestCancel                from a Run that mayCancel
 
-// needs refuses a transition asked from a Phase outside from.
 func (j *Journal) needs(transition string, from ...Phase) error {
 	if slices.Contains(from, j.Phase) {
 		return nil
@@ -59,7 +58,6 @@ func (j *Journal) holdBeforeAdmission(reason, detail string, at time.Time) error
 	return nil
 }
 
-// admit records that kata accepted the revision-0 running observation.
 func (j *Journal) admit(revision int64) error {
 	if err := j.needs("be admitted", PhasePrepared); err != nil {
 		return err
@@ -68,7 +66,6 @@ func (j *Journal) admit(revision int64) error {
 	return nil
 }
 
-// reopen records that kata holds the running observation of an accepted resume.
 func (j *Journal) reopen(revision int64) error {
 	if err := j.needs("be reopened", PhaseResuming); err != nil {
 		return err
@@ -91,7 +88,6 @@ func (j *Journal) markLaunching() error {
 	return nil
 }
 
-// markStarted saves the start record of the launched process.
 func (j *Journal) markStarted(launch *LaunchRecord) error {
 	if err := j.needs("be started", PhaseLaunching); err != nil {
 		return err
@@ -101,7 +97,6 @@ func (j *Journal) markStarted(launch *LaunchRecord) error {
 	return nil
 }
 
-// markExited saves the exit record of the attempt's process and, for an agent, what its output said.
 func (j *Journal) markExited(exit *ExitRecord, result *AgentResult) error {
 	if err := j.needs("record an exit", PhaseStarted); err != nil {
 		return err
@@ -113,7 +108,6 @@ func (j *Journal) markExited(exit *ExitRecord, result *AgentResult) error {
 	return nil
 }
 
-// finish records the Run's decided Outcome; only its reports remain.
 func (j *Journal) finish(o *Outcome, at time.Time) error {
 	if err := j.needs("finish", inFlight...); err != nil {
 		return err
@@ -123,7 +117,6 @@ func (j *Journal) finish(o *Outcome, at time.Time) error {
 	return nil
 }
 
-// settle records that every Issue write and the final observation have been sent.
 func (j *Journal) settle() error {
 	if err := j.needs("settle", PhaseFinished); err != nil {
 		return err
@@ -132,7 +125,6 @@ func (j *Journal) settle() error {
 	return nil
 }
 
-// requestCancel saves the request to stop a Run that is admitted or running; it is concluded later.
 func (j *Journal) requestCancel(by string, at time.Time) error {
 	if reason := j.mayCancel(); reason != "" {
 		return fmt.Errorf("run %s cannot be abandoned: %s", j.RunUID, reason)
@@ -141,7 +133,6 @@ func (j *Journal) requestCancel(by string, at time.Time) error {
 	return nil
 }
 
-// concludeCancel ends a cancelled Run: its outcome is `cancelled` and the steps that never ran are skipped.
 func (j *Journal) concludeCancel(at time.Time) error {
 	if err := j.needs("conclude a cancel", PhaseAdmitted, PhaseStarted); err != nil {
 		return err
@@ -208,7 +199,6 @@ func (j *Journal) concludeStep(outcome *Outcome, at time.Time) error {
 	return nil
 }
 
-// skipUnfinished skips every step from index from on that never reached a final state, because the run timed out.
 func (j *Journal) skipUnfinished(from int) {
 	for i := from; i < len(j.Steps); i++ {
 		if !terminalStep(j.Steps[i].State) {
@@ -217,19 +207,16 @@ func (j *Journal) skipUnfinished(from int) {
 	}
 }
 
-// addUsage adds the tokens and cost of an attempt's outcome to the step's own.
 func (r *StepRecord) addUsage(o *Outcome) {
 	r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, o.InputTokens), addTokens(r.OutputTokens, o.OutputTokens)
 	r.CostUSD = addCost(r.CostUSD, o.CostUSD)
 }
 
-// sumSteps sets the outcome's tokens and cost to what every attempt of every step used.
 func (o *Outcome) sumSteps(steps []StepRecord) {
 	o.InputTokens, o.OutputTokens = sumStepTokens(steps)
 	o.CostUSD = sumStepCost(steps)
 }
 
-// finishWorkflow decides the Run's outcome once every step is succeeded, failed or skipped: failed when any step failed.
 func (j *Journal) finishWorkflow(at time.Time) error {
 	if err := j.needs("finish a workflow", PhaseAdmitted); err != nil {
 		return err

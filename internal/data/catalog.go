@@ -16,7 +16,6 @@ import (
 // (agent_route.go), to reach a remote entry or federation hub with only its own token (catalog_connect.go, federation*.go; kata's Discover would let KATA_AUTH_TOKEN replace a remote entry's token) and name it in a join, to tell which entry a connection is (gateway.go) and for
 // [tui].confirm_quit (cmd/tern-kata/main.go), so this reads <KATA_HOME>/config.toml itself for them; delete this file once pkg/client does.
 
-// CatalogEntry is one [[daemon]] entry of kata's config.toml.
 type CatalogEntry struct {
 	Name          string
 	URL           string
@@ -25,8 +24,7 @@ type CatalogEntry struct {
 	Local         bool
 	Home          string
 	InstanceUID   string
-	// InlineToken is the entry's token key, a bearer token written in the file itself.
-	InlineToken string
+	InlineToken   string
 }
 
 // Token returns the bearer token the entry carries: its inline token, else what its token_env variable holds; an entry with
@@ -45,17 +43,13 @@ func (e CatalogEntry) Token() (string, error) {
 	return token, nil
 }
 
-// Catalog is what tern-kata reads of kata's client configuration.
 type Catalog struct {
-	// Active is the active_daemon name, empty when none is selected.
-	Active string
-	// Daemons are the entries in file order.
+	Active  string
 	Daemons []CatalogEntry
 	// ConfirmQuit is [tui].confirm_quit; true unless the file sets it false, and true when [tui] does not decode.
 	ConfirmQuit bool
 }
 
-// Entry finds the entry called name.
 func (c Catalog) Entry(name string) (CatalogEntry, bool) {
 	for _, e := range c.Daemons {
 		if e.Name == name {
@@ -86,7 +80,6 @@ type tuiFile struct {
 	} `toml:"tui"`
 }
 
-// kataHome is $KATA_HOME, else .kata under the user's home directory.
 func kataHome() (string, error) {
 	if v := os.Getenv("KATA_HOME"); v != "" {
 		return v, nil
@@ -107,7 +100,6 @@ func ReadCatalog() (Catalog, error) {
 	return ReadCatalogAt(home)
 }
 
-// ReadCatalogAt is ReadCatalog for the config.toml in home, whatever KATA_HOME says.
 func ReadCatalogAt(home string) (Catalog, error) {
 	path := filepath.Join(home, "config.toml")
 	raw, err := os.ReadFile(path)

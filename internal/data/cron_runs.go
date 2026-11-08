@@ -50,7 +50,6 @@ func (c *Client) ListRuns(ctx context.Context, cmd model.LoadRuns) (model.RunsLo
 	return loaded, nil
 }
 
-// ShowRun reads one Run by uid.
 func (c *Client) ShowRun(ctx context.Context, cmd model.ShowRun) (model.RunShown, error) {
 	response, err := c.ShowCronRunWithResponse(ctx, &g.ShowCronRunRequestOptions{PathParams: &g.ShowCronRunPath{ProjectID: cmd.ProjectID, RunUID: cmd.UID}})
 	if err != nil {
@@ -114,7 +113,6 @@ func (c *Client) readOneRunNames(ctx context.Context, projectID int64, wire g.Cr
 	return names, nil
 }
 
-// runsPageSize is the most Runs kata answers in one page.
 const runsPageSize = 100
 
 // runNames resolves the uids a Run holds to the names a row shows: the job's, the workflow's and the Issue's short id and title.
@@ -123,15 +121,13 @@ const runsPageSize = 100
 type runNames struct {
 	jobs      map[string]string
 	workflows map[string]string
-	// issues holds the Issue's short id and title in a Run's fields, keyed by the Issue's uid.
-	issues map[string]model.Run
+	issues    map[string]model.Run
 }
 
 func newRunNames() runNames {
 	return runNames{jobs: map[string]string{}, workflows: map[string]string{}, issues: map[string]model.Run{}}
 }
 
-// readRunNames reads the Project's Issues of every status, jobs and workflows (the archived ones too), one request of each kind.
 func (c *Client) readRunNames(ctx context.Context, projectID int64) (runNames, error) {
 	names := newRunNames()
 	archived := true

@@ -130,8 +130,6 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 	return "", false
 }
 
-// otherAdapterProblem is why the worker leaves a job to another adapter, empty when its options.adapter is absent or names
-// tern-kata.
 func otherAdapterProblem(job cronjob.Job) string {
 	if name := job.OtherAdapter(); name != "" {
 		return fmt.Sprintf("its options.adapter names %q, not %s", name, cronjob.AdapterName)

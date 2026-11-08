@@ -6,20 +6,14 @@ import (
 	"slices"
 )
 
-// The View card's fields beyond the Filter card's own.
 const (
 	ViewName Field = "name"
 	ViewBase Field = "base"
 )
 
-// viewTable declares the View card's fields, in tab order: the name, the base Collection, then the Filter card's fields and
-// the search text. Every key of the card dismisses its error.
+// Every key of the card dismisses its error.
 var viewTable = fieldTable[ViewFormState]{
 	form:       func(m *Model) *ViewFormState { return &m.ViewForm },
-	busy:       func(f ViewFormState) bool { return f.Saving },
-	focus:      func(f *ViewFormState) *Field { return &f.Field },
-	caret:      func(f *ViewFormState) *Caret { return &f.Caret },
-	err:        func(f *ViewFormState) *error { return &f.Err },
 	dismissErr: true,
 	fields: slices.Concat(
 		[]formField[ViewFormState]{
@@ -31,7 +25,6 @@ var viewTable = fieldTable[ViewFormState]{
 	),
 }
 
-// ViewFields is the View card's field list, in tab order.
 var ViewFields = viewTable.specs()
 
 const (
@@ -48,15 +41,11 @@ const (
 // ViewFormState is the View card: a saved view being made (Self is "") or edited (Self is the name it had when the card opened). Its Filter fields are the
 // Filter card's, held in Values with the search text.
 type ViewFormState struct {
-	Open, Saving bool
-	Field        Field
-	Name         string
-	Base         Collection
-	Values       Filters
-	Caret        Caret
-	Self         string
-	// Err is why the last save did not happen, naming the field; the card and its input stay.
-	Err error
+	formCard
+	Name   string
+	Base   Collection
+	Values Filters
+	Self   string
 	// Sent is the save the card is waiting on, so only its own answer closes or fails the card.
 	Sent SaveView
 }
@@ -100,7 +89,6 @@ func (m Model) ViewChoices(name Field) []string {
 	return fixedFilterChoices(name)
 }
 
-// choiceValue is the value the choice field holds: the base's key for Base.
 func (f ViewFormState) choiceValue(name Field) string {
 	if name == ViewBase {
 		return f.Base.Key()
@@ -108,7 +96,6 @@ func (f ViewFormState) choiceValue(name Field) string {
 	return viewTable.value(f, name)
 }
 
-// chooseViewBase gives the Base field the Collection at index i in ViewBases; an index out of range changes nothing.
 func chooseViewBase(m *Model, i int) bool {
 	bases := m.ViewBases()
 	if i < 0 || i >= len(bases) {
@@ -118,20 +105,15 @@ func chooseViewBase(m *Model, i int) bool {
 	return true
 }
 
-// stepViewBase moves the Base field to its next Collection, or the previous one when back, wrapping around.
 func stepViewBase(m *Model, back bool) {
 	bases := m.ViewBases()
 	at := slices.IndexFunc(bases, func(c Collection) bool { return c.Key() == m.ViewForm.Base.Key() })
 	m.ViewForm.Base = bases[cycleIndex(max(at, 0), len(bases), back)]
 }
 
-// viewFormKey is one key for the View card on top: a bound chord acts, any other types.
 func viewFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	binding, bound := LookupBindingForMode(msg.Chord, ModeViewForm)
 	bound = bound && !(isCaretChord(msg.Chord) && viewTable.textAt(&m.ViewForm, m.ViewForm.Field) != nil)
-	if m.ViewForm.Saving && !(bound && binding.Action == CancelViewForm) {
-		return m, nil // the save has not answered: the input stays as sent
-	}
 	m.ViewForm.Err = nil
 	if bound {
 		return updateViewForm(m, binding.Action)
@@ -155,7 +137,7 @@ func updateViewForm(m Model, action Action) (Model, []Cmd) {
 		return saveViewForm(m)
 	case CancelViewForm:
 		m.ViewForm = ViewFormState{}
-	case DeleteInput, ClearInput: // the shared step took them in a text field
+	case DeleteInput, ClearInput:
 		viewTable.resetFocused(&m)
 	}
 	return m, nil

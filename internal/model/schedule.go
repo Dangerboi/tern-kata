@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// Frequency is how often a Schedule repeats.
 type Frequency string
 
 const (
@@ -19,10 +18,8 @@ const (
 	Yearly  Frequency = "YEARLY"
 )
 
-// Frequencies is every Frequency, in the order the card cycles them.
 var Frequencies = []Frequency{Daily, Weekly, Monthly, Yearly}
 
-// DayKind says which day of the month a monthly or yearly Schedule falls on.
 type DayKind int
 
 const (
@@ -32,7 +29,6 @@ const (
 	LastDay                     // the last day of the month
 )
 
-// EndKind says when a Schedule stops.
 type EndKind int
 
 const (
@@ -59,7 +55,6 @@ type Schedule struct {
 	Count      int
 }
 
-// IsRaw says the rule is outside the form and Raw holds its text.
 func (s Schedule) IsRaw() bool { return s.Raw != "" }
 
 // MondayFirst is the weekdays in the order the web UI sorts and the card lists them.
@@ -67,7 +62,6 @@ var MondayFirst = []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time
 
 var weekdayCodes = []string{"MO", "TU", "WE", "TH", "FR", "SA", "SU"} // parallel to MondayFirst
 
-// MondayIndex is where d falls in MondayFirst.
 func MondayIndex(d time.Weekday) int { return slices.Index(MondayFirst, d) }
 
 func weekdayCode(d time.Weekday) string { return weekdayCodes[MondayIndex(d)] }
@@ -80,7 +74,6 @@ func weekdayOf(code string) (time.Weekday, bool) {
 	return MondayFirst[i], true
 }
 
-// sortWeekdays returns days Monday first, without repeats.
 func sortWeekdays(days []time.Weekday) []time.Weekday {
 	out := slices.Clone(days)
 	slices.SortFunc(out, func(a, b time.Weekday) int { return MondayIndex(a) - MondayIndex(b) })
@@ -163,27 +156,8 @@ func parseCommon(rule string) (Schedule, bool) {
 			return Schedule{}, false
 		}
 	}
-	count, hasCount := parts["COUNT"]
-	until, hasUntil := parts["UNTIL"]
-	if hasCount && hasUntil {
+	if !s.readEnd(parts) {
 		return Schedule{}, false
-	}
-	if hasCount {
-		if s.Count = positive(count); s.Count == 0 {
-			return Schedule{}, false
-		}
-		s.End = EndCount
-	}
-	if hasUntil {
-		m := untilPattern.FindStringSubmatch(until)
-		if m == nil || m[4] != "" {
-			return Schedule{}, false
-		}
-		date, err := time.Parse("20060102", until)
-		if err != nil {
-			return Schedule{}, false
-		}
-		s.End, s.Until = EndUntil, date.Format(time.DateOnly)
 	}
 	byDay, hasDay := parts["BYDAY"]
 	byMonthDay, hasMonthDay := parts["BYMONTHDAY"]
@@ -198,73 +172,106 @@ func parseCommon(rule string) (Schedule, bool) {
 		if hasMonthDay || hasMonth {
 			return Schedule{}, false
 		}
-		if hasDay {
-			for _, code := range strings.Split(byDay, ",") {
-				d, ok := weekdayOf(code)
-				if !ok {
-					return Schedule{}, false
-				}
-				s.Weekdays = append(s.Weekdays, d)
-			}
-			s.Weekdays = sortWeekdays(s.Weekdays)
+		return s, !hasDay || s.readWeekdays(byDay)
+	case Monthly:
+		if hasMonth {
+			return Schedule{}, false
 		}
-		return s, true
-	}
-	if s.Frequency == Monthly && hasMonth {
-		return Schedule{}, false
-	}
-	if s.Frequency == Yearly {
+	case Yearly:
 		if !hasMonth {
 			return s, !hasDay && !hasMonthDay
 		}
-		if !integer.MatchString(byMonth) {
-			return Schedule{}, false
-		}
-		s.Month, _ = strconv.Atoi(byMonth)
-		if s.Month < 1 || s.Month > 12 {
+		month, ok := whole(byMonth)
+		if s.Month = month; !ok || month < 1 || month > 12 {
 			return Schedule{}, false
 		}
 	}
 	switch {
 	case hasMonthDay:
-		// A single day 1 to 31 (monthly also -1); lists and other negative days are Advanced.
-		if !integer.MatchString(byMonthDay) {
-			return Schedule{}, false
-		}
-		day, _ := strconv.Atoi(byMonthDay)
-		switch {
-		case day == -1 && s.Frequency == Monthly:
-			s.Day = LastDay
-		case day >= 1 && day <= 31:
-			s.Day, s.DayOfMonth = DayOfMonth, day
-		default:
-			return Schedule{}, false
-		}
+		return s, s.readMonthDay(byMonthDay)
 	case hasDay:
-		m := byDayPattern.FindStringSubmatch(byDay)
-		if m == nil || m[1] == "" {
-			return Schedule{}, false
-		}
-		nth, _ := strconv.Atoi(m[1])
-		weekday, ok := weekdayOf(m[2])
-		if !ok || nth == 0 || nth < -1 || nth > 5 {
-			return Schedule{}, false
-		}
-		s.Day, s.Nth, s.Weekday = NthWeekday, nth, weekday
+		return s, s.readNthWeekday(byDay)
 	}
 	return s, true
 }
 
-// positive reads a whole number of at least 1, else 0.
-func positive(s string) int {
+// readEnd sets the end from COUNT or UNTIL, false for both together, a COUNT under 1 and an UNTIL that is not a plain date.
+func (s *Schedule) readEnd(parts map[string]string) bool {
+	count, hasCount := parts["COUNT"]
+	until, hasUntil := parts["UNTIL"]
+	switch {
+	case hasCount && hasUntil:
+		return false
+	case hasCount:
+		s.End = EndCount
+		s.Count = positive(count)
+		return s.Count > 0
+	case hasUntil:
+		m := untilPattern.FindStringSubmatch(until)
+		date, err := time.Parse("20060102", until)
+		if m == nil || m[4] != "" || err != nil {
+			return false
+		}
+		s.End, s.Until = EndUntil, date.Format(time.DateOnly)
+	}
+	return true
+}
+
+// readWeekdays sets a weekly BYDAY list, false for a code that is not a weekday.
+func (s *Schedule) readWeekdays(byDay string) bool {
+	for _, code := range strings.Split(byDay, ",") {
+		d, ok := weekdayOf(code)
+		if !ok {
+			return false
+		}
+		s.Weekdays = append(s.Weekdays, d)
+	}
+	s.Weekdays = sortWeekdays(s.Weekdays)
+	return true
+}
+
+// readMonthDay sets a single BYMONTHDAY, 1 to 31 (monthly also -1); lists and other negative days are Advanced.
+func (s *Schedule) readMonthDay(byMonthDay string) bool {
+	day, ok := whole(byMonthDay)
+	switch {
+	case ok && day == -1 && s.Frequency == Monthly:
+		s.Day = LastDay
+	case ok && day >= 1 && day <= 31:
+		s.Day, s.DayOfMonth = DayOfMonth, day
+	default:
+		return false
+	}
+	return true
+}
+
+// readNthWeekday sets a BYDAY of one weekday with its place in the month, 1 to 5 or -1 for the last.
+func (s *Schedule) readNthWeekday(byDay string) bool {
+	m := byDayPattern.FindStringSubmatch(byDay)
+	if m == nil || m[1] == "" {
+		return false
+	}
+	nth, _ := strconv.Atoi(m[1])
+	weekday, ok := weekdayOf(m[2])
+	if !ok || nth == 0 || nth < -1 || nth > 5 {
+		return false
+	}
+	s.Day, s.Nth, s.Weekday = NthWeekday, nth, weekday
+	return true
+}
+
+func whole(s string) (int, bool) {
 	if !integer.MatchString(s) {
-		return 0
+		return 0, false
 	}
 	n, err := strconv.Atoi(s)
-	if err != nil || n < 1 {
-		return 0
+	return n, err == nil
+}
+
+func positive(s string) int {
+	if n, ok := whole(s); ok && n >= 1 {
+		return n
 	}
-	return n
+	return 0
 }
 
 var ordinals = map[int]string{-1: "last", 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th"}

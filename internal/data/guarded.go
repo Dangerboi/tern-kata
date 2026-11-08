@@ -8,7 +8,6 @@ import (
 	"go.kenn.io/kata/pkg/client"
 )
 
-// guardedAttempts bounds how often a Guarded write retries when the revision moves between reading the target and writing it.
 const guardedAttempts = 3
 
 func etag(revision int64) string { return fmt.Sprintf("\"rev-%d\"", revision) }

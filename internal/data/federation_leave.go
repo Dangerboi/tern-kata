@@ -149,24 +149,12 @@ func leaveHubError(err error) error {
 // the entry's allow_insecure counts, since the binding's is what the spoke's daemon reports and the token is the user's.
 func hubAdminClient(ctx context.Context, hubURL string, bindingInsecure bool) (*client.Client, error) {
 	want := strings.TrimRight(hubURL, "/")
-	auth := client.TargetAuth{AllowInsecure: bindingInsecure}
 	// An unreadable catalog leaves the hub unmatched; the hub then refuses the unauthenticated request in words the Pane shows.
 	catalog, _ := ReadCatalog()
 	for _, entry := range catalog.Daemons {
-		if entry.Local || strings.TrimRight(entry.URL, "/") != want {
-			continue
+		if !entry.Local && strings.TrimRight(entry.URL, "/") == want {
+			return hubEntryClient(ctx, entry)
 		}
-		token, err := entry.Token()
-		if err != nil {
-			return nil, err
-		}
-		auth.Token = token
-		auth.AllowInsecure = entry.AllowInsecure
-		break
 	}
-	hub, err := client.NewForTarget(ctx, want, auth)
-	if err != nil {
-		return nil, err
-	}
-	return hub, nil
+	return client.NewForTarget(ctx, want, client.TargetAuth{AllowInsecure: bindingInsecure})
 }

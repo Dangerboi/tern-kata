@@ -14,21 +14,17 @@ import (
 // would happen and what blocks it, asks to type the Project's name before an adoption, and runs it. `b` browses the hubs' Projects,
 // read only. The Daemon gateway reads the catalog and makes the calls.
 
-// FederationOperation is what an enrollment does to the local Project.
 type FederationOperation string
 
 const (
 	// FederationAdoptSameName adopts the local Project into the hub Project of the same name, which the hub creates when it has none.
-	FederationAdoptSameName FederationOperation = "adopt-same-name"
-	// FederationAdoptSelectedHub adopts the local Project into the hub Project that was chosen.
+	FederationAdoptSameName    FederationOperation = "adopt-same-name"
 	FederationAdoptSelectedHub FederationOperation = "adopt-selected-hub"
-	// FederationCreateReplica makes a new local Project as a replica of the chosen hub Project.
-	FederationCreateReplica FederationOperation = "create-replica"
+	FederationCreateReplica    FederationOperation = "create-replica"
 	// FederationRejoin rebinds a local Project that left this hub Project's federation earlier; it still shares the hub Project's uid.
 	FederationRejoin FederationOperation = "rejoin"
 )
 
-// Label is the operation as the preview words it.
 func (o FederationOperation) Label() string {
 	switch o {
 	case FederationAdoptSameName:
@@ -51,7 +47,6 @@ type FederationHub struct {
 	Active, Local bool
 }
 
-// Label is the hub's line in the hub step.
 func (h FederationHub) Label() string {
 	label := oneLine(h.Name) + " " + oneLine(h.Endpoint) + " auth " + oneLine(h.Auth)
 	if h.AllowInsecure {
@@ -63,7 +58,6 @@ func (h FederationHub) Label() string {
 	return label
 }
 
-// FederationBinding is a local Project that has a federation role on this daemon, whatever the role.
 type FederationBinding struct {
 	ProjectID   int64
 	ProjectName string
@@ -79,7 +73,6 @@ type FederationHubProjects struct {
 	Err      error
 }
 
-// FederationEnrollDraft is one enrollment as the choices build it and the preview shows it.
 type FederationEnrollDraft struct {
 	Operation FederationOperation
 	// SpokeProjectID and SpokeProjectName are the local Project; the id is 0 for a new replica until the hub Project names it.
@@ -97,10 +90,8 @@ type FederationEnrollDraft struct {
 	APICapabilities            string
 	DisplayCapabilities        string
 	PushEnabled, AllowInsecure bool
-	// SpokeName is the name the hub is asked to give the spoke, "" for none.
-	SpokeName string
-	// BlockedReason is why the enrollment cannot run; the preview names it.
-	BlockedReason string
+	SpokeName                  string
+	BlockedReason              string
 }
 
 func newFederationEnrollDraft(actor string) FederationEnrollDraft {
@@ -110,7 +101,6 @@ func newFederationEnrollDraft(actor string) FederationEnrollDraft {
 	return FederationEnrollDraft{RequestedActor: actor, APICapabilities: "claim,pull,push", DisplayCapabilities: "pull,push,lease", PushEnabled: true, AdoptExisting: true}
 }
 
-// sameNameHubProjectWords says what happens to the hub Project of the local Project's name: used when it exists, else created.
 func sameNameHubProjectWords(name string, exists bool) string {
 	if exists {
 		return fmt.Sprintf("use existing hub project %q; enable federation if needed", oneLine(name))
@@ -118,7 +108,6 @@ func sameNameHubProjectWords(name string, exists bool) string {
 	return fmt.Sprintf("create hub project %q and enable federation", oneLine(name))
 }
 
-// HubProjectBehavior is what the preview says happens to the hub Project.
 func (d FederationEnrollDraft) HubProjectBehavior() string {
 	if d.Operation == FederationAdoptSameName {
 		if d.HubProjectID != 0 {
@@ -166,7 +155,6 @@ func (d FederationEnrollDraft) PreviewLines() []string {
 	return lines
 }
 
-// FederationEnrollOutcome is what a successful enrollment did.
 type FederationEnrollOutcome struct {
 	Draft         FederationEnrollDraft
 	HubURL        string
@@ -178,7 +166,6 @@ type FederationEnrollOutcome struct {
 	HubProjectUID string
 }
 
-// ResultLines are the enrollment result's lines as kata tui words them.
 func (o FederationEnrollOutcome) ResultLines() []string {
 	status := "joined"
 	if o.Adopted {
@@ -300,7 +287,6 @@ func (r FederationEnrollRecovery) Lines() (lines []string, errLine int) {
 	return lines, errLine
 }
 
-// RevealedLines are the lines drawn once `R` revealed the command: the warning, the target and the command itself.
 func (r FederationEnrollRecovery) RevealedLines() []string {
 	return []string{
 		"single-use/secret-bearing recovery command",
@@ -310,7 +296,6 @@ func (r FederationEnrollRecovery) RevealedLines() []string {
 	}
 }
 
-// LoadFederationHubs reads kata's daemon catalog for the hub step. Request numbers the reads: an answer to an older one is dropped.
 type LoadFederationHubs struct {
 	Workspace string
 	Request   int64
@@ -318,7 +303,6 @@ type LoadFederationHubs struct {
 
 func (LoadFederationHubs) cmd() {}
 
-// FederationHubsLoaded answers LoadFederationHubs: every daemon of the catalog in file order, the active one marked.
 type FederationHubsLoaded struct {
 	Request int64
 	Hubs    []FederationHub
@@ -327,7 +311,6 @@ type FederationHubsLoaded struct {
 
 func (FederationHubsLoaded) msg() {}
 
-// LoadFederationHubProjects reads the Projects of the catalog daemon called Hub, with that daemon's own token.
 type LoadFederationHubProjects struct {
 	Workspace string
 	Request   int64
@@ -350,7 +333,6 @@ type FederationHubProjectsLoaded struct {
 
 func (FederationHubProjectsLoaded) msg() {}
 
-// BrowseFederationHubs reads the Projects of every catalog daemon that is neither the active one nor local.
 type BrowseFederationHubs struct {
 	Workspace string
 	Request   int64
@@ -358,7 +340,6 @@ type BrowseFederationHubs struct {
 
 func (BrowseFederationHubs) cmd() {}
 
-// FederationBrowsed answers BrowseFederationHubs: one entry per hub read, each with its Projects or its failure.
 type FederationBrowsed struct {
 	Request int64
 	Hubs    []FederationHubProjects
@@ -389,13 +370,11 @@ type FederationEnrolled struct {
 
 func (FederationEnrolled) msg() {}
 
-// FederationLocalChoice is a row of the local Project step: the new replica, or a Project to adopt.
 type FederationLocalChoice struct {
 	CreateReplica bool
 	Project       Project
 }
 
-// Label is the row's text.
 func (c FederationLocalChoice) Label() string {
 	if c.CreateReplica {
 		return FederationCreateReplica.Label()
@@ -458,18 +437,15 @@ func (m Model) FederationHubProjectChoices() []FederationHubProjectChoice {
 	return rows
 }
 
-// FederationBrowseRow is a row of the browse: a hub's Project, Hub indexing Browsed.
 type FederationBrowseRow struct {
 	Hub     int
 	Project Project
 }
 
-// Label is the row's text: the Project's id and name.
 func (r FederationBrowseRow) Label() string {
 	return strconv.FormatInt(r.Project.ID, 10) + " " + oneLine(r.Project.Name)
 }
 
-// BrowseRows are the browse's rows across every hub read, in hub order.
 func (f FederationState) BrowseRows() []FederationBrowseRow {
 	var rows []FederationBrowseRow
 	for i, hub := range f.Browsed {
@@ -514,7 +490,6 @@ func (m Model) localProjectNameExists(name string) bool {
 	return slices.ContainsFunc(m.Snapshot.Catalog, func(c CatalogProject) bool { return c.Project.Name == name })
 }
 
-// binding is the local Project's federation role, matched by id or by name.
 func (f FederationState) binding(projectID int64, name string) (FederationBinding, bool) {
 	for _, b := range f.Bindings {
 		if projectID != 0 && b.ProjectID == projectID || name != "" && b.ProjectName == name {
@@ -566,7 +541,6 @@ func (m Model) federationCursorCount() (cursor, n int) {
 	return f.Cursor, len(f.Spokes)
 }
 
-// FederationChoiceCursor is the row the choice or browse screen has selected, clamped to its rows.
 func (m Model) FederationChoiceCursor() int {
 	cursor, n := m.federationCursorCount()
 	return max(0, min(cursor, n-1))
@@ -582,7 +556,6 @@ func (m Model) FederationChoosing() bool {
 	return false
 }
 
-// moveFederationChoice moves the cursor of the choice or browse screen shown.
 func moveFederationChoice(m Model, action Action) Model {
 	cursor, n := m.federationCursorCount()
 	if n == 0 {
@@ -603,7 +576,6 @@ func moveFederationChoice(m Model, action Action) Model {
 	return m
 }
 
-// federationChoiceMoves are the movement keys of the choice and browse screens.
 func federationChoiceMoves(pageDef) []actionEntry {
 	return slices.Concat(
 		pageMoveActions(pageDef{moves: pageMoves{mode: ModeFederationPick, noun: "choice", move: moveFederationChoice}}),
@@ -636,7 +608,6 @@ func startFederationEnroll(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// startFederationBrowse is b on the list: the hubs' Projects, read only.
 func startFederationBrowse(m Model) (Model, []Cmd) {
 	f := &m.Federation
 	if f.Screen != FederationList {
@@ -650,7 +621,6 @@ func startFederationBrowse(m Model) (Model, []Cmd) {
 	return m, []Cmd{BrowseFederationHubs{Workspace: m.Workspace, Request: f.hubReads.Ask()}}
 }
 
-// chooseFederation is Enter on a choice screen.
 func chooseFederation(m Model) (Model, []Cmd) {
 	switch m.Federation.Screen {
 	case FederationPickLocal:
@@ -755,7 +725,6 @@ func federationBrowsed(m Model, msg FederationBrowsed) Model {
 	return m
 }
 
-// federationChoiceBack is esc and backspace on a choice screen: one step back, the list from the first.
 func federationChoiceBack(m Model) (Model, []Cmd) {
 	f := &m.Federation
 	f.hubReads.Discard()
@@ -774,7 +743,6 @@ func federationChoiceBack(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// federationBrowseBack is esc and backspace in the browse: back to the list.
 func federationBrowseBack(m Model) (Model, []Cmd) {
 	f := &m.Federation
 	f.hubReads.Discard()
@@ -945,20 +913,17 @@ func federationEnrolled(m Model, msg FederationEnrolled) (Model, []Cmd) {
 	return askFederation(m)
 }
 
-// revealFederationJoin is R on the recovery: the one thing that shows the command and its token.
 func revealFederationJoin(m Model) (Model, []Cmd) {
 	m.Federation.Recovery.Reveal = true
 	return m, nil
 }
 
-// federationRecoveryBack is esc and backspace on the recovery: back to the preview.
 func federationRecoveryBack(m Model) (Model, []Cmd) {
 	m.Federation.Recovery.Reveal = false
 	m.Federation.Screen = FederationPreview
 	return m, nil
 }
 
-// federationEnrollRows are the keys of the enrollment's choices, preview and recovery and of the browse.
 var federationEnrollRows = []actionEntry{
 	{action: FederationChoose, modes: []Mode{ModeFederationPick}, keys: keys("enter", "↵"), help: "select", footer: []Mode{ModeFederationPick}, footerKey: "↵", handle: chooseFederation},
 	{action: FederationChoiceBack, modes: []Mode{ModeFederationPick}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationPick}, handle: federationChoiceBack},

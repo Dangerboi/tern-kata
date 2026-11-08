@@ -11,13 +11,11 @@ const (
 // WorkAttention is what an Issue's `work.attention` metadata asks of its reader: "needs-human" or "stuck", with the agent's
 // `work.attention_msg`. It is kata's coordination signal, not a Lane label, and whoever wrote it shows the same.
 type WorkAttention struct {
-	// Stuck is true for "stuck", false for "needs-human".
 	Stuck bool
 	// Msg is the message with its whitespace folded, "" when none was written.
 	Msg string
 }
 
-// Word is the signal as the Pane names it.
 func (w WorkAttention) Word() string {
 	if w.Stuck {
 		return "stuck"
@@ -25,7 +23,6 @@ func (w WorkAttention) Word() string {
 	return "needs human"
 }
 
-// Text is the word, then the message after a colon when there is one.
 func (w WorkAttention) Text() string {
 	if w.Msg == "" {
 		return w.Word()

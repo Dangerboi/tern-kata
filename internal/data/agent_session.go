@@ -17,23 +17,19 @@ import (
 // extension writes it on session start, on every session switch or branch and on every agent start (its SESSION_PATH_SUFFIX), and removePrompt removes it.
 const AgentSessionSuffix = ".session"
 
-// agentSessionTail is how much of the end of a session file the Pane reads: a session of any size costs this much.
 const agentSessionTail = 1 << 20
 
-// The reasons the Agent card gives for an agent whose session it cannot show.
 const (
 	agentSessionNoPath = "no session yet: omp has not named its session file"
 	agentSessionNoFile = "no session file yet"
 	agentSessionUnread = "session file unreadable"
 )
 
-// waitAgentSessions is the pause between two reads of an open Agent card.
 func (g *Gateway) waitAgentSessions(ctx context.Context, cmd model.WaitAgentSessions) model.AgentSessionTick {
 	g.pause(ctx, model.AgentSessionEvery)
 	return model.AgentSessionTick(cmd)
 }
 
-// readAgentSessions reads the session facts of each asked agent.
 func (g *Gateway) readAgentSessions(ctx context.Context, cmd model.ReadAgentSessions) model.AgentSessionsRead {
 	out := model.AgentSessionsRead{Request: cmd.Request, Sessions: make([]model.AgentSessionFacts, 0, len(cmd.Agents))}
 	for _, a := range cmd.Agents {
@@ -47,7 +43,6 @@ func (g *Gateway) readAgentSessions(ctx context.Context, cmd model.ReadAgentSess
 	return out
 }
 
-// readAgentSession is one agent's session: the path file beside its prompt file names the session file, whose tail is parsed.
 func readAgentSession(a model.AgentSessionAsk) model.AgentSessionFacts {
 	if a.PromptFile == "" {
 		return model.AgentSessionFacts{Reason: agentSessionNoPath}
@@ -116,7 +111,6 @@ func parseSessionTail(r io.ReaderAt, size, limit int64) (model.AgentSessionFacts
 	return s, nil
 }
 
-// sessionEntry is the part of a session line the card reads; message content stays undecoded until the role says it matters.
 type sessionEntry struct {
 	Type    string `json:"type"`
 	Message *struct {

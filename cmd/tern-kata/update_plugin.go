@@ -15,7 +15,6 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// ternTimeout bounds each `tern` command the plugin step runs.
 const ternTimeout = time.Minute
 
 var pluginTOMLVersion = regexp.MustCompile(`(?m)^version\s*=\s*"([^"\n]+)"`)
@@ -79,7 +78,6 @@ func updatePlugin(ctx context.Context, version string, fetch func() (unpackedRel
 	fmt.Fprintf(out, "Updated this machine's tern-kata plugin from %s to %s\n", have, want)
 }
 
-// runTern runs tern with args and returns its stdout; a failure carries tern's own words.
 func runTern(ctx context.Context, ternPath string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, ternTimeout)
 	defer cancel()

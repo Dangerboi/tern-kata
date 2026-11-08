@@ -6,11 +6,9 @@ import "time"
 // test seam). Everything that sleeps, times out or stamps a heartbeat goes through it.
 type Clock interface {
 	Now() time.Time
-	// After delivers once d has passed on this clock.
 	After(d time.Duration) <-chan time.Time
 }
 
-// SystemClock is the wall clock.
 type SystemClock struct{}
 
 func (SystemClock) Now() time.Time                         { return time.Now() }

@@ -23,7 +23,6 @@ const DetailScrollID = DetailID + ".viewport"
 // inside the scroller, not the scroller itself.
 const DetailContentID = DetailScrollID + ".content"
 
-// DetailActivityID holds the Activity heading, its tab names and the active tab's rows.
 const DetailActivityID = DetailContentID + ".activity"
 
 // ActivityRevealIDs are the nodes to reveal, in this order, to bring the active Activity tab into view:
@@ -48,9 +47,9 @@ func detail(m model.Model, now time.Time) tern.Element {
 		noIssue.Key = "empty"
 		children = append(children, noIssue)
 	case m.DetailLoading() && m.DetailAuthority() == nil:
-		children = append(children, ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading Issue detail…"})
+		children = append(children, plainText("loading", ui.TonePending, "Loading Issue detail…"))
 	case m.DetailErr() != nil:
-		children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.DetailErr().Error()})
+		children = append(children, plainText("error", ui.ToneError, m.DetailErr().Error()))
 	case m.DetailAuthority() == nil || m.DetailAuthority().Issue == nil:
 		children = append(children, ui.Text{Common: ui.Common{Key: "unavailable"}, Text: "This Issue is unavailable or no longer visible."})
 	default:
@@ -86,7 +85,6 @@ func detail(m model.Model, now time.Time) tern.Element {
 	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
 }
 
-// statusText is the status badge text: the status, plus the close reason of a closed Issue.
 func statusText(issue *model.Issue) string {
 	if issue.ClosedReason != nil && *issue.ClosedReason != "" && issue.Status == "closed" {
 		return issue.Status + " · " + *issue.ClosedReason
@@ -94,8 +92,6 @@ func statusText(issue *model.Issue) string {
 	return issue.Status
 }
 
-// activityTabs is the Activity heading with a clickable name and count per tab;
-// the active one is accent and bracketed, as in kata's TUI.
 func activityTabs(m model.Model) tern.Element {
 	tabs := ui.Nodes(ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: "Activity", S: "strong"}}})
 	for tab := model.TabComments; tab < model.TabCount; tab++ {
@@ -108,8 +104,6 @@ func activityTabs(m model.Model) tern.Element {
 	return ui.Row{Common: ui.Common{Key: "tabs"}, Gap: ui.GapMD, Children: tabs}
 }
 
-// detailRows draws the model's rows: the children as table rows and the others as Activity cards, the one under the
-// cursor marked.
 func detailRows(m model.Model, now time.Time) (children []detailChild, activity tern.Nodes) {
 	for i, item := range m.DetailRows() {
 		mark := ui.Mark("")
@@ -156,14 +150,14 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 			}
 		}
 		if row.Creation != "" {
-			parts = append(parts, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: row.Creation})
+			parts = append(parts, plainText("creation", ui.ToneMuted, row.Creation))
 		}
 		if len(row.Tags) > 0 {
 			parts = append(parts, commentTagLine(row.Tags))
 		}
 		if mark == ui.MarkPick && item.Kind == model.RowComment {
 			if choice, ok := m.DetailCommentLink(); ok {
-				link := ui.Text{Common: ui.Common{Key: "link", Tone: ui.ToneAccent}, Text: fmt.Sprintf("link %d/%d: %s", choice.Index, choice.Count, choice.Label)}
+				link := plainText("link", ui.ToneAccent, fmt.Sprintf("link %d/%d: %s", choice.Index, choice.Count, choice.Label))
 				if choice.IssueUID != "" {
 					link.Hovercard = refCard(m, refFacts{UID: choice.IssueUID, Qualified: choice.Qualified}, now)
 				}
@@ -184,10 +178,8 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 	return children, activity
 }
 
-// leafKey is the key of the nth reply from another Issue drawn after the comment with this key.
 func leafKey(commentKey string, n int) string { return commentKey + "-leaf" + strconv.Itoa(n) }
 
-// commentTagLine is a comment's confirm and refute tags on one line, joined by a middle dot.
 func commentTagLine(tags []model.RowSpan) ui.Text {
 	var spans []ui.Span
 	for i, tag := range tags {
@@ -199,7 +191,6 @@ func commentTagLine(tags []model.RowSpan) ui.Text {
 	return ui.Text{Common: ui.Common{Key: "tags"}, Spans: spans}
 }
 
-// indented draws node after two columns of space per level of depth, so a reply sits under the comment it answers.
 func indented(key string, depth int, node tern.Element) tern.Element {
 	if depth == 0 {
 		return node
@@ -208,8 +199,6 @@ func indented(key string, depth int, node tern.Element) tern.Element {
 	return ui.Row{Common: ui.Common{Key: key}, Children: ui.Nodes(pad, node)}
 }
 
-// commentLeaf is a reply from another Issue: a muted line under the comment it answers, indented to its depth, with a second
-// line when the comment it answers changed after the reply.
 func commentLeaf(key string, leaf model.CommentLeaf) tern.Element {
 	lines := ui.Nodes(ui.Text{Common: ui.Common{Key: "leaf", Min: &ui.Bounds{W: ui.Ch(0)}}, Spans: []ui.Span{{T: leaf.Text, S: "muted"}}})
 	if leaf.Edited {
@@ -218,7 +207,6 @@ func commentLeaf(key string, leaf model.CommentLeaf) tern.Element {
 	return indented(key, leaf.Depth, ui.Col{Common: ui.Common{Key: key, Grow: 1}, Children: lines})
 }
 
-// detailChild is a child row with its cursor mark.
 type detailChild struct {
 	model.ChildRow
 	mark ui.Mark
@@ -351,12 +339,11 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		children[i] = ui.Row{Common: ui.Common{Key: strings.ReplaceAll(strings.ToLower(r.name), " ", "-")}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(key, r.value)}
 	}
 	if line := issue.Attribution.Line(issue.Author); line != "" {
-		children = append(children, ui.Text{Common: ui.Common{Key: "creation", Tone: ui.ToneMuted}, Text: line})
+		children = append(children, plainText("creation", ui.ToneMuted, line))
 	}
 	return ui.Col{Common: ui.Common{Key: "properties", Role: PropertiesRole}, Gap: ui.GapNone, Children: children}
 }
 
-// workAttention is the Work attention value: the word a badge in its tone, then the whole message as wrapping text, so a long
 // message is read to its last word instead of being cut at the edge of a one-line chip.
 func workAttention(w model.WorkAttention) tern.Element {
 	tone := attentionTone(w)
@@ -370,14 +357,11 @@ func workAttention(w model.WorkAttention) tern.Element {
 	)}
 }
 
-// propertyRow is a Name: value row of the properties grid.
 type propertyRow struct {
 	name  string
 	value tern.Element
 }
 
-// cronProperties are the Cron job property of a cron-made Issue and the Cron jobs property of a parent, each job a row the
-// cursor can stand on and a click opens on the Jobs Page. A closed parent says its jobs are paused.
 func cronProperties(m model.Model) []propertyRow {
 	var job tern.Element
 	var jobs tern.Nodes
@@ -411,7 +395,7 @@ func cronProperties(m model.Model) []propertyRow {
 	}
 	if len(jobs) > 0 {
 		if m.CronJobsClosed() {
-			jobs = append(jobs, ui.Text{Common: ui.Common{Key: "paused", Tone: ui.ToneMuted}, Text: "Closed: its Cron jobs are paused."})
+			jobs = append(jobs, plainText("paused", ui.ToneMuted, "Closed: its Cron jobs are paused."))
 		}
 		rows = append(rows, propertyRow{"Cron jobs", ui.Col{Common: ui.Common{Key: "v"}, Gap: ui.GapNone, Children: jobs}})
 	}

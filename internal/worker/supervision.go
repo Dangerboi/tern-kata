@@ -12,7 +12,6 @@ import (
 	"time"
 )
 
-// ConfigFileName is the worker's config file, beside the supervision marker.
 const ConfigFileName = "worker.toml"
 
 // ManualFileName is the supervision marker's name, the one place it is spelled. Every text that names the marker
@@ -29,25 +28,17 @@ const SupervisionOnWords = "a " + ConfigFileName + " without " + ManualFileName 
 // SupervisionOffWords names what turns supervision off, for the paragraph `worker status` prints about a supervised worker.
 const SupervisionOffWords = ManualFileName + " beside " + ConfigFileName
 
-// ManualPath is the supervision marker.
 func (d Dirs) ManualPath() string { return filepath.Join(d.Config, ManualFileName) }
 
 // ManualPresent is whether the marker exists, whatever else is there: the Worker card's read.
-func (d Dirs) ManualPresent() bool {
-	_, err := os.Stat(d.ManualPath())
-	return err == nil
-}
+func (d Dirs) ManualPresent() bool { return fileExists(d.ManualPath()) }
 
 // SupervisionOn is whether the plugin starts and restarts the worker: worker.toml exists and the marker does not. The one
 // place the rule is decided: the host half (host.luau) asks `tern-kata worker supervised`, which answers from here.
 func (d Dirs) SupervisionOn() bool {
-	if _, err := os.Stat(d.ConfigPath()); err != nil {
-		return false
-	}
-	return !d.ManualPresent()
+	return fileExists(d.ConfigPath()) && !d.ManualPresent()
 }
 
-// supervisedConfigMaxBytes bounds the worker.toml text SupervisedConfig returns.
 const supervisedConfigMaxBytes = 1 << 20
 
 // SupervisedConfig is SupervisionOn together with worker.toml's text (at most supervisedConfigMaxBytes; empty when it
@@ -94,8 +85,6 @@ func RunningWorker(ctx context.Context, d Dirs) (Identity, bool) {
 	return Identity{PID: pid}, true
 }
 
-// SetSupervision turns the plugin's supervision off by creating the marker (and the config folder when it is missing) or
-// on by removing it; either, repeated, is no error.
 func (d Dirs) SetSupervision(on bool) error { return SetMarker(d.Config, d.ManualPath(), on) }
 
 // SetMarker creates the supervision marker file at path (making dir when it is missing) when on is false, and removes it when on

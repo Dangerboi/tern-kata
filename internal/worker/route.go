@@ -12,25 +12,20 @@ import (
 // the daemon's instance. A daemon that no longer advertises cron_v1, answers for another Project or is another instance
 // than the one pinned (ADR-0010) stops admission and report delivery for that Project until a check passes.
 const (
-	// routeReuse is how long a passing check stands for the next admission or report.
 	routeReuse = 5 * time.Second
-	// routeIdle is how often an otherwise idle Project is checked.
-	routeIdle = 5 * time.Minute
+	routeIdle  = 5 * time.Minute
 	// routeBackoffStart and routeBackoffMax bound the wait between checks while one is failing; each wait is random
 	// between half and all of its limit.
 	routeBackoffStart = 30 * time.Second
 	routeBackoffMax   = 5 * time.Minute
-	// startingProjects is how many Projects resolve and recover at once when the worker starts.
-	startingProjects = 2
+	startingProjects  = 2
 )
 
-// routeState is one Project's last route check, guarded by Worker.mu.
 type routeState struct {
 	passedAt time.Time
-	// err is why the last check failed, empty while it passes; retryAt is when a failing check may be tried again.
-	err     string
-	retryAt time.Time
-	backoff time.Duration
+	err      string
+	retryAt  time.Time
+	backoff  time.Duration
 }
 
 // checkRoute confirms the Project's route. force asks for a fresh probe even when a passing one is recent (a stream
@@ -67,7 +62,6 @@ func (w *Worker) checkRoute(ctx context.Context, ps *projectState, force bool) e
 	return err
 }
 
-// probeRoute asks the daemon about project and, when the Project was pinned to an instance, about the instance.
 func (w *Worker) probeRoute(ctx context.Context, project Project, instance string) error {
 	caps, err := w.opt.Kata.Capabilities(ctx, project.ID)
 	switch {
@@ -91,7 +85,6 @@ func (w *Worker) probeRoute(ctx context.Context, project Project, instance strin
 	return nil
 }
 
-// routeFailing reports whether the last route check failed and when another may be tried.
 func (w *Worker) routeFailing(ps *projectState) (retryAt time.Time, failing bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

@@ -16,10 +16,8 @@ type RemoteAgent struct {
 	Unread string
 }
 
-// Key is the metadata key of the agent's record, which names its row on the Agent card.
 func (r RemoteAgent) Key() string { return AgentRecordKey(r.HostID, r.Block) }
 
-// HostLabel is the host as the Agent card and the badge name it: the host name, else the Host id.
 func (r RemoteAgent) HostLabel() string { return cmp.Or(r.Host, r.HostID) }
 
 // remoteAgentsIn reads the records in metadata that another host (a Host id other than hostID) published. With no Host id of
@@ -46,7 +44,6 @@ func RemoteHostOn(metadata map[string]any, hostID string) string {
 	return ""
 }
 
-// RemoteAgents lists the agents other hosts started on the Issue, oldest start first.
 func (m Model) RemoteAgents(issueUID string) []RemoteAgent {
 	issue := m.issueByUID(issueUID)
 	if issue == nil {
@@ -73,7 +70,6 @@ func (m Model) remoteMessageRefusal(r RemoteAgent) string {
 	return MessageSenderRefusal(m.Actor, cmp.Or(r.Actor, AgentAddressActor(r.Address)), r.MessageFrom, true, m.VerifiedSenders)
 }
 
-// newestRemoteAgentOn is the agent other hosts published on an Issue, among those match accepts, that started last.
 func (m Model) newestRemoteAgentOn(issueUID string, match func(RemoteAgent) bool) (RemoteAgent, bool) {
 	var target RemoteAgent
 	found := false
@@ -118,13 +114,11 @@ type ForgetAgentRecord struct {
 	HostID  string
 	Block   string
 	Address string
-	// Host names the host in the answer's words.
-	Host string
+	Host    string
 }
 
 func (ForgetAgentRecord) cmd() {}
 
-// AgentRecordForgotten answers ForgetAgentRecord.
 type AgentRecordForgotten struct {
 	Host string
 	Err  error
@@ -178,5 +172,4 @@ func RemoteIssueAgent(r AgentRecord, issueRef, issueUID string, projectID int64)
 	}
 }
 
-// Remote says the agent runs on another host.
 func (a IssueAgent) Remote() bool { return a.HostID != "" }

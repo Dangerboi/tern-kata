@@ -47,7 +47,6 @@ func (c *Client) ListJobs(ctx context.Context, cmd model.LoadJobs) (model.JobsLo
 	return loaded, nil
 }
 
-// jobActivityPages bounds how many pages of the Project's Runs are read to find each adapter job's recent runs.
 const jobActivityPages = 5
 
 // jobActivity is what each job has done lately: for a native job the children its parent holds that carry its uid in their
@@ -106,7 +105,6 @@ func isNativeJob(jobs []model.CronJob, uid string) bool {
 	return slices.ContainsFunc(jobs, func(j model.CronJob) bool { return j.UID == uid && j.Native() })
 }
 
-// satisfied says every live adapter job has its share of runs.
 func satisfied(jobs []model.CronJob, activity map[string]model.JobActivity) bool {
 	return !slices.ContainsFunc(jobs, func(j model.CronJob) bool {
 		return !j.Native() && !j.Archived() && len(activity[j.UID].Runs) < model.JobActivityShown
@@ -135,7 +133,6 @@ func (c *Client) projectArchived(ctx context.Context, projectID int64, err error
 	return false, nil
 }
 
-// parentReader reads a native job's parent Issue once however many jobs hang from it.
 type parentReader struct {
 	c         *Client
 	projectID int64
@@ -146,13 +143,10 @@ func newParentReader(c *Client, projectID int64) *parentReader {
 	return &parentReader{c: c, projectID: projectID, read: map[string]readParent{}}
 }
 
-// children are the children of the parent uid, already read, that the job made, newest first.
 func (p *parentReader) children(parentUID, jobUID string) []model.CronChild {
 	return p.read[parentUID].children[jobUID]
 }
 
-// translate is kata's Cron job as the model holds it. A native job comes with its parent: its status and the job's own
-// progress key.
 func (p *parentReader) translate(ctx context.Context, wire g.CronJob) (model.CronJob, error) {
 	job := model.CronJob{Job: cronjobclient.Job(wire)}
 	if !job.Native() {
@@ -172,7 +166,6 @@ func (p *parentReader) translate(ctx context.Context, wire g.CronJob) (model.Cro
 type readParent struct {
 	parent   model.CronJobParent
 	metadata map[string]any
-	// children are the parent's children that a Cron job made, newest first, by the job's uid.
 	children map[string][]model.CronChild
 }
 
@@ -206,7 +199,6 @@ func (p *parentReader) parent(ctx context.Context, uid string) (readParent, erro
 	return read, nil
 }
 
-// cronChildren groups the children a Cron job made by that job, newest first by the run each was made for.
 func cronChildren(wire []g.IssueOut) map[string][]model.CronChild {
 	byJob := map[string][]model.CronChild{}
 	for _, child := range wire {

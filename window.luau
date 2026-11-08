@@ -11,7 +11,6 @@ local launched: { [number]: boolean } = {}
 local fresh: { [number]: boolean } = {}
 -- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
 local pending: { [number]: string? } = {}
--- New kata Panes that are to run the wrap-up sweep once their surface is live.
 local pendingSweep: { [number]: boolean } = {}
 -- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
 -- Kept in `tern.kv` too, because a plugin reload (a local update brings the plugin along) empties this table while the
@@ -144,19 +143,17 @@ local function existingPane(cx: WindowCx): number?
     return nil
 end
 
-local function selectIssue(cx: WindowCx, pane: number, ref: string)
-    cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "select-issue", value = ref})
+-- An action the kata Pane's issue list takes over TSP, so a value never passes through a shell.
+local function paneAction(cx: WindowCx, pane: number, act: string, value: string)
+    cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = act, value = value})
 end
 
--- kata Panes that have been sent the agent states since their surface went live.
 local relayed: { [number]: boolean } = {}
--- kata Panes with a pending wait for their surface (see the title handler).
 local retrying: { [number]: boolean } = {}
 
 -- Background agents live in a session of this name (internal/model AgentSession), kept out of sight.
 local AGENT_SESSION = "kata agents"
 
--- The tabs that are in that session, by id.
 local function hiddenTabs(cx: WindowCx, all: { TabInfo }): { [number]: boolean }
     local sessions: { [number]: boolean } = {}
     for _, session in cx.sessions:list() do
@@ -204,13 +201,12 @@ end
 local function relayStates(cx: WindowCx, pane: number, states: string)
     if not cx.session:surface(pane) then return end
     relayed[pane] = true
-    cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "agent-states", value = states})
+    paneAction(cx, pane, "agent-states", states)
 end
 
 -- Places new agent tabs; defined with the tab placement below, and run on every relay pass.
 local placeAgents: (WindowCx, { TabInfo }, { PaneInfo }) -> ()
 
--- The states to every live kata Pane, or only to those not sent them yet.
 local function relayAll(cx: WindowCx, onlyNew: boolean)
     local tabs = cx.session:tabs()
     local panes = cx.session:panes()
@@ -224,19 +220,21 @@ local function relayAll(cx: WindowCx, onlyNew: boolean)
     end
 end
 
-local function sweepAgents(cx: WindowCx, pane: number)
-    cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = "wrap-up-sweep", value = ""})
+local function showSessionOf(cx: WindowCx, tab: number?)
+    for _, info in cx.session:tabs() do
+        if info.id == tab then cx.sessions:switch(info.session) end
+    end
 end
 
 local function deliver(cx: WindowCx, pane: number)
     local ref = pending[pane]
     if ref and cx.session:surface(pane) then
         pending[pane] = nil
-        selectIssue(cx, pane, ref)
+        paneAction(cx, pane, "select-issue", ref)
     end
     if pendingSweep[pane] and cx.session:surface(pane) then
         pendingSweep[pane] = nil
-        sweepAgents(cx, pane)
+        paneAction(cx, pane, "wrap-up-sweep", "")
     end
     if not relayed[pane] then relayAll(cx, true) end
 end
@@ -314,7 +312,7 @@ local function openKata(cx: WindowCx, find: boolean, act: (number) -> (), queue:
 end
 
 local function open(cx: WindowCx, ref: string?)
-    openKata(cx, ref ~= nil, function(pane) selectIssue(cx, pane, ref :: string) end, function(pane) pending[pane] = ref end)
+    openKata(cx, ref ~= nil, function(pane) paneAction(cx, pane, "select-issue", ref :: string) end, function(pane) pending[pane] = ref end)
 end
 
 -- `W` starts an agent in a new tab, which Tern appends as the last tab. The agent's prompt file is named
@@ -365,7 +363,6 @@ local function tabRecs(tabs: { TabInfo }): { placement.TabRec }
     return recs
 end
 
--- The window's panes as plain data for the placement rule.
 local function paneRecs(panes: { PaneInfo }): { placement.PaneRec }
     local recs: { placement.PaneRec } = {}
     for i, info in panes do
@@ -374,7 +371,6 @@ local function paneRecs(panes: { PaneInfo }): { placement.PaneRec }
     return recs
 end
 
--- Moves `tab` right of the tab `homeTab` of the starting Pane; nothing when there is none.
 local function placeTab(cx: WindowCx, tab: number, homeTab: number?)
     if not homeTab then return end
     local starterTab: TabInfo? = nil
@@ -452,9 +448,7 @@ local function openFocusedAgent(cx: WindowCx, pane: number, tab: number)
     local kata = placement.kataPaneFor(paneRecs(cx.session:panes()), markerOf(command), lastKata)
     if not kata or not kata.tab then return end
     if not cx.layout:move(pane, kata.pane, "right") then return end
-    for _, info in cx.session:tabs() do
-        if info.id == kata.tab then cx.sessions:switch(info.session) end
-    end
+    showSessionOf(cx, kata.tab)
     cx.layout:focus(pane)
     relayAll(cx, false)
 end
@@ -521,9 +515,7 @@ tern.command({
         openFocusedAgent(cx, pane, shown)
         local now = cx.session:pane(pane)
         local tab = if now then now.tab else nil
-        for _, entry in cx.session:tabs() do
-            if entry.id == tab then cx.sessions:switch(entry.session) end
-        end
+        showSessionOf(cx, tab)
         cx.layout:focus(pane)
     end,
 })
@@ -604,7 +596,6 @@ tern.on("title", function(ev, cx)
     end
 end)
 
--- Agents' states go to every kata Pane as they change, so its badges follow them.
 tern.on("agent_state", function(ev, cx)
     if ev.new == "waiting_input" then
         if ev.old ~= "waiting_input" then
@@ -660,7 +651,6 @@ local function withPluginDir(fn: () -> ())
     if not ok then answer(nil) end
 end
 
--- Where `version.txt` is: the user's TERN_KATA_BASE_URL, else the latest GitHub release.
 local function versionTextUrl(): string
     local base = releases.releaseBase(tern.getenv("TERN_KATA_BASE_URL"), nil)
     return (base:gsub("/+$", "")) .. "/version.txt"
@@ -753,12 +743,11 @@ tern.command({
     run = function(cx) open(cx, nil) end,
 })
 
--- Tells every running agent to wrap up: the focused tab's kata Pane (or a new one) runs the sweep and shows who has finished.
 tern.command({
     id = "wrap-up-agents",
     title = "Wrap up every running agent",
     run = function(cx)
-        openKata(cx, true, function(pane) sweepAgents(cx, pane) end, function(pane) pendingSweep[pane] = true end)
+        openKata(cx, true, function(pane) paneAction(cx, pane, "wrap-up-sweep", "") end, function(pane) pendingSweep[pane] = true end)
     end,
 })
 

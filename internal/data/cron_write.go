@@ -72,7 +72,6 @@ func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWr
 		case !found:
 			return model.JobWritten{}, daemonError(err)
 		case op == model.JobCreated && current.Name == cmd.Name && reflect.DeepEqual(withoutEmptyMaps(current.Definition), withoutEmptyMaps(def)):
-			// The same create, sent again after the first one landed.
 			return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Op: op, Job: &current}, nil
 		}
 		return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Changed: &current}, nil
@@ -104,7 +103,6 @@ func (c *Client) ArchiveJob(ctx context.Context, cmd model.ArchiveJobCmd) (model
 	return c.writtenJob(ctx, cmd.ProjectID, model.JobArchived, response.JSON200, parents)
 }
 
-// RestoreJob restores an archived job, guarded like ArchiveJob.
 func (c *Client) RestoreJob(ctx context.Context, cmd model.RestoreJobCmd) (model.JobWritten, error) {
 	response, err := c.RestoreCronJobWithResponse(ctx, &g.RestoreCronJobRequestOptions{
 		PathParams: &g.RestoreCronJobPath{ProjectID: cmd.ProjectID, CronUID: cmd.UID},
@@ -117,7 +115,6 @@ func (c *Client) RestoreJob(ctx context.Context, cmd model.RestoreJobCmd) (model
 	return c.writtenJob(ctx, cmd.ProjectID, model.JobRestored, response.JSON200, parents)
 }
 
-// guardedFailure is a failed guarded write: the current job when kata refused for a moved guard, else kata's error.
 func (c *Client) guardedFailure(ctx context.Context, projectID int64, uid string, err error, parents *parentReader) (model.JobWritten, error) {
 	current, found, readErr := c.conflictingJob(ctx, projectID, uid, err, parents)
 	switch {

@@ -5,7 +5,6 @@ import "strings"
 // Following a ticket that belongs to another Project from a Project Collection switches the Pane to that Project: the same Page,
 // the ticket selected once the Project's snapshot arrives. The jump history remembers where the Pane stood so Esc returns to it.
 
-// crossPlace is where the Pane stood when a jump left for another Project.
 type crossPlace struct {
 	collection Collection
 	page       Page
@@ -57,7 +56,6 @@ func (d *IssueDetailData) links() []Link {
 	return d.Links
 }
 
-// cutQualified splits a qualified id, project#short.
 func cutQualified(id string) (project, short string, ok bool) {
 	i := strings.LastIndex(id, "#")
 	if i <= 0 {
@@ -84,7 +82,6 @@ func (m Model) otherProjectNamed(name string) (CatalogProject, bool) {
 	return CatalogProject{}, false
 }
 
-// placeEntry is the jump history entry for leaving this place for another Project.
 func (m Model) placeEntry() jumpEntry {
 	row, hasRow := m.cursorRowID()
 	return jumpEntry{uid: m.SelectedUID, tab: m.tab, row: row, hasRow: hasRow, cross: &crossPlace{
@@ -139,7 +136,6 @@ func (m Model) EscGoesBack() bool {
 	return m.listJump && len(m.back) > 0 && m.Focus != ColumnDetail && m.SelectedUID == m.landedOn
 }
 
-// followArrived says the Collection's snapshot is on screen.
 func (m Model) followArrived() Model {
 	if m.follow != nil {
 		follow := *m.follow
@@ -149,7 +145,6 @@ func (m Model) followArrived() Model {
 	return m.landFollow()
 }
 
-// waitingForFollow says the Project followed into has not answered yet, so the selection must not be tidied.
 func (m Model) waitingForFollow() bool { return m.follow != nil && !m.follow.snapshot }
 
 // landFollow settles a followed ticket once the Project's snapshot has arrived and, on the Board, its Lane list: the Board puts

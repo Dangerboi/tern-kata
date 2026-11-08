@@ -24,18 +24,15 @@ func (LoadLanes) cmd() {}
 // LanesLoaded answers LoadLanes. No Lanes means the default list. Shared says Lanes and the limits are the Project's tern.lanes,
 // else they are the file's. Err means the file could not be read or parsed, whichever list is used.
 type LanesLoaded struct {
-	ProjectUID string
-	// Request is the LoadLanes it answers.
-	Request int64
-	Lanes   []string
-	// DoneDays and DoneCards are the Project's Done limits; zero means the default.
+	ProjectUID          string
+	Request             int64
+	Lanes               []string
 	DoneDays, DoneCards int
 	Shared              bool
 	// ProjectID and Revision are the Project as the daemon listed it with the list; ProjectID is 0 when it was not read.
 	ProjectID, Revision int64
 	// Archived says the Project is archived: kata still lists it with its list but refuses any change to its metadata.
-	Archived bool
-	// SharedErr is why the Project's shared list was not used: it could not be read, or its value is not a Lane list.
+	Archived  bool
 	SharedErr error
 	Err       error
 }
@@ -53,7 +50,6 @@ type SaveLanes struct {
 
 func (SaveLanes) cmd() {}
 
-// LanesSaved answers SaveLanes.
 type LanesSaved struct {
 	ProjectUID          string
 	Lanes               []string
@@ -87,7 +83,6 @@ type LanesShared struct {
 
 func (LanesShared) msg() {}
 
-// same says o is this write and not an earlier one, whose card was cancelled.
 func (s ShareLanes) same(o ShareLanes) bool {
 	return s.ProjectUID == o.ProjectUID && s.Revision == o.Revision && s.Stop == o.Stop && s.DoneDays == o.DoneDays &&
 		s.DoneCards == o.DoneCards && slices.Equal(s.Lanes, o.Lanes)
@@ -147,7 +142,6 @@ func (m Model) lanesRefresh() (Model, []Cmd) {
 	return m, []Cmd{m.loadLanesCmd(m.Board.asked)}
 }
 
-// loadLanesCmd is a numbered read of the Lane list of the Project uid; it supersedes any read still out.
 func (m *Model) loadLanesCmd(uid string) LoadLanes {
 	return LoadLanes{Workspace: m.Workspace, ProjectUID: uid, Request: m.Board.reads.Ask()}
 }
@@ -182,7 +176,6 @@ func applyLanesLoaded(m Model, msg LanesLoaded) Model {
 	m.Board.archived = msg.Archived
 	m.Board.fileErr, m.Board.loaded = msg.Err, true
 	var notices []string
-	// A shared list that cannot be used is reported once, not on every read that finds it unchanged.
 	if msg.SharedErr == nil {
 		m.Board.reported = ""
 	} else if text := msg.SharedErr.Error(); text != m.Board.reported {
@@ -206,7 +199,6 @@ func applyLanesLoaded(m Model, msg LanesLoaded) Model {
 	return m.WithVisibleSelection()
 }
 
-// answeredBy says msg is the result of this save and not of an earlier one, whose card was cancelled.
 func (s SaveLanes) answeredBy(msg LanesSaved) bool {
 	return msg.ProjectUID == s.ProjectUID && msg.DoneDays == s.DoneDays && msg.DoneCards == s.DoneCards && slices.Equal(msg.Lanes, s.Lanes)
 }
@@ -278,7 +270,6 @@ func shareFailure(s ShareLanes) string {
 	return "Lanes not shared"
 }
 
-// conflictError says the Project changed since the Lanes card opened and names the list it shares now.
 func conflictError(current LanesLoaded) error {
 	now := "nothing"
 	switch {
@@ -298,7 +289,6 @@ func conflictError(current LanesLoaded) error {
 	return fmt.Errorf("The Project changed since this card opened; it shares %s now. Save again to replace it.", now)
 }
 
-// keepLane re-picks the Lane view's Lane when a new Lane list dropped it.
 func (m Model) keepLane() Model {
 	if !m.LaneViewShown() || slices.ContainsFunc(m.BoardColumns(), func(c BoardColumn) bool { return c.Lane == m.Board.Lane }) {
 		return m

@@ -38,15 +38,11 @@ const DefaultFolder = "/kata"
 // KeyFileName is the key file written beside kata's config.toml when the key comes from standard input.
 const KeyFileName = "docbank.key"
 
-// Runner runs the executables the setup drives (kata, and docbank in the local form).
 type Runner interface {
-	// LookPath finds name on PATH.
 	LookPath(name string) (string, error)
-	// Run runs name with args, with env (NAME=value) added to the process's environment, and returns its combined output.
 	Run(ctx context.Context, env []string, name string, args ...string) ([]byte, error)
 }
 
-// ExecRunner runs the real programs, in the process's environment.
 type ExecRunner struct{}
 
 func (ExecRunner) LookPath(name string) (string, error) { return exec.LookPath(name) }
@@ -83,19 +79,15 @@ type Env struct {
 	DefaultKataHome string
 	// ProbeTimeout bounds the authenticated read of Docbank; zero means the default.
 	ProbeTimeout time.Duration
-	// LookupEnv reads --key-env's variable.
-	LookupEnv func(string) (string, bool)
-	// Stdin is read for `--key-file -`.
-	Stdin io.Reader
-	// Confirm asks a yes/no question on the terminal; nil when there is none.
-	Confirm func(question string) (bool, error)
-	Out     io.Writer
+	LookupEnv    func(string) (string, bool)
+	Stdin        io.Reader
+	Confirm      func(question string) (bool, error)
+	Out          io.Writer
 }
 
 // Common is what both forms take besides where Docbank is.
 type Common struct {
-	Folder string // empty means DefaultFolder
-	// Yes restarts the kata daemon without asking; NoRestart leaves it alone.
+	Folder         string // empty means DefaultFolder
 	Yes, NoRestart bool
 }
 
@@ -107,7 +99,6 @@ type Remote struct {
 	KeyFile, KeyEnv string
 }
 
-// kataSection is kata's [docbank] section as setup writes and compares it.
 type kataSection struct {
 	URL        string `toml:"url"`
 	APIKey     string `toml:"api_key"`
@@ -125,7 +116,6 @@ const (
 	kataMissing  = "kata is not on PATH; install kata first (https://github.com/kenn-io/kata), nothing was written"
 )
 
-// probeTimeout is Env.ProbeTimeout, or the default.
 func (e Env) probeTimeout() time.Duration {
 	if e.ProbeTimeout > 0 {
 		return e.ProbeTimeout
@@ -419,7 +409,6 @@ func (e Env) writeKeyFile(path, key string) error {
 	return err
 }
 
-// readConfig is a config.toml as text (kata's, or Docbank's); a missing file is empty text.
 func readConfig(path string) (string, error) {
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -437,7 +426,6 @@ func existingSection(path, text string) (kataSection, bool, error) {
 	return decodeSection[kataSection](path, text, "docbank")
 }
 
-// decodeSection is the [name] section text holds, found false when there is none. A file that does not parse is refused.
 func decodeSection[T any](path, text, name string) (section T, found bool, err error) {
 	var tables map[string]toml.Primitive
 	meta, err := toml.Decode(text, &tables)
@@ -454,7 +442,6 @@ func decodeSection[T any](path, text, name string) (section T, found bool, err e
 	return section, true, nil
 }
 
-// matches reports whether the section found in the file sets what want sets (the folder defaulting as kata defaults it).
 func (have kataSection) matches(want kataSection) bool {
 	if have.Folder == "" {
 		have.Folder = DefaultFolder
@@ -468,7 +455,6 @@ func (have kataSection) matches(want kataSection) bool {
 	return have.APIKey == "" && have == want
 }
 
-// describe shows the section as found, with an inline key hidden.
 func (s kataSection) describe() string {
 	var b strings.Builder
 	line := func(name, value string) {
@@ -493,7 +479,6 @@ func (s kataSection) keySource() string {
 	return "api_key_env " + s.APIKeyEnv
 }
 
-// text is the section as written to the file.
 func (s kataSection) text() string {
 	var b strings.Builder
 	b.WriteString("[docbank]\n")
@@ -507,8 +492,6 @@ func (s kataSection) text() string {
 	return b.String()
 }
 
-// writeSection appends the section to existing and writes the result over path atomically. The new file is parsed before it replaces
-// the old one and must hold exactly the section; the text before it is the old file, byte for byte.
 func writeSection(path, existing string, want kataSection) error {
 	return appendSection(path, existing, "docbank", want.text(), func(got kataSection) bool { return got.matches(want) })
 }
@@ -579,7 +562,6 @@ func resolveLink(path string) (string, error) {
 	return target, nil
 }
 
-// tomlString is s as a TOML basic string.
 func tomlString(s string) string {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
@@ -588,7 +570,6 @@ func tomlString(s string) string {
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
-// AskYesNo prints question to out and reads one line from in; "y" or "yes" in any case is a yes.
 func AskYesNo(in *bufio.Reader, out io.Writer, question string) (bool, error) {
 	if _, err := io.WriteString(out, question); err != nil {
 		return false, err

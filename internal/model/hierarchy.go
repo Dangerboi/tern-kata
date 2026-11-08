@@ -1,6 +1,9 @@
 package model
 
-import "slices"
+import (
+	"maps"
+	"slices"
+)
 
 type IssueRow struct {
 	Issue
@@ -25,7 +28,6 @@ func (m Model) issueHierarchy() (map[string]string, map[string][]int) {
 			parents[link.FromIssueUID] = link.ToIssueUID
 		}
 	}
-	// Break cyclic parent paths so every loaded Issue still has a reachable root.
 	state := make(map[string]int, len(m.Issues))
 	var visit func(string)
 	visit = func(uid string) {
@@ -134,7 +136,6 @@ func (m Model) VisibleRows() []IssueRow {
 	return m.listRows()
 }
 
-// listRows are the list's rows worked out afresh.
 func (m Model) listRows() []IssueRow {
 	rows := make([]IssueRow, 0, len(m.Issues))
 	counts := childCountsByParent(m.Snapshot.Links)
@@ -253,11 +254,15 @@ func updateHierarchy(m Model, action Action) Model {
 	if expanded == m.ExpandedUIDs[m.SelectedUID] {
 		return m
 	}
-	expansions := make(map[string]bool, len(m.ExpandedUIDs)+1)
-	for uid, open := range m.ExpandedUIDs {
-		expansions[uid] = open
-	}
-	expansions[m.SelectedUID] = expanded
-	m.ExpandedUIDs = expansions
+	m.ExpandedUIDs = m.expandedCopy()
+	m.ExpandedUIDs[m.SelectedUID] = expanded
 	return m.WithVisibleSelection()
+}
+
+// expandedCopy is ExpandedUIDs as a map to write to: the Model's own is shared by every copy of it.
+func (m Model) expandedCopy() map[string]bool {
+	if m.ExpandedUIDs == nil {
+		return map[string]bool{}
+	}
+	return maps.Clone(m.ExpandedUIDs)
 }

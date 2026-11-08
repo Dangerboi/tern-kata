@@ -15,25 +15,21 @@ var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
 
 type Draft struct {
 	Editor                          TextEditor
-	BaseText                        string // the Issue text the Draft started against
+	BaseText                        string
 	ProjectID, BaseRevision         int64
 	Comment, Saving, DiscardConfirm bool
 	Conflict                        *Issue
 	Err                             error
-	// ReplyTo is the UID of the comment a comment Draft answers ("" for a plain comment), ReplyAuthor its author and
-	// ReplyKind what the reply is.
-	ReplyTo, ReplyAuthor string
-	ReplyKind            ReplyKind
+	ReplyTo, ReplyAuthor            string
+	ReplyKind                       ReplyKind
 	Keyed
 }
 
-// Keyed is the idempotency key of a request's last send and the request it went with; see mintKey.
 type Keyed struct {
 	Key  string
 	sent any
 }
 
-// ReplyKind is what a Reply is to the comment it answers.
 type ReplyKind string
 
 const (
@@ -43,7 +39,6 @@ const (
 	ReplySupersede ReplyKind = "supersede"
 )
 
-// ReplyKinds are the kinds of a Reply, in the order the kind key cycles them.
 var ReplyKinds = []ReplyKind{ReplyPlain, ReplyConfirm, ReplyRefute, ReplySupersede}
 
 // DuplicateReply is kata's refusal of a Reply as a duplicate of an earlier one of the same kind. It is a Draft's Err, and
@@ -52,7 +47,6 @@ type DuplicateReply struct{ Message string }
 
 func (e DuplicateReply) Error() string { return e.Message }
 
-// Duplicate says kata refused the last send as a duplicate Reply.
 func (d Draft) Duplicate() bool {
 	_, ok := errors.AsType[DuplicateReply](d.Err)
 	return ok
@@ -61,7 +55,6 @@ func (d Draft) Duplicate() bool {
 // minEvidence is the length kata asks of a confirm or refute, counted in characters once whitespace collapses.
 const minEvidence = 40
 
-// validReply is the refusal of a Reply the daemon would reject for too little evidence, nil when it may be sent.
 func (d Draft) validReply() error {
 	if d.ReplyTo == "" || (d.ReplyKind != ReplyConfirm && d.ReplyKind != ReplyRefute) {
 		return nil
@@ -187,7 +180,6 @@ func startDraft(m Model, comment bool) Model {
 	return m.focusDetail()
 }
 
-// startReply is `R`: on a comment row it opens the Issue's comment Draft as a reply to that comment, keeping the Draft's text.
 // A body Draft already open stays as it is, as `c` leaves it.
 func startReply(m Model) Model {
 	row, ok := m.withRows().cursorRow()
@@ -239,7 +231,6 @@ func (m Model) mintKey(k Keyed, request any) (Model, Keyed) {
 	return m, k
 }
 
-// replyKey handles the keys only a Reply Draft has: the kind key cycles the kind and Send anyway resends a duplicate with force.
 func replyKey(m Model, b Binding) (Model, []Cmd, bool) {
 	d, _ := m.ActiveDraft()
 	switch b.Action {
@@ -294,8 +285,6 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	return m, nil, false
 }
 
-// draftCard is the Draft editor's part of the shared Draft key handler: its text is the body of the
-// Draft being edited and saving sends it back to kata.
 var draftCard = draftCardKeys{
 	draft: func(m Model) Draft { d, _ := m.ActiveDraft(); return d },
 	set:   func(m Model, d Draft) Model { return putDraft(m, m.EditorUID, d) },

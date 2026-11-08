@@ -15,8 +15,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
-// envWithout returns environ without the entries named in names, in one pass, with room for the two entries the callers add;
-// names compare case-insensitively when caseInsensitive (Windows).
 func envWithout(environ []string, caseInsensitive bool, names ...string) []string {
 	env := make([]string, 0, len(environ)+2)
 	for _, entry := range environ {
@@ -28,14 +26,10 @@ func envWithout(environ []string, caseInsensitive bool, names ...string) []strin
 	return env
 }
 
-// envNamed says an environment entry called name is the variable called want; names compare case-insensitively when
-// caseInsensitive (Windows).
 func envNamed(name, want string, caseInsensitive bool) bool {
 	return name == want || caseInsensitive && strings.EqualFold(name, want)
 }
 
-// childEnv returns environ for a child with KATA_AUTHOR set to actor, dropping every existing spelling first;
-// names compare case-insensitively on Windows. An empty actor leaves environ unchanged.
 func childEnv(environ []string, actor string, caseInsensitive bool) []string {
 	if actor == "" {
 		return environ
@@ -117,8 +111,6 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 	return env
 }
 
-// envValue is the value of the last entry named name in environ, "" when there is none; names compare case-insensitively when
-// caseInsensitive (Windows).
 func envValue(environ []string, name string, caseInsensitive bool) string {
 	value := ""
 	for _, entry := range environ {
@@ -140,7 +132,6 @@ func editorSurfaceOptions(closable bool) tern.SurfaceOptions {
 	return tern.SurfaceOptions{ID: "kata", Mode: tern.Screen, Title: "tern-kata", Font: tern.FontSans, Discard: true, Closable: closable}
 }
 
-// openSurface opens the window's surface and installs the plugin's style sheet on it.
 func openSurface(session *tern.Session, closable bool) (*tern.Surface, error) {
 	surface, err := session.Open(editorSurfaceOptions(closable))
 	if err != nil {

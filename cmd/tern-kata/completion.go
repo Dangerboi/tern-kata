@@ -9,17 +9,12 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// docbankForms are the operands `tern-kata docbank` takes first.
 var docbankForms = []string{"setup", "supervised", "supervise"}
 
-// workerForms are the operands `tern-kata worker` takes first.
 var workerForms = []string{"init", "add", "edit", "upgrade", "status", "stop", "supervised", "doctor", "resume", "abandon"}
 
-// viewsForms are the operands `tern-kata views` takes first.
 var viewsForms = []string{"show", "add", "rm"}
 
-// writeCompletion is `tern-kata completion <shell>`: the script that completes tern-kata's subcommands, worker forms and
-// flags in that shell. Where nothing fits (a file name) the shell completes file names.
 func writeCompletion(shell string, out io.Writer) error {
 	script := map[string]func() string{"bash": bashCompletion, "zsh": zshCompletion, "fish": fishCompletion}[shell]
 	_, err := io.WriteString(out, script())
@@ -99,7 +94,7 @@ _tern_kata() {
 	fi
 }
 complete -o default -F _tern_kata tern-kata
-`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames), strings.Join(viewsForms, " "), dashed(viewFlagNames), dashed(agentFlagNames()), dashed(docbankFlagNames()), strings.Join(docbankForms, " "))
+`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames), strings.Join(viewsForms, " "), dashed(viewFlagNames), dashed(flagNames(agentFlags)), dashed(flagNames(docbankFlags)), strings.Join(docbankForms, " "))
 }
 
 // zshCompletion is the bash script run through zsh's bash completion layer, so the two shells offer the same words.

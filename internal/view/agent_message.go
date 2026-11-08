@@ -8,8 +8,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// agentMessageLayer is the Message card: the message to the agent, or, while kata holds a message the agent has not cleared, that
-// message and whether to replace it. kata's refusal of the last send and the sending marker follow either.
 func agentMessageLayer(m model.Model) tern.Element {
 	f := m.AgentMessage
 	if !f.Open {
@@ -63,7 +61,6 @@ func agentMessageLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T(head), Meta: refMeta(f.IssueRef), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, children))
 }
 
-// broadcastOutcomeLayer is the Message card after a broadcast: how many agents got the message, then each agent skipped with why.
 func broadcastOutcomeLayer(m model.Model) tern.Element {
 	f := m.AgentMessage
 	reached := f.BroadcastReached()
@@ -78,7 +75,6 @@ func broadcastOutcomeLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T("Message the agents"), Meta: refMeta(f.IssueRef), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, skippedAndClose(m, children, true)))
 }
 
-// quickReplyLayer is the picker of the three quick replies: each reply's text, a button to send it and a Cancel.
 func quickReplyLayer(m model.Model) tern.Element {
 	f := m.AgentMessage
 	children := make([]tern.Element, 0, len(model.QuickReplies)+1)
@@ -92,8 +88,7 @@ func quickReplyLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T("Quick reply to " + f.Agent), Meta: refMeta(f.IssueRef), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, children))
 }
 
-// sweepLayer is the wrap-up sweep's card: how many of the agents it reached have finished, each agent's standing with its last
-// message, then each agent skipped with why. It follows the relay, so it changes as agents go idle or exit.
+// sweepLayer follows the relay, so it changes as agents go idle or exit.
 func sweepLayer(m model.Model) tern.Element {
 	f := m.AgentMessage
 	var children []tern.Element
@@ -119,7 +114,6 @@ func sweepLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgentMessage)}, Head: ui.T("Wrap-up sweep"), Icon: ui.IconSend, Modal: true, Size: ui.SizeMD}, skippedAndClose(m, children, !f.Sending)))
 }
 
-// skippedAndClose appends one line per skipped agent with why, then the Close button when withClose.
 func skippedAndClose(m model.Model, children []tern.Element, withClose bool) []tern.Element {
 	for i, t := range m.AgentMessage.Targets {
 		if t.Skipped != "" {
@@ -132,7 +126,6 @@ func skippedAndClose(m model.Model, children []tern.Element, withClose bool) []t
 	return children
 }
 
-// heldText is what the Message card says of the message the agent has not cleared; from is the actor that wrote it, "" when unknown.
 func heldText(from string) string {
 	by := ""
 	if from != "" {

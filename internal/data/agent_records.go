@@ -25,10 +25,8 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// HostIDFile holds the Host id in tern-kata's state folder.
 const HostIDFile = "host-id"
 
-// hostIDLockWait is how long a Pane waits for another Pane replacing an empty host-id file.
 const hostIDLockWait = 5 * time.Second
 
 // ReadHostID is the Host id kept in the state folder, made on the first call: random, written once, never changed (ADR-0018). An empty file is made again.
@@ -114,7 +112,6 @@ func readHostIDFile(path string) (string, error) {
 	return strings.TrimSpace(string(text)), err
 }
 
-// agentHost is this host as an Agent record names it.
 type agentHost struct {
 	ID, Name string
 }
@@ -130,15 +127,11 @@ func (g *Gateway) hostOf(dirs agentDirs) (agentHost, error) {
 	return agentHost{ID: id, Name: cmp.Or(cfg.Host, g.host, HostName())}, nil
 }
 
-// agentDirs are the config and state folders of agent.toml and agents.json.
 type agentDirs struct{ config, state string }
 
-// agentRecordOf is the record of entry on host. Its actor is the entry's, else the Address's (<actor>/<name>-<block>).
+// Its actor is the entry's, else the Address's.
 func agentRecordOf(host agentHost, e model.AgentEntry) model.AgentRecord {
-	actor := e.Actor
-	if i := strings.LastIndex(e.Address, "/"); actor == "" && i > 0 {
-		actor = e.Address[:i]
-	}
+	actor := cmp.Or(e.Actor, AddressActor(e.Address))
 	from := e.MessageFromActors()
 	if from == nil {
 		from = []string{}
@@ -157,17 +150,12 @@ func (g *Gateway) withDaemon(ctx context.Context, workspace string, fn func(*Cli
 	return err
 }
 
-// issueRecords reads the keys of an Issue's metadata that hold Agent records, as stored. An Issue kata no longer has holds none.
-func (c *Client) issueRecords(ctx context.Context, projectID int64, uid string) (map[string]json.RawMessage, error) {
-	records, _, err := c.readIssueRecords(ctx, projectID, uid)
-	return records, err
-}
-
-// readIssueRecords is issueRecords that also tells whether kata has the Issue.
-func (c *Client) readIssueRecords(ctx context.Context, projectID int64, uid string) (map[string]json.RawMessage, bool, error) {
+// readMetadata reads an Issue's metadata from the body as sent, so a guard holds the value kata stores, not a re-encoding of a
+// decoded one; found is false when kata has no such Issue.
+func (c *Client) readMetadata(ctx context.Context, projectID int64, uid string) (metadata map[string]json.RawMessage, found bool, err error) {
 	r, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: uid}})
 	if client.StatusCode(err) == http.StatusNotFound {
-		return map[string]json.RawMessage{}, false, nil
+		return nil, false, nil
 	}
 	if err != nil {
 		return nil, false, daemonError(err)
@@ -180,7 +168,17 @@ func (c *Client) readIssueRecords(ctx context.Context, projectID int64, uid stri
 	if err := json.Unmarshal(r.Body, &body); err != nil {
 		return nil, false, err
 	}
-	return recordsOf(body.Issue.Metadata), true, nil
+	return body.Issue.Metadata, true, nil
+}
+
+// readIssueRecords reads the keys of an Issue's metadata that hold Agent records, as stored, and tells whether kata has the Issue;
+// one it no longer has holds none.
+func (c *Client) readIssueRecords(ctx context.Context, projectID int64, uid string) (map[string]json.RawMessage, bool, error) {
+	metadata, found, err := c.readMetadata(ctx, projectID, uid)
+	if err != nil {
+		return nil, false, err
+	}
+	return recordsOf(metadata), found, nil
 }
 
 func recordsOf(metadata map[string]json.RawMessage) map[string]json.RawMessage {
@@ -216,7 +214,6 @@ func (c *Client) ForgetAgentRecord(ctx context.Context, cmd model.ForgetAgentRec
 	return c.patchRecords(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, map[string]any{model.AgentRecordKey(cmd.HostID, cmd.Block): nil})
 }
 
-// addressHolder is the host name of the record of another host id on the Issue that holds address, "" when none does.
 func addressHolder(records map[string]json.RawMessage, hostID, address string) string {
 	if address == "" {
 		return ""
@@ -235,7 +232,7 @@ func addressHolder(records map[string]json.RawMessage, hostID, address string) s
 // publishAgentRecord writes the record of e on its Issue, unless another host id's record on the Issue holds the same Address: then
 // nothing is written and the answer is that record's host name. A record already there for e is written again as it should be.
 func (c *Client) publishAgentRecord(ctx context.Context, host agentHost, e model.AgentEntry) (usedBy string, err error) {
-	records, err := c.issueRecords(ctx, e.ProjectID, e.IssueUID)
+	records, _, err := c.readIssueRecords(ctx, e.ProjectID, e.IssueUID)
 	if err != nil {
 		return "", err
 	}
@@ -247,8 +244,6 @@ func (c *Client) publishAgentRecord(ctx context.Context, host agentHost, e model
 	return "", c.patchRecords(ctx, e.ProjectID, e.IssueUID, rec.Actor, map[string]any{model.AgentRecordKey(host.ID, e.Block): rec})
 }
 
-// planAgentRecord decides, over the records an Issue holds, what publishing e needs: the host name of another host id's record that
-// holds its Address (nothing to write then), or whether its record is missing or differs and must be written.
 func planAgentRecord(records map[string]json.RawMessage, host agentHost, e model.AgentEntry) (usedBy string, write bool) {
 	if usedBy = addressHolder(records, host.ID, e.Address); usedBy != "" {
 		return usedBy, false
@@ -268,7 +263,7 @@ func planAgentRecord(records map[string]json.RawMessage, host agentHost, e model
 // removeAgentRecords removes, from the Issue, the records that carry hostID and that match picks (by key and, when it reads, value).
 // A record of another host id is never removed.
 func (c *Client) removeAgentRecords(ctx context.Context, projectID int64, uid, hostID string, pick func(key string, r *model.AgentRecord) bool) error {
-	records, err := c.issueRecords(ctx, projectID, uid)
+	records, _, err := c.readIssueRecords(ctx, projectID, uid)
 	if err != nil {
 		return err
 	}
@@ -314,7 +309,6 @@ func (g *Gateway) removeAgentRecordsOf(ctx context.Context, entries []model.Agen
 	return errors.Join(errs...)
 }
 
-// removeAgentRecordOf removes the record this host id published for the agent in block on an Issue: the exit of an agent.
 func (g *Gateway) removeAgentRecordOf(ctx context.Context, c *Client, projectID int64, uid, block string) error {
 	hostID, err := g.thisHostID()
 	if err != nil {
@@ -323,13 +317,11 @@ func (g *Gateway) removeAgentRecordOf(ctx context.Context, c *Client, projectID 
 	return c.removeHostRecord(ctx, projectID, uid, hostID, block)
 }
 
-// removeHostRecord removes the record hostID published for the agent in block on an Issue.
 func (c *Client) removeHostRecord(ctx context.Context, projectID int64, uid, hostID, block string) error {
 	key := model.AgentRecordKey(hostID, block)
 	return c.removeAgentRecords(ctx, projectID, uid, hostID, func(k string, _ *model.AgentRecord) bool { return k == key })
 }
 
-// thisHostID is the Host id kept in the state folder of the Gateway's worker directories.
 func (g *Gateway) thisHostID() (string, error) {
 	state, err := g.stateDir()
 	if err != nil {
@@ -364,7 +356,6 @@ func (g *Gateway) publishAgent(ctx context.Context, workspace string, dirs agent
 	return g.noteAddressHolder(file, e, usedBy)
 }
 
-// noteAddressHolder keeps usedBy as the reason entry e publishes no record ("" clears an earlier one), in agents.json as it stands.
 func (g *Gateway) noteAddressHolder(file string, e model.AgentEntry, usedBy string) (model.AgentEntry, error) {
 	if e.AddressUsedBy == usedBy {
 		return e, nil
@@ -381,8 +372,6 @@ func (g *Gateway) noteAddressHolder(file string, e model.AgentEntry, usedBy stri
 	return e, err
 }
 
-// issueRecordsListed is what a read of Issues found of Agent records: per Issue its Project and the record keys it holds, and
-// whether kata no longer has the Issue (nothing is published on it).
 type issueRecordsListed struct {
 	projectID int64
 	records   map[string]json.RawMessage
@@ -502,7 +491,7 @@ func (c *Client) publishListed(ctx context.Context, host agentHost, e model.Agen
 		return usedBy, false, err
 	}
 	if listed.missing {
-		return "", true, nil // nothing to publish on
+		return "", true, nil
 	}
 	usedBy, write := planAgentRecord(listed.records, host, e)
 	if !write {

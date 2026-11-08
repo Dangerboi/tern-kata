@@ -46,7 +46,6 @@ func (g *Gateway) configFolder() (string, error) {
 	return dirs.Config, nil
 }
 
-// readLanes reads the whole file; a missing file is an empty one.
 func readLanes(path string) (lanesFile, error) {
 	var file lanesFile
 	if _, err := toml.DecodeFile(path, &file); err != nil && !errors.Is(err, fs.ErrNotExist) {

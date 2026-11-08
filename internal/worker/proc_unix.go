@@ -45,7 +45,6 @@ func checkGroup(l *LaunchRecord) GroupProof {
 	return GroupProof{State: GroupPresent}
 }
 
-// exitSignal names the signal that ended the process, empty for a normal exit.
 func exitSignal(state interface{ Sys() any }) string {
 	if ws, ok := state.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
 		return ws.Signal().String()

@@ -13,13 +13,10 @@ const (
 	DateWeekAfter  Action = "date-week-after"
 )
 
-// CalendarDayMsg is a click on a day of the open calendar: the day goes into the field and the calendar closes.
 type CalendarDayMsg struct{ Day string }
 
 func (CalendarDayMsg) msg() {}
 
-// CalendarState is the calendar a card shows beside one of its date fields. Card and Field say which field it picks for;
-// Cursor is the day the keys are on.
 type CalendarState struct {
 	Open   bool
 	Card   Card
@@ -27,15 +24,12 @@ type CalendarState struct {
 	Cursor string
 }
 
-// CalendarView is what the view draws of the open calendar: the field it sits beside, the day the keys are on, the day the
-// field holds now ("" when it holds none that reads), the card's other date ("" for none), and today.
 type CalendarView struct {
 	Card                        Card
 	Field                       Field
 	Cursor, Value, Other, Today string
 }
 
-// ShownCalendar reports the open calendar of the card on top.
 func (m Model) ShownCalendar() (CalendarView, bool) {
 	entry, ok := m.topEntry()
 	if !ok || !m.DateCalendar.Open || m.DateCalendar.Card != entry.card {
@@ -60,8 +54,7 @@ func (m Model) paneToday() string {
 	return m.Calendar.DayOf(m.Now)
 }
 
-// dayOf is the day a date field's text reads as, "" for blank or text that is not a date. A date kata holds with a time reads
-// as its day.
+// A date kata holds with a time reads as its day.
 func dayOf(text, today string) string {
 	if day, err := ParseDateInput(text, today); err == nil {
 		return day[:min(len(day), len(dayLayout))]
@@ -74,8 +67,7 @@ func dayOf(text, today string) string {
 	return ""
 }
 
-// dateFieldOf is the text of the date field the card on top holds focus on and the text of the card's other date, ok false when
-// the card is not on a date field. The text points into m.
+// The text points into m.
 func dateFieldOf(m *Model, card Card) (text *string, other string, ok bool) {
 	switch card {
 	case CardDates:
@@ -109,7 +101,6 @@ func dateFieldOf(m *Model, card Card) (text *string, other string, ok bool) {
 	return nil, "", false
 }
 
-// showCalendar puts the calendar beside the focused date field, its cursor on the day the field reads as, else today.
 func showCalendar(m Model, entry cardEntry) Model {
 	if entry.busy(m) {
 		return m
@@ -130,7 +121,6 @@ func showCalendar(m Model, entry cardEntry) Model {
 	return m
 }
 
-// pickDay writes day into the field the open calendar is for and closes it.
 func pickDay(m Model, day string) Model {
 	picked := m.DateCalendar
 	m.DateCalendar = CalendarState{}
@@ -186,12 +176,10 @@ func shiftDay(day string, by int) string {
 	return t.AddDate(0, 0, by).Format(dayLayout)
 }
 
-// calendarOpen says the calendar is open for the card on top.
 func calendarOpen(m Model, entry cardEntry) bool {
 	return m.DateCalendar.Open && m.DateCalendar.Card == entry.card
 }
 
-// settleCalendar closes a calendar whose field is no longer the focused date field of the card on top.
 func (m Model) settleCalendar() Model {
 	if !m.DateCalendar.Open {
 		return m

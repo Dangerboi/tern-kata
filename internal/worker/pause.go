@@ -20,7 +20,6 @@ import (
 // files beside them). kata's job definition is never written, so other machines' workers keep their own counts and the Jobs
 // Page reads the pause from this worker's status.
 
-// streakFile is one job's run of failures in a row, saved under its Project's folder.
 type streakFile struct {
 	Version int `json:"version"`
 	// Failed counts the runs recorded failed since the last succeeded run or resume.
@@ -36,17 +35,14 @@ type streakFile struct {
 
 const maxSeenRuns = 32
 
-// streakDir is the folder under a Project's folder that holds its jobs' streak files.
 const streakDir = "failures"
 
-// PausedJob is an adapter job this worker stopped admitting after repeated failed runs.
 type PausedJob struct {
 	Project string
 	JobUID  string
 	Name    string
-	// Failed is how many runs in a row were recorded failed.
-	Failed int
-	Since  time.Time
+	Failed  int
+	Since   time.Time
 }
 
 // Reason is the pause as `worker status` words it.
@@ -79,12 +75,7 @@ func (w *Worker) loadStreak(projectUID, jobUID string) (streakFile, error) {
 
 func (w *Worker) saveStreak(projectUID, jobUID string, s streakFile) error {
 	s.Version = 1
-	raw, _ := json.Marshal(s)
-	path := w.streakPath(projectUID, jobUID)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	return replaceFile(path, raw)
+	return saveJSON(w.streakPath(projectUID, jobUID), s)
 }
 
 // noteOutcome counts a run whose outcome is recorded: a run recorded failed (a timeout included) adds one, a succeeded run
@@ -172,7 +163,6 @@ func (w *Worker) ResumeJob(jobUID string) (PausedJob, error) {
 	return PausedJob{}, fmt.Errorf("job %s is not paused by this worker", jobUID)
 }
 
-// PausedJobs lists the jobs of the served Projects this worker has paused, by Project then name.
 func (w *Worker) PausedJobs() []PausedJob {
 	var out []PausedJob
 	for _, ps := range w.projects {

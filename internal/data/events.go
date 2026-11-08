@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	// maxErrorBody bounds the body read from a failed stream request.
 	maxErrorBody = 64 << 10
 	// maxEventLine and maxEventData bound one line and one event's data; kata's events are small envelopes.
 	maxEventLine = 1 << 20

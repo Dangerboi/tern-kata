@@ -23,7 +23,6 @@ var agentsFlags = []tableFlag{
 	{"issue", true, "an Issue ref", func(p *LaunchPlan, v string) { p.TargetRef = v }},
 }
 
-// planAgents parses `tern-kata agents [--issue <ref>]`: TargetRef is the Issue the list is cut to, empty for every Issue.
 func planAgents(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
 	plan := LaunchPlan{Subcommand: "agents"}
 	for i := 1; i < len(args); i++ {
@@ -42,7 +41,6 @@ func planAgents(args []string, lookup func(string) (string, bool)) (LaunchPlan, 
 	return plan, nil
 }
 
-// planTeam parses `tern-kata team <ref>`: TargetRef is the parent Issue, in the forms `agents --issue` takes.
 func planTeam(args []string) (LaunchPlan, error) {
 	plan := LaunchPlan{Subcommand: "team"}
 	for _, arg := range args[1:] {
@@ -163,8 +161,6 @@ func runAgents(plan LaunchPlan, workspace string, running []model.IssueAgent, se
 	return nil
 }
 
-// runTeam is `team`: the team whose parent plan.TargetRef names, from teams.json, agents.json and the latest relay, with the
-// parent's children as kata holds them now. No team on the Issue is an error, so a script can tell.
 func runTeam(plan LaunchPlan, workspace string, files func() ([]model.Team, []model.AgentEntry, []model.AgentState, error), now time.Time, send func(model.Cmd) model.Msg, out io.Writer) error {
 	teams, entries, states, err := files()
 	if err != nil {
@@ -314,7 +310,6 @@ func writeSlot(plan LaunchPlan, workspace string, a model.IssueAgent, text strin
 	return fmt.Sprintf("Sent the message to %s on %s.", a.Address, place), true
 }
 
-// hostName is the host an agent on another host runs on, as its record names it.
 func hostName(a model.IssueAgent) string {
 	if a.Host != "" {
 		return a.Host

@@ -12,7 +12,6 @@ import (
 // first asks, in the Backfill card, whether the children should be made. The count is worked out here from the trigger, its
 // zone and the parent's progress; nothing is asked when none were missed or the job catches up with "latest" or "skip".
 
-// ModeBackfill is the Backfill card's keymap mode.
 const ModeBackfill Mode = "backfill"
 
 const (
@@ -20,11 +19,9 @@ const (
 	BackfillCreate Action = "backfill-create"
 	// BackfillLatest switches the jobs to catch-up "latest", guarded, and then goes on.
 	BackfillLatest Action = "backfill-latest"
-	// BackfillCancel changes nothing.
 	BackfillCancel Action = "backfill-cancel"
 )
 
-// BackfillFor is what the Backfill card holds back until the user has answered.
 type BackfillFor string
 
 const (
@@ -35,7 +32,6 @@ const (
 	BackfillSave BackfillFor = "save"
 )
 
-// BackfillJob is a job that owes a Backfill with the number of children it would create.
 type BackfillJob struct {
 	Job    CronJob
 	Missed int
@@ -50,14 +46,12 @@ type BackfillState struct {
 	Issue  Issue
 	Saving bool
 	Err    error
-	// Save is the Job card's write a BackfillSave holds back.
-	Save *SaveJobCmd
+	Save   *SaveJobCmd
 	// reading says a reopen waits for a read of the jobs, which request numbers.
 	reading bool
 	request int64
 }
 
-// Total is how many children the card's jobs would create in all.
 func (b BackfillState) Total() int {
 	total := 0
 	for _, j := range b.Jobs {
@@ -75,12 +69,10 @@ func (m Model) backfillOwed(job CronJob) int {
 	return job.Missed(m.Now)
 }
 
-// parentOpen says the job's parent is there to deliver into.
 func parentOpen(job CronJob) bool {
 	return job.Parent != nil && !job.Parent.Deleted && job.Parent.Status == "open"
 }
 
-// askBackfill opens the card when ending a pause owes a Backfill; it reports false when nothing is owed.
 func (m Model) askBackfill(kind BackfillFor, issue Issue, jobs ...CronJob) (Model, bool) {
 	var owed []BackfillJob
 	for _, job := range jobs {
@@ -95,7 +87,7 @@ func (m Model) askBackfill(kind BackfillFor, issue Issue, jobs ...CronJob) (Mode
 	return m, true
 }
 
-// resumeJob writes the job enabled. Every resume of a job goes through here, so a native job that owes a Backfill asks first.
+// Every resume of a job goes through here, so a native job that owes a Backfill asks first.
 func resumeJob(m Model, job CronJob) (Model, []Cmd) {
 	if parentOpen(job) {
 		if asked, ok := m.askBackfill(BackfillResume, Issue{}, job); ok {
@@ -105,7 +97,7 @@ func resumeJob(m Model, job CronJob) (Model, []Cmd) {
 	return writeJobEnabled(m, job, true)
 }
 
-// restoreJob restores the archived job. A job that comes back enabled under an open parent owes a Backfill, so it asks first.
+// A job that comes back enabled under an open parent owes a Backfill, so it asks first.
 func restoreJob(m Model, job CronJob) (Model, []Cmd) {
 	if job.Definition.Enabled && parentOpen(job) {
 		if asked, ok := m.askBackfill(BackfillRestore, Issue{}, job); ok {
@@ -120,8 +112,7 @@ func restoreJobNow(m Model, job CronJob) (Model, []Cmd) {
 	return m, []Cmd{RestoreJobCmd{Workspace: m.Workspace, ProjectID: m.Jobs.ProjectID, Actor: m.Actor, UID: job.UID, ExpectedEventUID: job.DefinitionEventUID}}
 }
 
-// reopenIssue is `r`: it reopens a closed Issue. A parent of native jobs first reads them afresh, because its progress stopped
-// advancing when it closed, and asks if reopening owes a Backfill.
+// A parent of native jobs first reads them afresh, because its progress stopped advancing when it closed, and asks if reopening owes a Backfill.
 func reopenIssue(m Model) (Model, []Cmd) {
 	found := closeIssue(m)
 	if found == nil || m.Stale || m.CloseForm.Saving {
@@ -145,8 +136,6 @@ func reopenNow(m Model, issue Issue) (Model, []Cmd) {
 	return m, []Cmd{ReopenIssueCmd{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Actor: m.Actor}}
 }
 
-// backfillJobsRead goes on with a reopen once the read of the parent's jobs it waited for has answered: it opens the card when
-// reopening would make the jobs catch up, else reopens.
 func backfillJobsRead(m Model, msg JobsLoaded) (Model, []Cmd) {
 	if m.Backfill.Open || !m.Backfill.reading || m.Backfill.request != msg.Request {
 		return m, nil
@@ -171,7 +160,6 @@ func backfillJobsRead(m Model, msg JobsLoaded) (Model, []Cmd) {
 	return reopenNow(m, issue)
 }
 
-// backfillKey is one key in the Backfill card.
 func backfillKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	b := m.Backfill
 	if b.Saving {
@@ -214,7 +202,6 @@ func backfillKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// sendJobSave sends the Job card's save, which the card waits on as it does any save.
 func sendJobSave(m Model, save SaveJobCmd) (Model, []Cmd) {
 	m.JobForm.Saving, m.JobForm.Err = true, nil
 	return m, []Cmd{save}
@@ -292,7 +279,6 @@ func backfillWritten(m Model, msg JobWritten) (Model, []Cmd, bool) {
 	return m, cmds, true
 }
 
-// MissedWords reads a count of missed runs: "1 missed run", "3 missed runs"; a count at the counting limit reads "10000 or more".
 func MissedWords(n int) string {
 	switch {
 	case n >= maxMissedCount:

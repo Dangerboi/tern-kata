@@ -5,15 +5,14 @@
 
 import { renameSync, rmSync, writeFileSync } from "node:fs";
 
-/** One running `kata` child whose stdout is read line by line. */
 export interface Spawned {
   lines: AsyncIterable<string>;
   exited: Promise<number>;
   kill(): void;
 }
 
-/** Effects the follower needs; tests replace them with fakes. */
-export interface FollowerDeps {
+/** The agent's Issue and address read from the environment. */
+export interface Config {
   address: string;
   project: string;
   /** The agent's Issue, qualified (`project#short id`). */
@@ -28,6 +27,9 @@ export interface FollowerDeps {
   coordinator?: string;
   /** The agent coordinates a team (TERN_KATA_COORDINATING=1): its Issue is the parent, and what happens on the parent's children is delivered to it. */
   coordinating?: boolean;
+}
+
+export interface FollowerDeps extends Config {
   /** Starts a long-running kata command; args exclude "kata". */
   spawn(args: string[]): Spawned;
   /** Runs a one-shot kata command; args exclude "kata". */
@@ -39,13 +41,11 @@ export interface FollowerDeps {
   clearTimer(handle: unknown): void;
 }
 
-/** The follower's lifecycle. */
 export interface Follower {
   start(): void;
   stop(): void;
 }
 
-/** The value of a notification slot. */
 export interface Slot {
   from: string;
   message: string;
@@ -54,25 +54,11 @@ export interface Slot {
   kind?: string;
 }
 
-/** What a stream line means to the follower. */
 export type StreamEvent =
   | { type: "reset"; after: number }
   /** actor is the `actor` of the issue.metadata_updated event that wrote the slot. */
   | { type: "slot"; ref: string; eventId: number; actor: string | undefined; to: Slot | null };
 
-/** The agent's Issue and address read from the environment. */
-export interface Config {
-  address: string;
-  project: string;
-  ref: string;
-  forwardComments?: boolean;
-  messageFrom?: string[];
-  verifiedSenders?: boolean;
-  coordinator?: string;
-  coordinating?: boolean;
-}
-
-/** A stream event other than a slot write, with the fields reactions read. */
 export interface KataEvent {
   eventId: number;
   type: string;
@@ -83,13 +69,11 @@ export interface KataEvent {
   payload: Record<string, unknown>;
 }
 
-/** A blocking link of the agent's Issue: the blocker and whether it was open when read. */
 export interface Blocker {
   ref: string;
   open: boolean;
 }
 
-/** A child of the coordinator's Issue, as last read: its title and whether it was open. */
 interface Child {
   title?: string;
   open: boolean;
@@ -105,18 +89,15 @@ interface RefState {
 const MIN_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 30000;
 
-/** Returns the notification slot metadata key for an address. */
 export function slotKey(address: string): string {
   return "notify." + Buffer.from(address, "utf8").toString("base64url");
 }
 
-/** Returns the actor part of an address (up to its last "/"), or undefined when it has none. */
 export function trustedSender(address: string): string | undefined {
   const i = address.lastIndexOf("/");
   return i > 0 ? address.slice(0, i) : undefined;
 }
 
-/** The teammate part of an address (after its last "/"), or undefined when it has none. */
 export function teammateOf(address: string): string | undefined {
   const i = address.lastIndexOf("/");
   return i > 0 && i < address.length - 1 ? address.slice(i + 1) : undefined;
@@ -152,35 +133,35 @@ function asRecord(v: unknown): Record<string, unknown> | undefined {
   return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 }
 
+function parseRecord(text: string): Record<string, unknown> | undefined {
+  try {
+    return asRecord(JSON.parse(text));
+  } catch {
+    return undefined;
+  }
+}
+
 function optionalText(v: unknown): string | undefined {
   if (typeof v === "string" && v !== "") return v;
   if (typeof v === "number") return String(v);
   return undefined;
 }
 
-/** Narrows a parsed JSON value to a Slot, or undefined when it is not one. */
 export function toSlot(v: unknown): Slot | undefined {
   const r = asRecord(v);
   if (!r || typeof r.from !== "string" || typeof r.message !== "string") return undefined;
   return { from: r.from, message: r.message, teammate: optionalText(r.teammate), re: optionalText(r.re), kind: optionalText(r.kind) };
 }
 
-/** Returns the leading `"event_id":<n>` of a stream line, or undefined. */
 export function eventIdOf(line: string): number | undefined {
   const m = /^\{"event_id":(\d+),/.exec(line);
   return m ? Number(m[1]) : undefined;
 }
 
-/** Interprets one stream line; undefined when it is not for this key. */
 export function parseStreamLine(line: string, key: string): StreamEvent | undefined {
   const isReset = line.includes('"reset_required"');
   if (!isReset && !line.includes(key)) return undefined;
-  let parsed: Record<string, unknown> | undefined;
-  try {
-    parsed = asRecord(JSON.parse(line));
-  } catch {
-    return undefined;
-  }
+  const parsed = parseRecord(line);
   if (!parsed) return undefined;
   if (parsed.reset_required === true && typeof parsed.reset_after_id === "number") {
     return { type: "reset", after: parsed.reset_after_id };
@@ -197,15 +178,9 @@ export function parseStreamLine(line: string, key: string): StreamEvent | undefi
   return to ? { type: "slot", ref, eventId: parsed.event_id, actor, to } : undefined;
 }
 
-/** Interprets one stream line as an event of one of `types`; undefined for any other line. */
 export function parseEventLine(line: string, types: readonly string[]): KataEvent | undefined {
   if (!types.some((t) => line.includes(`"${t}"`))) return undefined;
-  let parsed: Record<string, unknown> | undefined;
-  try {
-    parsed = asRecord(JSON.parse(line));
-  } catch {
-    return undefined;
-  }
+  const parsed = parseRecord(line);
   if (!parsed || typeof parsed.type !== "string" || !types.includes(parsed.type)) return undefined;
   if (typeof parsed.event_id !== "number" || typeof parsed.project_name !== "string") return undefined;
   if (typeof parsed.issue_short_id !== "string" || typeof parsed.created_at !== "string") return undefined;
@@ -220,14 +195,9 @@ export function parseEventLine(line: string, types: readonly string[]): KataEven
   };
 }
 
-/** Reads the blockers of `ref` from `kata show --json` output; undefined on bad JSON. Only blocking links count. */
+/** Only blocking links count. */
 export function parseBlockers(stdout: string, ref: string): Blocker[] | undefined {
-  let links: unknown;
-  try {
-    links = asRecord(JSON.parse(stdout))?.links;
-  } catch {
-    return undefined;
-  }
+  const links = parseRecord(stdout)?.links;
   if (!Array.isArray(links)) return undefined;
   const out: Blocker[] = [];
   for (const link of links) {
@@ -241,23 +211,12 @@ export function parseBlockers(stdout: string, ref: string): Blocker[] | undefine
   return out;
 }
 
-/** Reads an Issue's title from `kata show --json` output. */
 export function parseTitle(stdout: string): string | undefined {
-  try {
-    return optionalText(asRecord(asRecord(JSON.parse(stdout))?.issue)?.title);
-  } catch {
-    return undefined;
-  }
+  return optionalText(asRecord(parseRecord(stdout)?.issue)?.title);
 }
 
-/** Reads the children of an Issue from `kata show --json` output, those in `project` only; undefined on bad JSON. */
 export function parseChildren(stdout: string, project: string): Map<string, Child> | undefined {
-  let children: unknown;
-  try {
-    children = asRecord(JSON.parse(stdout))?.children;
-  } catch {
-    return undefined;
-  }
+  const children = parseRecord(stdout)?.children;
   if (!Array.isArray(children)) return undefined;
   const out = new Map<string, Child>();
   for (const item of children) {
@@ -268,13 +227,8 @@ export function parseChildren(stdout: string, project: string): Map<string, Chil
   return out;
 }
 
-/** Reads an Issue's `work.attention_msg` from `kata show --json` output. */
 export function parseAttentionMsg(stdout: string): string | undefined {
-  try {
-    return optionalText(asRecord(asRecord(asRecord(JSON.parse(stdout))?.issue)?.metadata)?.["work.attention_msg"]);
-  } catch {
-    return undefined;
-  }
+  return optionalText(asRecord(asRecord(parseRecord(stdout)?.issue)?.metadata)?.["work.attention_msg"]);
 }
 
 /** Where a slot value was read: a live stream event, whose actor kata recorded, or the inbox read, which has none. */
@@ -311,7 +265,7 @@ export function mayDeliver(slot: Slot, source: SlotSource, policy: SlotPolicy): 
 const COMMENT_EXCERPT_LINES = 3;
 const COMMENT_EXCERPT_CHARS = 400;
 
-/** Builds the user message for a person's comment: the first lines of its body, bounded, and the UID `kata comment --reply` takes. */
+/** The UID is what `kata comment --reply` takes. */
 export function commentText(ref: string, author: string, body: string, uid: string): string {
   let excerpt = body.trim().split("\n").slice(0, COMMENT_EXCERPT_LINES).join("\n");
   if (excerpt.length > COMMENT_EXCERPT_CHARS) excerpt = excerpt.slice(0, COMMENT_EXCERPT_CHARS).trimEnd() + "…";
@@ -319,7 +273,6 @@ export function commentText(ref: string, author: string, body: string, uid: stri
   return `New comment on ${ref} from ${author}: ${excerpt} (c:${uid})`;
 }
 
-/** Builds the user message for a closed blocker; `remaining` is the number of the Issue's other blockers still open, when known. */
 export function blockerClosedText(blocker: string, title: string | undefined, ref: string, remaining: number | undefined): string {
   const parts = [`${blocker} closed${title ? `: ${title}` : ""}.`, `${ref} may be unblocked.`];
   if (remaining) parts.push(`${remaining} other ${remaining === 1 ? "blocker is" : "blockers are"} still open.`);
@@ -357,14 +310,8 @@ function qualify(project: string, ref: string): string {
   return ref.includes("#") ? ref : `${project}#${ref}`;
 }
 
-/** Parses `kata inbox --json` output into qualified refs and slots; undefined on bad JSON. */
 export function parseInbox(stdout: string, project: string): Array<{ ref: string; slot: Slot }> | undefined {
-  let requests: unknown;
-  try {
-    requests = asRecord(JSON.parse(stdout))?.requests;
-  } catch {
-    return undefined;
-  }
+  const requests = parseRecord(stdout)?.requests;
   if (!Array.isArray(requests)) return undefined;
   const out: Array<{ ref: string; slot: Slot }> = [];
   for (const item of requests) {
@@ -375,10 +322,6 @@ export function parseInbox(stdout: string, project: string): Array<{ ref: string
   return out;
 }
 
-/**
- * Creates the follower: it tails kata's event stream, re-reads the inbox when the
- * stream restarts or resets, and delivers each new trusted slot value once.
- */
 export function createFollower(deps: FollowerDeps): Follower {
   const key = slotKey(deps.address);
   const trusted = trustedSender(deps.address) ?? "";
@@ -397,7 +340,6 @@ export function createFollower(deps: FollowerDeps): Follower {
   let readAgain = false;
   // streamed counts the stream's slot events, so a read can leave alone the refs the stream changed while it ran.
   let streamed = 0;
-  // Event reactions: what the follower does with a stream event that is not a slot write. A new reaction is one more entry.
   const reactions: Record<string, (event: KataEvent, gen: number) => Promise<void>> = {
     "issue.closed": onClosed,
     "issue.links_changed": onLinksChanged,
@@ -422,13 +364,19 @@ export function createFollower(deps: FollowerDeps): Follower {
     queue = queue.then(() => (gen === generation ? task() : undefined)).catch(() => {});
   }
 
-  async function showOf(ref: string): Promise<string | undefined> {
+  async function stdoutOf(args: string[]): Promise<string | undefined> {
     try {
-      const result = await deps.run(["show", ref, "--json"]);
+      const result = await deps.run(args);
       return result.code === 0 ? result.stdout : undefined;
     } catch {
       return undefined;
     }
+  }
+
+  const showOf = (ref: string): Promise<string | undefined> => stdoutOf(["show", ref, "--json"]);
+
+  function enqueueBlockers(gen: number): void {
+    enqueue(gen, async () => void (await readBlockers(gen)));
   }
 
   async function readBlockers(gen: number): Promise<Blocker[] | undefined> {
@@ -532,7 +480,6 @@ export function createFollower(deps: FollowerDeps): Follower {
     deps.deliver(commentText(event.ref, teammate === undefined ? author : `agent ${author}/${teammate}`, body, uid));
   }
 
-  // react acts on an event created after the follower started, once per event id.
   function react(event: KataEvent): void {
     if (event.createdAt <= startedAt || event.eventId <= reacted) return;
     reacted = event.eventId;
@@ -571,14 +518,9 @@ export function createFollower(deps: FollowerDeps): Follower {
 
   async function readInboxOnce(gen: number): Promise<void> {
     const since = streamed;
-    let result: { code: number; stdout: string };
-    try {
-      result = await deps.run(["inbox", "--for", deps.address, "--json", "--project", deps.project]);
-    } catch {
-      return;
-    }
-    if (gen !== generation || result.code !== 0) return;
-    const entries = parseInbox(result.stdout, deps.project);
+    const stdout = await stdoutOf(["inbox", "--for", deps.address, "--json", "--project", deps.project]);
+    if (gen !== generation || stdout === undefined) return;
+    const entries = parseInbox(stdout, deps.project);
     if (entries) applyInbox(entries, since);
   }
 
@@ -610,8 +552,7 @@ export function createFollower(deps: FollowerDeps): Follower {
     if (event.type === "reset") {
       cursor = event.after;
       void readInbox();
-      const gen = generation;
-      enqueue(gen, async () => void (await readBlockers(gen)));
+      enqueueBlockers(generation);
       return;
     }
     handle(event.ref, event.eventId, event.actor, event.to);
@@ -637,7 +578,6 @@ export function createFollower(deps: FollowerDeps): Follower {
       }
       await stream.exited;
     } catch {
-      // a broken stream is handled like an exit
     }
     if (gen !== generation) return;
     scheduleRestart(gen, sawLine);
@@ -652,7 +592,7 @@ export function createFollower(deps: FollowerDeps): Follower {
       timer = undefined;
       launch(gen);
       void readInbox();
-      enqueue(gen, async () => void (await readBlockers(gen)));
+      enqueueBlockers(gen);
     }, delay);
   }
 
@@ -669,8 +609,7 @@ export function createFollower(deps: FollowerDeps): Follower {
       generation++;
       backoff = MIN_BACKOFF_MS;
       startedAt = deps.now();
-      const gen = generation;
-      enqueue(gen, async () => void (await readBlockers(gen)));
+      enqueueBlockers(generation);
       launch(generation);
       void readInbox();
     },
@@ -683,14 +622,12 @@ export function createFollower(deps: FollowerDeps): Follower {
       try {
         child?.kill();
       } catch {
-        // already gone
-      }
+        }
       child = undefined;
     },
   };
 }
 
-/** The slice of omp's extension context this file uses. */
 interface ExtensionContext {
   cwd?: string;
   agent?: { kind?: string };
@@ -702,7 +639,6 @@ interface ExtensionContext {
 /** The omp events after which the session's id may be another one; omp re-reads process.env for its shells after them. */
 const SESSION_EVENTS = ["session_start", "session_switch", "session_branch"] as const;
 
-/** The slice of omp's extension API this file uses. */
 export interface ExtensionApi {
   on(event: (typeof SESSION_EVENTS)[number] | "agent_start" | "session_shutdown", handler: (event: unknown, ctx: ExtensionContext) => void): void;
   sendUserMessage(text: string, options: { deliverAs: "aside" }): Promise<unknown> | void;
@@ -721,7 +657,6 @@ export function exportTranscriptSession(env: Record<string, string | undefined>,
   try {
     id = ctx.sessionManager?.getSessionId?.() ?? "";
   } catch {
-    // no session id to name
   }
   if (TRANSCRIPT_ID.test(id)) {
     env.KATA_TRANSCRIPT_AGENT = "omp";
@@ -735,7 +670,6 @@ export function exportTranscriptSession(env: Record<string, string | undefined>,
 /** The suffix of the file beside an agent's prompt file that holds its session file's path; the Pane reads it (data.AgentSessionSuffix). */
 export const SESSION_PATH_SUFFIX = ".session";
 
-/** The prompt file omp was started with: the last `@file` argument whose name is tern-kata's (`prompt-*.md`), or undefined. */
 export function promptFileFromArgv(argv: readonly string[]): string | undefined {
   for (let i = argv.length - 1; i >= 0; i--) {
     const arg = argv[i];
@@ -775,7 +709,6 @@ export function writeSessionPath(promptFile: string | undefined, ctx: ExtensionC
   }
 }
 
-/** How kata commands are executed; replaced in tests. */
 export interface KataIo {
   spawn(args: string[], cwd: string | undefined): Spawned;
   run(args: string[], cwd: string | undefined): Promise<{ code: number; stdout: string }>;
@@ -800,20 +733,21 @@ async function* readLines(stream: ReadableStream<Uint8Array>): AsyncGenerator<st
   if (buffered !== "") yield buffered;
 }
 
-/** Runs kata through Bun with the process environment unchanged. */
+const spawnKata = (args: string[], cwd: string | undefined) =>
+  Bun.spawn(["kata", ...args], { cwd, stdout: "pipe", stderr: "ignore", env: process.env });
+
 export const bunKataIo: KataIo = {
   spawn(args, cwd) {
-    const proc = Bun.spawn(["kata", ...args], { cwd, stdout: "pipe", stderr: "ignore", env: process.env });
+    const proc = spawnKata(args, cwd);
     return { lines: readLines(proc.stdout), exited: proc.exited, kill: () => proc.kill() };
   },
   async run(args, cwd) {
-    const proc = Bun.spawn(["kata", ...args], { cwd, stdout: "pipe", stderr: "ignore", env: process.env });
+    const proc = spawnKata(args, cwd);
     const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
     return { code, stdout };
   },
 };
 
-/** Builds the omp extension factory for an environment and kata runner. */
 export function createExtension(
   env: Record<string, string | undefined>,
   io: KataIo,
@@ -835,8 +769,7 @@ export function createExtension(
           try {
             Promise.resolve(pi.sendUserMessage(text, { deliverAs: "aside" })).catch(() => {});
           } catch {
-            // delivery is best effort
-          }
+              }
         },
         setTimer: (fn, ms) => {
           const guarded = () => {

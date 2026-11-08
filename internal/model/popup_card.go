@@ -7,11 +7,8 @@ import (
 	"unicode/utf8"
 )
 
-// Field names one field of a multi-field popup card; a card lists its fields in tab order.
 type Field string
 
-// FieldSpec is one field of a popup card: Name addresses it and names its node, and Text says it
-// takes typed text.
 type FieldSpec struct {
 	Name Field
 	Text bool
@@ -32,7 +29,6 @@ type ChooseMsg struct {
 
 func (ChooseMsg) msg() {}
 
-// Card names a popup card.
 type Card int
 
 const (
@@ -62,15 +58,13 @@ const (
 	CardAgentMessage
 )
 
-// cardEntry is everything the model knows about one popup card. Each card fills in one.
 type cardEntry struct {
 	card Card
 	// name is the stem of the card's node ids: its layer is "layer." + name and each of its fields' nodes is the layer's id
 	// and the field's name; the one input of a card without fields is the layer's id and "input". The view adds nothing
 	// else, so a card whose ids cannot follow that says so here.
-	name string
-	open func(Model) bool
-	// modes is every keymap mode the card can be in; mode picks the current one from its state.
+	name  string
+	open  func(Model) bool
 	modes []Mode
 	mode  func(Model) Mode
 	// key handles a key for the card; every global chord but ctrl+c, which quits at once from any card, is the card's to swallow or type.
@@ -88,30 +82,29 @@ type cardEntry struct {
 	fields []FieldSpec
 	focus  func(*Model) *Field
 	input  bool
-	// hidden says a field of the list does not apply to the card as it stands: tab skips it and it holds no caret. Nil when every field always applies.
 	hidden func(Model, Field) bool
 	// editing declares, for each keymap mode the card takes field-editing keys in, which shared actions it offers and the
 	// card's wording for them. The keymap rows come from it and the shared step applies the actions before key sees them.
 	editing []fieldEditing
-	// step moves the focused choice field to its next choice, or the previous one when back; nil for a card without choice fields.
-	step func(m Model, back bool) Model
+	step    func(m Model, back bool) Model
 	// clearErr dismisses the card's error; set only where every key, field moves included, dismisses it (the Filter and View cards).
 	clearErr func(Model) Model
+	// saving says a write of the card has not answered; nil for a card that does not track one. A saving card takes no key
+	// but cancel, the one action it still takes ("" for none); key never sees the others.
+	saving func(Model) bool
+	cancel Action
 	// target names the card's multi-line body for native edits, and edit applies one to it; both
 	// are zero for a card without a body. edit is called only while the card is not busy.
-	target EditTarget
-	// bodyField is the field the target body is, "" when it is the card's one input.
+	target    EditTarget
 	bodyField Field
 	edit      func(Model, func(TextEditor) TextEditor) Model
-	// choose gives the focused choice field its choice at an index; nil for a card without choice fields.
-	choose func(Model, int) Model
+	choose    func(Model, int) Model
 	// choices is the control, labels and held choice of the choice field called name, false for any other field and for a
 	// choice field the card keeps as a row of words; nil for a card without choice fields.
 	choices func(m Model, name Field) (ChoiceSet, bool)
 	// text reaches the text and caret of the focused field for the shared delete and clear actions; the text is nil when the
 	// focused field takes none. Nil for a card whose keys never delete or clear text.
-	text func(*Model) (*string, *Caret)
-	// erased runs after the shared delete or clear acted on the text, with whether it changed: the card's side effect of an edit.
+	text   func(*Model) (*string, *Caret)
 	erased func(m Model, action Action, changed bool) Model
 }
 
@@ -131,7 +124,7 @@ type fieldEditing struct {
 
 func (d fieldEditing) offers(a Action) bool { return slices.Contains(d.actions, a) }
 
-// moveRows are the rows for NextField and PreviousField; tab stays in the footer.
+// tab stays in the footer.
 func (d fieldEditing) moveRows() []Binding {
 	var rows []Binding
 	if d.offers(NextField) {
@@ -146,7 +139,7 @@ func (d fieldEditing) moveRows() []Binding {
 	return rows
 }
 
-// editRows are the rows for the choice, delete and clear actions; right stays in the footer.
+// right stays in the footer.
 func (d fieldEditing) editRows() []Binding {
 	var rows []Binding
 	if d.offers(NextChoice) {
@@ -167,7 +160,6 @@ func (d fieldEditing) editRows() []Binding {
 	return rows
 }
 
-// withFieldEditing is the card keymap rows own with the rows of every card's field-editing declaration put in.
 func withFieldEditing(own []Binding) []Binding {
 	var declared []fieldEditing
 	for _, entry := range cards {
@@ -201,19 +193,13 @@ func withFieldEditing(own []Binding) []Binding {
 // init, through buildCards, because the cards' key handlers read it back through the keymap lookup.
 var cards []cardEntry
 
-// Busy conditions: each card states its own once, and focus, the caret and native edits all derive from it. A card with
-// fields states it in its field table.
-
-// draftBusy is the Draft editor's busy condition: saving, asking to discard or showing a conflict.
 func draftBusy(m Model) bool {
 	draft, _ := m.ActiveDraft()
 	return m.EditorMode() != ModeEditor || draft.Saving
 }
 
-// workflowBusy is the Workflow card's busy condition, the same as the Draft editor's.
 func workflowBusy(m Model) bool { return workflowMode(m) != ModeEditor || m.Workflows.Card.Saving }
 
-// buildCards fills in cards.
 func buildCards() []cardEntry {
 	list := []cardEntry{
 		{
@@ -233,7 +219,7 @@ func buildCards() []cardEntry {
 			editing: []fieldEditing{{mode: ModeCreate, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
 			target:  EditCreateBody, bodyField: CreateBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
-				if !createTable.busy(m.Create) {
+				if !createTable.busyOf(m.Create) {
 					m.Create.Editor = apply(m.Create.Editor)
 				}
 				return m
@@ -288,21 +274,21 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardClose, name: "close", open: func(m Model) bool { return m.CloseForm.Open },
+			card: CardClose, name: "close",
 			modes: []Mode{ModeCloseForm}, mode: func(Model) Mode { return ModeCloseForm },
 			key:     closeKey,
 			table:   &closeTable,
 			editing: []fieldEditing{{mode: ModeCloseForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
 		},
 		{
-			card: CardDates, name: "dates", open: func(m Model) bool { return m.DatesForm.Open },
+			card: CardDates, name: "dates",
 			modes: []Mode{ModeDatesForm, ModeCalendar}, mode: func(m Model) Mode {
 				if m.DateCalendar.Open && m.DateCalendar.Card == CardDates {
 					return ModeCalendar
 				}
 				return ModeDatesForm
 			},
-			key:     updateDatesFormKey,
+			key:     datesTable.plainKey(ModeDatesForm, DatesSubmit, DatesCancel, submitDates),
 			table:   &datesTable,
 			editing: []fieldEditing{{mode: ModeDatesForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
 		},
@@ -322,8 +308,7 @@ func buildCards() []cardEntry {
 		{
 			card: CardMove, name: "move", open: func(m Model) bool { return m.MoveProject.Open },
 			modes: []Mode{ModeMoveProject, ModeMoveConfirm}, mode: Model.MoveCardMode,
-			key: moveProjectKey,
-			// The card holds no caret once a Project is chosen or while a request is out.
+			key:    moveProjectKey,
 			busy:   func(m Model) bool { return m.MoveProject.Sending || m.MoveProject.Target.UID != "" },
 			fields: []FieldSpec{}, input: true,
 			editing: []fieldEditing{{mode: ModeMoveProject, actions: []Action{DeleteInput, ClearInput}, clear: "clear filter"}},
@@ -340,7 +325,6 @@ func buildCards() []cardEntry {
 			card: CardAgentMessage, name: "agent-message", open: func(m Model) bool { return m.AgentMessage.Open },
 			modes: []Mode{ModeAgentMessage, ModeAgentMessageReplace, ModeAgentQuickReply, ModeAgentBroadcastOutcome}, mode: Model.AgentMessageMode,
 			key: agentMessageKey,
-			// The message holds no caret while it is sent, while the card asks before a replace or while it offers the quick replies.
 			busy: func(m Model) bool {
 				return m.AgentMessage.Sending || m.AgentMessage.Held != "" || m.AgentMessage.Picking || m.AgentMessage.Outcome
 			},
@@ -355,9 +339,9 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardDelete, name: "delete", open: func(m Model) bool { return m.DeleteForm.Open },
+			card: CardDelete, name: "delete",
 			modes: []Mode{ModeDeleteForm}, mode: func(Model) Mode { return ModeDeleteForm },
-			key:     updateDeleteFormKey,
+			key:     deleteTable.plainKey(ModeDeleteForm, DeleteSubmit, DeleteCancel, submitDelete),
 			table:   &deleteTable,
 			editing: []fieldEditing{{mode: ModeDeleteForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
 		},
@@ -382,7 +366,7 @@ func buildCards() []cardEntry {
 			erased:  func(m Model, _ Action, _ bool) Model { m.Federation.Name.Err = nil; return m },
 		},
 		{
-			card: CardRecurrence, name: "recurrence", open: func(m Model) bool { return m.RecurrenceForm.Open },
+			card: CardRecurrence, name: "recurrence",
 			modes: []Mode{ModeRecurrenceForm, ModeRecurrenceStop, ModeCalendar},
 			mode: func(m Model) Mode {
 				if m.DateCalendar.Open && m.DateCalendar.Card == CardRecurrence {
@@ -434,9 +418,9 @@ func buildCards() []cardEntry {
 			},
 		},
 		{
-			card: CardLanes, name: "lanes", open: func(m Model) bool { return m.LanesForm.Open },
+			card: CardLanes, name: "lanes",
 			modes: []Mode{ModeLanesForm}, mode: func(Model) Mode { return ModeLanesForm },
-			key:     updateLanesFormKey,
+			key: updateLanesFormKey, cancel: LanesCancel,
 			table:   &lanesTable,
 			editing: []fieldEditing{{mode: ModeLanesForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}}},
 			choices: lanesChoiceSet,
@@ -459,17 +443,17 @@ func buildCards() []cardEntry {
 			choices: workerChoiceSet,
 		},
 		{
-			card: CardFilter, name: "filters", open: func(m Model) bool { return m.FilterForm.Open },
+			card: CardFilter, name: "filters",
 			modes: []Mode{ModeFilterForm}, mode: func(Model) Mode { return ModeFilterForm },
-			key:     filterFormKey,
+			key: filterFormKey, cancel: CancelFilters,
 			table:   &filterTable,
 			editing: []fieldEditing{{mode: ModeFilterForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: ResetFilterForm}},
 			choices: filterChoiceSet,
 		},
 		{
-			card: CardView, name: "view", open: func(m Model) bool { return m.ViewForm.Open },
+			card: CardView, name: "view",
 			modes: []Mode{ModeViewForm}, mode: func(Model) Mode { return ModeViewForm },
-			key:     viewFormKey,
+			key: viewFormKey, cancel: CancelViewForm,
 			table:   &viewTable,
 			editing: []fieldEditing{{mode: ModeViewForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: SaveViewForm}},
 			choices: viewChoiceSet,
@@ -510,8 +494,6 @@ func buildCards() []cardEntry {
 	return list
 }
 
-// keyMode is the keymap mode the card is in for the next key: ModeDropdown while a select of the card holds its open dropdown,
-// the card's own mode otherwise.
 func (e cardEntry) keyMode(m Model) Mode {
 	if m.Dropdown.Open && m.Dropdown.Card == e.card && e.choices != nil {
 		return ModeDropdown
@@ -519,7 +501,6 @@ func (e cardEntry) keyMode(m Model) Mode {
 	return e.mode(m)
 }
 
-// Cards lists every popup card in the order TopCard tries them.
 func Cards() []Card {
 	list := make([]Card, len(cards))
 	for i, entry := range cards {
@@ -549,7 +530,6 @@ func (c Card) Name() string {
 	return ""
 }
 
-// CardInput reports whether the card has one text input without a field: its Draft, Workflow, value, name or filter.
 func CardInput(card Card) bool {
 	for _, entry := range cards {
 		if entry.card == card {
@@ -570,7 +550,6 @@ func CardBody(card Card) (EditTarget, Field) {
 	return NoEditTarget, ""
 }
 
-// topEntry is the entry of the card on top, false when none is.
 func (m Model) topEntry() (cardEntry, bool) {
 	if m.HelpOpen {
 		return cardEntry{}, false
@@ -602,9 +581,7 @@ func (m Model) TextCaret() (card Card, field Field, ok bool) {
 	return entry.card, field, ok
 }
 
-// caretAt finds the field holding the text caret. It derives from the card's one busy condition: the caret sits in the
-// focused field when the card is not busy, the card does not hide the field and the field takes text. A card without fields
-// has one input named "" when it declares one. The field is named even when ok is false.
+// The field is named even when ok is false.
 func (e cardEntry) caretAt(m Model) (field Field, ok bool) {
 	if e.focus == nil {
 		return "", e.input && !e.busy(m)
@@ -613,7 +590,6 @@ func (e cardEntry) caretAt(m Model) (field Field, ok bool) {
 	return field, !e.busy(m) && (e.hidden == nil || !e.hidden(m, field)) && takesText(e.fields, field)
 }
 
-// cardMode is the keymap mode of the card on top, "" when there is none.
 func (m Model) cardMode() Mode {
 	if entry, ok := m.topEntry(); ok {
 		return entry.keyMode(m)
@@ -624,8 +600,6 @@ func (m Model) cardMode() Mode {
 // quitChord is the one global chord every popup card lets through, in every state, busy ones included: ctrl+c quits at once.
 const quitChord = "ctrl+c"
 
-// cardLetsThrough reports whether mode belongs to a popup card and, if so, whether the card lets
-// chord through to its global binding.
 func cardLetsThrough(mode Mode, chord string) (isCard, through bool) {
 	for _, entry := range cards {
 		if slices.Contains(entry.modes, mode) {
@@ -635,7 +609,6 @@ func cardLetsThrough(mode Mode, chord string) (isCard, through bool) {
 	return false, false
 }
 
-// updateTopCardKey gives a key to the card on top; it reports false when no card is open.
 func updateTopCardKey(m Model, msg KeyMsg) (Model, []Cmd, bool) {
 	entry, ok := m.topEntry()
 	if !ok || msg.Chord == quitChord {
@@ -657,6 +630,11 @@ func updateTopCardKey(m Model, msg KeyMsg) (Model, []Cmd, bool) {
 	if m, ok := entry.editFields(m, msg); ok {
 		return m, nil, true
 	}
+	if entry.saving != nil && entry.saving(m) {
+		if binding, bound := LookupBindingForMode(msg.Chord, entry.mode(m)); !bound || binding.Action != entry.cancel {
+			return m, nil, true
+		}
+	}
 	m, cmds := entry.key(m, msg)
 	return m, cmds, true
 }
@@ -672,8 +650,7 @@ const (
 	EditWorkflowBody
 )
 
-// editBody applies a native edit or undo to target, if the card on top owns it. It reports whether
-// the card took the message, which it does even when the Draft is read-only.
+// It reports whether the card took the message, which it does even when the Draft is read-only.
 func editBody(m Model, target EditTarget, apply func(TextEditor) TextEditor) (Model, bool) {
 	if entry, ok := m.topEntry(); ok && target != NoEditTarget && entry.target == target {
 		return entry.edit(m, apply), true
@@ -681,8 +658,6 @@ func editBody(m Model, target EditTarget, apply func(TextEditor) TextEditor) (Mo
 	return m, false
 }
 
-// leaveDraft is esc in a card holding a Draft: it leaves at once when the Draft is empty and
-// otherwise asks whether to discard it.
 func leaveDraft(d Draft, empty bool) (Draft, bool) {
 	if empty {
 		return d, true
@@ -691,8 +666,6 @@ func leaveDraft(d Draft, empty bool) (Draft, bool) {
 	return d, false
 }
 
-// answerDiscard is one key while the card asks whether to discard its Draft: the discard binding
-// leaves, the keep binding goes back to editing, and any other key is swallowed.
 func answerDiscard(d Draft, binding Binding, bound bool) (Draft, bool) {
 	switch {
 	case bound && binding.Action == DiscardDraft:
@@ -703,20 +676,14 @@ func answerDiscard(d Draft, binding Binding, bound bool) (Draft, bool) {
 	return d, false
 }
 
-// draftCardKeys is what the Create card and the Draft editor each supply to the one key handler they
-// share: where the Draft lives, what saving sends and which keys and edits are the card's own.
 type draftCardKeys struct {
 	draft func(Model) Draft
 	set   func(Model, Draft) Model
-	// close removes the card and its Draft.
 	close func(Model) Model
 	save  func(Model) (Model, []Cmd)
-	// empty says the card holds nothing worth asking to discard.
 	empty func(Model) bool
-	// own handles a bound key only this card has; it reports false for any other.
-	own func(Model, Binding, KeyMsg) (Model, []Cmd, bool)
-	// edit applies a key that no card action took to the card's text.
-	edit func(Model, Binding, bool, KeyMsg) Model
+	own   func(Model, Binding, KeyMsg) (Model, []Cmd, bool)
+	edit  func(Model, Binding, bool, KeyMsg) Model
 }
 
 // key is one key for a card holding a Draft. While saving it does nothing, before any binding is
@@ -766,7 +733,6 @@ func (c draftCardKeys) key(m Model, msg KeyMsg) (Model, []Cmd) {
 	return c.set(m, d), nil
 }
 
-// editorKey is one key for a multi-line body: a bound editor action, or typed text.
 func editorKey(e TextEditor, binding Binding, bound bool, msg KeyMsg) TextEditor {
 	if bound {
 		return e.Key(binding.Action, editorSelectionChord(msg.Chord))
@@ -777,7 +743,6 @@ func editorKey(e TextEditor, binding Binding, bound bool, msg KeyMsg) TextEditor
 	return e
 }
 
-// focusField puts focus on the field called name of the open card; a name outside its field list is ignored.
 func focusField(m Model, name Field) Model {
 	if entry, ok := m.topEntry(); ok && entry.focus != nil && !entry.busy(m) && takesFocus(entry.fields, name) && (entry.hidden == nil || !entry.hidden(m, name)) {
 		*entry.focus(&m) = name
@@ -802,7 +767,6 @@ func takesFocus(list []FieldSpec, name Field) bool {
 	return slices.ContainsFunc(list, func(f FieldSpec) bool { return f.Name == name })
 }
 
-// takesText reports whether the field called name in list takes typed text.
 func takesText(list []FieldSpec, name Field) bool {
 	return slices.ContainsFunc(list, func(f FieldSpec) bool { return f.Name == name && f.Text })
 }
@@ -886,7 +850,6 @@ type Caret struct {
 	Back  int
 }
 
-// back is the caret's distance from the end of the text of field, clamped to the n runes it holds.
 func (c Caret) back(field Field, n int) int {
 	if c.Field != field {
 		return 0
@@ -910,8 +873,7 @@ func isCaretChord(chord string) bool {
 	return false
 }
 
-// eraseText applies DeleteInput or ClearInput to a single-line text field called field, whose caret is c: delete removes the
-// rune before the caret and clear empties the field. It reports whether the text changed; delete at the start and clear of an empty field do not change it.
+// delete at the start and clear of an empty field do not change the text.
 func eraseText(value string, c *Caret, field Field, action Action) (string, bool) {
 	runes := []rune(value)
 	n := len(runes)
@@ -960,8 +922,6 @@ func editText(value string, c *Caret, field Field, bound bool, msg KeyMsg) (stri
 	return value, false
 }
 
-// typedText is what a key adds to a text field: a bare character, a space, or
-// pasted text with its line breaks flattened.
 func typedText(msg KeyMsg) string {
 	text := msg.Text
 	switch {

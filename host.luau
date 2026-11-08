@@ -44,7 +44,6 @@ local HELD = 4
 local KV_HELD = "supervision.held"
 local held_line: string? = nil
 
--- Restart timing of one supervised program: the delay the next restart waits and the time before which none starts.
 type Backoff = { delay: number, next: number }
 
 local function new_backoff(): Backoff
@@ -59,7 +58,6 @@ local function reset_backoff(backoff: Backoff)
     backoff.next = 0
 end
 
--- Books the next start after the current delay and doubles the delay for the one after. Returns the delay waited.
 local function schedule_restart(backoff: Backoff): number
     local waited = backoff.delay
     backoff.next = tern.now() + waited
@@ -145,7 +143,6 @@ local function home_dir(): string?
     return env(if windows then "USERPROFILE" else "HOME")
 end
 
--- What every process the host half starts gets: the home folder, the plugin's PATH, a time limit, extra variables.
 local function process_options(timeout_ms: number, extra_env: { [string]: string }?)
     local vars = { PATH = tool_path() }
     if extra_env then
@@ -156,7 +153,6 @@ end
 
 local start
 
--- A timer slot: arming it cancels the one pending, and when it fires it calls fire().
 local function scheduler(fire: () -> ()): (number) -> ()
     local pending: TimerHandle? = nil
     return function(ms: number)
@@ -258,7 +254,6 @@ local function answered(binary: string, result: ProcessResult)
     launch(binary, config)
 end
 
--- Called by the timer: asks the Go worker whether the supervision rule holds, and starts the worker when it does and none runs.
 function start()
     if running then return arm(POLL_MS) end
     if asking then return end
@@ -376,7 +371,6 @@ local function docbank_answered(result: ProcessResult)
     end
 end
 
--- Called by the timer: asks Go whether the plugin keeps Docbank running, and when it does, whether Docbank runs.
 function docbank_check()
     if docbank_asking then return end
     local binary = find_binary()

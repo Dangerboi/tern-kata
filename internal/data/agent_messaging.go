@@ -1,11 +1,12 @@
 package data
 
 import (
+	"strings"
+
 	"github.com/Dangerboi/tern-kata/internal/data/ompext"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// OmpExtensionFolder is the folder of tern-kata's state folder that holds the omp extension the agents load.
 const OmpExtensionFolder = "omp"
 
 // AgentMessaging is how an agent hears the messages written to it: AddressPrefix is its Agent address up to the block id
@@ -26,6 +27,13 @@ type AgentMessaging struct {
 // AgentAddress is the Agent address of the agent in block whose address prefix is prefix: the one spelling the Pane records and
 // the wrapper sets as KATA_INBOX_USER.
 func AgentAddress(prefix, block string) string { return prefix + "-" + block }
+
+func AddressActor(address string) string {
+	if i := strings.LastIndex(address, "/"); i > 0 {
+		return address[:i]
+	}
+	return ""
+}
 
 // agentNoAddress says why an agent started with command cannot load tern-kata's omp extension, so has no Agent address, "" when
 // it can: the program must be omp.

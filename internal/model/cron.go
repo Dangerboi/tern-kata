@@ -13,7 +13,6 @@ import (
 // cronjob package's value; the model adds what only the Pane reads. The Jobs Page, the Job card, the cron markers on Issues
 // and the Runs Page read it.
 
-// CronJobParent is a native job's parent Issue as the gateway read it with the job.
 type CronJobParent struct {
 	UID, ShortID, Title string
 	// Status is the Issue's status; Deleted says it is deleted or gone.
@@ -23,14 +22,11 @@ type CronJobParent struct {
 	Progress *cronjob.Progress
 }
 
-// CronJob is a Cron job with, for a native one, its parent.
 type CronJob struct {
 	cronjob.Job
-	// Parent is set on a native job.
 	Parent *CronJobParent
 }
 
-// Job kinds as the Jobs Page words them.
 const (
 	KindRecurringChild = "recurring child"
 	KindAgentPrompt    = "agent prompt"
@@ -88,7 +84,6 @@ func (j CronJob) Pause(projectArchived bool) PauseReason {
 	return NotPaused
 }
 
-// StateText is the job's state as a row reads it: "active", "disabled", "archived" or "paused: <reason>".
 func (r PauseReason) StateText() string {
 	switch r {
 	case NotPaused:
@@ -138,7 +133,6 @@ func (j CronJob) NextRun(now time.Time, projectArchived bool) (time.Time, bool) 
 // Pane read from the parent.
 func (j CronJob) schedule() (cronjob.Schedule, bool) { return j.Job.Schedule(j.deliveryAnchor()) }
 
-// deliveryAnchor is the delivery anchor on a native job's parent, the zero time when the Pane has none.
 func (j CronJob) deliveryAnchor() time.Time {
 	if j.Parent == nil || j.Parent.Progress == nil {
 		return time.Time{}
@@ -215,27 +209,26 @@ func durationWords(seconds int64, bare bool) string {
 
 var weekdayNames = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 
+var cronMacros = map[string]string{
+	"@yearly":   "every year on 1 Jan at 00:00",
+	"@annually": "every year on 1 Jan at 00:00",
+	"@monthly":  "on day 1 of every month at 00:00",
+	"@weekly":   "every Sun at 00:00",
+	"@daily":    "every day at 00:00",
+	"@midnight": "every day at 00:00",
+	"@hourly":   "every hour",
+}
+
 // cronWords reads a cron expression that already parsed. The common shapes get a phrase; any other reads as the expression.
 func cronWords(expression string) string {
+	if every, ok := strings.CutPrefix(expression, "@every "); ok {
+		if d, err := time.ParseDuration(every); err == nil && d >= time.Second {
+			return "every " + durationWords(int64(d/time.Second), true)
+		}
+	} else if words, ok := cronMacros[expression]; ok {
+		return words
+	}
 	if strings.HasPrefix(expression, "@") {
-		if every, ok := strings.CutPrefix(expression, "@every "); ok {
-			if d, err := time.ParseDuration(every); err == nil && d >= time.Second {
-				return "every " + durationWords(int64(d/time.Second), true)
-			}
-			return "cron " + expression
-		}
-		switch expression {
-		case "@yearly", "@annually":
-			return "every year on 1 Jan at 00:00"
-		case "@monthly":
-			return "on day 1 of every month at 00:00"
-		case "@weekly":
-			return "every Sun at 00:00"
-		case "@daily", "@midnight":
-			return "every day at 00:00"
-		case "@hourly":
-			return "every hour"
-		}
 		return "cron " + expression
 	}
 	f := strings.Fields(expression)

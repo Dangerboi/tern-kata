@@ -27,10 +27,8 @@ type projectFilters struct {
 	Relationship string `toml:"relationship"`
 }
 
-// filterKeys are the keys of a Project's table that a save owns; any other key is kept.
 var filterKeys = []string{"name", "project", "status", "owner", "label", "relationship"}
 
-// loadFilters is the Project's saved default filter. No file or no table means none; an unreadable file is an error naming it.
 func (g *Gateway) loadFilters(projectUID string) (model.Filters, error) {
 	folder, err := g.configFolder()
 	if err != nil {
@@ -45,7 +43,6 @@ func (g *Gateway) loadFilters(projectUID string) (model.Filters, error) {
 	return model.Filters{ProjectUID: p.Project, Status: p.Status, Owner: p.Owner, Label: p.Label, Relationship: p.Relationship}, nil
 }
 
-// readTables is the TOML table file at path. No file is the zero value; an unreadable one is an error naming it.
 func readTables[T any](path string) (T, error) {
 	var file T
 	if _, err := toml.DecodeFile(path, &file); err != nil && !errors.Is(err, fs.ErrNotExist) {

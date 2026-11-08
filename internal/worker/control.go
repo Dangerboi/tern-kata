@@ -56,7 +56,6 @@ type Identity struct {
 // ErrNoWorker means nothing answers on the control socket.
 var ErrNoWorker = errors.New("no tern-kata worker is running on this machine; start one with `tern-kata worker`")
 
-// Ask sends req to the running worker of dirs. It returns ErrNoWorker when none answers.
 func Ask(ctx context.Context, dirs Dirs, req Request) (Response, error) {
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "unix", dirs.Socket())
@@ -132,40 +131,31 @@ func (w *Worker) handle(ctx context.Context, req Request) Response {
 		return Response{OK: true, Identity: &Identity{PID: w.pid, Version: w.opt.Version, Supervisor: w.opt.Supervisor}}
 	case cmdRun:
 		accepted, err := w.RequestRun(ctx, req.Job)
-		if err != nil {
-			return Response{Error: err.Error()}
-		}
-		return Response{OK: true, Run: &accepted}
+		return answer(Response{Run: &accepted}, err)
 	case cmdResumeJob:
 		p, err := w.ResumeJob(req.Job)
-		if err != nil {
-			return Response{Error: err.Error()}
-		}
-		return Response{OK: true, Resumed: &p}
+		return answer(Response{Resumed: &p}, err)
 	case cmdStop:
 		a, err := w.Stop(req.Mode)
-		if err != nil {
-			return Response{Error: err.Error()}
-		}
-		return Response{OK: true, Stop: &a}
+		return answer(Response{Stop: &a}, err)
 	case cmdRunDetail:
 		d, err := w.RunDetail(req.Run)
-		if err != nil {
-			return Response{Error: err.Error()}
-		}
-		return Response{OK: true, Detail: &d}
+		return answer(Response{Detail: &d}, err)
 	case cmdResume, cmdAbandon:
-		var t RunTransition
-		var err error
-		if req.Op == cmdResume {
-			t, err = w.Resume(ctx, req.Run, req.Actor)
-		} else {
-			t, err = w.Abandon(ctx, req.Run, req.Actor)
+		verb := w.Resume
+		if req.Op == cmdAbandon {
+			verb = w.Abandon
 		}
-		if err != nil {
-			return Response{Error: err.Error()}
-		}
-		return Response{OK: true, Transition: &t}
+		t, err := verb(ctx, req.Run, req.Actor)
+		return answer(Response{Transition: &t}, err)
 	}
 	return Response{Error: "unknown request " + req.Op}
+}
+
+func answer(ok Response, err error) Response {
+	if err != nil {
+		return Response{Error: err.Error()}
+	}
+	ok.OK = true
+	return ok
 }

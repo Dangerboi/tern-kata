@@ -9,19 +9,14 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// referenceRow is a row heading that names another Issue: lead, then ref as
-// an accent underlined link carrying the jump click, then trail.
 func referenceRow(uid string, lead tern.Element, ref string, card ui.Hovercard, trail ...tern.Element) tern.Element {
 	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapXS, Wrap: true, Children: append(ui.Nodes(lead, jumpLink(uid, ref, card)), trail...)}
 }
 
-// jumpLink is the accent underlined reference whose click jumps to the Issue uid.
 func jumpLink(uid, ref string, card ui.Hovercard) ui.Text {
 	return ui.Text{Common: ui.Common{Key: "jump", Hovercard: card, Actions: &ui.Actions{Click: JumpClick(uid)}}, Spans: []ui.Span{{T: ref, S: mono("accent link")}}}
 }
 
-// referenceText is the reference as an accent link followed, only when the peer is loaded, by
-// ` - ` and its title, as one text so it wraps word by word; a click anywhere jumps to the peer.
 func referenceText(key, uid, ref, title string, card ui.Hovercard) ui.Text {
 	spans := []ui.Span{{T: ref, S: mono("accent link")}}
 	if title != "" {
@@ -30,16 +25,12 @@ func referenceText(key, uid, ref, title string, card ui.Hovercard) ui.Text {
 	return ui.Text{Common: ui.Common{Key: key, Hovercard: card, Actions: &ui.Actions{Click: JumpClick(uid)}}, Spans: spans}
 }
 
-// linkRow is a Link row heading: `relation | ref - title`, the relation and separator muted and
-// pinned at the left, the referenceText wrapping beside it. click is the relation's click, if any.
 func linkRow(m model.Model, row model.DetailRow, click *ui.Actions, now time.Time) tern.Element {
 	noShrink := 0.0
 	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click, Shrink: &noShrink}, Spans: []ui.Span{{T: row.Relation + " |\u00a0", S: "muted"}}, Wrap: ui.WrapNone}
 	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Align: ui.AlignStart, Children: ui.Nodes(lead, referenceText("jump", row.ReferenceUID, row.Ref, row.RefTitle, refCard(m, rowFacts(row), now)))}
 }
 
-// historySentence is the compact event line `[type] time actor - what it did`; the verb is toned, verb toned, the object after it. An event with a Ref makes the
-// reference a link after the sentence. The author and the time are the card's head.
 func historySentence(m model.Model, row model.DetailRow, action string, now time.Time) tern.Element {
 	sentence := row.History
 	spans := []ui.Span{

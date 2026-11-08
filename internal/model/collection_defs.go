@@ -2,7 +2,6 @@ package model
 
 import "slices"
 
-// Grouping is how a Collection arranges its Issues into groups.
 type Grouping int
 
 const (
@@ -14,9 +13,6 @@ const (
 	GroupProject
 )
 
-// CollectionDef is everything the Pane knows about a kind of Collection: what it is called, the daemon view it reads, the
-// rule that keeps its Issues out of that read, whether the read needs the local calendar, how it groups, and whether groups
-// show headings.
 type CollectionDef struct {
 	Key        string
 	Title      string
@@ -56,15 +52,12 @@ var (
 	}
 )
 
-// InboxCollection is the Collection a Pane without a Project opens on.
 func InboxCollection() Collection { return Collection{View: inboxDef.Key, Title: inboxDef.Title} }
 
-// ProjectCollection is the Collection of one Project's Issues.
 func ProjectCollection(uid, name string) Collection {
 	return Collection{View: projectDef.Key, ProjectUID: uid, Title: name}
 }
 
-// ResultsCollection is the stand-in grouping for a filtered Collection.
 func ResultsCollection() Collection { return Collection{View: resultsDef.Key, Title: resultsDef.Title} }
 
 // Def is the definition of the Collection's kind; an unknown kind groups flat without headings.
@@ -81,7 +74,6 @@ func (c Collection) Def() CollectionDef {
 	return CollectionDef{}
 }
 
-// FixedCollections lists the named Collections in Menu order.
 func FixedCollections() []Collection {
 	out := make([]Collection, len(fixedDefs))
 	for i, d := range fixedDefs {
@@ -127,5 +119,4 @@ func (r Membership) has(issue Issue, inboxProjects map[int64]bool, today string)
 	return true
 }
 
-// DetailDaemonView is the daemon view an Issue's detail is read through.
 func DetailDaemonView() string { return allOpenDef.DaemonView }

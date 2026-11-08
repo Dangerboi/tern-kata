@@ -8,7 +8,6 @@ import (
 // retentionAge is how long a settled, fully reported run's folder is kept (ADR-0006 "Retention").
 const retentionAge = 14 * 24 * time.Hour
 
-// retain removes the old settled runs once at start and then every day until ctx ends.
 func (w *Worker) retain(ctx context.Context) {
 	for {
 		removed, err := w.store.Retain(w.clock.Now().Add(-retentionAge))

@@ -128,7 +128,6 @@ func checkIssued(issued *g.CreateTokenResponseBody, cmd model.CreateTokenCmd, sc
 	return nil
 }
 
-// withdraw revokes a token whose secret could not be delivered, and says so.
 func (c *Client) withdraw(ctx context.Context, id int64, cause error) error {
 	if id <= 0 {
 		return fmt.Errorf("token delivery failed; the outcome of creating it is unknown: %w", cause)
@@ -191,7 +190,6 @@ func (c *Client) teamUIDs(ctx context.Context, selectors []string) ([]string, er
 	return uids, nil
 }
 
-// RevokeToken revokes the token with id as `kata tokens revoke` does and returns kata's record of it.
 func (c *Client) RevokeToken(ctx context.Context, id int64) (model.Credential, error) {
 	response, err := c.RevokeTokenWithResponse(ctx, &g.RevokeTokenRequestOptions{PathParams: &g.RevokeTokenPath{ID: id}})
 	if err != nil {

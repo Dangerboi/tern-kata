@@ -25,12 +25,10 @@ type WorkerPickers struct {
 	Note                string
 }
 
-// LoadWorkerPickers asks for this machine's worker config, which answers WorkerPickersLoaded.
 type LoadWorkerPickers struct{}
 
 func (LoadWorkerPickers) cmd() {}
 
-// WorkerPickersLoaded answers LoadWorkerPickers. Names are sorted.
 type WorkerPickersLoaded struct{ Pickers WorkerPickers }
 
 func (WorkerPickersLoaded) msg() {}
@@ -52,7 +50,6 @@ type JobWorkflowsLoaded struct {
 
 func (JobWorkflowsLoaded) msg() {}
 
-// jobChoiceCmds are the reads that fill an opening card's pickers.
 func jobChoiceCmds(m Model, projectID int64) []Cmd {
 	return []Cmd{LoadWorkerPickers{}, LoadJobWorkflows{Workspace: m.Workspace, ProjectID: projectID}}
 }
@@ -156,7 +153,6 @@ func formatSecrets(refs map[string]string) string {
 	return strings.Join(entries, ", ")
 }
 
-// DateTrigger says the trigger fires on a date of an Issue.
 func DateTrigger(kind cronjob.TriggerKind) bool {
 	return kind == cronjob.TriggerIssueScheduled || kind == cronjob.TriggerIssueDeadline
 }
@@ -217,7 +213,6 @@ var promptJobKind = executeKind("prompt", "Agent prompt", KindAgentPrompt, false
 
 var workflowJobKind = executeKind("workflow", "Workflow", KindWorkflow, true)
 
-// executeKind is the kind of a job a Worker executes: an agent prompt, or a workflow of the Project.
 func executeKind(id, label, kind string, workflow bool) jobKind {
 	return jobKind{
 		id: id, label: label, triggers: cronjob.TriggersFor(cronjob.ActionExecute),
@@ -473,18 +468,8 @@ func (f JobFormState) ConditionLines() (lines []string, shown bool, err error) {
 	if err != nil {
 		return nil, true, err
 	}
-	money := func(v float64) string { return "$" + strconv.FormatFloat(v, 'f', -1, 64) }
-	if c.RunsPerDay != 0 {
-		lines = append(lines, "At most "+strconv.Itoa(c.RunsPerDay)+" runs per day")
-	}
-	if c.RunsPerWeek != 0 {
-		lines = append(lines, "At most "+strconv.Itoa(c.RunsPerWeek)+" runs per week")
-	}
-	if c.SpendPerDay != 0 {
-		lines = append(lines, "At most "+money(c.SpendPerDay)+" spent per day")
-	}
-	if c.SpendPerWeek != 0 {
-		lines = append(lines, "At most "+money(c.SpendPerWeek)+" spent per week")
+	for _, l := range c.Limits() {
+		lines = append(lines, l.Wording())
 	}
 	if c.NewCommits {
 		line := "Only with new commits since the last succeeded run"

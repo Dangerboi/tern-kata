@@ -15,11 +15,8 @@ const DocbankManualFileName = "docbank.manual"
 // DocbankSupervision is the plugin's supervision rule for Docbank, as docbanksetup.Env answers it. The Gateway cannot import that
 // package (it imports this one), so the program hands it in with WithDocbankSupervision.
 type DocbankSupervision interface {
-	// ManualPath is the marker docbank.manual.
 	ManualPath() string
-	// Supervised says whether the plugin keeps a local Docbank running, and when not, why.
 	Supervised() (on bool, why string)
-	// SetSupervision turns supervision on (the marker is removed) or off (it is created).
 	SetSupervision(on bool) error
 }
 

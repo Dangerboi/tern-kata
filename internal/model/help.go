@@ -64,7 +64,6 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 	return Binding{}, false
 }
 
-// Described is the binding's words for m: the entry's own label when it has one, else Help.
 func (b Binding) Described(m Model) string {
 	if b.entry != nil && b.entry.label != nil {
 		return b.entry.label(m)
@@ -72,7 +71,6 @@ func (b Binding) Described(m Model) string {
 	return b.Help
 }
 
-// Offered says whether the binding is on offer for m: an entry with a condition is offered only while it holds.
 func (b Binding) Offered(m Model) bool {
 	return b.entry == nil || b.entry.when == nil || b.entry.when(m)
 }
@@ -132,13 +130,11 @@ type sheetLine struct {
 	text  string
 }
 
-// SheetLine is one line of the help sheet: what it does and the keys that do it.
 type SheetLine struct {
 	Text string
 	Keys []string
 }
 
-// SheetGroup is a titled block of the help sheet.
 type SheetGroup struct {
 	Title string
 	Lines []SheetLine
@@ -161,7 +157,6 @@ var pageHelpModes = map[Page][]Mode{
 	PageConfig:  {ModeConfig},
 }
 
-// helpListing is one entry's key placed on one sheet line, with the modes the entry is bound in.
 type helpListing struct {
 	sheetLine
 	keys  []string

@@ -214,10 +214,8 @@ func quitAgentAttention(m model.Model, gateway *data.Gateway) {
 	done.Wait()
 }
 
-// quitClearDeadline bounds how long a quitting Pane waits for the daemon to take its clears.
 const quitClearDeadline = 3 * time.Second
 
-// lookupEnv reads the environment and answers gitUserNameKey from `git config user.name`.
 func lookupEnv(key string) (string, bool) {
 	if key != gitUserNameKey {
 		return os.LookupEnv(key)

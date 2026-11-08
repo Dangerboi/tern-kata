@@ -22,10 +22,8 @@ type capture struct {
 	room int
 }
 
-// errCaptureWrite is the write error a Hooks.CaptureWriteLimit fault produces.
 var errCaptureWrite = errors.New("injected write failure")
 
-// openCapture creates (or truncates) the file at path; when it cannot, the capture starts out lost.
 func openCapture(hooks Hooks, path string) *capture {
 	c := &capture{room: -1}
 	if hooks.CaptureWriteLimit != nil {
@@ -42,7 +40,6 @@ func openCapture(hooks Hooks, path string) *capture {
 	return c
 }
 
-// lose drops the file and keeps the first reason.
 func (c *capture) lose(path string, err error) {
 	if pe, ok := errors.AsType[*fs.PathError](err); ok {
 		err = pe.Err
@@ -56,7 +53,6 @@ func (c *capture) lose(path string, err error) {
 	}
 }
 
-// Write records p unless the capture is lost; it always reports p as written.
 func (c *capture) Write(p []byte) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -92,7 +88,6 @@ func (c *capture) Loss() string {
 	return c.lost
 }
 
-// Close closes the file; a failing close loses what could not be flushed.
 func (c *capture) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -105,7 +100,6 @@ func (c *capture) Close() error {
 	return nil
 }
 
-// lossOf joins the reasons of the captures that were lost, one per distinct reason.
 func lossOf(caps ...interface{ Loss() string }) string {
 	var reasons []string
 	for _, c := range caps {
@@ -116,7 +110,6 @@ func lossOf(caps ...interface{ Loss() string }) string {
 	return strings.Join(reasons, "; ")
 }
 
-// outputNote is the words that say a run's output was not recorded and why.
 func outputNote(reason string) string { return "output not recorded: " + reason }
 
 // outputLoss is why attempts' output was not recorded, empty when it all was: a prompt job's attempt, or every ended
@@ -143,7 +136,6 @@ func (j *Journal) outputLoss() string {
 	return strings.Join(notes, "; ")
 }
 
-// logUnrecorded tells the Worker's log once that an attempt's output was not recorded.
 func (w *Worker) logUnrecorded(j *Journal, exit *ExitRecord) {
 	if exit.Unrecorded != "" {
 		w.opt.Log("run %s: %s", j.RunUID, outputNote(exit.Unrecorded))

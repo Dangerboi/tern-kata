@@ -2,7 +2,6 @@ package model
 
 import "slices"
 
-// ScrollBy is one scroll move, spelled as Tern's scroll op names it.
 type ScrollBy string
 
 const (
@@ -27,8 +26,6 @@ type RevealActivityTab struct{}
 
 func (RevealActivityTab) cmd() {}
 
-// DetailDrawn reports whether the view draws the Activity tabs: the detail column
-// is on screen and holds a loaded Issue, not a placeholder or an error line.
 func (m Model) DetailDrawn() bool {
 	if m.OnJobs() {
 		return m.Shows(ColumnDetail) && m.SelectedJob() != nil
@@ -48,7 +45,6 @@ func (m Model) Shows(c Column) bool {
 	return m.Err == nil && !m.FirstLoad() && slices.Contains(m.VisibleColumns(), c)
 }
 
-// moveSelection moves the list selection by action: one row, to either end, or a page.
 func moveSelection(m Model, action Action) Model {
 	rows := m.VisibleRows()
 	if len(rows) == 0 {
@@ -85,8 +81,6 @@ func moveSelection(m Model, action Action) Model {
 // ponytail: a fixed step, not a measured page; if ResizeMsg ever carries rows, use rows minus the chrome.
 const pageRows = 10
 
-// Position is the place of the selected row in the current Page's list, counted from one and zero when nothing is selected,
-// and the number of rows: what the footer shows at its right.
 func (m Model) Position() (selected, total int) {
 	if m.OnConfig() {
 		return min(m.ConfigPage.Cursor+1, len(m.ConfigPage.Files)), len(m.ConfigPage.Files)

@@ -9,18 +9,15 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// FederationChoiceID is the id of the row at index of the enrollment's choices or of the browse.
 func FederationChoiceID(index int) string {
 	return itemID(FederationListID, "choice"+strconv.Itoa(index))
 }
 
-// federationEnrollScreen draws the enrollment's screens and the browse, under the Page's heading and header: the choices as a
-// list of cards, the preview, the recovery and the result as lines. It reports false for any other screen.
 func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 	f := m.Federation
 	title := func(text string) []tern.Element {
 		return ui.Nodes(
-			ui.Text{Common: ui.Common{Key: "selected", Tone: ui.ToneMuted}, Text: "selected project: " + m.FederationSelectedProject()},
+			plainText("selected", ui.ToneMuted, "selected project: "+m.FederationSelectedProject()),
 			ui.Text{Common: ui.Common{Key: "title", Tone: ui.ToneMuted}, Spans: []ui.Span{{T: text, S: "strong"}}, Wrap: ui.WrapNone})
 	}
 	line := func(key, text string) tern.Element {
@@ -30,7 +27,7 @@ func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 		if f.EnrollErr == nil {
 			return nil
 		}
-		return ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.EnrollErr.Error()})
+		return ui.Nodes(plainText("error", ui.ToneError, f.EnrollErr.Error()))
 	}
 	switch f.Screen {
 	case model.FederationPickLocal:
@@ -54,9 +51,9 @@ func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 		}
 		switch {
 		case f.HubsLoading:
-			out = append(out, ui.Text{Common: ui.Common{Key: "notice", Tone: ui.TonePending}, Text: "loading hub daemons..."})
+			out = append(out, plainText("notice", ui.TonePending, "loading hub daemons..."))
 		case len(labels) == 0 && f.EnrollErr == nil:
-			out = append(out, ui.Text{Common: ui.Common{Key: "notice", Tone: ui.ToneMuted}, Text: "no daemons in kata's catalog"})
+			out = append(out, plainText("notice", ui.ToneMuted, "no daemons in kata's catalog"))
 		default:
 			out = append(out, choiceList(m, labels)...)
 		}
@@ -77,9 +74,9 @@ func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 		}
 		switch {
 		case f.HubProjectsLoading:
-			out = append(out, ui.Text{Common: ui.Common{Key: "notice", Tone: ui.TonePending}, Text: "loading hub projects..."})
+			out = append(out, plainText("notice", ui.TonePending, "loading hub projects..."))
 		case len(labels) == 0:
-			out = append(out, ui.Text{Common: ui.Common{Key: "notice", Tone: ui.ToneMuted}, Text: "no hub projects"})
+			out = append(out, plainText("notice", ui.ToneMuted, "no hub projects"))
 		default:
 			out = append(out, choiceList(m, labels)...)
 		}
@@ -100,11 +97,11 @@ func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 		}
 		switch {
 		case f.Browsing:
-			out = append(out, ui.Text{Common: ui.Common{Key: "notice", Tone: ui.TonePending}, Text: "loading hub projects..."})
+			out = append(out, plainText("notice", ui.TonePending, "loading hub projects..."))
 		case f.EnrollErr != nil:
-			out = append(out, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: "failed to load hub projects: " + f.EnrollErr.Error()})
+			out = append(out, plainText("error", ui.ToneError, "failed to load hub projects: "+f.EnrollErr.Error()))
 		case len(labels) == 0:
-			out = append(out, ui.Text{Common: ui.Common{Key: "notice", Tone: ui.ToneMuted}, Text: "no hub projects"})
+			out = append(out, plainText("notice", ui.ToneMuted, "no hub projects"))
 		default:
 			out = append(out, choiceList(m, labels)...)
 		}
@@ -112,11 +109,11 @@ func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 	case model.FederationPreview:
 		out := append(title("Enrollment Preview"), federationLines(f.Draft.PreviewLines(), -1)...)
 		if f.Draft.BlockedReason != "" {
-			out = append(out, ui.Text{Common: ui.Common{Key: "blocked", Tone: ui.ToneError}, Text: "Blocked: " + f.Draft.BlockedReason})
+			out = append(out, plainText("blocked", ui.ToneError, "Blocked: "+f.Draft.BlockedReason))
 		}
 		out = append(out, failure()...)
 		if f.Enrolling {
-			out = append(out, ui.Text{Common: ui.Common{Key: "running", Tone: ui.TonePending}, Text: "enrolling..."})
+			out = append(out, plainText("running", ui.TonePending, "enrolling..."))
 		}
 		return out, true
 	case model.FederationRecovery:
@@ -124,7 +121,7 @@ func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 		out := append(title("Enrollment Recovery"), federationLines(lines, errLine)...)
 		if f.Recovery.Reveal {
 			revealed := f.Recovery.RevealedLines()
-			out = append(out, ui.Text{Common: ui.Common{Key: "reveal-warning", Tone: ui.ToneError}, Text: revealed[0]})
+			out = append(out, plainText("reveal-warning", ui.ToneError, revealed[0]))
 			out = append(out, line("reveal-valid", revealed[1]), line("reveal-target", revealed[2]),
 				ui.Text{Common: ui.Common{Key: "reveal-command"}, Text: revealed[3]})
 		}
@@ -135,7 +132,6 @@ func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 	return nil, false
 }
 
-// choiceList is the rows of a choice screen as cards in the Page's list, the selected one marked.
 func choiceList(m model.Model, labels []string) []tern.Element {
 	cursor := m.FederationChoiceCursor()
 	cards := make([]tern.Element, len(labels))
@@ -146,7 +142,6 @@ func choiceList(m model.Model, labels []string) []tern.Element {
 	return ui.Nodes(ui.List{CommonWithoutMax: scrollerCommon("federation"), Max: fillMax, Children: cards})
 }
 
-// federationAdoptLayer is the card asking to type the local Project's name before an adoption.
 func federationAdoptLayer(m model.Model) tern.Element {
 	f := m.Federation
 	if !f.Adopting {

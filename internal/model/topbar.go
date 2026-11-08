@@ -22,10 +22,8 @@ const (
 	DaemonRemote DaemonKind = "remote"
 )
 
-// DaemonSeparator divides the top bar's daemon line and its Menu button.
 const DaemonSeparator = " · "
 
-// DaemonLine is the top bar's daemon line.
 func (m Model) DaemonLine() string {
 	var parts []string
 	if m.Daemon.Name != "" {

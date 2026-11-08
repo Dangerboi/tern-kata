@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-// VerbTone marks the history verbs that are worth a colour. The view maps it
-// to a Tern tone; the empty value is neutral.
 type VerbTone string
 
 const (
@@ -88,7 +86,6 @@ func (m Model) historyRow(event Event) DetailRow {
 	return row
 }
 
-// payloadMap is a decoded event payload; numbers keep their JSON spelling.
 type payloadMap map[string]any
 
 // decodePayload fails for a payload that is not a JSON object, and then returns no fields.
@@ -100,7 +97,6 @@ func decodePayload(raw string) (payloadMap, error) {
 	return payload, err
 }
 
-// text is the value at key, empty when absent or null.
 func (p payloadMap) text(key string) string {
 	if p[key] == nil {
 		return ""
@@ -108,7 +104,6 @@ func (p payloadMap) text(key string) string {
 	return plain(p[key])
 }
 
-// pairs is the "key: value" list of an event this build has no phrasing for.
 func (p payloadMap) pairs() string {
 	keys := make([]string, 0, len(p))
 	for key := range p {
@@ -122,7 +117,6 @@ func (p payloadMap) pairs() string {
 	return strings.Join(parts, ", ")
 }
 
-// plain is a value as people would write it: no quotes, braces or brackets.
 func plain(v any) string {
 	switch v := v.(type) {
 	case nil:
@@ -143,10 +137,8 @@ func plain(v any) string {
 	return fmt.Sprint(v)
 }
 
-// oneLine collapses s to a single line.
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-// currentMetadata is the shown Issue's meta, which says which Attachments it still has.
 func (m Model) currentMetadata() map[string]any {
 	if m.authority == nil || m.authority.Issue == nil {
 		return nil
@@ -243,7 +235,6 @@ func linkObject(event Event, p payloadMap) string {
 	return relationName(relation) + " " + peer
 }
 
-// linkField is a links_changed payload field and the relation it names.
 type linkField struct{ field, relation string }
 
 var (
@@ -251,8 +242,6 @@ var (
 	linkRemoves = []linkField{{"parent_removed", "parent"}, {"blocks_removed", "blocks"}, {"blocked_by_removed", "blocked by"}, {"related_removed", "related"}}
 )
 
-// linksChanged phrases the aggregated event an Issue edit records for any mix
-// of added and removed links.
 func linksChanged(p payloadMap) (verb, object string) {
 	collect := func(specs []linkField, prefix string) (parts []string) {
 		for _, spec := range specs {

@@ -6,10 +6,8 @@ import (
 )
 
 const (
-	// ModeAgentBroadcastOutcome is the Message card showing who a broadcast reached and who it skipped.
 	ModeAgentBroadcastOutcome Mode = "agent-broadcast-outcome"
 
-	// BroadcastAgents is `S` on an Issue: the Message card for every running agent on it and on its open children.
 	BroadcastAgents Action = "broadcast-agents"
 )
 
@@ -36,7 +34,6 @@ type BroadcastTarget struct {
 	Host, HostID string
 }
 
-// Remote says the target runs on another host.
 func (t BroadcastTarget) Remote() bool { return t.HostID != "" }
 
 // BroadcastTargets are the agents a broadcast on the Issue uid (qualified id ref) goes through: those this Pane knows on it and
@@ -59,8 +56,6 @@ func (m Model) BroadcastTargets(uid, ref string) []BroadcastTarget {
 	return targets
 }
 
-// remoteTargets are the agents other hosts published on the Issue uid (qualified id ref), each with the reason the sender rule
-// gives, "" when it can take the message.
 func (m Model) remoteTargets(uid, ref string) []BroadcastTarget {
 	var targets []BroadcastTarget
 	for _, r := range m.RemoteAgents(uid) {
@@ -78,7 +73,6 @@ func (m Model) remoteBroadcastTarget(r RemoteAgent, uid, ref string) BroadcastTa
 	return t
 }
 
-// runningTargets are the agents of the mapping that have not exited and for which issueRef names an Issue, each with that ref.
 func (m Model) runningTargets(issueRef func(AgentEntry) (string, bool)) []BroadcastTarget {
 	var targets []BroadcastTarget
 	for _, e := range m.AgentMapping {
@@ -165,7 +159,6 @@ func broadcastSent(m Model, msg AgentMessageSent) Model {
 	return m
 }
 
-// BroadcastReached counts the agents the broadcast wrote to.
 func (f AgentMessageState) BroadcastReached() int {
 	return len(slices.DeleteFunc(slices.Clone(f.Targets), func(t BroadcastTarget) bool { return t.Skipped != "" }))
 }

@@ -64,7 +64,6 @@ static() {
   return "$status"
 }
 
-# Prints what a failed go test run reported: build errors, then the output of each failed test and package.
 failures='
   [.[] | select(.Action == "fail") | [.Package, .Test]] as $failed
   | .[]

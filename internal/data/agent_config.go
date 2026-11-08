@@ -31,16 +31,13 @@ import (
 //	checkout = "/home/me/Code/tern-kata"
 const AgentConfigFile = "agent.toml"
 
-// DefaultAgentCommand is the agent program when agent.toml names none.
 var DefaultAgentCommand = []string{worker.DefaultCommand}
 
-// AgentConfig is agent.toml, strictly decoded.
 type AgentConfig struct {
-	Actor   string   `toml:"actor"`
-	Name    string   `toml:"name"`
-	Command []string `toml:"command"`
-	// ForwardComments turns on telling the agent about a person's comment on its Issue; unset is off.
-	ForwardComments *bool `toml:"forward_comments"`
+	Actor           string   `toml:"actor"`
+	Name            string   `toml:"name"`
+	Command         []string `toml:"command"`
+	ForwardComments *bool    `toml:"forward_comments"`
 	// Host is this machine's name on the Agent records it publishes (top level only); unset is the machine's host name.
 	Host string `toml:"host"`
 	// MessageFrom lists the actors, besides the agent's own, whose messages the agent acts on; unset and empty are none.
@@ -48,14 +45,12 @@ type AgentConfig struct {
 	Projects    map[string]AgentProject `toml:"projects"`
 }
 
-// AgentProject is one [projects.<name>] table; its values override the top-level ones.
 type AgentProject struct {
-	Actor    string   `toml:"actor"`
-	Name     string   `toml:"name"`
-	Command  []string `toml:"command"`
-	Checkout string   `toml:"checkout"`
-	// ForwardComments overrides the top-level value when set.
-	ForwardComments *bool `toml:"forward_comments"`
+	Actor           string   `toml:"actor"`
+	Name            string   `toml:"name"`
+	Command         []string `toml:"command"`
+	Checkout        string   `toml:"checkout"`
+	ForwardComments *bool    `toml:"forward_comments"`
 	// MessageFrom overrides the top-level list when set, an empty list included.
 	MessageFrom []string `toml:"message_from"`
 }
@@ -79,7 +74,6 @@ func CheckAgentConfig(text string) error {
 	return err
 }
 
-// parseAgentConfig is the one definition of agent.toml's rules; name is what an error calls the file.
 func parseAgentConfig(path, text string) (AgentConfig, error) {
 	var c AgentConfig
 	meta, err := toml.Decode(text, &c)
@@ -141,7 +135,6 @@ func checkMessageFrom(actors []string) error {
 	return nil
 }
 
-// checkTeammate refuses a name that is no teammate name; the rule is model.ValidTeammate's.
 func checkTeammate(name string) error {
 	if !model.ValidTeammate(name) {
 		return fmt.Errorf("%q is not a teammate name (letters, digits, . _ -; at most 64)", name)
@@ -156,22 +149,17 @@ func checkAgentCommand(argv []string) error {
 	return nil
 }
 
-// AgentSettings are the actor, command and checkout an agent on a Project starts with.
 type AgentSettings struct {
 	// Actor is "" when agents run as whoever kata resolves in the agent's shell.
 	Actor string
 	// Name is the teammate the agent's Attention requests carry: the configured name, else the command's program name, "" when that is no valid teammate.
-	Name    string
-	Command []string
-	// Checkout is the Project's table's checkout, "" when it has none.
-	Checkout string
-	// ForwardComments is whether the agent is told of a person's comment on its Issue.
+	Name            string
+	Command         []string
+	Checkout        string
 	ForwardComments bool
-	// MessageFrom is the actors, besides Actor, whose messages the agent acts on.
-	MessageFrom []string
+	MessageFrom     []string
 }
 
-// For is the settings for a Project: its table's values over the top-level ones over the defaults.
 func (c AgentConfig) For(project string) AgentSettings {
 	s := AgentSettings{Actor: c.Actor, Name: c.Name, Command: c.Command, ForwardComments: c.ForwardComments != nil && *c.ForwardComments, MessageFrom: c.MessageFrom}
 	if p, ok := c.Projects[project]; ok {

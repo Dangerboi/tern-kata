@@ -45,7 +45,6 @@ func LocateNamed(name, startWith string) Locator {
 	}
 }
 
-// locateRemoteEntry connects to a remote catalog entry with only the credentials the entry itself carries.
 func locateRemoteEntry(ctx context.Context, entry CatalogEntry) (Target, error) {
 	token, err := entry.Token()
 	if err != nil {

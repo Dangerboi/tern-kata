@@ -8,29 +8,22 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// AgentListID is the id of the Agent card's list of agents.
 var AgentListID = LayerID(model.CardAgent) + ".list"
 
-// AgentItemID is the id of the Agent card's row for the agent block.
 func AgentItemID(block string) string { return itemID(AgentListID, block) }
 
-// TeamListID is the id of the team section's list on the parent's Agent card.
 var TeamListID = LayerID(model.CardAgent) + ".team"
 
-// TeamRowText is one child of the team: its ref and where it stands.
 func TeamRowText(r model.TeamRow) string { return r.Ref + " · " + r.State }
 
-// TeamHeadText is the team section's heading: the state and the limit.
 func TeamHeadText(t model.Team) string {
 	return "Team: " + model.TeamStateWords(t.State) + " · " + strconv.Itoa(t.Limit) + " at once"
 }
 
-// TeamChildText is what a child's card says of its team: whose child it is and who directs it.
 func TeamChildText(t model.Team) string {
 	return "Team: a child of the team on " + t.ParentRef + ", directed by the coordinator " + t.CoordinatorAddress
 }
 
-// teamSection is the parent's team under the agent list, and a child's line naming its team; nil for an Issue in neither.
 func teamSection(m model.Model) []tern.Element {
 	if t, ok := m.TeamOn(m.AgentCard.IssueUID); ok {
 		rows := m.TeamRows(t)
@@ -50,7 +43,6 @@ func teamSection(m model.Model) []tern.Element {
 	return nil
 }
 
-// AgentRowText is one agent's row: its state in the badge's words, when it started, where it is and, while its address holds an uncleared message, that message's first line.
 func AgentRowText(m model.Model, a model.IssueAgent) string {
 	state, _ := model.AgentStateWords(a.State)
 	text := state + " · started " + m.DetailTime(a.StartedAt) + " · " + model.AgentWhere(a.AgentEntry)
@@ -63,8 +55,7 @@ func AgentRowText(m model.Model, a model.IssueAgent) string {
 	return text
 }
 
-// RemoteRowText is one agent on another host: where it runs, when it started and, while its address holds an uncleared message,
-// that message's first line. It has no state, for the record is static.
+// RemoteRowText has no state: the record is static.
 func RemoteRowText(m model.Model, r model.RemoteAgent) string {
 	text := "on " + r.HostLabel() + " · started " + m.DetailTime(r.StartedAt)
 	if r.Unread != "" {
@@ -95,7 +86,7 @@ func agentLayer(m model.Model) tern.Element {
 	}
 	list := tern.Element(ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Max: ui.MaxLines(12), Children: items})
 	if len(items) == 0 {
-		list = ui.Text{Common: ui.Common{Key: "none", Tone: ui.ToneMuted}, Text: "No agents on this Issue yet."}
+		list = plainText("none", ui.ToneMuted, "No agents on this Issue yet.")
 	}
 	if m.AgentCardMode() == model.ModeAgentCardStop {
 		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Stop agent"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeMD}, []tern.Element{
@@ -140,7 +131,6 @@ func agentLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Agents"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeLG}, children))
 }
 
-// pauseLabel is the pause button's words: it resumes a paused team and pauses any other.
 func pauseLabel(m model.Model) string {
 	if t, ok := m.TeamOn(m.AgentCard.IssueUID); ok && t.State == model.TeamPaused {
 		return "Resume the team"
@@ -148,7 +138,6 @@ func pauseLabel(m model.Model) string {
 	return "Pause the team"
 }
 
-// agentStopQuestion is the stop prompt: it names the agent and says what stopping drops.
 func agentStopQuestion(m model.Model) string {
 	name := "this agent"
 	if e, ok := m.AgentCardStopTarget(); ok {
@@ -157,7 +146,6 @@ func agentStopQuestion(m model.Model) string {
 	return "Stop " + name + " on " + m.AgentCard.IssueRef + "? Its block closes and any unsaved work in it is dropped."
 }
 
-// agentForgetQuestion is the forget prompt: it names the host and the start time of the record it removes.
 func agentForgetQuestion(m model.Model) string {
 	r, ok := m.AgentCardForgetTarget()
 	if !ok {
@@ -167,7 +155,6 @@ func agentForgetQuestion(m model.Model) string {
 		"? Its record and any message left at its address are removed; the other host is not touched."
 }
 
-// teamDialog is the start dialog of the Agent card's `c`: where the coordinator goes and how many children run at once.
 func teamDialog(m model.Model) tern.Element {
 	d := m.AgentCard.Team
 	return popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Start a team"), Meta: refMeta(m.AgentCard.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeMD}, []tern.Element{

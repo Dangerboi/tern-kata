@@ -25,7 +25,6 @@ const (
 	enrollBudget = 15 * time.Second
 )
 
-// catalogHub is a catalog entry as the hub step lists it.
 func catalogHub(entry CatalogEntry, active bool) model.FederationHub {
 	endpoint, auth := "local", "no token"
 	if !entry.Local {
@@ -51,7 +50,6 @@ func (c *Client) ListFederationHubs(_ context.Context, cmd model.LoadFederationH
 	return loaded, nil
 }
 
-// hubEntry is the catalog daemon called name when it can be a hub: not the connected one and not local.
 func (c *Client) hubEntry(name string) (CatalogEntry, error) {
 	catalog, err := ReadCatalog()
 	if err != nil {
@@ -69,7 +67,6 @@ func (c *Client) hubEntry(name string) (CatalogEntry, error) {
 	return entry, nil
 }
 
-// hubEntryClient connects to a catalog daemon with its token_env token, honouring its allow_insecure.
 func hubEntryClient(ctx context.Context, entry CatalogEntry) (*client.Client, error) {
 	token, err := entry.Token()
 	if err != nil {
@@ -78,7 +75,6 @@ func hubEntryClient(ctx context.Context, entry CatalogEntry) (*client.Client, er
 	return client.NewForTarget(ctx, strings.TrimRight(entry.URL, "/"), client.TargetAuth{Token: token, AllowInsecure: entry.AllowInsecure})
 }
 
-// readHub reads a hub's instance and Projects: how it words its authentication, the account it says it acted as, and its Projects.
 func readHub(ctx context.Context, hub *client.Client, entry CatalogEntry) (auth, actor string, projects []model.Project, err error) {
 	instance, err := hub.InstanceWithResponse(ctx)
 	if err != nil {

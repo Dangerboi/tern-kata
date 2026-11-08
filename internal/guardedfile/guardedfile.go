@@ -20,7 +20,6 @@ var ErrChanged = errors.New("file changed since it was read")
 // Token is what a read saw: the file's text, empty for a missing file. Callers treat it as opaque.
 type Token struct{ text string }
 
-// Text is the file's text at the read.
 func (t Token) Text() string { return t.text }
 
 // Read reads path. A missing file reads as empty text. Any other failure is the error, with no token, so nothing can write
@@ -33,7 +32,6 @@ func Read(path string) (Token, error) {
 	return Token{text: string(text)}, nil
 }
 
-// lockWait bounds how long a write waits for another writer's lock before giving up with an error.
 const lockWait = 10 * time.Second
 
 // Write replaces path with next, creating the file (always mode 0600; dirMode is for the folder only) and its folder (with dirMode) when missing, unless the file is no longer
@@ -68,7 +66,6 @@ func Write(path string, dirMode fs.FileMode, token Token, next []byte) error {
 	}})
 }
 
-// updateTries bounds how often Update reads the file again and applies its change on top when another writer got in between.
 const updateTries = 20
 
 // Update reads path, lets change return the file's next bytes from what was read, and writes them with Write. When another

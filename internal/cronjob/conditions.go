@@ -6,6 +6,7 @@ import (
 	"math"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -13,7 +14,6 @@ import (
 // ConditionsKey is the options key that holds a job's conditions (ADR-0016).
 const ConditionsKey = "conditions"
 
-// Condition names, as a skip record and a refusal name the condition that said no.
 const (
 	ConditionRunsPerDay   = "runs_per_day"
 	ConditionRunsPerWeek  = "runs_per_week"
@@ -23,8 +23,8 @@ const (
 )
 
 // Conditions are what a due occurrence of an Adapter execute job must meet, read from options.conditions. The zero value
-// has no condition. Every field is one condition and is off at its zero value, so a later condition is one more field,
-// one more key in conditionKeys, one more test in Any, and one more row in the worker's condition table.
+// has no condition. Every field is one condition and is off at its zero value, so a later condition is one more field
+// and, when windowed, one more row in limits.
 type Conditions struct {
 	// RunsPerDay and RunsPerWeek are the most runs the job may start in a calendar day or week of its trigger's zone.
 	RunsPerDay  int
@@ -39,13 +39,68 @@ type Conditions struct {
 	Folders    []string
 }
 
-// Any reports whether at least one condition is on.
-func (c Conditions) Any() bool {
-	return c.RunsPerDay != 0 || c.RunsPerWeek != 0 || c.SpendPerDay != 0 || c.SpendPerWeek != 0 || c.NewCommits
+// Limit is one windowed condition that is on: at most Runs runs started, or at most Spend dollars spent, in the
+// calendar day or Monday-first week that contains an occurrence.
+type Limit struct {
+	// Condition is the key in options.conditions and the name a skip record carries.
+	Condition string
+	// Per is "day" or "week"; Week is true for "week".
+	Per   string
+	Week  bool
+	Runs  int
+	Spend float64
 }
 
-// conditionKeys are the keys options.conditions may hold, in the order a problem names them.
-var conditionKeys = []string{ConditionRunsPerDay, ConditionRunsPerWeek, ConditionSpendPerDay, ConditionSpendPerWeek, ConditionNewCommits}
+// Wording is the limit as the Pane shows it: "At most 3 runs per day", "At most $5 spent per week".
+func (l Limit) Wording() string {
+	if l.Runs != 0 {
+		return "At most " + strconv.Itoa(l.Runs) + " runs per " + l.Per
+	}
+	return "At most $" + strconv.FormatFloat(l.Spend, 'f', -1, 64) + " spent per " + l.Per
+}
+
+type limitRow struct {
+	Limit
+	runs  *int
+	spend *float64
+}
+
+// limits is the one table of windowed conditions, in the order options, problems, skips and the Pane list them. A later
+// windowed condition is one more field of Conditions and one more row here.
+func (c *Conditions) limits() []limitRow {
+	return []limitRow{
+		{Limit: Limit{Condition: ConditionRunsPerDay, Per: "day"}, runs: &c.RunsPerDay},
+		{Limit: Limit{Condition: ConditionRunsPerWeek, Per: "week", Week: true}, runs: &c.RunsPerWeek},
+		{Limit: Limit{Condition: ConditionSpendPerDay, Per: "day"}, spend: &c.SpendPerDay},
+		{Limit: Limit{Condition: ConditionSpendPerWeek, Per: "week", Week: true}, spend: &c.SpendPerWeek},
+	}
+}
+
+// Limits are the windowed conditions that are on, runs first and day before week.
+func (c Conditions) Limits() []Limit {
+	var out []Limit
+	for _, r := range c.limits() {
+		if r.runs != nil && *r.runs != 0 {
+			r.Runs = *r.runs
+		} else if r.spend != nil && *r.spend != 0 {
+			r.Spend = *r.spend
+		} else {
+			continue
+		}
+		out = append(out, r.Limit)
+	}
+	return out
+}
+
+func (c Conditions) Any() bool { return len(c.Limits()) > 0 || c.NewCommits }
+
+func conditionKeys() []string {
+	var keys []string
+	for _, r := range new(Conditions).limits() {
+		keys = append(keys, r.Condition)
+	}
+	return append(keys, ConditionNewCommits)
+}
 
 // Conditions reads options.conditions once, typed. An absent key (or a null) is no conditions. A value that does not
 // parse (not an object, an unknown key, a limit that is not a whole number of at least 1) is an error that names it: a
@@ -59,39 +114,31 @@ func (j Job) Conditions() (Conditions, error) {
 	if !ok {
 		return Conditions{}, fmt.Errorf("options.%s must be an object, not %s", ConditionsKey, kindOf(raw))
 	}
+	keys := conditionKeys()
 	for key := range obj {
-		if !slices.Contains(conditionKeys, key) {
-			return Conditions{}, fmt.Errorf("options.%s has an unknown condition %q (known: %s)", ConditionsKey, key, strings.Join(conditionKeys, ", "))
+		if !slices.Contains(keys, key) {
+			return Conditions{}, fmt.Errorf("options.%s has an unknown condition %q (known: %s)", ConditionsKey, key, strings.Join(keys, ", "))
 		}
 	}
 	var c Conditions
-	for _, f := range []struct {
-		key string
-		to  *int
-	}{{ConditionRunsPerDay, &c.RunsPerDay}, {ConditionRunsPerWeek, &c.RunsPerWeek}} {
-		v, present := obj[f.key]
+	for _, r := range c.limits() {
+		v, present := obj[r.Condition]
 		if !present {
 			continue
 		}
-		n, err := wholeNumber(v)
-		if err != nil || n < 1 {
-			return Conditions{}, fmt.Errorf("options.%s.%s must be a whole number of at least 1, not %v", ConditionsKey, f.key, v)
-		}
-		*f.to = n
-	}
-	for _, f := range []struct {
-		key string
-		to  *float64
-	}{{ConditionSpendPerDay, &c.SpendPerDay}, {ConditionSpendPerWeek, &c.SpendPerWeek}} {
-		v, present := obj[f.key]
-		if !present {
+		if r.runs != nil {
+			n, err := wholeNumber(v)
+			if err != nil || n < 1 {
+				return Conditions{}, fmt.Errorf("options.%s.%s must be a whole number of at least 1, not %v", ConditionsKey, r.Condition, v)
+			}
+			*r.runs = n
 			continue
 		}
 		d, err := readDollars(v)
 		if err != nil {
-			return Conditions{}, fmt.Errorf("options.%s.%s must be an amount in dollars above 0, not %v", ConditionsKey, f.key, v)
+			return Conditions{}, fmt.Errorf("options.%s.%s must be an amount in dollars above 0, not %v", ConditionsKey, r.Condition, v)
 		}
-		*f.to = d
+		*r.spend = d
 	}
 	if v, present := obj[ConditionNewCommits]; present {
 		var err error
@@ -102,7 +149,6 @@ func (j Job) Conditions() (Conditions, error) {
 	return c, nil
 }
 
-// readDollars reads a JSON number that is a finite amount above 0, whatever Go type the decoder gave it.
 func readDollars(v any) (float64, error) {
 	f, err := numberValue(v)
 	if err != nil {
@@ -114,7 +160,6 @@ func readDollars(v any) (float64, error) {
 	return f, nil
 }
 
-// numberValue is a JSON number as a float64, whatever Go type the decoder gave it.
 func numberValue(v any) (float64, error) {
 	switch n := v.(type) {
 	case int:
@@ -168,8 +213,6 @@ func readNewCommits(v any) (on bool, folders []string, err error) {
 	return false, nil, fmt.Errorf("%s must be true or an object with folders, not %s", prefix, kindOf(v))
 }
 
-// cleanFolder is a folder under the checkout as a clean slash path; one that leaves the checkout, or is the checkout
-// itself, is an error.
 func cleanFolder(name string) (string, error) {
 	folder := path.Clean(strings.TrimSpace(name))
 	switch {
@@ -185,7 +228,6 @@ func cleanFolder(name string) (string, error) {
 	return folder, nil
 }
 
-// wholeNumber reads a JSON number that holds an integer, whatever Go type the decoder gave it.
 func wholeNumber(v any) (int, error) {
 	switch n := v.(type) {
 	case int:

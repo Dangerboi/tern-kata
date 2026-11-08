@@ -13,7 +13,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// viewsEnv is what the views commands need beyond the plan: views.toml, and the daemon for the Project catalog and Issues.
 type viewsEnv struct {
 	plan      LaunchPlan
 	workspace string
@@ -40,12 +39,15 @@ func runViews(plan LaunchPlan, workspace string, store func() (data.ViewsStore, 
 	}
 }
 
-func (e viewsEnv) say(line string) error {
-	_, err := fmt.Fprintln(e.out, line)
+func (e viewsEnv) say(lines ...string) error {
+	var b strings.Builder
+	for _, line := range lines {
+		b.WriteString(line + "\n")
+	}
+	_, err := io.WriteString(e.out, b.String())
 	return err
 }
 
-// read is views.toml's views; an unreadable file is the error, naming the file and why.
 func (e viewsEnv) read() (data.ViewsStore, data.ViewsRead, error) {
 	store, err := e.store()
 	if err != nil {
@@ -55,7 +57,6 @@ func (e viewsEnv) read() (data.ViewsStore, data.ViewsRead, error) {
 	return store, read, err
 }
 
-// catalog is the Projects the daemon knows, from one read of the Inbox snapshot.
 func (e viewsEnv) catalog() ([]model.CatalogProject, error) {
 	loaded, err := e.snapshot(model.InboxCollection(), model.Filters{})
 	return loaded.Snapshot.Catalog, err
@@ -73,7 +74,6 @@ func (e viewsEnv) snapshot(c model.Collection, f model.Filters) (model.SnapshotL
 	}
 }
 
-// names lists the fixed Collections' keys and the saved views' names, for the message of an unknown name.
 func names(views []model.SavedView) string {
 	var all []string
 	for _, c := range model.FixedCollections() {
@@ -131,33 +131,26 @@ func (e viewsEnv) list() error {
 	for _, v := range read.Views {
 		width = max(width, utf8.RuneCountInString(v.Name))
 	}
-	if err := e.say("Fixed Collections:"); err != nil {
-		return err
-	}
+	lines := []string{"Fixed Collections:"}
 	for _, c := range model.FixedCollections() {
-		if err := e.say(strings.TrimRight(fmt.Sprintf("  %-*s  %s", width, c.View, c.Title), " ")); err != nil {
-			return err
-		}
+		lines = append(lines, strings.TrimRight(fmt.Sprintf("  %-*s  %s", width, c.View, c.Title), " "))
 	}
 	if readErr == nil {
 		if len(read.Views) == 0 {
-			if err := e.say("Saved views: none (add one with `tern-kata views add <name>`)"); err != nil {
-				return err
-			}
-		} else if err := e.say("Saved views:"); err != nil {
-			return err
+			lines = append(lines, "Saved views: none (add one with `tern-kata views add <name>`)")
+		} else {
+			lines = append(lines, "Saved views:")
 		}
 	}
 	for _, v := range read.Views {
 		line := fmt.Sprintf("  %-*s  %s  %s", width, v.Name, describeBase(v.Base, catalog, known), model.DescribeFilters(v.Filters, projectName))
-		if err := e.say(strings.TrimRight(line, " ")); err != nil {
-			return err
-		}
+		lines = append(lines, strings.TrimRight(line, " "))
 	}
 	for _, problem := range read.Problems {
-		if err := e.say("Not listed: " + problem.Error()); err != nil {
-			return err
-		}
+		lines = append(lines, "Not listed: "+problem.Error())
+	}
+	if err := e.say(lines...); err != nil {
+		return err
 	}
 	if readErr != nil {
 		return subcommandError{readErr}
@@ -165,7 +158,6 @@ func (e viewsEnv) list() error {
 	return nil
 }
 
-// shownGroup and shownIssue are `views show --json`: one object per group, with the Issues in the Pane's order.
 type shownGroup struct {
 	ID     string       `json:"id"`
 	Title  string       `json:"title"`
@@ -192,7 +184,6 @@ func dayOrNil(day string) *string {
 	return &day
 }
 
-// show prints the Issues of a fixed Collection or saved view, grouped as the Pane groups them.
 func (e viewsEnv) show(name string) error {
 	_, read, readErr := e.read()
 	ref, ok := model.ResolveViewName(name, read.Views)
@@ -238,20 +229,15 @@ func (e viewsEnv) show(name string) error {
 		return e.say("No issues.")
 	}
 	dated := collection.Def().Dated
+	var lines []string
 	for _, group := range groups {
 		indent := ""
 		if group.Heading {
-			if err := e.say(group.Title); err != nil {
-				return err
-			}
+			lines = append(lines, group.Title)
 			indent = "  "
 		}
 		for _, issue := range group.Issues {
-			priority := model.PriorityText(issue.Priority)
-			if priority == "" {
-				priority = "-"
-			}
-			words := []string{indent + issue.QualifiedID, issue.Status, priority}
+			words := []string{indent + issue.QualifiedID, issue.Status, dash(model.PriorityText(issue.Priority))}
 			if dated {
 				if dates := model.DatesLine(issue); dates != "" {
 					words = append(words, dates)
@@ -261,15 +247,12 @@ func (e viewsEnv) show(name string) error {
 				words = append(words, "closed "+cal.DayOf(*issue.ClosedAt))
 			}
 			words = append(words, issue.Title)
-			if err := e.say(strings.Join(words, "  ")); err != nil {
-				return err
-			}
+			lines = append(lines, strings.Join(words, "  "))
 		}
 	}
-	return nil
+	return e.say(lines...)
 }
 
-// checkBase says why a saved view on a Project cannot be shown: the daemon no longer lists the Project, or it is archived.
 func (e viewsEnv) checkBase(v model.SavedView) error {
 	if !v.Base.IsProject() {
 		return nil
@@ -309,7 +292,6 @@ func project(catalog []model.CatalogProject, name string) (model.Project, error)
 	return model.Project{}, fmt.Errorf("Project %q is not a Project of this daemon; the Projects are %s", name, strings.Join(known, ", "))
 }
 
-// view is the saved view the flags of `views add` describe, its Projects looked up in the daemon's catalog when it names one.
 func (e viewsEnv) view(name string) (v model.SavedView, filterProject string, err error) {
 	flags := e.plan.ViewFlags
 	v = model.SavedView{Name: name, Filters: model.Filters{Status: flags["status"], Owner: flags["owner"], Label: flags["label"], Relationship: flags["relationship"], Search: flags["search"]}}
@@ -353,7 +335,6 @@ func (e viewsEnv) view(name string) (v model.SavedView, filterProject string, er
 	return v, filterProject, nil
 }
 
-// add saves the view the flags describe, refusing an existing name without --replace.
 func (e viewsEnv) add(name string) error {
 	store, read, err := e.read()
 	if err != nil {
@@ -399,7 +380,6 @@ func (e viewsEnv) add(name string) error {
 	return e.say(strings.TrimSpace(fmt.Sprintf("%s view %q: %s  %s", verb, v.Name, describeBase(v.Base, nil, false), model.DescribeFilters(v.Filters, func(string) string { return filterProject }))))
 }
 
-// remove deletes a saved view without asking.
 func (e viewsEnv) remove(name string) error {
 	store, read, err := e.read()
 	if err != nil {

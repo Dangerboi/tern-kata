@@ -11,16 +11,13 @@ import (
 // "Restore a deleted Issue" is a Menu entry that opens the single-field form for one reference: a short id, project#id or a
 // ULID. Enter reads that Issue with deleted Issues included and shows its title and that it is deleted; Enter again restores it.
 
-// RestoreDeletedAction is the Menu entry's form.
 const RestoreDeletedAction Action = "restore-deleted"
 
-// RestoreTitle is the Menu entry and the title of its form; RestoreKey names the Menu row.
 const (
 	RestoreTitle = "Restore a deleted Issue"
 	RestoreKey   = "restore"
 )
 
-// DeletedIssue is the Issue a restore reads: Deleted says kata holds it as deleted.
 type DeletedIssue struct {
 	UID         string
 	ProjectID   int64
@@ -40,7 +37,6 @@ type LookupDeleted struct {
 
 func (LookupDeleted) cmd() {}
 
-// DeletedLooked answers LookupDeleted; Ref is the reference as typed.
 type DeletedLooked struct {
 	Ref   string
 	Issue DeletedIssue
@@ -49,7 +45,6 @@ type DeletedLooked struct {
 
 func (DeletedLooked) msg() {}
 
-// RestoreIssueCmd is one request to kata's restore action.
 type RestoreIssueCmd struct {
 	Workspace, UID, Actor string
 	ProjectID             int64
@@ -66,7 +61,6 @@ type IssueRestored struct {
 
 func (IssueRestored) msg() {}
 
-// projectName is the name of the catalog Project with the id, "" when the Collection does not list it.
 func (m Model) projectName(id int64) string {
 	for _, entry := range m.Snapshot.Catalog {
 		if entry.Project.ID == id {
@@ -76,7 +70,6 @@ func (m Model) projectName(id int64) string {
 	return ""
 }
 
-// openRestore is the Menu entry: the form with nothing found yet.
 func openRestore(m Model) Model {
 	if m.Stale || m.FieldForm.Saving {
 		return m
@@ -121,7 +114,6 @@ func (m Model) inBoundProject(cmd LookupDeleted) (LookupDeleted, error) {
 	return cmd, nil
 }
 
-// sendRestore is Enter in the form: read the Issue first, restore it once it is shown.
 func sendRestore(m Model) (Model, []Cmd) {
 	f := &m.FieldForm
 	if found := f.Found; found != nil {
@@ -158,8 +150,6 @@ func deletedLooked(m Model, msg DeletedLooked) Model {
 	return m
 }
 
-// issueRestored applies kata's answer to the restore: it closes the form, or keeps it open with kata's refusal, or with the
-// word that kata held the Issue as not deleted.
 func issueRestored(m Model, msg IssueRestored) (Model, []Cmd) {
 	f := &m.FieldForm
 	if !f.Open || f.Action != RestoreDeletedAction || f.Found == nil || f.Found.UID != msg.UID {

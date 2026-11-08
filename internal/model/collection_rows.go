@@ -12,14 +12,12 @@ import (
 // Model changed since works them out afresh.
 // The slices are shared by every copy of the Model: callers read them and never write to them.
 type collectionRows struct {
-	filled bool
-	inputs collectionInputs
-	// expanded and lanes are copies of ExpandedUIDs and Board.Lanes, compared by content.
+	filled   bool
+	inputs   collectionInputs
 	expanded map[string]bool
 	lanes    []string
 	rows     []IssueRow
-	// columns are the Board's, set only while the Board Page is current.
-	columns []BoardColumn
+	columns  []BoardColumn
 }
 
 // collectionInputs are the comparable inputs of the rows and columns. The loaded Issues and the snapshot's Links are told
@@ -39,24 +37,24 @@ type collectionInputs struct {
 }
 
 func (m Model) collectionInputs() collectionInputs {
-	in := collectionInputs{issueN: len(m.Issues), linkN: len(m.Snapshot.Links), flat: m.Flat, graphOrder: m.GraphOrder,
-		onBoard: m.OnBoard(), boardMode: m.Board.Mode, boardLane: m.Board.Lane, calendar: m.Calendar}
+	in := collectionInputs{firstIssue: first(m.Issues), issueN: len(m.Issues), firstLink: first(m.Snapshot.Links), linkN: len(m.Snapshot.Links),
+		flat: m.Flat, graphOrder: m.GraphOrder, onBoard: m.OnBoard(), boardMode: m.Board.Mode, boardLane: m.Board.Lane, calendar: m.Calendar}
 	in.doneDays, in.doneCards = m.DoneLimits()
-	if len(m.Issues) > 0 {
-		in.firstIssue = &m.Issues[0]
-	}
-	if len(m.Snapshot.Links) > 0 {
-		in.firstLink = &m.Snapshot.Links[0]
-	}
 	return in
 }
 
-// answers says the kept rows and columns are the ones m's inputs give.
+// first is the first element of s, nil when it is empty: with len(s) it tells a replaced slice from the one seen before.
+func first[T any](s []T) *T {
+	if len(s) == 0 {
+		return nil
+	}
+	return &s[0]
+}
+
 func (c collectionRows) answers(m Model) bool {
 	return c.filled && c.inputs == m.collectionInputs() && maps.Equal(c.expanded, m.ExpandedUIDs) && slices.Equal(c.lanes, m.Board.Lanes)
 }
 
-// withCollectionRows brings the kept rows and columns up to date with m.
 func (m Model) withCollectionRows() Model {
 	if m.collection.answers(m) {
 		return m

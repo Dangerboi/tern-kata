@@ -13,22 +13,18 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// workerEnv is what the worker subcommands need from the machine, so tests give them their own folders and daemon.
 type workerEnv struct {
 	Dirs worker.Dirs
 	// Locate finds the kata daemon the way the Pane does; the worker has no workspace, so it is asked about none.
-	Locate data.Locator
-	Clock  worker.Clock
-	// Log receives the foreground worker's log lines.
+	Locate  data.Locator
+	Clock   worker.Clock
 	Log     io.Writer
 	Version string
 	// Supervisor is who started this worker, from TERN_KATA_SUPERVISOR; empty when it was started by hand.
-	Supervisor string
-	// Dir is the directory `worker init` and `worker add` read the Binding from, and Hostname names the machine's executor.
+	Supervisor    string
 	Dir, Hostname string
 }
 
-// newWorkerEnv is the production environment: tern-kata's user folders and kata's own discovery.
 // Only `worker init` and `worker add` read the working directory, so the other forms work from a removed one.
 func newWorkerEnv(plan LaunchPlan) (workerEnv, error) {
 	dirs, err := worker.DefaultDirs()
@@ -50,7 +46,15 @@ func isWorkerCommand(plan LaunchPlan) bool {
 	return plan.Subcommand == "run" || plan.Subcommand == "worker"
 }
 
-// runWorkerCommand runs `run <job-uid>`, `worker status`, `worker doctor` or the foreground worker.
+// askWorker is worker.Ask with a refusal the worker answers turned into an error carrying its words, so a caller has one failure to handle.
+func askWorker(ctx context.Context, dirs worker.Dirs, req worker.Request) (worker.Response, error) {
+	resp, err := worker.Ask(ctx, dirs, req)
+	if err == nil && !resp.OK {
+		err = errors.New(resp.Error)
+	}
+	return resp, err
+}
+
 func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
 	switch {
 	case plan.Subcommand == "run":
@@ -62,12 +66,9 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 	case len(plan.Operands) == 1 && plan.Operands[0] == "upgrade":
 		return upgradeWorkerConfig(ctx, env, out)
 	case len(plan.Operands) == 1 && plan.Operands[0] == "status":
-		resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "status"})
+		resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: "status"})
 		if err != nil {
 			return subcommandError{err}
-		}
-		if !resp.OK {
-			return subcommandError{errors.New(resp.Error)}
 		}
 		if plan.JSON {
 			return writeJSON(out, resp.Status)
@@ -158,27 +159,21 @@ func installedNote(s worker.Status, env workerEnv) string {
 	return line + "\n"
 }
 
-// stopWorker is `worker stop [--now]`: it asks the running worker to drain (or, with --now, to end at once) and says what
-// the worker answered.
 func stopWorker(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
 	mode := worker.StopIdle
 	if plan.Now {
 		mode = worker.StopNow
 	}
-	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "stop", Mode: mode})
+	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: "stop", Mode: mode})
 	if errors.Is(err, worker.ErrNoWorker) {
 		return subcommandError{errors.New("no tern-kata worker is running on this machine: there is nothing to stop")}
 	}
 	if err != nil {
 		return subcommandError{err}
 	}
-	if !resp.OK {
-		return subcommandError{errors.New(resp.Error)}
-	}
 	return writeStopAnswer(out, resp.Stop)
 }
 
-// writeStopAnswer says what the worker answered to a stop: the mode, the runs in flight and whether anything starts it again.
 func writeStopAnswer(out io.Writer, a *worker.StopAnswer) error {
 	var err error
 	runs := fmt.Sprintf("%d %s in flight", a.InFlight, plural(a.InFlight, "run", "runs"))
@@ -213,10 +208,7 @@ func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 			return err
 		}
 	}
-	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: verb, Run: uid, Actor: plan.Actor})
-	if err == nil && !resp.OK {
-		err = errors.New(resp.Error)
-	}
+	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: verb, Run: uid, Actor: plan.Actor})
 	if err != nil {
 		if verb == "resume" {
 			err = fmt.Errorf("%w; no job this worker paused is %q", err, uid)
@@ -245,8 +237,8 @@ func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 // its name when one paused job has it), it lifts the pause and says so; done is false when ref names no paused job, and
 // the caller treats it as a held run's uid.
 func resumePausedJob(ctx context.Context, env workerEnv, ref string, out io.Writer) (done bool, err error) {
-	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "status"})
-	if err != nil || !resp.OK || resp.Status == nil {
+	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: "status"})
+	if err != nil || resp.Status == nil {
 		return false, nil //nolint:nilerr // the held-run path asks again and reports what is wrong
 	}
 	var match []worker.PausedJob
@@ -262,12 +254,8 @@ func resumePausedJob(ctx context.Context, env workerEnv, ref string, out io.Writ
 	default:
 		return true, subcommandError{fmt.Errorf("%d paused jobs are named %q (in Projects %s); resume one by its uid", len(match), ref, projectNames(match))}
 	}
-	resp, err = worker.Ask(ctx, env.Dirs, worker.Request{Op: "resume-job", Job: match[0].JobUID})
-	if err != nil {
+	if _, err = askWorker(ctx, env.Dirs, worker.Request{Op: "resume-job", Job: match[0].JobUID}); err != nil {
 		return true, subcommandError{err}
-	}
-	if !resp.OK {
-		return true, subcommandError{errors.New(resp.Error)}
 	}
 	_, err = fmt.Fprintf(out, "Job %q in Project %s resumed: the worker admits its runs again and counts failed runs from none.\n", match[0].Name, match[0].Project)
 	return true, err
@@ -281,14 +269,10 @@ func projectNames(jobs []worker.PausedJob) string {
 	return strings.Join(names, ", ")
 }
 
-// runJobNow asks the running worker for a manual occurrence and prints the run's uid once the worker has saved it.
 func runJobNow(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
-	resp, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "run", Job: plan.TargetRef})
+	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: "run", Job: plan.TargetRef})
 	if err != nil {
 		return subcommandError{err}
-	}
-	if !resp.OK {
-		return subcommandError{errors.New(resp.Error)}
 	}
 	_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s accepted; follow it with `tern-kata worker status`.\n", resp.Run.RunUID, resp.Run.JobName, resp.Run.Project)
 	return err
@@ -298,12 +282,9 @@ func runJobNow(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Write
 // all or nothing, and says what it added and what it could not.
 func upgradeWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
 	path := env.Dirs.ConfigPath()
-	raw, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return subcommandError{fmt.Errorf("no worker config at %s; run `tern-kata worker init` first", path)}
-	}
+	raw, err := readWorkerConfig(path)
 	if err != nil {
-		return subcommandError{err}
+		return err
 	}
 	cfg, err := worker.LoadConfig(path)
 	if err != nil {
@@ -313,7 +294,7 @@ func upgradeWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) erro
 	if err != nil {
 		return subcommandError{err}
 	}
-	text, report, err := worker.Upgrade(ctx, worker.NewKata(target.Client), cfg, string(raw))
+	text, report, err := worker.Upgrade(ctx, worker.NewKata(target.Client), cfg, raw)
 	if err != nil {
 		return subcommandError{err}
 	}
@@ -322,11 +303,11 @@ func upgradeWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) erro
 			return err
 		}
 	}
-	if text == string(raw) {
+	if text == raw {
 		_, err = fmt.Fprintln(out, "worker.toml is unchanged.")
 		return err
 	}
-	if err := worker.ReplaceConfig(path, string(raw), text); err != nil {
+	if err := worker.ReplaceConfig(path, raw, text); err != nil {
 		return subcommandError{err}
 	}
 	return reportEdit(ctx, env, path, out)
@@ -344,12 +325,11 @@ func runDoctor(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Write
 		return err
 	}
 	if n := report.Problems(); n > 0 {
-		return subcommandError{fmt.Errorf("worker doctor found %d %s", n, map[bool]string{true: "problem", false: "problems"}[n == 1])}
+		return subcommandError{fmt.Errorf("worker doctor found %d %s", n, plural(n, "problem", "problems"))}
 	}
 	return nil
 }
 
-// runForeground is `tern-kata worker`: it serves until ctx ends (an interrupt, a terminate or a hangup, see stopSignals).
 func runForeground(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
 	cfg, err := worker.LoadConfig(env.Dirs.ConfigPath())
 	if err != nil {
@@ -371,7 +351,7 @@ func runForeground(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 	if err != nil {
 		return subcommandError{err}
 	}
-	if _, err := fmt.Fprintf(out, "Worker %q serving %d %s; state in %s. Stop it with ctrl+c.\n", cfg.Executor, len(cfg.Projects), map[bool]string{true: "Project", false: "Projects"}[len(cfg.Projects) == 1], env.Dirs.State); err != nil {
+	if _, err := fmt.Fprintf(out, "Worker %q serving %d %s; state in %s. Stop it with ctrl+c.\n", cfg.Executor, len(cfg.Projects), plural(len(cfg.Projects), "Project", "Projects"), env.Dirs.State); err != nil {
 		return err
 	}
 	if err := w.Run(ctx); err != nil {

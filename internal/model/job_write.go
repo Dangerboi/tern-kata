@@ -14,7 +14,6 @@ import (
 // The writes of a Cron job: the Job card's save, and the keys on the Jobs Page that pause, resume, archive and restore. Each is
 // a Guarded write on the job's definition_event_uid, which every write to the job changes.
 
-// JobOp is what a job write did, in kata's words.
 type JobOp string
 
 const (
@@ -28,11 +27,10 @@ const (
 // of a create that landed is no second job; otherwise it is a replace that writes nothing unless the job still has that
 // definition_event_uid.
 type SaveJobCmd struct {
-	Workspace string
-	ProjectID int64
-	Actor     string
-	UID       string
-	// ExpectedEventUID is the version of the job the write replaces.
+	Workspace        string
+	ProjectID        int64
+	Actor            string
+	UID              string
 	ExpectedEventUID string
 	Name             string
 	Definition       cronjob.Definition
@@ -47,7 +45,6 @@ type SaveJobCmd struct {
 
 func (SaveJobCmd) cmd() {}
 
-// ArchiveJobCmd archives the job at UID, guarded on ExpectedEventUID.
 type ArchiveJobCmd struct {
 	Workspace        string
 	ProjectID        int64
@@ -58,7 +55,6 @@ type ArchiveJobCmd struct {
 
 func (ArchiveJobCmd) cmd() {}
 
-// RestoreJobCmd restores the archived job at UID, guarded on ExpectedEventUID.
 type RestoreJobCmd struct {
 	Workspace        string
 	ProjectID        int64
@@ -111,7 +107,6 @@ func writableJob(m Model) (Model, CronJob, bool) {
 	return m, CronJob{}, false
 }
 
-// refuse is a job key that has nothing to do; the Notice says why.
 func refuse(m Model, why string) (Model, []Cmd) {
 	m.Notice = why
 	return m, nil
@@ -132,7 +127,6 @@ func toggleJob(m Model) (Model, []Cmd) {
 	return resumeJob(m, job)
 }
 
-// pauseJob writes the job disabled.
 func pauseJob(m Model, job CronJob) (Model, []Cmd) { return writeJobEnabled(m, job, false) }
 
 // writeJobEnabled writes the job enabled or disabled, guarded. A resume goes through resumeJob, which asks about a Backfill first.
@@ -210,7 +204,6 @@ func jobWritten(m Model, msg JobWritten) Model {
 	return m
 }
 
-// jobState is the state of a job as the list words it.
 func jobState(m Model, job CronJob) string {
 	return m.JobPause(job).StateText()
 }

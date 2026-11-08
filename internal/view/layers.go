@@ -35,7 +35,6 @@ var layerDraws = map[model.Card]func(model.Model, time.Time) tern.Element{
 	model.CardPicker:          func(m model.Model, _ time.Time) tern.Element { return pickerLayer(m) },
 }
 
-// topLayer is the layer of the card on top, nil when none is.
 func topLayer(m model.Model, now time.Time) tern.Element {
 	if draw := layerDraws[m.TopCard()]; draw != nil {
 		return draw(m, now)
@@ -43,7 +42,6 @@ func topLayer(m model.Model, now time.Time) tern.Element {
 	return nil
 }
 
-// inputLeaf is the last part of the node id of the one input of a card without fields.
 const inputLeaf = "input"
 
 // LayerID is the id of card's layer: "layer." and the card's name in the model's card table.
@@ -77,7 +75,6 @@ func FieldFromID(id string) (model.Card, model.Field, bool) {
 	return model.NoCard, "", false
 }
 
-// BodyTarget is the body a Tern editor node edits: the card's own body field or input, none for any other node.
 func BodyTarget(id string) model.EditTarget {
 	card, field, ok := FieldFromID(id)
 	if !ok {

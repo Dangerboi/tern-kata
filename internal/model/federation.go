@@ -12,7 +12,6 @@ import (
 // The Federation Page is a Lettered Page: it lists this daemon's spoke federations, the Projects that are replicas of a Project
 // on a hub, as the daemon's federation status reports them, with a detail for one. It copies kata tui's federation view.
 
-// FederationQuarantine is one active quarantine on a spoke Project.
 type FederationQuarantine struct {
 	ID                        int64
 	Direction                 string
@@ -69,50 +68,38 @@ type FederationLoaded struct {
 
 func (FederationLoaded) msg() {}
 
-// FederationScreen is which of the Federation Page's screens is shown.
 type FederationScreen int
 
 const (
-	// FederationList is the list of spokes.
 	FederationList FederationScreen = iota
-	// FederationDetail is one spoke's detail.
 	FederationDetail
-	// FederationLeavePreview is the preview of leaving one spoke's federation.
 	FederationLeavePreview
-	// FederationLeaveDone is the result of a leave.
 	FederationLeaveDone
 	// FederationPickLocal, FederationPickHub and FederationPickHubProject are the enrollment's three choices, in order.
 	FederationPickLocal
 	FederationPickHub
 	FederationPickHubProject
-	// FederationBrowse is the read-only list of the hubs' Projects.
 	FederationBrowse
-	// FederationPreview is the enrollment preview; the typed confirmation of an adoption is a card over it.
 	FederationPreview
 	// FederationRecovery is what a failure after the hub granted the enrollment leaves.
 	FederationRecovery
-	// FederationEnrollDone is the result of an enrollment.
 	FederationEnrollDone
 )
 
 // FederationState is the Federation Page's state. It is not saved and is read again on every entry.
 type FederationState struct {
-	Screen FederationScreen
-	// Loading says a read is out; Err is the last read's failure.
-	Loading bool
-	Err     error
-	// Daemon, Endpoint, InstanceUID and Auth are what the last read said of the active daemon.
+	Screen                              FederationScreen
+	Loading                             bool
+	Err                                 error
 	Daemon, Endpoint, InstanceUID, Auth string
 	Spokes                              []FederationSpoke
-	// Cursor indexes Spokes.
-	Cursor int
+	Cursor                              int
 	// Leave is the leave being previewed or run; Leaving says it runs, LeaveErr is why the last run failed and Left is the result of
 	// the last one that succeeded.
 	Leave    FederationLeaveDraft
 	Leaving  bool
 	LeaveErr error
 	Left     FederationLeaveOutcome
-	// Bindings are the Projects with a federation role, of any role, as the last read said.
 	Bindings []FederationBinding
 	// Draft is the enrollment being chosen, previewed or run. EnrollErr is the last failure of a choice, a browse or a run;
 	// Enrolling says a run is out.
@@ -122,28 +109,23 @@ type FederationState struct {
 	Enrolled                                 FederationEnrollOutcome
 	Recovery                                 FederationEnrollRecovery
 	LocalCursor, HubCursor, HubProjectCursor int
-	// Hubs are the daemons of kata's catalog, read when the hub step opens; HubProjects are the chosen hub's Projects.
-	Hubs               []FederationHub
-	HubsLoading        bool
-	HubProjects        []Project
-	HubProjectsLoading bool
-	// Browsed are the hubs' Projects of the browse and BrowseCursor indexes their rows; Browsing says the read is out.
-	Browsed      []FederationHubProjects
-	BrowseCursor int
-	Browsing     bool
-	// Adopting says the card asking to type the local Project's name is open; AdoptErr is why the last try was refused.
-	Adopting   bool
-	AdoptInput string
-	AdoptCaret Caret
-	AdoptErr   error
-	// Name is the card asking for a spoke's name, for an enrollment or an enrolled spoke.
-	Name FederationName
+	Hubs                                     []FederationHub
+	HubsLoading                              bool
+	HubProjects                              []Project
+	HubProjectsLoading                       bool
+	Browsed                                  []FederationHubProjects
+	BrowseCursor                             int
+	Browsing                                 bool
+	Adopting                                 bool
+	AdoptInput                               string
+	AdoptCaret                               Caret
+	AdoptErr                                 error
+	Name                                     FederationName
 	// reads numbers the asks, attempts the leaves and enrollments, and hubReads the reads of the catalog and the hubs; an
 	// answer to another is dropped.
 	reads, attempts, hubReads Latest
 }
 
-// OnFederation says the Federation Page is current.
 func (m Model) OnFederation() bool { return m.Page == PageFederation }
 
 // federationMode is the Federation Page's mode: the Menu's while the sidebar has the keyboard.
@@ -168,14 +150,12 @@ func federationMode(m Model) Mode {
 	return ModeFederation
 }
 
-// enterFederation starts a fresh reading.
 func enterFederation(m Model) (Model, []Cmd) {
 	f := m.Federation
 	m.Federation = FederationState{reads: f.reads, attempts: f.attempts.Discarded(), hubReads: f.hubReads.Discarded()}
 	return askFederation(m)
 }
 
-// clearFederation drops what the Page held and every ask still out.
 func clearFederation(m Model) Model {
 	f := m.Federation
 	m.Federation = FederationState{reads: f.reads.Discarded(), attempts: f.attempts.Discarded(), hubReads: f.hubReads.Discarded()}
@@ -188,7 +168,6 @@ func askFederation(m Model) (Model, []Cmd) {
 	return m, []Cmd{LoadFederation{Workspace: m.Workspace, Request: f.reads.Ask()}}
 }
 
-// openFederationDetail is Enter on a spoke.
 func openFederationDetail(m Model) (Model, []Cmd) {
 	if m.Federation.Screen == FederationList && m.SelectedSpoke() != nil {
 		m.Federation.Screen = FederationDetail
@@ -240,23 +219,15 @@ func updateFederation(m Model, msg Msg) (Model, []Cmd, bool) {
 	return m, nil, false
 }
 
-// moveFederation moves the cursor by action: one row, to either end, or a page. A detail has no cursor to move.
 func moveFederation(m Model, action Action) Model {
-	n := len(m.Federation.Spokes)
-	if n == 0 || m.Federation.Screen != FederationList {
-		return m
+	if m.Federation.Screen == FederationList {
+		moveCursor(&m.Federation.Cursor, len(m.Federation.Spokes), action)
 	}
-	m.Federation.Cursor = movedIndex(m.Federation.Cursor, n, listPage, action)
 	return m
 }
 
-// SelectedSpoke is the spoke under the cursor, nil when there is none.
 func (m Model) SelectedSpoke() *FederationSpoke {
-	f := m.Federation
-	if f.Cursor < 0 || f.Cursor >= len(f.Spokes) {
-		return nil
-	}
-	return &f.Spokes[f.Cursor]
+	return rowAt(m.Federation.Spokes, m.Federation.Cursor)
 }
 
 // Header is the line naming the active daemon, as kata tui words it.
@@ -265,12 +236,9 @@ func (f FederationState) Header() string {
 		" auth " + oneLine(f.Auth)
 }
 
-// Summary is the line under the title: how many spoke federations the daemon has.
 func (f FederationState) Summary() string { return strconv.Itoa(len(f.Spokes)) + " spoke federations" }
 
-// FederationNotice is what stands in place of the list.
 type FederationNotice struct {
-	// Text is the line; Err says it is a failure, which the view draws as one.
 	Text string
 	Err  bool
 }
@@ -288,7 +256,6 @@ func (f FederationState) Notice() (FederationNotice, bool) {
 	return FederationNotice{}, false
 }
 
-// dashLine is s on one line, "-" when nothing is left.
 func dashLine(s string) string { return federationDash(oneLine(s)) }
 
 func federationDash(s string) string {
@@ -313,7 +280,6 @@ func (s FederationSpoke) HubHost() string {
 	return dashLine(s.HubURL)
 }
 
-// Push is "push" when the Project pushes to the hub, else "off".
 func (s FederationSpoke) Push() string {
 	if s.PushEnabled {
 		return "push"
@@ -332,7 +298,6 @@ func (s FederationSpoke) Sync(now time.Time) string {
 	return "never"
 }
 
-// Badges are the Project's warnings, comma separated, "-" when it has none.
 func (s FederationSpoke) Badges() string {
 	var badges []string
 	if s.AllowInsecure {
@@ -353,7 +318,6 @@ func (s FederationSpoke) Badges() string {
 	return strings.Join(badges, ",")
 }
 
-// Lines are a spoke's two lines in the list: the Project and its hub and actor, then push, pending, sync and badges.
 func (s FederationSpoke) Lines(now time.Time) [2]string {
 	return [2]string{
 		oneLine(s.ProjectName) + s.nameWord() + "  Hub " + s.HubHost() + "  Actor " + dashLine(s.BoundActor),
@@ -361,7 +325,6 @@ func (s FederationSpoke) Lines(now time.Time) [2]string {
 	}
 }
 
-// nameWord is the spoke's name in the list's first line, "" when it has none.
 func (s FederationSpoke) nameWord() string {
 	if s.SpokeName == "" {
 		return ""
@@ -369,13 +332,11 @@ func (s FederationSpoke) nameWord() string {
 	return "  Name " + oneLine(s.SpokeName)
 }
 
-// Footer is the line under the list about the selected spoke: its hub URL and Project id, actor and credential.
 func (s FederationSpoke) Footer() string {
 	return "hub " + oneLine(s.HubURL) + "/project " + strconv.FormatInt(s.HubProjectID, 10) + " · actor " + dashLine(s.BoundActor) +
 		" · credential " + dashLine(s.CredentialStatus)
 }
 
-// DetailLines are a spoke's detail as kata tui words it, one line each; "" is a blank line.
 func (s FederationSpoke) DetailLines() []string {
 	lines := []string{
 		oneLine(s.ProjectName),
@@ -418,7 +379,6 @@ func (s FederationSpoke) DetailLines() []string {
 	)
 }
 
-// federationRows are the Federation Page's own keys beyond its movement keys.
 var federationRows = []actionEntry{
 	{action: OpenFederationDetail, modes: []Mode{ModeFederation}, keys: keys("enter", "↵"), help: "detail", footer: []Mode{ModeFederation}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 4, "show the spoke's detail"}}, handle: openFederationDetail},
 	{action: StartFederationLeave, modes: []Mode{ModeFederation}, keys: keys("x", "x"), help: "leave", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 6, "leave the selected spoke's federation (preview first)"}}, handle: startFederationLeave},
@@ -426,5 +386,5 @@ var federationRows = []actionEntry{
 	{action: NameFederationSpoke, modes: []Mode{ModeFederation}, keys: keys("shift+n", "N"), help: "name spoke", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 32, "name the selected spoke, or clear its name with an empty one (kept by the hub)"}}, handle: openFederationNameForSpoke},
 	{action: StartFederationEnroll, modes: []Mode{ModeFederation}, keys: keys("n", "n"), help: "enroll", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 30, "enroll a Project in a hub's federation (choose, preview, confirm)"}}, handle: startFederationEnroll},
 	{action: StartFederationBrowse, modes: []Mode{ModeFederation}, keys: keys("b", "b"), help: "browse hubs", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 31, "browse the Projects of the catalog's hubs (read only)"}}, handle: startFederationBrowse},
-	{action: LetteredBack, modes: []Mode{ModeFederation}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 1, "back to the Page shown before"}}, handle: federationBack},
+	letteredBackRow(ModeFederation, federationBack),
 }

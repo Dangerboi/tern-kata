@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-// AgentTone is the colour word of an Agent badge, as the view's span styles name it.
 type AgentTone string
 
 const (
@@ -30,7 +29,6 @@ type IssueAgent struct {
 	Host, HostID string
 }
 
-// pressing ranks a state word: lower is more pressing. A word nobody knows ranks with "no state".
 func pressing(state AgentStateWord) int {
 	switch state {
 	case AgentWaitingInput:
@@ -45,7 +43,6 @@ func pressing(state AgentStateWord) int {
 	return 4
 }
 
-// IssueAgents lists the agents mapped to the Issue, in the mapping's order, each with its relayed state.
 func (m Model) IssueAgents(issueUID string) []IssueAgent {
 	var agents []IssueAgent
 	for _, entry := range m.AgentMapping {
@@ -59,7 +56,6 @@ func (m Model) IssueAgents(issueUID string) []IssueAgent {
 	return agents
 }
 
-// markUnread sets Unread on each agent of the Issue that has not exited, from the Issue's metadata.
 func markUnread(agents []IssueAgent, issue *Issue) {
 	for i := range agents {
 		if agents[i].State != AgentExited {
@@ -68,7 +64,6 @@ func markUnread(agents []IssueAgent, issue *Issue) {
 	}
 }
 
-// agentWithState is the IssueAgent of entry with the state the relay gave its block ("" when no relay listed it).
 func agentWithState(entry AgentEntry, states []AgentState) IssueAgent {
 	agent := IssueAgent{AgentEntry: entry}
 	for _, s := range states {
@@ -80,7 +75,6 @@ func agentWithState(entry AgentEntry, states []AgentState) IssueAgent {
 	return agent
 }
 
-// AgentStateWords is how the badge and the Agent card name an agent's state, and the tone of the words.
 func AgentStateWords(state AgentStateWord) (string, AgentTone) {
 	switch state {
 	case AgentWaitingInput:
@@ -95,7 +89,6 @@ func AgentStateWords(state AgentStateWord) (string, AgentTone) {
 	return "agent", AgentToneMuted
 }
 
-// UnreadMessageWords is what the Agent badge appends, after the state word, while an agent of the Issue has an unread message.
 const UnreadMessageWords = "message unread"
 
 // unreadMessage is the first line of the message the metadata holds at address as a request, "" when the address is empty, holds
@@ -176,7 +169,6 @@ type AgentBadgeIndex struct {
 	remote map[string][]RemoteAgent
 }
 
-// AgentBadges indexes the agents of every Issue that has one, for a frame that asks the badge of every row.
 func (m Model) AgentBadges() AgentBadgeIndex {
 	states := make(map[string]AgentStateWord, len(m.Agents.States))
 	for _, s := range m.Agents.States {
@@ -204,7 +196,6 @@ func (m Model) AgentBadges() AgentBadgeIndex {
 	return AgentBadgeIndex{agents: agents, remote: remote}
 }
 
-// For is the Agent badge of the Issue, as AgentBadgeFor.
 func (x AgentBadgeIndex) For(issueUID string) (AgentBadge, bool) {
 	return badgeOf(x.agents[issueUID], x.remote[issueUID])
 }
@@ -225,7 +216,6 @@ func jumpToAgent(m Model, block string) (Model, []Cmd) {
 	return m, []Cmd{FocusAgent{Block: block}}
 }
 
-// FocusAgent asks Tern to show an agent's block.
 type FocusAgent struct{ Block string }
 
 func (FocusAgent) cmd() {}
@@ -255,7 +245,6 @@ type RefreshAgents struct {
 
 func (RefreshAgents) cmd() {}
 
-// AgentsRefreshed answers RefreshAgents with the mapping as it is now; on Err the mapping stays.
 type AgentsRefreshed struct {
 	Agents []AgentEntry
 	Err    error
@@ -264,7 +253,6 @@ type AgentsRefreshed struct {
 
 func (AgentsRefreshed) msg() {}
 
-// askRefresh is the RefreshAgents for suspects, numbered after every request asked before it.
 func (m Model) askRefresh(suspects []string) (Model, RefreshAgents) {
 	m.agentAsks++
 	return m, RefreshAgents{Suspects: suspects, PaneBlock: m.PaneBlock, Seq: m.agentAsks}
@@ -314,7 +302,6 @@ func (m Model) keepFresh(answer []AgentEntry, seq int64) ([]AgentEntry, Model) {
 	return next, m
 }
 
-// agentsRefreshed takes in the mapping and, when a relay wanted a refresh while this one was out, asks for the next.
 func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
 	if msg.Err == nil {
 		var next []AgentEntry

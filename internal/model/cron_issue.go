@@ -15,7 +15,6 @@ type CronOccurrence struct {
 	ScheduledAt                time.Time
 }
 
-// CronMade says a Cron job made the Issue.
 func (i Issue) CronMade() bool { return i.CronOccurrence != nil }
 
 // cronParent says the Issue carries a native job's delivery state, so some Cron job makes children of it.
@@ -28,7 +27,6 @@ func (i Issue) cronParent() bool {
 	return false
 }
 
-// wantsCronJobs says the Issue's detail names Cron jobs: it was made by one or is the parent of some.
 func (i Issue) wantsCronJobs() bool { return i.CronMade() || i.cronParent() }
 
 // CronRow is a Cron job as the Issue detail names it: Property says which detail property the row belongs to, "Cron job" on
@@ -93,7 +91,6 @@ func (m Model) parentPause(job CronJob, parent *Issue) PauseReason {
 	return job.Pause(m.Jobs.ProjectArchived)
 }
 
-// CronJobsClosed says the detail's Issue is a closed parent with Cron jobs listed, whose jobs are therefore paused.
 func (m Model) CronJobsClosed() bool {
 	if m.authority == nil || m.authority.Issue == nil || m.authority.Issue.Status != "closed" {
 		return false
@@ -101,7 +98,6 @@ func (m Model) CronJobsClosed() bool {
 	return slices.ContainsFunc(m.rows.items, func(r DetailItem) bool { return r.Kind == RowCron && r.Cron.Property == cronJobsProperty })
 }
 
-// cronJobsOf are the Cron jobs the Pane holds for the Issue's Project; known is false until they have been read.
 func (m Model) cronJobsOf(issue *Issue) (jobs []CronJob, known bool) {
 	if m.Jobs.ProjectID != issue.ProjectID || !m.Jobs.reads.Asked() || (m.Jobs.Loading && m.Jobs.Jobs == nil) {
 		return nil, false
@@ -109,7 +105,6 @@ func (m Model) cronJobsOf(issue *Issue) (jobs []CronJob, known bool) {
 	return m.Jobs.Jobs, true
 }
 
-// cronRead is the Issue and revision the Jobs Page's job list was last read for from an Issue detail.
 type cronRead struct {
 	uid      string
 	revision int64
@@ -151,7 +146,6 @@ func openJob(m Model, uid string) (Model, []Cmd) {
 	return m, cmds
 }
 
-// OpenJobMsg is a click on a Cron job named in the Issue detail.
 type OpenJobMsg struct{ UID string }
 
 func (OpenJobMsg) msg() {}

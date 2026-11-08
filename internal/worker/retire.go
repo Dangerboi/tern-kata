@@ -26,7 +26,6 @@ func (w *Worker) retireUnserved(ctx context.Context) {
 	}
 }
 
-// retireOnce retires every unserved Project it knows and reports whether none is left to retry.
 func (w *Worker) retireOnce(ctx context.Context, served map[string]bool) (done bool) {
 	journals, _, err := w.store.Scan()
 	if err != nil {

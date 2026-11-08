@@ -10,7 +10,6 @@ import (
 // A Team is one coordinator agent on a parent Issue and a queue of Background agents on its ready children, at most Limit running
 // at once. teams.json, beside agents.json, holds one record per team; any Pane on the host drives every record (DriveTeams).
 
-// TeamState is where a team stands in teams.json.
 type TeamState string
 
 const (
@@ -40,7 +39,6 @@ type TeamChild struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
-// TeamChildRef is a child Issue a coordinator's prompt names at start.
 type TeamChildRef struct{ Ref, Title string }
 
 // TeamRole is what an agent's prompt says of its team. A coordinator has Coordinating, the Project's open Children at the start
@@ -70,12 +68,10 @@ type Team struct {
 	Children []TeamChild `json:"children"`
 }
 
-// Started says the team has started (or is starting) the Issue uid.
 func (t Team) Started(uid string) bool {
 	return slices.ContainsFunc(t.Children, func(c TeamChild) bool { return c.UID == uid })
 }
 
-// TeamOn is the team whose parent is the Issue uid.
 func (m Model) TeamOn(uid string) (Team, bool) {
 	for _, t := range m.Teams {
 		if t.ParentUID == uid {
@@ -99,7 +95,6 @@ type StartTeam struct {
 
 func (StartTeam) cmd() {}
 
-// TeamStarted answers StartTeam: Entry is the coordinator's agent.
 type TeamStarted struct {
 	Placement AgentPlacement
 	IssueRef  string

@@ -16,18 +16,30 @@ import (
 // stripped before the file is checked again.
 const problemPrefix = "#! "
 
+func noWorkerConfig(path string) error {
+	return fmt.Errorf("no worker config at %s; run `tern-kata worker init` first", path)
+}
+
+func readWorkerConfig(path string) (string, error) {
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", subcommandError{noWorkerConfig(path)}
+	}
+	if err != nil {
+		return "", subcommandError{err}
+	}
+	return string(raw), nil
+}
+
 // editWorkerConfig is `worker edit`: worker.toml goes through the editor (resolveEditor) in a temporary file, and the result
 // replaces it only when the shared strict check accepts it. A refusal reopens the text with the problem at the top;
 // an unchanged or empty result leaves the file as it was, and so does a file that changed while the editor was open. Whenever
 // the write fails, the edited copy stays in its temporary file, whose path the error names.
 func editWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
 	path := env.Dirs.ConfigPath()
-	raw, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return subcommandError{fmt.Errorf("no worker config at %s; run `tern-kata worker init` first", path)}
-	}
+	original, err := readWorkerConfig(path)
 	if err != nil {
-		return subcommandError{err}
+		return err
 	}
 	editor, err := resolveEditor()
 	if err != nil {
@@ -45,7 +57,6 @@ func editWorkerConfig(ctx context.Context, env workerEnv, out io.Writer) error {
 	}()
 	tmp.Close()
 
-	original := string(raw)
 	offered, problem := original, ""
 	for {
 		body := offered
@@ -112,7 +123,6 @@ func stripProblem(text string) string {
 	return text
 }
 
-// reportEdit says what the write means for a worker that may be running.
 func reportEdit(ctx context.Context, env workerEnv, path string, out io.Writer) error {
 	if _, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "status"}); errors.Is(err, worker.ErrNoWorker) {
 		_, err = fmt.Fprintf(out, "Wrote %s. No worker is running; the next one reads it.\n", path)

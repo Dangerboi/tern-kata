@@ -9,10 +9,8 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// PageBarID is the Page bar's row; a Page's entry is its id under it.
 const PageBarID = "main.topbar.left.pages"
 
-// barFit is how the Page bar is drawn: whole, compact, or compact on a line of its own under the top bar.
 type barFit uint8
 
 const (
@@ -32,14 +30,11 @@ const (
 // keycapPadCols is the room a keycap span's pill takes beyond its text; the compact bar must still fit at the widths the tests walk.
 const keycapPadCols = 1
 
-// badgePadCols is the room a badge's pill takes beyond its text, and badgeGapCols the gap between an entry's label and its count badge.
 const (
 	badgePadCols = 2
 	badgeGapCols = 1
 )
 
-// entryCols is the width an entry draws: its keycap, then its label unless the Page bar is compact and the Page not current,
-// then its count badge when it has one, which the compact bar keeps.
 func entryCols(entry model.PageBarEntry, compact bool) int {
 	cols := utf8.RuneCountInString(entry.Chord) + keycapPadCols
 	if !compact || entry.Current {
@@ -78,8 +73,6 @@ func pageBarFit(m model.Model, headingCols int) barFit {
 	return barOwnLine
 }
 
-// pageBar is the Page bar: one entry per Page, a keycap and the label, "[1] Issues  [2] Jobs", the current label accented, each its
-// own click target that presses its key. An entry is a row of its label text and, while the Page has a count, a count badge.
 func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, compact bool) ui.Row {
 	entries := m.PageBar()
 	cells := make([]tern.Element, 0, len(entries))
@@ -103,7 +96,6 @@ func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, c
 	return ui.Row{Common: flexCell("pages", ui.ToneNeutral, 0), Gap: ui.GapMD, Children: cells}
 }
 
-// barTitle is the top bar's title: the Collection's, "Project: name" for a Project.
 func barTitle(m model.Model) string {
 	if m.Collection.IsProject() {
 		return "Project: " + m.Collection.Title
@@ -111,7 +103,6 @@ func barTitle(m model.Model) string {
 	return m.Collection.Title
 }
 
-// topBarFit is how the Page bar fits the top bar beside the title as drawn now.
 func topBarFit(m model.Model) barFit {
 	cols := displayWidth(barTitle(m))
 	if m.Loading {
@@ -120,7 +111,6 @@ func topBarFit(m model.Model) barFit {
 	return pageBarFit(m, cols)
 }
 
-// pageLine is the Page bar on a line of its own under the top bar, for a Pane too narrow for it beside the title; nil otherwise.
 func pageLine(m model.Model) []tern.Element {
 	if topBarFit(m) != barOwnLine {
 		return nil

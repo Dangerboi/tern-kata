@@ -17,8 +17,7 @@ const agentAttentionMaxBytes = 1024
 type RaisedAttention struct {
 	UID       string
 	ProjectID int64
-	// Message is the text this Pane last wrote.
-	Message string
+	Message   string
 	// Exited says the request is the one for an agent that exited leaving its Issue open. It lives with the Issue, not with the
 	// agent's entry in the mapping: pruning the entry leaves it, and only the Issue closing, another agent on the Issue waiting
 	// (its request replaces this one) or the Pane quitting clears it.
@@ -28,7 +27,6 @@ type RaisedAttention struct {
 	Seen []string
 }
 
-// messages are the texts a request of this Pane's may read as now: what it wrote, then what other agents on the Issue raised.
 func (r RaisedAttention) messages() []string {
 	out := []string{r.Message}
 	for _, s := range r.Seen {
@@ -66,7 +64,6 @@ type ClearAgentAttention struct {
 
 func (ClearAgentAttention) cmd() {}
 
-// AgentAttentionWritten answers RaiseAgentAttention and ClearAgentAttention for the Issue with UID.
 type AgentAttentionWritten struct {
 	UID   string
 	Clear bool
@@ -75,7 +72,6 @@ type AgentAttentionWritten struct {
 
 func (AgentAttentionWritten) msg() {}
 
-// agentAttentionMessage is the agent's last message cut to the bytes kata takes, on a rune boundary, or the fixed text when blank.
 func agentAttentionMessage(last string) string {
 	if strings.TrimSpace(last) == "" {
 		return AgentWaitingMessage
@@ -90,7 +86,6 @@ func agentAttentionMessage(last string) string {
 	return last[:cut]
 }
 
-// agentWaiting reports whether the relay shows the agent block waiting for input.
 func agentWaiting(states []AgentState, block string) bool {
 	for _, s := range states {
 		if s.Block == block {
@@ -100,7 +95,6 @@ func agentWaiting(states []AgentState, block string) bool {
 	return false
 }
 
-// agentWaitingOn reports whether any mapped agent on the Issue, whichever Pane started it, waits now.
 func (m Model) agentWaitingOn(uid string) bool {
 	for _, e := range m.AgentMapping {
 		if e.IssueUID == uid && agentWaiting(m.Agents.States, e.Block) {
@@ -213,11 +207,8 @@ func putRaise(m Model, cmds []Cmd, uid string, project int64, teammate, address,
 	return m, cmds
 }
 
-// agentExitedMessage is the request's text for an agent that exited while its Issue is open.
 func agentExitedMessage(ref string) string { return "agent exited without closing " + ref }
 
-// issueStatus is the status of an Issue by UID as the Collection lists it, else as the last read through the Daemon gave it; ""
-// when neither is known.
 func (m Model) issueStatus(uid string) string {
 	if issue := m.issueByUID(uid); issue != nil {
 		return issue.Status
@@ -225,7 +216,6 @@ func (m Model) issueStatus(uid string) string {
 	return m.AgentClose.known[uid]
 }
 
-// agentExited reports whether the relay shows the agent block exited; an idle agent is between turns.
 func agentExited(states []AgentState, block string) bool {
 	return slices.ContainsFunc(states, func(s AgentState) bool { return s.Block == block && s.State == AgentExited })
 }
@@ -278,7 +268,6 @@ func (m Model) withoutGone(e AgentEntry) []AgentEntry {
 	return slices.DeleteFunc(slices.Clone(m.AgentGone), func(g AgentEntry) bool { return g.Block == e.Block })
 }
 
-// readIssueStatus asks the Daemon for the status of an Issue the Collection does not list, unless a read of it is in flight.
 func readIssueStatus(m Model, cmds []Cmd, project int64, uid string) (Model, []Cmd) {
 	if m.issueByUID(uid) == nil && !slices.Contains(m.AgentClose.reading, uid) && !slices.Contains(m.AgentClose.unreadable, uid) {
 		m.AgentClose.reading = append(slices.Clone(m.AgentClose.reading), uid)
@@ -298,7 +287,6 @@ func readExitedIssues(m Model, cmds []Cmd, reread bool) (Model, []Cmd) {
 	return m, cmds
 }
 
-// seenWaiting is the record's Seen with the message of every mapped agent on its Issue that waits now.
 func (m Model) seenWaiting(r RaisedAttention) []string {
 	seen := r.Seen
 	for _, e := range m.AgentMapping {
@@ -334,7 +322,6 @@ func (m Model) QuitAgentAttention() []Cmd {
 	return cmds
 }
 
-// agentWaitingOnOthers is agentWaitingOn for the agents other Panes started: this Pane's own go with it.
 func (m Model) agentWaitingOnOthers(uid string) bool {
 	for _, e := range m.AgentMapping {
 		if e.IssueUID == uid && e.PaneBlock != m.PaneBlock && agentWaiting(m.Agents.States, e.Block) {

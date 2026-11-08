@@ -54,7 +54,6 @@ func NormalizeRecipient(raw string) (string, error) {
 	return recipient, nil
 }
 
-// NotificationKey is the metadata key of the slot for a recipient address.
 func NotificationKey(address string) string {
 	return NotificationKeyPrefix + base64.RawURLEncoding.EncodeToString([]byte(address))
 }
@@ -107,10 +106,8 @@ func ReadNotificationSlot(key, raw string) (NotificationSlot, error) {
 	return slot, nil
 }
 
-// maxNamedRecipients is how many addresses a broadcast line names before it counts the rest.
 const maxNamedRecipients = 3
 
-// slotDiffChange is one notification slot in an issue.metadata_updated diff: a cleared request (Cleared) or the value now stored.
 type slotDiffChange struct {
 	address string
 	cleared bool
@@ -188,7 +185,6 @@ func notificationSentence(changes []slotDiffChange) (verb, object string) {
 	return verb, object
 }
 
-// namedRecipients lists at most three addresses and counts the rest: "a, b, c +2".
 func namedRecipients(addresses []string) string {
 	if len(addresses) <= maxNamedRecipients {
 		return strings.Join(addresses, ", ")

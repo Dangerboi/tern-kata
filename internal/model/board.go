@@ -1,7 +1,6 @@
 package model
 
 import (
-	"maps"
 	"slices"
 	"time"
 )
@@ -10,19 +9,15 @@ import (
 // detail column, so the snapshot read carries no selected detail while it is shown. The Lane view is one Lane as the list's
 // rows beside the detail column.
 
-// Done's defaults: it reaches back DefaultDoneDays days of the Pane calendar and shows at most DefaultDoneCards cards.
 const (
 	DefaultDoneDays  = 14
 	DefaultDoneCards = 20
 )
 
-// BoardMode is what the Board Page shows.
 type BoardMode uint8
 
 const (
-	// BoardColumns is the Board: every Lane side by side.
 	BoardColumns BoardMode = iota
-	// BoardLane is the Lane view: the Lane named by BoardState.Lane as a flat list beside the detail.
 	BoardLane
 )
 
@@ -36,8 +31,7 @@ type BoardState struct {
 	DoneDays, DoneCards int
 	// Shared says Lanes and the limits are the Project's shared list (its tern.lanes metadata), not the Lane list file's.
 	Shared bool
-	// Lane is the key of the Lane the Lane view shows.
-	Lane string
+	Lane   string
 	// fileErr is why the Lane list file could not be read; while it is set the file is never overwritten.
 	fileErr error
 	// projectID and revision are the Project as read with the list, which a shared write needs; projectID is 0 when it was not
@@ -55,19 +49,14 @@ type BoardState struct {
 	reads Latest
 }
 
-// LanesRequest is the number of the newest Lane list read asked for.
 func (m Model) LanesRequest() int64 { return m.Board.reads.Newest() }
 
-// OnBoard says the Board Page is current.
 func (m Model) OnBoard() bool { return m.Page == PageBoard }
 
-// BoardShown says the Board's Lane columns are on screen: the Board Page and not its Lane view.
 func (m Model) BoardShown() bool { return m.Page == PageBoard && m.Board.Mode == BoardColumns }
 
-// LaneViewShown says the Board Page shows its Lane view.
 func (m Model) LaneViewShown() bool { return m.Page == PageBoard && m.Board.Mode == BoardLane }
 
-// DoneLimits are how many days back Done reaches and how many cards it shows at most.
 func (m Model) DoneLimits() (days, cards int) {
 	days, cards = m.Board.DoneDays, m.Board.DoneCards
 	if days <= 0 {
@@ -79,7 +68,6 @@ func (m Model) DoneLimits() (days, cards int) {
 	return days, cards
 }
 
-// LaneList is the Lane list the Board draws.
 func (m Model) LaneList() []string {
 	if len(m.Board.Lanes) == 0 {
 		return DefaultLanes()
@@ -87,7 +75,6 @@ func (m Model) LaneList() []string {
 	return m.Board.Lanes
 }
 
-// LaneSource says where the Lane list in use comes from, as the Board and the Lanes card word it.
 func (m Model) LaneSource() string {
 	switch {
 	case m.Board.Shared:
@@ -98,20 +85,16 @@ func (m Model) LaneSource() string {
 	return "default"
 }
 
-// BoardCard is one Issue as a card: what the view draws besides the Issue itself.
 type BoardCard struct {
-	Issue Issue
-	// Labels are the Issue's labels that are not Lane labels.
+	Issue  Issue
 	Labels []string
 	// Also are the other Lane labels of an open Issue, after the one that placed it.
-	Also []string
-	// Reopen titles the Lane a Done card reopens into.
+	Also   []string
 	Reopen string
 	// Relationships are the Issue's Relationships from the Collection snapshot's links, every linked Issue counted whether the Board draws it or not.
 	Relationships Relationships
 }
 
-// BoardColumn is one column of the Board: No lane, a Lane, or Done. Lane is its key, see LaneNone and LaneDone.
 type BoardColumn struct {
 	Lane  string
 	Title string
@@ -130,7 +113,6 @@ func (m Model) BoardColumns() []BoardColumn {
 	return m.boardColumns()
 }
 
-// boardColumns are the Board's columns worked out afresh.
 func (m Model) boardColumns() []BoardColumn {
 	lanes := m.LaneList()
 	doneDays, doneCards := m.DoneLimits()
@@ -177,10 +159,8 @@ func (c PaneCalendar) closedWithin(issue Issue, days int) bool {
 	return c.DayOf(*issue.ClosedAt) >= today.AddDate(0, 0, -days).Format("2006-01-02")
 }
 
-// boardRows are the Board's cards in reading order, or the Lane view's Lane's cards: the rows the selection moves over while the Board Page is shown.
 func (m Model) boardRows() []IssueRow { return m.boardRowsOf(m.BoardColumns()) }
 
-// boardRowsOf are boardRows read from columns.
 func (m Model) boardRowsOf(columns []BoardColumn) []IssueRow {
 	var rows []IssueRow
 	for _, column := range columns {
@@ -194,7 +174,6 @@ func (m Model) boardRowsOf(columns []BoardColumn) []IssueRow {
 	return rows
 }
 
-// toggleBoard is `b`: the Board Page from the Issues Page, the Issues Page back with the same Issue selected.
 func toggleBoard(m Model) (Model, []Cmd) {
 	if m.OnBoard() {
 		return showPage(PageIssues)(m)
@@ -213,7 +192,6 @@ func enterBoard(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// CardAt is the column and row of the card of uid, -1 and -1 when no column holds it.
 func CardAt(columns []BoardColumn, uid string) (col, row int) {
 	for c, column := range columns {
 		if i := slices.IndexFunc(column.Cards, func(card BoardCard) bool { return card.Issue.UID == uid }); i >= 0 {
@@ -223,7 +201,6 @@ func CardAt(columns []BoardColumn, uid string) (col, row int) {
 	return -1, -1
 }
 
-// neighbour is the nearest column from step away from from, towards step, that has cards; -1 when there is none.
 func neighbour(columns []BoardColumn, from, step int) int {
 	for c := from + step; c >= 0 && c < len(columns); c += step {
 		if len(columns[c].Cards) > 0 {
@@ -233,7 +210,6 @@ func neighbour(columns []BoardColumn, from, step int) int {
 	return -1
 }
 
-// laneView shows the Lane of the selected card (else the first Lane with cards, else No lane) as the Lane view, with the detail beside it.
 func (m Model) laneView() Model {
 	columns := m.BoardColumns()
 	m.Board.Lane = LaneNone
@@ -248,7 +224,6 @@ func (m Model) laneView() Model {
 	return m.WithVisibleSelection()
 }
 
-// laneBack is Esc in the Lane view: the Board with the same card selected, or the Menu where there is no Board to go back to.
 func laneBack(m Model) (Model, []Cmd) {
 	if back, cmds, ok := m.backAcross(); ok {
 		return back, cmds
@@ -262,7 +237,6 @@ func laneBack(m Model) (Model, []Cmd) {
 	return m.WithVisibleSelection(), nil
 }
 
-// switchLane is `←` and `→` in the Lane view: the neighbouring Lane that has cards, on the same row where it can.
 func switchLane(m Model, step int) Model {
 	columns := m.BoardColumns()
 	at := slices.IndexFunc(columns, func(c BoardColumn) bool { return c.Lane == m.Board.Lane })
@@ -277,7 +251,6 @@ func switchLane(m Model, step int) Model {
 	return m
 }
 
-// laneCardMove is `<` and `>` in the Lane view: a Move that leaves the selection on the card that takes the moved card's place.
 func laneCardMove(dir int) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
 		at := slices.IndexFunc(m.boardRows(), func(row IssueRow) bool { return row.UID == m.SelectedUID })
@@ -293,7 +266,6 @@ func laneCardMove(dir int) func(Model) (Model, []Cmd) {
 	}
 }
 
-// openLane is Enter on the Board: the Lane view of the selected card's Lane.
 func openLane(m Model) Model {
 	if m.SelectedUID == "" {
 		return m
@@ -301,15 +273,12 @@ func openLane(m Model) Model {
 	return m.laneView()
 }
 
-// clearBoard puts the Board back to its columns when the Page is left.
 func clearBoard(m Model) Model {
 	m.Board.Mode = BoardColumns
 	m.lanesWanted = false
 	return m
 }
 
-// settleBoard keeps the Board Page consistent: it ends without a Project Collection, and the Board gives way to the Lane view
-// where the Pane is too narrow for it or the list lost focus.
 func (m Model) settleBoard() Model {
 	switch {
 	case !m.OnBoard():
@@ -323,12 +292,8 @@ func (m Model) settleBoard() Model {
 	return m
 }
 
-// revealInList unfolds the parents of uid so the nested list shows it.
 func (m Model) revealInList(uid string) Model {
-	m.ExpandedUIDs = maps.Clone(m.ExpandedUIDs)
-	if m.ExpandedUIDs == nil {
-		m.ExpandedUIDs = map[string]bool{}
-	}
+	m.ExpandedUIDs = m.expandedCopy()
 	parents, _ := m.issueHierarchy()
 	for parent := parents[uid]; parent != ""; parent = parents[parent] {
 		m.ExpandedUIDs[parent] = true
@@ -336,7 +301,6 @@ func (m Model) revealInList(uid string) Model {
 	return m
 }
 
-// moveOnBoard moves the selected card up or down its Lane, or to the neighbouring Lane that has cards, keeping its row where it can.
 func moveOnBoard(m Model, action Action) Model {
 	columns := m.BoardColumns()
 	col, row := CardAt(columns, m.SelectedUID)
@@ -362,7 +326,6 @@ func moveOnBoard(m Model, action Action) Model {
 	return m
 }
 
-// updateBoard applies the Board Page's results: the Project's Lane list and Done limits, read and saved.
 func updateBoard(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case LanesLoaded:

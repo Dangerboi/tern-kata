@@ -38,63 +38,47 @@ const (
 	contextMenuPickAct = "pick"
 )
 
-// FocusDetailClick, RetryClick and MenuClick carry no value.
 const (
 	FocusDetailClick = string(model.FocusDetail)
 	RetryClick       = string(model.RetryAction)
 	MenuClick        = string(model.OpenPicker)
-	// NoticeLinkClick opens the Issue the Notice names.
-	NoticeLinkClick = "notice-link"
+	NoticeLinkClick  = "notice-link"
 )
 
 func click(act, value string) string { return act + "=" + value }
 
-// KeyClick presses chord.
 func KeyClick(chord string) string { return click(keyAct, chord) }
 
 // ButtonClick is the click of a card's button: its chord pressed with the card as it stands, so no overlay of the card (its open
 // calendar or dropdown) takes the chord in place of the button.
 func ButtonClick(chord string) string { return click(buttonAct, chord) }
 
-// JumpClick opens the referenced Issue.
 func JumpClick(uid string) string { return click(jumpAct, uid) }
 
-// ToggleClick folds or unfolds the Issue row, and OpenRowClick is its double click.
 func ToggleClick(uid string) string  { return click(string(model.ToggleExpansion), uid) }
 func OpenRowClick(uid string) string { return click(string(model.OpenRow), uid) }
 
-// AgentClick focuses the agent block, given as decimal text.
 func AgentClick(block string) string { return click(agentAct, block) }
 
-// CardClick selects the Board card of the Issue.
 func CardClick(uid string) string { return click(cardAct, uid) }
 
-// ContextMenuPickClick is the id of a context menu row of the Issue with uid built for mode: select it, then run what chord is
-// bound to in mode.
 func ContextMenuPickClick(uid string, mode model.Mode, chord string) string {
 	return click(contextMenuPickAct, string(mode)+":"+uid+":"+chord)
 }
 
-// JobClick selects the job's card on the Jobs Page.
 func JobClick(uid string) string { return click(jobAct, uid) }
 
-// RunClick selects the Run's card on the Runs Page.
 func RunClick(uid string) string { return click(runAct, uid) }
 
-// AttentionClick selects the request on the Issue with uid on the Attention Page.
 func AttentionClick(uid string) string { return click(attentionAct, uid) }
 
-// OpenJobClick opens the Cron job on the Jobs Page.
 func OpenJobClick(uid string) string { return click(openJobAct, uid) }
 
-// JobOpenClick is the double click of a Jobs Page card: select it and press Enter. RunOpenClick, AttentionOpenClick and
-// WorkflowOpenClick do the same on the Runs, Attention and Workflows Pages.
 func JobOpenClick(uid string) string       { return click(jobOpenAct, uid) }
 func RunOpenClick(uid string) string       { return click(runOpenAct, uid) }
 func AttentionOpenClick(uid string) string { return click(attentionOpenAct, uid) }
 func WorkflowOpenClick(uid string) string  { return click(workflowOpenAct, uid) }
 
-// ConfigActClick runs the action of the Config Page's row with key: what the action's key does with the cursor on that row.
 func ConfigActClick(key model.ConfigFileKey, action model.ConfigAction) string {
 	return click(configAct, string(key)+":"+string(action))
 }
@@ -102,17 +86,14 @@ func ConfigActClick(key model.ConfigFileKey, action model.ConfigAction) string {
 // RefClick selects the Board card of a related Issue, revealing it in its Lane, or opens its detail when the Board does not draw it.
 func RefClick(uid string) string { return click(refAct, uid) }
 
-// ActivityTabClick shows the Activity tab.
 func ActivityTabClick(tab model.ActivityTab) string {
 	return click(activityTabAct, strconv.Itoa(int(tab)))
 }
 
-// DetailItemClick puts the detail's row cursor on the row with key in the tab.
 func DetailItemClick(tab model.ActivityTab, key string) string {
 	return click(detailItemAct, strconv.Itoa(int(tab))+":"+key)
 }
 
-// ChooseClick picks the choice at index of the open card's choice field called name.
 func ChooseClick(name model.Field, index int) string {
 	return click(chooseAct, string(name)+":"+strconv.Itoa(index))
 }
@@ -125,7 +106,21 @@ func parseTab(text string) (model.ActivityTab, bool) {
 	return model.ActivityTab(tab), true
 }
 
-// DecodeAction is the message for an Action input from node id, nil for one the Pane does not use.
+var uidActs = map[string]func(value string) model.Msg{
+	jumpAct:          func(v string) model.Msg { return model.JumpIssueMsg{UID: v} },
+	agentAct:         func(v string) model.Msg { return model.AgentJumpMsg{Block: v} },
+	cardAct:          func(v string) model.Msg { return model.SelectMsg{UID: v} },
+	refAct:           func(v string) model.Msg { return model.ShowCardMsg{UID: v} },
+	runAct:           func(v string) model.Msg { return model.RunSelectMsg{UID: v} },
+	attentionAct:     func(v string) model.Msg { return model.AttentionSelectMsg{UID: v} },
+	openJobAct:       func(v string) model.Msg { return model.OpenJobMsg{UID: v} },
+	jobAct:           func(v string) model.Msg { return model.JobSelectMsg{UID: v} },
+	jobOpenAct:       func(v string) model.Msg { return model.JobOpenMsg{UID: v} },
+	runOpenAct:       func(v string) model.Msg { return model.RunOpenMsg{UID: v} },
+	attentionOpenAct: func(v string) model.Msg { return model.AttentionOpenMsg{UID: v} },
+	workflowOpenAct:  func(v string) model.Msg { return model.WorkflowOpenMsg{UID: v} },
+}
+
 func DecodeAction(id, act, value string) model.Msg {
 	switch act {
 	case keyAct:
@@ -158,40 +153,19 @@ func DecodeAction(id, act, value string) model.Msg {
 		if i, err := strconv.Atoi(index); found && err == nil {
 			return model.ChooseMsg{Field: model.Field(name), Index: i}
 		}
-	case jumpAct:
-		return model.JumpIssueMsg{UID: value}
-	case agentAct:
-		return model.AgentJumpMsg{Block: value}
-	case cardAct:
-		return model.SelectMsg{UID: value}
 	case contextMenuPickAct:
 		if mode, rest, found := strings.Cut(value, ":"); found {
 			if uid, chord, found := strings.Cut(rest, ":"); found {
 				return model.ContextMenuPickMsg{UID: uid, Mode: model.Mode(mode), Chord: chord}
 			}
 		}
-	case refAct:
-		return model.ShowCardMsg{UID: value}
-	case runAct:
-		return model.RunSelectMsg{UID: value}
-	case attentionAct:
-		return model.AttentionSelectMsg{UID: value}
-	case openJobAct:
-		return model.OpenJobMsg{UID: value}
-	case jobAct:
-		return model.JobSelectMsg{UID: value}
-	case jobOpenAct:
-		return model.JobOpenMsg{UID: value}
-	case runOpenAct:
-		return model.RunOpenMsg{UID: value}
-	case attentionOpenAct:
-		return model.AttentionOpenMsg{UID: value}
-	case workflowOpenAct:
-		return model.WorkflowOpenMsg{UID: value}
 	case configAct:
 		if key, action, found := strings.Cut(value, ":"); found {
 			return model.ConfigActMsg{Key: model.ConfigFileKey(key), Action: model.ConfigAction(action)}
 		}
+	}
+	if decode, ok := uidActs[act]; ok {
+		return decode(value)
 	}
 	return nil
 }
@@ -200,7 +174,6 @@ func DecodeAction(id, act, value string) model.Msg {
 func itemID(list, key string) string   { return list + "." + key }
 func itemKey(list, item string) string { return strings.TrimPrefix(item, list+".") }
 
-// selectedItem is the list's Selected for the row with key: none while key is empty.
 func selectedItem(list, key string) string {
 	if key == "" {
 		return ""
@@ -208,19 +181,14 @@ func selectedItem(list, key string) string {
 	return itemID(list, key)
 }
 
-// IssueID is the id of the Issue list's row for uid.
 func IssueID(uid string) string { return itemID(IssueListID, uid) }
 
-// IsIssueID reports whether id is a row of the Issue list.
 func IsIssueID(id string) bool { return strings.HasPrefix(id, itemID(IssueListID, "")) }
 
-// IsBoardCardID reports whether id is under the Board's node: a Lane column, its card list or a card.
 func IsBoardCardID(id string) bool { return strings.HasPrefix(id, BoardID+".") }
 
-// PickerItemID is the id of the Menu popup's entry key.
 func PickerItemID(key string) string { return itemID(PickerListID, key) }
 
-// DecodeSelect is the message for a Select input on list id choosing item, nil for a list the Pane does not use.
 func DecodeSelect(id, item string) model.Msg {
 	switch id {
 	case IssueListID:
@@ -244,7 +212,6 @@ func DecodeSelect(id, item string) model.Msg {
 	return nil
 }
 
-// controlField is the choice field whose control node has id: a card field's id and the control's key.
 func controlField(id string) (model.Field, bool) {
 	fieldID, ok := strings.CutSuffix(id, "."+choiceControlKey)
 	if !ok {
@@ -265,8 +232,6 @@ func decodeChoice(field model.Field, item string) model.Msg {
 	return nil
 }
 
-// DecodeChange is the message for Tern's new value of node id: a day picked on a card's calendar, the option a select picked
-// (as the index it was given) or the state a switch flipped to. It is nil for any other node.
 func DecodeChange(id string, value any) model.Msg {
 	if day, ok := value.(string); ok {
 		for _, card := range model.Cards() {
@@ -291,7 +256,6 @@ func DecodeChange(id string, value any) model.Msg {
 	return nil
 }
 
-// DecodeToggle is the message for the pointer opening or closing the dropdown of the select at node id, nil for any other node.
 func DecodeToggle(id string, open bool) model.Msg {
 	if field, ok := controlField(id); ok {
 		return model.DropdownToggleMsg{Field: field, Open: open}
@@ -299,7 +263,6 @@ func DecodeToggle(id string, open bool) model.Msg {
 	return nil
 }
 
-// DecodeFocus is the message for Tern's focus on node id: focus that field of the open card, nil for any other node.
 func DecodeFocus(id string) model.Msg {
 	if _, field, ok := FieldFromID(id); ok && field != "" {
 		return model.FocusFieldMsg{Field: field}
@@ -349,7 +312,6 @@ func blockID(raw json.RawMessage) (string, bool) {
 	if _, err := strconv.ParseUint(number, 10, 64); err == nil {
 		return number, true
 	}
-	// An exponent or fraction form of a whole number.
 	f, _, err := big.ParseFloat(number, 10, 128, big.ToNearestEven)
 	if err != nil || !f.IsInt() || f.Sign() < 0 {
 		return "", false

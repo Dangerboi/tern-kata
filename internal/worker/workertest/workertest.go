@@ -29,7 +29,6 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-// Daemon is kata running in this process on a temporary database.
 type Daemon struct {
 	Client *client.Client
 	Kata   *worker.Kata
@@ -55,7 +54,6 @@ type Gate struct {
 	once    sync.Once
 }
 
-// Hold starts holding the requests match accepts.
 func (d *Daemon) Hold(match func(*http.Request) bool) *Gate {
 	g := &Gate{match: match, Arrived: make(chan struct{}, 64), pass: make(chan struct{}, 64), open: make(chan struct{})}
 	d.mu.Lock()
@@ -64,10 +62,8 @@ func (d *Daemon) Hold(match func(*http.Request) bool) *Gate {
 	return g
 }
 
-// Release lets one held request through.
 func (g *Gate) Release() { g.pass <- struct{}{} }
 
-// Open lets every held and later request through.
 func (g *Gate) Open() { g.once.Do(func() { close(g.open) }) }
 
 // Fail answers 503 to every request match accepts until Heal.
@@ -77,7 +73,6 @@ func (d *Daemon) Fail(match func(*http.Request) bool) {
 	d.mu.Unlock()
 }
 
-// Heal stops what Fail started.
 func (d *Daemon) Heal() { d.Fail(nil) }
 
 func (d *Daemon) intercept(w http.ResponseWriter, r *http.Request) (served bool) {
@@ -198,7 +193,6 @@ func (d *Daemon) Intercept(match func(*http.Request) bool, handle func(w http.Re
 	}
 }
 
-// Requests counts the requests so far whose method and path ("GET /api/v1/projects") contain text.
 func (d *Daemon) Requests(text string) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -221,7 +215,6 @@ func (d *Daemon) PeakInFlight() int {
 	return d.peak
 }
 
-// Project creates (or finds) a Project.
 func (d *Daemon) Project(t *testing.T, name string) worker.Project {
 	t.Helper()
 	actor := "tester"
@@ -235,14 +228,11 @@ func (d *Daemon) Project(t *testing.T, name string) worker.Project {
 
 // Job describes a prompt job to create. Zero values give an enabled manual-trigger job with a per-run Issue.
 type Job struct {
-	Name   string
-	Prompt string
-	// Workflow makes the job run the workflow with this uid instead of Prompt.
-	Workflow string
-	Profile  string
-	// Adapter is the job's options.adapter, absent when blank.
-	Adapter string
-	// Conditions is the job's options.conditions, absent when nil.
+	Name        string
+	Prompt      string
+	Workflow    string
+	Profile     string
+	Adapter     string
 	Conditions  map[string]any
 	Checkout    string
 	IssueTitle  string
@@ -258,15 +248,13 @@ type Job struct {
 	Disabled     bool
 	// Notify makes the job a notify job on ExistingUID (or on Trigger.IssueUID for an Issue-date trigger) instead of a
 	// prompt job.
-	Notify *Notify
-	// ScheduledOffset and DeadlineOffset are the per-run Issue's date offsets in seconds.
+	Notify                          *Notify
 	ScheduledOffset, DeadlineOffset *int64
 }
 
 // Notify is a notify action: the inbox address (or "current-owner-or-author") and the text.
 type Notify struct{ Recipient, Message string }
 
-// Seconds is a pointer to n, for the optional numeric fields of Job.
 func Seconds(n int64) *int64 { return &n }
 
 func (j Job) definition() g.CronJobDefinition {
@@ -340,7 +328,6 @@ func optional(s string) *string {
 	return &s
 }
 
-// CreateJob creates an adapter prompt job in the Project.
 func (d *Daemon) CreateJob(t *testing.T, p worker.Project, j Job) cronjob.Job {
 	t.Helper()
 	actor := "tester"
@@ -380,7 +367,6 @@ func (d *Daemon) findJob(t *testing.T, p worker.Project, name string) cronjob.Jo
 	return cronjob.Job{}
 }
 
-// PlanningDates reads an Issue's scheduled and deadline instants; a date the Issue lacks is the zero time.
 func (d *Daemon) PlanningDates(t *testing.T, p worker.Project, issueUID string) (scheduled, deadline time.Time) {
 	t.Helper()
 	r, err := d.Client.IssuePlanningDatesWithResponse(context.Background(), &g.IssuePlanningDatesRequestOptions{PathParams: &g.IssuePlanningDatesPath{ProjectID: p.ID, Ref: issueUID}})
@@ -402,7 +388,6 @@ func (d *Daemon) SetIssueDate(t *testing.T, p worker.Project, issueUID, field st
 	d.patchIssueDate(t, p, issueUID, field, at.UTC().Format("2006-01-02T15:04"))
 }
 
-// ClearIssueDate removes one planning date (scheduled_on or deadline) from an Issue.
 func (d *Daemon) ClearIssueDate(t *testing.T, p worker.Project, issueUID, field string) {
 	t.Helper()
 	d.patchIssueDate(t, p, issueUID, field, nil)
@@ -418,7 +403,6 @@ func (d *Daemon) patchIssueDate(t *testing.T, p worker.Project, issueUID, field 
 	}
 }
 
-// SetSomeday parks the Issue (someday=true) or, with false, takes it off the shelf.
 func (d *Daemon) SetSomeday(t *testing.T, p worker.Project, issueUID string, someday bool) {
 	t.Helper()
 	if someday {
@@ -428,7 +412,6 @@ func (d *Daemon) SetSomeday(t *testing.T, p worker.Project, issueUID string, som
 	d.patchIssueDate(t, p, issueUID, "someday", nil)
 }
 
-// InboxRequest is the notification an Issue holds for a recipient: its sender and text, ok false when there is none.
 func (d *Daemon) InboxRequest(t *testing.T, p worker.Project, issueUID, recipient string) (from, message string, ok bool) {
 	t.Helper()
 	r, err := d.Client.ShowIssueWithResponse(context.Background(), &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: p.ID, Ref: issueUID}})
@@ -462,7 +445,6 @@ func (d *Daemon) CreateNativeJob(t *testing.T, p worker.Project, name, parentUID
 	return d.findJob(t, p, name)
 }
 
-// Issue creates an Issue in the Project and returns it.
 func (d *Daemon) Issue(t *testing.T, p worker.Project, title string) worker.Issue {
 	t.Helper()
 	issue, err := d.Kata.CreateIssue(context.Background(), p.ID, "tester", "", title, "body", nil)
@@ -472,7 +454,6 @@ func (d *Daemon) Issue(t *testing.T, p worker.Project, title string) worker.Issu
 	return issue
 }
 
-// CloseIssue closes the Issue as done.
 func (d *Daemon) CloseIssue(t *testing.T, p worker.Project, issueUID string) {
 	t.Helper()
 	reason := g.CloseActionRequestBodyReason("done")
@@ -495,7 +476,6 @@ var (
 	stubErr  error
 )
 
-// BuildStub returns the path of the stub agent program, compiled once per test binary.
 func BuildStub(t *testing.T) string {
 	t.Helper()
 	stubOnce.Do(func() {
@@ -518,7 +498,6 @@ func BuildStub(t *testing.T) string {
 	return stubPath
 }
 
-// ManualClock is a Clock a test advances by hand.
 type ManualClock struct {
 	mu      sync.Mutex
 	now     time.Time
@@ -553,7 +532,6 @@ func (c *ManualClock) After(d time.Duration) <-chan time.Time {
 	return ch
 }
 
-// Advance moves the clock and releases every wait that is now due.
 func (c *ManualClock) Advance(d time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -569,7 +547,6 @@ func (c *ManualClock) Advance(d time.Duration) {
 	c.waiters = kept
 }
 
-// WriteConfig writes worker.toml into a fresh config folder and returns the folders.
 func WriteConfig(t *testing.T, toml string) worker.Dirs {
 	t.Helper()
 	dirs := worker.Dirs{Config: t.TempDir(), State: shortTemp(t)}
@@ -590,7 +567,6 @@ func shortTemp(t *testing.T) string {
 	return dir
 }
 
-// Step is one step of a workflow to create: a command step when Command is set, else a prompt step.
 type Step struct {
 	Key     string
 	Command string
@@ -600,7 +576,6 @@ type Step struct {
 	Options map[string]any
 }
 
-// CreateWorkflow creates a workflow in the Project and returns it as the worker reads it.
 func (d *Daemon) CreateWorkflow(t *testing.T, p worker.Project, name string, steps ...Step) worker.Workflow {
 	t.Helper()
 	actor := "tester"

@@ -5,15 +5,11 @@
 -- what these functions answer.
 
 export type Check = {
-    -- `TERN_KATA_NO_UPDATE_CHECK` is non-empty.
     envOff: boolean,
     -- The window half's own folder is not `<tern plugin dir>/tern-kata`: the plugin is linked to a checkout.
     linked: boolean,
-    -- The palette toggle says off.
     toggleOff: boolean,
-    -- Seconds since the epoch (`os.time()`).
     now: number,
-    -- When the last check was made, nil when there never was one.
     lastCheck: number?,
 }
 
@@ -28,7 +24,6 @@ function M.parse(text: string): { number }?
     return {tonumber(a) :: number, tonumber(b) :: number, tonumber(c) :: number}
 end
 
--- -1, 0 or 1 as `a` is older than, the same as or newer than `b`; nil when either is not a version.
 function M.compare(a: string, b: string): number?
     local left, right = M.parse(a), M.parse(b)
     if not left or not right then return nil end
@@ -39,7 +34,6 @@ function M.compare(a: string, b: string): number?
     return 0
 end
 
--- `version = "0.6.0"` of a plugin.toml.
 function M.pluginVersion(toml: string): string?
     return toml:match('^version%s*=%s*"([^"\n]+)"') or toml:match('\nversion%s*=%s*"([^"\n]+)"')
 end
@@ -57,7 +51,6 @@ function M.isLinked(pluginDir: string, ternPluginDir: string?): boolean
     return normalize(pluginDir) ~= normalize(ternPluginDir) .. "/tern-kata"
 end
 
--- What a stopped check is: the variable first, then a linked plugin, then the toggle; nil when checks are on.
 function M.offBecause(check: Check): "variable" | "linked" | "toggle" | nil
     if check.envOff then return "variable" end
     if check.linked then return "linked" end
@@ -86,7 +79,6 @@ function M.toast(releaseText: string, own: string, toasted: string?): (string?, 
         .. "). Run Update tern-kata from the palette.", release
 end
 
--- The palette toggle: the state it stores and the toast that tells it.
 function M.toggle(check: Check): (boolean, string)
     local off = not check.toggleOff
     local text = off and "tern-kata update checks are off" or "tern-kata update checks are on"

@@ -11,7 +11,6 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
-// ListWorkflows reads every workflow of the Project, archived ones included, in kata's order.
 func (c *Client) ListWorkflows(ctx context.Context, projectID int64) ([]model.Workflow, error) {
 	all := true
 	listed, err := c.ListCronWorkflowsWithResponse(ctx, &g.ListCronWorkflowsRequestOptions{PathParams: &g.ListCronWorkflowsPath{ProjectID: projectID}, Query: &g.ListCronWorkflowsQuery{IncludeDeleted: &all}})
@@ -28,7 +27,6 @@ func (c *Client) ListWorkflows(ctx context.Context, projectID int64) ([]model.Wo
 	return workflows, nil
 }
 
-// ShowWorkflow reads one workflow, archived or not.
 func (c *Client) ShowWorkflow(ctx context.Context, projectID int64, uid string) (model.Workflow, error) {
 	shown, err := c.ShowCronWorkflowWithResponse(ctx, &g.ShowCronWorkflowRequestOptions{PathParams: &g.ShowCronWorkflowPath{ProjectID: projectID, CronUID: uid}})
 	if err != nil {
@@ -85,7 +83,6 @@ func (c *Client) ArchiveWorkflow(ctx context.Context, cmd model.ArchiveWorkflow)
 	return c.workflowWritten(ctx, cmd.ProjectID, cmd.ProjectUID, model.WorkflowOpArchive, cmd.UID, written, err)
 }
 
-// RestoreWorkflow brings an archived workflow back, guarded on its definition_event_uid.
 func (c *Client) RestoreWorkflow(ctx context.Context, cmd model.RestoreWorkflow) (model.WorkflowWritten, error) {
 	body := &g.CronDefinitionActionBody{ExpectedEventUID: cmd.Expected}
 	if cmd.Actor != "" {

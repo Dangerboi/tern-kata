@@ -9,8 +9,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// jobLayer is the Job card: the fields the kind and trigger show, the schedule in words and the next runs under the trigger,
-// and the buttons. After a save found the job changed meanwhile it shows the newer job and asks what to do with the draft.
 func jobLayer(m model.Model, now time.Time) tern.Element {
 	f := m.JobForm
 	if !f.Open {
@@ -88,7 +86,6 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardJob)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconTimer}, children))
 }
 
-// jobPreview is the schedule under the trigger: in words and the next runs, or what keeps it from being told yet.
 func jobPreview(f model.JobFormState, cal model.PaneCalendar, now time.Time) tern.Element {
 	preview := f.Preview(cal, now)
 	if preview.Err != nil {
@@ -104,7 +101,6 @@ func jobPreview(f model.JobFormState, cal model.PaneCalendar, now time.Time) ter
 	return ui.Col{Common: ui.Common{Key: "preview"}, Children: ui.Nodes(lines...)}
 }
 
-// jobConditions is the adapter job's conditions, read-only, or why they cannot be read; nil when it has none.
 func jobConditions(f model.JobFormState) tern.Element {
 	lines, shown, err := f.ConditionLines()
 	if !shown {
@@ -121,7 +117,6 @@ func jobConditions(f model.JobFormState) tern.Element {
 	return ui.Col{Common: ui.Common{Key: "conditions"}, Children: ui.Nodes(rows...)}
 }
 
-// jobConflict is the card after a save found the job changed: the newer job, the draft kept, and the three ways out.
 func jobConflict(m model.Model) []tern.Element {
 	rows := []tern.Element{toneText("conflict", ui.ToneWarning, "The job changed meanwhile; nothing was written. Your draft is kept. The newer job:")}
 	for i, fact := range m.JobConflictFacts() {

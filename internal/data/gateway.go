@@ -25,18 +25,15 @@ import (
 type Gateway struct {
 	locate Locator
 	// host is this machine's host name, which the Attachment migration compares old pointers against; empty when unreadable.
-	host string
-	// deadline bounds discovery, the version Ping and the kind check of one connection attempt.
+	host     string
 	deadline time.Duration
 
 	mu      sync.Mutex
 	clients map[string]*Client
 	// connecting holds, per workspace, a channel closed when the dial in flight for it ends.
 	connecting map[string]chan struct{}
-	// closed is set by Close, so a connect in flight caches nothing after it.
-	closed bool
-	// current is the catalog name of the daemon the Pane last switched to; empty until it does.
-	current string
+	closed     bool
+	current    string
 	// epoch counts daemon switches, so a connect that raced one is dropped rather than cached against the new daemon.
 	epoch uint64
 
@@ -50,7 +47,6 @@ type Gateway struct {
 	now            func() time.Time
 	wakePoll       time.Duration
 
-	// workerDirs locates this machine's worker; runTern runs the tern program. Both are the real ones unless a test replaces them.
 	workerDirs func() (worker.Dirs, error)
 	runTern    func(context.Context, []string) ([]byte, error)
 	// docbank builds the Docbank supervision environment; nil until the program sets it.
@@ -62,7 +58,6 @@ type Gateway struct {
 	lsAt     time.Time
 	lsFlight *lsFlight
 
-	// openFile opens a downloaded Attachment with the program the OS chooses for it, and cacheDir says where downloads go; both are the real ones unless a test replaces them.
 	openFile func(path string) error
 	cacheDir func() (string, error)
 }
@@ -78,13 +73,11 @@ func HostName() string {
 	return host
 }
 
-// WithHost sets this machine's host name, which tells the local copies of old Attachments from those on other machines.
 func (g *Gateway) WithHost(host string) *Gateway {
 	g.host = host
 	return g
 }
 
-// Close ends the running stream and drops the cached clients.
 func (g *Gateway) Close() {
 	g.streamMu.Lock()
 	if g.streamCancel != nil {
@@ -259,7 +252,6 @@ func (g *Gateway) dial(ctx, connectCtx context.Context, locate Locator, current,
 	return c, nil
 }
 
-// connect locates the daemon for workspace with ctx and dials it.
 func connectLocated(ctx context.Context, locate Locator, workspace string) (*Client, error) {
 	target, err := locate(ctx, workspace)
 	if err != nil {

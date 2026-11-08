@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -33,16 +32,13 @@ const (
 // trigger yields the occurrences of one job definition. It is the extension point for a new trigger kind: build it in
 // newTrigger and the rest of the schedule (checkpoints, catchup, overlap, capacity, admission) applies unchanged.
 type trigger interface {
-	// next is the first occurrence strictly after t, the zero time when there is none.
 	next(t time.Time) time.Time
 }
 
-// scheduled is a cron expression or an interval, read by the rules the Pane shares (internal/cronjob).
 type scheduled struct{ cronjob.Schedule }
 
 func (s scheduled) next(t time.Time) time.Time { return s.Next(t) }
 
-// onceTrigger fires at one instant.
 type onceTrigger struct{ at time.Time }
 
 func (o onceTrigger) next(t time.Time) time.Time {
@@ -52,7 +48,6 @@ func (o onceTrigger) next(t time.Time) time.Time {
 	return time.Time{}
 }
 
-// isIssueDate reports whether the trigger fires on an Issue's planning date.
 func isIssueDate(t cronjob.Trigger) bool {
 	return t.Kind == cronjob.TriggerIssueScheduled || t.Kind == cronjob.TriggerIssueDeadline
 }
@@ -114,7 +109,6 @@ func schedulable(job cronjob.Job) bool {
 	return false
 }
 
-// busyError is a refusal that waiting cures: the Project is full or the job's overlap gate is closed.
 type busyError struct {
 	msg      string
 	capacity bool
@@ -139,7 +133,6 @@ type parkedError struct {
 
 func (e *parkedError) Error() string { return e.msg }
 
-// parkedIssue says why an open Issue is not ready for an ordinary execute job.
 type parkedIssue struct {
 	reason string
 	until  time.Time
@@ -161,7 +154,6 @@ func (w *Worker) parked(ctx context.Context, issue Issue) (*parkedIssue, error) 
 	return nil, nil
 }
 
-// jobSchedule is one job's schedule state, owned by its Project's loop.
 type jobSchedule struct {
 	defEvent string
 	trig     trigger
@@ -219,7 +211,6 @@ type checkpointStore interface {
 	Save(jobUID string, c checkpoint)
 }
 
-// fileCheckpoints is the checkpointStore of one Project's schedule folder; log is the Project's prefixed logger.
 type fileCheckpoints struct {
 	dir string
 	log func(format string, args ...any)
@@ -242,13 +233,8 @@ func (f fileCheckpoints) Load(jobUID string) (checkpoint, bool) {
 
 func (f fileCheckpoints) Save(jobUID string, c checkpoint) {
 	c.Version = 1
-	raw, _ := json.Marshal(c)
-	path := f.path(jobUID)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
-		err = replaceFile(path, raw)
-		if err != nil {
-			f.log("saving the schedule of job %s: %v", jobUID, err)
-		}
+	if err := saveJSON(f.path(jobUID), c); err != nil {
+		f.log("saving the schedule of job %s: %v", jobUID, err)
 	}
 }
 
@@ -290,7 +276,6 @@ func (s *projectSchedule) save(jobUID string, st *jobSchedule) {
 	s.store.Save(jobUID, checkpoint{DefinitionEventUID: st.defEvent, Through: st.through, Date: st.date, DateSeen: st.dateSeen, Pending: st.pending, Parked: st.parked})
 }
 
-// newProjectSchedule builds the schedule of a served Project over the worker's files, run preparation and clock.
 func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
 	name := ps.cfg.Name
 	log := func(format string, args ...any) {
@@ -319,7 +304,6 @@ func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
 	}
 }
 
-// kick wakes the Project loop to look at its queued occurrences.
 func (w *Worker) kick(ps *projectState) {
 	select {
 	case ps.kick <- struct{}{}:
@@ -384,8 +368,6 @@ func selectOccurrences(cands []time.Time, now time.Time, catchup string, grace t
 	return keep, stillParked, len(cands) - len(keep)
 }
 
-// plan brings one job's state up to now: rebuild it when the definition changed, collect the occurrences that became
-// due, and apply the catchup policy to them and to those still waiting.
 func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
 	st := s.jobs[job.UID]
 	resumed := false
@@ -558,8 +540,6 @@ func (w *Worker) jobsStale(ps *projectState, issueEvent bool) bool {
 	return w.clock.Now().Sub(ps.jobsAt) >= jobRefreshDebounce
 }
 
-// summary is what a tick reports after planning and admission: the queued and scheduled counts, the next occurrence
-// of any job, the earliest instant a waiting Issue becomes ready, and the jobs whose occurrences wait for their Issue.
 type summary struct {
 	queued, scheduled int
 	next, wake        time.Time
@@ -655,7 +635,6 @@ func (w *Worker) planAll(ps *projectState, now time.Time) bool {
 	return true
 }
 
-// planAll plans every given job and forgets the state of jobs that went away.
 func (s *projectSchedule) planAll(jobs []cronjob.Job, disabled map[string]bool, now time.Time) {
 	live := map[string]bool{}
 	for _, j := range jobs {
@@ -812,7 +791,6 @@ func (s *projectSchedule) admitDue(ctx context.Context) {
 	}
 }
 
-// issueDates is what the worker last read of one Issue's planning dates.
 type issueDates struct {
 	at        time.Time // when the read succeeded
 	scheduled time.Time

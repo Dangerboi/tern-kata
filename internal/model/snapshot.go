@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"time"
 )
 
 // SnapshotQuery is what picks a snapshot: the Collection and filters, plus the selected Issue's detail riding along. View is the
@@ -51,9 +50,6 @@ type SnapshotLoaded struct {
 
 func (SnapshotLoaded) msg() {}
 
-// Snapshot is the Collection snapshot as the model holds it: the Issues the query selected, the Links of those Issues
-// (child counts are counted from them), the Project catalog and the event cursor it answers.
-// The gateway translates it from kata's wire shape.
 type Snapshot struct {
 	Issues  []Issue
 	Links   []Link
@@ -71,7 +67,6 @@ type ProjectStats struct{ Open, Closed int }
 
 type ChildCounts struct{ Open, Total int }
 
-// CountChildren is uid's direct children among links; see childCountsByParent.
 func CountChildren(links []Link, uid string) ChildCounts { return childCountsByParent(links)[uid] }
 
 // childCountsByParent counts every Issue's direct children among links as kata counts them: every parent Link pointing at
@@ -98,7 +93,6 @@ type SnapshotFailed struct {
 
 func (SnapshotFailed) msg() {}
 
-// CollectionQuery is the snapshot query for a Collection and the filters alone.
 func CollectionQuery(c Collection, f Filters) SnapshotQuery {
 	q := SnapshotQuery{View: new(c.View)}
 	if c.ProjectUID != "" {
@@ -148,7 +142,6 @@ func liveQuery(m Model) SnapshotQuery {
 	return q
 }
 
-// sameCollectionQuery compares what picks the Issues, not the detail riding along.
 func sameCollectionQuery(a, b SnapshotQuery) bool {
 	a.SelectedIssueUID, b.SelectedIssueUID = nil, nil
 	a.IncludeHistory, b.IncludeHistory = nil, nil
@@ -179,7 +172,6 @@ func snapshotChanged(m Model) (Model, []Cmd) {
 	return m, []Cmd{ReadSnapshot{Workspace: m.Workspace, Query: query, ETag: etag, Request: request}}
 }
 
-// RefreshRequest is the number of the newest snapshot or id-lookup read asked for.
 func (m Model) RefreshRequest() int64 { return m.snapshotReads.Newest() }
 
 // collectionSwitched is a Collection switch: deliberate, so it neither waits for the read of the Collection left behind (that
@@ -271,7 +263,6 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 	return m, cmds
 }
 
-// snapshotFailed ends the read: on the first load or a Collection switch it is the error shown; otherwise the Pane is stale.
 func snapshotFailed(m Model, msg SnapshotFailed) (Model, []Cmd) {
 	if !m.snapshotReads.IsCurrent(msg.Request) {
 		return m, nil
@@ -282,13 +273,9 @@ func snapshotFailed(m Model, msg SnapshotFailed) (Model, []Cmd) {
 		m.Err = msg.Err
 		return m, nil
 	}
-	m.Stale = true
-	m.StreamErr = msg.Err
-	m.ReconnectAttempt++
-	return startStream(m, time.Second<<min(m.ReconnectAttempt-1, 5))
+	return streamLost(m, msg.Err)
 }
 
-// selectAfterCreate selects the Issue just created now, and again once the snapshot lists it.
 func (m Model) selectAfterCreate(uid string) Model {
 	m.pending = uid
 	m.SelectedUID = uid
@@ -317,7 +304,6 @@ func (m Model) cancelPending(before Model, msg Msg) Model {
 	return m
 }
 
-// applyCollection puts a snapshot on screen: the Collections, the grouped Issues, and the selection.
 func (m Model) applyCollection(snapshot Snapshot) Model {
 	m.Snapshot = snapshot
 	m.Relationships = NewRelationshipIndex(snapshot.Links)

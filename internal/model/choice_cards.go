@@ -6,10 +6,8 @@ import (
 	"time"
 )
 
-// recurrenceEndLabels are the words of the Ends field's choices.
 var recurrenceEndLabels = map[EndKind]string{EndNever: "Never", EndUntil: "On a date", EndCount: "After a number of occurrences"}
 
-// filterChoiceText is how the Filter card shows value of the choice field called name.
 func (m Model) filterChoiceText(name Field, value string) string {
 	switch name {
 	case FilterProject:
@@ -23,7 +21,6 @@ func (m Model) filterChoiceText(name Field, value string) string {
 	return FilterChoiceLabel(FilterRelationships, value)
 }
 
-// filterControl is the control of a Filter choice field: Status is tabs, Project and Relationship are selects.
 func filterControl(name Field) Control {
 	if name == FilterStatus {
 		return ControlTabs
@@ -43,7 +40,6 @@ func filterChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	return newChoices(filterControl(name), labels, slices.Index(choices, m.FilterForm.Values.Value(name))), true
 }
 
-// viewChoiceText is how the View card shows value of the choice field called name.
 func (m Model) viewChoiceText(name Field, value string) string {
 	if name != ViewBase {
 		if name == FilterProject && value == "" {
@@ -78,8 +74,6 @@ func viewChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	return newChoices(control, labels, slices.Index(choices, m.ViewForm.choiceValue(name))), true
 }
 
-// jobControl is the control of a Job choice field: the named ones are selects, Enabled is a switch and any other follows the
-// number of its choices.
 func jobControl(name Field, n int) Control {
 	switch name {
 	case JobFieldKind, JobFieldTrigger, JobFieldPolicy, JobFieldOverlap, JobFieldCatchup:

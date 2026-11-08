@@ -8,8 +8,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// backfillLayer is the Backfill card: what the step about to be taken would make the daemon create at once, job by job, and
-// the three ways out.
 func backfillLayer(m model.Model) tern.Element {
 	b := m.Backfill
 	if !b.Open {
@@ -54,7 +52,6 @@ func backfillLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardBackfill)}, Modal: true, Size: ui.SizeLG, Head: ui.T(head), Icon: ui.IconHistory}, children))
 }
 
-// missedIssues is how many child Issues a count of missed runs makes: "1 child Issue", "3 child Issues".
 func missedIssues(n int) string {
 	switch {
 	case n >= 10000:

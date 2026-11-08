@@ -23,7 +23,6 @@ func (c *Client) ReadAuthCapabilities(ctx context.Context, cmd model.LoadAuthCap
 		VerifiedSenders: VerifiedAuthKind(auth.Kind)}, nil
 }
 
-// readInstanceAuth is the one read of /api/v1/instance: the connection's auth information.
 func (c *Client) readInstanceAuth(ctx context.Context) (g.AuthInfoOut, error) {
 	response, err := c.InstanceWithResponse(ctx)
 	if err != nil {
@@ -57,7 +56,6 @@ func ReadVerifiedSenders(ctx context.Context, locate Locator, workspace string) 
 	return err == nil && VerifiedAuthKind(auth.Kind), err
 }
 
-// ListCredentials reads the daemon's redacted token inventory and the instant it classified each token's state.
 func (c *Client) ListCredentials(ctx context.Context, cmd model.LoadCredentials) (model.CredentialsLoaded, error) {
 	response, err := c.ListTokensWithResponse(ctx)
 	if err != nil {
@@ -92,7 +90,6 @@ func timeOrZero(t *time.Time) time.Time {
 	return *t
 }
 
-// pause returns once d has passed on the gateway's clock or ctx ends.
 func (g *Gateway) pause(ctx context.Context, d time.Duration) {
 	// Round(0) drops the monotonic reading, which does not advance while the machine sleeps.
 	deadline := g.now().Round(0).Add(d)

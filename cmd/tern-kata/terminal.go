@@ -18,10 +18,8 @@ type paneSurface interface {
 	Close() error
 }
 
-// reconnect opens a fresh Tern session and the Pane's surface on it.
 type reconnect func(ctx context.Context) (paneSession, paneSurface, error)
 
-// terminal owns the Tern session, the surface and the input reader, and lets the process run a function outside Tern.
 type terminal struct {
 	ctx         context.Context
 	session     paneSession
@@ -45,7 +43,6 @@ func (t *terminal) Send(op tern.Op) error { return t.surface.Send(op) }
 
 func (t *terminal) Caps() tern.Caps { return t.session.Caps() }
 
-// Inputs delivers every Tern input; InputErrors the reader's failure.
 func (t *terminal) Inputs() <-chan any        { return t.inputs }
 func (t *terminal) InputErrors() <-chan error { return t.inputErrors }
 
@@ -72,8 +69,6 @@ func (t *terminal) Suspend(run func()) error {
 	return nil
 }
 
-// connectPane is the production reconnect: Tern's connect plus the Pane's surface, opened closable or not as the Pane
-// first opened it.
 func connectPane(closable bool) reconnect {
 	return func(ctx context.Context) (paneSession, paneSurface, error) {
 		session, err := tern.Connect(ctx, editorOptions())

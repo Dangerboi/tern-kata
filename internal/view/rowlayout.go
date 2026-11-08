@@ -6,7 +6,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// listColumns are the list's cell widths, and whether the owner column is drawn.
 type listColumns struct {
 	ownerShown bool
 	id, owner  int
@@ -29,7 +28,6 @@ func (c listColumns) role() string {
 	return role
 }
 
-// rowParts are what one Issue row holds, each cell as drawn but for its padding, gap and cut.
 type rowParts struct {
 	id, prio, status ui.Span
 	badges           []ui.Span // the Agent badge and the Work attention word, ahead of the title
@@ -41,13 +39,11 @@ type rowParts struct {
 	ownerStyle       string
 }
 
-// listRow is a row's spans: the label's on the left, the value's pinned right.
 type listRow struct {
 	label, value []ui.Span
 	dateFits     bool // whether the Date badge is among the label's spans
 }
 
-// layoutHeader is the header's spans, one for each cell of a row.
 func layoutHeader(cols listColumns) listRow {
 	return listRow{
 		label: []ui.Span{
@@ -96,7 +92,6 @@ func layoutRow(cols listColumns, width int, p rowParts) listRow {
 	return laid
 }
 
-// rightCells are the kids, owner and updated cells, the owner only when shown.
 func rightCells(kids, owner, updated string, cols listColumns, style, ownerStyle string) []ui.Span {
 	spans := []ui.Span{{T: cell(kids, kidsWidth), S: style}}
 	if cols.ownerShown {

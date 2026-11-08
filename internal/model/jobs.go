@@ -33,9 +33,8 @@ type JobsLoaded struct {
 	Request         int64
 	Jobs            []CronJob
 	ProjectArchived bool
-	// Activity is what each job has done lately, by the job's uid, when the read asked for it.
-	Activity map[string]JobActivity
-	Err      error
+	Activity        map[string]JobActivity
+	Err             error
 }
 
 // JobActivity is what a job has done lately, newest first: the Runs of an adapter job, the child Issues a native job made.
@@ -44,7 +43,6 @@ type JobActivity struct {
 	Children []CronChild
 }
 
-// CronChild is a child Issue a native job made, read from its parent's children by their cron.occurrence metadata.
 type CronChild struct {
 	UID, ShortID, Title, Status string
 	ScheduledAt, CreatedAt      time.Time
@@ -68,34 +66,26 @@ const JobActivityShown = 5
 
 func (JobsLoaded) msg() {}
 
-// JobSelectMsg is a click on a job's row.
 type JobSelectMsg struct{ UID string }
 
 func (JobSelectMsg) msg() {}
 
-// JobOpenMsg is a double click on a job's row.
 type JobOpenMsg struct{ UID string }
 
 func (JobOpenMsg) msg() {}
 
-// JobsState is the Jobs Page's state. It is not saved: a Pane starts on the Issues Page.
 type JobsState struct {
 	// ProjectUID is the Project the state was filled for; resetPagesForProject empties it when the Pane's Project differs.
 	ProjectUID string
-	// Jobs are the Project's jobs as last read, archived ones only when ShowArchived asked for them.
-	Jobs []CronJob
+	Jobs       []CronJob
 	// ProjectID is the Project Jobs belongs to; zero before a read was asked for.
-	ProjectID int64
-	// ProjectArchived is what the last read found of the Project.
+	ProjectID       int64
 	ProjectArchived bool
-	// ShowArchived says archived jobs are listed.
-	ShowArchived bool
-	// Selected is the uid of the job the inspector shows.
-	Selected string
-	// Activity is what each job has done lately, as the last read found it.
-	Activity map[string]JobActivity
-	Loading  bool
-	Err      error
+	ShowArchived    bool
+	Selected        string
+	Activity        map[string]JobActivity
+	Loading         bool
+	Err             error
 	// Writing is the uid of the job a pause, resume, archive or restore is writing; the keys wait for its answer.
 	Writing string
 	// reads numbers the reads asked for; stale asks for another.
@@ -143,7 +133,6 @@ func (m Model) highRateWarning(job CronJob, now time.Time) string {
 	return cronjob.HighRateWarning(perDay)
 }
 
-// OnJobs says the Jobs Page is current.
 func (m Model) OnJobs() bool { return m.Page == PageJobs }
 
 // JobRow is one job as the Jobs Page's list draws it. Schedule and Next are empty where they can't be worked out.
@@ -159,13 +148,10 @@ type JobRow struct {
 	Unsupported string
 	// WorkerPause is why this machine's worker admits none of the job's runs, empty when it does.
 	WorkerPause string
-	// Last is the job's latest run or child in words, empty when it has none on record.
-	Last string
-	// Warning is the high-rate warning of a job that makes more than 24 Issues a day, empty for any other.
-	Warning string
+	Last        string
+	Warning     string
 }
 
-// visibleJobs are the jobs the list shows: the archived ones only when asked for, and those the search leaves.
 func (m Model) visibleJobs() []CronJob {
 	jobs := m.Jobs.Jobs
 	if !m.Jobs.ShowArchived {
@@ -218,7 +204,6 @@ func (m Model) runWords(r Run, now time.Time) string {
 	return words
 }
 
-// SelectedJob is the job the inspector shows: the selected one if the list shows it, else nil.
 func (m Model) SelectedJob() *CronJob {
 	for _, job := range m.visibleJobs() {
 		if job.UID == m.Jobs.Selected {
@@ -281,7 +266,6 @@ func (m Model) CurrentSelection() string {
 	return m.SelectedUID
 }
 
-// JobFact is one line of the inspector. Parent marks the line Enter opens.
 type JobFact struct {
 	Label, Value string
 	Parent       bool
@@ -512,7 +496,6 @@ func jobsLoaded(m Model, msg JobsLoaded) Model {
 	return m.settleJobSelection()
 }
 
-// settleJobSelection keeps the selection on a listed job, the first when it is gone.
 func (m Model) settleJobSelection() Model {
 	jobs := m.visibleJobs()
 	if slices.ContainsFunc(jobs, func(j CronJob) bool { return j.UID == m.Jobs.Selected }) {
@@ -525,7 +508,6 @@ func (m Model) settleJobSelection() Model {
 	return m
 }
 
-// moveJob moves the selection by action: one row, to either end, or a page.
 func moveJob(m Model, action Action) Model {
 	jobs := m.visibleJobs()
 	if len(jobs) == 0 {
@@ -543,14 +525,12 @@ func toggleArchivedJobs(m Model) Model {
 	return m.settleJobSelection()
 }
 
-// reloadJobs reads the jobs again.
 func reloadJobs(m Model) (Model, []Cmd) {
 	m.Jobs.stale = true
 	m, cmd := m.askWorker(0)
 	return m, []Cmd{cmd, LoadWorkerSetup{Workspace: m.Workspace}}
 }
 
-// focusInspector is enter on the job list: the inspector takes the keys.
 func focusInspector(m Model) Model {
 	if m.SelectedJob() != nil {
 		m.Focus = ColumnDetail
@@ -558,7 +538,6 @@ func focusInspector(m Model) Model {
 	return m
 }
 
-// inspectorBack is esc in the inspector: the keys go back to the list.
 func inspectorBack(m Model) Model {
 	m.Focus = ColumnList
 	return m

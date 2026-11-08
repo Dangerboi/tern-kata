@@ -6,13 +6,10 @@ import (
 	"time"
 )
 
-// GroupState is the answer of a Group proof.
 type GroupState int
 
 const (
-	// GroupGone: no process of the run's group is left.
 	GroupGone GroupState = iota
-	// GroupPresent: at least one process of the group is still there.
 	GroupPresent
 	// GroupUnchecked: the platform could not tell; GroupProof.Reason says why.
 	GroupUnchecked
@@ -38,7 +35,6 @@ const (
 	groupPoll = 200 * time.Millisecond
 )
 
-// proveGroup is the group proof of a launch: the platform adapter's answer, unless a test hook supplies one.
 func (w *Worker) proveGroup(l *LaunchRecord) GroupProof {
 	if hook := w.opt.Hooks.GroupProof; hook != nil {
 		if proof, ok := hook(l); ok {
@@ -48,7 +44,6 @@ func (w *Worker) proveGroup(l *LaunchRecord) GroupProof {
 	return checkGroup(l)
 }
 
-// uncheckedLog remembers, per run, the reason its group last could not be checked.
 type uncheckedLog struct {
 	mu     sync.Mutex
 	reason map[string]string
@@ -74,7 +69,6 @@ func (u *uncheckedLog) changed(runUID string, proof GroupProof) bool {
 	return true
 }
 
-// noteGroup logs a group that cannot be checked, once per run per change of reason.
 func (w *Worker) noteGroup(runUID string, l *LaunchRecord, proof GroupProof) {
 	if w.unchecked.changed(runUID, proof) {
 		w.opt.Log("run %s: process group %d cannot be checked: %s; the run keeps its slot and overlap gate until the check succeeds", runUID, l.PGID, proof.Reason)

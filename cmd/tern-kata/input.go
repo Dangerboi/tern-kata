@@ -10,7 +10,6 @@ import (
 	"golang.org/x/term"
 )
 
-// paneSize is the Pane's size as a ResizeMsg: its width from Tern and its rows from the terminal.
 func paneSize(cols int) model.ResizeMsg {
 	msg := model.ResizeMsg{Cols: cols}
 	if _, rows, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
@@ -19,8 +18,6 @@ func paneSize(cols int) model.ResizeMsg {
 	return msg
 }
 
-// startInputReader forwards every Tern input to inputs, and the Pane's new height in rows whenever only that changed; the Pane
-// driver decides what each means.
 func startInputReader(ctx context.Context, session paneSession, inputs chan<- any, inputErrors chan<- error) func() {
 	ctx, cancel := context.WithCancel(ctx)
 	var wg sync.WaitGroup

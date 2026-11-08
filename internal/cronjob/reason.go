@@ -18,7 +18,6 @@ var legacyHoldCodes = []string{
 	"group_unproven", "invalid_prompt", "execution_error", "agent_login", "agent_quota",
 }
 
-// ReasonMessage is a summary message under kata's convention: the code on the first line, the detail on the next.
 func ReasonMessage(code, detail string) string {
 	if detail == "" {
 		return reasonPrefix + code
@@ -39,7 +38,6 @@ func ReadReason(message string) (code, detail string) {
 	return "", message
 }
 
-// Reason is the Run's reason code and the rest of its summary (see ReadReason).
 func (r Run) Reason() (code, detail string) { return ReadReason(r.Summary) }
 
 // validReasonCode is the convention's code grammar: [a-z0-9_.-]{1,64}.

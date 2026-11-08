@@ -22,7 +22,6 @@ func TriggersFor(action ActionKind) []TriggerKind {
 	return append([]TriggerKind(nil), triggersOf[action]...)
 }
 
-// AllowsTrigger says a job with this action may have a trigger of this kind.
 func AllowsTrigger(action ActionKind, trigger TriggerKind) bool {
 	for _, k := range triggersOf[action] {
 		if k == trigger {
@@ -32,7 +31,6 @@ func AllowsTrigger(action ActionKind, trigger TriggerKind) bool {
 	return false
 }
 
-// OnceAt is the instant of a once trigger.
 func OnceAt(t Trigger) (time.Time, error) {
 	at, err := time.Parse(time.RFC3339, t.At)
 	if err != nil {

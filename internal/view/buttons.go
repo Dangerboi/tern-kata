@@ -15,10 +15,7 @@ import (
 // this key.
 const choiceControlKey = "control"
 
-// choiceControl is the choice field called name of card, drawn as the control the model's choice set decides: a select, segmented
-// tabs or a switch, each in a FormField that holds the label, the hint and the warning. The field's node is the FormField, so
-// its id is FieldID; the control is its child. The control never takes focus: the model owns the keys, and the select draws
-// the menu, highlight and search text the model holds.
+// The control never takes focus: the model owns the keys, and the select draws the menu, highlight and search text the model holds.
 func choiceControl(m model.Model, card model.Card, name model.Field, title string, focused bool, hint, warning string) tern.Element {
 	set, ok := m.CardChoices(card, name)
 	if !ok {
@@ -73,7 +70,6 @@ func choiceControl(m model.Model, card model.Card, name model.Field, title strin
 	return field
 }
 
-// choiceValue is the value or tab id of the choice at index, none for -1.
 func choiceValue(index int) string {
 	if index < 0 {
 		return ""
@@ -81,9 +77,7 @@ func choiceValue(index int) string {
 	return strconv.Itoa(index)
 }
 
-// choiceField is a popup card's choice field: its prompt, then every choice as a label whose click picks it, the chosen ones
-// bracketed in the accent as the active Activity tab is. The choices wrap in their own column, so a wrapped line never reads
-// as another field. The choice at cursor gets the keys' cursor mark; -1 marks none.
+// The choices wrap in their own column, so a wrapped line never reads as another field.
 func choiceField(name model.Field, tone ui.Tone, title, prompt string, labels []string, chosen func(int) bool, cursor int) tern.Element {
 	choices := make([]tern.Element, 0, len(labels))
 	for i, label := range labels {
@@ -101,8 +95,7 @@ func choiceField(name model.Field, tone ui.Tone, title, prompt string, labels []
 		ui.Row{Common: ui.Common{Key: "choices", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: choices})}
 }
 
-// cardKeys are the key labels of action in mode, as keycaps, and the chord of the first: what a click on its button or menu row
-// presses. An action with no binding in mode has no keys and no chord.
+// An action with no binding in mode has no keys and no chord.
 func cardKeys(mode model.Mode, action model.Action) (keys []string, chord string) {
 	bindings := model.CardKeys(mode, action)
 	if len(bindings) > 0 {
@@ -111,7 +104,6 @@ func cardKeys(mode model.Mode, action model.Action) (keys []string, chord string
 	return keycaps(bindings), chord
 }
 
-// keycaps are the keycap texts of bindings.
 func keycaps(bindings []model.Binding) []string {
 	keys := make([]string, len(bindings))
 	for i, b := range bindings {
@@ -141,14 +133,12 @@ func cardButton(key string, mode model.Mode, action model.Action, words string, 
 	return button
 }
 
-// destructive makes button the confirm of a destructive card.
 func destructive(button ui.Button) ui.Button {
 	button.Variant = ui.ButtonDanger
 	return button
 }
 
-// unavailable disables button with reason as its tooltip when the model already knows its action cannot run now; an empty
-// reason leaves it enabled.
+// An empty reason leaves the button enabled.
 func unavailable(button ui.Button, reason string) ui.Button {
 	if reason != "" {
 		button.Disabled = ui.Because(reason)
@@ -159,7 +149,6 @@ func unavailable(button ui.Button, reason string) ui.Button {
 	return button
 }
 
-// menuButton is the top bar's Menu button at Tern's default size, the key that opens the Menu as its keycap.
 func menuButton(m model.Model) ui.Button {
 	return ui.Button{Common: ui.Common{Key: "menu", Shrink: new(float64), Actions: &ui.Actions{Click: MenuClick}}, Text: "Menu", Keys: keycaps(m.MenuKeys())}
 }
@@ -173,8 +162,6 @@ func buttonRow(buttons ...tern.Element) tern.Element {
 	return ui.Row{Common: ui.Common{Key: footKey}, Gap: ui.GapMD, Justify: ui.JustifyEnd, Wrap: true, Children: buttons}
 }
 
-// popup is overlay with children as its body and the card's buttonRow, taken out of them, as its footer bar, which stays in view
-// while the body scrolls.
 func popup(overlay ui.Overlay, children []tern.Element) ui.Overlay {
 	body := make([]tern.Element, 0, len(children))
 	for _, child := range children {
@@ -188,12 +175,10 @@ func popup(overlay ui.Overlay, children []tern.Element) ui.Overlay {
 	return overlay
 }
 
-// discardButtons answer the discard prompt of a Draft.
 func discardButtons() tern.Element {
 	return buttonRow(destructive(cardButton("discard", model.ModeDiscard, model.DiscardDraft, "Discard", false)), cardButton("keep", model.ModeDiscard, model.KeepDraft, "Keep editing", true))
 }
 
-// refMeta is a head's muted reference to an Issue or Project, in the mono face.
 func refMeta(ref string) ui.Rich {
 	return ui.Spans(ui.Span{T: ref, S: "mono"})
 }

@@ -23,7 +23,6 @@ type Run struct {
 	IssueShortID, IssueTitle string
 }
 
-// Name is what the Run ran: the job's name, else the workflow's, else the uid of whichever kata holds.
 func (r Run) Name() string {
 	switch {
 	case r.JobName != "":
@@ -36,7 +35,6 @@ func (r Run) Name() string {
 	return r.WorkflowUID
 }
 
-// Executor is who ran it: the machine's label, else the actor.
 func (r Run) Executor() string {
 	if r.ExecutorLabel != "" {
 		return r.ExecutorLabel
@@ -44,7 +42,6 @@ func (r Run) Executor() string {
 	return r.Actor
 }
 
-// Started is when the Run started, else when it was first observed.
 func (r Run) Started() time.Time {
 	if r.StartedAt != nil {
 		return *r.StartedAt
@@ -121,7 +118,6 @@ type RunsLoaded struct {
 
 func (RunsLoaded) msg() {}
 
-// ShowRun asks for one Run by uid.
 type ShowRun struct {
 	Workspace string
 	ProjectID int64
@@ -130,7 +126,6 @@ type ShowRun struct {
 
 func (ShowRun) cmd() {}
 
-// RunShown answers ShowRun.
 type RunShown struct {
 	UID string
 	Run Run
@@ -139,37 +134,29 @@ type RunShown struct {
 
 func (RunShown) msg() {}
 
-// RunSelectMsg is a click on a Run's row.
 type RunSelectMsg struct{ UID string }
 
 func (RunSelectMsg) msg() {}
 
-// RunOpenMsg is a double click on a Run's row.
 type RunOpenMsg struct{ UID string }
 
 func (RunOpenMsg) msg() {}
 
-// RunsState is the Runs Page's state. It is not saved: a Pane starts on the Issues Page.
 type RunsState struct {
-	// ProjectUID is the Project the state was filled for; resetPagesForProject empties it when the Pane's Project differs.
-	ProjectUID string
-	// Runs are the Project's Runs as last read, newest first: the newest page and any older pages asked for.
-	Runs []Run
-	// ProjectID is the Project Runs belongs to; zero before a read was asked for.
+	ProjectUID      string
+	Runs            []Run
 	ProjectID       int64
 	ProjectArchived bool
 	// JobUID narrows the Runs to one Cron job's; JobName is how the heading calls it.
 	JobUID, JobName string
 	// More is the cursor of the next older page; empty when Runs reaches back as far as kata holds them.
-	More string
-	// Selected is the uid of the Run the inspector shows.
+	More     string
 	Selected string
 	Loading  bool
 	Err      error
 	// reads numbers the reads asked for; stale asks for another.
-	reads Latest
-	stale bool
-	// refresh makes the next read of the newest page join the Runs held.
+	reads   Latest
+	stale   bool
 	refresh bool
 	// Timeline says the Page shows the since-you-last-looked mode (see Model.Timeline); Seen is when this machine last marked the
 	// Project's Runs seen, zero for never; SeenErr is why seen.toml could not be read.
@@ -183,10 +170,8 @@ type RunsState struct {
 	jobsStale bool
 }
 
-// OnRuns says the Runs Page is current.
 func (m Model) OnRuns() bool { return m.Page == PageRuns }
 
-// RunRow is one Run as the Runs Page's list draws it. A part that can't be worked out is empty.
 type RunRow struct {
 	Run      Run
 	Name     string
@@ -215,7 +200,6 @@ func (m Model) RunRows(now time.Time) []RunRow {
 	return slices.DeleteFunc(rows, func(row RunRow) bool { return !m.matchesSearch(runSearchWords(row)...) })
 }
 
-// allRunRows are the rows of every Run held, whatever the search is.
 func (m Model) allRunRows(now time.Time) []RunRow {
 	rows := make([]RunRow, len(m.Runs.Runs))
 	for i, run := range m.Runs.Runs {
@@ -256,7 +240,6 @@ func twoDigits(n int64) string {
 	return strconv.FormatInt(n, 10)
 }
 
-// SelectedRun is the Run the inspector shows: the selected one if the list holds it, else nil.
 func (m Model) SelectedRun() *Run {
 	for _, run := range m.searchedRuns() {
 		if run.UID == m.Runs.Selected {
@@ -266,7 +249,6 @@ func (m Model) SelectedRun() *Run {
 	return nil
 }
 
-// RunFact is one line of the inspector.
 type RunFact struct{ Label, Value string }
 
 // RunFacts are the inspector's lines for the selected Run: its status and reason code, what it ran and for which Issue, who ran it
@@ -427,7 +409,6 @@ func runsLoaded(m Model, msg RunsLoaded) Model {
 	return m.settleRunSelection()
 }
 
-// runShown replaces the Run held with the one kata answered with, when the list holds it.
 func runShown(m Model, msg RunShown) Model {
 	if msg.Err != nil {
 		m.Notice = "Reading the run failed: " + msg.Err.Error()
@@ -441,7 +422,6 @@ func runShown(m Model, msg RunShown) Model {
 	return m.settleRunSelection() // the Run may no longer match the search
 }
 
-// settleRunSelection keeps the selection on a listed Run, the first when it is gone.
 func (m Model) settleRunSelection() Model {
 	runs := m.searchedRuns()
 	if slices.ContainsFunc(runs, func(r Run) bool { return r.UID == m.Runs.Selected }) {
@@ -454,7 +434,6 @@ func (m Model) settleRunSelection() Model {
 	return m
 }
 
-// moveRun moves the selection by action: one row, to either end, or a page.
 func moveRun(m Model, action Action) Model {
 	runs := m.searchedRuns()
 	if len(runs) == 0 {
@@ -465,14 +444,12 @@ func moveRun(m Model, action Action) Model {
 	return m
 }
 
-// reloadRuns reads the newest Runs again.
 func reloadRuns(m Model) (Model, []Cmd) {
 	m.Runs.stale, m.Runs.jobsStale = true, true
 	m, cmd := m.askWorker(0)
 	return m, []Cmd{cmd}
 }
 
-// olderRuns asks for the next older page of Runs, when kata holds more.
 func olderRuns(m Model) (Model, []Cmd) {
 	if m.Runs.More == "" || m.Runs.Loading {
 		return m, nil
@@ -481,7 +458,6 @@ func olderRuns(m Model) (Model, []Cmd) {
 	return m, []Cmd{LoadRuns{Workspace: m.Workspace, ProjectID: m.Runs.ProjectID, JobUID: m.Runs.JobUID, Before: m.Runs.More, Request: m.Runs.reads.Ask()}}
 }
 
-// inspectRun is enter on the Run list: the inspector takes the keys and the Run is read again for the detail.
 func inspectRun(m Model) (Model, []Cmd) {
 	run := m.SelectedRun()
 	if run == nil {
@@ -491,7 +467,6 @@ func inspectRun(m Model) (Model, []Cmd) {
 	return m, []Cmd{ShowRun{Workspace: m.Workspace, ProjectID: m.Runs.ProjectID, UID: run.UID}}
 }
 
-// runInspectorBack is esc in the inspector: the keys go back to the list.
 func runInspectorBack(m Model) Model {
 	m.Focus = ColumnList
 	return m
@@ -522,7 +497,6 @@ func (m Model) refilteredRuns() Model {
 	return m
 }
 
-// runsOfJob is r on the Jobs Page: the Runs Page filtered to the selected job.
 func runsOfJob(m Model) (Model, []Cmd) {
 	job := m.SelectedJob()
 	if job == nil {
@@ -539,7 +513,6 @@ func runsOfJob(m Model) (Model, []Cmd) {
 	return m, cmds
 }
 
-// openRunIssue is i: the Run's Issue opens on the Issues Page, with its detail focused.
 func openRunIssue(m Model) Model {
 	run := m.SelectedRun()
 	switch {

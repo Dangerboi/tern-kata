@@ -43,10 +43,8 @@ func RelativeTime(t, now time.Time) string {
 	}
 }
 
-// ChildCells are a loaded child's status, title, owner and updated cells as the Children table shows them.
 type ChildCells struct{ Status, Title, Owner, Updated string }
 
-// ChildCells shapes a loaded child's row for the table.
 func (m Model) ChildCells(c ChildRow, now time.Time) ChildCells {
 	return ChildCells{Status: c.Status, Title: c.Title, Owner: m.OwnerText(c.Owner, c.OwnerExpires, now).String(), Updated: RelativeTime(c.UpdatedAt, now)}
 }

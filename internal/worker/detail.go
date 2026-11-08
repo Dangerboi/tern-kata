@@ -2,8 +2,6 @@ package worker
 
 import (
 	"cmp"
-	"errors"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,31 +25,26 @@ type RunDetail struct {
 	Cwd, SessionDir, SessionID string
 }
 
-// StepDetail is one step of a run as the journal knows it.
 type StepDetail struct {
 	Index   int              // 1-based
 	Kind    cronjob.StepKind // prompt or command
 	Key     string           // a workflow step's key; empty for a prompt job's one step
 	Attempt int
-	// Summary is what the step said or why it ended as it did; empty while it runs.
 	Summary string
 	// State is running, held: <reason>, succeeded, failed or cancelled for the step.
-	State     string
-	SessionID string
-	PID       int
-	StartedAt time.Time
-	EndedAt   time.Time
-	ExitCode  *int
-	Signal    string
-	TimedOut  bool
-	// Unrecorded is why the step's output was not recorded, empty when it was.
+	State      string
+	SessionID  string
+	PID        int
+	StartedAt  time.Time
+	EndedAt    time.Time
+	ExitCode   *int
+	Signal     string
+	TimedOut   bool
 	Unrecorded string
 }
 
-// OutputTailBytes bounds RunDetail.OutputTail.
 const OutputTailBytes = 4 << 10
 
-// stepKind is the kind of the plan's step i, empty when the plan has no such step (a damaged journal).
 func stepKind(j *Journal, i int) cronjob.StepKind {
 	if j.Workflow == nil || i < 0 || i >= len(j.Workflow.Steps) {
 		return ""
@@ -93,18 +86,10 @@ func stepsOf(j *Journal) []StepDetail {
 	return steps
 }
 
-// RunDetail reads one run of this worker for a Pane.
 func (w *Worker) RunDetail(uid string) (RunDetail, error) {
-	j, err := w.store.Load(uid)
-	switch {
-	case errors.Is(err, ErrNoJournal) && w.store.IsQuarantined(uid):
-		return RunDetail{}, fmt.Errorf("run %s has a damaged journal, set aside in quarantine; run `tern-kata worker doctor`", uid)
-	case errors.Is(err, ErrNoJournal):
-		return RunDetail{}, fmt.Errorf("this worker has no run %s", uid)
-	case err != nil:
+	j, err := w.ownRun(uid)
+	if err != nil {
 		return RunDetail{}, err
-	case j.Executor != w.opt.Config.Executor:
-		return RunDetail{}, fmt.Errorf("run %s belongs to worker %q, not %q", uid, j.Executor, w.opt.Config.Executor)
 	}
 	d := RunDetail{RunStatus: w.runStatus(j), Steps: stepsOf(j), OutputTail: outputTail(w.heldFile(j, "output.jsonl"), OutputTailBytes)}
 	d.StderrTail = stderrFallback(w.heldFile(j, "stderr.log"))

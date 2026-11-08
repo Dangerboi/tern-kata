@@ -22,7 +22,6 @@ type ViewsState struct {
 	Deleting string
 }
 
-// LoadViews reads views.toml.
 type LoadViews struct{}
 
 func (LoadViews) cmd() {}
@@ -58,7 +57,6 @@ type ViewSaved struct {
 
 func (ViewSaved) msg() {}
 
-// DeleteView removes the view called Name from views.toml.
 type DeleteView struct {
 	Name  string
 	Token any
@@ -66,7 +64,6 @@ type DeleteView struct {
 
 func (DeleteView) cmd() {}
 
-// ViewDeleted answers DeleteView, as ViewSaved answers SaveView.
 type ViewDeleted struct {
 	Sent    DeleteView
 	Changed bool
@@ -83,7 +80,6 @@ const (
 	viewKeyPrefix = "view."
 )
 
-// The reasons a saved view's base cannot be opened.
 const (
 	ProjectGone     = "Project gone"
 	ProjectArchived = "archived"
@@ -123,7 +119,6 @@ func sameBase(a, b Collection) bool {
 	return a.View == b.View
 }
 
-// SavedViews are the saved views by name, ignoring case: the order the Menu lists them in.
 func (m Model) SavedViews() []SavedView {
 	views := slices.Clone(m.Views.List)
 	slices.SortStableFunc(views, func(a, b SavedView) int {
@@ -152,7 +147,6 @@ func (m Model) ViewBaseNote(v SavedView) string {
 	return ""
 }
 
-// EntryTitle is how a Menu row reads: its title, and for a saved view whose base is missing the reason, in parentheses.
 func (m Model) EntryTitle(e PickerEntry) string {
 	if e.Kind == EntrySavedView {
 		if v, ok := m.savedViewNamed(e.Title); ok {
@@ -210,7 +204,6 @@ func openSavedView(m Model, v SavedView) (Model, []Cmd) {
 	return m.cursorOnView(v.Name), cmds
 }
 
-// cursorOnView puts the sidebar's cursor on the saved view's row when the sidebar shows the Views level.
 func (m Model) cursorOnView(name string) Model {
 	if m.SidebarLevel != MenuViews {
 		return m
@@ -223,7 +216,6 @@ func (m Model) cursorOnView(name string) Model {
 	return m
 }
 
-// selectedSavedView is the saved view under the cursor of the popup (or, with popup false, the sidebar).
 func (m Model) selectedSavedView(popup bool) (SavedView, bool) {
 	entries, cursor := m.SidebarEntries(), m.CollectionCursor
 	if popup {
@@ -239,7 +231,6 @@ func (m Model) selectedSavedView(popup bool) (SavedView, bool) {
 	return m.savedViewNamed(entry.Title)
 }
 
-// editSavedView is the edit key on a saved view's row: the View card, prefilled.
 func editSavedView(m Model, popup bool) Model {
 	if v, ok := m.selectedSavedView(popup); ok {
 		return openViewForm(m, v.Name, v)
@@ -247,7 +238,6 @@ func editSavedView(m Model, popup bool) Model {
 	return m
 }
 
-// askDeleteView is the delete key on a saved view's row: it asks before the file is touched.
 func askDeleteView(m Model, popup bool) Model {
 	if v, ok := m.selectedSavedView(popup); ok {
 		m.Views.Deleting = v.Name
@@ -255,7 +245,6 @@ func askDeleteView(m Model, popup bool) Model {
 	return m
 }
 
-// DeleteViewQuestion is the question asked before a saved view is deleted.
 func DeleteViewQuestion(name string) string { return "Delete view " + name + "? y/n" }
 
 // confirmDeleteView is y: it dismisses the question at once and sends the delete; the file's answer follows as ViewDeleted.
@@ -279,7 +268,6 @@ func errText(err error) string {
 	return err.Error()
 }
 
-// dismissDeleteQuestion is n or esc: the view stays and the question goes.
 func dismissDeleteQuestion(m Model) Model {
 	m.Views.Deleting = ""
 	return m
@@ -299,13 +287,11 @@ func viewDeleted(m Model, msg ViewDeleted) (Model, []Cmd) {
 	return m, nil
 }
 
-// clampMenuCursors keeps both cursors on a row after the list shrank.
 func (m *Model) clampMenuCursors() {
 	m.Picker.Cursor = max(0, min(m.Picker.Cursor, len(m.PickerEntries())-1))
 	m.CollectionCursor = max(0, min(m.CollectionCursor, len(m.SidebarEntries())-1))
 }
 
-// viewSaved is the answer to a save: the View card closes and the view opens, or the card stays with its input and says why.
 func viewSaved(m Model, msg ViewSaved) (Model, []Cmd) {
 	m = viewsLoaded(m, msg.Loaded)
 	form := m.ViewForm
@@ -340,5 +326,4 @@ func viewSaved(m Model, msg ViewSaved) (Model, []Cmd) {
 	return openSavedView(m, saved)
 }
 
-// reloadViews is what opening the Menu asks: the file as it is now.
 func reloadViews() []Cmd { return []Cmd{LoadViews{}} }

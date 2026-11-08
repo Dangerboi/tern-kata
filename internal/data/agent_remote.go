@@ -9,10 +9,8 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// remoteAgentsPage is how many Issues one read of a Project's open Issues asks for.
 const remoteAgentsPage = 200
 
-// eachOpenIssuePage calls fn with each page of the open Issues of a Project, in order, until the daemon names no next page or fn fails.
 func (c *Client) eachOpenIssuePage(ctx context.Context, projectID int64, fn func(page *g.ListIssuesResp) error) error {
 	open, limit := g.ListIssuesQueryStatusOpen, int64(remoteAgentsPage)
 	var cursor *string
@@ -73,7 +71,6 @@ func (c *Client) ReadRemoteAgents(ctx context.Context, hostID string, cmd model.
 	return model.RemoteAgentsLoaded{Agents: agents}, nil
 }
 
-// remoteScope is the id of the Project a scan reads: the one cmd.ScopeRef names, else the workspace's bound one.
 func (c *Client) remoteScope(ctx context.Context, cmd model.LoadRemoteAgents) (int64, error) {
 	if cmd.ScopeRef != "" {
 		target, err := c.readIssueTarget(ctx, cmd.Workspace, cmd.ScopeRef)
@@ -92,7 +89,6 @@ func (c *Client) remoteScope(ctx context.Context, cmd model.LoadRemoteAgents) (i
 	return loaded.Project.ID, nil
 }
 
-// remoteAgentsOn lists the agents the records in an Issue's metadata publish, except those of hostID.
 func remoteAgentsOn(ref, uid string, projectID int64, metadata map[string]any, hostID string) []model.IssueAgent {
 	var agents []model.IssueAgent
 	for _, r := range model.AgentRecords(metadata) {

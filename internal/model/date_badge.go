@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// DateTone is the tone of a Date badge; the view maps it to a theme tone.
 type DateTone int
 
 const (
@@ -15,7 +14,6 @@ const (
 	DateAccent
 )
 
-// DateBadge is the one badge an open card shows for its most pressing date.
 type DateBadge struct {
 	Text string
 	Tone DateTone
@@ -23,7 +21,6 @@ type DateBadge struct {
 
 const dayLayout = "2006-01-02"
 
-// IssueDates are the Issue's scheduled date and deadline as the date Collections read them, empty when absent.
 func IssueDates(issue Issue) (scheduled, deadline string) {
 	return IssueDate(issue.ScheduledOnDate, issue.Metadata, ScheduledKey), IssueDate(issue.DeadlineOnDate, issue.Metadata, DeadlineKey)
 }
@@ -40,7 +37,6 @@ func readableDates(issue Issue) (scheduled, deadline string) {
 	return scheduled, deadline
 }
 
-// CalendarDay is the Pane calendar's date read once, for a frame that draws a Date badge on many cards.
 type CalendarDay struct {
 	day  string
 	date time.Time
@@ -68,7 +64,6 @@ func (t CalendarDay) ChooseDateBadge(issue Issue) (DateBadge, bool) {
 		}
 		return DateBadge{Text: "scheduled " + scheduled}, true
 	}
-	// Both days read here: readableDates left out any that did not, and today reads.
 	switch {
 	case deadline != "" && deadline < today:
 		return DateBadge{Text: fmt.Sprintf("overdue %dd", t.daysUntil(deadline)*-1), Tone: t.deadlineTone(deadline)}, true
@@ -90,14 +85,11 @@ func (t CalendarDay) ChooseDateBadge(issue Issue) (DateBadge, bool) {
 	return DateBadge{Text: "scheduled " + shortDay(scheduled, today), Tone: t.scheduledTone(scheduled)}, true
 }
 
-// daysUntil is the whole days from today to the readable day; negative for a day before.
 func (t CalendarDay) daysUntil(day string) int {
 	to, _ := time.Parse(dayLayout, day)
 	return int(to.Sub(t.date).Hours() / 24)
 }
 
-// deadlineTone is the tone of a readable deadline day against the calendar day, which reads: overdue error, today and
-// tomorrow warning, later muted.
 func (t CalendarDay) deadlineTone(day string) DateTone {
 	switch {
 	case day < t.day:
@@ -108,8 +100,6 @@ func (t CalendarDay) deadlineTone(day string) DateTone {
 	return DateMuted
 }
 
-// scheduledTone is the tone of a readable scheduled day against the calendar day, which reads: passed warning, today
-// accent, later muted.
 func (t CalendarDay) scheduledTone(day string) DateTone {
 	switch {
 	case day < t.day:
@@ -147,7 +137,6 @@ func readableDays(days ...string) bool {
 	return true
 }
 
-// shortDay is day as MM-DD, or YYYY-MM-DD in another year than today.
 func shortDay(day, today string) string {
 	if day[:4] == today[:4] {
 		return day[5:]

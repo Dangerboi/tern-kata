@@ -24,7 +24,6 @@ const (
 	RevokeCancel  Action = "revoke-cancel"
 )
 
-// The Token card's fields.
 const (
 	TokenActor   Field = "actor"
 	TokenName    Field = "name"
@@ -54,19 +53,15 @@ var tokenTable = fieldTable[TokenFormState]{
 	},
 }
 
-// TokenFields is the Token card's field list, in tab order.
 var TokenFields = tokenTable.specs()
 
-// The two scopes a token takes, as the Scope field spells them.
 const (
 	TokenScopeAccount = "account"
 	TokenScopeIssue   = "issue"
 )
 
-// maxTokenTeams is how many teams a new token may enroll its actor in.
 const maxTokenTeams = 256
 
-// TokenLabel is the name the Token card gives a field.
 func TokenLabel(field Field) string {
 	switch field {
 	case TokenActor:
@@ -87,10 +82,8 @@ func TokenLabel(field Field) string {
 	return string(field)
 }
 
-// TokenValues holds what each Token field has been typed.
 type TokenValues struct{ Actor, Name, Expires, Scope, Issue, Teams, File string }
 
-// Value is what the field called name holds, "" for a name that is not a Token field.
 func (v TokenValues) Value(name Field) string {
 	return tokenTable.value(TokenFormState{Values: v}, name)
 }
@@ -102,20 +95,17 @@ type TokenFormState struct {
 	Values       TokenValues
 	Caret        Caret
 	Err          error
-	// Done says the token was made: the card then only reports it.
-	Done     bool
-	DoneID   int64
-	DoneFile string
+	Done         bool
+	DoneID       int64
+	DoneFile     string
 }
 
-// RevokeState is the card that asks before a token is revoked.
 type RevokeState struct {
 	Open, Saving bool
 	Token        Credential
 	Err          error
 }
 
-// Question is the revoke card's question.
 func (r RevokeState) Question() string {
 	name := "—"
 	if r.Token.Name != "" {
@@ -151,7 +141,6 @@ type TokenCreated struct {
 
 func (TokenCreated) msg() {}
 
-// RevokeTokenCmd asks kata to revoke the token with ID.
 type RevokeTokenCmd struct {
 	Workspace string
 	ID        int64
@@ -159,7 +148,6 @@ type RevokeTokenCmd struct {
 
 func (RevokeTokenCmd) cmd() {}
 
-// TokenRevoked answers RevokeTokenCmd.
 type TokenRevoked struct {
 	ID  int64
 	Err error
@@ -167,7 +155,6 @@ type TokenRevoked struct {
 
 func (TokenRevoked) msg() {}
 
-// openTokenForm is n on the Credentials Page: the card with the Pane's actor in place.
 func openTokenForm(m Model) (Model, []Cmd) {
 	if !m.Credentials.Available || m.TokenForm.Open {
 		return m, nil
@@ -190,7 +177,6 @@ func openRevoke(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// tokenSeconds reads the Expires field: blank is none, else a positive whole-second duration.
 func tokenSeconds(text string) (int64, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -203,7 +189,6 @@ func tokenSeconds(text string) (int64, error) {
 	return int64(d / time.Second), nil
 }
 
-// tokenTeams reads the Teams field: comma-separated names or uids, blanks dropped, at most maxTokenTeams.
 func tokenTeams(text string) ([]string, error) {
 	var teams []string
 	for _, team := range strings.Split(text, ",") {
@@ -242,7 +227,6 @@ func (m Model) tokenIssue(ref string) (projectID int64, shortID string, err erro
 	return 0, "", fmt.Errorf("kata Project %q not found", project)
 }
 
-// tokenRequest reads the card into the token to make, or says what is wrong with it.
 func (m Model) tokenRequest() (CreateTokenCmd, error) {
 	v := m.TokenForm.Values
 	cmd := CreateTokenCmd{Connection: m.Connection, Workspace: m.Workspace, Actor: strings.TrimSpace(v.Actor), Name: strings.TrimSpace(v.Name), File: strings.TrimSpace(v.File)}
@@ -345,7 +329,6 @@ func updateRevokeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// readAgain reads the token list again after a create or revoke, while the Credentials Page is shown and may list tokens.
 func readAgain(m Model) (Model, []Cmd) {
 	if m.OnCredentials() && m.Credentials.Available {
 		return askCredentials(m, 0)

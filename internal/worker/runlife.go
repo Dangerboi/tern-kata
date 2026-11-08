@@ -12,7 +12,6 @@ import "fmt"
 type holdClass int
 
 const (
-	// notHeld: the Outcome names no hold reason.
 	notHeld holdClass = iota
 	// holdBeforeAdmission: the Run ended before kata saw it (no Outcome status). Nothing ran, it never resumes, and
 	// it frees its slot and its job's gate at once.
@@ -22,7 +21,6 @@ const (
 	holdUncertain
 )
 
-// holdClass is the class of the Run's hold, notHeld for a Run without one.
 func (j *Journal) holdClass() holdClass {
 	switch {
 	case j.Outcome == nil || j.Outcome.Hold == "":
@@ -33,10 +31,8 @@ func (j *Journal) holdClass() holdClass {
 	return holdUncertain
 }
 
-// settled is whether the Run's Phase is final: every Issue write and the final observation have been sent.
 func (j *Journal) settled() bool { return j.Phase == PhaseSettled }
 
-// held is whether the Run waits for the user.
 func (j *Journal) held() bool { return j.holdClass() != notHeld }
 
 // owes is whether the Run is accepted, not held and not yet settled, so a report or its settlement is still due. An
@@ -48,14 +44,11 @@ func (j *Journal) owes() bool { return !j.settled() && !j.held() }
 // that needs the user. A settled Run, and a hold from before admission, close none.
 func (j *Journal) closesGate() bool { return !j.settled() || j.holdClass() == holdUncertain }
 
-// reportDue is whether the Run's process is gone and only its reports to kata remain.
 func (j *Journal) reportDue() bool { return j.Phase == PhaseFinished }
 
-// driveStep is the work a goroutine driving the Run does next.
 type driveStep int
 
 const (
-	// driveNone: the Run is settled.
 	driveNone driveStep = iota
 	driveAdmit
 	driveReopen
@@ -65,7 +58,6 @@ const (
 	driveRecover
 )
 
-// driveStep is the step that carries the Run on from its Phase.
 func (j *Journal) driveStep() driveStep {
 	switch j.Phase {
 	case PhasePrepared:
@@ -184,7 +176,6 @@ func holdLine(who string, pgid int, proof GroupProof) string {
 	return line
 }
 
-// exitedHold is the hold detail of a group not proven gone after its process ended.
 func exitedHold(what string, pgid int, proof GroupProof) string {
 	if proof.State == GroupUnchecked {
 		return fmt.Sprintf("process group %d cannot be checked after the %s exited: %s; %s", pgid, what, proof.Reason, uncheckedKeeps)

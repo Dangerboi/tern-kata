@@ -2,7 +2,6 @@ package model
 
 import "strings"
 
-// The Filter form's fields.
 const (
 	FilterProject      Field = "project"
 	FilterStatus       Field = "status"
@@ -17,19 +16,13 @@ const (
 // error. The Board ignores the status filter, so its card hides that field.
 var filterTable = fieldTable[FilterFormState]{
 	form:       func(m *Model) *FilterFormState { return &m.FilterForm },
-	busy:       func(f FilterFormState) bool { return f.Saving },
-	focus:      func(f *FilterFormState) *Field { return &f.Field },
-	caret:      func(f *FilterFormState) *Caret { return &f.Caret },
-	err:        func(f *FilterFormState) *error { return &f.Err },
 	hidden:     func(m Model, name Field) bool { return !m.FilterFieldShown(name) },
 	dismissErr: true,
 	fields:     filterFieldList(func(f *FilterFormState) *Filters { return &f.Values }, Model.FilterChoices),
 }
 
-// FilterFields is the Filter form's field list, in tab order.
 var FilterFields = filterTable.specs()
 
-// FilterChoice is one value a Filter form choice field cycles through and how the form shows it.
 type FilterChoice struct{ Value, Label string }
 
 // The Filter form's fixed choice lists; the empty value first is "no filter".
@@ -49,17 +42,12 @@ func FilterChoiceLabel(choices []FilterChoice, value string) string {
 }
 
 type FilterFormState struct {
-	Open, Saving bool
-	Field        Field
-	Values       Filters
-	Caret        Caret
-	// Err is why the last save as default did not happen; the card and its values stay.
-	Err error
+	formCard
+	Values Filters
 	// Sent is the save the card is waiting on, so only its own result closes or fails the card.
 	Sent SaveFilters
 }
 
-// Value is the filter value the field called name holds, "" for a name that is not a Filter field or the search text.
 func (f Filters) Value(name Field) string {
 	switch name {
 	case FilterProject:
@@ -78,8 +66,6 @@ func (f Filters) Value(name Field) string {
 	return ""
 }
 
-// FilterChoices is the values the choice field called name cycles through, in the order the form shows them; nil for a text
-// field.
 func (m Model) FilterChoices(name Field) []string {
 	if name == FilterProject {
 		return m.projectChoices(m.Collection.ProjectUID)
@@ -99,7 +85,6 @@ func (m Model) projectChoices(only string) []string {
 	return values
 }
 
-// fixedFilterChoices is the values of the choice fields whose list is fixed (Status and Relationship); nil for any other field.
 func fixedFilterChoices(name Field) []string {
 	var choices []FilterChoice
 	switch name {
@@ -118,13 +103,9 @@ func fixedFilterChoices(name Field) []string {
 	return values
 }
 
-// filterFormKey is one key for the Filter form on top: a bound chord acts, any other types.
 func filterFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	binding, bound := LookupBindingForMode(msg.Chord, ModeFilterForm)
 	bound = bound && !(isCaretChord(msg.Chord) && filterTable.textAt(&m.FilterForm, m.FilterForm.Field) != nil)
-	if m.FilterForm.Saving && !(bound && binding.Action == CancelFilters) {
-		return m, nil // the save has not answered: the values stay as sent
-	}
 	if !bound || binding.Action != SaveFilterDefault {
 		m.FilterForm.Err = nil
 	}
@@ -163,7 +144,7 @@ func updateFilterForm(m Model, action Action) (Model, []Cmd) {
 		if !m.FilterFieldShown(FilterStatus) {
 			m.FilterForm.Values.Status = status
 		}
-	case DeleteInput, ClearInput: // the shared step took them in a text field
+	case DeleteInput, ClearInput:
 		filterTable.resetFocused(&m)
 	}
 	return m, nil

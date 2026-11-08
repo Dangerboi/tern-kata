@@ -111,7 +111,6 @@ type CommentLeaf struct {
 	Edited bool
 }
 
-// commentLeafRow is a leaf as kata's TUI words it: the reply's kind, its handle, author, time, (edited) and status.
 func (m Model) commentLeafRow(l commentLeaf) CommentLeaf {
 	actor := deref(l.link.Author)
 	if t := deref(l.link.Teammate); t != "" {

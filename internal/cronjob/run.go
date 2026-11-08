@@ -16,7 +16,6 @@ const (
 	RunUnknown RunStatus = "unknown"
 )
 
-// ReadRunStatus is the status kata wrote as one of the constants above; any other text is RunUnknown.
 func ReadRunStatus(s string) RunStatus {
 	switch st := RunStatus(s); st {
 	case RunRunning, RunSucceeded, RunFailed, RunCancelled:

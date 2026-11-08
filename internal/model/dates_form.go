@@ -13,26 +13,19 @@ const (
 	OpenDates     Action = "open-dates"
 )
 
-// The Dates card's fields.
 const (
 	DatesScheduled Field = "scheduled"
 	DatesDeadline  Field = "deadline"
 )
 
-// datesTable declares the Dates card's fields, in tab order, and its busy condition. Each field holds the text typed in it.
 var datesTable = fieldTable[DatesFormState]{
-	form:  func(m *Model) *DatesFormState { return &m.DatesForm },
-	busy:  func(f DatesFormState) bool { return f.Saving },
-	focus: func(f *DatesFormState) *Field { return &f.Field },
-	caret: func(f *DatesFormState) *Caret { return &f.Caret },
-	err:   func(f *DatesFormState) *error { return &f.Err },
+	form: func(m *Model) *DatesFormState { return &m.DatesForm },
 	fields: []formField[DatesFormState]{
 		textField(DatesScheduled, func(f *DatesFormState) *string { return &f.Text.Scheduled }),
 		textField(DatesDeadline, func(f *DatesFormState) *string { return &f.Text.Deadline }),
 	},
 }
 
-// DatesFields is the Dates card's field list, in tab order.
 var DatesFields = datesTable.specs()
 
 // The metadata keys kata keeps the two dates under.
@@ -41,7 +34,6 @@ const (
 	DeadlineKey  = "deadline_on"
 )
 
-// DatesLabel is the name the Dates card and its messages give a field.
 func DatesLabel(field Field) string {
 	if field == DatesDeadline {
 		return "Deadline"
@@ -56,7 +48,6 @@ func datesKey(field Field) string {
 	return ScheduledKey
 }
 
-// DatesPair holds one string for each date of the Dates card.
 type DatesPair struct{ Scheduled, Deadline string }
 
 func (p *DatesPair) at(field Field) *string {
@@ -69,7 +60,6 @@ func (p *DatesPair) at(field Field) *string {
 	return nil
 }
 
-// Of is the string held for the field called name, "" for a name that is not a Dates field.
 func (p DatesPair) Of(name Field) string {
 	if s := p.at(name); s != nil {
 		return *s
@@ -81,18 +71,14 @@ func (p DatesPair) Of(name Field) string {
 // held under the metadata key when it opened ("" for none): the value a save guards on. Prefill differs from Held only for a
 // date kata projects without holding it in metadata.
 type DatesFormState struct {
-	Open, Saving bool
-	Field        Field
-	UID          string
-	ProjectID    int64
-	Text         DatesPair
-	Prefill      DatesPair
-	Held         DatesPair
-	Caret        Caret
-	Err          error
+	formCard
+	UID       string
+	ProjectID int64
+	Text      DatesPair
+	Prefill   DatesPair
+	Held      DatesPair
 }
 
-// Value is the text the field called name holds.
 func (f DatesFormState) Value(name Field) string { return datesTable.value(f, name) }
 
 // DateChange is one date key a save writes: Value is the new day, "" to clear the key, and Was what the key held when the card
@@ -143,8 +129,6 @@ func (e DatesConflict) Error() string {
 	return fmt.Sprintf("The Issue changed since the card opened; %s. The %s field now shows the current date.", written, e.Label)
 }
 
-// datePreview is the muted line under a date field: the day text resolves to with its weekday, "no date" for blank, and nothing
-// for text that is not a date (saving refuses it).
 func datePreview(text, today string) string {
 	day, err := ParseDateInput(text, today)
 	switch {
@@ -156,7 +140,6 @@ func datePreview(text, today string) string {
 	return DateWithWeekday(day)
 }
 
-// dateDay is the day text resolves to, "" for blank, or an error naming the field by label.
 func dateDay(label, text, today string) (string, error) {
 	day, err := ParseDateInput(text, today)
 	if err != nil {
@@ -177,7 +160,6 @@ func (m Model) DatesPreview(name Field) string {
 	return DateWithWeekday(text[:min(len(text), len(dayLayout))])
 }
 
-// openDates is `d`: the card prefilled with the Issue's two dates as kata holds them.
 func openDates(m Model) Model {
 	if m.Stale || m.DatesForm.Saving {
 		return m
@@ -231,11 +213,7 @@ func datesChanges(f DatesFormState, today string) ([]DateChange, error) {
 
 func submitDates(m Model) (Model, []Cmd) {
 	f := &m.DatesForm
-	if f.Saving {
-		return m, nil
-	}
-	if m.Stale {
-		f.Err = errors.New("Daemon disconnected; reconnect before saving dates.")
+	if f.refuseSubmit(m, "saving dates") {
 		return m, nil
 	}
 	changes, err := datesChanges(*f, m.Calendar.Date)
@@ -283,25 +261,4 @@ func updateDates(m Model, msg DatesResultMsg) (Model, []Cmd) {
 		m.DatesForm = DatesFormState{}
 	}
 	return snapshotChanged(m.issueWritten(msg.UID))
-}
-
-func updateDatesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
-	form := &m.DatesForm
-	if form.Saving {
-		return m, nil
-	}
-	binding, bound := LookupBindingForMode(msg.Chord, ModeDatesForm)
-	switch {
-	case bound && binding.Action == DatesSubmit:
-		return submitDates(m)
-	case bound && binding.Action == DatesCancel:
-		m.DatesForm = DatesFormState{}
-	default:
-		text := datesTable.textAt(form, form.Field)
-		var edited bool
-		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
-			form.Err = nil
-		}
-	}
-	return m, nil
 }

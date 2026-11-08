@@ -10,15 +10,13 @@ import (
 // The Daemons Page is a Lettered Page: it lists the daemons named in kata's client configuration, as kata tui lists them, and Enter
 // switches this Pane to the one under the cursor. A switch lives in this Pane only and persists nothing.
 
-// DaemonEntry is one daemon of kata's catalog as the Page shows it.
 type DaemonEntry struct {
 	Name string
 	// Endpoint is "local" for a local entry, else the host of the entry's url.
 	Endpoint string
 	// Token says the entry has a token (inline or by environment variable) and AllowInsecure that it allows an unencrypted url.
 	Token, AllowInsecure bool
-	// Current marks the daemon this Pane talks to.
-	Current bool
+	Current              bool
 }
 
 // LoadDaemons asks for the catalog. Request numbers the asks: an answer to an older one is dropped. Workspace is the one whose
@@ -63,13 +61,11 @@ func (DaemonSwitched) msg() {}
 
 // DaemonsState is the Daemons Page's state. The list is read again on every entry.
 type DaemonsState struct {
-	Loading bool
-	Err     error
-	Entries []DaemonEntry
-	// ConfigPath is where the catalog is read from.
+	Loading    bool
+	Err        error
+	Entries    []DaemonEntry
 	ConfigPath string
-	// Cursor indexes Entries.
-	Cursor int
+	Cursor     int
 	// Switching is the daemon being connected to, "" when no switch is out. It outlives leaving the Page, because the answer still
 	// changes the Pane's connection.
 	Switching string
@@ -77,18 +73,10 @@ type DaemonsState struct {
 	reads, switches Latest
 }
 
-// OnDaemons says the Daemons Page is current.
 func (m Model) OnDaemons() bool { return m.Page == PageDaemons }
 
-// daemonsMode is the Daemons Page's mode: the Menu's while the sidebar has the keyboard.
-func daemonsMode(m Model) Mode {
-	if m.Focus == ColumnCollections {
-		return ""
-	}
-	return ModeDaemons
-}
+var daemonsMode = sidebarMode(ModeDaemons)
 
-// enterDaemons starts a fresh reading of the catalog.
 func enterDaemons(m Model) (Model, []Cmd) {
 	d := m.Daemons
 	m.Daemons = DaemonsState{reads: d.reads, Loading: true, Switching: d.Switching, switches: d.switches}
@@ -101,9 +89,6 @@ func clearDaemons(m Model) Model {
 	m.Daemons = DaemonsState{reads: d.reads.Discarded(), Switching: d.Switching, switches: d.switches}
 	return m
 }
-
-// daemonsBack is esc and backspace: the Page shown before.
-func daemonsBack(m Model) (Model, []Cmd) { return showPage(m.letteredFrom)(m) }
 
 // switchSelectedDaemon is Enter: it connects this Pane to the daemon under the cursor. A switch already out is waited for.
 func switchSelectedDaemon(m Model) (Model, []Cmd) {
@@ -196,33 +181,19 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	return m, []Cmd{LoadProject{Workspace: m.Workspace, Switched: true, Connection: m.Connection}, account}
 }
 
-// moveDaemon moves the cursor by action: one row, to either end, or a page.
 func moveDaemon(m Model, action Action) Model {
-	n := len(m.Daemons.Entries)
-	if n == 0 {
-		return m
-	}
-	m.Daemons.Cursor = movedIndex(m.Daemons.Cursor, n, listPage, action)
+	moveCursor(&m.Daemons.Cursor, len(m.Daemons.Entries), action)
 	return m
 }
 
-// SelectedDaemon is the daemon under the cursor, nil when there is none.
-func (m Model) SelectedDaemon() *DaemonEntry {
-	d := m.Daemons
-	if d.Cursor < 0 || d.Cursor >= len(d.Entries) {
-		return nil
-	}
-	return &d.Entries[d.Cursor]
-}
+func (m Model) SelectedDaemon() *DaemonEntry { return rowAt(m.Daemons.Entries, m.Daemons.Cursor) }
 
-// Summary is the line under the title: how many daemons the catalog names.
 func (d DaemonsState) Summary() string { return strconv.Itoa(len(d.Entries)) + " daemons" }
 
 // DaemonsNotice is what stands in place of the list, with a line under it when there is something to add.
 type DaemonsNotice struct {
 	Text, Detail string
-	// Err says the notice is a failure, which the view draws as one.
-	Err bool
+	Err          bool
 }
 
 // Notice is what stands in place of the list: loading, a failed read, or the empty catalog; false when the list is shown.
@@ -258,7 +229,6 @@ func (e DaemonEntry) Footer() string {
 	return text
 }
 
-// Auth is "token" when the entry has a token, else "no token".
 func (e DaemonEntry) Auth() string {
 	if e.Token {
 		return "token"
@@ -266,7 +236,6 @@ func (e DaemonEntry) Auth() string {
 	return "no token"
 }
 
-// State is "current" for the daemon this Pane talks to, else "".
 func (e DaemonEntry) State() string {
 	if e.Current {
 		return "current"
@@ -274,10 +243,8 @@ func (e DaemonEntry) State() string {
 	return ""
 }
 
-// DaemonsHeader is the list's header in kata tui's columns.
 func DaemonsHeader() string { return daemonRow("Daemon", "Endpoint", "Auth", "State") }
 
-// Row is the entry on kata tui's columns: Daemon, Endpoint, Auth and State.
 func (e DaemonEntry) Row() string {
 	return daemonRow(oneLine(e.Name), oneLine(e.Endpoint), e.Auth(), e.State())
 }
@@ -293,8 +260,7 @@ func padRunes(s string, width int) string {
 	return s
 }
 
-// daemonsRows are the Daemons Page's own keys beyond its movement keys.
 var daemonsRows = []actionEntry{
 	{action: SwitchDaemonAction, modes: []Mode{ModeDaemons}, keys: keys("enter", "↵"), help: "switch", footer: []Mode{ModeDaemons}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 10, "switch this Pane to the selected daemon"}}, handle: switchSelectedDaemon},
-	{action: LetteredBack, modes: []Mode{ModeDaemons}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeDaemons}, sheet: []sheetLine{{sheetLettered, 1, "back to the Page shown before"}}, handle: daemonsBack},
+	letteredBackRow(ModeDaemons, letteredBack),
 }

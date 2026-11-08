@@ -7,7 +7,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// readViews reads views.toml for the Pane: the valid views, the entries left out and the token a write rests on.
 func (g *Gateway) readViews() model.ViewsLoaded {
 	store, err := g.ViewsStore()
 	if err != nil {
@@ -24,7 +23,6 @@ func readViewsOf(store ViewsStore) model.ViewsLoaded {
 	return model.ViewsLoaded{Views: read.Views, Problems: read.Problems, Token: read.Token}
 }
 
-// writeView sends the Pane's write to the store with the token the Pane read, then reads the file again for the Pane.
 func (g *Gateway) writeView(cmd model.SaveView) model.ViewSaved {
 	store, err := g.ViewsStore()
 	if err != nil {

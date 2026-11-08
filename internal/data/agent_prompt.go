@@ -49,8 +49,6 @@ func oneLine(s string) string {
 	return strings.Join(strings.FieldsFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }), " ")
 }
 
-// writeCoordinatorSection is the coordinator's prompt: its children, how it directs them and what it may, what it hears, who it
-// asks and how the team ends. The forwarded events are worded as the omp extension delivers them.
 func writeCoordinatorSection(b *strings.Builder, ref string, role model.TeamRole) {
 	b.WriteString("\n# Your team\n\n")
 	fmt.Fprintf(b, "You are the coordinator of a team on %s. Agents run on its child Issues, at most %d at once, each as a background agent started by tern-kata; when one's agent exits, the next ready child starts. Your work is to direct them, not to do their work.\n\n", ref, role.Limit)
@@ -68,8 +66,6 @@ func writeCoordinatorSection(b *strings.Builder, ref string, role model.TeamRole
 	fmt.Fprintf(b, "- When no ready child is left to start and none runs, you get one message naming the children closed and those still open. Then: if every child is closed and the criteria of %s hold, check them and close it with evidence (`kata close %s --done -m \"<what was done and how it was verified>\"` plus `--commit`, `--pr`, `--test` or `--reviewed`). Otherwise comment what is left, run `kata meta set %s work.attention needs-human` and `kata meta set %s work.attention_msg \"<why>\"`, then `kata label rm %s ready-for-agent` (when it has that label) and `kata label add %s ready-for-human`.\n", ref, ref, ref, ref, ref, ref)
 }
 
-// writeChildSection is a child's prompt: its parent and coordinator, where it reports and asks, whose messages it acts on, and the
-// shared checkout.
 func writeChildSection(b *strings.Builder, ref string, role model.TeamRole) {
 	b.WriteString("\n# Your team\n\n")
 	fmt.Fprintf(b, "You are a child on a team: your parent is %s and your coordinator is the agent at %s.\n\n", role.Parent, role.Coordinator)
@@ -79,7 +75,6 @@ func writeChildSection(b *strings.Builder, ref string, role model.TeamRole) {
 	b.WriteString("- You share the checkout with your coordinator and the other children. Edit and commit only your own files: stage them by path, never everything, and leave other people's changes as they are.\n")
 }
 
-// joinList writes words as "a", "a and b" or "a, b and c" (with conjunction), each followed by suffix.
 func joinList(words []string, conjunction, suffix string) string {
 	parts := make([]string, len(words))
 	for i, w := range words {

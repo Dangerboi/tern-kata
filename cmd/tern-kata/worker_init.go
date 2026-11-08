@@ -9,8 +9,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// setupWorkerConfig is `worker init` (add false) or `worker add` (add true): it writes worker.toml for the Project bound
-// to env.Dir, or adds that Project and its checkout to the existing file, through the worker package's checked write.
 func setupWorkerConfig(add bool, plan LaunchPlan, env workerEnv, out io.Writer) error {
 	path := env.Dirs.ConfigPath()
 	project, checkout, err := data.ResolveBinding(env.Dir)
@@ -26,7 +24,7 @@ func setupWorkerConfig(add bool, plan LaunchPlan, env workerEnv, out io.Writer) 
 	if add {
 		key, err = worker.AddProject(path, binding)
 		if errors.Is(err, worker.ErrNoConfig) {
-			err = fmt.Errorf("no worker config at %s; run `tern-kata worker init` first", path)
+			err = noWorkerConfig(path)
 		}
 	} else {
 		setup := worker.Setup{

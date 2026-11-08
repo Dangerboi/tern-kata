@@ -5,7 +5,6 @@ package model
 // before replacing an unread message are the typed message's.
 
 const (
-	// ModeAgentQuickReply is the Message card as the picker of the three quick replies.
 	ModeAgentQuickReply Mode = "agent-quick-reply"
 
 	// QuickReplyAgent is `r` on the Attention Page; AgentCardQuickReply is `r` on the Agent card.
@@ -16,14 +15,12 @@ const (
 	AgentQuickReplyThree Action = "agent-quick-reply-3"
 )
 
-// The texts of the quick replies.
 const (
 	QuickReplyContinue    = "continue"
 	QuickReplyWrapUp      = "wrap up: commit what you have and comment your status"
 	QuickReplyCommitClose = "commit and close if the acceptance criteria hold"
 )
 
-// QuickReply is one canned message: the key that sends it, the picker's short name for it and its text.
 type QuickReply struct {
 	Key    string
 	Name   string
@@ -31,7 +28,6 @@ type QuickReply struct {
 	Action Action
 }
 
-// QuickReplies are the picker's three replies, in key order.
 var QuickReplies = []QuickReply{
 	{Key: "1", Name: "Continue", Text: QuickReplyContinue, Action: AgentQuickReplyOne},
 	{Key: "2", Name: "Wrap up", Text: QuickReplyWrapUp, Action: AgentQuickReplyTwo},
@@ -44,7 +40,6 @@ func openAgentQuickReply(m Model) (Model, []Cmd) {
 	return openAgentMessageFor(m, true)
 }
 
-// quickReplyOf is the quick reply a picker action sends.
 func quickReplyOf(action Action) (QuickReply, bool) {
 	for _, q := range QuickReplies {
 		if q.Action == action {

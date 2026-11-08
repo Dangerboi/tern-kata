@@ -9,7 +9,6 @@ import (
 	"os/signal"
 )
 
-// execAgent runs plan's command as a child in the environment agentEnv makes, with stdio attached, and exits with its status.
 func execAgent(plan LaunchPlan, environ []string) error {
 	return subcommandError{runChild(plan.Operands[0], plan.Operands[1:], agentEnv(environ, plan, true))}
 }

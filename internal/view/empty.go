@@ -6,8 +6,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// emptyState is Tern's empty state: what is missing in a few words, one muted line on why or what to do, and the buttons that
-// fill it. It grows to the room its list would have had. listAndEmpty keys it after its list.
 func emptyState(title, text string, actions ...tern.Element) ui.Empty {
 	return ui.Empty{
 		CommonWithoutTitle: ui.CommonWithoutTitle{Grow: 1},
@@ -26,8 +24,6 @@ func emptyButton(m model.Model, key string, action model.Action, words string, p
 	return ui.Nodes(cardButton(key, m.CurrentMode(), action, words, primary))
 }
 
-// emptyLane is the narrow variant of emptyState, one row of just the title, for a column too narrow to hold a line of
-// text. It sits at the top where the rows would start.
 func emptyLane(title string) ui.Empty {
 	e := emptyState(title, "")
 	e.Variant = ui.EmptyInline

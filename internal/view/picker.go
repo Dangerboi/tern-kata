@@ -8,7 +8,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// PickerListID is the id of the Menu popup's list.
 var PickerListID = LayerID(model.CardPicker) + ".list"
 
 func pickerLayer(m model.Model) tern.Element {

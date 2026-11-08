@@ -13,7 +13,6 @@ var lanesDoneLabels = map[model.Field]string{
 	model.LanesCards: "Most cards",
 }
 
-// lanesDonePlaceholders are the defaults a blank Done field stands for.
 var lanesDonePlaceholders = map[model.Field]string{
 	model.LanesDays:  "14",
 	model.LanesCards: "20",

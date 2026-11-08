@@ -65,7 +65,6 @@ func translateSnapshot(s *g.UISnapshotResponseBody) model.Snapshot {
 	return snapshot
 }
 
-// wireQuery is the one place the model's snapshot query becomes kata's, read through the Collection's daemon view.
 func wireQuery(q model.SnapshotQuery, daemonView string) g.ReadUISnapshotQuery {
 	w := g.ReadUISnapshotQuery{
 		View: &daemonView, ProjectUID: q.ProjectUID, Status: q.Status, Owner: q.Owner, Label: q.Label, Text: q.Text,

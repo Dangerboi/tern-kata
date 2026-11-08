@@ -10,11 +10,8 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// refFacts is what a reference carries itself: the Issue's uid, its qualified id and, when its Link says so, its status.
 type refFacts struct{ UID, Qualified, Status string }
 
-// refSummary is what the Pane knows of a referenced Issue: the loaded Issue's qualified ref, title, status, owner with the
-// claim's expiry and updated time; an Issue that is not loaded gives only what its reference carries, and nothing is invented.
 type refSummary struct{ Ref, Title, Status, Owner, Updated string }
 
 func summarize(m model.Model, f refFacts, now time.Time) refSummary {
@@ -31,8 +28,6 @@ func summarize(m model.Model, f refFacts, now time.Time) refSummary {
 	return refSummary{Ref: f.Qualified, Status: f.Status}
 }
 
-// refCardBody is the card's content: the qualified ref with the status badge in its tone, then the title, the owner and the
-// updated time, each only when known.
 func refCardBody(s refSummary) tern.Element {
 	head := ui.Nodes(ui.Text{Common: ui.Common{Key: "ref"}, Spans: []ui.Span{{T: s.Ref, S: "accent strong"}}})
 	if s.Status != "" {
@@ -51,12 +46,10 @@ func refCardBody(s refSummary) tern.Element {
 	return ui.Col{Common: ui.Common{Key: "card"}, Gap: ui.GapXS, Children: lines}
 }
 
-// refCard is the hovercard of one Issue reference.
 func refCard(m model.Model, f refFacts, now time.Time) ui.Hovercard {
 	return ui.Hovercard{Element: refCardBody(summarize(m, f, now))}
 }
 
-// refCards is one hovercard for several references: their cards one under another.
 func refCards(m model.Model, facts []refFacts, now time.Time) ui.Hovercard {
 	if len(facts) == 1 {
 		return refCard(m, facts[0], now)

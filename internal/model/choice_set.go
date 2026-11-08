@@ -5,31 +5,24 @@ import (
 	"strings"
 )
 
-// Control is the kind of control a popup card draws a choice field with.
 type Control int
 
 const (
-	// ControlSelect is a field that opens a dropdown list of the choices, with search past SearchOver of them.
 	ControlSelect Control = iota
-	// ControlTabs is a segmented strip of two or three choices.
 	ControlTabs
-	// ControlSwitch is a yes or no setting.
 	ControlSwitch
 )
 
 const (
-	// ModeDropdown is a card with the dropdown of one of its selects open.
-	ModeDropdown     Mode   = "dropdown"
-	DropdownNext     Action = "dropdown-next"
-	DropdownPrevious Action = "dropdown-previous"
-	DropdownPick     Action = "dropdown-pick"
-	DropdownClose    Action = "dropdown-close"
-	// DropdownEraseQuery and DropdownClearQuery edit the search line of a select that has one.
+	ModeDropdown       Mode   = "dropdown"
+	DropdownNext       Action = "dropdown-next"
+	DropdownPrevious   Action = "dropdown-previous"
+	DropdownPick       Action = "dropdown-pick"
+	DropdownClose      Action = "dropdown-close"
 	DropdownEraseQuery Action = "dropdown-erase-query"
 	DropdownClearQuery Action = "dropdown-clear-query"
 )
 
-// SearchOver is how many choices a select holds before it takes a search line.
 const SearchOver = 12
 
 // ChoiceSet is a choice field as the card shows it: the control, the labels in the order ChooseMsg indexes them and the index of
@@ -41,7 +34,6 @@ type ChoiceSet struct {
 	OnIndex int
 }
 
-// Search says the select takes a search line.
 func (s ChoiceSet) Search() bool { return s.Control == ControlSelect && len(s.Labels) > SearchOver }
 
 // Matches is the indexes of the labels that hold query, in order, whatever the case. Every index matches an empty query.
@@ -56,12 +48,10 @@ func (s ChoiceSet) Matches(query string) []int {
 	return found
 }
 
-// newChoices is a ChoiceSet drawn by control; chosen is the index of the held value.
 func newChoices(control Control, labels []string, chosen int) ChoiceSet {
 	return ChoiceSet{Control: control, Labels: labels, Chosen: chosen}
 }
 
-// segmentedOrSelect is the control a field the card does not name gets: tabs for up to three choices, a select for more.
 func segmentedOrSelect(n int) Control {
 	if n >= 1 && n <= 3 {
 		return ControlTabs
@@ -81,14 +71,12 @@ type Dropdown struct {
 	activeLabel string
 }
 
-// openedDropdown is the dropdown of the select called field of card, open on the chosen choice of set.
 func openedDropdown(card Card, field Field, set ChoiceSet) Dropdown {
 	d := Dropdown{Card: card, Field: field, Open: true, Active: max(set.Chosen, 0)}
 	d.hold(set)
 	return d
 }
 
-// hold remembers the label the highlight is on.
 func (d *Dropdown) hold(set ChoiceSet) {
 	d.activeLabel = ""
 	if d.Active >= 0 && d.Active < len(set.Labels) {
@@ -96,7 +84,6 @@ func (d *Dropdown) hold(set ChoiceSet) {
 	}
 }
 
-// follow moves the highlight to the held label's place in set; a label the set no longer has leaves it where it is.
 func (d *Dropdown) follow(set ChoiceSet) {
 	if d.Active >= 0 && d.Active < len(set.Labels) && set.Labels[d.Active] == d.activeLabel {
 		return
@@ -120,7 +107,6 @@ func (m Model) CardChoices(card Card, name Field) (ChoiceSet, bool) {
 	return ChoiceSet{}, false
 }
 
-// OpenDropdown is the open dropdown of the select called name of card; its zero value, closed, for any other field.
 func (m Model) OpenDropdown(card Card, name Field) Dropdown {
 	if open := m.Dropdown; open.Open && open.Card == card && open.Field == name {
 		return open
@@ -128,7 +114,6 @@ func (m Model) OpenDropdown(card Card, name Field) Dropdown {
 	return Dropdown{Card: card, Field: name}
 }
 
-// settleDropdown closes a dropdown whose field is no longer the focused select of the card on top.
 func (m Model) settleDropdown() Model {
 	if !m.Dropdown.Open {
 		return m
@@ -161,7 +146,6 @@ type DropdownToggleMsg struct {
 
 func (DropdownToggleMsg) msg() {}
 
-// switchField flips the switch field called name to on.
 func switchField(m Model, name Field, on bool) Model {
 	set, ok := m.topChoices(name)
 	if !ok || set.Control != ControlSwitch {
@@ -174,7 +158,6 @@ func switchField(m Model, name Field, on bool) Model {
 	return chooseField(m, name, index)
 }
 
-// toggleDropdown opens or closes the dropdown of the select called name; opening focuses the field.
 func toggleDropdown(m Model, name Field, open bool) Model {
 	if !open {
 		if m.Dropdown.Field == name {
@@ -193,7 +176,6 @@ func toggleDropdown(m Model, name Field, open bool) Model {
 	return m
 }
 
-// topChoices is the choice set of the field called name of the card on top.
 func (m Model) topChoices(name Field) (ChoiceSet, bool) {
 	if entry, ok := m.topEntry(); ok && entry.choices != nil {
 		return entry.choices(m, name)
@@ -201,7 +183,6 @@ func (m Model) topChoices(name Field) (ChoiceSet, bool) {
 	return ChoiceSet{}, false
 }
 
-// openDropdown opens the dropdown of the focused field when it is a select; it reports whether it did.
 func (e cardEntry) openDropdown(m Model) (Model, bool) {
 	if e.choices == nil || e.focus == nil {
 		return m, false
@@ -271,7 +252,6 @@ func (e cardEntry) dropdownKey(m Model, msg KeyMsg) (Model, bool) {
 	return m, true
 }
 
-// refilter puts the highlight on the first choice the search text leaves.
 func (d *Dropdown) refilter(set ChoiceSet) {
 	if matches := set.Matches(d.Query); len(matches) > 0 {
 		d.Active = matches[0]

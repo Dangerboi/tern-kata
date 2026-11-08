@@ -14,7 +14,6 @@ type AttachFile struct {
 
 func (AttachFile) cmd() {}
 
-// FileAttached answers AttachFile with the id and name of the new Attachment.
 type FileAttached struct {
 	UID, ID, Name string
 	Err           error
@@ -31,7 +30,6 @@ type UnlinkAttachment struct {
 
 func (UnlinkAttachment) cmd() {}
 
-// AttachmentUnlinked answers UnlinkAttachment.
 type AttachmentUnlinked struct {
 	UID, Name string
 	Err       error
@@ -49,7 +47,6 @@ type OpenAttachment struct {
 
 func (OpenAttachment) cmd() {}
 
-// AttachmentOpened answers OpenAttachment with the path of the downloaded file.
 type AttachmentOpened struct {
 	UID, Name, Path string
 	Err             error
@@ -79,7 +76,6 @@ type AttachmentsMigrated struct {
 
 func (AttachmentsMigrated) msg() {}
 
-// Report is the lines the command prints: what moved, and what was left with the reason.
 func (a AttachmentsMigrated) Report() string {
 	var b strings.Builder
 	if len(a.Moved) == 0 && len(a.Left) == 0 {

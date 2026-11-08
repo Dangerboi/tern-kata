@@ -18,8 +18,7 @@ const (
 	ModeWorkerCard    Mode = "worker-card"
 	ModeWorkerRestart Mode = "worker-restart"
 	ModeWorkerOff     Mode = "worker-supervision-off"
-	// ModeWorkerRead is the card when it draws no fields: only e, s and esc act.
-	ModeWorkerRead Mode = "worker-card-read"
+	ModeWorkerRead    Mode = "worker-card-read"
 )
 
 const (
@@ -36,10 +35,8 @@ const (
 	WorkerOffCancel   Action = "worker-off-cancel"
 )
 
-// WorkerDraftUID is the key of the $EDITOR round trip of worker.toml.
 const WorkerDraftUID = "worker-draft"
 
-// The Worker card's fields.
 const (
 	WorkerFieldExecutor Field = "executor"
 	WorkerFieldActor    Field = "actor"
@@ -69,7 +66,6 @@ var workerTable = fieldTable[WorkerCardState]{
 	},
 }
 
-// WorkerFields is the Worker card's field list in tab order.
 var WorkerFields = workerTable.specs()
 
 var workerFieldTitles = map[Field]string{
@@ -81,7 +77,6 @@ var workerFieldTitles = map[Field]string{
 	WorkerFieldTrust:    "Trust",
 }
 
-// WorkerPrompt is the title of the Worker card's field called name.
 func WorkerPrompt(name Field) string { return workerFieldTitles[name] }
 
 var workerHints = map[Field]string{
@@ -91,13 +86,10 @@ var workerHints = map[Field]string{
 	WorkerFieldThinking: "blank: the agent's own default",
 }
 
-// WorkerHint is the placeholder of the Worker card's field called name: what a blank field stands for.
 func WorkerHint(name Field) string { return workerHints[name] }
 
-// WorkerTrustNote is the warning shown beside the trust choice and written into worker.toml.
 const WorkerTrustNote = worker.TrustNote
 
-// WorkerSetup is the one read of this machine's worker setup for the Pane's folder.
 type WorkerSetup struct {
 	// Project and Checkout are the kata Project the Pane's folder is bound to and the folder holding that Binding's .kata.toml;
 	// both are empty for a folder bound to none.
@@ -109,15 +101,12 @@ type WorkerSetup struct {
 	// Lists says a file that loads lists Project, and Checkouts are the folders it maps the Project's checkouts to.
 	Lists     bool
 	Checkouts []string
-	// Executor is the file's executor label.
-	Executor string
-	// Text is the file's content as read; the edit opens it in $EDITOR.
-	Text string
+	Executor  string
+	Text      string
 	// Manual says worker.manual sits beside worker.toml: the plugin neither starts nor restarts the worker.
 	Manual bool
 }
 
-// LoadWorkerSetup asks for the setup read of the folder Workspace.
 type LoadWorkerSetup struct{ Workspace string }
 
 func (LoadWorkerSetup) cmd() {}
@@ -229,30 +218,21 @@ type WorkerCardState struct {
 	EditBase string
 }
 
-// Value is the text the field called name holds.
 func (f WorkerCardState) Value(name Field) string { return workerTable.value(f, name) }
 
-// WorkerCardKind is what the card offers for the machine as it was read.
 type WorkerCardKind int
 
 const (
-	// WorkerLoading: the setup read has not answered.
 	WorkerLoading WorkerCardKind = iota
-	// WorkerUnreadable: the read failed, Err says why.
 	WorkerUnreadable
-	// WorkerUnbound: the Pane's folder is bound to no Project.
 	WorkerUnbound
-	// WorkerSetUp: no worker.toml; the card offers to make one.
 	WorkerSetUp
 	// WorkerBroken: worker.toml exists and does not load; the card shows why and writes nothing over it.
 	WorkerBroken
-	// WorkerServe: worker.toml loads and does not list the Project; the card offers to add it.
 	WorkerServe
-	// WorkerServed: worker.toml loads and lists the Project.
 	WorkerServed
 )
 
-// WorkerCardKind is read from the setup alone.
 func (m Model) WorkerCardKind() WorkerCardKind {
 	w := m.Worker
 	switch s := w.Setup; {
@@ -272,7 +252,6 @@ func (m Model) WorkerCardKind() WorkerCardKind {
 	return WorkerServed
 }
 
-// WorkerCardSaves says the card offers a save: it sets the worker up or serves the Project, and has not saved yet.
 func (m Model) WorkerCardSaves() bool {
 	kind := m.WorkerCardKind()
 	return (kind == WorkerSetUp || kind == WorkerServe) && m.WorkerCard.Saved == ""
@@ -284,7 +263,6 @@ func (m Model) WorkerCardEdits() bool {
 	return m.WorkerCardKind() >= WorkerBroken && f.Saved == "" && !f.Saving && !f.Stopping
 }
 
-// WorkerCardShows says the field applies to the card as it stands; the others are hidden and tab skips them.
 func (m Model) WorkerCardShows(name Field) bool {
 	if !m.WorkerCardSaves() {
 		return false
@@ -292,7 +270,6 @@ func (m Model) WorkerCardShows(name Field) bool {
 	return name == WorkerFieldTrust || m.WorkerCardKind() == WorkerSetUp
 }
 
-// WorkerInFlight are the runs the worker reports that a restart now would interrupt.
 func (m Model) WorkerInFlight() []LocalRun {
 	var runs []LocalRun
 	for _, r := range m.Worker.Runs {
@@ -303,7 +280,6 @@ func (m Model) WorkerInFlight() []LocalRun {
 	return runs
 }
 
-// WorkerInFlightCount is how many runs the worker has in flight: those it lists, or its own count when that is higher.
 func (m Model) WorkerInFlightCount() int { return max(len(m.WorkerInFlight()), m.Worker.InFlight) }
 
 // WorkerInFlightWords is the runs in flight in words: how many, and which jobs.
@@ -365,7 +341,6 @@ func openWorkerCard(m Model) (Model, []Cmd) {
 	return m, []Cmd{LoadWorkerSetup{Workspace: m.Workspace}, ask}
 }
 
-// firstWorkerField is the first field the card shows.
 func (m Model) firstWorkerField() Field {
 	for _, f := range WorkerFields {
 		if m.WorkerCardShows(f.Name) {
@@ -387,7 +362,6 @@ func workerSetupLoaded(m Model, msg WorkerSetupLoaded) Model {
 	return m
 }
 
-// workerFieldError is a refusal that names the field: the card puts focus there.
 type workerFieldError struct {
 	field Field
 	text  string
@@ -411,7 +385,6 @@ func (m Model) workerSaveRefusal() error {
 	return nil
 }
 
-// submitWorker is the save key: it checks the card and asks for the write.
 func submitWorker(m Model) (Model, []Cmd) {
 	f := &m.WorkerCard
 	if !m.WorkerCardSaves() {
@@ -495,7 +468,6 @@ func workerEditorClosed(m Model, msg DraftEditorClosed) (Model, []Cmd, bool) {
 	return m, []Cmd{SaveWorkerEdit{Text: text, Base: f.EditBase}}, true
 }
 
-// workerEditStart is the text the editor is given: the refused edit when there is one, else the file.
 func (m Model) workerEditStart() string {
 	if m.WorkerCard.EditText != "" {
 		return m.WorkerCard.EditText
@@ -523,7 +495,6 @@ func workerEdited(m Model, msg WorkerEdited) (Model, []Cmd) {
 	return m.workerWritten("Edited the worker: worker.toml written.")
 }
 
-// workerStopped closes the card with what the stop did.
 func workerStopped(m Model, msg WorkerStopped) (Model, []Cmd) {
 	f := &m.WorkerCard
 	if !f.Open || !f.Stopping {
@@ -630,7 +601,6 @@ func workerRestartKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// workerRunning says a worker answers on this machine, so turning supervision off has something to stop.
 func (m Model) workerRunning() bool { return m.Worker.Read && m.Worker.Err == nil && m.Worker.Running }
 
 // switchSupervision is s on the card. On removes the marker at once. Off creates it at once when no worker runs, and otherwise asks
@@ -676,7 +646,6 @@ func workerOffKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// workerSupervisionSet is the answer: the card stays open and says what changed.
 func workerSupervisionSet(m Model, msg WorkerSupervisionSet) (Model, []Cmd) {
 	f := &m.WorkerCard
 	flight := f.Supervision
@@ -722,7 +691,6 @@ func (m Model) WorkerCardMode() Mode {
 	return ModeWorkerRead
 }
 
-// manualFile is the supervision marker's name, from the one rule.
 const manualFile = worker.ManualFileName
 
 // ManualPresentWords is the Worker card's words for a present supervision marker; the view shows them as the model words them.

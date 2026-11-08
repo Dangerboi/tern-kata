@@ -42,7 +42,6 @@ func AcquireLock(path string) (*Lock, error) {
 	return &Lock{file: file}, nil
 }
 
-// Release drops the lock.
 func (l *Lock) Release() error {
 	filelock.Unlock(l.file)
 	return l.file.Close()

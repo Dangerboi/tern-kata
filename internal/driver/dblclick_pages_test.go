@@ -101,12 +101,12 @@ func TestDoubleClickOnAWorkflowRowUnderAPopupCardDoesNothing(t *testing.T) {
 
 func TestDoubleClickOnAnAttentionCardOpensItsIssueWithTheDetailFocused(t *testing.T) {
 	s := attentionPageWith(t, attentionRequests(t), 0)
-	m := step(t, s, click(view.AttentionID("work-aa11"), view.AttentionOpenClick("work-aa11"))).State.Model
+	m := step(t, s, click(view.AttentionListID+".work-aa11", view.AttentionOpenClick("work-aa11"))).State.Model
 	if m.Page != model.PageIssues || m.SelectedUID != "work-aa11" || m.Focus != model.ColumnDetail || m.DetailHidden() {
 		t.Errorf("page %v selected %q focus %v, want the Issues Page on the request's Issue with its detail focused", m.Page, m.SelectedUID, m.Focus)
 	}
 
-	unknown := step(t, s, click(view.AttentionID("work-aa11"), view.AttentionOpenClick("nope"))).State.Model
+	unknown := step(t, s, click(view.AttentionListID+".work-aa11", view.AttentionOpenClick("nope"))).State.Model
 	if unknown.Page != model.PageAttention {
 		t.Errorf("a uid off the list left for page %v", unknown.Page)
 	}
@@ -115,7 +115,7 @@ func TestDoubleClickOnAnAttentionCardOpensItsIssueWithTheDetailFocused(t *testin
 func TestDoubleClickOnAnAttentionCardUnderAnotherLayerDoesNothing(t *testing.T) {
 	s := attentionPageWith(t, attentionRequests(t), 0)
 	s = step(t, s, key("?")).State
-	m := step(t, s, click(view.AttentionID("work-aa11"), view.AttentionOpenClick("work-aa11"))).State.Model
+	m := step(t, s, click(view.AttentionListID+".work-aa11", view.AttentionOpenClick("work-aa11"))).State.Model
 	if m.Page != model.PageAttention || m.CurrentMode() != model.ModeHelp {
 		t.Errorf("page %v mode %q, want the Attention Page under help", m.Page, m.CurrentMode())
 	}

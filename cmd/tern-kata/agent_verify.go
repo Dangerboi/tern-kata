@@ -9,7 +9,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/data"
 )
 
-// agentVerifyDeadline bounds the wrapper's one read of the daemon before it starts the agent.
 const agentVerifyDeadline = 10 * time.Second
 
 // verifyAgentRoute asks the daemon on the route environ names (as routedEnv left it) whether it verifies the actor of every write,
@@ -30,7 +29,6 @@ func verifyAgentRoute(environ []string) bool {
 	return daemonVerifiesSenders(context.Background(), data.LocateWithKata, workspace)
 }
 
-// daemonVerifiesSenders is whether the daemon locate finds for workspace verifies actors, "no" on any failure.
 func daemonVerifiesSenders(ctx context.Context, locate data.Locator, workspace string) bool {
 	ctx, cancel := context.WithTimeout(ctx, agentVerifyDeadline)
 	defer cancel()

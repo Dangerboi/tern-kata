@@ -10,7 +10,6 @@ import (
 )
 
 // TextEditor presents the reusable buffer; the model owns text, selection and undo.
-// caretAt is the caret of the single-line field in UTF-16 units for ui.Field.Cursor.
 func caretAt(c model.Caret, field model.Field, text string) *int {
 	offset := c.Offset(field, text)
 	return &offset
@@ -64,7 +63,6 @@ func editorLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDraft)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconPen}, children))
 }
 
-// replyTitle names the kind of a Reply Draft and whose comment it answers, e.g. "Confirm dana's comment".
 func replyTitle(draft model.Draft) string {
 	whose := "a comment"
 	if draft.ReplyAuthor != "" {

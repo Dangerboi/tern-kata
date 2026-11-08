@@ -14,7 +14,6 @@ type SearchState struct {
 	Caret                   Caret
 }
 
-// SearchInputFocused reports whether the Search input, not a popup card, holds the text caret.
 func (m Model) SearchInputFocused() bool {
 	return (m.Search.Open && !m.Search.Results || m.PageSearch.Open) && m.Err == nil && !m.FirstLoad() && m.Focus == ColumnList
 }
@@ -57,13 +56,11 @@ func openSearch(m Model) Model {
 	return m
 }
 
-// searchMove is a row or page key in the search modes: it moves through the results, which it shows.
 func searchMove(m Model, action Action) Model {
 	m.Search.Results = true
 	return moveSelection(m, action)
 }
 
-// searchEnter shows the results from the query, and commits the search from the results.
 func searchEnter(m Model) Model {
 	if m.Search.Results {
 		m.Search = SearchState{}
@@ -73,7 +70,6 @@ func searchEnter(m Model) Model {
 	return m
 }
 
-// searchBack goes from the results to the query, and from the query cancels the search.
 func searchBack(m Model) (Model, []Cmd) {
 	if m.Search.Results {
 		m.Search.Results = false
@@ -85,7 +81,6 @@ func searchBack(m Model) (Model, []Cmd) {
 	return snapshotChanged(m)
 }
 
-// searchErasing is the handler of the key that deletes before the caret or clears the query.
 func searchErasing(action Action) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
 		text, edited := eraseText(m.Filters.Search, &m.Search.Caret, "", action)
@@ -96,7 +91,6 @@ func searchErasing(action Action) func(Model) (Model, []Cmd) {
 	}
 }
 
-// searchEdit sets the query to text, as backspace and ctrl+u do.
 func searchEdit(m Model, text string) (Model, []Cmd) {
 	m.Filters.Search = text
 	m.SelectedUID = ""
@@ -125,13 +119,11 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 	return snapshotChanged(m)
 }
 
-// FilterTerm is one filter that is set: the Filter card field it is and its value, a Project by its name.
 type FilterTerm struct {
 	Field Field
 	Value string
 }
 
-// ActiveFilters is the filters of f that are set, in the Filter card's order with the search text last.
 func ActiveFilters(f Filters, projectName func(uid string) string) []FilterTerm {
 	var terms []FilterTerm
 	add := func(field Field, value string) {

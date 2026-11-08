@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
 
-	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -77,7 +75,7 @@ func (c *Client) ClearAttention(ctx context.Context, cmd model.ClearAttention) (
 // guard: it replaces an earlier request, which is how a newly waiting agent's message lands.
 func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAttention) error {
 	value := notifyValue(cmd.Actor, cmd.Message, "", cmd.Teammate)
-	return c.writeAttentionSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), value)
+	return daemonError(c.writeMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), value))
 }
 
 // HandOffAgent writes what an agent that stops without closing its Issue writes: work.attention = needs-human and work.attention_msg
@@ -108,16 +106,11 @@ func (c *Client) HandOffAgent(ctx context.Context, cmd model.HandOffAgent) error
 // slot that is gone, someone else's, or rewritten between the read and the write counts as cleared.
 func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAttention) error {
 	key := model.NotificationKey(cmd.Address)
-	raw, held, err := c.readSlot(ctx, cmd.ProjectID, cmd.UID, key)
-	if err != nil || !held {
-		return err
-	}
 	// A slot that does not read as a request, or reads as someone else's, is not this Pane's to clear.
-	if slot, err := model.ReadNotificationSlot(key, raw); err == nil && slot.From == cmd.Actor && slices.Contains(cmd.Messages, slot.Message) {
-		_, err := c.clearSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, raw)
-		return err
-	}
-	return nil
+	return c.clearSlotIf(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, func(raw string) bool {
+		slot, err := model.ReadNotificationSlot(key, raw)
+		return err == nil && slot.From == cmd.Actor && slices.Contains(cmd.Messages, slot.Message)
+	})
 }
 
 // SendAgentMessage writes a message to an agent's Agent address on an Issue as `kata notify` does, as cmd.Actor (the Pane's actor,
@@ -127,6 +120,7 @@ func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAt
 func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessage) (model.AgentMessageSent, error) {
 	key := model.NotificationKey(cmd.Address)
 	value := notifyValue(cmd.Actor, cmd.Message, cmd.Re, cmd.Teammate)
+	sent := model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address}
 	var expect *string
 	if cmd.Replacing != "" {
 		expect = &cmd.Replacing
@@ -134,14 +128,14 @@ func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessag
 	for range guardedAttempts {
 		_, err := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, value, expect)
 		if daemonCode(err) != "metadata_guard_failed" {
-			return model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address}, daemonError(err)
+			return sent, daemonError(err)
 		}
 		raw, held, err := c.readSlot(ctx, cmd.ProjectID, cmd.UID, key)
 		if err != nil {
-			return model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address}, err
+			return sent, err
 		}
 		if held && (expect == nil || raw != *expect) {
-			sent := model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address, Held: raw}
+			sent.Held = raw
 			if slot, err := model.ReadNotificationSlot(key, raw); err == nil {
 				// The first line, with control characters made spaces: both are shown to people, and text another actor wrote must not steer a terminal.
 				first, _, _ := strings.Cut(strings.TrimSpace(slot.Message), "\n")
@@ -154,41 +148,29 @@ func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessag
 			expect = &raw
 		}
 	}
-	return model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address}, errors.New("what kata holds for the agent kept changing; send the message again")
+	return sent, errors.New("what kata holds for the agent kept changing; send the message again")
 }
 
 // ClearAgentAddress removes whatever is left at an exited agent's Agent address on an Issue, whoever wrote it: nobody reads that
 // address again. The clear is guarded on the value read, so a write that lands in between stays.
 func (c *Client) ClearAgentAddress(ctx context.Context, cmd model.ClearAgentAddress) error {
-	key := model.NotificationKey(cmd.Address)
-	raw, held, err := c.readSlot(ctx, cmd.ProjectID, cmd.UID, key)
-	if err != nil || !held {
+	return c.clearSlotIf(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), func(string) bool { return true })
+}
+
+// A slot that is gone, or rewritten between the read and the write, counts as cleared.
+func (c *Client) clearSlotIf(ctx context.Context, projectID int64, uid, actor, key string, mine func(raw string) bool) error {
+	raw, held, err := c.readSlot(ctx, projectID, uid, key)
+	if err != nil || !held || !mine(raw) {
 		return err
 	}
-	_, err = c.clearSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, raw)
+	_, err = c.clearSlot(ctx, projectID, uid, actor, key, raw)
 	return err
 }
 
-// readSlot reads the raw value under key on an Issue from the body as sent, so a guard holds the value kata stores, not a
-// re-encoding of a decoded one; held is false when the Issue has no such key or kata has no such Issue.
 func (c *Client) readSlot(ctx context.Context, projectID int64, uid, key string) (raw string, held bool, err error) {
-	r, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: uid}})
-	if client.StatusCode(err) == http.StatusNotFound {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, daemonError(err)
-	}
-	var body struct {
-		Issue struct {
-			Metadata map[string]json.RawMessage `json:"metadata"`
-		} `json:"issue"`
-	}
-	if err := json.Unmarshal(r.Body, &body); err != nil {
-		return "", false, err
-	}
-	value, held := body.Issue.Metadata[key]
-	return string(value), held, nil
+	metadata, _, err := c.readMetadata(ctx, projectID, uid)
+	value, held := metadata[key]
+	return string(value), held, err
 }
 
 // clearSlot removes the slot under key while it still holds seen. A slot rewritten since is left alone and reported as changed.
@@ -202,7 +184,6 @@ func (c *Client) clearSlot(ctx context.Context, projectID int64, uid, actor, key
 	return false, nil
 }
 
-// notifyValue is the value of a notify slot: who wrote it and what, with re and teammate when set.
 func notifyValue(from, message, re, teammate string) map[string]any {
 	value := map[string]any{"from": from, "message": message}
 	if re != "" {
@@ -214,12 +195,6 @@ func notifyValue(from, message, re, teammate string) map[string]any {
 	return value
 }
 
-// writeAttentionSlot patches one notify slot, a nil value clearing it, with no guard.
-func (c *Client) writeAttentionSlot(ctx context.Context, projectID int64, uid, actor, key string, value any) error {
-	return daemonError(c.writeMetadataKey(ctx, projectID, uid, actor, key, value))
-}
-
-// ReadSweepComments reads whether the Issue holds a comment by the agent's teammate made at or after the sweep was sent.
 func (c *Client) ReadSweepComments(ctx context.Context, cmd model.ReadSweepComments) (model.SweepCommentsRead, error) {
 	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.UID)
 	if err != nil {
@@ -234,7 +209,6 @@ func (c *Client) ReadSweepComments(ctx context.Context, cmd model.ReadSweepComme
 	return read, nil
 }
 
-// ReadAgentIssue reads the status of the Issue with uid in a Project.
 func (c *Client) ReadAgentIssue(ctx context.Context, cmd model.ReadAgentIssue) (model.AgentIssueRead, error) {
 	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.UID)
 	if err != nil {

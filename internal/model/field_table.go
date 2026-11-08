@@ -6,16 +6,14 @@ import "slices"
 // caret live and the one busy condition. fill derives from it everything a card entry needs about its fields, so a card
 // states no lookup, text, erase or busy closure of its own.
 type fieldTable[F any] struct {
-	// form is where the card's state lives on the model.
 	form func(*Model) *F
-	// busy is the card's one busy condition: it is saving or otherwise answering something.
-	busy func(F) bool
-	// focus, caret and err reach the focused field, the caret of the focused text field and the card's error.
-	focus func(*F) *Field
-	caret func(*F) *Caret
-	err   func(*F) *error
-	// hidden says a field does not apply to the card as it stands: tab skips it, it holds no caret and it takes no step. Nil
-	// when every field always applies.
+	// busy is the card's one busy condition: it is saving or otherwise answering something. focus, caret and err reach the
+	// focused field, the caret of the focused text field and the card's error. A state that embeds formCard leaves all four
+	// nil: they are its shell's Field, Caret and Err, and busy is its Saving.
+	busy   func(F) bool
+	focus  func(*F) *Field
+	caret  func(*F) *Caret
+	err    func(*F) *error
 	hidden func(Model, Field) bool
 	// dismissErr says every shared field action, a move between fields included, dismisses the card's error, not just an
 	// edit of its text.
@@ -32,27 +30,22 @@ type formField[F any] struct {
 	// reach the whole model for a choice whose choices come from it; f is the card's state within m.
 	step   func(m *Model, f *F, back bool)
 	choose func(m *Model, f *F, index int) bool
-	// empty says the choice has no choices right now, so stepping it changes nothing; nil for a choice that always has some.
-	empty func(*F) bool
+	empty  func(*F) bool
 	// held reaches the string a choice holds as its value, nil for a choice that holds none as a string.
-	held func(*F) *string
-	// reset sets a choice that can be none to none; nil for a choice that cannot.
+	held  func(*F) *string
 	reset func(f *F)
 }
 
-// textField declares a field holding the text at get.
 func textField[F any](name Field, get func(*F) *string) formField[F] {
 	return formField[F]{name: name, text: get}
 }
 
-// choiceField declares a field of choices that live in the card's own state.
 func choiceField[F any](name Field, step func(*F, bool), choose func(*F, int) bool) formField[F] {
 	return formField[F]{name: name,
 		step:   func(_ *Model, f *F, back bool) { step(f, back) },
 		choose: func(_ *Model, f *F, index int) bool { return choose(f, index) }}
 }
 
-// cycleIndex is the index after i, or before it when back, in a ring of n.
 func cycleIndex(i, n int, back bool) int {
 	d := 1
 	if back {
@@ -74,14 +67,66 @@ func yesNoField[F any](name Field, get func(*F) *bool) formField[F] {
 		})
 }
 
-// modelChoiceField declares a field of choices that come from the model, such as the Projects of the catalog.
 func modelChoiceField[F any](name Field, step func(*Model, bool), choose func(*Model, int) bool) formField[F] {
 	return formField[F]{name: name,
 		step:   func(m *Model, _ *F, back bool) { step(m, back) },
 		choose: func(m *Model, _ *F, index int) bool { return choose(m, index) }}
 }
 
-// specs is the field list the model and the view read: each field's name and whether it takes text, in tab order.
+func (t *fieldTable[F]) shell(f *F) *formCard { return any(f).(cardShell).card() }
+
+func (t *fieldTable[F]) busyOf(f F) bool {
+	if t.busy != nil {
+		return t.busy(f)
+	}
+	return t.shell(&f).Saving
+}
+
+func (t *fieldTable[F]) focusOf(f *F) *Field {
+	if t.focus != nil {
+		return t.focus(f)
+	}
+	return &t.shell(f).Field
+}
+
+func (t *fieldTable[F]) caretOf(f *F) *Caret {
+	if t.caret != nil {
+		return t.caret(f)
+	}
+	return &t.shell(f).Caret
+}
+
+func (t *fieldTable[F]) errOf(f *F) *error {
+	if t.err != nil {
+		return t.err(f)
+	}
+	return &t.shell(f).Err
+}
+
+func (t *fieldTable[F]) clear(m *Model) {
+	var zero F
+	*t.form(m) = zero
+}
+
+// typeKey gives a key no card action took to the focused field: a field with text takes it, a bound space typed like any other
+// character, and an edit dismisses the card's error. It reports whether the focused field takes text.
+func (t *fieldTable[F]) typeKey(m *Model, binding Binding, bound bool, msg KeyMsg) bool {
+	f := t.form(m)
+	field := *t.focusOf(f)
+	text := t.textAt(f, field)
+	if text == nil {
+		return false
+	}
+	if bound && binding.Action == InputSpace {
+		bound = false
+	}
+	var edited bool
+	if *text, edited = editText(*text, t.caretOf(f), field, bound, msg); edited {
+		*t.errOf(f) = nil
+	}
+	return true
+}
+
 func (t *fieldTable[F]) specs() []FieldSpec {
 	list := make([]FieldSpec, len(t.fields))
 	for i, f := range t.fields {
@@ -97,7 +142,6 @@ func (t *fieldTable[F]) find(name Field) *formField[F] {
 	return nil
 }
 
-// textAt is the text of the field called name, nil for a name that is not a text field of the table.
 func (t *fieldTable[F]) textAt(f *F, name Field) *string {
 	if field := t.find(name); field != nil && field.text != nil {
 		return field.text(f)
@@ -105,7 +149,6 @@ func (t *fieldTable[F]) textAt(f *F, name Field) *string {
 	return nil
 }
 
-// value is the text the field called name holds, or the string a choice holds as its value; "" for any other name.
 func (t *fieldTable[F]) value(f F, name Field) string {
 	field := t.find(name)
 	switch {
@@ -120,11 +163,9 @@ func (t *fieldTable[F]) value(f F, name Field) string {
 	return ""
 }
 
-// stepFocused moves the focused choice field to its next choice, or the previous one when back, and dismisses the error.
-// It reports whether the focused field is a choice.
 func (t *fieldTable[F]) stepFocused(m *Model, back bool) bool {
 	f := t.form(m)
-	field := t.find(*t.focus(f))
+	field := t.find(*t.focusOf(f))
 	if field == nil || field.step == nil || (t.hidden != nil && t.hidden(*m, field.name)) {
 		return false
 	}
@@ -132,20 +173,17 @@ func (t *fieldTable[F]) stepFocused(m *Model, back bool) bool {
 		return true
 	}
 	field.step(m, f, back)
-	*t.err(f) = nil
+	*t.errOf(f) = nil
 	return true
 }
 
-// resetFocused sets the focused choice field to none, when it can be none.
 func (t *fieldTable[F]) resetFocused(m *Model) {
 	f := t.form(m)
-	if field := t.find(*t.focus(f)); field != nil && field.reset != nil {
+	if field := t.find(*t.focusOf(f)); field != nil && field.reset != nil {
 		field.reset(f)
 	}
 }
 
-// filterFieldList declares the Filter card's fields, in tab order, for a card that holds them as a Filters: the Project,
-// Status, Owner, Label and Relationship. choices gives a choice field its values, which depend on the card.
 func filterFieldList[F any](values func(*F) *Filters, choices func(Model, Field) []string) []formField[F] {
 	text := func(name Field, get func(*Filters) *string) formField[F] {
 		return textField(name, func(f *F) *string { return get(values(f)) })
@@ -180,28 +218,30 @@ func filterFieldList[F any](values func(*F) *Filters, choices func(Model, Field)
 	}
 }
 
-// fill sets on e everything that derives from the table: the field list, busy condition, focus, text and caret for the
-// shared delete and clear actions, the error a changed text dismisses, and the choice steps of a table with choices.
 func (t *fieldTable[F]) fill(e *cardEntry) {
 	e.fields = t.specs()
-	e.busy = func(m Model) bool { return t.busy(*t.form(&m)) }
+	e.busy = func(m Model) bool { return t.busyOf(*t.form(&m)) }
+	if _, shelled := any(new(F)).(cardShell); shelled {
+		e.open = func(m Model) bool { return t.shell(t.form(&m)).Open }
+		e.saving = func(m Model) bool { return t.shell(t.form(&m)).Saving }
+	}
 	if t.hidden != nil {
 		e.hidden = t.hidden
 	}
 	if t.dismissErr {
 		e.clearErr = func(m Model) Model {
-			*t.err(t.form(&m)) = nil
+			*t.errOf(t.form(&m)) = nil
 			return m
 		}
 	}
-	e.focus = func(m *Model) *Field { return t.focus(t.form(m)) }
+	e.focus = func(m *Model) *Field { return t.focusOf(t.form(m)) }
 	e.text = func(m *Model) (*string, *Caret) {
 		f := t.form(m)
-		return t.textAt(f, *t.focus(f)), t.caret(f)
+		return t.textAt(f, *t.focusOf(f)), t.caretOf(f)
 	}
 	e.erased = func(m Model, _ Action, changed bool) Model {
 		if changed {
-			*t.err(t.form(&m)) = nil
+			*t.errOf(t.form(&m)) = nil
 		}
 		return m
 	}
@@ -214,9 +254,25 @@ func (t *fieldTable[F]) fill(e *cardEntry) {
 	}
 	e.choose = func(m Model, index int) Model {
 		f := t.form(&m)
-		if field := t.find(*t.focus(f)); field != nil && field.choose != nil && field.choose(&m, f, index) {
-			*t.err(f) = nil
+		if field := t.find(*t.focusOf(f)); field != nil && field.choose != nil && field.choose(&m, f, index) {
+			*t.errOf(f) = nil
 		}
 		return m
+	}
+}
+
+// The card is not saving, which the one guard before every key handler sees to.
+func (t *fieldTable[F]) plainKey(mode Mode, submit, cancel Action, send func(Model) (Model, []Cmd)) func(Model, KeyMsg) (Model, []Cmd) {
+	return func(m Model, msg KeyMsg) (Model, []Cmd) {
+		binding, bound := LookupBindingForMode(msg.Chord, mode)
+		switch {
+		case bound && binding.Action == submit:
+			return send(m)
+		case bound && binding.Action == cancel:
+			t.clear(&m)
+		default:
+			t.typeKey(&m, binding, bound, msg)
+		}
+		return m, nil
 	}
 }

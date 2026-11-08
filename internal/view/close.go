@@ -19,8 +19,7 @@ var closeLabels = map[model.Field]string{
 	model.CloseRationale:   "Rationale (audit-no-change)",
 }
 
-// attachmentPicker is the Attachments field: the Issue's attachments as a row of toggles, the cited ones bracketed. Like the
-// Weekdays of the Recurrence card it takes several values at once, so it stays a row; a click on a name toggles it.
+// Like the Weekdays of the Recurrence card it takes several values at once, so it stays a row.
 func attachmentPicker(f model.CloseFormState, tone ui.Tone, title string) tern.Element {
 	cursor := -1
 	if f.Field == model.CloseAttachments {
@@ -70,7 +69,6 @@ func closeLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardClose)}, Modal: true, Size: ui.SizeLG, Head: ui.T(closeTitle(m)), Icon: ui.IconCheck}, children))
 }
 
-// closeTitle is the Close card's title: an undo's card says what it completes.
 func closeTitle(m model.Model) string {
 	if m.CloseForm.UndoEntry != 0 {
 		return "Undo reopen — complete as done"

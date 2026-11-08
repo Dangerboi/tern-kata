@@ -17,7 +17,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// The Lane lists and default filters files in tern-kata's config folder.
 const (
 	lanesFileName   = "lanes.toml"
 	filtersFileName = "filters.toml"
@@ -235,7 +234,6 @@ func agentSummary(c AgentConfig) string {
 	return strings.Join(parts, " · ")
 }
 
-// workerSupervision says whether the plugin supervises the worker, by the worker package's own rule, or that worker.manual turned it off.
 func workerSupervision(d worker.Dirs) string {
 	switch {
 	case d.ManualPresent():

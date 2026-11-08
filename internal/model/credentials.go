@@ -65,7 +65,6 @@ type CredentialsLoaded struct {
 
 func (CredentialsLoaded) msg() {}
 
-// CredentialsState is the Credentials Page's state. It is not saved and is read again on every entry.
 type CredentialsState struct {
 	// Checking says the capability check is out; Available that the account may list tokens; Loading that a list is out.
 	Checking, Available, Loading bool
@@ -73,36 +72,24 @@ type CredentialsState struct {
 	Err        error
 	Tokens     []Credential
 	ObservedAt time.Time
-	// Cursor indexes Tokens.
-	Cursor int
-	// reads numbers the asks; an answer to another is dropped.
-	reads Latest
+	Cursor     int
+	reads      Latest
 }
 
-// OnCredentials says the Credentials Page is current.
 func (m Model) OnCredentials() bool { return m.Page == PageCredentials }
 
-// credentialsMode is the Credentials Page's mode: the Menu's while the sidebar has the keyboard.
-func credentialsMode(m Model) Mode {
-	if m.Focus == ColumnCollections {
-		return ""
-	}
-	return ModeCredentials
-}
+var credentialsMode = sidebarMode(ModeCredentials)
 
-// enterCredentials starts a fresh reading: the capability check first.
 func enterCredentials(m Model) (Model, []Cmd) {
 	m.Credentials = CredentialsState{reads: m.Credentials.reads}
 	return askCapabilities(m)
 }
 
-// clearCredentials drops what the Page held and every ask still out.
 func clearCredentials(m Model) Model {
 	m.Credentials = CredentialsState{reads: m.Credentials.reads.Discarded()}
 	return m
 }
 
-// askAccount asks whether the connection's credential is limited to one Issue.
 func askAccount(m *Model) Cmd {
 	return LoadAuthCapabilities{Workspace: m.Workspace, Request: m.accountReads.Ask(), Account: true}
 }
@@ -154,9 +141,6 @@ func refreshCredentials(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// credentialsBack is esc and backspace: the Page shown before.
-func credentialsBack(m Model) (Model, []Cmd) { return showPage(m.letteredFrom)(m) }
-
 func updateCredentials(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case AuthCapabilitiesLoaded:
@@ -199,28 +183,17 @@ func updateCredentials(m Model, msg Msg) (Model, []Cmd, bool) {
 	return updateTokens(m, msg)
 }
 
-// moveCredential moves the cursor by action: one row, to either end, or a page.
 func moveCredential(m Model, action Action) Model {
-	n := len(m.Credentials.Tokens)
-	if n == 0 {
-		return m
-	}
-	m.Credentials.Cursor = movedIndex(m.Credentials.Cursor, n, listPage, action)
+	moveCursor(&m.Credentials.Cursor, len(m.Credentials.Tokens), action)
 	return m
 }
 
-// SelectedCredential is the token under the cursor, nil when there is none.
 func (m Model) SelectedCredential() *Credential {
-	c := m.Credentials
-	if c.Cursor < 0 || c.Cursor >= len(c.Tokens) {
-		return nil
-	}
-	return &c.Tokens[c.Cursor]
+	return rowAt(m.Credentials.Tokens, m.Credentials.Cursor)
 }
 
 // CredentialsNotice is what the Page shows in place of the token list, with a line under it when there is a reason to give.
 type CredentialsNotice struct {
-	// Text is the line; Err says it is a failure, which the view draws as one.
 	Text, Detail string
 	Err          bool
 }
@@ -244,7 +217,6 @@ func (c CredentialsState) Notice() (CredentialsNotice, bool) {
 	return CredentialsNotice{}, false
 }
 
-// RefreshError is the failure of a refresh that left the held list on screen, "" when there is none.
 func (c CredentialsState) RefreshError() string {
 	if c.Err != nil && c.Available && len(c.Tokens) > 0 {
 		return "refresh failed: " + oneLine(c.Err.Error())
@@ -269,7 +241,6 @@ func credentialTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02 15:04:05Z")
 }
 
-// Lines are a token's four lines as kata tui words them, without the cursor marker.
 func (c Credential) Lines() [4]string {
 	name := "—"
 	if c.Name != "" {
@@ -287,10 +258,9 @@ func (c Credential) Lines() [4]string {
 	}
 }
 
-// credentialsRows are the Credentials Page's own keys beyond its movement keys.
 var credentialsRows = []actionEntry{
 	{action: RefreshCredentials, modes: []Mode{ModeCredentials}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 3, "read the credentials again, or retry the check"}}, handle: refreshCredentials},
 	{action: NewToken, modes: []Mode{ModeCredentials}, keys: keys("n", "n"), help: "new token", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 20, "create an API token (Token card)"}}, handle: openTokenForm},
 	{action: RevokeToken, modes: []Mode{ModeCredentials}, keys: keys("x", "x"), help: "revoke", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 21, "revoke the selected token, after asking"}}, handle: openRevoke},
-	{action: LetteredBack, modes: []Mode{ModeCredentials}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 1, "back to the Page shown before"}}, handle: credentialsBack},
+	letteredBackRow(ModeCredentials, letteredBack),
 }

@@ -102,7 +102,7 @@ func (f *undoFixture) rival(uid string, write func(c *Client)) {
 func (f *undoFixture) rivalField(uid string, action model.Action, value string) {
 	f.t.Helper()
 	f.rival(uid, func(c *Client) {
-		if err := c.WriteField(context.Background(), model.WriteField{UID: uid, ProjectID: f.project.ID, Actor: "rival", Action: action, Value: value}); err != nil {
+		if _, err := c.writeField(context.Background(), model.WriteField{UID: uid, ProjectID: f.project.ID, Actor: "rival", Action: action, Value: value}); err != nil {
 			f.t.Fatal(err)
 		}
 	})
@@ -481,7 +481,7 @@ func TestUndoRefusesWithoutWritingWhenTheIssueMovedOn(t *testing.T) {
 	closed := as[model.CloseResultMsg](t, run(t, f.gateway, model.CloseIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Quick: true, Reason: model.ReasonDone, Key: "k-1"}))
 	e = f.entry(closed.Record)
 	f.rival(uid, func(c *Client) {
-		if err := c.Reopen(context.Background(), model.ReopenIssueCmd{UID: uid, ProjectID: f.project.ID, Actor: "rival"}); err != nil {
+		if _, err := c.reopenRaw(context.Background(), model.ReopenIssueCmd{UID: uid, ProjectID: f.project.ID, Actor: "rival"}); err != nil {
 			t.Fatal(err)
 		}
 	})

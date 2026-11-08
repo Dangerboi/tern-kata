@@ -1,7 +1,5 @@
 package model
 
-// FirstLoad reports that nothing has loaded yet, so there is no list or
-// Collections to keep on screen. Later loads leave what is shown in place.
 func (m Model) FirstLoad() bool {
 	return m.Loading && len(m.Issues) == 0 && len(m.Collections) == 0
 }

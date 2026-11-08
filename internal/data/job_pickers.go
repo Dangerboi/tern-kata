@@ -4,14 +4,13 @@ import (
 	"slices"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // loadWorkerPickers reads this machine's worker.toml with the worker's own parser, so a file the worker would refuse offers no
 // picker either. A missing file is no error: the Job card takes free text then. A file that exists but does not read leaves the
 // card on free text and says why.
-func loadWorkerPickers() model.WorkerPickersLoaded {
-	dirs, err := worker.DefaultDirs()
+func (g *Gateway) loadWorkerPickers(model.LoadWorkerPickers) model.WorkerPickersLoaded {
+	dirs, err := g.workerDirs()
 	if err != nil {
 		return model.WorkerPickersLoaded{Pickers: model.WorkerPickers{Note: err.Error()}}
 	}

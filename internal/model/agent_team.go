@@ -9,7 +9,6 @@ import (
 // The Agent card's `c` starts a team on the card's Issue: it opens the start dialog, where the coordinator goes (split, tab or
 // background, as `s`, `t` and `g` on the card) and how many children run at once (1 to 8).
 
-// ModeAgentCardTeam is the Agent card showing the team start dialog.
 const ModeAgentCardTeam Mode = "agent-card-team"
 
 // The Agent card's `c` and the keys of the start dialog.
@@ -37,7 +36,6 @@ const (
 	TeamEndingReason   = "The team is ending."
 )
 
-// TeamDialog is the start dialog: Where the coordinator goes and how many children run at once.
 type TeamDialog struct {
 	Open  bool
 	Where AgentPlacement
@@ -64,7 +62,6 @@ func (m Model) teamRefusal(issue Issue) string {
 	return ""
 }
 
-// teamPauseRefusal is why `p` is off on the Issue uid, "" when its team can be paused or resumed.
 func (m Model) teamPauseRefusal(uid string) string {
 	t, on := m.TeamOn(uid)
 	switch {
@@ -136,7 +133,6 @@ func openTeamDialog(m Model) (Model, []Cmd) {
 	return m, nil
 }
 
-// updateTeamDialogKey takes a key while the start dialog is open.
 func updateTeamDialogKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	binding, bound := LookupBindingForMode(msg.Chord, ModeAgentCardTeam)
 	if !bound {
@@ -182,7 +178,6 @@ func startTeam(m Model) (Model, []Cmd) {
 	return m, []Cmd{cmd}
 }
 
-// TeamStateWords is the team's state as the Agent card says it.
 func TeamStateWords(s TeamState) string {
 	switch s {
 	case TeamPaused:
@@ -258,7 +253,6 @@ func (m Model) TeamRows(t Team) []TeamRow {
 	return slices.Concat(rows, queued, others)
 }
 
-// ChildTeam is the team that started the Issue uid, when uid is one of its children.
 func (m Model) ChildTeam(uid string) (Team, bool) {
 	for _, t := range m.Teams {
 		if t.Started(uid) {

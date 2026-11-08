@@ -9,58 +9,44 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// FederationListID is the Federation Page's list of spoke cards; a card is the Project's name under it.
 const FederationListID = "main.columns.list.federation"
 
-// federation is the Federation Page's list column: the title with its summary, the active daemon's header, then the screen shown:
-// what stands in place of the list, one card per spoke Project with the selected one's hub, actor and credential under it, or one
-// Project's detail.
 func federation(m model.Model, now time.Time) tern.Element {
 	f := m.Federation
-	children := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Spans: []ui.Span{{T: "Federation", S: "strong"}}, Wrap: ui.WrapNone})
+	children := ui.Nodes(heading(ui.Span{T: "Federation", S: "strong"}))
 	if f.Screen == model.FederationList {
 		children = append(children, ui.Text{Common: ui.Common{Key: "summary", Tone: ui.ToneMuted}, Text: f.Summary(), Wrap: ui.WrapNone})
 	}
-	children = append(children, ui.Text{Common: ui.Common{Key: "header", Tone: ui.ToneMuted}, Text: f.Header()})
-	column := func() tern.Element {
-		return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapSM, children)
-	}
+	children = append(children, plainText("header", ui.ToneMuted, f.Header()))
 	switch f.Screen {
 	case model.FederationLeavePreview:
 		lines, warning := f.Leave.PreviewLines()
 		children = append(children, federationScreen("Leave Federation", lines, warning)...)
 		if f.Leaving {
-			children = append(children, ui.Text{Common: ui.Common{Key: "running", Tone: ui.TonePending}, Text: "leaving..."})
+			children = append(children, plainText("running", ui.TonePending, "leaving..."))
 		}
 		if f.LeaveErr != nil {
-			children = append(children, ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: f.LeaveErr.Error()})
+			children = append(children, plainText("error", ui.ToneError, f.LeaveErr.Error()))
 		}
-		return column()
+		return listPanel(m, 0.5, children)
 	case model.FederationLeaveDone:
 		lines, warning := f.Left.ResultLines()
 		children = append(children, federationScreen("Leave Result", lines, warning)...)
-		return column()
+		return listPanel(m, 0.5, children)
 	}
 	if more, shown := federationEnrollScreen(m); shown {
 		children = append(children, more...)
-		return column()
+		return listPanel(m, 0.5, children)
 	}
 	spoke := m.SelectedSpoke()
 	if f.Screen == model.FederationDetail && spoke != nil {
 		for i, line := range spoke.DetailLines() {
 			children = append(children, ui.Text{Common: ui.Common{Key: "detail" + strconv.Itoa(i)}, Text: line, Wrap: ui.WrapNone})
 		}
-		return column()
+		return listPanel(m, 0.5, children)
 	}
 	if notice, shown := f.Notice(); shown {
-		tone := ui.TonePending
-		if notice.Err {
-			tone = ui.ToneError
-		} else if !f.Loading {
-			tone = ui.ToneMuted
-		}
-		children = append(children, ui.Text{Common: ui.Common{Key: "notice", Tone: tone}, Text: notice.Text})
-		return column()
+		return listPanel(m, 0.5, append(children, noticeLines(notice.Err, !f.Loading, notice.Text, "")...))
 	}
 	cards := make([]tern.Element, len(f.Spokes))
 	for i, s := range f.Spokes {
@@ -68,12 +54,11 @@ func federation(m model.Model, now time.Time) tern.Element {
 	}
 	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("federation"), Max: fillMax, Children: cards})
 	if spoke != nil {
-		children = append(children, ui.Text{Common: ui.Common{Key: "footer", Tone: ui.ToneMuted}, Text: spoke.Footer()})
+		children = append(children, plainText("footer", ui.ToneMuted, spoke.Footer()))
 	}
-	return column()
+	return listPanel(m, 0.5, children)
 }
 
-// federationCard is one spoke Project on two lines, toned by what needs attention: a badge draws it in a warning, none plain.
 func federationCard(s model.FederationSpoke, selected bool, now time.Time) tern.Element {
 	lines := s.Lines(now)
 	body := make([]tern.Element, len(lines))
@@ -87,13 +72,11 @@ func federationCard(s model.FederationSpoke, selected bool, now time.Time) tern.
 	return ui.Card{Common: ui.Common{Key: s.ProjectName, Tone: tone}, Selected: selected, Children: body}
 }
 
-// federationScreen is a leave screen's title and its lines, the one at index warning in the error tone.
 func federationScreen(title string, lines []string, warning int) []tern.Element {
 	out := ui.Nodes(ui.Text{Common: ui.Common{Key: "title", Tone: ui.ToneMuted}, Spans: []ui.Span{{T: title, S: "strong"}}, Wrap: ui.WrapNone})
 	return append(out, federationLines(lines, warning)...)
 }
 
-// federationLines are a screen's lines, the one at index warning in the error tone; "" is a blank line.
 func federationLines(lines []string, warning int) []tern.Element {
 	var out []tern.Element
 	for i, line := range lines {

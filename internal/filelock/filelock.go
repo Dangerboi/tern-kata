@@ -8,15 +8,12 @@ import (
 	"time"
 )
 
-// ErrLocked is a try-lock finding the file held by another lock.
 var ErrLocked = errors.New("locked")
 
-// ErrTimeout is Wait giving up because the file stayed held.
 var ErrTimeout = errors.New("timed out waiting for a file lock")
 
 const pollEvery = 5 * time.Millisecond
 
-// Wait takes f exclusively, retrying until timeout has passed and then returning ErrTimeout.
 func Wait(f *os.File, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {

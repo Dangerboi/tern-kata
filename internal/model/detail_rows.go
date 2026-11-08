@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// RowKind says what a row of the Issue detail is, so the view can draw it and a click or enter knows what it opens.
 type RowKind uint8
 
 const (
@@ -16,7 +15,6 @@ const (
 	RowLink
 	RowEvent
 	RowAttachment
-	// RowCron is a Cron job named by a property of the Issue detail's header; it sits ahead of the children.
 	RowCron
 )
 
@@ -41,6 +39,12 @@ type DetailItem struct {
 	Activity DetailRow
 }
 
+func (i DetailItem) id() rowID { return rowID{i.Kind, i.Key} }
+
+func commentLanding(key string) *jumpEntry {
+	return &jumpEntry{tab: TabComments, row: rowID{RowComment, key}, hasRow: true}
+}
+
 func (t ActivityTab) kind() RowKind { return tabTable[t].kind }
 
 // InActivity says rows of the kind belong to an Activity tab; a child row and a Cron job row do not.
@@ -57,33 +61,28 @@ func (k RowKind) Tab() ActivityTab {
 // row's id never ends in the child's UID as the list row's does. A child that is not loaded has only its UID, Key and Ref.
 type ChildRow struct {
 	Key, UID, Ref, Title, Status string
-	// Qualified is the child's qualified id as its Link carries it.
-	Qualified      string
-	Owner          *string
-	OwnerExpires   *time.Time
-	UpdatedAt      time.Time
-	Loaded, Closed bool
+	Qualified                    string
+	Owner                        *string
+	OwnerExpires                 *time.Time
+	UpdatedAt                    time.Time
+	Loaded, Closed               bool
 }
 
-// rowID names a row across refreshes.
 type rowID struct {
 	kind RowKind
 	key  string
 }
 
-// rowInputs are what the rows are worked out from; the rows are rebuilt only when one of them changes.
 type rowInputs struct {
-	authority  *IssueDetailData
-	firstIssue *Issue // with issueN, tells when the loaded Issues changed
-	issueN     int
-	tab        ActivityTab
-	calendar   PaneCalendar
-	// jobs are the Cron jobs the Cron rows name: where they were read, which read, and its answer.
+	authority                         *IssueDetailData
+	firstIssue                        *Issue // with issueN, tells when the loaded Issues changed
+	issueN                            int
+	tab                               ActivityTab
+	calendar                          PaneCalendar
 	jobsProject, jobsRequest, jobsRev int64
 	jobsLoading                       bool
 }
 
-// detailRows is the Issue detail's cursor list: the children, then the active tab's rows.
 type detailRows struct {
 	inputs rowInputs
 	items  []DetailItem
@@ -94,7 +93,6 @@ type detailRows struct {
 // (DetailIndex) is an index into it; cursor movement, reveal and clicks all go through this list.
 func (m Model) DetailRows() []DetailItem { return m.rows.items }
 
-// DetailParent is the detail Issue's parent link, when it has one.
 func (m Model) DetailParent() (DetailRow, bool) {
 	if m.rows.parent == nil {
 		return DetailRow{}, false
@@ -110,13 +108,9 @@ func (m Model) DetailChildCounts() ChildCounts {
 	return CountChildren(m.authority.Links, m.authority.Issue.UID)
 }
 
-// withRows brings the rows up to date with the authority, the loaded Issues and the active tab.
 func (m Model) withRows() Model {
-	in := rowInputs{authority: m.authority, issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar,
+	in := rowInputs{authority: m.authority, firstIssue: first(m.Issues), issueN: len(m.Issues), tab: m.tab, calendar: m.Calendar,
 		jobsProject: m.Jobs.ProjectID, jobsRequest: m.Jobs.reads.Newest(), jobsRev: m.Jobs.rev, jobsLoading: m.Jobs.Loading}
-	if len(m.Issues) > 0 {
-		in.firstIssue = &m.Issues[0]
-	}
 	if in == m.rows.inputs {
 		return m
 	}
@@ -166,7 +160,6 @@ func (m Model) withRows() Model {
 	return m
 }
 
-// commentItem is a comment row; a reply opens the comment it answers, here or in another Issue.
 func (m Model) commentItem(comment Comment) DetailItem {
 	row := DetailRow{Key: comment.UID, Author: comment.Author, Time: m.DetailTime(comment.CreatedAt), Body: comment.Body,
 		Creation: comment.Attribution.Line(comment.Author)}
@@ -177,15 +170,7 @@ func (m Model) commentItem(comment Comment) DetailItem {
 		row.Replies = fmt.Sprintf("%d replies", n)
 	}
 	if target := comment.Reply; target != nil && comment.ReplyKind != nil {
-		verb := map[string]string{"confirm": "confirms", "refute": "refutes", "supersede": "supersedes"}[*comment.ReplyKind]
-		if verb == "" {
-			verb = "replies to"
-		}
-		whose := "a comment"
-		if target.Author != nil {
-			whose = *target.Author + "'s comment"
-		}
-		row.Reply = verb + " " + whose
+		row.Reply = replyVerb(*comment.ReplyKind) + " " + answeredComment(target.Author)
 		switch {
 		case target.IssueUID != nil && *target.IssueUID != m.DetailIssueUID():
 			if target.IssueShortID != nil {
@@ -242,8 +227,6 @@ func (m Model) linkRow(link Link) DetailRow {
 	return row
 }
 
-// childItems are the detail Issue's children: the loaded ones in the list's order, then the ones not loaded in the Link
-// order. Titles, statuses and times come from the loaded Issues.
 func (m Model) childItems(links []DetailRow) []DetailItem {
 	byUID := make(map[string]DetailRow)
 	var uids []string
@@ -271,7 +254,6 @@ func (m Model) childItems(links []DetailRow) []DetailItem {
 	return items
 }
 
-// cursorRow is the row under the cursor.
 func (m Model) cursorRow() (DetailItem, bool) {
 	if m.cursor < 0 || m.cursor >= len(m.rows.items) {
 		return DetailItem{}, false
@@ -281,10 +263,9 @@ func (m Model) cursorRow() (DetailItem, bool) {
 
 func (m Model) cursorRowID() (rowID, bool) {
 	row, ok := m.withRows().cursorRow()
-	return rowID{row.Kind, row.Key}, ok
+	return row.id(), ok
 }
 
-// reanchor keeps the cursor on the row it was on (anchor) after the rows changed, else on the nearest row left.
 func (m Model) reanchor(anchor rowID, anchored bool) Model {
 	m = m.withRows()
 	if anchored {
@@ -297,7 +278,6 @@ func (m Model) reanchor(anchor rowID, anchored bool) Model {
 	return m
 }
 
-// firstActivityIndex is the cursor index of the active tab's first row (past the children).
 func (m Model) firstActivityIndex() int {
 	if i := slices.IndexFunc(m.rows.items, func(r DetailItem) bool { return r.Kind.InActivity() }); i >= 0 {
 		return i

@@ -20,7 +20,6 @@ type Phase string
 const (
 	// PhasePrepared: the journal exists with its frozen definition; nothing has been sent to kata.
 	PhasePrepared Phase = "prepared"
-	// PhaseAdmitted: kata accepted the revision-0 running observation (and the per-run Issue exists).
 	PhaseAdmitted Phase = "admitted"
 	// PhaseLaunching: saved before omp is started. A journal found here has no start record, so the process may exist.
 	PhaseLaunching Phase = "launching"
@@ -31,11 +30,9 @@ const (
 	PhaseResuming Phase = "resuming"
 	// PhaseFinished: the process is gone and its Outcome is decided (or the run is held); only reporting remains.
 	PhaseFinished Phase = "finished"
-	// PhaseSettled: every Issue write and the final observation have been sent.
-	PhaseSettled Phase = "settled"
+	PhaseSettled  Phase = "settled"
 )
 
-// Hold reasons a Run can end with (ADR-0005).
 const (
 	HoldAdmissionRejected = "admission_rejected"
 	HoldCreateRejected    = "create_rejected"
@@ -52,7 +49,6 @@ const (
 	HoldAgentQuota = "agent_quota"
 )
 
-// IntentKind names a kata write a run still owes (ADR-0006 "Reporting intents").
 type IntentKind string
 
 const (
@@ -67,19 +63,17 @@ const (
 
 // Intent is one owed kata write, saved with its exact payload before it is sent; a retry reuses it.
 type Intent struct {
-	Kind  IntentKind `json:"kind"`
-	Key   string     `json:"key,omitempty"`
-	Text  string     `json:"text,omitempty"`
-	Done  bool       `json:"done,omitempty"`
-	Error string     `json:"error,omitempty"`
-	// Recipient is a notify intent's resolved inbox address, empty until it is resolved.
-	Recipient string `json:"recipient,omitempty"`
+	Kind      IntentKind `json:"kind"`
+	Key       string     `json:"key,omitempty"`
+	Text      string     `json:"text,omitempty"`
+	Done      bool       `json:"done,omitempty"`
+	Error     string     `json:"error,omitempty"`
+	Recipient string     `json:"recipient,omitempty"`
 	// Inspect says the write cannot be delivered without a person looking: kata holds something a retry would
 	// overwrite. The run is settled with it marked and `worker status` and `worker doctor` name it (ADR-0006).
 	Inspect string `json:"inspect,omitempty"`
 }
 
-// Journal is run.json: everything the worker needs to continue one Run alone.
 type Journal struct {
 	Version   int    `json:"version"`
 	RunUID    string `json:"run_uid"`
@@ -154,13 +148,11 @@ type Journal struct {
 	CarriedCost *float64 `json:"carried_cost_usd,omitempty"`
 }
 
-// CancelRecord is who asked a running run to stop.
 type CancelRecord struct {
 	By string    `json:"by"`
 	At time.Time `json:"at"`
 }
 
-// addTokens sums two optional token counts; nil only when neither is known.
 func addTokens(a, b *int64) *int64 {
 	if a == nil && b == nil {
 		return nil
@@ -175,7 +167,6 @@ func addTokens(a, b *int64) *int64 {
 	return &sum
 }
 
-// addCost sums two optional costs; nil only when neither is known.
 func addCost(a, b *float64) *float64 {
 	if a == nil && b == nil {
 		return nil
@@ -190,7 +181,6 @@ func addCost(a, b *float64) *float64 {
 	return &sum
 }
 
-// withCarried adds the carried tokens and cost of earlier resumed attempts to an outcome's own.
 func (j *Journal) withCarried(o *Outcome) *Outcome {
 	o.InputTokens, o.OutputTokens = addTokens(j.CarriedInput, o.InputTokens), addTokens(j.CarriedOutput, o.OutputTokens)
 	o.CostUSD = addCost(j.CarriedCost, o.CostUSD)
@@ -208,7 +198,6 @@ type ResumeRecord struct {
 	Detail string `json:"detail"`
 }
 
-// attempt is the number of the current attempt of the prompt step, starting at 1.
 func (j *Journal) attempt() int { return max(j.Attempt, 1) }
 
 // NotifySpec is a notify job's request as frozen when the run was prepared. Recipient may still be the alias
@@ -220,13 +209,11 @@ type NotifySpec struct {
 	Resolved *ResolvedNotice `json:"resolved,omitempty"`
 }
 
-// ResolvedNotice is an inbox request with its recipient and text settled.
 type ResolvedNotice struct {
 	Recipient string `json:"recipient"`
 	Message   string `json:"message"`
 }
 
-// JournalIssue is the run's Issue.
 type JournalIssue struct {
 	UID      string `json:"uid"`
 	Ref      string `json:"ref"`
@@ -245,7 +232,6 @@ type LaunchRecord struct {
 	At         time.Time `json:"at"`
 }
 
-// ExitRecord is the process's recorded exit status.
 type ExitRecord struct {
 	Code     int       `json:"code"`
 	Signal   string    `json:"signal,omitempty"`
@@ -279,7 +265,6 @@ func (o *Outcome) holdDetail() string {
 // abandon summary word it so.
 func (o *Outcome) holdLine() string { return o.Hold + ": " + o.holdDetail() }
 
-// Inspections are the reasons the run's reports could not be delivered without a person looking.
 func (j *Journal) Inspections() []string {
 	var out []string
 	for _, it := range j.Intents {
@@ -327,7 +312,6 @@ type Store struct {
 
 func gateKey(projectUID, jobUID string) string { return projectUID + "/" + jobUID }
 
-// noteGate records the journal's state in the overlap index. It is called where a journal is saved.
 func (s *Store) noteGate(j *Journal) {
 	s.gateMu.Lock()
 	defer s.gateMu.Unlock()
@@ -408,7 +392,6 @@ func (s *Store) RunsReadable() error {
 	return nil
 }
 
-// NewStore opens the journals under dirs.
 func NewStore(dirs Dirs, hooks Hooks) *Store {
 	return &Store{dirs: dirs, hooks: hooks}
 }
@@ -420,14 +403,12 @@ func (s *Store) path(uid string) string { return filepath.Join(s.RunDir(uid), "r
 
 func (s *Store) lock(uid string) *sync.Mutex { return s.locks.get(uid) }
 
-// ErrNoJournal means the run has no journal here.
 var ErrNoJournal = errors.New("no journal")
 
 // errDamagedJournal marks a journal that was read but is not a valid one; a read failure is not damage and must not
 // quarantine a healthy run.
 var errDamagedJournal = errors.New("damaged journal")
 
-// Load reads a run's journal.
 func (s *Store) Load(uid string) (*Journal, error) {
 	raw, err := readFile(s.path(uid))
 	if errors.Is(err, fs.ErrNotExist) {
@@ -446,7 +427,6 @@ func (s *Store) Load(uid string) (*Journal, error) {
 	return &j, nil
 }
 
-// Create saves a new journal, failing when one exists, then calls the hook at point.
 func (s *Store) Create(j *Journal, point string) error {
 	l := s.lock(j.RunUID)
 	l.Lock()
@@ -457,7 +437,6 @@ func (s *Store) Create(j *Journal, point string) error {
 	return s.write(j, point)
 }
 
-// Update applies change to the saved journal and saves the result, then calls the hook at point. It returns the new journal.
 func (s *Store) Update(uid, point string, change func(*Journal) error) (*Journal, error) {
 	l := s.lock(uid)
 	l.Lock()
@@ -512,6 +491,15 @@ func (s *Store) write(j *Journal, point string) error {
 // replaceFile writes path durably: temp file, fsync, rename, folder sync (not on Windows). A failed folder sync fails
 // the save though the file may already have been replaced; recovery handles either version (ADR-0006).
 func replaceFile(path string, raw []byte) error { return replaceFileSyncing(path, raw, syncDir) }
+
+// saveJSON writes v as the JSON file at path, creating its folder. A state file is plain data, so marshaling it cannot fail.
+func saveJSON(path string, v any) error {
+	raw, _ := json.Marshal(v)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return replaceFile(path, raw)
+}
 
 func replaceFileSyncing(path string, raw []byte, sync func(dir string) error) error {
 	dir := filepath.Dir(path)
@@ -630,10 +618,8 @@ func (s *Store) dropFromGates(uid string) {
 	}
 }
 
-// Quarantined is where a damaged journal of uid lives.
 func (s *Store) Quarantined(uid string) string { return filepath.Join(s.dirs.Quarantine(), uid) }
 
-// Quarantine lists the quarantined uids.
 func (s *Store) Quarantine() []string {
 	entries, _ := os.ReadDir(s.dirs.Quarantine())
 	var uids []string
@@ -643,7 +629,6 @@ func (s *Store) Quarantine() []string {
 	return uids
 }
 
-// IsQuarantined reports whether uid's journal was set aside.
 func (s *Store) IsQuarantined(uid string) bool {
 	_, err := os.Stat(s.Quarantined(uid))
 	return err == nil
@@ -665,11 +650,7 @@ func (s *Store) Acknowledge(uid, by string, at time.Time) error {
 	if !s.IsQuarantined(uid) {
 		return fmt.Errorf("run %s is not in quarantine", uid)
 	}
-	raw, err := json.Marshal(acknowledgement{By: by, At: at.UTC()})
-	if err != nil {
-		return err
-	}
-	return replaceFile(s.acknowledgementPath(uid), raw)
+	return saveJSON(s.acknowledgementPath(uid), acknowledgement{By: by, At: at.UTC()})
 }
 
 // Acknowledged says who acknowledged the quarantined run, if anyone did.
@@ -720,7 +701,6 @@ func (s *Store) Retain(cutoff time.Time) (removed []string, err error) {
 	return removed, err
 }
 
-// expired reports whether a journal may be removed: settled, nothing unsent, not held, ended before cutoff.
 func expired(j *Journal, cutoff time.Time) bool {
 	if !j.settled() || j.held() || j.Outcome == nil || !j.Outcome.At.Before(cutoff) {
 		return false

@@ -5,40 +5,35 @@ import (
 	"time"
 )
 
-// Issue is an Issue as the Pane shows it. The gateway translates it from kata's wire shape.
 type Issue struct {
 	AssignmentExpiresOn *time.Time
-	// Attribution is kata's creation attribution of the Issue.
-	Attribution  Attribution
-	Author       string
-	Body         string
-	ClosedAt     *time.Time
-	ClosedReason *string
-	CreatedAt    time.Time
-	// CronOccurrence is set on an Issue a Cron job made.
-	CronOccurrence  *CronOccurrence
-	DeadlineOnDate  *string
-	ID              int64
-	Labels          []string
-	Metadata        map[string]any
-	Owner           *string
-	Priority        *int64
-	ProjectID       int64
-	ProjectName     string
-	ProjectUID      *string
-	QualifiedID     string
-	RecurrenceID    *int64
-	Revision        int64
-	ScheduledOnDate *string
-	ShortID         string
-	Status          string
-	Title           string
-	UID             string
-	UpdatedAt       time.Time
+	Attribution         Attribution
+	Author              string
+	Body                string
+	ClosedAt            *time.Time
+	ClosedReason        *string
+	CreatedAt           time.Time
+	CronOccurrence      *CronOccurrence
+	DeadlineOnDate      *string
+	ID                  int64
+	Labels              []string
+	Metadata            map[string]any
+	Owner               *string
+	Priority            *int64
+	ProjectID           int64
+	ProjectName         string
+	ProjectUID          *string
+	QualifiedID         string
+	RecurrenceID        *int64
+	Revision            int64
+	ScheduledOnDate     *string
+	ShortID             string
+	Status              string
+	Title               string
+	UID                 string
+	UpdatedAt           time.Time
 }
 
-// Qualified is the Issue as kata names it across Projects, project#short id: its own qualified id when set, else built from
-// its Project and short id; empty when it has neither.
 func (i Issue) Qualified() string {
 	if i.QualifiedID != "" || i.ProjectName == "" || i.ShortID == "" {
 		return i.QualifiedID
@@ -46,10 +41,8 @@ func (i Issue) Qualified() string {
 	return i.ProjectName + "#" + i.ShortID
 }
 
-// IsClosed says the Issue is closed; any other status counts as open.
 func IsClosed(issue Issue) bool { return issue.Status == "closed" }
 
-// Project is a Project as the Pane holds it. The gateway translates it from kata's wire shape.
 type Project struct {
 	ID       int64
 	Name     string
@@ -70,36 +63,29 @@ type Model struct {
 	// VerifiedSenders says the daemon derives the actor of every write from the credential (kata's identity mode), as the Pane's own
 	// capability read reports. A message from another actor or to another host is refused until it does; false until the answer arrives.
 	VerifiedSenders bool
-	// accountReads numbers the asks for the connection's own capabilities; the Credentials Page numbers its own.
-	accountReads Latest
+	accountReads    Latest
 	// accountAnswered says a read of them succeeded on this connection, so the stream opening again asks no more.
 	accountAnswered bool
 	LiveState
 	IssueDetail
-	Create CreateState
-	// Agents is the latest agent state list the window half relayed.
-	Agents AgentStatesRelay
-	// AgentClose is what ending finished Background agents remembers.
+	Create     CreateState
+	Agents     AgentStatesRelay
 	AgentClose agentCloseState
 	// pending is the Issue Create just made, selected as soon as a snapshot lists it.
-	pending string
-	// etag answers etagQuery: the snapshot on screen.
-	etag         string
-	etagQuery    SnapshotQuery
-	CloseForm    CloseFormState
-	DatesForm    DatesFormState
-	DateCalendar CalendarState
-	DeleteForm   DeleteFormState
-	TokenForm    TokenFormState
-	RevokeCard   RevokeState
-	// AgentCard is the Agent card, which lists an Issue's agents.
-	AgentCard AgentCardState
-	// AgentSessions is what the Agent card read of the agents' session files.
+	pending        string
+	etag           string
+	etagQuery      SnapshotQuery
+	CloseForm      CloseFormState
+	DatesForm      DatesFormState
+	DateCalendar   CalendarState
+	DeleteForm     DeleteFormState
+	TokenForm      TokenFormState
+	RevokeCard     RevokeState
+	AgentCard      AgentCardState
 	AgentSessions  agentSessionState
 	RecurrenceForm RecurrenceFormState
 	JobForm        JobFormState
-	// Backfill is the card that asks whether the runs a native job missed are created before the job runs again.
-	Backfill BackfillState
+	Backfill       BackfillState
 	// Now is the instant the Pane driver last stepped the model at: the model reads no clock, so what it counts against the
 	// time, as the runs a job missed, counts against this.
 	Now   time.Time
@@ -112,10 +98,8 @@ type Model struct {
 	HostID    string
 	FieldForm FieldFormState
 	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
-	Notice string
-	// NoticeLink is the part of the Notice a click opens as an Issue; it goes with the Notice.
-	NoticeLink *NoticeLink
-	// MoveProject is the Move card, which moves the selected Issue to another Project.
+	Notice      string
+	NoticeLink  *NoticeLink
 	MoveProject MoveProjectState
 	// afterMove is the Issue just moved to another Project and its neighbouring row, until a snapshot stops listing it.
 	afterMove *movedIssue
@@ -131,8 +115,7 @@ type Model struct {
 	AgentAttention []RaisedAttention
 	// AgentGone are the entries of agents this Pane started whose block went (pruned from agents.json) without a relay showing them
 	// exited, until the exit request for their Issue is decided.
-	AgentGone []AgentEntry
-	// AgentMessage is the Message card, which writes a message to an agent from the Attention Page.
+	AgentGone    []AgentEntry
 	AgentMessage AgentMessageState
 	// goneAgentClears says, by block, how far the clear of an exited agent's Agent address and record has got: asked, or done (kept
 	// while the agent is mapped or gone). A failed clear is dropped, so the next sweep asks again.
@@ -141,16 +124,14 @@ type Model struct {
 	// start: an answer that read the file before the start wrote the entry does not hold it, and that is no sign the agent is gone.
 	// Only an answer to a later request settles it.
 	agentFresh map[string]int64
-	// agentAsks counts the RefreshAgents and PruneAgents the Pane has asked for.
-	agentAsks int64
+	agentAsks  int64
 	// agentsPruned says the first PruneAgents answer is in; sweepPending holds a wrap-up sweep asked for before it and the first
 	// relay were both in.
-	agentsPruned bool
-	sweepPending bool
-	Project      Project
-	Daemon       Daemon
-	Snapshot     Snapshot
-	// Relationships is every Issue's Relationships, built from Snapshot's links each time a snapshot is applied.
+	agentsPruned  bool
+	sweepPending  bool
+	Project       Project
+	Daemon        Daemon
+	Snapshot      Snapshot
 	Relationships RelationshipIndex
 	Issues        []Issue
 	SelectedUID   string
@@ -159,8 +140,7 @@ type Model struct {
 	Cols          int
 	Rows          int
 	Quitting      bool
-	// AskQuit is the question "Quit tern-kata? y/n" while it is on screen.
-	AskQuit bool
+	AskQuit       bool
 	// QuitAtOnce is kata's [tui].confirm_quit = false, read at launch: q quits without asking.
 	QuitAtOnce       bool
 	Collection       Collection
@@ -169,33 +149,29 @@ type Model struct {
 	SidebarLevel     MenuLevel
 	Bound            bool
 	Picker           PickerState
-	// Views is views.toml as the Pane last read it; ViewForm is the View card; ActiveView is the saved view this Pane opened.
-	Views       ViewsState
-	ViewForm    ViewFormState
-	ActiveView  ActiveView
-	ProjectForm ProjectFormState
-	LanesForm   LanesFormState
-	WorkerCard  WorkerCardState
-	// Dropdown is the open list of a popup card's select, if one is open.
-	Dropdown     Dropdown
-	Focus        Column
-	Groups       []IssueGroup
-	Calendar     PaneCalendar
-	HelpOpen     bool
-	Flat         bool
-	GraphOrder   bool // nested siblings in blocking order, not creation order; Pane state, never saved
-	ExpandedUIDs map[string]bool
-	Drafts       map[string]Draft
-	EditorUID    string
-	Filters      Filters
-	// DefaultFilters is the bound Project's saved default filter, empty when it has none.
-	DefaultFilters Filters
-	Search         SearchState
-	// PageSearch is the search of the Jobs, Runs or Workflows Page that is current.
-	PageSearch PageSearchState
-	IDSearch   IDSearch
-	FilterForm FilterFormState
-	Page       Page
+	Views            ViewsState
+	ViewForm         ViewFormState
+	ActiveView       ActiveView
+	ProjectForm      ProjectFormState
+	LanesForm        LanesFormState
+	WorkerCard       WorkerCardState
+	Dropdown         Dropdown
+	Focus            Column
+	Groups           []IssueGroup
+	Calendar         PaneCalendar
+	HelpOpen         bool
+	Flat             bool
+	GraphOrder       bool // nested siblings in blocking order, not creation order; Pane state, never saved
+	ExpandedUIDs     map[string]bool
+	Drafts           map[string]Draft
+	EditorUID        string
+	Filters          Filters
+	DefaultFilters   Filters
+	Search           SearchState
+	PageSearch       PageSearchState
+	IDSearch         IDSearch
+	FilterForm       FilterFormState
+	Page             Page
 	// pageDetailHidden is the detail column's hidden flag from before the current Page took its place; leavePage restores it.
 	pageDetailHidden bool
 	Board            BoardState
@@ -210,19 +186,16 @@ type Model struct {
 	// lanesWanted is the Lanes card a Config Page jump waits for: it opens once the Lane list read for the Board answers, so the
 	// card starts on the source in use, and the wish ends when it opens or the Board is left.
 	lanesWanted bool
-	// Worker is what the Pane knows of this machine's worker: whether it runs, what it serves and the local state of its runs.
-	Worker    WorkerState
-	Workflows WorkflowsState
+	Worker      WorkerState
+	Workflows   WorkflowsState
 	// Attention is the Attention Page's state, which no Project or Collection change resets.
 	Attention AttentionState
 	// Moving is the Issue whose Move is in flight; further Moves wait for its result.
 	Moving string
-	// Undo is the history of changes `u` takes back.
-	Undo UndoHistory
+	Undo   UndoHistory
 	// nonce is the random per-run prefix of every idempotency key and keys counts the keys minted.
-	nonce string
-	keys  int
-	// collection keeps the rows and columns worked out from Issues and the snapshot; see collectionRows.
+	nonce      string
+	keys       int
 	collection collectionRows
 }
 

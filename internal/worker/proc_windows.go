@@ -26,13 +26,11 @@ const (
 
 var procOpenJobObject = windows.NewLazySystemDLL("kernel32.dll").NewProc("OpenJobObjectW")
 
-// jobs holds the worker's handle to each job it made, by name, until the job is proven empty.
 var jobs = struct {
 	sync.Mutex
 	held map[string]windows.Handle
 }{held: map[string]windows.Handle{}}
 
-// basicAccounting is JOBOBJECT_BASIC_ACCOUNTING_INFORMATION.
 type basicAccounting struct {
 	TotalUserTime, TotalKernelTime, ThisPeriodTotalUserTime, ThisPeriodTotalKernelTime int64
 	TotalPageFaultCount, TotalProcesses, ActiveProcesses, TotalTerminatedProcesses     uint32

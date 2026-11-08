@@ -69,7 +69,7 @@ func attentionPageWith(t *testing.T, requests []model.AttentionRequest, skipped 
 
 func attentionCardText(t *testing.T, s driver.State, uid string) string {
 	t.Helper()
-	id := view.AttentionID(uid)
+	id := view.AttentionListID + "." + uid
 	var text string
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if n.ID == id || strings.HasPrefix(n.ID, id+".") {
@@ -345,7 +345,7 @@ func TestSixReturnsToTheAttentionPageAsItWas(t *testing.T) {
 
 func TestClickingARequestSelectsIt(t *testing.T) {
 	s := attentionPageWith(t, attentionRequests(t), 0)
-	out := step(t, s, click(view.AttentionID("work-cc33"), view.AttentionClick("work-cc33")))
+	out := step(t, s, click(view.AttentionListID+".work-cc33", view.AttentionClick("work-cc33")))
 	if got := out.State.Model.Attention.Selected; got != "work-cc33" {
 		t.Fatalf("selected %q after the click", got)
 	}

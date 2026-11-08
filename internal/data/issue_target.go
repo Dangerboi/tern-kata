@@ -32,7 +32,6 @@ func issueReadError(err error) error {
 // ulid is the shape of a kata Issue UID; any other ref is a short id, optionally behind "<project>#".
 var ulid = regexp.MustCompile(`(?i)^[0-9A-HJKMNP-TV-Z]{26}$`)
 
-// issueTarget is an Issue named by a ref, read once, with the Project the workspace is bound to.
 type issueTarget struct {
 	issue   g.ShowIssueOut
 	binding model.Project
@@ -90,7 +89,6 @@ func (c *Client) readIssueTarget(ctx context.Context, workspace, ref string) (is
 	return target, nil
 }
 
-// projectNames is the name of every Project by id.
 func (c *Client) projectNames(ctx context.Context) (map[int64]string, error) {
 	response, err := c.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{})
 	if err != nil {

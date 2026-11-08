@@ -58,7 +58,6 @@ func sendAgentsBack(m Model) (Model, []Cmd) {
 	return m.sendBack(func(block string) bool { return m.Agents.answered(block) })
 }
 
-// sendBack sends back every open background agent of this Pane whose block pick accepts, and marks it as being moved.
 func (m Model) sendBack(pick func(block string) bool) (Model, []Cmd) {
 	if m.PaneBlock == "" {
 		return m, nil
@@ -101,7 +100,6 @@ type SetAgentOpen struct {
 
 func (SetAgentOpen) cmd() {}
 
-// AgentOpenSet answers SetAgentOpen; on Err the entry stays as it was.
 type AgentOpenSet struct {
 	Block      string
 	Open       bool

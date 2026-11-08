@@ -10,7 +10,6 @@ import (
 // Panes started that have not exited, the second writes a message to one of them (or to each on an Issue) the way the Message
 // card does, as the sender's actor with the sender's teammate on it, so the receiving extension words it as from a peer.
 
-// AgentStatesSaved answers SaveAgentStates.
 type AgentStatesSaved struct{ Err error }
 
 func (AgentStatesSaved) msg() {}
@@ -21,7 +20,6 @@ type SaveAgentStates struct{ States []AgentState }
 
 func (SaveAgentStates) cmd() {}
 
-// CheckAgentMessage is the text trimmed, or the refusal a message to an agent gets: nothing typed, or more than kata takes.
 func CheckAgentMessage(text string) (string, error) {
 	text = strings.TrimSpace(text)
 	switch {
@@ -33,8 +31,6 @@ func CheckAgentMessage(text string) (string, error) {
 	return text, nil
 }
 
-// RunningAgents lists the agents of entries that have not exited, in the mapping's order, each with the state the relay gave its
-// block ("" when no relay listed it).
 func RunningAgents(entries []AgentEntry, states []AgentState) []IssueAgent {
 	var running []IssueAgent
 	for _, entry := range entries {
@@ -59,7 +55,6 @@ func (e AgentEntry) OnIssue(ref string) bool {
 	return ref == e.IssueRef || ref == e.IssueUID || ref == short
 }
 
-// AgentsOnIssue keeps the agents on the Issue ref names.
 func AgentsOnIssue(agents []IssueAgent, ref string) []IssueAgent {
 	var found []IssueAgent
 	for _, a := range agents {

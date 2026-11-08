@@ -12,7 +12,6 @@ import (
 // What the Agent card shows of each omp agent besides its relayed state comes from the agent's session file: its model, the tool
 // calls so far, the tool it is running now and the cost so far. The Pane reads a bounded tail of the file while the card is open.
 
-// AgentSessionEvery is how often the open Agent card reads the sessions again.
 const AgentSessionEvery = 2 * time.Second
 
 // AgentSessionAsk names one agent whose session is to be read: its block and the prompt file the session path file sits beside.
@@ -22,7 +21,6 @@ type AgentSessionAsk struct {
 	PromptFile string
 }
 
-// ReadAgentSessions asks for the sessions of Agents now. Request numbers the asks.
 type ReadAgentSessions struct {
 	Request int64
 	Agents  []AgentSessionAsk
@@ -36,7 +34,6 @@ type WaitAgentSessions struct{ Request int64 }
 
 func (WaitAgentSessions) cmd() {}
 
-// AgentSessionTick answers WaitAgentSessions.
 type AgentSessionTick struct{ Request int64 }
 
 func (AgentSessionTick) msg() {}
@@ -46,8 +43,7 @@ func (AgentSessionTick) msg() {}
 type AgentSessionFacts struct {
 	Block  string
 	Reason string
-	// Model is the model of the session's last assistant message.
-	Model string
+	Model  string
 	// ToolCalls is the number of tool calls in the tail read; CurrentTool the tool of the last call with no result after it.
 	ToolCalls   int
 	CurrentTool string
@@ -58,7 +54,6 @@ type AgentSessionFacts struct {
 	Partial bool
 }
 
-// AgentSessionsRead answers ReadAgentSessions.
 type AgentSessionsRead struct {
 	Request  int64
 	Sessions []AgentSessionFacts
@@ -76,7 +71,6 @@ type agentSessionState struct {
 	Sessions []AgentSessionFacts
 }
 
-// AgentSessionFor is the session facts last read for the agent in block, false when none were read yet.
 func (m Model) AgentSessionFor(block string) (AgentSessionFacts, bool) {
 	i := slices.IndexFunc(m.AgentSessions.Sessions, func(s AgentSessionFacts) bool { return s.Block == block })
 	if i < 0 {
@@ -139,7 +133,6 @@ func agentSessionTick(m Model, msg AgentSessionTick) (Model, []Cmd) {
 	return askAgentSessions(m)
 }
 
-// AgentFact is one line of the Agent card's detail for the selected agent; Muted lines are the reasons a fact is missing.
 type AgentFact struct {
 	Text  string
 	Muted bool
@@ -227,7 +220,6 @@ func sessionSummary(s AgentSessionFacts) string {
 	return strings.Join(parts, " · ")
 }
 
-// AgentSessionNotOmpReason is what the card says of an agent that is not omp, which has no session to read.
 const AgentSessionNotOmpReason = "not an omp agent: no session to read"
 
 func (m Model) agentNotOmp(block string) bool {

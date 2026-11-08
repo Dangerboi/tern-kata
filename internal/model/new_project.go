@@ -38,7 +38,6 @@ type BindProject struct{ Workspace, Actor, Name string }
 
 func (BindProject) cmd() {}
 
-// ProjectSaved is the daemon's answer to CreateProject or BindProject.
 type ProjectSaved struct {
 	Project Project
 	Err     error

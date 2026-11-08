@@ -12,10 +12,5 @@
 //   - ADR-0009 prompt and contract: BuildPrompt, agentArgs and the closure check in report (agent.go, run.go).
 //   - ADR-0010 configuration: one strict worker.toml (config.go).
 //
-// Extension points for later work: Worker.prepare (the one place a Run is admitted to a slot; scheduling calls it with
-// a derived occurrence), Worker.advance and Worker.recoverRun (the journal state machine every phase flows through),
-// the Intent list on Journal (reporting writes), Hooks.AfterSave (crash tests), projectState.jobs (the definitions
-// cache refreshed by the event follower), and the control Request ops in control.go (resume, abandon).
-//
 // The worker reaches kata only through Kata, the HTTP client; the only place the generated types appear.
 package worker

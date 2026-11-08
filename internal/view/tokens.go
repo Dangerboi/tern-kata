@@ -8,8 +8,7 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// tokenLayer is the Token card: the fields of a new API token, or once it is made the token's id and the file that holds its
-// secret. The secret itself is never drawn: the Pane never holds it.
+// The secret itself is never drawn: the Pane never holds it.
 func tokenLayer(m model.Model) tern.Element {
 	form := m.TokenForm
 	if !form.Open {
@@ -47,7 +46,6 @@ func tokenLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardToken)}, Head: ui.T("New token"), Icon: ui.IconKey, Modal: true, Size: ui.SizeLG}, children))
 }
 
-// revokeLayer is the confirmation before a token is revoked.
 func revokeLayer(m model.Model) tern.Element {
 	r := m.RevokeCard
 	if !r.Open {

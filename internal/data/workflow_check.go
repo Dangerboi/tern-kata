@@ -19,7 +19,6 @@ type promptBudget struct {
 	missing bool
 }
 
-// readPromptBudget loads worker.toml the way the Worker does and reads its prompt limit.
 func (g *Gateway) readPromptBudget() promptBudget {
 	dirs, err := g.workerDirs()
 	if err != nil {
@@ -36,7 +35,6 @@ func (g *Gateway) readPromptBudget() promptBudget {
 	return promptBudget{max: &limit}
 }
 
-// reading is the Worker's reading of one definition against the budget.
 func (b promptBudget) reading(d cronjob.WorkflowDefinition) model.WorkerReading {
 	check := worker.CheckWorkflow(d, b.max)
 	out := model.WorkerReading{Refusals: check.Refusals, BudgetUnchecked: check.BudgetUnchecked}
@@ -46,13 +44,11 @@ func (b promptBudget) reading(d cronjob.WorkflowDefinition) model.WorkerReading 
 	return out
 }
 
-// readWorkflowText answers the card's ask, After its pause, with the request number it came with.
 func (g *Gateway) readWorkflowText(ctx context.Context, cmd model.ReadWorkflowText) model.WorkflowTextRead {
 	pause(ctx, cmd.After)
 	return model.WorkflowTextRead{Request: cmd.Request, Reading: g.readPromptBudget().reading(cmd.Definition)}
 }
 
-// readWorkflowsAfter puts the Worker's reading of each loaded Workflow into the load.
 var readWorkflowsAfter = afterStep{"read the Worker's reading of each Workflow", func(g *Gateway, _ context.Context, _ model.Cmd, result model.Msg) model.Msg {
 	loaded, ok := result.(model.WorkflowsLoaded)
 	if !ok || loaded.Err != nil {

@@ -11,10 +11,8 @@ import (
 // exists, whether it loads (the loader's own error when it does not) and a one-line summary of what it holds. It is read again on
 // every entry and acts on no Project, so it has no reset rule.
 
-// ConfigFileKey is the stable key of a row, which later actions and tests name a row by.
 type ConfigFileKey string
 
-// The rows of the Config Page, in the order the Page lists them.
 const (
 	ConfigLanes   ConfigFileKey = "lanes"
 	ConfigFilters ConfigFileKey = "filters"
@@ -48,18 +46,13 @@ const (
 	ConfigSwitch ConfigAction = "switch"
 )
 
-// ConfigFile is one row of the Config Page.
 type ConfigFile struct {
-	Key   ConfigFileKey
-	Title string
-	// Path is the file's absolute path on this machine.
-	Path   string
-	Status ConfigFileStatus
-	// Err is the loader's own error text when Status is ConfigBroken, "" otherwise.
-	Err string
-	// Summary is the one line of what the file holds, or what a missing file implies.
+	Key     ConfigFileKey
+	Title   string
+	Path    string
+	Status  ConfigFileStatus
+	Err     string
 	Summary string
-	// Actions are the keys the row offers.
 	Actions []ConfigAction
 	// Text is the file's text as read, "" when it is missing: the base an edit of the file must still find on disk. Only the
 	// agent.toml row has it.
@@ -70,10 +63,8 @@ type ConfigFile struct {
 	Supervised bool
 }
 
-// Has says the row offers action.
 func (f ConfigFile) Has(action ConfigAction) bool { return slices.Contains(f.Actions, action) }
 
-// StatusWords is the status as the row says it.
 func (f ConfigFile) StatusWords() string {
 	if f.Key == ConfigDocbank && f.Status != ConfigBroken {
 		if f.Status == ConfigLoads {
@@ -123,7 +114,6 @@ type DocbankSupervisionSet struct {
 
 func (DocbankSupervisionSet) msg() {}
 
-// AgentDraftUID is the key of the $EDITOR round trip of agent.toml.
 const AgentDraftUID = "agent-config-draft"
 
 // ErrAgentConfigChanged is SaveAgentConfig finding agent.toml no longer as the edit began: nothing was written.
@@ -144,7 +134,6 @@ type AgentConfigSaved struct {
 
 func (AgentConfigSaved) msg() {}
 
-// ConfigActMsg is a click on a row's action: the row's key, and the action it names.
 type ConfigActMsg struct {
 	Key    ConfigFileKey
 	Action ConfigAction
@@ -152,14 +141,12 @@ type ConfigActMsg struct {
 
 func (ConfigActMsg) msg() {}
 
-// ConfigPageState is the Config Page's state. The rows are read again on every entry.
 type ConfigPageState struct {
 	Loading bool
 	Err     error
 	Folder  string
 	Files   []ConfigFile
-	// Cursor indexes Files.
-	Cursor int
+	Cursor  int
 	// Switching says a Docbank supervision switch is out; s waits for its answer.
 	Switching bool
 	// Saving says an agent.toml save is out; e waits for its answer.
@@ -173,31 +160,19 @@ type ConfigPageState struct {
 	reads      Latest
 }
 
-// OnConfig says the Config Page is current.
 func (m Model) OnConfig() bool { return m.Page == PageConfig }
 
-// configMode is the Config Page's mode: the Menu's while the sidebar has the keyboard.
-func configMode(m Model) Mode {
-	if m.Focus == ColumnCollections {
-		return ""
-	}
-	return ModeConfig
-}
+var configMode = sidebarMode(ModeConfig)
 
-// enterConfig starts a fresh reading of the files.
 func enterConfig(m Model) (Model, []Cmd) {
 	m.ConfigPage = ConfigPageState{reads: m.ConfigPage.reads, Loading: true}
 	return m, []Cmd{LoadConfigFiles{Request: m.ConfigPage.reads.Ask()}}
 }
 
-// clearConfig drops what the Page held and every read still out.
 func clearConfig(m Model) Model {
 	m.ConfigPage = ConfigPageState{reads: m.ConfigPage.reads.Discarded()}
 	return m
 }
-
-// configBack is esc and backspace: the Page shown before.
-func configBack(m Model) (Model, []Cmd) { return showPage(m.letteredFrom)(m) }
 
 func updateConfig(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
@@ -234,31 +209,19 @@ func updateConfig(m Model, msg Msg) (Model, []Cmd, bool) {
 	return m, nil, true
 }
 
-// moveConfig moves the cursor by action: one row, to either end, or a page.
 func moveConfig(m Model, action Action) Model {
-	n := len(m.ConfigPage.Files)
-	if n == 0 {
-		return m
-	}
-	m.ConfigPage.Cursor = movedIndex(m.ConfigPage.Cursor, n, listPage, action)
+	moveCursor(&m.ConfigPage.Cursor, len(m.ConfigPage.Files), action)
 	return m
 }
 
-// SelectedConfigFile is the row under the cursor, nil when there is none.
 func (m Model) SelectedConfigFile() *ConfigFile {
-	c := m.ConfigPage
-	if c.Cursor < 0 || c.Cursor >= len(c.Files) {
-		return nil
-	}
-	return &c.Files[c.Cursor]
+	return rowAt(m.ConfigPage.Files, m.ConfigPage.Cursor)
 }
 
-// Summary is the line under the title: how many files the Page lists and where they are.
 func (c ConfigPageState) Summary() string {
 	return strconv.Itoa(len(c.Files)) + " files in " + oneLine(c.Folder)
 }
 
-// ConfigNotice is what stands in place of the Config Page's list; Err says it is a failure, which the view draws as one.
 type ConfigNotice struct {
 	Text string
 	Err  bool
@@ -275,7 +238,6 @@ func (c ConfigPageState) Notice() (ConfigNotice, bool) {
 	return ConfigNotice{}, false
 }
 
-// configOpenLabel is enter's label on the selected row: what it opens.
 func configOpenLabel(m Model) string {
 	if f := m.SelectedConfigFile(); f != nil {
 		return ConfigActionLabel(*f, ConfigOpen)
@@ -338,7 +300,7 @@ func openConfigFile(m Model) (Model, []Cmd) {
 		}
 		return m, cmds
 	case ConfigViews:
-		m, cmds := configBack(m)
+		m, cmds := letteredBack(m)
 		if m.OnConfig() {
 			return m, cmds
 		}
@@ -486,12 +448,11 @@ func agentConfigSaved(m Model, msg AgentConfigSaved) (Model, []Cmd) {
 	return m, []Cmd{LoadConfigFiles{Request: c.reads.Ask()}}
 }
 
-// configRows are the Config Page's own keys beyond its movement keys.
 var configRows = []actionEntry{
 	{action: OpenConfigFile, modes: []Mode{ModeConfig}, keys: keys("enter", "↵"), help: "open", label: configOpenLabel, footer: []Mode{ModeConfig}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 40, "open the card or Page that edits the selected file"}}, handle: openConfigFile, when: selectedConfigOffers(ConfigOpen)},
 	{action: SwitchDocbank, modes: []Mode{ModeConfig}, keys: keys("s", "s"), help: "supervision", label: configSwitchLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 41, "turn the plugin's supervision of Docbank off or on"}}, handle: switchDocbank, when: selectedConfigOffers(ConfigSwitch)},
 	{action: EditAgentConfig, modes: []Mode{ModeConfig}, keys: keys("e", "e"), help: "edit", label: configEditLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 42, "edit agent.toml in $EDITOR; it is checked before it is written"}}, handle: editAgentConfig, when: selectedConfigOffers(ConfigEdit)},
-	{action: LetteredBack, modes: []Mode{ModeConfig}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 1, "back to the Page shown before"}}, handle: configBack},
+	letteredBackRow(ModeConfig, letteredBack),
 }
 
 func configSwitchLabel(m Model) string {

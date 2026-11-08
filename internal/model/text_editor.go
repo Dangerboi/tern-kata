@@ -74,10 +74,8 @@ func (e TextEditor) Undo() TextEditor {
 
 var lineBreaks = strings.NewReplacer("\r\n", "\n", "\r", "\n")
 
-// normalizeLineBreaks turns CRLF and lone CR into LF.
 func normalizeLineBreaks(text string) string { return lineBreaks.Replace(text) }
 
-// singleLineText is typed text for a one-line field: each line break is one space.
 func singleLineText(text string) string {
 	return strings.ReplaceAll(normalizeLineBreaks(text), "\n", " ")
 }

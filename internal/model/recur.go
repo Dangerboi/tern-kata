@@ -26,7 +26,6 @@ type RecurTarget struct {
 
 func (RecurTarget) msg() {}
 
-// Recurring is the live Recurrence, nil when the Issue does not recur or its Recurrence was stopped.
 func (t RecurTarget) Recurring() *Recurrence {
 	if t.Recurrence == nil || t.Recurrence.Stopped {
 		return nil
@@ -47,30 +46,25 @@ func (t RecurTarget) Report() string {
 	}
 }
 
-// StopReport is the line a stop prints.
 func (t RecurTarget) StopReport() string {
 	return fmt.Sprintf("%s no longer recurs; its existing Occurrences stay.", t.ShortID)
 }
 
-// WithRecurrence is the target as it stands with rec, the recurrence a Guarded change found.
 func (t RecurTarget) WithRecurrence(rec Recurrence) RecurTarget {
 	t.Recurrence = &rec
 	return t
 }
 
-// Refusals of `recur`, each saying nothing was written.
 var (
 	ErrRecurrenceWithheld = errRecurrenceWithheld
 
 	ErrRecurrenceMovedMeanwhile = errors.New("The schedule changed meanwhile; nothing was written. The current schedule is printed above.")
 )
 
-// NotRecurringError is the refusal to change or stop an Issue that never recurred.
 func NotRecurringError(shortID string) error {
 	return fmt.Errorf("%s does not recur; nothing was written.", shortID)
 }
 
-// RecurStoppedError is the refusal to change or stop a Recurrence that was stopped.
 func RecurStoppedError(shortID string) error {
 	return fmt.Errorf("The recurrence of %s was stopped; nothing was written. kata can't make it recur again.", shortID)
 }
@@ -163,7 +157,6 @@ func (f RecurrenceFormState) rawTerms(rule string) (RecurrenceTerms, error) {
 	return RecurrenceTerms{Rule: rule, Start: start, TimeZone: zone}, nil
 }
 
-// readFlags sets the card's fields from the flags. A flag the frequency does not use is refused, not ignored.
 func (f *RecurrenceFormState) readFlags(flags map[string]string) error {
 	freq, ok := flags["frequency"]
 	if !ok {

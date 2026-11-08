@@ -8,7 +8,6 @@ import (
 	"strconv"
 )
 
-// issueWrite is what a write to an Issue answered: whether it changed the Issue, the Issue after it, and the link it made.
 type issueWrite struct {
 	Changed bool
 	Issue   *g.Issue
@@ -19,7 +18,6 @@ func written(changed bool, issue g.Issue, link *g.LinkOut) issueWrite {
 	return issueWrite{Changed: changed, Issue: &issue, Link: link}
 }
 
-// writeField is WriteField with kata's own error and answer.
 func (c *Client) writeField(ctx context.Context, cmd model.WriteField) (issueWrite, error) {
 	actor := &cmd.Actor
 	switch cmd.Action {
@@ -88,12 +86,6 @@ func (c *Client) writeField(ctx context.Context, cmd model.WriteField) (issueWri
 	return issueWrite{}, nil
 }
 
-func (c *Client) WriteField(ctx context.Context, cmd model.WriteField) error {
-	_, e := c.writeField(ctx, cmd)
-	return daemonError(e)
-}
-
-// fieldUndoKinds are the field writes that have an inverse.
 var fieldUndoKinds = map[model.Action]model.UndoKind{
 	model.AddLabelAction:    model.UndoLabelAdd,
 	model.RemoveLabelAction: model.UndoLabelRemove,
@@ -105,7 +97,6 @@ var fieldUndoKinds = map[model.Action]model.UndoKind{
 	model.AddRelatedAction:  model.UndoLinkAdd,
 }
 
-// WriteFieldRecorded is WriteField that also says what the write did to the Undo history.
 func (c *Client) WriteFieldRecorded(ctx context.Context, cmd model.WriteField) (model.WriteRecord, error) {
 	kind, undoable := fieldUndoKinds[cmd.Action]
 	if !undoable {
@@ -117,7 +108,6 @@ func (c *Client) WriteFieldRecorded(ctx context.Context, cmd model.WriteField) (
 	return done(res, ambiguousWrite(e), func(entry *model.UndoEntry) { entry.Label = cmd.Value }), daemonError(e)
 }
 
-// removeLink deletes the link with the id from the Issue, with kata's own error and answer.
 func (c *Client) removeLink(ctx context.Context, projectID int64, uid, actor string, linkID int64) (issueWrite, error) {
 	r, e := c.DeleteLinkWithResponse(ctx, &g.DeleteLinkRequestOptions{PathParams: &g.DeleteLinkPath{ProjectID: projectID, Ref: uid, LinkID: linkID}, Query: &g.DeleteLinkQuery{Actor: actor}})
 	if e != nil {
@@ -126,8 +116,6 @@ func (c *Client) removeLink(ctx context.Context, projectID int64, uid, actor str
 	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
 }
 
-// move adds the label to add, then removes each label to remove, and stops at the first failure. It returns the labels it
-// changed and the Issue after the last change.
 func (c *Client) move(ctx context.Context, cmd model.MoveIssueCmd) (added, removed []string, last issueWrite, err error) {
 	write := model.WriteField{Workspace: cmd.Workspace, UID: cmd.UID, ProjectID: cmd.ProjectID, Actor: cmd.Actor}
 	step := func(action model.Action, label string) bool {
@@ -158,19 +146,11 @@ func (c *Client) move(ctx context.Context, cmd model.MoveIssueCmd) (added, remov
 	return
 }
 
-// Move adds the label to add, then removes each label to remove, and stops at the first failure.
-func (c *Client) Move(ctx context.Context, cmd model.MoveIssueCmd) error {
-	_, _, _, err := c.move(ctx, cmd)
-	return daemonError(err)
-}
-
-// MoveRecorded is Move that also says what the Move did to the Undo history.
 func (c *Client) MoveRecorded(ctx context.Context, cmd model.MoveIssueCmd) (model.WriteRecord, error) {
 	done := c.recorder(ctx, model.UndoLaneMove, cmd.ProjectID, cmd.UID, cmd.Actor)
 	added, removed, last, err := c.move(ctx, cmd)
 	return done(last, ambiguousWrite(err), func(entry *model.UndoEntry) {
 		entry.Added, entry.Removed = added, removed
-		// The move's steps applied in order to the pre-move labels.
 		after := slices.Clone(entry.Labels)
 		for _, l := range added {
 			if !slices.Contains(after, l) {

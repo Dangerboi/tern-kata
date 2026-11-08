@@ -6,7 +6,6 @@ import (
 	"slices"
 )
 
-// errStopping is why every admission is refused once a stop was asked.
 var errStopping = errors.New("the worker is stopping")
 
 // Stop modes: StopIdle refuses new work and exits once no run is in flight; StopNow ends the worker at once, as a
@@ -43,7 +42,6 @@ func (w *Worker) Stop(mode string) (StopAnswer, error) {
 	return answer, nil
 }
 
-// Worker commands, as the control socket and the CLI name them.
 const (
 	cmdStatus    = "status"
 	cmdRunDetail = "run-detail"
@@ -86,7 +84,6 @@ func refusedWhileStopping(command, mode string) error {
 	return errStopping
 }
 
-// stopRefusal is why command may not run now because the worker is stopping or halted, nil when it may.
 func (w *Worker) stopRefusal(command string) error {
 	if w.halted.Load() {
 		return refusedWhileStopping(command, StopNow)
@@ -131,23 +128,15 @@ func (w *Worker) seedFlight() {
 		if !slices.ContainsFunc(w.projects, func(ps *projectState) bool { return ps.cfg.Name == j.ProjectName }) {
 			continue
 		}
-		if w.flight == nil {
-			w.flight = map[string]flight{}
-		}
 		w.flight[j.RunUID] = flight{owes: true}
 	}
 }
 
-// updateFlight applies change to uid's entry, drops the entry when neither a goroutine nor the lifecycle holds it,
-// and asks the drain whether it is done.
 func (w *Worker) updateFlight(uid string, change func(*flight)) {
 	w.mu.Lock()
 	f := w.flight[uid]
 	change(&f)
 	if f.driven || f.owes {
-		if w.flight == nil {
-			w.flight = map[string]flight{}
-		}
 		w.flight[uid] = f
 	} else {
 		delete(w.flight, uid)

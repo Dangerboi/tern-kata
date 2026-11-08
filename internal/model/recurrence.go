@@ -15,7 +15,6 @@ type Recurrence struct {
 // date as YYYY-MM-DD and the IANA time zone. They are written together and a Guarded write compares them together.
 type RecurrenceTerms struct{ Rule, Start, TimeZone string }
 
-// Schedule is the rule as the form shape, or raw.
 func (r Recurrence) Schedule() Schedule { return ParseSchedule(r.Rule) }
 
 // Text is what the Issue detail's Recurring property reads: the schedule in words and the next Occurrence's date, the rule

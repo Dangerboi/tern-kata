@@ -12,15 +12,12 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// BoardID is the Board's row of Lane columns; a Lane's column is its key under it, a card the Issue's key under the column's card list.
 const BoardID = "main.columns.list.board"
 
-// LaneHeaderID is the Lane view's header line over its list.
 const LaneHeaderID = "main.columns.list.lane"
 
 func laneKey(column int) string { return "lane" + strconv.Itoa(column) }
 
-// CardID is the id of the Board card of uid, "" when the Board draws none.
 func CardID(m model.Model, uid string) string {
 	if col, _ := model.CardAt(m.BoardColumns(), uid); col >= 0 {
 		return itemID(itemID(itemID(BoardID, laneKey(col)), "cards"), uid)
@@ -28,7 +25,6 @@ func CardID(m model.Model, uid string) string {
 	return ""
 }
 
-// SelectedRowID is the node of the selected Issue's row in the list, or its card on the Board.
 func SelectedRowID(m model.Model) string {
 	if node, ok := listNodes[m.ListNode()]; ok {
 		return node.row(m)
@@ -96,9 +92,6 @@ var dateTones = map[model.DateTone]ui.Tone{
 	model.DateAccent:  ui.ToneAccent,
 }
 
-// boardCard is one Issue: its short id over its title clamped to two lines and its labels that are not Lane labels. The selected card
-// is unclamped and adds the owner and every label. The id is a badge in its Lane's tone; the title is the normal text colour, a Done
-// card's muted. The id row ends with the Date badge of an open card; the selected card adds the Dates line. Labels are info badges, the owner a user badge, "also" warning and the reopen hint muted.
 func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, menu contextMenuKeys, today model.CalendarDay, badges model.AgentBadgeIndex, now time.Time) tern.Element {
 	issue := card.Issue
 	selected := issue.UID == m.SelectedUID
@@ -183,11 +176,8 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 }
 
-// maxRelationshipIDs is how many ids a Blocked marker names before it says "+N".
 const maxRelationshipIDs = 3
 
-// blockedSpans are "blocked by 8gm4, other#ab12" for the open Issues that block the card, nil when none do: the words are sans, each
-// ref and the "+N" are mono.
 func blockedSpans(card model.BoardCard) []ui.Span {
 	blockers := card.Relationships.OpenBlockers()
 	if len(blockers) == 0 {
@@ -207,7 +197,6 @@ func blockedSpans(card model.BoardCard) []ui.Span {
 	return spans
 }
 
-// blockedCard is the Blocked marker's hovercard: the card of each Issue the marker names.
 func blockedCard(m model.Model, card model.BoardCard, now time.Time) ui.Hovercard {
 	shown, _ := shownRefs(card.Relationships.OpenBlockers())
 	facts := make([]refFacts, len(shown))
@@ -217,13 +206,11 @@ func blockedCard(m model.Model, card model.BoardCard, now time.Time) ui.Hovercar
 	return refCards(m, facts, now)
 }
 
-// shownRefs are the refs a list names and how many more it leaves out, cut to maxRelationshipIDs.
 func shownRefs(refs []model.RelationshipRef) ([]model.RelationshipRef, int) {
 	shown := min(len(refs), maxRelationshipIDs)
 	return refs[:shown], len(refs) - shown
 }
 
-// highlightTone is the tone of a Relationship highlight's tag and ring.
 var highlightTone = map[model.Highlight]ui.Tone{
 	model.HighlightBlocksThis:    ui.ToneError,
 	model.HighlightBlockedByThis: ui.ToneWarning,
@@ -232,9 +219,6 @@ var highlightTone = map[model.Highlight]ui.Tone{
 	model.HighlightRelated:       ui.ToneNeutral,
 }
 
-// relationshipsLine is the selected card's Relationships line: "parent zpxs  6 children, 2 open  blocks e000  blocked by 8gm4  related 7x74".
-// The parts are set off by the row gap, so a narrow card wraps between them; empty parts are left out and the line is nil without any.
-// Every id is its own clickable node, so a click selects that Issue's card.
 func relationshipsLine(m model.Model, card model.BoardCard, now time.Time) tern.Element {
 	r, project := card.Relationships, card.Issue.ProjectName
 	var parts []tern.Element

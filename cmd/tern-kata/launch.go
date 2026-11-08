@@ -14,44 +14,30 @@ import (
 // gitUserNameKey is the lookup key under which main supplies `git config user.name`; the launch module never execs.
 const gitUserNameKey = "git config user.name"
 
-// LaunchPlan is what main does after parsing the command line: run the Pane, or hand off to `kata tui`.
 type LaunchPlan struct {
-	// IssueRef is the Issue reference (<project>/<short_id>) the Pane opens first; empty for none.
 	IssueRef string
 	Actor    string
 	// InboxUser is KATA_INBOX_USER, trimmed: the address the Attention Page reads when not blank, else the actor's.
-	InboxUser string
-	// Version is non-empty when --version was given: main prints it and exits.
-	Version string
-	// Help is true when --help or -h was given: main prints usage and exits.
-	Help bool
-	// FallbackArgs are the arguments for `kata tui` when Tern is unsupported.
+	InboxUser    string
+	Version      string
+	Help         bool
 	FallbackArgs []string
 	// TUIArgs are the arguments only `kata tui` takes (FallbackArgs without the --issue translation); inside Tern nothing reads
 	// them, so main refuses them there instead of dropping them unseen.
-	TUIArgs []string
-	// Subcommand is "migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "agents", "team", "message" or "completion" when it was the first argument; main runs it
-	// without Tern.
+	TUIArgs    []string
 	Subcommand string
 	// TargetRef is the Issue as recur and run take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
 	// unlike IssueRef; Operands are the arguments after it.
-	TargetRef string
-	Operands  []string
-	// RecurFlags are recur's schedule flags by name without dashes (model.RecurFlagNames), as typed; Stop is --stop.
+	TargetRef  string
+	Operands   []string
 	RecurFlags map[string]string
 	Stop       bool
 	// Takeover is `worker --takeover`: claim the served Projects' leases even from another live worker.
-	Takeover bool
-	// Now is `worker stop --now`: end the worker at once instead of letting its runs in flight finish.
-	Now bool
-	// JSON is `worker status --json` or `views show --json`: the status as the worker's control socket answers it, or the groups of
-	// Issues, instead of the text.
-	JSON bool
-	// ViewFlags are `views add`'s --base, --project, --status, --owner, --label, --relationship and --search by name without dashes, as typed;
-	// unset ones are absent. Replace is `views add --replace`.
+	Takeover  bool
+	Now       bool
+	JSON      bool
 	ViewFlags map[string]string
 	Replace   bool
-	// InitFlags are `worker init`'s --executor, --actor, --command, --model and --thinking by name without dashes, as typed; unset ones are absent.
 	InitFlags map[string]string
 	// Force and Pause are `update --force` and `update --pause`. Preflight is `update --preflight`, the check one release
 	// runs of another; it is not for people, so usage and completion leave it out.
@@ -61,11 +47,9 @@ type LaunchPlan struct {
 	MessageText string
 	Teammate    string
 	// ScopeRef is the sender's KATA_REF, the Issue whose Project `agents` and `message` look in for agents on other hosts.
-	ScopeRef string
-	// MessageRe is `message --re`: the handle of the comment the message asks the agent to answer; empty for none.
+	ScopeRef  string
 	MessageRe string
-	// AgentRef is `agent --ref`: the qualified Issue ref the agent's KATA_REF is set to; empty leaves the agent without one.
-	AgentRef string
+	AgentRef  string
 	// AgentAddressPrefix is `agent --address-prefix`: the agent's Agent address up to its block id, <actor>/<name>. The wrapper sets
 	// KATA_INBOX_USER to the address with the block id from TERN_PANE, and KATA_OMP_LIVE_INBOX=0; empty leaves both out.
 	AgentAddressPrefix string
@@ -83,22 +67,16 @@ type LaunchPlan struct {
 	// Both are read only with an address prefix, and an inherited value of either variable is dropped then.
 	AgentCoordinator  string
 	AgentCoordinating bool
-	// AgentRoute is `agent`'s --home, --db, --schema, --dsn-file, --env-file, --daemon, --server, --token-file, --auth-file, --allow-insecure and --trust-private-network: the Pane's daemon, which the wrapper turns into
-	// the agent's kata environment; zero leaves it as inherited.
-	AgentRoute data.AgentRoute
-	// Docbank is `docbank setup`'s own flags. The route flags it takes record into AgentRoute.
-	Docbank DocbankSetup
-	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
-	fallbackAuthor string
+	AgentRoute        data.AgentRoute
+	Docbank           DocbankSetup
+	fallbackAuthor    string
 }
 
 // version is the release build's version, set with -ldflags "-X main.version=...".
 var version string
 
-// pseudoVersion matches the VCS-stamped versions Go gives untagged builds, with optional +dirty/+incompatible.
 var pseudoVersion = regexp.MustCompile(`[-.][0-9]{14}-[0-9a-f]{12}(\+.*)?$`)
 
-// resolveVersion picks the linker value, else the main module version from build info unless empty, "(devel)" or a pseudo-version, else "dev".
 func resolveVersion(linker string, buildInfo func() (*debug.BuildInfo, bool)) string {
 	if linker != "" {
 		return linker
@@ -109,7 +87,6 @@ func resolveVersion(linker string, buildInfo func() (*debug.BuildInfo, bool)) st
 	return "dev"
 }
 
-// buildVersion is this binary's version.
 func buildVersion() string { return resolveVersion(version, debug.ReadBuildInfo) }
 
 // usageError is a command line tern-kata refuses before doing anything: main exits 2, the Unix status for bad usage.
@@ -117,10 +94,8 @@ type usageError struct{ error }
 
 func (e usageError) Unwrap() error { return e.error }
 
-// subcommands are the first arguments that name a command run without Tern.
 var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "agents", "team", "message", "completion"}
 
-// completionShells are the shells `tern-kata completion` writes a script for.
 var completionShells = []string{"bash", "zsh", "fish"}
 
 // PlanLaunch parses args (without the program name). --version before a lone -- wins over everything else, then --help or -h
@@ -134,7 +109,6 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 	return plan, nil
 }
 
-// flagReader is the flag reader scanOperands calls for subcommand sub: subcommandFlag, with an unknown flag refused.
 func flagReader(sub string, args []string, plan *LaunchPlan) func(i *int) error {
 	return func(i *int) error {
 		matched, err := subcommandFlag(sub, args, i, plan)
@@ -304,7 +278,6 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 	return plan, nil
 }
 
-// parseAs reads --as <actor> or --as=<actor> at args[*i], moving *i past a separate value; matched is false for any other argument.
 // An explicitly empty actor is refused.
 func parseAs(args []string, i *int) (actor string, matched bool, err error) {
 	if name, _, _ := strings.Cut(args[*i], "="); name != "--as" {
@@ -333,7 +306,6 @@ func parseFlagValue(args []string, i *int, flag, what string, allowEmpty bool) (
 	return value, nil
 }
 
-// resolveActor is flag, else the first set of KATA_AUTHOR, USER and the gitUserNameKey lookup, else "anonymous".
 func resolveActor(flag string, lookup func(string) (string, bool)) string {
 	actor := flag
 	for _, key := range []string{"KATA_AUTHOR", "USER", gitUserNameKey} {
@@ -409,8 +381,6 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 	return plan, nil
 }
 
-// scanOperands splits args[1:] (args[0] is the subcommand) into operands and flags: a word not starting with "--", or any word
-// after a lone --, is an operand; every other word goes to onFlag, which reads it at args[*i] and moves *i past a separate value.
 func scanOperands(args []string, onFlag func(i *int) error) ([]string, error) {
 	var operands []string
 	flagsEnded := false
@@ -431,16 +401,12 @@ func scanOperands(args []string, onFlag func(i *int) error) ([]string, error) {
 	return operands, nil
 }
 
-// validViewsForm reports whether operands are one of the forms of `tern-kata views`: none, or show, add or rm with one name.
 func validViewsForm(operands []string) bool {
 	return len(operands) == 0 || len(operands) == 2 && slices.Contains(viewsForms, operands[0])
 }
 
-// viewFlagNames are the flags of `views add` that set a field of the saved view.
 var viewFlagNames = []string{"base", "project", "status", "owner", "label", "relationship", "search"}
 
-// parseViewFlag reads one of viewFlagNames as --name value or --name=value at args[*i], moving *i past a separate value;
-// matched is false for any other argument. A value may be empty and is then judged by the view's checks.
 func parseViewFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
 	return parseNamedFlag(args, i, viewFlagNames, &plan.ViewFlags, true)
 }
@@ -466,25 +432,18 @@ func parseNamedFlag(args []string, i *int, names []string, given *map[string]str
 	return true, nil
 }
 
-// heldRunForms are the worker operands that take a run uid as a second operand; alone they are no command.
 var heldRunForms = []string{"resume", "abandon"}
 
-// settlesHeldRun reports whether operands are `resume <run-uid>` or `abandon <run-uid>`, a form that takes no --takeover.
 func settlesHeldRun(operands []string, takeover bool) bool {
 	return len(operands) == 2 && slices.Contains(heldRunForms, operands[0]) && !takeover
 }
 
-// initFlagNames are the flags of `worker init` that set a value of the written file.
 var initFlagNames = []string{"executor", "actor", "command", "model", "thinking"}
 
-// parseInitFlag reads one of initFlagNames as --name value or --name=value at args[*i], moving *i past a separate value;
-// matched is false for any other argument. The value must not be empty.
 func parseInitFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
 	return parseNamedFlag(args, i, initFlagNames, &plan.InitFlags, false)
 }
 
-// parseRecurFlag reads --stop, or one of recur's schedule flags as --name value or --name=value, at args[*i], moving *i past a
-// separate value; matched is false for any other argument. A value may be empty (--on "") and is then refused by the schedule model.
 func parseRecurFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
 	if args[*i] == "--stop" {
 		plan.Stop = true
@@ -493,7 +452,6 @@ func parseRecurFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err 
 	return parseNamedFlag(args, i, model.RecurFlagNames, &plan.RecurFlags, true)
 }
 
-// usage is the --help text.
 const usage = `tern-kata: browse and edit kata Issues in a native Tern Pane.
 
 Usage:

@@ -6,8 +6,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
-// decode turns one Tern input into the message the model understands, nil for
-// an input the Pane does not use.
 func decode(input tern.Input) model.Msg {
 	switch input := input.(type) {
 	case tern.Key:

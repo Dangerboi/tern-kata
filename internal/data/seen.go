@@ -7,7 +7,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// seenFileName is the file's name in the config folder.
 const seenFileName = "seen.toml"
 
 // seenFile is what this machine has looked at on the Runs Page: one table per Project UID, named seen.toml beside filters.toml.

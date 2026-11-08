@@ -51,7 +51,6 @@ func DefaultDirs() (Dirs, error) {
 	return Dirs{Config: config, State: filepath.Join(state, "tern-kata")}, nil
 }
 
-// ConfigPath is worker.toml.
 func (d Dirs) ConfigPath() string { return filepath.Join(d.Config, ConfigFileName) }
 
 // Lock is worker.lock, the one-worker-per-machine lock (ADR-0006).
@@ -60,13 +59,11 @@ func (d Dirs) Lock() string { return filepath.Join(d.State, "worker.lock") }
 // Socket is the control socket (ADR-0004).
 func (d Dirs) Socket() string { return filepath.Join(d.State, "worker.sock") }
 
-// Runs is the folder of run directories, one per run uid, each holding run.json.
 func (d Dirs) Runs() string { return filepath.Join(d.State, "runs") }
 
 // Quarantine holds journals that could not be read, whole, under the same uid; a quarantined uid is never prepared again.
 func (d Dirs) Quarantine() string { return filepath.Join(d.State, "quarantine", "runs") }
 
-// ProjectDir is the Project's pin, event cursor and (later) per-job checkpoints.
 func (d Dirs) ProjectDir(projectUID string) string {
 	return filepath.Join(d.State, "projects", projectUID)
 }
@@ -107,15 +104,13 @@ type ProjectConfig struct {
 	Profiles  []string `toml:"profiles"`
 	// Secrets names the [secrets] entries this Project's jobs may use. Unlike the other lists an empty one allows
 	// nothing: a job written for one Project must not reach a secret meant for another.
-	Secrets []string `toml:"secrets"`
-	// Commands lets this Project's workflows run command steps (sh -c); off unless set.
-	Commands bool `toml:"commands"`
+	Secrets  []string `toml:"secrets"`
+	Commands bool     `toml:"commands"`
 }
 
 // DefaultCommand is the agent program a Profile runs when its Command is blank, and the one `worker init` writes.
 const DefaultCommand = ompext.Program
 
-// Profile is a named agent command line. Command defaults to DefaultCommand.
 type Profile struct {
 	Command  string   `toml:"command"`
 	Model    string   `toml:"model"`
@@ -126,7 +121,6 @@ type Profile struct {
 	Extensions Extensions `toml:"extensions"`
 }
 
-// Extensions modes.
 const (
 	ExtensionsAmbient = "ambient"
 	ExtensionsNone    = "none"
@@ -144,7 +138,6 @@ type Extensions struct {
 
 const extensionsList = "list"
 
-// UnmarshalTOML takes the string or the array of strings the key may hold.
 func (e *Extensions) UnmarshalTOML(data any) error {
 	*e = Extensions{}
 	switch v := data.(type) {
@@ -170,7 +163,6 @@ func (e *Extensions) UnmarshalTOML(data any) error {
 	return nil
 }
 
-// validate says what is wrong with the key, empty when it is fine.
 func (e Extensions) validate() string {
 	if e.bad != "" {
 		return e.bad
@@ -208,7 +200,6 @@ func (e Extensions) args() []string {
 	return nil
 }
 
-// hasArg is true when the profile's args hold one of flags, bare or as flag=value.
 func (p Profile) hasArg(flags ...string) bool {
 	return slices.ContainsFunc(p.Args, func(a string) bool {
 		flag, _, _ := strings.Cut(a, "=")
@@ -235,7 +226,6 @@ func (p Profile) ompProfile() (name string, ok bool) {
 	return name, ok
 }
 
-// SecretSource is where a secret's value comes from: an environment variable or a private file.
 type SecretSource struct {
 	Env  string `toml:"env"`
 	File string `toml:"file"`
@@ -283,7 +273,6 @@ func (c *Config) checkDecoded(meta toml.MetaData, err error, name string) error 
 	return nil
 }
 
-// Config fields a FieldError names.
 const (
 	FieldExecutor = "executor"
 	FieldCommand  = "command"
@@ -398,7 +387,6 @@ func (Limits) parse(text string, fallback time.Duration, name string) (time.Dura
 	return d, nil
 }
 
-// defaultTimeout and the other limits' accessors apply the defaults; LoadConfig has already validated the text.
 func (c Config) defaultTimeout() time.Duration {
 	d, _ := c.Limits.parse(c.Limits.DefaultTimeout, DefaultTimeout, "")
 	return d
@@ -409,11 +397,8 @@ func (c Config) maxTimeout() time.Duration {
 	return d
 }
 
-// DefaultPauseAfterFailures is how many failed runs in a row pause a job when worker.toml says nothing.
 const DefaultPauseAfterFailures = 3
 
-// PauseAfterFailures is how many runs of one job recorded failed in a row pause it: the configured pause_after_failures,
-// or the default; 0 turns pausing off.
 func (c Config) PauseAfterFailures() int {
 	if c.Limits.PauseAfterFailures == nil {
 		return DefaultPauseAfterFailures
@@ -421,7 +406,6 @@ func (c Config) PauseAfterFailures() int {
 	return *c.Limits.PauseAfterFailures
 }
 
-// MaxRunPrompts is how many prompts one run may send: the configured max_run_prompts, or the default.
 func (c Config) MaxRunPrompts() int {
 	if c.Limits.MaxRunPrompts == 0 {
 		return DefaultRunPrompts
@@ -429,10 +413,8 @@ func (c Config) MaxRunPrompts() int {
 	return c.Limits.MaxRunPrompts
 }
 
-// defaultCapacity is the slots a Project gets when its entry has no capacity line.
 const defaultCapacity = 3
 
-// project is the entry for name.
 func (c Config) project(name string) (ProjectConfig, bool) {
 	i := slices.IndexFunc(c.Projects, func(p ProjectConfig) bool { return p.Name == name })
 	if i < 0 {
@@ -459,7 +441,6 @@ func (p ProjectConfig) allowsSecret(name string) bool {
 	return slices.Contains(p.Secrets, name)
 }
 
-// readSecret resolves one secret by its worker.toml name.
 func (c Config) readSecret(name string) (string, error) {
 	src, ok := c.Secrets[name]
 	if !ok {
@@ -496,7 +477,6 @@ func (c Config) readSecret(name string) (string, error) {
 	return strings.TrimRight(string(raw), "\r\n"), nil
 }
 
-// command is the profile's program, DefaultCommand when unset.
 func (p Profile) command() string {
 	if p.Command == "" {
 		return DefaultCommand
@@ -533,7 +513,6 @@ func credentialAlias(s SecretSource) string {
 	return ""
 }
 
-// expandHome resolves a leading ~/ to the user's home folder.
 func expandHome(path string) (string, error) {
 	rest, ok := strings.CutPrefix(path, "~/")
 	if !ok {
@@ -557,7 +536,6 @@ func resolved(path string) string {
 
 func samePath(a, b string) bool { return resolved(a) == resolved(b) }
 
-// insidePath reports whether path is dir or lies under it.
 func insidePath(dir, path string) bool {
 	rel, err := filepath.Rel(resolved(dir), resolved(path))
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))

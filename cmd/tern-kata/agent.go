@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// agentUsage is what `tern-kata agent` refuses a command line with.
 const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
 
 // tableFlag is one flag of a subcommand with a flag table (`agent`, `agents`, `docbank`): its parser and the completion scripts read the
@@ -18,7 +17,6 @@ type tableFlag struct {
 	set        func(plan *LaunchPlan, value string)
 }
 
-// routeFlags choose the kata daemon; `agent` takes them all and `docbank setup` those that pick the daemon (docbankRouteFlags).
 var routeFlags = []tableFlag{
 	{"home", true, "a kata home folder", func(p *LaunchPlan, v string) { p.AgentRoute.Home = v }},
 	{"db", true, "the Pane's KATA_DB path", func(p *LaunchPlan, v string) { p.AgentRoute.DB = v }},
@@ -51,10 +49,6 @@ func flagNames(table []tableFlag) []string {
 	return names
 }
 
-func agentFlagNames() []string { return flagNames(agentFlags) }
-
-// parseTableFlag reads the flag of table at args[*i] ("--name value", "--name=value" or a bare switch), moving *i past a separate
-// value and recording it in plan; matched is false when the argument is no flag of table. command and usage head its refusals.
 func parseTableFlag(table []tableFlag, command, usage string, args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
 	arg := args[*i]
 	if !strings.HasPrefix(arg, "--") {
@@ -81,8 +75,6 @@ func parseTableFlag(table []tableFlag, command, usage string, args []string, i *
 	return true, nil
 }
 
-// planAgent parses `tern-kata agent [flags] -- <command> [args...]` (args[0] is "agent"). The flags come before the lone --, and
-// everything after it is the command and its arguments, verbatim: Operands holds them.
 func planAgent(args []string) (LaunchPlan, error) {
 	end := slices.Index(args, "--")
 	if end < 0 {

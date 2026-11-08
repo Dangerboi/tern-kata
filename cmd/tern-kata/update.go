@@ -17,16 +17,13 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// Where the release's files live on GitHub: the newest release, and a given one below v<version>.
 const (
 	latestBase  = "https://github.com/Dangerboi/tern-kata/releases/latest/download"
 	releaseBase = "https://github.com/Dangerboi/tern-kata/releases/download"
 )
 
-// goInstallCommand is what a user of a `go install` build runs to update.
 const goInstallCommand = "go install github.com/Dangerboi/tern-kata/cmd/tern-kata@latest"
 
-// updateEnv is what `tern-kata update` needs from the machine, so tests give it their own folders, binary and release server.
 type updateEnv struct {
 	Dirs worker.Dirs
 	// Release is the version the linker stamped, empty for a build that is not a release; Build is buildVersion(), which also
@@ -37,13 +34,11 @@ type updateEnv struct {
 	// BaseURL is TERN_KATA_BASE_URL: when set, version.txt, the archive and checksums.txt all come from it.
 	BaseURL string
 	Client  *http.Client
-	// Stdin is what --pause waits on.
-	Stdin io.Reader
+	Stdin   io.Reader
 	// PreflightTimeout is how long the new binary may take to check this machine; zero is preflightTimeout.
 	PreflightTimeout time.Duration
 }
 
-// newUpdateEnv is the production environment: tern-kata's user folders, this binary and the real network.
 func newUpdateEnv() (updateEnv, error) {
 	dirs, err := worker.DefaultDirs()
 	if err != nil {
@@ -140,8 +135,6 @@ func (e updateEnv) target() (string, error) {
 	return resolved, nil
 }
 
-// lockUpdate takes <State>/update.lock without waiting, so two updates never interleave their swaps; the returned function
-// drops it.
 func lockUpdate(state string) (func(), error) {
 	if err := os.MkdirAll(state, 0o700); err != nil {
 		return nil, err
@@ -163,8 +156,6 @@ func lockUpdate(state string) (func(), error) {
 	}, nil
 }
 
-// downloadBesideBinary downloads and unpacks release version into a folder beside target (the swap's volume, as in a full
-// update); the returned function removes it.
 func downloadBesideBinary(ctx context.Context, env updateEnv, target, version string) (unpackedRelease, func(), error) {
 	work, err := os.MkdirTemp(filepath.Dir(target), ".tern-kata-update-")
 	if err != nil {

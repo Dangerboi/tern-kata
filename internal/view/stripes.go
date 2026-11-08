@@ -5,7 +5,6 @@ import (
 	"strings"
 )
 
-// StripeRole is the role of every other drawn Issue row and Children row; StripeCSS shades it.
 const StripeRole = "tern-kata.stripe"
 
 // The roles of an Issue list row besides StripeRole, joined to it with spaces: ListRowRole marks a row (and the header), and
@@ -16,25 +15,20 @@ const (
 	ListOwnerRole = "tern-kata.ow"
 )
 
-// CSS is the plugin's whole style sheet: StripeCSS, SelectedCSS, ModeChipCSS, OrderedListCSS, ColumnFillCSS, PropertyKeyCSS,
-// PropertiesCSS, MonoCSS, then cellBoxCSS.
 var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + PropertiesCSS + "\n" + MonoCSS + "\n" + cellBoxCSS
 
-// PropertyKeyRole marks the key cell of a row of the Issue detail's properties; PropertyKeyCSS reads it.
 const PropertyKeyRole = "tern-kata.propkey"
 
 // PropertyKeyCSS gives every property key one box, wide enough for the longest label ("Scheduled:", "Recurring:", "Cron jobs:")
 // in either face, so every value starts at the same x. The box is in em because the label's own width depends on the face.
 const PropertyKeyCSS = `.sf-text[data-role~='` + PropertyKeyRole + `'] { display: inline-block; white-space: pre; min-width: 6.4em; }`
 
-// PropertiesRole marks the Issue detail's properties grid; PropertiesCSS reads it.
 const PropertiesRole = "tern-kata.props"
 
 // PropertiesCSS draws the grid's badges 2px shorter than Tern's 18px, the height of a text row, centred in the row by a 1px
 // margin, so the badges of rows one under another (Owner, Priority, Labels) keep a gap instead of touching.
 const PropertiesCSS = `[data-role~='` + PropertiesRole + `'] .sf-badge { height: 16px; margin: 1px 0; }`
 
-// ColumnRole marks a column's card and FillRole the list that scrolls inside it; ColumnFillCSS reads them.
 const (
 	ColumnRole = "tern-kata.column"
 	FillRole   = "tern-kata.fill"
@@ -77,7 +71,6 @@ const SelectedCSS = `.sf-item.sel[data-id^='` + IssueListID + `.'] { background-
 // cellEm is a column character's width in em: the surface CSS has no ch unit, and the mono face the cells use advances 0.6em.
 const cellEm = 0.6
 
-// maxBoxWidth is the widest id or owner column cellBoxCSS has a rule for; listColumns.fit holds the columns to it.
 const maxBoxWidth = 80
 
 // cellBoxCSS gives each cell of an Issue list row a box as wide as its column. Tern draws a glyph the font lacks, such as

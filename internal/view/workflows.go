@@ -13,10 +13,8 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// WorkflowListID is the Workflows Page's list of workflows; a row is the workflow's uid under it.
 const WorkflowListID = "main.columns.list.page.names.rows"
 
-// Tones the Workflows Page gives what it names: a workflow's steps by kind, its retries and its waits.
 const (
 	commandTone  = ui.ToneInfo
 	promptTone   = ui.ToneUser
@@ -25,8 +23,6 @@ const (
 	usingJobTone = ui.ToneAccent
 )
 
-// workflows is the Workflows Page: the Project's workflows, and beside them (in a narrow Pane instead of them) the steps of the
-// selected one once Enter has opened them. It takes the list column's place.
 func workflows(m model.Model, now time.Time) tern.Element {
 	sideBySide := m.Cols >= model.SideBySideCols
 	var panels []tern.Element
@@ -52,7 +48,6 @@ func workflows(m model.Model, now time.Time) tern.Element {
 	)}
 }
 
-// workflowList is the rows: name, then the steps it has, an archived workflow muted and badged. paired says the inspector sits beside.
 func workflowList(m model.Model, paired bool) tern.Element {
 	visible := m.VisibleWorkflows()
 	items := make([]tern.Element, len(visible))
@@ -89,7 +84,7 @@ func workflowList(m model.Model, paired bool) tern.Element {
 	common := ui.Common{Key: "names", Grow: 1, Basis: ui.BasisFrac(0.4), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
 	children := list
 	if m.Workflows.Err != nil {
-		children = append(ui.Nodes(ui.Text{Common: ui.Common{Key: "error", Tone: ui.ToneError}, Text: m.Workflows.Err.Error()}), list...)
+		children = append(ui.Nodes(plainText("error", ui.ToneError, m.Workflows.Err.Error())), list...)
 	}
 	if paired {
 		common.Role = ColumnRole
@@ -98,7 +93,6 @@ func workflowList(m model.Model, paired bool) tern.Element {
 	return ui.Col{Common: common, Children: children}
 }
 
-// jobNames is the jobs that use a workflow, as a row's cell: the first name and how many more.
 func jobNames(jobs []model.CronJob) string {
 	if len(jobs) == 1 {
 		return jobs[0].Name
@@ -113,7 +107,6 @@ func stepCount(n int) string {
 	return strconv.Itoa(n) + " steps"
 }
 
-// workflowInspector is the selected workflow read as steps: each with its kind, its text, the steps it waits for and its retries.
 func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
 	common := ui.Common{Key: "inspector", Grow: 1, Basis: ui.BasisFrac(0.6), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
 	w, ok := m.SelectedWorkflow()
@@ -149,8 +142,6 @@ func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
 	return ui.Col{Common: common, Children: ui.Nodes(body)}
 }
 
-// workerReading is the Worker's reading of a Workflow: what this machine's Worker would refuse and why, or that it would run it.
-// Refusals and a worker.toml that could not be read are drawn as warnings, the rest quietly.
 func workerReading(r model.WorkerReading) tern.Element {
 	lines := r.Lines()
 	children := make([]tern.Element, len(lines))
@@ -164,8 +155,6 @@ func workerReading(r model.WorkerReading) tern.Element {
 	return ui.Col{Common: ui.Common{Key: "worker-reading"}, Children: children}
 }
 
-// workflowStep is one step: its number and key, its kind badge, what it waits for and how often it retries, over its command or
-// prompt.
 func workflowStep(i int, step model.WorkflowStep) tern.Element {
 	tone, text := commandTone, step.Command
 	if step.Kind == cronjob.StepPrompt {
@@ -182,13 +171,11 @@ func workflowStep(i int, step model.WorkflowStep) tern.Element {
 		head = append(head, ui.Badge{Common: ui.Common{Key: "retries", Tone: retryTone}, Text: "retries " + strconv.Itoa(step.Retries)})
 	}
 	return ui.Col{Common: ui.Common{Key: "step." + strconv.Itoa(i)}, Gap: ui.GapSM, Children: ui.Nodes(
-		ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Wrap: true, Children: head},
+		headRow(head...),
 		ui.Text{Common: ui.Common{Key: "text"}, Text: text},
 	)}
 }
 
-// workflowLayer is the Workflow card: the JSON text of the workflow in an editor, the problem a failed check or save names under
-// it, and the card's keys. After a save found the workflow changed, the text stays beside the workflow as it stands now.
 func workflowLayer(m model.Model) tern.Element {
 	c := m.Workflows.Card
 	title, meta := "New workflow", ui.Rich{}
@@ -236,8 +223,6 @@ func conflictChoice(current *model.Workflow) []tern.Element {
 		buttonRow(cardButton("overwrite", model.ModeConflict, model.OverwriteDraft, "Overwrite", true), discard))
 }
 
-// workflowRuns is the inspector's Runs section: the workflow's latest runs among those the Page read, newest first, each with its
-// status, start, duration and summary.
 func workflowRuns(m model.Model, w model.Workflow, now time.Time) []tern.Element {
 	runs := m.WorkflowRuns(w.UID)
 	if len(runs) == 0 {
@@ -257,7 +242,6 @@ func workflowRuns(m model.Model, w model.Workflow, now time.Time) []tern.Element
 	return parts
 }
 
-// workflowJobs is the inspector's Jobs section: the live Cron jobs that run the workflow, each with its name and whether it is on.
 func workflowJobs(m model.Model, w model.Workflow) []tern.Element {
 	jobs := m.WorkflowJobs(w.UID)
 	if len(jobs) == 0 {

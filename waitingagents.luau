@@ -25,7 +25,6 @@ function M.waiting(agents: { Agent }, order: { [number]: number }, isKata: (stri
     return timed
 end
 
--- The status-line segments for `count` waiting agents: none for 0.
 function M.segment(count: number, command: string): { StatusSegment }?
     if count <= 0 then return nil end
     return {{text = count .. " waiting", tone = "warning", command = command}}

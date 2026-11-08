@@ -11,7 +11,6 @@ import (
 // `tern-kata agents` (which runs without a Pane, so hears no relay) reads it.
 const AgentStatesFile = "agent-states.json"
 
-// agentStatesDoc is agent-states.json: one entry per agent block a relay has listed.
 type agentStatesDoc struct {
 	States []agentStateRecord `json:"states"`
 }
@@ -26,7 +25,7 @@ type agentStateRecord struct {
 // file stays bounded by that. The read-merge-write runs under guardedfile.Update, so Panes writing at once lose nothing and a
 // reader never sees a half-written file.
 func (g *Gateway) saveAgentStates(cmd model.SaveAgentStates) model.AgentStatesSaved {
-	file, _, err := g.agentStatePaths()
+	file, err := g.agentsFile()
 	if err != nil {
 		return model.AgentStatesSaved{Err: err}
 	}
@@ -61,7 +60,7 @@ func (g *Gateway) saveAgentStates(cmd model.SaveAgentStates) model.AgentStatesSa
 // ReadRunningAgents is what `tern-kata agents` and `tern-kata message` work from: the agents of agents.json that the latest
 // relay has not shown exited, each with its state. With no relay file every agent reads with no state.
 func (g *Gateway) ReadRunningAgents() ([]model.IssueAgent, error) {
-	file, _, err := g.agentStatePaths()
+	file, err := g.agentsFile()
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +75,6 @@ func (g *Gateway) ReadRunningAgents() ([]model.IssueAgent, error) {
 	return model.RunningAgents(entries, states), nil
 }
 
-// readAgentStates reads agent-states.json; a missing file is no states.
 func readAgentStates(path string) ([]model.AgentState, error) {
 	doc, err := readJSONDoc[agentStatesDoc](path)
 	if err != nil {

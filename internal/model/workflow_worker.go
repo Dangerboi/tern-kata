@@ -13,7 +13,6 @@ import (
 // workflowReadingDelay is how long the card waits after a change of its text before it asks for the Worker's reading.
 const workflowReadingDelay = 400 * time.Millisecond
 
-// WorkerReading is the Worker's reading of one Workflow definition on this machine.
 type WorkerReading struct {
 	// Refusals are why the Worker would not run it, in the Worker's words, all of those that need no worker.toml and the prompt
 	// budget when it could be checked.
@@ -25,10 +24,8 @@ type WorkerReading struct {
 	ConfigMissing   bool
 }
 
-// Refuses says the Worker would not run the Workflow.
 func (r WorkerReading) Refuses() bool { return len(r.Refusals) > 0 }
 
-// ReadingLine is one line of a reading and whether it is drawn as a warning.
 type ReadingLine struct {
 	Text string
 	Warn bool
@@ -65,7 +62,6 @@ type ReadWorkflowText struct {
 
 func (ReadWorkflowText) cmd() {}
 
-// WorkflowTextRead answers ReadWorkflowText with the same Request.
 type WorkflowTextRead struct {
 	Request int64
 	Reading WorkerReading
@@ -73,7 +69,6 @@ type WorkflowTextRead struct {
 
 func (WorkflowTextRead) msg() {}
 
-// Definition is the workflow in the shared shape the Worker's check and kata's validator read.
 func (w Workflow) Definition() cronjob.WorkflowDefinition {
 	return w.wire().shape()
 }
@@ -101,7 +96,6 @@ func (m Model) settleWorkflowReading() (Model, []Cmd) {
 	return m, []Cmd{ReadWorkflowText{Request: request, Definition: doc.Shape, After: after}}
 }
 
-// workflowTextRead keeps the answer to the latest ask for the card that is open.
 func workflowTextRead(m Model, msg WorkflowTextRead) Model {
 	if c := &m.Workflows.Card; c.Open && m.Workflows.checkReads.IsCurrent(msg.Request) {
 		reading := msg.Reading

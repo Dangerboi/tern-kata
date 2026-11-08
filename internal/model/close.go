@@ -18,7 +18,6 @@ const (
 	CloseCancel  Action = "close-cancel"
 )
 
-// The Close card's fields.
 const (
 	CloseReason      Field = "reason"
 	CloseMessage     Field = "message"
@@ -29,16 +28,11 @@ const (
 	CloseRationale   Field = "rationale"
 	CloseReviewed    Field = "reviewed"
 	CloseExternal    Field = "external"
-	CloseAttachments Field = "attachments" // the picker of the Issue's Attachments to cite as evidence of a done close
+	CloseAttachments Field = "attachments"
 )
 
-// closeTable declares the Close card's fields, in tab order, and its busy condition.
 var closeTable = fieldTable[CloseFormState]{
-	form:  func(m *Model) *CloseFormState { return &m.CloseForm },
-	busy:  func(f CloseFormState) bool { return f.Saving },
-	focus: func(f *CloseFormState) *Field { return &f.Field },
-	caret: func(f *CloseFormState) *Caret { return &f.Caret },
-	err:   func(f *CloseFormState) *error { return &f.Err },
+	form: func(m *Model) *CloseFormState { return &m.CloseForm },
 	fields: []formField[CloseFormState]{
 		textField(CloseReason, func(f *CloseFormState) *string { return &f.Values.Reason }),
 		textField(CloseMessage, func(f *CloseFormState) *string { return &f.Values.Message }),
@@ -66,7 +60,6 @@ func closeAttachmentsField() formField[CloseFormState] {
 	return field
 }
 
-// toggleCited puts the picker's cursor on the Attachment at i and toggles whether the close cites it.
 func toggleCited(f *CloseFormState, i int) bool {
 	if i < 0 || i >= len(f.Attachments) {
 		return false
@@ -81,7 +74,6 @@ func toggleCited(f *CloseFormState, i int) bool {
 	return true
 }
 
-// Cites says whether the close cites the Attachment with id.
 func (f CloseFormState) Cites(id string) bool { return slices.Contains(f.Cited, id) }
 
 // ShowsAttachments says whether the card offers the Attachment picker: only a done close takes an Attachment as evidence, and
@@ -90,7 +82,6 @@ func (f CloseFormState) ShowsAttachments() bool {
 	return len(f.Attachments) > 0 && strings.TrimSpace(f.Values.Reason) == string(ReasonDone)
 }
 
-// citedEvidence is the close's Attachment evidence, in the order the picker lists them.
 func (f CloseFormState) citedEvidence() []CloseEvidence {
 	var out []CloseEvidence
 	for _, a := range f.Attachments {
@@ -101,25 +92,19 @@ func (f CloseFormState) citedEvidence() []CloseEvidence {
 	return out
 }
 
-// CloseFields is the Close card's field list, in tab order.
 var CloseFields = closeTable.specs()
 
-// CloseValues holds what each Close field has been typed.
 type CloseValues struct{ Reason, Message, Commit, PR, Test, Reviewed, External, Reference, Rationale string }
 
-// Value is what the field called name holds, "" for a name that is not a Close field.
 func (v CloseValues) Value(name Field) string {
 	return closeTable.value(CloseFormState{Values: v}, name)
 }
 
 type CloseFormState struct {
-	Open, Saving bool
-	Field        Field
-	UID          string
-	ProjectID    int64
-	Values       CloseValues
-	Caret        Caret
-	Err          error
+	formCard
+	UID       string
+	ProjectID int64
+	Values    CloseValues
 	Keyed
 	// UndoEntry is the Undo history entry whose inverse this card completes, 0 for a plain close.
 	UndoEntry uint64
@@ -144,7 +129,6 @@ type CloseResultMsg struct {
 
 func (CloseResultMsg) msg() {}
 
-// CloseReasonKind is why an Issue is closed.
 type CloseReasonKind string
 
 const (
@@ -155,7 +139,6 @@ const (
 	ReasonAuditNoChange CloseReasonKind = "audit-no-change"
 )
 
-// CloseEvidenceKind names what a piece of close evidence is.
 type CloseEvidenceKind string
 
 const (
@@ -170,21 +153,19 @@ const (
 	EvidenceAttachment   CloseEvidenceKind = "attachment"
 )
 
-// CloseEvidence is one trimmed evidence entry: a SHA, URL, test command, comma-separated reviewed paths, external account, Issue reference, audit rationale or the id of an Attachment of the Issue.
 type CloseEvidence struct {
 	Kind  CloseEvidenceKind
 	Value string
 }
 
-// CloseIssueCmd describes a close in plain values; the Daemon gateway turns it into kata's request.
-// Quick is the owner-local close: reason done, no message, no evidence.
 type CloseIssueCmd struct {
 	Workspace, UID, Actor string
 	ProjectID             int64
-	Quick                 bool
-	Reason                CloseReasonKind
-	Message               string
-	Evidence              []CloseEvidence
+	// Quick is the owner-local close: reason done, no message, no evidence.
+	Quick    bool
+	Reason   CloseReasonKind
+	Message  string
+	Evidence []CloseEvidence
 	// Key is kata's Idempotency-Key for this close.
 	Key string
 }
@@ -229,11 +210,7 @@ func openClose(m Model) Model {
 
 func submitClose(m Model, quick bool) (Model, []Cmd) {
 	f := &m.CloseForm
-	if !f.Open || f.Saving {
-		return m, nil
-	}
-	if m.Stale {
-		f.Err = errors.New("Daemon disconnected; reconnect before closing.")
+	if f.refuseSubmit(m, "closing") {
 		return m, nil
 	}
 	cmd := CloseIssueCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, Quick: quick, Reason: CloseReasonKind(strings.TrimSpace(f.Values.Reason))}
@@ -272,7 +249,6 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 	return m, []Cmd{cmd}
 }
 
-// submitUndoClose sends the close the Close card collected as the inverse of a reopen.
 func submitUndoClose(m Model, cmd CloseIssueCmd, quick bool) (Model, []Cmd) {
 	f := &m.CloseForm
 	entry, found := m.Undo.entry(f.UndoEntry)
@@ -352,7 +328,6 @@ func validateClose(cmd CloseIssueCmd) error {
 	return nil
 }
 
-// ReviewedPaths splits a reviewed-paths value on commas into its trimmed, non-empty paths.
 func ReviewedPaths(value string) []string {
 	var paths []string
 	for _, p := range strings.Split(value, ",") {
@@ -386,33 +361,22 @@ func updateClose(m Model, msg Msg) (Model, []Cmd) {
 	return m, nil
 }
 
-// closeKey is one key for the Close card on top.
 func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	f := &m.CloseForm
 	binding, bound := LookupBindingForMode(msg.Chord, ModeCloseForm)
 	switch {
 	case bound && binding.Action == CloseCancel:
-		if !f.Saving {
-			f.Open = false
-		}
+		f.Open = false
 	case bound && binding.Action == CloseSave:
 		return submitClose(m, false)
 	case bound && binding.Action == CloseQuick:
 		return submitClose(m, true)
-	case bound && binding.Action == InputSpace && f.Field == CloseAttachments && !f.Saving:
+	case bound && binding.Action == InputSpace && f.Field == CloseAttachments:
 		if toggleCited(f, f.AttachmentAt) {
 			f.Err = nil
 		}
-	case !f.Saving:
-		if value := closeTable.textAt(f, f.Field); value != nil {
-			var edited bool
-			if bound && binding.Action == InputSpace {
-				bound = false // a space in a text field is typed
-			}
-			if *value, edited = editText(*value, &f.Caret, f.Field, bound, msg); edited {
-				f.Err = nil
-			}
-		}
+	default:
+		closeTable.typeKey(&m, binding, bound, msg)
 	}
 	return m, nil
 }

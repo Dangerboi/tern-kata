@@ -13,8 +13,6 @@ func selectRow(m Model, uid string) Model {
 	return m
 }
 
-// toggleRow is a click on a parent row from any column or mode: select it like
-// any row, then fold its children as space does.
 func toggleRow(m Model, uid string) (Model, []Cmd) {
 	for _, row := range m.VisibleRows() {
 		if row.UID == uid && row.HasChildren {

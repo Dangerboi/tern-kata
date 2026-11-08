@@ -2,12 +2,8 @@ package model
 
 import "strings"
 
-// IDSearch is what the lookup made of the committed search as a short id: UID is
-// the Issue it named, empty when the Project has none.
 type IDSearch struct{ ShortID, UID string }
 
-// LookupSearchID resolves a search query that is a short id to its Issue through
-// the open-issue lookup, in the Project with ProjectID.
 type LookupSearchID struct {
 	Workspace string
 	ProjectID int64
@@ -34,7 +30,6 @@ func searchShortID(query string) (string, bool) {
 	return id, len(id) >= 4 && len(id) <= 26 && strings.Trim(id, crockford) == ""
 }
 
-// idMatch is the Issue the committed search names, when the lookup found one.
 func (m Model) idMatch() string {
 	if id, ok := searchShortID(m.Filters.Search); ok && id == m.IDSearch.ShortID {
 		return m.IDSearch.UID

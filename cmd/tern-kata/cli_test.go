@@ -103,9 +103,9 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		{[]string{"views", "show", "x", "--"}, "--json --as"},
 		{[]string{"views", "add", "x", "--re"}, "--relationship --replace"},
 		{[]string{"completion", "z"}, "zsh"},
-		{[]string{"agent", "--"}, dashed(agentFlagNames())},
+		{[]string{"agent", "--"}, dashed(flagNames(agentFlags))},
 		{[]string{"agent", "--as", "bot", "--re"}, "--ref"},
-		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--"}, dashed(agentFlagNames())},
+		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--"}, dashed(flagNames(agentFlags))},
 		{[]string{"agent", "--as", "bot", "--add"}, "--address-prefix"},
 		{[]string{"agent", "--ref", "demo#ab12", "--as", "bot", "--a"}, "--as --address-prefix --auth-file --allow-insecure"},
 		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp", "--"}, ""}, // after the lone -- the words are the command's
@@ -113,7 +113,7 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		{[]string{"doc"}, "docbank"},
 		{[]string{"docbank", "s"}, "setup supervised supervise"},
 		{[]string{"docbank", "supervise", ""}, "on off"},
-		{[]string{"docbank", "setup", "--"}, dashed(docbankFlagNames())},
+		{[]string{"docbank", "setup", "--"}, dashed(flagNames(docbankFlags))},
 		{[]string{"docbank", "setup", "--url", "https://d.example", "--key-"}, "--key-file --key-env"},
 	} {
 		if got := strings.Join(complete(t, tc.words...), " "); got != tc.want {

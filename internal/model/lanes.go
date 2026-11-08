@@ -16,13 +16,10 @@ import (
 // A Lane is named by its label. The two columns that are not a label have keys no label can have: kata labels hold
 // only [a-z0-9._:-], so neither "" nor a key with a space is ever a label.
 const (
-	// LaneNone is the key of No lane: open Issues with no Lane label.
 	LaneNone = ""
-	// LaneDone is the key of Done: recently closed Issues.
 	LaneDone = " done"
 )
 
-// DefaultLanes is the Lane list of a Project that has none saved.
 func DefaultLanes() []string {
 	return []string{"needs-triage", "needs-info", "ready-for-agent", "ready-for-human"}
 }
@@ -86,7 +83,6 @@ func SharedLanes(value any) (lanes []string, doneDays, doneCards int, err error)
 	return lanes, doneDays, doneCards, nil
 }
 
-// sharedLimit is the Done limit at key of a tern.lanes value: 0, the default, when absent.
 func sharedLimit(object map[string]any, key string, most int) (int, error) {
 	raw, held := object[key]
 	if !held || raw == nil {
@@ -120,7 +116,6 @@ func SharedLanesValue(lanes []string, doneDays, doneCards int) map[string]any {
 	return value
 }
 
-// LaneLabels are the Lane labels of issue, in Lane order.
 func LaneLabels(issue Issue, lanes []string) []string {
 	var found []string
 	for _, lane := range lanes {
@@ -139,7 +134,6 @@ func LabelLane(issue Issue, lanes []string) string {
 	return LaneNone
 }
 
-// LaneOf is the column issue stands in: Done when it is closed, else the Lane its labels point at.
 func LaneOf(issue Issue, lanes []string) string {
 	if IsClosed(issue) {
 		return LaneDone

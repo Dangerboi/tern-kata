@@ -144,10 +144,25 @@ type Binding struct {
 	Help         string
 	Mode         Mode
 	ShowInFooter bool
-	entry        *actionEntry
+	// twin marks a card binding on a ctrl+ chord that the headless Tern delivers as meta+ too; buildKeymap adds that row.
+	twin  bool
+	entry *actionEntry
 }
 
-// CardKeys are the non-headless bindings of action in mode, in keymap order: what a card button names and sends.
+func withHeadlessTwins(rows []Binding) []Binding {
+	out := make([]Binding, 0, len(rows)+18)
+	for _, b := range rows {
+		twin := b.twin
+		b.twin = false
+		out = append(out, b)
+		if twin {
+			chord := "meta+" + strings.TrimPrefix(b.Chord, "ctrl+")
+			out = append(out, Binding{Chord: chord, Key: chord, Action: b.Action, Help: b.Help + headlessNote, Mode: b.Mode})
+		}
+	}
+	return out
+}
+
 func CardKeys(mode Mode, action Action) []Binding {
 	var keys []Binding
 	for _, b := range Keymap {
@@ -167,37 +182,30 @@ func (b Binding) Headless() bool { return strings.HasSuffix(b.Help, headlessNote
 type Mode string
 
 const (
-	ModeList          Mode = "list"
-	ModeHelp          Mode = "help"
-	ModeError         Mode = "error"
-	ModeDetail        Mode = "detail"
-	ModeCollections   Mode = "collections"
-	ModeSearch        Mode = "search"
-	ModeSearchResults Mode = "search-results"
-	// ModePageSearch is the Jobs, Runs and Workflows Pages' search input.
-	ModePageSearch   Mode = "page-search"
-	ModeFilterForm   Mode = "filter-form"
-	ModeBoard        Mode = "board"
-	ModeLane         Mode = "lane"
-	ModeJobs         Mode = "jobs"
-	ModeJobInspector Mode = "job-inspector"
-	ModeRuns         Mode = "runs"
-	ModeRunInspector Mode = "run-inspector"
-	ModeWorkflows    Mode = "workflows"
-	ModeAttention    Mode = "attention"
-	ModeCredentials  Mode = "credentials"
-	// ModeQuit is the question "Quit tern-kata? y/n", which takes only its answers.
-	ModeQuit       Mode = "quit"
-	ModeFederation Mode = "federation"
-	ModeDaemons    Mode = "daemons"
-	ModeConfig     Mode = "config"
-	// ModeFederationLeave is the Federation Page's leave preview and ModeFederationResult the result of a leave or an enrollment.
-	ModeFederationLeave  Mode = "federation-leave"
-	ModeFederationResult Mode = "federation-result"
-	// ModeFederationPick is the enrollment's three choices (local Project, hub, hub Project), ModeFederationBrowse the read-only
-	// browse of the hubs' Projects, ModeFederationPreview the enrollment preview, ModeFederationAdopt the typed confirmation of an
-	// adoption, ModeFederationName the card asking for a spoke's name and ModeFederationRecovery the
-	// recovery after the hub granted the enrollment.
+	ModeList               Mode = "list"
+	ModeHelp               Mode = "help"
+	ModeError              Mode = "error"
+	ModeDetail             Mode = "detail"
+	ModeCollections        Mode = "collections"
+	ModeSearch             Mode = "search"
+	ModeSearchResults      Mode = "search-results"
+	ModePageSearch         Mode = "page-search"
+	ModeFilterForm         Mode = "filter-form"
+	ModeBoard              Mode = "board"
+	ModeLane               Mode = "lane"
+	ModeJobs               Mode = "jobs"
+	ModeJobInspector       Mode = "job-inspector"
+	ModeRuns               Mode = "runs"
+	ModeRunInspector       Mode = "run-inspector"
+	ModeWorkflows          Mode = "workflows"
+	ModeAttention          Mode = "attention"
+	ModeCredentials        Mode = "credentials"
+	ModeQuit               Mode = "quit"
+	ModeFederation         Mode = "federation"
+	ModeDaemons            Mode = "daemons"
+	ModeConfig             Mode = "config"
+	ModeFederationLeave    Mode = "federation-leave"
+	ModeFederationResult   Mode = "federation-result"
 	ModeFederationPick     Mode = "federation-pick"
 	ModeFederationBrowse   Mode = "federation-browse"
 	ModeFederationPreview  Mode = "federation-preview"
@@ -209,23 +217,16 @@ const (
 // cardBindings are the keys of the Popup cards. Each card's handler reads them by mode; the
 // main-surface keys are registered in mainActions.
 var cardBindings = []Binding{
-	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "create Issue", Mode: ModeCreate, ShowInFooter: true},
-	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "create Issue" + headlessNote, Mode: ModeCreate},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "create Issue", Mode: ModeCreate, twin: true, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: CancelDraft, Help: "discard?", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "ctrl+space", Key: "ctrl+space", Action: CreateComplete, Help: "complete label", Mode: ModeCreate, ShowInFooter: true},
-	{Chord: "ctrl+d", Key: "ctrl+d", Action: ShowCalendar, Help: "calendar", Mode: ModeCreate, ShowInFooter: true},
-	{Chord: "meta+d", Key: "meta+d", Action: ShowCalendar, Help: "calendar" + headlessNote, Mode: ModeCreate},
-	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "save Draft", Mode: ModeEditor, ShowInFooter: true},
-	{Chord: "meta+o", Key: "meta+o", Action: SaveDraftAction, Help: "save Draft" + headlessNote, Mode: ModeEditor},
-	{Chord: "ctrl+e", Key: "ctrl+e", Action: ExternalEditorAction, Help: "$EDITOR", Mode: ModeEditor, ShowInFooter: true},
-	{Chord: "meta+e", Key: "meta+e", Action: ExternalEditorAction, Help: "$EDITOR" + headlessNote, Mode: ModeEditor},
-	{Chord: "ctrl+r", Key: "ctrl+r", Action: CycleReplyKind, Help: "reply kind", Mode: ModeEditor},
-	{Chord: "meta+r", Key: "meta+r", Action: CycleReplyKind, Help: "reply kind" + headlessNote, Mode: ModeEditor},
-	{Chord: "ctrl+f", Key: "ctrl+f", Action: SendReplyAnyway, Help: "send reply anyway", Mode: ModeEditor},
-	{Chord: "meta+f", Key: "meta+f", Action: SendReplyAnyway, Help: "send reply anyway" + headlessNote, Mode: ModeEditor},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: ShowCalendar, Help: "calendar", Mode: ModeCreate, twin: true, ShowInFooter: true},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "save Draft", Mode: ModeEditor, twin: true, ShowInFooter: true},
+	{Chord: "ctrl+e", Key: "ctrl+e", Action: ExternalEditorAction, Help: "$EDITOR", Mode: ModeEditor, twin: true, ShowInFooter: true},
+	{Chord: "ctrl+r", Key: "ctrl+r", Action: CycleReplyKind, Help: "reply kind", Mode: ModeEditor, twin: true},
+	{Chord: "ctrl+f", Key: "ctrl+f", Action: SendReplyAnyway, Help: "send reply anyway", Mode: ModeEditor, twin: true},
 	{Chord: "escape", Key: "esc", Action: CancelDraft, Help: "discard?", Mode: ModeEditor, ShowInFooter: true},
-	{Chord: "ctrl+z", Key: "ctrl+z", Action: EditorUndo, Help: "undo", Mode: ModeEditor, ShowInFooter: true},
-	{Chord: "meta+z", Key: "meta+z", Action: EditorUndo, Help: "undo" + headlessNote, Mode: ModeEditor},
+	{Chord: "ctrl+z", Key: "ctrl+z", Action: EditorUndo, Help: "undo", Mode: ModeEditor, twin: true, ShowInFooter: true},
 	{Chord: "y", Key: "y", Action: DiscardDraft, Help: "discard Draft", Mode: ModeDiscard, ShowInFooter: true},
 	{Chord: "n", Key: "n", Action: KeepDraft, Help: "keep editing", Mode: ModeDiscard, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: KeepDraft, Help: "keep editing", Mode: ModeDiscard},
@@ -246,18 +247,15 @@ var cardBindings = []Binding{
 	{Chord: "shift+down", Key: "shift+down", Action: EditorDown, Help: "select down", Mode: ModeEditor},
 	{Chord: "shift+home", Key: "shift+home", Action: EditorHome, Help: "select to line start", Mode: ModeEditor},
 	{Chord: "shift+end", Key: "shift+end", Action: EditorEnd, Help: "select to line end", Mode: ModeEditor},
-	{Chord: "ctrl+a", Key: "ctrl+a", Action: EditorSelectAll, Help: "select all", Mode: ModeEditor},
-	{Chord: "meta+a", Key: "meta+a", Action: EditorSelectAll, Help: "select all" + headlessNote, Mode: ModeEditor},
+	{Chord: "ctrl+a", Key: "ctrl+a", Action: EditorSelectAll, Help: "select all", Mode: ModeEditor, twin: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: ApplyFilters, Help: "apply filters", Mode: ModeFilterForm},
-	{Chord: "ctrl+d", Key: "ctrl+d", Action: SaveFilterDefault, Help: "save as default", Mode: ModeFilterForm, ShowInFooter: true},
-	{Chord: "meta+d", Key: "meta+d", Action: SaveFilterDefault, Help: "save as default" + headlessNote, Mode: ModeFilterForm},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: SaveFilterDefault, Help: "save as default", Mode: ModeFilterForm, twin: true, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: CancelFilters, Help: "cancel", Mode: ModeFilterForm, ShowInFooter: true},
 	{Chord: "space", Key: "space", Action: InputSpace, Help: "next choice / space", Mode: ModeFilterForm},
 	{Chord: "ctrl+r", Key: "ctrl+r", Action: ResetFilterForm, Help: "reset form", Mode: ModeFilterForm},
-	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveViewForm, Help: "save view", Mode: ModeViewForm, ShowInFooter: true},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveViewForm, Help: "save view", Mode: ModeViewForm, twin: true, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: SaveViewForm, Help: "save view", Mode: ModeViewForm},
-	{Chord: "meta+o", Key: "meta+o", Action: SaveViewForm, Help: "save view" + headlessNote, Mode: ModeViewForm},
 	{Chord: "escape", Key: "esc", Action: CancelViewForm, Help: "cancel", Mode: ModeViewForm, ShowInFooter: true},
 	{Chord: "space", Key: "space", Action: InputSpace, Help: "next choice / space", Mode: ModeViewForm},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: CloseSave, Help: "close", Mode: ModeCloseForm, ShowInFooter: true},
@@ -279,8 +277,7 @@ var cardBindings = []Binding{
 	{Chord: "escape", Key: "esc", Action: DropdownClose, Help: "close choices", Mode: ModeDropdown, ShowInFooter: true},
 	{Chord: "backspace", Key: "backspace", Action: DropdownEraseQuery, Help: "erase search", Mode: ModeDropdown},
 	{Chord: "ctrl+u", Key: "ctrl+u", Action: DropdownClearQuery, Help: "clear search", Mode: ModeDropdown},
-	{Chord: "ctrl+d", Key: "ctrl+d", Action: ShowCalendar, Help: "calendar", Mode: ModeDatesForm, ShowInFooter: true},
-	{Chord: "meta+d", Key: "meta+d", Action: ShowCalendar, Help: "calendar" + headlessNote, Mode: ModeDatesForm},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: ShowCalendar, Help: "calendar", Mode: ModeDatesForm, twin: true, ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: DeleteSubmit, Help: "delete", Mode: ModeDeleteForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: DeleteSubmit, Help: "delete", Mode: ModeDeleteForm},
 	{Chord: "escape", Key: "esc", Action: DeleteCancel, Help: "cancel", Mode: ModeDeleteForm, ShowInFooter: true},
@@ -349,25 +346,19 @@ var cardBindings = []Binding{
 	{Chord: "2", Key: "2", Action: AgentQuickReplyTwo, Help: "wrap up", Mode: ModeAgentQuickReply, ShowInFooter: true},
 	{Chord: "3", Key: "3", Action: AgentQuickReplyThree, Help: "commit and close", Mode: ModeAgentQuickReply, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentMessageCancel, Help: "cancel", Mode: ModeAgentQuickReply, ShowInFooter: true},
-	// Adoption confirmation of the Federation Page's enrollment: one name field, so every other key is typed.
-	// Spoke name card: one name field, so every other key is typed; an empty name clears it.
 	{Chord: "enter", Key: "enter", Action: FederationNameSave, Help: "save name", Mode: ModeFederationName, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: FederationNameCancel, Help: "cancel", Mode: ModeFederationName, ShowInFooter: true},
 	{Chord: "enter", Key: "enter", Action: FederationAdoptConfirm, Help: "adopt", Mode: ModeFederationAdopt, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: FederationAdoptCancel, Help: "back", Mode: ModeFederationAdopt, ShowInFooter: true},
-	{Chord: "ctrl+o", Key: "ctrl+o", Action: RecurrenceSave, Help: "save recurrence", Mode: ModeRecurrenceForm, ShowInFooter: true},
-	{Chord: "meta+o", Key: "meta+o", Action: RecurrenceSave, Help: "save recurrence" + headlessNote, Mode: ModeRecurrenceForm},
-	{Chord: "ctrl+x", Key: "ctrl+x", Action: RecurrenceStop, Help: "stop recurring", Mode: ModeRecurrenceForm, ShowInFooter: true},
-	{Chord: "ctrl+d", Key: "ctrl+d", Action: ShowCalendar, Help: "calendar", Mode: ModeRecurrenceForm, ShowInFooter: true},
-	{Chord: "meta+d", Key: "meta+d", Action: ShowCalendar, Help: "calendar" + headlessNote, Mode: ModeRecurrenceForm},
-	{Chord: "meta+x", Key: "meta+x", Action: RecurrenceStop, Help: "stop recurring" + headlessNote, Mode: ModeRecurrenceForm},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: RecurrenceSave, Help: "save recurrence", Mode: ModeRecurrenceForm, twin: true, ShowInFooter: true},
+	{Chord: "ctrl+x", Key: "ctrl+x", Action: RecurrenceStop, Help: "stop recurring", Mode: ModeRecurrenceForm, twin: true, ShowInFooter: true},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: ShowCalendar, Help: "calendar", Mode: ModeRecurrenceForm, twin: true, ShowInFooter: true},
 	{Chord: "y", Key: "y", Action: RecurrenceStopConfirm, Help: "stop recurring", Mode: ModeRecurrenceStop, ShowInFooter: true},
 	{Chord: "n", Key: "n", Action: RecurrenceStopKeep, Help: "keep editing", Mode: ModeRecurrenceStop, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: RecurrenceStopKeep, Help: "keep editing", Mode: ModeRecurrenceStop},
 	{Chord: "escape", Key: "esc", Action: RecurrenceCancel, Help: "cancel", Mode: ModeRecurrenceForm, ShowInFooter: true},
 	{Chord: "space", Key: "space", Action: InputSpace, Help: "next choice / toggle / space", Mode: ModeRecurrenceForm},
-	{Chord: "ctrl+o", Key: "ctrl+o", Action: JobSave, Help: "save job", Mode: ModeJobForm, ShowInFooter: true},
-	{Chord: "meta+o", Key: "meta+o", Action: JobSave, Help: "save job" + headlessNote, Mode: ModeJobForm},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: JobSave, Help: "save job", Mode: ModeJobForm, twin: true, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: JobCancel, Help: "cancel", Mode: ModeJobForm, ShowInFooter: true},
 	{Chord: "space", Key: "space", Action: InputSpace, Help: "next choice / space", Mode: ModeJobForm},
 	{Chord: "enter", Key: "enter", Action: JobNewline, Help: "new line (in the prompt)", Mode: ModeJobForm},
@@ -392,8 +383,7 @@ var cardBindings = []Binding{
 	{Chord: "end", Key: "end", Action: MoveLast, Help: "last Collection", Mode: ModePicker},
 	{Chord: "enter", Key: "enter", Action: PickCollection, Help: "open Collection", Mode: ModePicker, ShowInFooter: true},
 	{Chord: "f2", Key: "f2", Action: EditViewAction, Help: "edit view", Mode: ModePicker, ShowInFooter: true},
-	{Chord: "ctrl+d", Key: "ctrl+d", Action: AskDeleteView, Help: "delete view", Mode: ModePicker, ShowInFooter: true},
-	{Chord: "meta+d", Key: "meta+d", Action: AskDeleteView, Help: "delete view" + headlessNote, Mode: ModePicker},
+	{Chord: "ctrl+d", Key: "ctrl+d", Action: AskDeleteView, Help: "delete view", Mode: ModePicker, twin: true, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: ClosePicker, Help: "close", Mode: ModePicker, ShowInFooter: true},
 	// New Project form: one name field, so every other key is typed.
 	{Chord: "enter", Key: "enter", Action: ProjectSubmit, Help: "create Project", Mode: ModeProjectForm, ShowInFooter: true},
@@ -403,15 +393,13 @@ var cardBindings = []Binding{
 	// Lanes card: text fields and the Save to choice, so every other key is typed.
 	{Chord: "enter", Key: "enter", Action: LanesSubmit, Help: "save Lanes", Mode: ModeLanesForm, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: LanesSubmit, Help: "save Lanes", Mode: ModeLanesForm},
-	{Chord: "ctrl+x", Key: "ctrl+x", Action: LanesStopSharing, Help: "stop sharing", Mode: ModeLanesForm, ShowInFooter: true},
-	{Chord: "meta+x", Key: "meta+x", Action: LanesStopSharing, Help: "stop sharing" + headlessNote, Mode: ModeLanesForm},
+	{Chord: "ctrl+x", Key: "ctrl+x", Action: LanesStopSharing, Help: "stop sharing", Mode: ModeLanesForm, twin: true, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: LanesCancel, Help: "cancel", Mode: ModeLanesForm, ShowInFooter: true},
 	{Chord: "space", Key: "space", Action: InputSpace, Help: "next choice / space", Mode: ModeLanesForm},
-	// Worker card. Its edit (e) key is added here by the ticket that builds it. s (supervision) is typed while the card draws fields.
+	// Worker card. s (supervision) is typed while the card draws fields.
 	{Chord: "s", Key: "s", Action: WorkerSupervision, Help: "supervision off / on", Mode: ModeWorkerCard, ShowInFooter: true},
 	{Chord: "e", Key: "e", Action: WorkerEdit, Help: "edit worker.toml", Mode: ModeWorkerCard, ShowInFooter: true},
-	{Chord: "ctrl+o", Key: "ctrl+o", Action: WorkerSave, Help: "save worker config", Mode: ModeWorkerCard, ShowInFooter: true},
-	{Chord: "meta+o", Key: "meta+o", Action: WorkerSave, Help: "save worker config" + headlessNote, Mode: ModeWorkerCard},
+	{Chord: "ctrl+o", Key: "ctrl+o", Action: WorkerSave, Help: "save worker config", Mode: ModeWorkerCard, twin: true, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: WorkerCancel, Help: "close", Mode: ModeWorkerCard, ShowInFooter: true},
 	{Chord: "space", Key: "space", Action: InputSpace, Help: "toggle choice / space", Mode: ModeWorkerCard},
 	{Chord: "s", Key: "s", Action: WorkerSupervision, Help: "supervision off / on", Mode: ModeWorkerRead, ShowInFooter: true},

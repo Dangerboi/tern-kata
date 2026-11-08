@@ -5,9 +5,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// The colours an Issue's parts take wherever they're drawn: the Board, the list and the Issue detail.
-
-// namedLaneTones are the tones of No lane, Done and the default Lanes; customLaneTones go to other Lanes in Lane list order.
 var (
 	namedLaneTones = map[string]ui.Tone{
 		model.LaneNone:    ui.ToneMuted,
@@ -20,7 +17,6 @@ var (
 	customLaneTones = []ui.Tone{ui.ToneAccent, ui.TonePending, ui.ToneNeutral}
 )
 
-// laneTone is the tone of the Lane with key lane in the Lane list lanes.
 func laneTone(lanes []string, lane string) ui.Tone {
 	if tone, ok := namedLaneTones[lane]; ok {
 		return tone
@@ -37,23 +33,18 @@ func laneTone(lanes []string, lane string) ui.Tone {
 	return ui.ToneNeutral
 }
 
-// issueLaneTone is the tone of the Lane issue stands in under the Pane's Lane list: Done's for a closed Issue.
 func issueLaneTone(m model.Model, issue model.Issue) ui.Tone {
 	return issueLaneToneIn(m.LaneList(), issue)
 }
 
-// issueLaneToneIn is issueLaneTone under the Lane list lanes, for a frame that read the list once.
 func issueLaneToneIn(lanes []string, issue model.Issue) ui.Tone {
 	return laneTone(lanes, model.LaneOf(issue, lanes))
 }
 
-// ownerTone is the tone of an Issue's owner.
 const ownerTone = ui.ToneUser
 
-// labelTone is the tone of a label that isn't drawn as its Lane.
 const labelTone = ui.ToneInfo
 
-// priorityText is "P1" and its tone for a priority, "" and muted for none: P0 error, P1 warning, P2 info, the rest muted.
 func priorityText(p *int64) (string, ui.Tone) {
 	if p == nil {
 		return "", ui.ToneMuted

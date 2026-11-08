@@ -39,7 +39,6 @@ const (
 	JobDiscard   Action = "job-discard"
 )
 
-// The Job card's fields.
 const (
 	JobFieldKind         Field = "kind"
 	JobFieldName         Field = "name"
@@ -74,8 +73,6 @@ const (
 	JobFieldEnabled      Field = "enabled"
 )
 
-// JobFields is the Job card's field list in tab order: the fields of every kind and trigger. Which of them apply to the card as
-// it stands is JobFormState.Shows; tab skips the others.
 var JobFields = jobTable.specs()
 
 // jobFieldTitles are the prompts of the fields. The part before the first " (" is the field's name in a message.
@@ -113,7 +110,6 @@ var jobFieldTitles = map[Field]string{ //nolint:gosec // G101: field prompts ("S
 	JobFieldEnabled:      "Enabled",
 }
 
-// JobPrompt is the prompt of the Job card's field called name.
 func JobPrompt(name Field) string { return jobFieldTitles[name] }
 
 func jobFieldName(name Field) string {
@@ -145,26 +141,20 @@ var jobCatchups = []struct{ id, label string }{
 	{CatchupLatest, "Latest missed run"}, {CatchupAll, "Every missed run"}, {CatchupSkip, "Skip runs older than the grace"},
 }
 
-// jobKind is one kind of job the card can make. The card builds a job of the kind from its fields and reads one back into them.
 type jobKind struct {
-	id    string
-	label string
-	// triggers lists the trigger ids the kind offers, in choice order; the first is the default.
+	id       string
+	label    string
 	triggers []cronjob.TriggerKind
-	// owns says the card can edit the job as this kind.
-	owns func(CronJob) bool
+	owns     func(CronJob) bool
 	// shown says the field beyond the common ones (kind, name, trigger, enabled) and the trigger's own applies to the form.
-	shown func(f JobFormState, name Field) bool
-	// load reads the kind's fields from a job it owns.
-	load func(f *JobFormState, job CronJob)
-	// checkTrigger is the kind's limits on a trigger the form built.
+	shown        func(f JobFormState, name Field) bool
+	load         func(f *JobFormState, job CronJob)
 	checkTrigger func(t cronjob.Trigger) error
 	// build is the kind's part of the definition (action, Issue policy, overlap, catchup, grace) and, for a new job, the reference
 	// of its parent. Name, trigger and enabled are the card's.
 	build func(f JobFormState) (def cronjob.Definition, parentRef string, err error)
 }
 
-// jobTrigger is one kind of trigger the card can make, with the fields it adds.
 type jobTrigger struct {
 	id     cronjob.TriggerKind
 	label  string
@@ -376,10 +366,8 @@ func (f JobFormState) trigger() jobTrigger {
 	return jobTriggers[0]
 }
 
-// InTrigger says the field is one of the current trigger's own: the schedule preview comes after them.
 func (f JobFormState) InTrigger(name Field) bool { return slices.Contains(f.trigger().fields, name) }
 
-// Shows says the field applies to the card as it stands; the others are hidden and tab skips them.
 func (f JobFormState) Shows(name Field) bool {
 	switch name {
 	case JobFieldKind, JobFieldName, JobFieldTrigger, JobFieldEnabled:
@@ -432,10 +420,8 @@ var jobTable = fieldTable[JobFormState]{
 	},
 }
 
-// Text is what the card holds in the text field called name.
 func (f JobFormState) Text(name Field) string { return jobTable.value(f, name) }
 
-// JobChoice is one choice of a choice field.
 type JobChoice struct {
 	Label  string
 	Chosen bool
@@ -451,10 +437,8 @@ func (f JobFormState) kinds() []jobKind {
 	return slices.DeleteFunc(slices.Clone(jobKinds), func(k jobKind) bool { return (k.id == nativeJobKind.id) != native })
 }
 
-// jobOption is one choice of a field whose value is a string: the value the field holds and the words that show it.
 type jobOption struct{ value, label string }
 
-// optionValue is the string the option-valued field called name holds, nil for a field that is not one.
 func (f *JobFormState) optionValue(name Field) *string {
 	switch name {
 	case JobFieldWorkflow:
@@ -514,7 +498,6 @@ func (f JobFormState) options(name Field) []jobOption {
 	return opts
 }
 
-// JobChoices are the choices of the choice field called name, in the order the card shows and picks them by index.
 func (f JobFormState) JobChoices(name Field) []JobChoice {
 	var choices []JobChoice
 	switch name {
@@ -537,7 +520,6 @@ func (f JobFormState) JobChoices(name Field) []JobChoice {
 	return choices
 }
 
-// policyKind is the Issue policy the form holds.
 func (f JobFormState) policyKind() cronjob.IssuePolicyKind { return cronjob.IssuePolicyKind(f.Policy) }
 
 func jobTriggerOf(id cronjob.TriggerKind) jobTrigger {
@@ -573,7 +555,6 @@ func jobPick(f *JobFormState, name Field, i int) bool {
 	return true
 }
 
-// jobStep moves the choice field called name one choice on; back goes the other way.
 func jobStep(f *JobFormState, name Field, back bool) {
 	choices := f.JobChoices(name)
 	if len(choices) == 0 {
@@ -583,7 +564,6 @@ func jobStep(f *JobFormState, name Field, back bool) {
 	jobPick(f, name, cycleIndex(at, len(choices), back))
 }
 
-// jobChoiceField declares a choice field of the Job card: JobChoices lists its choices.
 func jobChoiceField(name Field) formField[JobFormState] {
 	field := choiceField(name,
 		func(f *JobFormState, back bool) { jobStep(f, name, back) },
@@ -633,7 +613,6 @@ func changeJobForm(projectID int64, job CronJob) (JobFormState, bool) {
 	return JobFormState{}, false
 }
 
-// openNewJob is `n` on the Jobs Page: a card for a new job, whose parent the user names.
 func openNewJob(m Model) (Model, []Cmd) {
 	switch {
 	case !m.OnJobs() || m.Jobs.ProjectID == 0:
@@ -646,7 +625,6 @@ func openNewJob(m Model) (Model, []Cmd) {
 	return newJobForm(m, m.Jobs.ProjectID, "")
 }
 
-// openIssueJob is `J` on an Issue: a card for a new native job with the Issue as its parent.
 func openIssueJob(m Model) (Model, []Cmd) {
 	issue := closeIssue(m)
 	switch {
@@ -658,7 +636,6 @@ func openIssueJob(m Model) (Model, []Cmd) {
 	return newJobForm(m, issue.ProjectID, cmp.Or(issue.ShortID, issue.UID))
 }
 
-// openEditJob is `e` on the Jobs Page: the card on the selected job, prefilled.
 func openEditJob(m Model) (Model, []Cmd) {
 	m, job, ok := writableJob(m)
 	if !ok {
@@ -698,12 +675,10 @@ type JobTerms struct {
 	ReportRef  string
 }
 
-// issueRef is the Issue reference the card holds, without the # a short id may carry.
 func (f JobFormState) issueRef() string {
 	return strings.TrimPrefix(strings.TrimSpace(f.Issue), "#")
 }
 
-// reportRef is the Issue reference of a notify job's own Issue under an Issue-date trigger, without the # a short id may carry.
 func (f JobFormState) reportRef() string {
 	return strings.TrimPrefix(strings.TrimSpace(f.Report), "#")
 }
@@ -749,7 +724,6 @@ type JobPreview struct {
 	Err   error
 }
 
-// previewRuns is how many next runs the preview lists.
 const previewRuns = 3
 
 // Preview reads the trigger as it stands. A job's interval counts from its anchor: the creation instant, which for a job that
@@ -790,7 +764,6 @@ func (f JobFormState) previewJob(t cronjob.Trigger, now time.Time) (cronjob.Job,
 	return cronjob.Job{CreatedAt: now, Definition: cronjob.Definition{Trigger: t}}, now
 }
 
-// runLayout formats a listed run with the zone abbreviation.
 const runLayout = "Mon 2006-01-02 15:04 MST"
 
 // listRuns steps a schedule from now for the next previewRuns instants, each shown in the schedule's own zone, or in the Pane
@@ -924,7 +897,6 @@ func jobFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// insertPrompt puts text, line breaks included, at the caret of the prompt field.
 func (f *JobFormState) insertPrompt(field *string, text string) {
 	runes := []rune(*field)
 	at := len(runes) - f.Caret.back(f.Field, len(runes))
@@ -957,7 +929,6 @@ func answerJobConflict(m Model, msg KeyMsg) (Model, []Cmd) {
 	return m, nil
 }
 
-// JobConflictFacts are the lines that show the newer job the card found.
 func (m Model) JobConflictFacts() []JobFact {
 	job := m.JobForm.Conflict
 	if job == nil {

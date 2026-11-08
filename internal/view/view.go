@@ -27,11 +27,8 @@ const (
 
 const IssueListID = "main.columns.list.issues"
 
-// loadingMarker sits in a column heading while that column's content is
-// replaced; the previous content stays on screen until it arrives.
 var loadingMarker = ui.Span{T: "  loading…", S: "muted"}
 
-// Render draws m; now is the time relative "updated" cells are measured from.
 func Render(m model.Model, now time.Time) tern.View {
 	if len(m.VisibleColumns()) == 0 {
 		return narrowView()
@@ -43,7 +40,7 @@ func Render(m model.Model, now time.Time) tern.View {
 	case m.Err != nil:
 		main = failureView(m)
 	case m.FirstLoad():
-		main = ui.Nodes(ui.Text{Common: ui.Common{Key: "loading", Tone: ui.TonePending}, Text: "Loading " + m.Collection.Title + " Issues…"})
+		main = ui.Nodes(plainText("loading", ui.TonePending, "Loading "+m.Collection.Title+" Issues…"))
 	default:
 		columns := make([]tern.Element, 0, 3)
 		for _, column := range m.VisibleColumns() {
@@ -98,7 +95,7 @@ func Render(m model.Model, now time.Time) tern.View {
 	}
 	layer := topLayer(m, now)
 	if m.CloseForm.Err != nil && !m.CloseForm.Open {
-		main = append(main, ui.Text{Common: ui.Common{Key: "close-error", Tone: ui.ToneError}, Text: m.CloseForm.Err.Error()})
+		main = append(main, plainText("close-error", ui.ToneError, m.CloseForm.Err.Error()))
 	}
 	if m.HelpOpen {
 		return tern.View{Main: main}
@@ -154,7 +151,6 @@ func issues(m model.Model, now time.Time) tern.Element {
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(0.4)}, "", children)
 }
 
-// laneHeader is the Lane view's header line: the Lane's title and card count, as on the Board.
 func laneHeader(m model.Model) tern.Element {
 	for _, column := range m.BoardColumns() {
 		if column.Lane == m.Board.Lane {
@@ -164,21 +160,17 @@ func laneHeader(m model.Model) tern.Element {
 	return ui.Text{Common: ui.Common{Key: "lane"}, Spans: []ui.Span{{T: model.LaneTitle(m.Board.Lane), S: "strong"}}}
 }
 
-// searchInput is the Search field above the Issues, in the list and on the Board.
 func searchInput(m model.Model) tern.Element {
 	placeholder := "Search Issues in " + m.Collection.Title
 	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Cursor: caretAt(m.Search.Caret, "", m.Filters.Search), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}}
 }
 
-// pageSearchInput is the search field above the Jobs, Runs or Workflows list, drawn like the Issues' while it is being typed into
-// and read-only while the keys are back on the list.
 func pageSearchInput(m model.Model) tern.Element {
 	noun := m.PageSearchNoun()
 	text := m.PageSearch.Text
 	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search " + noun}, Field: ui.Field{Text: text, Cursor: caretAt(m.PageSearch.Caret, "", text), Mode: "insert", Placeholder: ui.T("Search " + noun), Readonly: !m.PageSearch.Open, Prompt: []ui.Span{{T: "/ "}}}}
 }
 
-// searchEmpty is the empty state of a Page whose search leaves no row; it stays under the search input.
 func searchEmpty(m model.Model) ui.Empty {
 	return emptyState("No "+m.PageSearchNoun()+" match", "Nothing matches "+strconv.Quote(m.PageSearch.Text)+". Press esc to end the search.")
 }
@@ -235,8 +227,6 @@ func topBar(m model.Model) tern.Element {
 	)}
 }
 
-// filterLine lists the active filters under the top bar: the Filter card's funnel, a chip per filter and, muted at the end,
-// where they came from (the default or a saved view); nil when it has nothing to show.
 func filterLine(m model.Model) []tern.Element {
 	terms, note := m.FilterLine()
 	if len(terms) == 0 && note == "" || m.OnJobs() || m.OnRuns() {
@@ -252,8 +242,6 @@ func filterLine(m model.Model) []tern.Element {
 	return ui.Nodes(ui.Row{Common: ui.Common{Key: "filters", Hidden: m.HelpOpen}, Gap: ui.GapSM, Wrap: true, Children: cells})
 }
 
-// filterChipText is a filter as its chip says it, "status open": the field's name and its value, a Relationship in the Filter
-// card's words.
 func filterChipText(term model.FilterTerm) string {
 	value := term.Value
 	if term.Field == model.FilterRelationship {
@@ -278,7 +266,38 @@ func panel(m model.Model, column model.Column, common ui.Common, gap ui.Gap, chi
 	return ui.Card{Common: common, Selected: m.Focus == column, Children: children}
 }
 
-// idCell is the first cell: the tree connectors, the fold marker and the short id.
+// plainText is a line of text in tone, unstyled: the tone only marks its role. See toneText for one drawn in the tone.
+func plainText(key string, tone ui.Tone, text string) ui.Text {
+	return ui.Text{Common: ui.Common{Key: key, Tone: tone}, Text: text}
+}
+
+func heading(spans ...ui.Span) ui.Text {
+	return ui.Text{Common: ui.Common{Key: "heading"}, Spans: spans, Wrap: ui.WrapNone}
+}
+
+func listPanel(m model.Model, basis float64, children []tern.Element) tern.Element {
+	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1, Basis: ui.BasisFrac(basis)}, ui.GapSM, children)
+}
+
+func noticeLines(failed, settled bool, text, detail string) []tern.Element {
+	tone := ui.TonePending
+	switch {
+	case failed:
+		tone = ui.ToneError
+	case settled:
+		tone = ui.ToneMuted
+	}
+	lines := ui.Nodes(plainText("notice", tone, text))
+	if detail != "" {
+		lines = append(lines, plainText("detail", ui.ToneMuted, detail))
+	}
+	return lines
+}
+
+func headRow(children ...tern.Element) ui.Row {
+	return ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Wrap: true, Children: children}
+}
+
 func idCell(row model.IssueRow) string {
 	disclosure := ""
 	if row.HasChildren {
@@ -290,7 +309,6 @@ func idCell(row model.IssueRow) string {
 	return row.Guide + disclosure + row.ShortID
 }
 
-// cell is text padded with spaces to width terminal cells, or cut to it with an ellipsis.
 func cell(text string, width int) string {
 	text = cut(text, width)
 	return text + strings.Repeat(" ", max(width-displayWidth(text), 0))
@@ -310,7 +328,6 @@ var displayCondition = &runewidth.Condition{StrictEmojiNeutral: true}
 
 func displayWidth(text string) int { return displayCondition.StringWidth(text) }
 
-// stripeRole is the role of the drawn row at index i: every other row is shaded.
 func stripeRole(i int) string {
 	if i%2 == 1 {
 		return StripeRole
@@ -318,7 +335,6 @@ func stripeRole(i int) string {
 	return ""
 }
 
-// rowLookups are what every row of a frame draws from alike, read once: the Lane list and each Issue's Agent badge.
 type rowLookups struct {
 	lanes  []string
 	badges model.AgentBadgeIndex
@@ -336,8 +352,6 @@ const (
 	sidebarChrome = 4 // the Collections column's border and padding
 )
 
-// listWidth is the list column's width in cells: all of the Pane when it is the only column, otherwise its basis plus its
-// share of what the other columns leave, as Tern's flex layout gives it.
 func listWidth(m model.Model) int {
 	columns := m.VisibleColumns()
 	if len(columns) < 2 {
@@ -361,15 +375,10 @@ func listWidth(m model.Model) int {
 	return m.Cols - fixed
 }
 
-// itemDetailWidth is the cells of the Item's Detail spacer between a row's label and its value (not the Issue detail column).
 const itemDetailWidth = 1
 
-// rowPadding is the cells a row spends on its selection mark and edges, beside its cells.
 const rowPadding = 4
 
-// issueRow is one Issue: the id, prio, status and title on the left, the
-// title being the cell that gives way, and kids, owner and updated pinned to
-// the right so each column lines up with the header. A blank cell keeps its width.
 func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected bool, role string, cols listColumns, menu contextMenuKeys, now time.Time) tern.Element {
 	tone := ui.ToneNeutral
 	statusStyle := "accent"
@@ -424,10 +433,8 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(laid.label...), Detail: ui.T(strings.Repeat(" ", itemDetailWidth)), Value: ui.Spans(laid.value...)}
 }
 
-// footerHint is one key of the current mode's legend: the chord a click presses, the key as drawn and what it does.
 type footerHint struct{ chord, key, description string }
 
-// footerHints are the current mode's hints in reading order, and position is the selected row's place in the list.
 func footerHints(m model.Model) (hints []footerHint, position string) {
 	for binding := range model.BindingsForMode(m.CurrentMode(), true) {
 		if !binding.Offered(m) {
@@ -461,8 +468,6 @@ func footerHints(m model.Model) (hints []footerHint, position string) {
 	return hints, fmt.Sprintf("%d / %d", selected, total)
 }
 
-// footer is the key legend: each hint a muted text with a key span, wrapping onto more lines in a narrow Pane instead of
-// losing hints, with the selected row's place in the list at the right.
 func footer(m model.Model) tern.Element {
 	hints, position := footerHints(m)
 	cells := make([]tern.Element, len(hints))
@@ -483,7 +488,6 @@ func headerRow(cols listColumns) tern.Element {
 	return ui.Item{Common: ui.Common{Key: "header", Role: cols.role(), Tone: ui.ToneMuted}, Label: ui.Spans(header.label...), Detail: ui.T(" "), Value: ui.Spans(header.value...)}
 }
 
-// listOwner is the owner cell text: the name cut to ownerWidth as before, then " until …" whole when the claim expires.
 func listOwner(m model.Model, row model.IssueRow, now time.Time) string {
 	owner := m.OwnerText(row.Owner, row.AssignmentExpiresOn, now)
 	if displayWidth(owner.Name) <= ownerWidth {
@@ -492,7 +496,6 @@ func listOwner(m model.Model, row model.IssueRow, now time.Time) string {
 	return cell(owner.Name, ownerWidth) + owner.Until
 }
 
-// issueTitle is the title as the list and the Board draw it: a recurring Issue's starts with "↻ ", one a Cron job made with "◷ ".
 func issueTitle(issue model.Issue) string {
 	title := issue.Title
 	if issue.CronMade() {

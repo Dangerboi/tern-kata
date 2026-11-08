@@ -22,14 +22,11 @@ import (
 // maxDownload bounds one downloaded file, so a wrong server cannot fill the disk.
 const maxDownload = 512 << 20
 
-// unpackedRelease is a downloaded, checked and unpacked release. Dir holds what the archive holds: the binary, LICENSE and
-// plugin/.
 type unpackedRelease struct {
 	Dir    string
 	Binary string
 }
 
-// binaryName is the file the archive holds the binary as.
 func (e updateEnv) binaryName() string {
 	if runtime.GOOS == "windows" {
 		return "tern-kata.exe"
@@ -45,7 +42,6 @@ func (e updateEnv) archiveName() string {
 	return "tern-kata_" + runtime.GOOS + "_" + runtime.GOARCH + ".tar.gz"
 }
 
-// versionURL is version.txt of the latest release, or of the dist/ TERN_KATA_BASE_URL names.
 func (e updateEnv) versionURL() string {
 	if e.BaseURL != "" {
 		return strings.TrimRight(e.BaseURL, "/") + "/version.txt"
@@ -53,7 +49,6 @@ func (e updateEnv) versionURL() string {
 	return latestBase + "/version.txt"
 }
 
-// fileURL is name in the folder of release version, or in the dist/ TERN_KATA_BASE_URL names.
 func (e updateEnv) fileURL(version, name string) string {
 	if e.BaseURL != "" {
 		return strings.TrimRight(e.BaseURL, "/") + "/" + name
@@ -61,7 +56,6 @@ func (e updateEnv) fileURL(version, name string) string {
 	return releaseBase + "/" + version + "/" + name
 }
 
-// fetchLatestVersion reads the latest release's version from version.txt, as the semver "vX.Y.Z".
 func fetchLatestVersion(ctx context.Context, env updateEnv) (string, error) {
 	var text strings.Builder
 	if err := download(ctx, env.Client, env.versionURL(), &text, 1<<10); err != nil {
@@ -74,8 +68,6 @@ func fetchLatestVersion(ctx context.Context, env updateEnv) (string, error) {
 	return latest, nil
 }
 
-// downloadRelease downloads release version's archive for this OS and its checksums.txt into work, checks the archive's
-// SHA-256 against its checksums.txt line and unpacks it into work/unpacked.
 func downloadRelease(ctx context.Context, env updateEnv, version, work string) (unpackedRelease, error) {
 	name := env.archiveName()
 	archive := filepath.Join(work, name)
@@ -100,7 +92,6 @@ func downloadRelease(ctx context.Context, env updateEnv, version, work string) (
 	return unpackedRelease{Dir: dir, Binary: binary}, nil
 }
 
-// download writes the body of url to w, refusing more than limit bytes and any status but 200.
 func download(ctx context.Context, client *http.Client, url string, w io.Writer, limit int64) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -133,7 +124,6 @@ func downloadFile(ctx context.Context, env updateEnv, url, path string) (err err
 	return download(ctx, env.Client, url, file, maxDownload)
 }
 
-// verifyChecksum checks that file's SHA-256 is the one sums (the text of a checksums.txt) lists for name.
 func verifyChecksum(file, name, sums string) error {
 	want := ""
 	for line := range strings.SplitSeq(sums, "\n") {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -19,18 +20,14 @@ import (
 const TrustNote = "Anyone who can write jobs in a listed Project can run prompts on this machine as you, and commands too in a Project you give commands = true."
 
 var (
-	// ErrConfigExists is InitConfig refusing to overwrite a worker.toml.
-	ErrConfigExists = errors.New("worker config already exists")
-	// ErrConfigChanged is ReplaceConfig finding worker.toml no longer as the edit began.
+	ErrConfigExists  = errors.New("worker config already exists")
 	ErrConfigChanged = errors.New("worker.toml changed while you edited it")
-	// ErrNoConfig is AddProject finding no worker.toml to extend.
-	ErrNoConfig = errors.New("no worker config")
+	ErrNoConfig      = errors.New("no worker config")
 
 	unsafeKeyChars = regexp.MustCompile(`[^a-z0-9_-]`)
 	checkoutsTable = regexp.MustCompile(`^\s*\[\s*(?:checkouts|"checkouts"|'checkouts')\s*\]\s*(#.*)?$`)
 )
 
-// Binding is a kata Project and the primary checkout its directory is bound to.
 type Binding struct {
 	Project  string
 	Checkout string
@@ -111,7 +108,6 @@ func sameCheckout(a, b string) bool {
 	return filepath.Clean(a) == filepath.Clean(b)
 }
 
-// tomlString is s as a TOML basic string.
 func tomlString(s string) string {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
@@ -138,7 +134,6 @@ func projectBlock(project, key string) string {
 		"# commands = false   # true lets its workflows run command steps (sh -c)\n"
 }
 
-// starterConfig is the worker.toml `worker init` writes; a value the Setup leaves empty keeps its commented default.
 func starterConfig(s Setup, key string) string {
 	actor := "# actor = " + tomlString(s.DefaultActor)
 	if s.Actor != "" {
@@ -195,26 +190,12 @@ command = ` + tomlString(command) + `
 // the file has none. Every other line stays byte for byte.
 func addToConfig(existing, project, key, checkout string, addCheckout bool) string {
 	line := key + " = " + tomlString(checkout)
-	lines := strings.SplitAfter(existing, "\n")
-	if lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
+	lines := configLines(existing)
 	insertAt := -1
 	if addCheckout {
-		for i, l := range lines {
-			if checkoutsTable.MatchString(strings.TrimRight(l, "\r\n")) {
-				insertAt = i + 1
-				for j := i + 1; j < len(lines); j++ {
-					t := strings.TrimSpace(lines[j])
-					if strings.HasPrefix(t, "[") {
-						break
-					}
-					if t != "" && !strings.HasPrefix(t, "#") {
-						insertAt = j + 1
-					}
-				}
-				break
-			}
+		if i := slices.IndexFunc(lines, func(l string) bool { return checkoutsTable.MatchString(strings.TrimRight(l, "\r\n")) }); i >= 0 {
+			_, last := tableEnd(lines, i)
+			insertAt = last + 1
 		}
 	}
 	nl := "\n"
@@ -239,6 +220,27 @@ func addToConfig(existing, project, key, checkout string, addCheckout bool) stri
 		text += nl + "[checkouts]" + nl + line + nl
 	}
 	return text
+}
+
+func configLines(text string) []string {
+	lines := strings.SplitAfter(text, "\n")
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+// tableEnd is where the table whose header is lines[i] ends: end is the next line starting with [ (or the end of the
+// text), last the line of its last key or value, the header itself when it has none.
+func tableEnd(lines []string, i int) (end, last int) {
+	end, last = i+1, i
+	for end < len(lines) && !strings.HasPrefix(strings.TrimSpace(lines[end]), "[") {
+		if t := strings.TrimSpace(lines[end]); t != "" && !strings.HasPrefix(t, "#") {
+			last = end
+		}
+		end++
+	}
+	return end, last
 }
 
 // WriteConfig writes a whole worker.toml: content goes next to path, is checked with LoadConfig, then renamed into place (mode 0600).

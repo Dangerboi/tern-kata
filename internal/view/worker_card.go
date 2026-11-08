@@ -10,8 +10,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// workerLayer is the Worker card: the facts about this machine's worker in a grid, then what the machine still needs, as fields
-// to fill in and a save, or the question how to stop or restart the running worker, each choice beside what it does.
 func workerLayer(m model.Model) tern.Element {
 	f := m.WorkerCard
 	if !f.Open {
@@ -63,25 +61,22 @@ func workerLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorker)}, Head: ui.T("Worker"), Icon: ui.IconCpu, Modal: true, Size: ui.SizeLG}, children))
 }
 
-// workerFacts is the card's fact grid: the Project and its checkout, worker.toml, the worker and its supervision, each value
-// leading with its state in that state's colour.
 func workerFacts(m model.Model) tern.Element {
 	s := m.Worker.Setup
 	muted := func(text string) ui.Span { return ui.Span{T: text, S: "muted"} }
 	fact := func(key, label string, value ...ui.Span) tern.Element {
 		return factRow(key, "", muted(label), value...)
 	}
+	file, fileTone := fileState(m)
 	return ui.Col{Common: ui.Common{Key: "facts"}, Gap: ui.GapXS, Children: ui.Nodes(
 		fact("project", "Project", ui.Span{T: s.Project, S: "strong"}),
 		fact("checkout", "Checkout", ui.Span{T: s.Checkout}),
-		fact("file", "worker.toml", ui.Span{T: fileWords(m), S: toneStyle(fileTone(m))}, muted(" · "+s.Path)),
+		fact("file", "worker.toml", ui.Span{T: file, S: toneStyle(fileTone)}, muted(" · "+s.Path)),
 		fact("worker", "Worker", workerSpans(m)...),
 		fact("supervision", "Supervision", supervisionSpans(m)...),
 	)}
 }
 
-// stopChoices is the card's question how to stop the running worker, in bold, then the two ways, labelled as the card's buttons
-// are, each beside what it does to the runs in flight.
 func stopChoices(m model.Model, key, question, idleLabel, nowLabel string) tern.Element {
 	idle, now := m.WorkerStopWords()
 	nowStyle := ""
@@ -95,7 +90,6 @@ func stopChoices(m model.Model, key, question, idleLabel, nowLabel string) tern.
 	)}
 }
 
-// workerFields are the card's inputs: the setup fields when worker.toml is to be made, the checkout and the trust note, and the trust choice.
 func workerFields(m model.Model) []tern.Element {
 	f := m.WorkerCard
 	tone := func(name model.Field) ui.Tone {
@@ -126,7 +120,6 @@ func workerFields(m model.Model) []tern.Element {
 	return children
 }
 
-// workerActions is the card's button row. It holds the saves, the restart choice, the edit (e) and supervision.
 func workerActions(m model.Model) tern.Element {
 	f := m.WorkerCard
 	switch {
@@ -172,36 +165,25 @@ func supervisionButton(m model.Model) tern.Element {
 	return cardButton("supervision", m.WorkerCardMode(), model.WorkerSupervision, label, false)
 }
 
-// fileWords is the state of worker.toml. The checkouts it maps the Project to are named only when they are not just the
-// Checkout row above.
-func fileWords(m model.Model) string {
+// fileState is the state of worker.toml in words and the tone of its colour. The checkouts it maps the Project to are named only
+// when they are not just the Checkout row above.
+func fileState(m model.Model) (string, ui.Tone) {
 	s := m.Worker.Setup
 	switch m.WorkerCardKind() {
 	case model.WorkerSetUp:
-		return "none yet"
+		return "none yet", ui.ToneWarning
 	case model.WorkerBroken:
-		return "does not load: " + s.LoadErr
+		return "does not load: " + s.LoadErr, ui.ToneError
 	case model.WorkerServe:
-		return "loads, and does not list " + s.Project
+		return "loads, and does not list " + s.Project, ui.ToneWarning
 	}
 	words := "loads, lists " + s.Project
 	if !slices.Equal(s.Checkouts, []string{s.Checkout}) {
 		words += " with checkout " + strings.Join(s.Checkouts, ", ")
 	}
-	return words
+	return words, ui.ToneSuccess
 }
 
-func fileTone(m model.Model) ui.Tone {
-	switch m.WorkerCardKind() {
-	case model.WorkerBroken:
-		return ui.ToneError
-	case model.WorkerSetUp, model.WorkerServe:
-		return ui.ToneWarning
-	}
-	return ui.ToneSuccess
-}
-
-// workerSpans is whether a worker runs, in its state's colour, then the executor, process and runs in flight of a running one.
 func workerSpans(m model.Model) []ui.Span {
 	w := m.Worker
 	switch {
@@ -225,7 +207,6 @@ func workerSpans(m model.Model) []ui.Span {
 	return spans
 }
 
-// supervisionSpans is whether the plugin supervises the worker, in that state's colour, then what that means for it.
 func supervisionSpans(m model.Model) []ui.Span {
 	w, s := m.Worker, m.Worker.Setup
 	state, style, means := "on", toneStyle(ui.ToneSuccess), "the plugin starts a worker once a worker.toml loads"

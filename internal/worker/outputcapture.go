@@ -37,19 +37,15 @@ const (
 // endTailBytes is how much of a skipped agent_end's end is kept to read its isTerminal from; omp writes it last.
 const endTailBytes = 256
 
-// lineSink feeds omp's stdout, line by line, to the parser and keeps the first bytes in a capped file.
 type lineSink struct {
-	mu       sync.Mutex
-	parser   *agentParser
-	file     *cappedFile
-	buf      []byte
-	skipping bool
-	// skippedEnd is whether the line being skipped is an agent_end, judged from its first bytes; endTail is the last
-	// bytes of such a line.
+	mu         sync.Mutex
+	parser     *agentParser
+	file       *cappedFile
+	buf        []byte
+	skipping   bool
 	skippedEnd bool
 	endTail    []byte
-	// limit is the longest line held; zero means maxLine.
-	limit int
+	limit      int
 }
 
 func (s *lineSink) maxLen() int {
@@ -93,7 +89,6 @@ func (s *lineSink) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-// overlong drops the held bytes of a line past the limit, remembering whether it is an agent_end and, if so, its end.
 func (s *lineSink) overlong() {
 	s.skippedEnd = bytes.HasPrefix(bytes.TrimSpace(s.buf), []byte(agentEndPrefix))
 	s.endTail = s.endTail[:0]
@@ -103,7 +98,6 @@ func (s *lineSink) overlong() {
 	s.buf, s.skipping = nil, true
 }
 
-// noteEndTail keeps the last endTailBytes of a skipped agent_end line.
 func (s *lineSink) noteEndTail(seg []byte) {
 	if !s.skippedEnd {
 		return
@@ -115,8 +109,6 @@ func (s *lineSink) noteEndTail(seg []byte) {
 	}
 }
 
-// skippedLine hands the parser a stand-in for a skipped line when it was an agent_end: finished unless its isTerminal
-// says false.
 func (s *lineSink) skippedLine() {
 	if !s.skippedEnd {
 		return
@@ -151,7 +143,6 @@ func (s *lineSink) line(l []byte) {
 	}
 }
 
-// flush parses a last line that had no newline.
 func (s *lineSink) flush() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -219,7 +210,6 @@ func (w *tailWindow) Write(p []byte) {
 	w.trim()
 }
 
-// WriteString is Write for a string, without a byte copy of it.
 func (w *tailWindow) WriteString(s string) {
 	w.total += int64(len(s))
 	w.buf = append(w.buf, s...)
@@ -244,13 +234,11 @@ func (w *tailWindow) Bytes() (kept []byte, atLineStart bool) {
 	return w.buf, !w.cut || w.startsLine
 }
 
-// Omitted is how many bytes written are not in Bytes.
 func (w *tailWindow) Omitted() int64 {
 	kept, _ := w.Bytes()
 	return w.total - int64(len(kept))
 }
 
-// lastWindow is the last max bytes of raw and whether they begin at a line start.
 func lastWindow(raw []byte, max int) ([]byte, bool) {
 	if len(raw) <= max {
 		return raw, true
@@ -271,13 +259,10 @@ func dropPartialLine(raw []byte, atLineStart bool) []byte {
 	return nil
 }
 
-// stderrFileCap is how much of stderr's start stderr.log keeps.
 const stderrFileCap = 64 << 10
 
-// stderrTailBytes is how much of stderr's end is kept for failure reasons.
 const stderrTailBytes = 2048
 
-// tailSink keeps the first 64 KiB of stderr in a file and its last 2 KiB for failure reasons.
 type tailSink struct {
 	file *cappedFile
 	mu   sync.Mutex
@@ -296,7 +281,6 @@ func (t *tailSink) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// tailText is the kept end of stderr as plain text.
 func (t *tailSink) tailText() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -312,8 +296,6 @@ const (
 	commandTail = 256 << 10
 )
 
-// headTail drains a command's output to a capture: the first head bytes as they come, then only the last tail bytes,
-// written with a marker when it is closed.
 type headTail struct {
 	*capture
 	head    int
@@ -340,7 +322,6 @@ func (h *headTail) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-// Close writes the marker and the kept tail when output went past the head, then closes the file.
 func (h *headTail) Close() error {
 	if h.closed {
 		return nil
@@ -356,8 +337,6 @@ func (h *headTail) Close() error {
 	return h.capture.Close()
 }
 
-// outputTail joins the assistant messages of an output.jsonl and keeps the last max bytes, holding no more than a
-// tail window of them while it scans.
 func outputTail(path string, max int) string {
 	tail := scanOutputTail(path, max)
 	kept, _ := tail.Bytes()
@@ -367,8 +346,6 @@ func outputTail(path string, max int) string {
 	return string(kept)
 }
 
-// scanOutputTail feeds the assistant messages of an output.jsonl, joined, through a window of max bytes and returns
-// the window; it is all the scan keeps of the messages.
 func scanOutputTail(path string, max int) *tailWindow {
 	tail := &tailWindow{max: max}
 	f, err := os.Open(path)
@@ -405,7 +382,6 @@ func scanOutputTail(path string, max int) *tailWindow {
 	return tail
 }
 
-// fileTail is the last max bytes of a text file, empty when it cannot be read.
 func fileTail(path string, max int) string {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -426,7 +402,6 @@ func stderrFallback(path string) string {
 	return plainText(string(dropPartialLine(raw, atLineStart)))
 }
 
-// commandTail1K is the end of a command step's output, kept in the step's result.
 func commandTail1K(dir string) string {
 	return fileTail(filepath.Join(dir, "output.log"), 1024)
 }

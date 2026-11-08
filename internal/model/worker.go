@@ -15,7 +15,6 @@ import (
 // verbs run now, resume and abandon. Kata holds a Run's record; the worker alone knows what kata does not: why a run is held and
 // what the agent has said so far. Only runs whose executor label is the worker's are shown with local state.
 
-// workerPollEvery is how often the worker is asked again while a run is running.
 const workerPollEvery = 2 * time.Second
 
 // LoadWorker asks this machine's worker for its status, After a pause when After is set. Request numbers the asks: an answer to
@@ -27,7 +26,6 @@ type LoadWorker struct {
 
 func (LoadWorker) cmd() {}
 
-// WorkerProject is a Project the worker serves.
 type WorkerProject struct {
 	Name      string
 	Admitting bool
@@ -74,7 +72,6 @@ func (m Model) SkipRows() []JobSkips {
 	return rows
 }
 
-// LocalRun is a run of this machine's worker as the worker reports it.
 type LocalRun struct {
 	UID, Project, Job, Issue string
 	// State is running, resuming, held: <reason>, succeeded, failed, cancelled; Pending is what is still unreported to kata.
@@ -89,7 +86,6 @@ type LocalRun struct {
 	Abandonable   bool
 }
 
-// Settled says the run is neither running nor held.
 func (r LocalRun) Settled() bool {
 	switch r.State {
 	case "succeeded", "failed", "cancelled", "unknown":
@@ -98,7 +94,6 @@ func (r LocalRun) Settled() bool {
 	return false
 }
 
-// WorkerStatus is what the worker answered to a status ask.
 type WorkerStatus struct {
 	Executor string
 	// PID is the worker's process id. Supervised says the plugin's host half started it and starts it again when it exits.
@@ -122,12 +117,10 @@ type WorkerLoaded struct {
 
 func (WorkerLoaded) msg() {}
 
-// LoadLocalRun asks the worker for one run's detail.
 type LoadLocalRun struct{ UID string }
 
 func (LoadLocalRun) cmd() {}
 
-// LocalStep is one step of a run as the worker's journal knows it.
 type LocalStep struct {
 	Index     int
 	Kind      string
@@ -139,7 +132,6 @@ type LocalStep struct {
 	TimedOut  bool
 }
 
-// LocalRunDetail is a run's status, steps and the tail of its output as the worker reads them from its journal and files.
 type LocalRunDetail struct {
 	LocalRun
 	Summary                    string
@@ -148,7 +140,6 @@ type LocalRunDetail struct {
 	Cwd, SessionDir, SessionID string
 }
 
-// LocalRunLoaded answers LoadLocalRun.
 type LocalRunLoaded struct {
 	UID    string
 	Detail LocalRunDetail
@@ -157,7 +148,6 @@ type LocalRunLoaded struct {
 
 func (LocalRunLoaded) msg() {}
 
-// RunJobNow asks the worker to run an adapter job now.
 type RunJobNow struct{ JobUID, JobName string }
 
 func (RunJobNow) cmd() {}
@@ -170,7 +160,6 @@ type JobRunRequested struct {
 
 func (JobRunRequested) msg() {}
 
-// ResumeLocalRun and AbandonLocalRun send the verb to the worker for a held run.
 type ResumeLocalRun struct{ UID string }
 
 func (ResumeLocalRun) cmd() {}
@@ -195,12 +184,10 @@ type OpenRunSession struct{ Cwd, SessionDir, SessionID string }
 
 func (OpenRunSession) cmd() {}
 
-// RunSessionOpened answers OpenRunSession.
 type RunSessionOpened struct{ Err error }
 
 func (RunSessionOpened) msg() {}
 
-// WorkerState is what the Pane knows of this machine's worker.
 type WorkerState struct {
 	// Read says an answer arrived; Running that something answered on the control socket.
 	Read, Running bool
@@ -228,7 +215,6 @@ type WorkerState struct {
 	detailStale bool
 }
 
-// askWorker numbers a new status ask and drops the older ones.
 func (m Model) askWorker(after time.Duration) (Model, Cmd) {
 	m.Worker.inflight, m.Worker.polling = true, after > 0
 	return m, LoadWorker{Request: m.Worker.reads.Ask(), After: after}
@@ -261,7 +247,6 @@ func workerLoaded(m Model, msg WorkerLoaded) (Model, []Cmd) {
 	return m, []Cmd{cmd}
 }
 
-// runsRunning says a Run listed is running, or the worker reports one of its runs running.
 func (m Model) runsRunning() bool {
 	if !m.Worker.Running {
 		return false
@@ -274,7 +259,6 @@ func (m Model) runsRunning() bool {
 	return slices.ContainsFunc(m.Runs.Runs, func(r Run) bool { return r.Status == cronjob.RunRunning && m.IsLocalRun(r) })
 }
 
-// IsLocalRun says the Run was executed by this machine's worker.
 func (m Model) IsLocalRun(r Run) bool {
 	return m.Worker.Running && r.ExecutorLabel != "" && r.ExecutorLabel == m.Worker.Executor
 }
@@ -293,7 +277,6 @@ func (m Model) LocalRunOf(uid string) (LocalRun, bool) {
 	return LocalRun{}, false
 }
 
-// LocalDetail is the worker's detail of the selected Run, when it has been read.
 func (m Model) LocalDetail() *LocalRunDetail {
 	if d := m.Worker.Detail; d != nil && d.UID == m.Runs.Selected {
 		return d
@@ -329,7 +312,6 @@ func localRunLoaded(m Model, msg LocalRunLoaded) Model {
 	return m
 }
 
-// WorkerProjectName is the Project the Jobs and Runs Pages show.
 func (m Model) workerProjectName() string {
 	if m.Collection.IsProject() {
 		return m.Collection.Title
@@ -376,7 +358,6 @@ func (m Model) JobPause(job CronJob) PauseReason {
 	return PauseFailedRuns
 }
 
-// workerPauseWords is the worker's pause of the job in a sentence, empty when it holds none.
 func (m Model) workerPauseWords(uid string) string {
 	n := m.workerPausedJobs(uid)
 	if n == 0 {
@@ -474,7 +455,6 @@ func runJobNow(m Model) (Model, []Cmd) {
 	return m, []Cmd{RunJobNow{JobUID: job.UID, JobName: job.Name}}
 }
 
-// ResumeJob asks the worker to lift its pause on an adapter job.
 type ResumeJob struct{ JobUID, JobName string }
 
 func (ResumeJob) cmd() {}
@@ -546,7 +526,6 @@ func openRunSession(m Model) (Model, []Cmd) {
 	return m, []Cmd{OpenRunSession{Cwd: d.Cwd, SessionDir: d.SessionDir, SessionID: d.SessionID}}
 }
 
-// notLocal is why a verb that needs the worker's local state is refused for the Run, empty when the Run is this machine's.
 func (m Model) notLocal(run Run, verb string) string {
 	switch {
 	case m.IsLocalRun(run):
@@ -662,7 +641,6 @@ func (m Model) localFacts(run Run) (hold []RunFact, rest []RunFact) {
 	return hold, rest
 }
 
-// holdWords is a hold reason as the Pane words it.
 func holdWords(hold string) string { return strings.ReplaceAll(hold, "_", " ") }
 
 func stepWords(s LocalStep) string {

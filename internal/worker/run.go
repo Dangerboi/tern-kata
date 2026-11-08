@@ -27,7 +27,6 @@ func (w *Worker) noteHook(err error) {
 	}
 }
 
-// spawn runs the journal's state machine in the background, once per run.
 func (w *Worker) spawn(ps *projectState, uid string) {
 	w.mu.Lock()
 	if w.flight[uid].driven || w.halted.Load() {
@@ -36,9 +35,6 @@ func (w *Worker) spawn(ps *projectState, uid string) {
 	}
 	f := w.flight[uid]
 	f.driven = true
-	if w.flight == nil {
-		w.flight = map[string]flight{}
-	}
 	w.flight[uid] = f
 	w.mu.Unlock()
 	w.runs.Go(func() {
@@ -143,10 +139,26 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 	w.spawn(ps, uid)
 }
 
+func (w *Worker) record(uid, point string, transition func(j *Journal, at time.Time) error) error {
+	_, err := w.store.Update(uid, point, func(j *Journal) error { return transition(j, w.clock.Now().UTC()) })
+	return err
+}
+
+func (w *Worker) finish(uid string, o *Outcome) error {
+	return w.record(uid, "finished", func(j *Journal, at time.Time) error { return j.finish(o, at) })
+}
+
+func (w *Worker) endAttempt(j *Journal, o *Outcome) error {
+	if j.Workflow == nil {
+		return w.finish(j.RunUID, o)
+	}
+	return w.record(j.RunUID, "step-concluded", func(j *Journal, at time.Time) error { return j.concludeStep(o, at) })
+}
+
 // hold records an uncertain outcome: kata will get `unknown` with the reason first (ADR-0005).
 func (w *Worker) hold(j *Journal, reason, detail string) error {
-	_, err := w.store.Update(j.RunUID, "held", func(j *Journal) error {
-		if err := j.hold(reason, detail, w.clock.Now().UTC()); err != nil {
+	return w.record(j.RunUID, "held", func(j *Journal, at time.Time) error {
+		if err := j.hold(reason, detail, at); err != nil {
 			return err
 		}
 		// What the run has cost so far, so a spend limit counts a held run: resumed attempts, concluded steps and the
@@ -154,15 +166,13 @@ func (w *Worker) hold(j *Journal, reason, detail string) error {
 		j.Outcome.CostUSD = addCost(sumStepCost(j.Steps), addCost(j.CarriedCost, w.heldCost(j)))
 		return nil
 	})
-	return err
 }
 
 // preAdmissionHold ends a run before kata saw it: no observation, no Issue write, slot and gate released (ADR-0005).
 func (w *Worker) preAdmissionHold(j *Journal, reason, detail string) error {
-	_, err := w.store.Update(j.RunUID, "held-before-admission", func(j *Journal) error {
-		return j.holdBeforeAdmission(reason, detail, w.clock.Now().UTC())
+	return w.record(j.RunUID, "held-before-admission", func(j *Journal, at time.Time) error {
+		return j.holdBeforeAdmission(reason, detail, at)
 	})
-	return err
 }
 
 func (w *Worker) qualified(j *Journal, shortID string) string { return j.ProjectName + "#" + shortID }
@@ -173,12 +183,7 @@ func (w *Worker) admit(ctx context.Context, ps *projectState, j *Journal) error 
 	if err := w.checkRoute(ctx, ps, false); err != nil {
 		return fmt.Errorf("cannot confirm the kata route: %w", err)
 	}
-	state := claimLease(ctx, w.opt.Kata, w.clock, w.opt.Config.Executor, ps.actor, j.ProjectID, false)
-	if !state.Unknown { // a transient kata failure says nothing about the lease; keep what the loop knew
-		w.mu.Lock()
-		ps.lease = state
-		w.mu.Unlock()
-	}
+	state := w.renewLease(ctx, ps, j.ProjectID)
 	if state.Unknown {
 		return errors.New(state.Why())
 	}
@@ -294,7 +299,6 @@ func childEnv(actor string, secrets map[string]string) []string {
 	return promptEnv(os.Environ(), actor, secrets, envCaseInsensitive)
 }
 
-// envCaseInsensitive is whether the platform compares environment variable names without regard to case.
 const envCaseInsensitive = runtime.GOOS == "windows"
 
 // reservedEnvName reports whether name is one the worker keeps for itself: TERN_KATA_* and KATA_*. Names compare
@@ -306,7 +310,6 @@ func reservedEnvName(name string, caseInsensitive bool) bool {
 	return strings.HasPrefix(name, "TERN_KATA_") || strings.HasPrefix(name, "KATA_")
 }
 
-// promptEnv filters environ as childEnv does; names compare case-insensitively when caseInsensitive (Windows).
 func promptEnv(environ []string, actor string, secrets map[string]string, caseInsensitive bool) []string {
 	var env []string
 	for _, kv := range environ {
@@ -326,7 +329,6 @@ func promptEnv(environ []string, actor string, secrets map[string]string, caseIn
 	return env
 }
 
-// launch runs the run's next attempt: a notify run's request, a workflow's next step, or a prompt job's one agent.
 func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error {
 	if j.Cancel != nil {
 		return w.concludeCancel(j)
@@ -343,18 +345,9 @@ func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error
 // failAttempt records an attempt that certainly never ran, so the failure is not uncertain: a prompt job's run fails,
 // a workflow step fails (and is retried when it has retries left).
 func (w *Worker) failAttempt(j *Journal, reason string) error {
-	outcome := j.withCarried(&Outcome{Status: cronjob.RunFailed, Summary: reason})
-	if j.Workflow != nil {
-		return w.concludeStep(j, outcome)
-	}
-	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		return j.finish(outcome, w.clock.Now().UTC())
-	})
-	return err
+	return w.endAttempt(j, j.withCarried(&Outcome{Status: cronjob.RunFailed, Summary: reason}))
 }
 
-// runPrompt runs one agent attempt: prompt file, `launching` mark, process, start record, wait, exit record, outcome.
-// It returns once the journal says the attempt is concluded, or an error that leaves the journal where it was.
 func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) error {
 	secrets, err := w.secrets(j)
 	if err != nil {
@@ -382,7 +375,6 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 		return w.hold(j, HoldInvalidPrompt, "the prompt could not be written: "+err.Error())
 	}
 	cwd := cmp.Or(j.Checkout, w.store.RunDir(j.RunUID))
-	// A spawn error is certain, not uncertain: nothing was started.
 	program, err := exec.LookPath(sp.profile.command())
 	if err != nil {
 		return w.failAttempt(j, "cannot start the agent: "+err.Error())
@@ -449,8 +441,6 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 // startError is a process that could not be started: nothing ran, so the failure is certain.
 type startError struct{ error }
 
-// timeLeft is how long the run's current attempt may run: the job's timeout for a prompt job, what is left of the
-// run's shared expiry for a workflow step.
 func (w *Worker) timeLeft(j *Journal) time.Duration {
 	if j.Workflow != nil && !j.ExpiresAt.IsZero() {
 		return j.ExpiresAt.Sub(w.clock.Now())
@@ -543,7 +533,6 @@ func (w *Worker) stopAndWait(ctx context.Context, launch *LaunchRecord, done <-c
 	return waitErr, nil
 }
 
-// conclude proves the process group gone and decides the outcome of a run that has an exit record.
 func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	command := j.activeIsCommand()
 	var proof GroupProof
@@ -581,13 +570,7 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	} else {
 		outcome = j.withCarried(classify(j))
 	}
-	if j.Workflow != nil {
-		return w.concludeStep(j, outcome)
-	}
-	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		return j.finish(outcome, w.clock.Now().UTC())
-	})
-	return err
+	return w.endAttempt(j, outcome)
 }
 
 // commentKey is the idempotency key of the run's comment of the given kind. A resumed attempt gets its own, so its
@@ -649,53 +632,11 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 	}
 	var planErr error // why the comment and label could not be planned yet
 	if len(j.Intents) == 0 || j.IntentsPartial {
-		// The final observation is planned first and never waits for an Issue read; the comment and label do.
-		intents := []Intent{{Kind: IntentFinal}}
-		if j.IntentsPartial {
-			intents = slices.Clone(j.Intents)
-		}
-		issueOpen := true
-		readErr := error(nil)
-		if j.Outcome.Status == cronjob.RunSucceeded && !j.Issue.Existing {
-			var issue Issue
-			if issue, readErr = w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID); readErr == nil {
-				issueOpen = issue.Open()
-			}
-		} else if j.Outcome.Status == cronjob.RunSucceeded {
-			issueOpen = false
-		}
-		if readErr == nil {
-			switch j.Outcome.Status {
-			case cronjob.RunSucceeded:
-				if quietSuccess(j) {
-					break // every step was a command that exited 0 on an existing Issue: the Run says it all
-				}
-				if j.Issue.Existing || issueOpen {
-					intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("succeeded"), Text: j.Outcome.Summary})
-					if !j.Issue.Existing {
-						intents = append(intents,
-							Intent{Kind: IntentLabel, Text: "needs-review"},
-							Intent{Kind: IntentNotify, Text: reviewNotice(j)})
-					}
-				}
-			case cronjob.RunFailed:
-				intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("failed"), Text: "The run failed: " + j.Outcome.Summary})
-			case cronjob.RunUnknown:
-				intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.holdLine() + "\n\nResume it with `tern-kata worker resume " + j.RunUID + "` or abandon it with `tern-kata worker abandon " + j.RunUID + "`."})
-				intents = append(intents, Intent{Kind: IntentNotify, Text: heldNotice(j)})
-			case cronjob.RunCancelled:
-				intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
-			}
-		}
-		if j.Notify != nil { // a notify run's only record is the Run itself; the Issue gets no comment, label or request
-			intents = intents[:1]
-			readErr = nil
-		}
-		partial := readErr != nil
-		planErr = readErr
+		var intents []Intent
+		intents, planErr = w.planIntents(ctx, j)
 		var err error
 		if j, err = w.store.Update(j.RunUID, "intents-planned", func(j *Journal) error {
-			j.Intents, j.IntentsPartial = intents, partial
+			j.Intents, j.IntentsPartial = intents, planErr != nil
 			return nil
 		}); err != nil {
 			return err
@@ -706,32 +647,8 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 			continue
 		}
 		var err error
-		if it := j.Intents[i]; it.Kind == IntentNotify && it.Recipient == "" {
-			if j, err = w.resolveRecipient(ctx, j, i); err == nil && j.Intents[i].Done {
-				continue // the Issue names nobody to tell
-			}
-		}
-		var revision int64
-		if err == nil {
-			revision, err = w.send(ctx, j, j.Intents[i])
-		}
-		var herr error
-		kind := j.Intents[i].Kind
-		j, herr = w.store.Update(j.RunUID, "intent-"+string(kind), func(j *Journal) error {
-			it := &j.Intents[i]
-			it.Done, it.Error, it.Inspect = err == nil, "", ""
-			if inspect, ok := errors.AsType[*inspectError](err); ok {
-				it.Inspect = inspect.reason
-			} else if err != nil {
-				it.Error = err.Error()
-			}
-			if err == nil && revision > 0 {
-				j.Revision = revision
-			}
-			return nil
-		})
-		if herr != nil {
-			return herr
+		if j, err = w.deliver(ctx, j, i); err != nil {
+			return err
 		}
 	}
 	if j.IntentsPartial {
@@ -747,6 +664,76 @@ func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error
 	}
 	_, err := w.store.Update(j.RunUID, "settled", func(j *Journal) error { return j.settle() })
 	return err
+}
+
+// planIntents is what the run owes kata: the final observation, planned first and never waiting for an Issue read, then
+// the comment and label the closure check calls for, which do. A failed Issue read returns the intents so far and the
+// error; the caller saves them as partial and plans the rest again.
+func (w *Worker) planIntents(ctx context.Context, j *Journal) ([]Intent, error) {
+	intents := []Intent{{Kind: IntentFinal}}
+	if j.IntentsPartial {
+		intents = slices.Clone(j.Intents)
+	}
+	if j.Notify != nil { // a notify run's only record is the Run itself; the Issue gets no comment, label or request
+		return intents[:1], nil
+	}
+	issueOpen := true
+	if j.Outcome.Status == cronjob.RunSucceeded && !j.Issue.Existing {
+		issue, err := w.opt.Kata.ShowIssue(ctx, j.ProjectID, j.Issue.UID)
+		if err != nil {
+			return intents, err
+		}
+		issueOpen = issue.Open()
+	}
+	switch j.Outcome.Status {
+	case cronjob.RunSucceeded:
+		if quietSuccess(j) {
+			break // every step was a command that exited 0 on an existing Issue: the Run says it all
+		}
+		if j.Issue.Existing || issueOpen {
+			intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("succeeded"), Text: j.Outcome.Summary})
+			if !j.Issue.Existing {
+				intents = append(intents,
+					Intent{Kind: IntentLabel, Text: "needs-review"},
+					Intent{Kind: IntentNotify, Text: reviewNotice(j)})
+			}
+		}
+	case cronjob.RunFailed:
+		intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("failed"), Text: "The run failed: " + j.Outcome.Summary})
+	case cronjob.RunUnknown:
+		intents = append(intents,
+			Intent{Kind: IntentComment, Key: j.commentKey("held"), Text: "The run is held: " + j.Outcome.holdLine() + "\n\n" + resumeOrAbandon(j.RunUID)},
+			Intent{Kind: IntentNotify, Text: heldNotice(j)})
+	case cronjob.RunCancelled:
+		intents = append(intents, Intent{Kind: IntentComment, Key: j.commentKey("cancelled"), Text: "The run was abandoned: " + j.Outcome.Summary})
+	}
+	return intents, nil
+}
+
+func (w *Worker) deliver(ctx context.Context, j *Journal, i int) (*Journal, error) {
+	var err error
+	if it := j.Intents[i]; it.Kind == IntentNotify && it.Recipient == "" {
+		if j, err = w.resolveRecipient(ctx, j, i); err == nil && j.Intents[i].Done {
+			return j, nil // the Issue names nobody to tell
+		}
+	}
+	var revision int64
+	if err == nil {
+		revision, err = w.send(ctx, j, j.Intents[i])
+	}
+	return w.store.Update(j.RunUID, "intent-"+string(j.Intents[i].Kind), func(j *Journal) error {
+		it := &j.Intents[i]
+		it.Done, it.Error, it.Inspect = err == nil, "", ""
+		if inspect, ok := errors.AsType[*inspectError](err); ok {
+			it.Inspect = inspect.reason
+		} else if err != nil {
+			it.Error = err.Error()
+		}
+		if err == nil && revision > 0 {
+			j.Revision = revision
+		}
+		return nil
+	})
 }
 
 // inspectError is a write that cannot be delivered without a person looking: kata holds something a retry would
@@ -772,8 +759,7 @@ func quietSuccess(j *Journal) bool {
 
 // heldNotice is the inbox request for a held run, saved in its intent so a retry sends the same words.
 func heldNotice(j *Journal) string {
-	return truncate(fmt.Sprintf("Run %s of %q on %s is held: %s Resume it with `tern-kata worker resume %s` or abandon it with `tern-kata worker abandon %s`.",
-		j.RunUID, j.JobName, j.Issue.Ref, j.Outcome.holdLine(), j.RunUID, j.RunUID), maxNotifyBytes)
+	return truncate(fmt.Sprintf("Run %s of %q on %s is held: %s %s", j.RunUID, j.JobName, j.Issue.Ref, j.Outcome.holdLine(), resumeOrAbandon(j.RunUID)), maxNotifyBytes)
 }
 
 // reviewNotice is the Attention request for a succeeded run that left its Issue open, saved in its intent so a retry sends
@@ -866,10 +852,7 @@ func plainText(s string) string {
 // (ADR-0006 "read-back"). The run's identity (ADR-0002) already keeps a restart from preparing the occurrence twice.
 func (w *Worker) notify(ctx context.Context, j *Journal) error {
 	finish := func(status cronjob.RunStatus, summary string) error {
-		_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-			return j.finish(&Outcome{Status: status, Summary: truncate(summary, maxSummaryBytes)}, w.clock.Now().UTC())
-		})
-		return err
+		return w.finish(j.RunUID, &Outcome{Status: status, Summary: truncate(summary, maxSummaryBytes)})
 	}
 	notice := j.Notify.Resolved
 	if notice == nil {
@@ -911,6 +894,5 @@ func (w *Worker) notify(ctx context.Context, j *Journal) error {
 
 const (
 	currentOwnerOrAuthor = "current-owner-or-author"
-	// maxNotifyBytes is the inbox's message limit.
-	maxNotifyBytes = 1024
+	maxNotifyBytes       = 1024
 )

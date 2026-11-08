@@ -35,7 +35,6 @@ func (c *Client) CreateIssue(ctx context.Context, cmd model.CreateIssueCmd) (mod
 	return model.IssueCreated{UID: response.JSON200.Issue.UID}, nil
 }
 
-// idempotencyKey is the Idempotency-Key header value for key, nil when the write carries none.
 func idempotencyKey(key string) *string {
 	if key == "" {
 		return nil

@@ -39,7 +39,6 @@ func (c *Client) deleteReasonKey(ctx context.Context, cmd model.DeleteIssueCmd, 
 	return &key
 }
 
-// commentDeleteReason adds the reason as a comment by the actor, before the delete. A failure stops the delete.
 func (c *Client) commentDeleteReason(ctx context.Context, cmd model.DeleteIssueCmd, reason string) error {
 	actor := cmd.Actor
 	_, err := c.CreateCommentWithResponse(ctx, &g.CreateCommentRequestOptions{
@@ -71,14 +70,12 @@ func (c *Client) deleteRaw(ctx context.Context, cmd model.DeleteIssueCmd) (issue
 	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
 }
 
-// DeleteRecorded soft-deletes the Issue and also says what the delete did to the Undo history.
 func (c *Client) DeleteRecorded(ctx context.Context, cmd model.DeleteIssueCmd) (model.WriteRecord, error) {
 	done := c.recorder(ctx, model.UndoDelete, cmd.ProjectID, cmd.UID, cmd.Actor)
 	res, err := c.deleteRaw(ctx, cmd)
 	return done(res, ambiguousWrite(err)), daemonError(err)
 }
 
-// restoreRaw restores the Issue, which kata finds among the deleted ones, with kata's own error and answer.
 func (c *Client) restoreRaw(ctx context.Context, projectID int64, uid, actor string) (issueWrite, error) {
 	r, err := c.RestoreIssueWithResponse(ctx, &g.RestoreIssueRequestOptions{
 		PathParams: &g.RestoreIssuePath{ProjectID: projectID, Ref: uid},
@@ -99,7 +96,6 @@ func (c *Client) RestoreIssue(ctx context.Context, cmd model.RestoreIssueCmd) (m
 	return model.IssueRestored{UID: cmd.UID, Changed: res.Changed}, nil
 }
 
-// showIssueIncludingDeleted is showIssue for an Issue that may be deleted.
 func (c *Client) showIssueIncludingDeleted(ctx context.Context, projectID int64, uid string) (*g.ShowIssueResponseBody, error) {
 	include := true
 	r, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{
@@ -150,5 +146,4 @@ func (c *Client) LookupDeleted(ctx context.Context, cmd model.LookupDeleted) (mo
 	return model.DeletedLooked{Ref: cmd.Typed, Issue: model.DeletedIssue{UID: i.UID, ProjectID: i.ProjectID, ShortID: i.ShortID, Title: i.Title, Deleted: i.DeletedAt != nil}}, nil
 }
 
-// restoreEventType is the type of the event kata records when a deleted Issue is restored.
 const restoreEventType = "issue.restored"

@@ -34,7 +34,6 @@ type WorkflowPlan struct {
 	Steps    []PlanStep `json:"steps"`
 }
 
-// PlanStep is one step of the plan. A prompt step carries the profile its omp process is started with.
 type PlanStep struct {
 	Key         string           `json:"key"`
 	Kind        cronjob.StepKind `json:"kind"`
@@ -55,9 +54,8 @@ type StepRecord struct {
 	// Tries counts the attempts started for this step, a retry after a certain failure being a new one.
 	Tries int `json:"tries,omitempty"`
 	// Dir is the attempt's folder under the run's, holding its prompt, session and output.
-	Dir     string `json:"dir,omitempty"`
-	Summary string `json:"summary,omitempty"`
-	// LastFailure is why the previous attempt failed, kept for the retry's prompt.
+	Dir         string        `json:"dir,omitempty"`
+	Summary     string        `json:"summary,omitempty"`
 	LastFailure string        `json:"last_failure,omitempty"`
 	StartedAt   time.Time     `json:"started_at,omitzero"`
 	EndedAt     time.Time     `json:"ended_at,omitzero"`
@@ -74,7 +72,6 @@ func terminalStep(state string) bool {
 	return state == StepSucceeded || state == StepFailed || state == StepSkipped
 }
 
-// activeStep is the index of the step an attempt is running or held on, or -1.
 func (j *Journal) activeStep() int {
 	if j.Workflow == nil {
 		return -1
@@ -88,7 +85,6 @@ func (j *Journal) activeIsCommand() bool {
 	return i >= 0 && stepKind(j, i) == cronjob.StepCommand
 }
 
-// attemptDir is the folder of the run's current (or last) attempt: the run's own for a prompt job, the step's for a workflow.
 func (w *Worker) attemptDir(j *Journal) string {
 	dir := w.store.RunDir(j.RunUID)
 	if j.Workflow == nil {
@@ -156,13 +152,11 @@ func CheckWorkflow(d cronjob.WorkflowDefinition, maxPrompts *int) WorkflowCheck 
 	return check
 }
 
-// optionMap is a definition's options as an object, nil when there are none.
 func optionMap(options any) map[string]any {
 	object, _ := options.(map[string]any)
 	return object
 }
 
-// unsupportedOption names the options of a workflow or step that the worker refuses to run.
 func unsupportedOption(options any) string {
 	object := optionMap(options)
 	if _, ok := object["on_fail"]; ok {
@@ -230,12 +224,10 @@ func workflowFit(cfg Config, pc ProjectConfig, wf Workflow, jobProfile string) (
 	return "", false
 }
 
-// stepProfile is the profile a prompt step runs with: its own option, else the job's.
 func stepProfile(s cronjob.WorkflowStep, jobProfile string) string {
 	return cmp.Or(optionProfile(s.Options), jobProfile)
 }
 
-// optionProfile is the profile an options object names, "" when it names none.
 func optionProfile(options any) string {
 	p, _ := optionMap(options)["profile"].(string)
 	return p
@@ -253,16 +245,13 @@ func stepsFor(plan *WorkflowPlan) []StepRecord {
 	return recs
 }
 
-// attemptSpec is what one process attempt runs: where its files go, what it is told, and which profile starts it.
 type attemptSpec struct {
 	dir     string
 	task    string
 	profile Profile
-	// plan, index and tries are set for a workflow step: the step, its position and the attempt count of the step.
-	plan  *PlanStep
-	index int
-	tries int
-	// failure is why the step's previous attempt failed, for a retry's prompt.
+	plan    *PlanStep
+	index   int
+	tries   int
 	failure string
 }
 
@@ -276,13 +265,13 @@ func (w *Worker) workflowStep(ctx context.Context, j *Journal) error {
 	}
 	i := slices.IndexFunc(j.Steps, func(s StepRecord) bool { return !terminalStep(s.State) })
 	if i < 0 {
-		return w.finishWorkflow(j)
+		return w.record(j.RunUID, "finished", (*Journal).finishWorkflow)
 	}
 	rec := j.Steps[i]
 	// A step still saved running here has no launch record (a launched one is held at recovery), so it is checked like a
 	// pending one; a resumed step carries a fresh expiry.
 	if !j.ExpiresAt.IsZero() && !w.clock.Now().Before(j.ExpiresAt) {
-		return w.timeOutWorkflow(j)
+		return w.record(j.RunUID, "finished", (*Journal).timeOutWorkflow)
 	}
 	if rec.State != StepRunning {
 		j, err = w.store.Update(j.RunUID, "step-started", func(j *Journal) error {
@@ -344,25 +333,6 @@ func (w *Worker) skipBlocked(j *Journal) (*Journal, error) {
 	})
 }
 
-// concludeStep records how the current step's attempt ended and what comes next: the next step, a retry after a certain
-// failure, or the end of the run. The attempt's start record and receipt move into the step's record.
-func (w *Worker) concludeStep(j *Journal, outcome *Outcome) error {
-	_, err := w.store.Update(j.RunUID, "step-concluded", func(j *Journal) error {
-		return j.concludeStep(outcome, w.clock.Now().UTC())
-	})
-	return err
-}
-
-// timeOutWorkflow ends a run whose expiry passed before its next step started: every step that never ran is skipped
-// and the run fails as timed out, with no process started.
-func (w *Worker) timeOutWorkflow(j *Journal) error {
-	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		return j.timeOutWorkflow(w.clock.Now().UTC())
-	})
-	return err
-}
-
-// sumStepTokens is the tokens every attempt of every step used; nil when no attempt reported any.
 func sumStepTokens(steps []StepRecord) (in, out *int64) {
 	var sumIn, sumOut int64
 	var saw bool
@@ -382,14 +352,6 @@ func sumStepTokens(steps []StepRecord) (in, out *int64) {
 		return nil, nil
 	}
 	return &sumIn, &sumOut
-}
-
-// finishWorkflow decides the run's outcome once every step is succeeded, failed or skipped: failed when any step failed.
-func (w *Worker) finishWorkflow(j *Journal) error {
-	_, err := w.store.Update(j.RunUID, "finished", func(j *Journal) error {
-		return j.finishWorkflow(w.clock.Now().UTC())
-	})
-	return err
 }
 
 // workflowSummary is the run's summary in kata: the workflow's result, then one entry per step with what it ended as
@@ -430,7 +392,6 @@ func workflowSummary(j *Journal, status cronjob.RunStatus) string {
 	return b.String()
 }
 
-// stepStateText is a step's state for the run detail: the live state of the step an attempt is on.
 func stepStateText(j *Journal, i int) string {
 	r := j.Steps[i]
 	if r.State != StepRunning {
@@ -511,7 +472,6 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 	return w.conclude(ctx, j)
 }
 
-// classifyCommand is the outcome of a command step that has a receipt: succeeded only on exit status 0.
 func classifyCommand(j *Journal, tail string) *Outcome {
 	e := j.Exit
 	var reason string
@@ -544,7 +504,6 @@ func workflowExpiry(plan *WorkflowPlan, now time.Time, timeout time.Duration) ti
 	return now.Add(timeout)
 }
 
-// sumStepCost is the cost every attempt of every step reported; nil when none did.
 func sumStepCost(steps []StepRecord) *float64 {
 	var sum *float64
 	for _, r := range steps {

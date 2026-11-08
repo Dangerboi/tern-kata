@@ -36,13 +36,11 @@ type FieldFormState struct {
 	UID, Value   string
 	ProjectID    int64
 	Labels       []string
-	// Attachments are the Attachments Labels name, in the same order, as they were when the form opened.
-	Attachments []Attachment
-	Suggestion  int
-	Caret       Caret
-	// Found is the Issue a restore read, shown until the reference is edited.
-	Found *DeletedIssue
-	Err   error
+	Attachments  []Attachment
+	Suggestion   int
+	Caret        Caret
+	Found        *DeletedIssue
+	Err          error
 }
 type WriteField struct {
 	Workspace, UID, Actor, Value string
@@ -90,7 +88,6 @@ func (m Model) FieldSuggestions() []string {
 	return labels
 }
 
-// fieldIssue is the Issue the field keys act on: the one the Issue detail shows, else the selected one in the list.
 func (m Model) fieldIssue() *Issue {
 	if issue := m.shownIssue(); issue != nil {
 		return issue
@@ -103,7 +100,6 @@ func (m Model) fieldIssue() *Issue {
 	return nil
 }
 
-// issueByUID is the Issue uid, as the detail shows it or as the list holds it.
 func (m Model) issueByUID(uid string) *Issue {
 	if issue := m.shownIssue(); issue != nil && issue.UID == uid {
 		return issue
@@ -116,7 +112,6 @@ func (m Model) issueByUID(uid string) *Issue {
 	return nil
 }
 
-// LoadedIssue is the Issue uid when the Pane holds it, as the detail shows it or as the list holds it.
 func (m Model) LoadedIssue(uid string) (Issue, bool) {
 	if issue := m.issueByUID(uid); issue != nil {
 		return *issue, true
@@ -124,18 +119,16 @@ func (m Model) LoadedIssue(uid string) (Issue, bool) {
 	return Issue{}, false
 }
 
-// fieldOpen says how the form of an action opens.
 type fieldOpen int
 
 const (
-	openInput         fieldOpen = iota // a plain input
-	openProjectLabels                  // a picker of the Project's labels, loaded from the daemon
-	openIssueLabels                    // a picker of the Issue's labels
-	openAttachments                    // a picker of the Issue's Attachments; none says so as the Notice
-	openImmediate                      // submits at once
+	openInput         fieldOpen = iota
+	openProjectLabels           // a picker of the Project's labels, loaded from the daemon
+	openIssueLabels
+	openAttachments // a picker of the Issue's Attachments; none says so as the Notice
+	openImmediate
 )
 
-// fieldSpec describes one single-field form action. Opening and submitting read it instead of branching on the action.
 type fieldSpec struct {
 	title      string
 	needsValue bool
@@ -160,10 +153,8 @@ var fieldSpecs = map[Action]fieldSpec{
 	RestoreDeletedAction: {title: RestoreTitle + " (short id, project#id or ULID)", needsValue: true, send: sendRestore},
 }
 
-// FieldTitle is the title of the form of an action.
 func FieldTitle(action Action) string { return fieldSpecs[action].title }
 
-// FieldFormTitle is the title of the open form: what the card is for, FieldTitle.
 func (m Model) FieldFormTitle() string { return FieldTitle(m.FieldForm.Action) }
 
 // FieldFormMeta is the Issue the open form acts on, as "#shortid", where kata tui names it in the title; "" when the form does not
@@ -202,10 +193,8 @@ func sendTimedAssignment(m Model) (Model, []Cmd) {
 	return sendFieldWrite(m)
 }
 
-// trimHash drops the "#" of a reference typed as #id.
 func trimHash(v string) string { return strings.TrimPrefix(v, "#") }
 
-// PriorityText is "P1" for a priority, empty for none.
 func PriorityText(p *int64) string {
 	if p == nil {
 		return ""
@@ -281,7 +270,6 @@ func sendFieldWrite(m Model) (Model, []Cmd) {
 	return m, []Cmd{WriteField{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Action: f.Action, Value: f.Value, Actor: m.Actor}}
 }
 
-// sendAttach uploads the file the form holds the path of to the Issue it was opened on.
 func sendAttach(m Model) (Model, []Cmd) {
 	f := &m.FieldForm
 	if m.issueByUID(f.UID) == nil {

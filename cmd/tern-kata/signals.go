@@ -8,7 +8,6 @@ import (
 	"syscall"
 )
 
-// stopSignals end a command early: an interrupt, a terminate, and the hangup a closed terminal sends.
 var stopSignals = []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP}
 
 // paneStopSignals end the Pane: a terminate or a hangup, as when its terminal goes. Ctrl+c reaches the Pane as a key, and an
@@ -41,8 +40,6 @@ func withSignals(parent context.Context, signals ...os.Signal) (ctx context.Cont
 	return ctx, received, func() { signal.Stop(arrived); cancel() }
 }
 
-// interrupted is a command a signal stopped before it finished: main exits 128 plus the signal's number, as a shell reports a
-// command a signal ended.
 type interrupted struct {
 	signal os.Signal
 	err    error

@@ -24,11 +24,8 @@ const (
 	DocbankUnreachableMessage  = "kata could not reach Docbank, or Docbank refused the request. Check that Docbank is running and that url in the [docbank] section of kata's config.toml is right."
 )
 
-// attachmentLimit is model.MaxAttachmentBytes as the refusal texts word it.
 var attachmentLimit = fmt.Sprintf("%d MiB", model.MaxAttachmentBytes>>20)
 
-// attachmentError is the plain-words text of a failed attachment call: what kata's attachment error codes mean for the person at the
-// Pane. Any other failure reads as every daemon failure does.
 func attachmentError(err error) error {
 	switch daemonCode(err) {
 	case "docbank_not_configured":
@@ -51,7 +48,6 @@ func attachmentError(err error) error {
 	return daemonError(err)
 }
 
-// attachmentsConfigured is whether the daemon has a Docbank to store attachments in, as its UI snapshot says.
 func (c *Client) attachmentsConfigured(ctx context.Context) (bool, error) {
 	view := model.DetailDaemonView()
 	response, err := c.ReadUISnapshotWithResponse(ctx, &g.ReadUISnapshotRequestOptions{Query: &g.ReadUISnapshotQuery{View: &view}}, plainOverSocket)
@@ -64,12 +60,9 @@ func (c *Client) attachmentsConfigured(ctx context.Context) (bool, error) {
 	return docbankConfigured(response.JSON200.Capabilities), nil
 }
 
-// docbankConfigured is whether a daemon's capabilities say attachments work. kata leaves the field out when it has no Docbank,
-// so absent reads as not configured.
+// kata leaves the field out when it has no Docbank, so absent reads as not configured.
 func docbankConfigured(c g.UICapabilities) bool { return c.Attachments != nil && *c.Attachments }
 
-// attachSource is the regular file input names: whitespace and one pair of wrapping quotes stripped, a leading ~ expanded, a
-// relative path taken from the workspace, symlinks followed.
 func attachSource(workspace, input string) (string, error) {
 	path := strings.TrimSpace(input)
 	if len(path) >= 2 && (path[0] == '"' || path[0] == '\'') && path[len(path)-1] == path[0] {
@@ -94,8 +87,6 @@ func attachSource(workspace, input string) (string, error) {
 	return path, nil
 }
 
-// attachableFile refuses what kata takes no Attachment from, before anything is read: a missing file, a directory or other
-// file that is not regular, and one over the size limit. Symlinks are followed.
 func attachableFile(path string) error {
 	info, err := os.Stat(path)
 	switch {
@@ -113,8 +104,7 @@ func attachableFile(path string) error {
 	return nil
 }
 
-// upload sends the file at source to kata as an Attachment called name of the Issue uid of projectID. kata stores the bytes in
-// Docbank and writes the reference to the Issue's metadata.
+// kata stores the bytes in Docbank and writes the reference to the Issue's metadata.
 func (c *Client) upload(ctx context.Context, projectID int64, uid, actor, name, source string) (g.AddAttachmentResponseBody, error) {
 	content, err := os.ReadFile(source)
 	if err != nil {
@@ -136,7 +126,6 @@ func (c *Client) upload(ctx context.Context, projectID int64, uid, actor, name, 
 	return *response.JSON200, nil
 }
 
-// AttachFile is the Attach write: it uploads the file under its own name.
 func (c *Client) AttachFile(ctx context.Context, cmd model.AttachFile) (model.FileAttached, error) {
 	source, err := attachSource(cmd.Workspace, cmd.Path)
 	if err != nil {
@@ -149,14 +138,11 @@ func (c *Client) AttachFile(ctx context.Context, cmd model.AttachFile) (model.Fi
 	return model.FileAttached{UID: cmd.UID, ID: added.AttachmentID, Name: added.Attachment.Name}, nil
 }
 
-// metadataPatch is the request that sets one metadata key of an Issue, a nil value clearing it, with no guard.
 func metadataPatch(projectID int64, uid, actor, key string, value any) (*g.PatchIssueMetadataRequestOptions, *g.PatchIssueMetadataBody) {
 	body := &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}}
 	return &g.PatchIssueMetadataRequestOptions{PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid}, Body: body}, body
 }
 
-// patchMetadataKey writes one metadata key of an Issue, a null value clearing it, guarded on the key still holding the JSON
-// text ifValue, or on its being absent when ifValue is nil.
 func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any, ifValue *string) (issueWrite, error) {
 	options, body := metadataPatch(projectID, uid, actor, key, value)
 	either := runtime.NewEitherFromB[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_1{Key: key, IfAbsent: g.True})
@@ -174,14 +160,12 @@ func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, act
 	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
 }
 
-// writeMetadataKey patches one metadata key of an Issue with no guard, a nil value clearing it, and returns the client's raw error.
 func (c *Client) writeMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any) error {
 	options, _ := metadataPatch(projectID, uid, actor, key, value)
 	_, err := c.PatchIssueMetadataWithResponse(ctx, options)
 	return err
 }
 
-// clearMetadataKey clears one metadata key of an Issue with no guard, as `kata docbank attachments rm` does.
 func (c *Client) clearMetadataKey(ctx context.Context, projectID int64, uid, actor, key string) error {
 	if err := c.writeMetadataKey(ctx, projectID, uid, actor, key, nil); err != nil {
 		return attachmentError(err)
@@ -194,7 +178,6 @@ func (c *Client) UnlinkAttachment(ctx context.Context, cmd model.UnlinkAttachmen
 	return c.clearMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.AttachmentKey(cmd.ID))
 }
 
-// attachmentCacheDir is the folder downloaded Attachments are kept in.
 func attachmentCacheDir() (string, error) {
 	base, err := os.UserCacheDir()
 	if err != nil {

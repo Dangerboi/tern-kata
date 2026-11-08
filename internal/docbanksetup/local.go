@@ -27,7 +27,6 @@ type Local struct {
 	Port int
 }
 
-// docbankServer is the [server] section of Docbank's config.toml as setup reads and writes it.
 type docbankServer struct {
 	BindAddr string `toml:"bind_addr"`
 	APIPort  *int   `toml:"api_port"`
@@ -221,7 +220,6 @@ func (e Env) docbankStatus(ctx context.Context) (string, error) {
 	return string(out), nil
 }
 
-// restartDocbank runs `docbank daemon restart` and then requires `docbank daemon status` to name addr.
 func (e Env) restartDocbank(ctx context.Context, addr string) error {
 	ctx, cancel := context.WithTimeout(ctx, checkDeadline)
 	defer cancel()
@@ -253,12 +251,10 @@ func statusNames(status, addr string) bool {
 	}
 }
 
-// isWordByte is whether b is a letter, digit or underscore.
 func isWordByte(b byte) bool {
 	return b == '_' || '0' <= b && b <= '9' || 'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z'
 }
 
-// newKey is 32 random bytes from the operating system's secure source, as hex.
 func newKey() (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -267,12 +263,10 @@ func newKey() (string, error) {
 	return hex.EncodeToString(raw), nil
 }
 
-// existingServer is the [server] section text holds, found false when there is none. A file that does not parse is refused.
 func existingServer(path, text string) (docbankServer, bool, error) {
 	return decodeSection[docbankServer](path, text, "server")
 }
 
-// serverText is the section as appended to Docbank's config.
 func serverText(s docbankServer) string {
 	var b strings.Builder
 	b.WriteString("[server]\n")

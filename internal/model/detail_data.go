@@ -16,12 +16,9 @@ type IssueDetailData struct {
 	AttachmentsOff bool
 }
 
-// Comment is one comment; ReplyKind is set when it replies to another, Reply is the answered comment and
-// Backlinks are the comments replying to this one.
 type Comment struct {
-	UID    string
-	Author string
-	// Attribution is kata's creation attribution of the comment.
+	UID         string
+	Author      string
 	Attribution Attribution
 	Body        string
 	CreatedAt   time.Time
@@ -30,15 +27,13 @@ type Comment struct {
 	Backlinks   []CommentLink
 }
 
-// CommentLink is a comment on the other end of a reply; Kind is the reply's kind.
 type CommentLink struct {
 	UID          *string
 	Kind         string
 	Author       *string
 	IssueUID     *string
 	IssueShortID *string
-	// ProjectUID is the Project of the comment's Issue, when kata names it.
-	ProjectUID *string
+	ProjectUID   *string
 	// Handle, Teammate and Status describe the linked comment as kata gives it; CreatedAt orders replies and EditedAt is set once
 	// it was edited. TargetEdited says the comment this link answers (or is answered by) changed after the reply.
 	Handle, Teammate, Status *string

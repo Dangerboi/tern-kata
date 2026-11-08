@@ -20,7 +20,6 @@ import (
 // and no more.
 const workerAskTimeout = 30 * time.Second
 
-// ask sends one request to this machine's worker.
 func (g *Gateway) ask(ctx context.Context, req worker.Request) (worker.Response, error) {
 	dirs, err := g.workerDirs()
 	if err != nil {
@@ -38,7 +37,6 @@ func (g *Gateway) ask(ctx context.Context, req worker.Request) (worker.Response,
 	return resp, nil
 }
 
-// pause waits d, or until ctx ends; a d of zero does not wait.
 func pause(ctx context.Context, d time.Duration) {
 	if d > 0 {
 		select {
@@ -98,7 +96,6 @@ func (g *Gateway) moveRun(ctx context.Context, op, uid string) model.LocalRunMov
 	return moved
 }
 
-// openRunSession opens the run's omp session in a new tab of Tern's session daemon.
 func (g *Gateway) openRunSession(ctx context.Context, cmd model.OpenRunSession) model.RunSessionOpened {
 	out, err := g.runTern(ctx, SessionTabArgs(cmd))
 	if err != nil {
@@ -116,7 +113,6 @@ func SessionTabArgs(cmd model.OpenRunSession) []string {
 	return []string{"new", "tab", "--cwd", cmd.Cwd, "--", "omp", "--resume", cmd.SessionID, "--session-dir", cmd.SessionDir}
 }
 
-// execTern runs the tern program with args, returning its combined output.
 func execTern(ctx context.Context, args []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "tern", args...)
 	consolewindow.Hide(cmd)

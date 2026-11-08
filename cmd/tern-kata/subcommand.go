@@ -11,12 +11,10 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// subcommandError is any failure of a subcommand, from its usage to its output: main exits 1 with the message, not the Pane's start-failure status.
 type subcommandError struct{ error }
 
 func (e subcommandError) Unwrap() error { return e.error }
 
-// runSubcommand runs plan's migrate-attachments, recur, views, agents or message through the same gateway commands the Pane sends, printing results to out.
 func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, out io.Writer) error {
 	defer gateway.Close()
 	workspace, err := os.Getwd()
@@ -74,7 +72,6 @@ func runRecur(plan LaunchPlan, workspace string, send func(model.Cmd) model.Msg,
 		_, err := fmt.Fprintln(out, line)
 		return err
 	}
-	// movedMeanwhile prints the schedule another writer left and refuses: the write did not land.
 	movedMeanwhile := func(target model.RecurTarget, changed model.Recurrence) error {
 		if err := say(target.WithRecurrence(changed).Report()); err != nil {
 			return err

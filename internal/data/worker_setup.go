@@ -119,8 +119,6 @@ func (g *Gateway) stopWorker(ctx context.Context, cmd model.StopWorker) model.Wo
 	return model.WorkerStopped{Mode: resp.Stop.Mode, InFlight: resp.Stop.InFlight, Restarts: resp.Stop.Restarts}
 }
 
-// saveWorkerEdit replaces worker.toml with text the worker package accepts, when the file is still the base the edit started from; the
-// refusal names the problem and nothing is written.
 func (g *Gateway) saveWorkerEdit(cmd model.SaveWorkerEdit) model.WorkerEdited {
 	dirs, err := g.workerDirs()
 	if err != nil {

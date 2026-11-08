@@ -124,7 +124,6 @@ func ResolveBinding(dir string) (project, root string, err error) {
 	return project, root, nil
 }
 
-// readBinding is the Project name the .kata.toml at workspaceRoot binds to.
 func readBinding(workspaceRoot string) (string, error) {
 	path := filepath.Join(workspaceRoot, ".kata.toml")
 	var cfg struct {

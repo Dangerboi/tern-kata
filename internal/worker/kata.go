@@ -41,18 +41,14 @@ type Kata struct {
 	retries [readAttempts - 1]time.Duration
 }
 
-// KataOption changes one of the limits of a Kata; tests use them to shorten the waits.
 type KataOption func(*Kata)
 
-// WithCallTimeout sets the deadline every one-shot call gets from the moment it takes a slot.
 func WithCallTimeout(d time.Duration) KataOption { return func(k *Kata) { k.timeout = d } }
 
-// WithReadRetryDelays sets the waits before the second and third attempt of a read-only call that ran out of time.
 func WithReadRetryDelays(first, second time.Duration) KataOption {
 	return func(k *Kata) { k.retries = [readAttempts - 1]time.Duration{first, second} }
 }
 
-// NewKata wraps c, which the caller found with client.Discover (as the Pane does) or built for a test.
 func NewKata(c *client.Client, opts ...KataOption) *Kata {
 	k := &Kata{c: c, slots: make(chan struct{}, maxCalls), timeout: callTimeout, retries: [readAttempts - 1]time.Duration{firstReadRetry, secondReadRetry}}
 	for _, o := range opts {
@@ -95,7 +91,6 @@ func call[T any](ctx context.Context, k *Kata, readOnly bool, f func(context.Con
 	}
 }
 
-// Errors the worker tells apart from any other daemon failure.
 var (
 	// ErrNotFound is kata's `not_found` for a Run, Issue or job that doesn't exist.
 	ErrNotFound = errors.New("not found")
@@ -105,7 +100,6 @@ var (
 	ErrRevisionConflict = errors.New("revision conflict")
 )
 
-// APIError is a kata refusal with its status and code, wrapping the sentinel that classifies it.
 type APIError struct {
 	Status  int
 	Code    string
@@ -122,7 +116,6 @@ func (e *APIError) Refused() bool {
 	return e.Status >= 400 && e.Status < 500 && e.Status != http.StatusRequestTimeout && e.Status != http.StatusTooManyRequests
 }
 
-// apiError is err as the user should read it, classified by wrapping one of the sentinels above.
 func apiError(err error) error {
 	if err == nil {
 		return nil
@@ -154,7 +147,6 @@ func apiError(err error) error {
 	return e
 }
 
-// refused reports whether err is a kata refusal that a retry cannot change.
 func refused(err error) bool {
 	e, ok := errors.AsType[*APIError](err)
 	return ok && e.Refused()
@@ -163,14 +155,12 @@ func refused(err error) bool {
 // MinKataVersion is the oldest kata daemon the Pane and the Worker accept: kata v0.21 upgrades its database to schema 43, which older kata binaries cannot open.
 const MinKataVersion = "v0.21.0"
 
-// KataTooOldError is Ping's refusal of a daemon older than MinKataVersion; Version is what the daemon reported.
 type KataTooOldError struct{ Version string }
 
 func (e *KataTooOldError) Error() string {
 	return fmt.Sprintf("kata daemon %s is too old; the worker requires %s or newer; upgrade kata", e.Version, MinKataVersion)
 }
 
-// Ping returns the daemon's version, refusing one older than MinKataVersion with a *KataTooOldError.
 func (k *Kata) Ping(ctx context.Context) (string, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.PingResp, error) { return k.c.PingWithResponse(ctx) })
 	if err != nil {
@@ -202,7 +192,6 @@ func projectOf(p g.ProjectOut) Project {
 	return Project{ID: p.ID, UID: p.UID, Name: p.Name, Revision: p.Revision, Metadata: p.Metadata}
 }
 
-// Projects lists the live Projects.
 func (k *Kata) Projects(ctx context.Context) ([]Project, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ListProjectsResp, error) {
 		return k.c.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{})
@@ -222,7 +211,6 @@ func (k *Kata) Projects(ctx context.Context) ([]Project, error) {
 	return out, nil
 }
 
-// Project reads one Project by id.
 func (k *Kata) Project(ctx context.Context, id int64) (Project, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ShowProjectResp, error) {
 		return k.c.ShowProjectWithResponse(ctx, &g.ShowProjectRequestOptions{PathParams: &g.ShowProjectPath{ProjectID: id}})
@@ -255,17 +243,13 @@ func (k *Kata) PatchProjectMetadata(ctx context.Context, id, revision int64, act
 	return r.JSON200.Project.Revision, nil
 }
 
-// Capabilities is what a Project's daemon answers about its cron API: the event features it advertises and the uid of
-// the Project it answers for.
 type Capabilities struct {
 	Features   []string
 	ProjectUID string
 }
 
-// Has reports whether the daemon advertises feature.
 func (c Capabilities) Has(feature string) bool { return slices.Contains(c.Features, feature) }
 
-// Capabilities reads the Project's cron capabilities.
 func (k *Kata) Capabilities(ctx context.Context, projectID int64) (Capabilities, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.GetCronCapabilitiesResp, error) {
 		return k.c.GetCronCapabilitiesWithResponse(ctx, &g.GetCronCapabilitiesRequestOptions{PathParams: &g.GetCronCapabilitiesPath{ProjectID: projectID}})
@@ -279,14 +263,11 @@ func (k *Kata) Capabilities(ctx context.Context, projectID int64) (Capabilities,
 	return Capabilities{Features: r.JSON200.EventFeatures, ProjectUID: r.JSON200.ProjectUID}, nil
 }
 
-// Instance is who the daemon is and who it says the worker authenticates as.
 type Instance struct {
-	UID string
-	// Actor is the authenticated actor, empty when the daemon names none.
+	UID   string
 	Actor string
 }
 
-// Instance reads the daemon's instance uid and the actor its credential authenticates as.
 func (k *Kata) Instance(ctx context.Context) (Instance, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.InstanceResp, error) { return k.c.InstanceWithResponse(ctx) })
 	if err != nil {
@@ -298,7 +279,6 @@ func (k *Kata) Instance(ctx context.Context) (Instance, error) {
 	return Instance{UID: r.JSON200.InstanceUID, Actor: cronjobclient.Str(r.JSON200.Auth.Actor)}, nil
 }
 
-// Jobs lists the Project's live jobs.
 func (k *Kata) Jobs(ctx context.Context, projectID int64) ([]cronjob.Job, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ListCronJobsResp, error) {
 		return k.c.ListCronJobsWithResponse(ctx, &g.ListCronJobsRequestOptions{PathParams: &g.ListCronJobsPath{ProjectID: projectID}})
@@ -371,7 +351,6 @@ type Observation struct {
 	ExpectedRevision           int64
 }
 
-// Observe sends an observation and returns the stored Run and whether kata replayed an identical one.
 func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (cronjob.Run, bool, error) {
 	msg := o.Message
 	body := &g.ObserveCronRunBody{
@@ -395,7 +374,6 @@ func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (cro
 	return cronjobclient.Run(r.JSON200.Run), r.JSON200.Replayed, nil
 }
 
-// Issue is the part of a kata Issue the worker reads.
 type Issue struct {
 	ID        int64
 	UID       string
@@ -412,10 +390,8 @@ type Issue struct {
 	Metadata map[string]any
 }
 
-// Open reports whether the Issue is open.
 func (i Issue) Open() bool { return i.Status == "open" }
 
-// Someday reports whether the Issue is parked with kata's someday metadata.
 func (i Issue) Someday() bool {
 	v, _ := i.Metadata["someday"].(bool)
 	return v
@@ -441,7 +417,6 @@ func (k *Kata) CreateIssue(ctx context.Context, projectID int64, actor, key, tit
 	return Issue{ID: i.ID, UID: i.UID, ShortID: i.ShortID, Title: i.Title, Body: i.Body, Status: i.Status, ProjectID: i.ProjectID}, nil
 }
 
-// ShowIssue reads an Issue by uid.
 func (k *Kata) ShowIssue(ctx context.Context, projectID int64, uid string) (Issue, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ShowIssueResp, error) {
 		return k.c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: uid}})
@@ -468,7 +443,6 @@ type PlanningDates struct {
 	Deadline  time.Time
 }
 
-// PlanningDates reads the Issue's planning-date instants.
 func (k *Kata) PlanningDates(ctx context.Context, projectID int64, issueUID string) (PlanningDates, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.IssuePlanningDatesResp, error) {
 		return k.c.IssuePlanningDatesWithResponse(ctx, &g.IssuePlanningDatesRequestOptions{PathParams: &g.IssuePlanningDatesPath{ProjectID: projectID, Ref: issueUID}})
@@ -494,7 +468,6 @@ func inboxSlot(recipient string) string {
 	return "notify." + base64.RawURLEncoding.EncodeToString([]byte(recipient))
 }
 
-// InboxRequest is the request the Issue holds for recipient, ok false when there is none.
 func (i Issue) InboxRequest(recipient string) (from, message string, ok bool) {
 	slot, _ := i.Metadata[inboxSlot(recipient)].(map[string]any)
 	if slot == nil {
@@ -544,7 +517,6 @@ func (k *Kata) AddLabel(ctx context.Context, projectID int64, actor, issueUID, l
 	return apiError(err)
 }
 
-// Event is one frame of a Project's event stream.
 type Event struct {
 	ID   int64
 	Type string
@@ -629,7 +601,6 @@ type Workflow struct {
 	cronjob.WorkflowDefinition
 }
 
-// Workflow reads one workflow of the Project.
 func (k *Kata) Workflow(ctx context.Context, projectID int64, uid string) (Workflow, error) {
 	r, err := call(ctx, k, true, func(ctx context.Context) (*g.ShowCronWorkflowResp, error) {
 		return k.c.ShowCronWorkflowWithResponse(ctx, &g.ShowCronWorkflowRequestOptions{PathParams: &g.ShowCronWorkflowPath{ProjectID: projectID, CronUID: uid}})

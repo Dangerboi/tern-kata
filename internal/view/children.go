@@ -12,10 +12,6 @@ import (
 // ChildrenTableID is the id of the Children table; a Select on it carries the chosen child's UID as the item.
 const ChildrenTableID = DetailContentID + ".children.table"
 
-// childrenTable is the Children heading over a native table of one row per child: reference, status, title, owner and
-// updated time, as in kata's TUI. Tern sizes the columns, cuts the title and hides low-priority columns when narrow. A
-// click on a row jumps to the child, and the row under the detail's cursor is the table's selected row. A child that is
-// not loaded shows only its reference.
 func childrenTable(m model.Model, children []detailChild, now time.Time) tern.Element {
 	rows := make([]ui.TableRow, len(children))
 	selected := ""
@@ -54,8 +50,6 @@ func childTicketCell(m model.Model, child detailChild, now time.Time) ui.Cell {
 	return ui.TextCell{Text: ui.Spans(ui.Span{T: child.Ref, S: "accent"}), Title: refTooltip(summarize(m, facts, now))}
 }
 
-// loadedChildCells adds a loaded child's other cells to cells; a closed child's status and title are muted, as its owner and
-// updated always are, and an empty owner is left out.
 func loadedChildCells(cells map[string]ui.Cell, c model.ChildCells, child detailChild) {
 	style := ""
 	if child.Closed {

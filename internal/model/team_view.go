@@ -27,7 +27,6 @@ type TeamKid struct {
 	RemoteHost string
 }
 
-// LoadTeamKids reads the children of a team's parent, with which of them are ready.
 type LoadTeamKids struct {
 	Workspace string
 	ProjectID int64
@@ -36,7 +35,6 @@ type LoadTeamKids struct {
 
 func (LoadTeamKids) cmd() {}
 
-// TeamKidsLoaded answers LoadTeamKids.
 type TeamKidsLoaded struct {
 	Kids []TeamKid
 	Err  error
@@ -54,7 +52,6 @@ type ResolveComment struct {
 
 func (ResolveComment) cmd() {}
 
-// CommentResolved answers ResolveComment: CommentUID is the comment's ULID.
 type CommentResolved struct {
 	CommentUID string
 	Err        error
@@ -62,7 +59,6 @@ type CommentResolved struct {
 
 func (CommentResolved) msg() {}
 
-// ErrNoSuchComment is a handle that names no comment on the Issue.
 var ErrNoSuchComment = errors.New("no comment with that handle on the Issue")
 
 // TeamRow is one child of a team: its Issue, its ref, where it stands and the Agent address of its agent ("" when none runs or
@@ -151,7 +147,6 @@ func TeamRows(t Team, entries []AgentEntry, states []AgentState, kids []TeamKid,
 	return rows
 }
 
-// teamAgentWords is a running agent's state as the team's rows say it: the badge's words.
 func teamAgentWords(a IssueAgent) string {
 	words, _ := AgentStateWords(a.State)
 	return words
@@ -195,7 +190,6 @@ func otherChildRow(uid, ref string, sameProject bool, agent *IssueAgent, remoteH
 	return row
 }
 
-// TeamReport is the printed view of t: its state, limit and coordinator, then one line per row.
 func TeamReport(t Team, rows []TeamRow) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Team on %s: %s, limit %d, coordinator %s\n", t.ParentRef, t.State, t.Limit, dashWord(t.CoordinatorAddress))

@@ -2,10 +2,8 @@ package model
 
 import "slices"
 
-// AgentStateWord is Tern's word for an agent block's state.
 type AgentStateWord string
 
-// The state words Tern gives an agent block.
 const (
 	AgentIdle         AgentStateWord = "idle"
 	AgentWorking      AgentStateWord = "working"
@@ -17,7 +15,6 @@ const (
 // that could not tell) leaves it unknown, which never changes anything.
 type AgentSeen uint8
 
-// The places a relay can put an agent.
 const (
 	SeenUnknown AgentSeen = iota
 	SeenHidden
@@ -76,7 +73,6 @@ type AgentStatesRelay struct {
 	recheck []string
 }
 
-// apply merges msg into the states. mapped says whether a block is in the Agent mapping.
 func (r AgentStatesRelay) apply(msg AgentStatesMsg, mapped func(block string) bool) AgentStatesRelay {
 	next := slices.Clone(r.States)
 	r.Received = true
@@ -100,7 +96,6 @@ func (r AgentStatesRelay) apply(msg AgentStatesMsg, mapped func(block string) bo
 	return r.trimmed(mapped)
 }
 
-// trimmed drops the states of blocks that are neither mapped nor listed by the latest relay.
 func (r AgentStatesRelay) trimmed(mapped func(block string) bool) AgentStatesRelay {
 	r.States = slices.DeleteFunc(slices.Clone(r.States), func(s AgentState) bool {
 		return !mapped(s.Block) && !slices.Contains(r.Listed, s.Block)
@@ -108,27 +103,22 @@ func (r AgentStatesRelay) trimmed(mapped func(block string) bool) AgentStatesRel
 	return r
 }
 
-// listedStates is the states the latest relay listed, as merged.
 func (r AgentStatesRelay) listedStates() []AgentState {
 	return slices.DeleteFunc(slices.Clone(r.States), func(s AgentState) bool { return !slices.Contains(r.Listed, s.Block) })
 }
 
-// entered says the latest relay moved block into state.
 func (r AgentStatesRelay) entered(block string, state AgentStateWord) bool {
 	return slices.ContainsFunc(r.Changes, func(c AgentChange) bool { return c.Block == block && c.To == state })
 }
 
-// enteredFinished says the latest relay moved block to idle or exited.
 func (r AgentStatesRelay) enteredFinished(block string) bool {
 	return r.entered(block, AgentIdle) || r.entered(block, AgentExited)
 }
 
-// seenShown says the latest relay that listed block put it outside the hidden session.
 func (r AgentStatesRelay) seenShown(block string) bool {
 	return slices.ContainsFunc(r.States, func(s AgentState) bool { return s.Block == block && s.Hidden == SeenShown })
 }
 
-// answered says the latest relay moved block from waiting_input to working: its user answered it.
 func (r AgentStatesRelay) answered(block string) bool {
 	return slices.ContainsFunc(r.Changes, func(c AgentChange) bool {
 		return c.Block == block && c.From == AgentWaitingInput && c.To == AgentWorking

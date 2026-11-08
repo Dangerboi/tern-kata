@@ -16,7 +16,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
-// State is the model plus the text focus target last sent to Tern.
 type State struct {
 	Model model.Model
 	Focus string
@@ -37,7 +36,6 @@ type Output struct {
 	// View is nil when the input changed nothing to draw.
 	View *tern.View
 	Ops  []tern.Op
-	// Cmds are the daemon commands.
 	Cmds []model.Cmd
 	// Editor is the $EDITOR round trip, kept apart so every daemon command of the step runs before it.
 	Editor *model.OpenDraftEditor
@@ -86,7 +84,6 @@ func Step(s State, in any, now time.Time) Output {
 	return out
 }
 
-// route sorts the model's commands: intents become Ops, the editor round trip its own field, the rest daemon Cmds.
 func (out *Output) route(m model.Model, cmds []model.Cmd) {
 	for _, cmd := range cmds {
 		switch cmd := cmd.(type) {
