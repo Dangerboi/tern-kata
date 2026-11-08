@@ -367,6 +367,8 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("views: --json applies to `tern-kata views show` only")
 	case plan.Subcommand == "views" && (plan.Replace || len(plan.ViewFlags) > 0) && !(len(operands) > 0 && operands[0] == "add"):
 		return LaunchPlan{}, fmt.Errorf("views: --base, --project, --status, --owner, --label, --relationship, --search and --replace apply to `tern-kata views add` only")
+	case plan.fallbackAuthor != "" && !readsActor(plan.Subcommand, operands):
+		return LaunchPlan{}, fmt.Errorf("%s: --as applies to %s only", plan.Subcommand, asForms[plan.Subcommand])
 	case plan.Subcommand == "update" && len(operands) > 0:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata update [--force] [--pause]")
 	case plan.Subcommand == "completion" && (len(operands) != 1 || !slices.Contains(completionShells, operands[0])):
@@ -432,6 +434,24 @@ func parseNamedFlag(args []string, i *int, names []string, given *map[string]str
 	return true, nil
 }
 
+// asForms names, for each subcommand with forms that ignore the actor, the forms that read it.
+var asForms = map[string]string{
+	"views":  "`tern-kata views show`",
+	"worker": "`tern-kata worker` (foreground), init, doctor, resume and abandon",
+}
+
+// readsActor reports whether the form of sub named by operands reads the --as actor: every other subcommand either does or
+// refuses --as in its own parser.
+func readsActor(sub string, operands []string) bool {
+	switch sub {
+	case "views":
+		return len(operands) > 0 && operands[0] == "show"
+	case "worker":
+		return len(operands) == 0 || slices.Contains([]string{"init", "doctor", "resume", "abandon"}, operands[0])
+	}
+	return true
+}
+
 var heldRunForms = []string{"resume", "abandon"}
 
 func settlesHeldRun(operands []string, takeover bool) bool {
@@ -461,22 +481,22 @@ Usage:
                    [--day 15|last|"2nd tue"] [--month 1-12] [--until DATE | --count N]
                    | --rule <rrule>] [--start DATE] [--zone <iana>] [--stop] [--as <actor>]
   tern-kata run <job-uid>
-  tern-kata views [--as <actor>]
+  tern-kata views
   tern-kata views show <name> [--json] [--as <actor>]
   tern-kata views add <name> [--base <collection>|project:<name>] [--project <name>]
                    [--status open|closed|all] [--owner <actor>|@me] [--label <label>]
-                   [--relationship <kind>] [--search <text>] [--replace] [--as <actor>]
+                   [--relationship <kind>] [--search <text>] [--replace]
   tern-kata views rm <name>
-  tern-kata worker [--takeover]
+  tern-kata worker [--takeover] [--as <actor>]
   tern-kata worker init [--executor <name>] [--actor <actor>] [--command <cmd>]
-                        [--model <model>] [--thinking <level>]
+                        [--model <model>] [--thinking <level>] [--as <actor>]
   tern-kata worker add
   tern-kata worker edit
   tern-kata worker upgrade
   tern-kata worker status [--json]
   tern-kata worker stop [--now]
   tern-kata worker supervised
-  tern-kata worker doctor
+  tern-kata worker doctor [--as <actor>]
   tern-kata worker resume <run-uid> [--as <actor>]
   tern-kata worker resume <job-uid>
   tern-kata worker abandon <run-uid> [--as <actor>]
@@ -484,7 +504,7 @@ Usage:
   tern-kata agents [--issue <ref>]
   tern-kata team <ref>
   tern-kata message <address|ref> -m <text> [--re <comment>] [--as <actor>]
-  tern-kata docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
+  tern-kata docbank supervised
   tern-kata docbank supervise on|off
   tern-kata docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
   tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
@@ -512,7 +532,8 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 recurs (a schedule changed meanwhile is printed, not overwritten);
                                 --rule <rrule> replaces the frequency flags; the start date
                                 defaults to the Issue's scheduled date or today, the zone to
-                                this machine's IANA zone or UTC
+                                this machine's IANA zone or UTC; an Issue that already recurs
+                                keeps its stored start and zone
   recur <ref> --stop            stop the Recurrence; existing Occurrences stay
   run <job-uid>                 ask this machine's worker to run an adapter prompt job now,
                                 prints the new run's uid once the worker has saved it
@@ -649,9 +670,11 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 that it has attachments on. --key-file names a file that holds the
                                 key, or - reads it from standard input and stores it in <KATA_HOME>/docbank.key
                                 (mode 0600); --key-env names a variable the kata daemon's own environment
-                                holds. No flag takes the key itself. Plain http is for this machine
-                                only. The rest of config.toml stays byte for byte; a [docbank] section
-                                that is the same is "already set up", a different one is refused and shown.
+                                holds; setup reads it from this shell too, to check the url, and
+                                fails when it is unset or empty here. No flag takes the key itself.
+                                Plain http is for this machine only. The rest of config.toml stays
+                                byte for byte; a [docbank] section that is the same is "already set
+                                up", a different one is refused and shown.
                                 --yes restarts without asking; --no-restart, or no terminal without
                                 --yes, prints the restart command instead (for a --daemon profile it
                                 runs and prints kata daemon restart with KATA_HOME set to the
@@ -660,7 +683,7 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 The plugin supervises only the default kata daemon's Docbank: a local
                                 setup for it leaves the plugin keeping Docbank running (docbank
                                 supervise); for a --home or --daemon profile it says how to keep Docbank running
-  docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
+  docbank supervised
                                 the plugin host half's question: does the plugin keep a local Docbank
                                 running? Exit 0 and the line "on" when kata's [docbank] url is on this
                                 machine, Docbank's [server] api_port in <DOCBANK_HOME>/config.toml is
@@ -720,7 +743,7 @@ Inside Tern, it opens a Pane. Outside Tern, it runs ` + "`kata tui`" + ` instead
 In a directory bound to a kata Project (a .kata.toml in it or a parent), it opens
 that Project's Issues; elsewhere it opens Inbox.
 
-Environment: KATA_AUTHOR, USER (actor), KATA_INBOX_USER (the Inbox address the Attention Page reads, else the actor), EDITOR (external Draft editing), TZ (time zone).
+Environment: KATA_AUTHOR, USER (actor), KATA_INBOX_USER (the Inbox address the Attention Page reads, else the actor), VISUAL, EDITOR (external Draft editing; VISUAL wins), TZ (time zone).
 
 Docs: https://github.com/Dangerboi/tern-kata#readme
 `

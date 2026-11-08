@@ -67,11 +67,11 @@ type Env struct {
 	// Daemon is the kata catalog name of a local profile; empty for the default daemon. kata's daemon commands take no --daemon, so a
 	// profile is restarted with KATA_HOME set to its home.
 	Daemon string
-	// CommandPrefix is put before the restart command printed when kata is not restarted, for the environment the route set
-	// (for instance "KATA_HOME=/x "); it is never used to run anything. A profile's own KATA_HOME replaces it.
-	CommandPrefix string
-	Runner        Runner
-	HTTP          *http.Client
+	// CommandEnv is the environment the route set, as name/value pairs, written before the restart command printed when kata is not
+	// restarted; it is never used to run anything. A profile's own KATA_HOME replaces it.
+	CommandEnv [][2]string
+	Runner     Runner
+	HTTP       *http.Client
 	// Locate finds the kata daemon for the final check, called with KataHome as the workspace so a checkout's pin cannot redirect it.
 	Locate data.Locator
 	// DefaultKataHome is the home of the default kata daemon (KATA_HOME or ~/.kata), the only daemon whose Docbank the plugin keeps
@@ -204,9 +204,9 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 // (asking first unless c.Yes; never when c.NoRestart or when there is no terminal to ask on) and, once restarted, check that it has
 // attachments on. keyEnv is --key-env's variable, when there is one.
 func (e Env) applyKata(ctx context.Context, c Common, keyEnv string) error {
-	command, prefix, env := "kata daemon restart", e.CommandPrefix, []string(nil)
+	command, hintEnv, env := "kata daemon restart", e.CommandEnv, []string(nil)
 	if e.Daemon != "" {
-		prefix, env = "KATA_HOME="+ShellWord(e.KataHome)+" ", []string{"KATA_HOME=" + e.KataHome}
+		hintEnv, env = [][2]string{{"KATA_HOME", e.KataHome}}, []string{"KATA_HOME=" + e.KataHome}
 	}
 	restart := c.Yes
 	if !c.Yes && !c.NoRestart && e.Confirm != nil {
@@ -216,7 +216,7 @@ func (e Env) applyKata(ctx context.Context, c Common, keyEnv string) error {
 		}
 	}
 	if c.NoRestart || !restart {
-		_, err := fmt.Fprintf(e.Out, "The kata daemon was not restarted, and it reads config.toml only at start, so attachments stay off until you run:\n  %s%s\n", prefix, command)
+		_, err := fmt.Fprintf(e.Out, "The kata daemon was not restarted, and it reads config.toml only at start, so attachments stay off until you run:\n  %s\n", RestartHint(runtime.GOOS, hintEnv, command))
 		return err
 	}
 	if err := ctx.Err(); err != nil {
@@ -493,15 +493,18 @@ func (s kataSection) text() string {
 }
 
 func writeSection(path, existing string, want kataSection) error {
-	return appendSection(path, existing, "docbank", want.text(), func(got kataSection) bool { return got.matches(want) })
+	_, _, err := appendSection(path, existing, "docbank", want.text(), false, func(got kataSection) bool { return got.matches(want) })
+	return err
 }
 
 // appendSection appends text, the [name] section, to existing and writes the result over path atomically (creating the folder). The
 // new file is parsed before it replaces the old one: it must hold a [name] section that ok accepts after the old file's bytes.
-func appendSection[T any](path, existing, name, text string, ok func(T) bool) error {
-	path, err := resolveLink(path)
+// An existing file keeps its mode, except that when text carries a secret the group and other bits are dropped (not on Windows,
+// whose modes mean nothing); tightened is then true and was is the mode it had.
+func appendSection[T any](path, existing, name, text string, secret bool, ok func(T) bool) (was fs.FileMode, tightened bool, err error) {
+	path, err = resolveLink(path)
 	if err != nil {
-		return err
+		return 0, false, err
 	}
 	next := existing
 	if next != "" {
@@ -514,8 +517,11 @@ func appendSection[T any](path, existing, name, text string, ok func(T) bool) er
 	mode := fs.FileMode(0o600)
 	if info, err := os.Stat(path); err == nil {
 		mode = info.Mode().Perm() // an edit keeps the file's own mode
+		if secret && runtime.GOOS != "windows" && mode&0o077 != 0 {
+			was, tightened, mode = mode, true, mode&^0o077
+		}
 	}
-	return atomicfile.Write(path, []byte(next), atomicfile.Options{Mode: mode, DirMode: 0o700, Check: func(tmp string) error {
+	err = atomicfile.Write(path, []byte(next), atomicfile.Options{Mode: mode, DirMode: 0o700, Check: func(tmp string) error {
 		now, err := readConfig(path)
 		if err != nil {
 			return err
@@ -536,6 +542,7 @@ func appendSection[T any](path, existing, name, text string, ok func(T) bool) er
 		}
 		return nil
 	}})
+	return was, tightened && err == nil, err
 }
 
 // resolveLink is the file path names when path is a symlink that resolves, so an edit replaces the file the link points at and the
@@ -591,4 +598,18 @@ func ShellWord(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// RestartHint is command with env set before it, written for the shell a person on goos types it into: `NAME='v' command` for a
+// POSIX shell, `$env:NAME='v'; command` for PowerShell on Windows (cmd.exe has no one-line form that PowerShell's also runs).
+func RestartHint(goos string, env [][2]string, command string) string {
+	var b strings.Builder
+	for _, kv := range env {
+		if goos == "windows" {
+			fmt.Fprintf(&b, "$env:%s='%s'; ", kv[0], strings.ReplaceAll(kv[1], "'", "''"))
+		} else {
+			fmt.Fprintf(&b, "%s=%s ", kv[0], ShellWord(kv[1]))
+		}
+	}
+	return b.String() + command
 }

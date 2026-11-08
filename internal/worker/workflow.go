@@ -407,13 +407,16 @@ func stepStateText(j *Journal, i int) string {
 }
 
 // commandEnv is the environment of a command step (ADR-0008): the worker's, without its kata credentials and routing
-// selectors or the worker's own internals, plus the job's secrets and the run's identity.
-// Names compare case-insensitively when caseInsensitive (Windows).
-func commandEnv(environ []string, j *Journal, runDir string, secrets map[string]string, caseInsensitive bool) []string {
+// selectors, its own internals or the variables the [secrets] env sources read, plus the job's secrets and the run's
+// identity. Names compare case-insensitively when caseInsensitive (Windows).
+func commandEnv(environ []string, j *Journal, runDir string, secrets map[string]string, hidden map[string]bool, caseInsensitive bool) []string {
 	var env []string
 	for _, kv := range environ {
 		name, _, _ := strings.Cut(kv, "=")
-		if reservedEnvName(name, caseInsensitive) {
+		if caseInsensitive {
+			name = strings.ToUpper(name)
+		}
+		if hidden[name] || reservedEnvName(name, caseInsensitive) {
 			continue
 		}
 		env = append(env, kv)
@@ -445,7 +448,7 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 	out := openHeadTail(w.store.hooks, filepath.Join(sp.dir, "output.log"), commandHead, commandTail)
 	cmd := exec.Command(program, "-c", sp.task)
 	cmd.Dir = cwd
-	cmd.Env = commandEnv(os.Environ(), j, runDir, secrets, envCaseInsensitive)
+	cmd.Env = commandEnv(os.Environ(), j, runDir, secrets, w.opt.Config.secretEnvNames(envCaseInsensitive), envCaseInsensitive)
 	cmd.Stdin = nil
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)

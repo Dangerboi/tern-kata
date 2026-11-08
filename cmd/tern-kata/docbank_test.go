@@ -464,12 +464,12 @@ func TestDocbankSetupPrintsAProfilesRestartWithItsKataHome(t *testing.T) {
 
 func TestDocbankSupervisionFormsParseAndRefuseSetupFlags(t *testing.T) {
 	lookup := func(string) (string, bool) { return "robot", true }
-	for _, args := range [][]string{{"docbank", "supervised"}, {"docbank", "supervise", "on"}, {"docbank", "supervise", "off"}, {"docbank", "supervised", "--home", "/x"}} {
+	for _, args := range [][]string{{"docbank", "supervised"}, {"docbank", "supervise", "on"}, {"docbank", "supervise", "off"}} {
 		if _, err := PlanLaunch(args, lookup, "test"); err != nil {
 			t.Errorf("%v: %v", args, err)
 		}
 	}
-	for _, args := range [][]string{{"docbank", "supervise"}, {"docbank", "supervise", "maybe"}, {"docbank", "supervised", "--yes"}, {"docbank", "supervise", "on", "--home", "/x"}, {"docbank", "supervised", "--port", "9"}} {
+	for _, args := range [][]string{{"docbank", "supervise"}, {"docbank", "supervise", "maybe"}, {"docbank", "supervised", "--yes"}, {"docbank", "supervise", "on", "--home", "/x"}, {"docbank", "supervised", "--port", "9"}, {"docbank", "supervised", "--home", "/x"}, {"docbank", "supervised", "--daemon", "d"}, {"docbank", "supervised", "--db", "f"}, {"docbank", "supervised", "--schema", "s"}, {"docbank", "supervised", "--server", "http://x"}} {
 		if _, err := PlanLaunch(args, lookup, "test"); err == nil {
 			t.Errorf("%v: no error", args)
 		} else if got := exitStatus(err); got != 2 {
@@ -513,6 +513,19 @@ func TestDocbankSupervisedAnswersOnAndOffAndSuperviseWritesTheMarker(t *testing.
 	out.Reset()
 	if err := printDocbankSupervised(env(&out)); err != nil || out.String() != "on\n" {
 		t.Fatalf("supervised after on = %q, %v", out.String(), err)
+	}
+	out.Reset()
+	if err := runDocbankSupervise(plan, env(&out)); err != nil || !strings.Contains(out.String(), "already on") || strings.Contains(out.String(), "Removed ") {
+		t.Fatalf("supervise on twice = %q, %v; want it said it was already on", out.String(), err)
+	}
+	plan.Operands[1] = "off"
+	out.Reset()
+	if err := runDocbankSupervise(plan, env(&out)); err != nil || !strings.Contains(out.String(), "Created ") {
+		t.Fatalf("supervise off = %q, %v", out.String(), err)
+	}
+	out.Reset()
+	if err := runDocbankSupervise(plan, env(&out)); err != nil || !strings.Contains(out.String(), "already off") || strings.Contains(out.String(), "Created ") {
+		t.Fatalf("supervise off twice = %q, %v; want it said it was already off", out.String(), err)
 	}
 }
 

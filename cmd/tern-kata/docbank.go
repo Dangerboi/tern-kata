@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"golang.org/x/term"
@@ -20,7 +19,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/docbanksetup"
 )
 
-const docbankUsage = "usage: tern-kata docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>] | docbank supervise on|off | docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]"
+const docbankUsage = "usage: tern-kata docbank supervised | docbank supervise on|off | docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]"
 
 type DocbankSetup struct {
 	docbanksetup.Remote
@@ -60,8 +59,8 @@ func planDocbank(args []string) (LaunchPlan, error) {
 		if d != (DocbankSetup{}) || portGiven {
 			return LaunchPlan{}, fmt.Errorf("docbank %s takes no setup flag; %s", operands[0], docbankUsage)
 		}
-		if operands[0] == "supervise" && !reflect.ValueOf(plan.AgentRoute).IsZero() {
-			return LaunchPlan{}, fmt.Errorf("docbank supervise takes no flag: the marker is in tern-kata's config folder; %s", docbankUsage)
+		if !reflect.ValueOf(plan.AgentRoute).IsZero() {
+			return LaunchPlan{}, fmt.Errorf("docbank %s takes no flag: it answers for the default kata daemon and the marker is in tern-kata's config folder; %s", operands[0], docbankUsage)
 		}
 		plan.Operands = operands
 		return plan, nil
@@ -110,8 +109,8 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 	}
 	// Resolved before the route's KATA_HOME is set below, which the default daemon's home is read from.
 	supervision := docbanksetup.NewSupervisionEnv(out)
-	// prefix is the part of the route a person must retype to run the restart command themselves.
-	var prefix strings.Builder
+	// routeEnv is the part of the route a person must retype to run the restart command themselves.
+	var routeEnv [][2]string
 	for _, v := range []struct{ name, value string }{{"KATA_HOME", daemon.Base}, {"KATA_DB", daemon.DB}, {"KATA_POSTGRES_SCHEMA", daemon.Schema}} {
 		if v.value == "" {
 			continue
@@ -120,7 +119,7 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 			return docbanksetup.Env{}, err
 		}
 		if v.name != "KATA_HOME" || plan.AgentRoute.Home != "" {
-			fmt.Fprintf(&prefix, "%s=%s ", v.name, docbanksetup.ShellWord(v.value))
+			routeEnv = append(routeEnv, [2]string{v.name, v.value})
 		}
 	}
 	locate := data.Locator(data.LocateWithKata)
@@ -130,7 +129,7 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 	env := supervision
 	env.KataHome = daemon.Home
 	env.Daemon = daemon.Name
-	env.CommandPrefix = prefix.String()
+	env.CommandEnv = routeEnv
 	env.Runner = docbanksetup.ExecRunner{}
 	env.HTTP = &http.Client{
 		// X-Api-Key must never follow a redirect: Go would copy it to the new host.
@@ -195,8 +194,18 @@ func printDocbankSupervised(env docbanksetup.Env) error {
 
 func runDocbankSupervise(plan LaunchPlan, env docbanksetup.Env) error {
 	on := plan.Operands[1] == "on"
+	_, statErr := os.Stat(env.ManualPath())
+	already := on == (statErr != nil) // on wants the marker absent, off wants it present
 	if err := env.SetSupervision(on); err != nil {
 		return subcommandError{err}
+	}
+	if already {
+		state := "off: " + env.ManualPath() + " is already there"
+		if on {
+			state = "on: " + env.ManualPath() + " is already absent"
+		}
+		_, err := fmt.Fprintf(env.Out, "Supervision was already %s.\n", state)
+		return err
 	}
 	if on {
 		_, err := fmt.Fprintf(env.Out, "Removed %s: the plugin keeps a local Docbank running again (within 10 seconds), when kata's [docbank] url and Docbank's [server] api_port are this machine's.\n", env.ManualPath())

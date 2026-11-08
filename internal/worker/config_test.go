@@ -68,6 +68,17 @@ func TestASecretFileOfAnotherUserIsRefused(t *testing.T) {
 	}
 }
 
+// A secret file under the home folder is written with ~ and the platform's separator: ~\secrets on Windows, ~/secrets elsewhere.
+func TestASecretFileUnderHomeTakesThePlatformsSeparator(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	got, err := expandHome("~" + string(filepath.Separator) + filepath.Join("secrets", "gh"))
+	if want := filepath.Join(home, "secrets", "gh"); err != nil || got != want {
+		t.Fatalf("expanded to %q, %v; want %q", got, err, want)
+	}
+}
+
 func TestAMissingWorkerConfigSaysWhereItBelongs(t *testing.T) {
 	_, err := LoadConfig(filepath.Join(t.TempDir(), "worker.toml"))
 	if err == nil || !strings.Contains(err.Error(), "no worker config at") {

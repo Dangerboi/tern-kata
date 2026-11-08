@@ -204,4 +204,32 @@ func TestWriteGoesThroughASymlink(t *testing.T) {
 	if info, err := os.Lstat(dangling); err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Errorf("the dangling link was replaced: %v, %v", info, err)
 	}
+
+	// A chain of links whose end is not there yet: every link stays, and the end is created.
+	first, middle, end := filepath.Join(dir, "config", "filters.toml"), filepath.Join(dir, "dotfiles", "filters-link"), filepath.Join(dir, "dotfiles", "filters.toml")
+	if err := os.Symlink(end, middle); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(middle, first); err != nil {
+		t.Fatal(err)
+	}
+	tok, _ = Read(first)
+	if err := Write(first, 0o700, tok, []byte("filter\n")); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(middle); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the middle link was replaced: %v, %v", info, err)
+	}
+	if got, _ := os.ReadFile(end); string(got) != "filter\n" {
+		t.Errorf("the chain's end holds %q", got)
+	}
+
+	// A loop is refused naming the file.
+	loop := filepath.Join(dir, "config", "seen.toml")
+	if err := os.Symlink(loop, loop); err != nil {
+		t.Fatal(err)
+	}
+	if err := Write(loop, 0o700, Token{}, []byte("x\n")); err == nil || !strings.Contains(err.Error(), loop) {
+		t.Errorf("a link loop wrote or said %v, want an error naming %s", err, loop)
+	}
 }

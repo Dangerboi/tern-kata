@@ -219,7 +219,7 @@ func (d *Daemon) Project(t *testing.T, name string) worker.Project {
 	t.Helper()
 	actor := "tester"
 	r, err := d.Client.InitProjectWithResponse(context.Background(), &g.InitProjectRequestOptions{Body: &g.InitProjectBody{Name: &name, Actor: &actor}})
-	if err != nil || r.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("creating Project %s: %v", name, err)
 	}
 	p := r.JSON200.Project
@@ -370,7 +370,7 @@ func (d *Daemon) findJob(t *testing.T, p worker.Project, name string) cronjob.Jo
 func (d *Daemon) PlanningDates(t *testing.T, p worker.Project, issueUID string) (scheduled, deadline time.Time) {
 	t.Helper()
 	r, err := d.Client.IssuePlanningDatesWithResponse(context.Background(), &g.IssuePlanningDatesRequestOptions{PathParams: &g.IssuePlanningDatesPath{ProjectID: p.ID, Ref: issueUID}})
-	if err != nil || r.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("reading the planning dates of %s: %v", issueUID, err)
 	}
 	if s := r.JSON200.ScheduledOn; s != nil {
@@ -415,7 +415,7 @@ func (d *Daemon) SetSomeday(t *testing.T, p worker.Project, issueUID string, som
 func (d *Daemon) InboxRequest(t *testing.T, p worker.Project, issueUID, recipient string) (from, message string, ok bool) {
 	t.Helper()
 	r, err := d.Client.ShowIssueWithResponse(context.Background(), &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: p.ID, Ref: issueUID}})
-	if err != nil || r.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("reading Issue %s: %v", issueUID, err)
 	}
 	slot, _ := r.JSON200.Issue.Metadata["notify."+base64.RawURLEncoding.EncodeToString([]byte(recipient))].(map[string]any)
@@ -614,10 +614,10 @@ func (d *Daemon) EditIssue(t *testing.T, p worker.Project, issueUID, title, owne
 	if owner != "" {
 		body.Owner = &owner
 	}
-	r, err := d.Client.EditIssueWithResponse(context.Background(), &g.EditIssueRequestOptions{
+	_, err := d.Client.EditIssueWithResponse(context.Background(), &g.EditIssueRequestOptions{
 		PathParams: &g.EditIssuePath{ProjectID: strconv.FormatInt(p.ID, 10), Ref: issueUID}, Body: body,
 	})
-	if err != nil || r.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("editing Issue %s: %v", issueUID, err)
 	}
 }

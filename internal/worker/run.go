@@ -148,7 +148,10 @@ func (w *Worker) finish(uid string, o *Outcome) error {
 	return w.record(uid, "finished", func(j *Journal, at time.Time) error { return j.finish(o, at) })
 }
 
+// endAttempt records the end of an attempt. Its summary goes to kata and the journal, so the run's secrets are masked
+// in it here, where every outcome of a step or a run passes (ADR-0009).
 func (w *Worker) endAttempt(j *Journal, o *Outcome) error {
+	o.Summary = maskSecrets(o.Summary, w.secretValues(j))
 	if j.Workflow == nil {
 		return w.finish(j.RunUID, o)
 	}
@@ -157,6 +160,7 @@ func (w *Worker) endAttempt(j *Journal, o *Outcome) error {
 
 // hold records an uncertain outcome: kata will get `unknown` with the reason first (ADR-0005).
 func (w *Worker) hold(j *Journal, reason, detail string) error {
+	detail = maskSecrets(detail, w.secretValues(j))
 	return w.record(j.RunUID, "held", func(j *Journal, at time.Time) error {
 		if err := j.hold(reason, detail, at); err != nil {
 			return err
@@ -293,10 +297,11 @@ var promptKeptKata = map[string]bool{
 	"KATA_TRUST_PRIVATE_NETWORK": true, "KATA_ALLOW_INSECURE": true,
 }
 
-// childEnv is the worker's environment for a prompt step (ADR-0009): without TERN_KATA_ internals and every KATA_*
-// except the routing and credential names, plus the actor and the step's secrets.
-func childEnv(actor string, secrets map[string]string) []string {
-	return promptEnv(os.Environ(), actor, secrets, envCaseInsensitive)
+// childEnv is the worker's environment for a prompt step (ADR-0009): without TERN_KATA_ internals, every KATA_*
+// except the routing and credential names and the variables the [secrets] env sources read, plus the actor and the
+// step's secrets.
+func childEnv(actor string, secrets map[string]string, hidden map[string]bool) []string {
+	return promptEnv(os.Environ(), actor, secrets, hidden, envCaseInsensitive)
 }
 
 const envCaseInsensitive = runtime.GOOS == "windows"
@@ -310,14 +315,14 @@ func reservedEnvName(name string, caseInsensitive bool) bool {
 	return strings.HasPrefix(name, "TERN_KATA_") || strings.HasPrefix(name, "KATA_")
 }
 
-func promptEnv(environ []string, actor string, secrets map[string]string, caseInsensitive bool) []string {
+func promptEnv(environ []string, actor string, secrets map[string]string, hidden map[string]bool, caseInsensitive bool) []string {
 	var env []string
 	for _, kv := range environ {
 		name, _, _ := strings.Cut(kv, "=")
 		if caseInsensitive {
 			name = strings.ToUpper(name)
 		}
-		if reservedEnvName(name, caseInsensitive) && !promptKeptKata[name] {
+		if hidden[name] || reservedEnvName(name, caseInsensitive) && !promptKeptKata[name] {
 			continue
 		}
 		env = append(env, kv)
@@ -394,7 +399,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	}
 	cmd := exec.Command(program, agentArgs(sp.profile, sp.dir, promptFile, resumeID, extension)...)
 	cmd.Dir = cwd
-	cmd.Env = childEnv(j.Actor, secrets)
+	cmd.Env = childEnv(j.Actor, secrets, w.opt.Config.secretEnvNames(envCaseInsensitive))
 	cmd.Stdin = nil // /dev/null: omp reads an open stdin to EOF as prompt text
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)
@@ -422,7 +427,9 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	}
 	stdout.flush()
 	result := parser.Result()
-	tail := stderr.tailText()
+	values := w.secretValues(j)
+	result.FinalText, result.ErrorText = maskSecrets(result.FinalText, values), maskSecrets(result.ErrorText, values)
+	tail := maskSecrets(stderr.tailText(), values)
 	exit.Unrecorded = lossOf(stdout.file, stderr.file)
 	if _, err := w.store.Update(j.RunUID, "exited", func(j *Journal) error {
 		result.StderrTail = tail
@@ -564,7 +571,7 @@ func (w *Worker) conclude(ctx context.Context, j *Journal) error {
 	if command {
 		var tail string // a log that lost output has no tail to put in a summary (ADR-0008)
 		if j.Exit.Unrecorded == "" {
-			tail = commandTail1K(w.attemptDir(j))
+			tail = maskedCommandTail(w.attemptDir(j), w.secretValues(j))
 		}
 		outcome = classifyCommand(j, tail)
 	} else {

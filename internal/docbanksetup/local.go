@@ -165,11 +165,17 @@ func (e Env) setupLocal(ctx context.Context, l Local) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := writeServer(docPath, docText, docbankServer{BindAddr: "127.0.0.1", APIPort: &port, APIKey: key}); err != nil {
+		was, tightened, err := writeServer(docPath, docText, docbankServer{BindAddr: "127.0.0.1", APIPort: &port, APIKey: key})
+		if err != nil {
 			return err
 		}
 		if _, err := fmt.Fprintf(e.Out, "Wrote the [server] section of %s: 127.0.0.1, port %d, an API key.\n", docPath, port); err != nil {
 			return err
+		}
+		if tightened {
+			if _, err := fmt.Fprintf(e.Out, "%s was readable by others (mode %04o); now mode %04o, since it holds the API key.\n", docPath, was, was&^0o077); err != nil {
+				return err
+			}
 		}
 	}
 	if !keyOnDisk {
@@ -288,8 +294,9 @@ func serverText(s docbankServer) string {
 
 // writeServer appends the section to existing and writes the result over path atomically, creating the folder. The new file is parsed
 // before it replaces the old one and must hold exactly the section after the old file's bytes.
-func writeServer(path, existing string, want docbankServer) error {
-	return appendSection(path, existing, "server", serverText(want), func(got docbankServer) bool {
+// The section holds the API key, so a file others can read is tightened (was is the mode it had, tightened whether it changed).
+func writeServer(path, existing string, want docbankServer) (was fs.FileMode, tightened bool, err error) {
+	return appendSection(path, existing, "server", serverText(want), true, func(got docbankServer) bool {
 		return got.APIPort != nil && *got.APIPort == *want.APIPort && got.APIKey == want.APIKey && got.BindAddr == want.BindAddr
 	})
 }

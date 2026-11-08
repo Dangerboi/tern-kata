@@ -133,11 +133,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The read at start, and after a gap the stream cannot resume, delivers only the agent's own actor's messages.
 - An Issue's list row no longer keeps the badge of a remote agent once the Issue shows none.
 - `tern-kata agent` asks the daemon its auth kind at start only when `--message-from` is given, so an agent started with only `--address-prefix` no longer waits on an unreachable daemon.
+- An agent for an Issue in a Project whose name starts with `--` starts instead of leaving a dead block: the Pane passes the agent wrapper its value flags as `--flag=value`.
 
 #### Attachments
 
 - `tern-kata docbank setup` recognises a running Docbank bound to `0.0.0.0` instead of calling its port in use by something else.
 - The restart command `tern-kata docbank setup` prints for you to run shell-quotes its `KATA_HOME`, `KATA_DB` and `KATA_POSTGRES_SCHEMA` values, so a path with a space or a quote pastes as it is.
+- The restart command `tern-kata docbank setup` prints works in PowerShell on Windows (`$env:KATA_HOME='…'; kata daemon restart`).
+- `tern-kata docbank setup` makes Docbank's `config.toml` owner-only when it adds the API key to it, and says so.
 
 #### Issues and Pages
 
@@ -147,6 +150,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The field card and sharing a Lane list refuse with "Daemon disconnected; reconnect before …" while the daemon is gone, as the other cards do, instead of ignoring enter or sending the write.
 - A label list that loads late no longer clears or replaces the error the New Issue card or a field card shows.
 - A Lane, filter, view or agent file that is a symlink (a dotfiles repo) is written through the link instead of being replaced by a regular file.
+  - A chain of links keeps every link, and a link loop is refused naming the file.
 
 #### Jobs and worker
 
@@ -158,6 +162,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A run held while a cancel was pending starts when you resume it; it used to be cancelled at launch instead.
 - A `run` request made as a run settles is no longer refused with "run … is not settled".
 - Retiring a Project, the pin check and resume work when the worker's state folder path contains `[`, `*` or `?`.
+- A step that prints a secret it was given no longer puts it in the run's summary, the step summary, a hold's detail or the journal: the worker writes values of 8 bytes or more as `***` there. The run folder's own output files keep what the step printed.
+- A secret read from an environment variable (`env = "GITHUB_TOKEN"`) reaches only the jobs that name it; every step of every Project used to inherit it.
+- A secret's `file` may start with `~\` on Windows, as `~/` already worked.
 
 #### Daemons and Federation
 
@@ -172,6 +179,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `tern-kata agent` refuses `--message-from`, `--forward-comments`, `--coordinator` and `--coordinating` without `--address-prefix` instead of ignoring them.
 - Bash and fish completion offer only `--issue` for `agents` and nothing for `team`, and fish offers `--as` only where a subcommand takes it.
 - `tern-kata team -- <ref>` takes a lone `--` as the end of flags, as the other subcommands do.
+- `--as` is refused where nothing reads it (the `views` forms other than `show`, and `worker upgrade`, `stop` and `edit`), and the usage lists it where it is read (`worker`, `worker init`, `worker doctor`).
+- `tern-kata docbank supervised` refuses the route flags (`--home`, `--daemon`, `--db`, `--schema`, `--server`) instead of ignoring them and answering for the default kata daemon.
+- `tern-kata docbank supervise on|off` says supervision was already on or off when nothing changed, instead of reporting a marker it did not remove or create.
+- The help names `VISUAL` beside `EDITOR` for Draft editing and `worker edit`, as tern-kata already reads it first.
 
 ## [0.9.0] - 2026-11-06
 

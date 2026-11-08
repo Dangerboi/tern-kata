@@ -222,7 +222,7 @@ var cardBindings = []Binding{
 	{Chord: "ctrl+space", Key: "ctrl+space", Action: CreateComplete, Help: "complete label", Mode: ModeCreate, ShowInFooter: true},
 	{Chord: "ctrl+d", Key: "ctrl+d", Action: ShowCalendar, Help: "calendar", Mode: ModeCreate, twin: true, ShowInFooter: true},
 	{Chord: "ctrl+o", Key: "ctrl+o", Action: SaveDraftAction, Help: "save Draft", Mode: ModeEditor, twin: true, ShowInFooter: true},
-	{Chord: "ctrl+e", Key: "ctrl+e", Action: ExternalEditorAction, Help: "$EDITOR", Mode: ModeEditor, twin: true, ShowInFooter: true},
+	{Chord: "ctrl+e", Key: "ctrl+e", Action: ExternalEditorAction, Help: "$VISUAL/$EDITOR", Mode: ModeEditor, twin: true, ShowInFooter: true},
 	{Chord: "ctrl+r", Key: "ctrl+r", Action: CycleReplyKind, Help: "reply kind", Mode: ModeEditor, twin: true},
 	{Chord: "ctrl+f", Key: "ctrl+f", Action: SendReplyAnyway, Help: "send reply anyway", Mode: ModeEditor, twin: true},
 	{Chord: "escape", Key: "esc", Action: CancelDraft, Help: "discard?", Mode: ModeEditor, ShowInFooter: true},

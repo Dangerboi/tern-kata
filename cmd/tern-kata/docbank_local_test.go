@@ -206,15 +206,20 @@ func TestDocbankSetupLocalKeepsEveryOtherByteOfDocbanksConfig(t *testing.T) {
 	f := newLocalFixture(t)
 	existing := "# mine\n[vault]\nname = \"x\" # keep"
 	f.writeDocbankConfig(t, existing)
-	if _, err := f.run(t, "", "--port", strconv.Itoa(freePort(t)), "--yes"); err != nil {
+	out, err := f.run(t, "", "--port", strconv.Itoa(freePort(t)), "--yes")
+	if err != nil {
 		t.Fatal(err)
 	}
 	got := f.docbankConfig(t)
 	if !strings.HasPrefix(got, existing+"\n\n[server]\n") {
 		t.Errorf("config.toml = %q", got)
 	}
-	if info, err := os.Stat(filepath.Join(f.dbHome, "config.toml")); err != nil || info.Mode().Perm() != 0o644 {
-		t.Errorf("an edited config.toml has mode %v, %v; want its own 0644", info, err)
+	// The appended section holds the API key, so a config.toml others can read is made owner-only, and the output says so.
+	if info, err := os.Stat(filepath.Join(f.dbHome, "config.toml")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("an edited config.toml has mode %v, %v; want 0600", info, err)
+	}
+	if !strings.Contains(out, "was readable by others (mode 0644); now mode 0600, since it holds the API key") {
+		t.Errorf("output does not say config.toml was tightened: %q", out)
 	}
 }
 

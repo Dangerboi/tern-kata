@@ -45,12 +45,11 @@ _tern_kata() {
 		recur) [[ $cur == -* ]] && words="%[2]s --stop --as" ;;
 		views)
 			if [[ $COMP_CWORD -eq 2 ]]; then
-				words="%[6]s --as"
+				words="%[6]s"
 			else
 				case ${COMP_WORDS[2]} in
 				show) [[ $cur == -* ]] && words="--json --as" ;;
-				add) [[ $cur == -* ]] && words="%[7]s --replace --as" ;;
-				rm) [[ $cur == -* ]] && words="--as" ;;
+				add) [[ $cur == -* ]] && words="%[7]s --replace" ;;
 				esac
 			fi
 			;;
@@ -68,7 +67,7 @@ _tern_kata() {
 			;;
 		docbank)
 			if [[ $cur == -* ]]; then
-				words="%[9]s"
+				[[ ${COMP_WORDS[2]} == setup ]] && words="%[9]s"
 			elif [[ $COMP_CWORD -eq 2 ]]; then
 				words="%[10]s"
 			elif [[ $COMP_CWORD -eq 3 && ${COMP_WORDS[2]} == supervise ]]; then
@@ -78,13 +77,13 @@ _tern_kata() {
 		completion) [[ $COMP_CWORD -eq 2 ]] && words="%[3]s" ;;
 		worker)
 			if [[ $COMP_CWORD -eq 2 ]]; then
-				words="%[4]s --takeover"
+				words="%[4]s --takeover --as"
 			else
 				case ${COMP_WORDS[2]} in
-				init) words="%[5]s" ;;
+				init) words="%[5]s --as" ;;
 				status) words="--json" ;;
 				stop) words="--now" ;;
-				resume | abandon | upgrade) [[ $cur == -* ]] && words="--as" ;;
+				doctor | resume | abandon) [[ $cur == -* ]] && words="--as" ;;
 				esac
 			fi
 			;;
@@ -114,7 +113,9 @@ func fishCompletion() string {
 	line("-n __fish_use_subcommand -f -a '%s'", strings.Join(subcommands, " "))
 	line("-n __fish_use_subcommand -l issue -r -d 'open this Issue first'")
 	line("-n __fish_use_subcommand -l as -r -d 'author for edits'")
-	line("-n '__fish_seen_subcommand_from migrate-attachments recur views worker message' -l as -r -d 'author for edits'")
+	line("-n '__fish_seen_subcommand_from migrate-attachments recur message' -l as -r -d 'author for edits'")
+	line("-n '__fish_seen_subcommand_from views; and __fish_seen_subcommand_from show' -l as -r -d 'author for edits'")
+	line("-n '__fish_seen_subcommand_from worker; and not __fish_seen_subcommand_from add edit upgrade status stop supervised' -l as -r -d 'author for edits'")
 	line("-l version -d 'print the version and exit'")
 	line("-s h -l help -d 'print the help and exit'")
 	line("-n '__fish_seen_subcommand_from migrate-attachments recur run views completion worker update agent agents team message' -f")
@@ -123,7 +124,7 @@ func fishCompletion() string {
 	fishTableFlags(line, agentFlags, "agent; and not contains -- -- (commandline -opc)") // after the lone -- the words are the command's, which bash completion leaves alone too
 	line("-n '__fish_seen_subcommand_from docbank; and not __fish_seen_subcommand_from %[1]s' -f -a '%[1]s'", strings.Join(docbankForms, " "))
 	line("-n '__fish_seen_subcommand_from supervise; and not __fish_seen_subcommand_from on off' -f -a 'on off'")
-	fishTableFlags(line, docbankFlags, "docbank")
+	fishTableFlags(line, docbankFlags, "setup")
 	line("-n '__fish_seen_subcommand_from update' -l force -d 'install even when a check refuses'")
 	line("-n '__fish_seen_subcommand_from update' -l pause -d 'wait for Enter after a success'")
 	line("-n '__fish_seen_subcommand_from completion' -a '%s'", strings.Join(completionShells, " "))

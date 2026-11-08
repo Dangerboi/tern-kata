@@ -156,7 +156,7 @@ func TestStartingATeamRunsTheCoordinatorAndRecordsTheTeam(t *testing.T) {
 		t.Fatal(got.Err)
 	}
 	line := h.runLines()
-	if len(line) != 1 || !strings.Contains(line[0], "--coordinating") || strings.Contains(line[0], "--coordinator ") || !strings.HasPrefix(line[0], "split 7 right") {
+	if len(line) != 1 || !strings.Contains(line[0], "--coordinating") || strings.Contains(line[0], "--coordinator=") || !strings.HasPrefix(line[0], "split 7 right") {
 		t.Fatalf("coordinator ran %q", line)
 	}
 	team := h.team()
@@ -208,7 +208,7 @@ func TestATeamStartsTheLimitAsBackgroundChildrenAndTheNextWhenOneExits(t *testin
 	}
 	lines := h.runLines()
 	for _, line := range lines[1:] {
-		if !strings.HasPrefix(line, "new session kata agents") || !strings.Contains(line, "--coordinator "+coordinator.Address+" ") || strings.Contains(line, "--coordinating") {
+		if !strings.HasPrefix(line, "new session kata agents") || !strings.Contains(line, "--coordinator="+coordinator.Address+" ") || strings.Contains(line, "--coordinating") {
 			t.Errorf("child ran %q", line)
 		}
 	}
@@ -469,15 +469,15 @@ func TestATeamsJSONRoundTripsAndEveryChangeStartsFromTheFileAsItIs(t *testing.T)
 func TestAgentCommandLinePassesTheTeamFlagsOnlyWithAnAddress(t *testing.T) {
 	has := func(line []string, flag string) bool { return slices.Contains(line, flag) }
 	child := AgentCommandLine("me", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", Coordinator: "dana/omp-7"}, AgentRoute{}, []string{"omp"}, "/p.md")
-	if i := slices.Index(child, "--coordinator"); i < 0 || child[i+1] != "dana/omp-7" || has(child, "--coordinating") {
+	if !slices.Contains(child, "--coordinator=dana/omp-7") || has(child, "--coordinating") {
 		t.Errorf("child %q", child)
 	}
 	coordinator := AgentCommandLine("me", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", Coordinating: true}, AgentRoute{}, []string{"omp"}, "/p.md")
-	if !has(coordinator, "--coordinating") || has(coordinator, "--coordinator") {
+	if !has(coordinator, "--coordinating") || hasFlag(coordinator, "--coordinator") {
 		t.Errorf("coordinator %q", coordinator)
 	}
 	bare := AgentCommandLine("me", "demo#ab12", AgentMessaging{Coordinator: "dana/omp-7", Coordinating: true}, AgentRoute{}, []string{"omp"}, "/p.md")
-	if has(bare, "--coordinator") || has(bare, "--coordinating") {
+	if hasFlag(bare, "--coordinator") || has(bare, "--coordinating") {
 		t.Errorf("without an address: %q", bare)
 	}
 }

@@ -266,7 +266,7 @@ func LoadConfig(path string) (Config, error) {
 	var c Config
 	meta, err := toml.DecodeFile(path, &c)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Config{}, fmt.Errorf("no worker config at %s; see the README's worker setup", path)
+		return Config{}, fmt.Errorf("no worker config at %s; see docs/guide/worker.md", path)
 	}
 	if err := c.checkDecoded(meta, err, path); err != nil {
 		return Config{}, err
@@ -461,6 +461,24 @@ func (p ProjectConfig) allowsSecret(name string) bool {
 	return slices.Contains(p.Secrets, name)
 }
 
+// secretEnvNames are the environment variables the [secrets] env sources read. A child inherits none of them: a job
+// gets only the secrets it names (ADR-0009), not every variable another job's or Project's secret came from. Names
+// are upper-cased when caseInsensitive (Windows).
+func (c Config) secretEnvNames(caseInsensitive bool) map[string]bool {
+	hidden := map[string]bool{}
+	for _, src := range c.Secrets {
+		if src.Env == "" {
+			continue
+		}
+		name := src.Env
+		if caseInsensitive {
+			name = strings.ToUpper(name)
+		}
+		hidden[name] = true
+	}
+	return hidden
+}
+
 func (c Config) readSecret(name string) (string, error) {
 	src, ok := c.Secrets[name]
 	if !ok {
@@ -533,8 +551,12 @@ func credentialAlias(s SecretSource) string {
 	return ""
 }
 
+// expandHome resolves a leading ~/ (and ~\ where that is the separator, as Windows users write it) to the home folder.
 func expandHome(path string) (string, error) {
 	rest, ok := strings.CutPrefix(path, "~/")
+	if !ok {
+		rest, ok = strings.CutPrefix(path, "~"+string(filepath.Separator))
+	}
 	if !ok {
 		return path, nil
 	}

@@ -59,4 +59,4 @@ A value that starts with `--` (a search for `--wip`, say) must be written `--sea
 - The write is guarded like the card's: a `views.toml` changed since it was read is refused and nothing is written.
 - `rm` refuses a fixed Collection and an unknown name.
 
-Exit status is `recur`'s: 0 on success, 1 on a refusal or a daemon failure (reason on stderr), 2 on a bad command line. `--as` and the refusal of an empty one are those of `recur` (see [Recurring Issues](recur.md)).
+Exit status is `recur`'s: 0 on success, 1 on a refusal or a daemon failure (reason on stderr), 2 on a bad command line. `--as` and the refusal of an empty one are those of `recur` (see [Recurring Issues](recur.md)); only `views show` takes `--as`, and the other forms refuse it.

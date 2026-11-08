@@ -166,9 +166,6 @@ func (k *Kata) Ping(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", apiError(err)
 	}
-	if r.JSON200 == nil {
-		return "", errors.New("kata daemon returned no version")
-	}
 	v := "v" + strings.TrimPrefix(r.JSON200.Version, "v")
 	if !semver.IsValid(v) {
 		return "", fmt.Errorf("cannot verify kata daemon version %q; the worker requires %s or newer", r.JSON200.Version, MinKataVersion)
@@ -199,9 +196,6 @@ func (k *Kata) Projects(ctx context.Context) ([]Project, error) {
 	if err != nil {
 		return nil, apiError(err)
 	}
-	if r.JSON200 == nil {
-		return nil, errors.New("kata daemon returned no Projects")
-	}
 	var out []Project
 	for _, p := range r.JSON200.Projects {
 		if p.DeletedAt == nil {
@@ -218,16 +212,13 @@ func (k *Kata) Project(ctx context.Context, id int64) (Project, error) {
 	if err != nil {
 		return Project{}, apiError(err)
 	}
-	if r.JSON200 == nil {
-		return Project{}, errors.New("kata daemon returned no Project")
-	}
 	return projectOf(r.JSON200.Project), nil
 }
 
 // PatchProjectMetadata writes patch only while the Project is still at revision (ADR-0003).
 func (k *Kata) PatchProjectMetadata(ctx context.Context, id, revision int64, actor string, patch map[string]any) error {
 	etag := `"rev-` + strconv.FormatInt(revision, 10) + `"`
-	r, err := call(ctx, k, false, func(ctx context.Context) (*g.PatchProjectMetadataResp, error) {
+	_, err := call(ctx, k, false, func(ctx context.Context) (*g.PatchProjectMetadataResp, error) {
 		return k.c.PatchProjectMetadataWithResponse(ctx, &g.PatchProjectMetadataRequestOptions{
 			PathParams: &g.PatchProjectMetadataPath{ProjectID: id},
 			Body:       &g.PatchProjectMetadataBody{Actor: actor, Patch: patch},
@@ -236,9 +227,6 @@ func (k *Kata) PatchProjectMetadata(ctx context.Context, id, revision int64, act
 	})
 	if err != nil {
 		return apiError(err)
-	}
-	if r.JSON200 == nil {
-		return errors.New("kata daemon returned no Project")
 	}
 	return nil
 }
@@ -257,9 +245,6 @@ func (k *Kata) Capabilities(ctx context.Context, projectID int64) (Capabilities,
 	if err != nil {
 		return Capabilities{}, apiError(err)
 	}
-	if r.JSON200 == nil {
-		return Capabilities{}, errors.New("kata daemon returned no capabilities")
-	}
 	return Capabilities{Features: r.JSON200.EventFeatures, ProjectUID: r.JSON200.ProjectUID}, nil
 }
 
@@ -273,9 +258,6 @@ func (k *Kata) Instance(ctx context.Context) (Instance, error) {
 	if err != nil {
 		return Instance{}, apiError(err)
 	}
-	if r.JSON200 == nil {
-		return Instance{}, errors.New("kata daemon returned no instance")
-	}
 	return Instance{UID: r.JSON200.InstanceUID, Actor: cronjobclient.Str(r.JSON200.Auth.Actor)}, nil
 }
 
@@ -285,9 +267,6 @@ func (k *Kata) Jobs(ctx context.Context, projectID int64) ([]cronjob.Job, error)
 	})
 	if err != nil {
 		return nil, apiError(err)
-	}
-	if r.JSON200 == nil {
-		return nil, errors.New("kata daemon returned no jobs")
 	}
 	jobs := make([]cronjob.Job, len(r.JSON200.Jobs))
 	for i, j := range r.JSON200.Jobs {
@@ -304,9 +283,6 @@ func (k *Kata) ShowRun(ctx context.Context, projectID int64, uid string) (cronjo
 	if err != nil {
 		return cronjob.Run{}, apiError(err)
 	}
-	if r.JSON200 == nil {
-		return cronjob.Run{}, errors.New("kata daemon returned no Run")
-	}
 	return cronjobclient.Run(r.JSON200.Run), nil
 }
 
@@ -318,9 +294,6 @@ func (k *Kata) Runs(ctx context.Context, projectID int64) ([]cronjob.Run, error)
 	})
 	if err != nil {
 		return nil, apiError(err)
-	}
-	if r.JSON200 == nil {
-		return nil, errors.New("kata daemon returned no Runs")
 	}
 	runs := make([]cronjob.Run, len(r.JSON200.Runs))
 	for i, run := range r.JSON200.Runs {
@@ -368,9 +341,6 @@ func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (cro
 	if err != nil {
 		return cronjob.Run{}, apiError(err)
 	}
-	if r.JSON200 == nil {
-		return cronjob.Run{}, errors.New("kata daemon returned no Run")
-	}
 	return cronjobclient.Run(r.JSON200.Run), nil
 }
 
@@ -410,9 +380,6 @@ func (k *Kata) CreateIssue(ctx context.Context, projectID int64, actor, key, tit
 	if err != nil {
 		return Issue{}, apiError(err)
 	}
-	if r.JSON200 == nil {
-		return Issue{}, errors.New("kata daemon returned no Issue")
-	}
 	i := r.JSON200.Issue
 	return Issue{ID: i.ID, UID: i.UID, ShortID: i.ShortID, Title: i.Title, Body: i.Body, Status: i.Status, ProjectID: i.ProjectID}, nil
 }
@@ -423,9 +390,6 @@ func (k *Kata) ShowIssue(ctx context.Context, projectID int64, uid string) (Issu
 	})
 	if err != nil {
 		return Issue{}, apiError(err)
-	}
-	if r.JSON200 == nil {
-		return Issue{}, errors.New("kata daemon returned no Issue")
 	}
 	i := r.JSON200.Issue
 	issue := Issue{ID: i.ID, UID: i.UID, ShortID: i.ShortID, Title: i.Title, Body: i.Body, Status: i.Status, ProjectID: i.ProjectID, Labels: i.Labels, Owner: cronjobclient.Str(i.Owner), Author: i.Author, Metadata: i.Metadata}
@@ -449,9 +413,6 @@ func (k *Kata) PlanningDates(ctx context.Context, projectID int64, issueUID stri
 	})
 	if err != nil {
 		return PlanningDates{}, apiError(err)
-	}
-	if r.JSON200 == nil {
-		return PlanningDates{}, errors.New("kata daemon returned no planning dates")
 	}
 	d := PlanningDates{Revision: r.JSON200.Revision}
 	if s := r.JSON200.ScheduledOn; s != nil {
@@ -607,9 +568,6 @@ func (k *Kata) Workflow(ctx context.Context, projectID int64, uid string) (Workf
 	})
 	if err != nil {
 		return Workflow{}, apiError(err)
-	}
-	if r.JSON200 == nil {
-		return Workflow{}, errors.New("kata daemon returned no workflow")
 	}
 	w := r.JSON200.Workflow
 	return Workflow{UID: w.UID, Name: w.Name, DefinitionEventUID: w.DefinitionEventUID, Deleted: w.DeletedAt != nil, WorkflowDefinition: cronjobclient.WorkflowDefinition(w.Definition)}, nil

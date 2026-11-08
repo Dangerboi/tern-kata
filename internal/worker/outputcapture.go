@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -387,7 +386,12 @@ func fileTail(path string, max int) string {
 	if err != nil {
 		return ""
 	}
-	raw, _ = lastWindow(raw, max)
+	return tailOf(string(raw), max)
+}
+
+// tailOf is the last max bytes of text, as trimmed valid UTF-8.
+func tailOf(text string, max int) string {
+	raw, _ := lastWindow([]byte(text), max)
 	return strings.TrimSpace(strings.ToValidUTF8(string(raw), ""))
 }
 
@@ -400,10 +404,6 @@ func stderrFallback(path string) string {
 	}
 	raw, atLineStart := lastWindow(raw, stderrTailBytes)
 	return plainText(string(dropPartialLine(raw, atLineStart)))
-}
-
-func commandTail1K(dir string) string {
-	return fileTail(filepath.Join(dir, "output.log"), 1024)
 }
 
 // readTailLine is the next line of an output for the tail scan. An agent_end line, recognised from its first bytes,

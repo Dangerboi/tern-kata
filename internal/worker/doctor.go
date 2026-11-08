@@ -80,7 +80,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 	if err != nil {
 		var fix string
 		if _, statErr := os.Stat(o.Dirs.ConfigPath()); errors.Is(statErr, fs.ErrNotExist) {
-			fix = "Create " + o.Dirs.ConfigPath() + " (the README's worker setup shows one)."
+			fix = "Create " + o.Dirs.ConfigPath() + " (docs/guide/worker.md shows one)."
 		}
 		add("FAIL", "config", err.Error(), fix)
 		return r

@@ -200,7 +200,7 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 		t.Fatalf("entry %+v", e)
 	}
 	extension := filepath.Join(dirs.State, OmpExtensionFolder, "tern-kata.ts")
-	want := []string{"split", "7", "right", "--cwd", fixturePath("/work/demo"), "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--address-prefix", "dana/omp", "--ref", "demo#ab12", "--", "omp", "-e", extension, "@" + e.PromptFile}
+	want := []string{"split", "7", "right", "--cwd", fixturePath("/work/demo"), "--json", "--", "tern-kata", "agent", "--as=me-agent", "--address-prefix=dana/omp", "--ref=demo#ab12", "--", "omp", "-e", extension, "@" + e.PromptFile}
 	if !slices.Equal(ran, want) {
 		t.Fatalf("ran %q, want %q", ran, want)
 	}
@@ -217,7 +217,7 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 	// W starts a tab, in the Binding's workspace, and without an actor the command still runs through `tern-kata agent` with the ref.
 	writeAgentFile(t, filepath.Join(dirs.Config, "agent.toml"), "")
 	as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentTab, IssueRef: "demo#cd34", ProjectName: "demo", Workspace: "/bound"}))
-	if len(ran) < 12 || !slices.Equal(ran[:11], []string{"new", "tab", "--cwd", "/bound", "--json", "--", "tern-kata", "agent", "--ref", "demo#cd34", "--"}) || ran[11] != "omp" {
+	if len(ran) < 11 || !slices.Equal(ran[:10], []string{"new", "tab", "--cwd", "/bound", "--json", "--", "tern-kata", "agent", "--ref=demo#cd34", "--"}) || ran[10] != "omp" {
 		t.Fatalf("W ran %q", ran)
 	}
 	as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentSplit, IssueRef: "demo#ef56", ProjectName: "demo", Workspace: "/bound"}))
@@ -247,7 +247,7 @@ func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnAgentAddressAndSaysWhy(
 		if got.Err != nil || got.Entry.Address != "" || got.Entry.NoAddress != c.want {
 			t.Errorf("%s: entry %+v, err %v; want no Agent address because %s", c.command, got.Entry, got.Err, c.want)
 		}
-		if slices.Contains(ran, "--address-prefix") || slices.Contains(ran, "-e") {
+		if hasFlag(ran, "--address-prefix") || slices.Contains(ran, "-e") {
 			t.Errorf("%s: ran %q, want no Agent address and no extension", c.command, ran)
 		}
 		text, err := os.ReadFile(got.Entry.PromptFile)
@@ -278,7 +278,7 @@ func TestAnOmpAgentWithTrustedExtensionInItsArgsLoadsTheExtensionThroughThatFlag
 		if n < 3 || ran[n-3] != "--trusted-extension" || ran[n-2] != extension || ran[n-1] != "@"+got.Entry.PromptFile || slices.Contains(ran, "-e") {
 			t.Errorf("%s: ran %q, want --trusted-extension %s before the prompt and no -e", command, ran, extension)
 		}
-		if !slices.Contains(ran, "--address-prefix") {
+		if !hasFlag(ran, "--address-prefix") {
 			t.Errorf("%s: ran %q, want an address prefix", command, ran)
 		}
 	}
@@ -1360,7 +1360,7 @@ func TestAgentConfigForwardCommentsIsOffUnlessSet(t *testing.T) {
 
 func TestAgentCommandLinePassesForwardCommentsOnlyWithAnAddress(t *testing.T) {
 	on := AgentCommandLine("me", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", ForwardComments: true}, AgentRoute{}, []string{"omp"}, "/p.md")
-	if want := []string{"tern-kata", "agent", "--as", "me", "--address-prefix", "dana/omp", "--forward-comments", "--ref", "demo#ab12", "--", "omp", "@/p.md"}; !slices.Equal(on, want) {
+	if want := []string{"tern-kata", "agent", "--as=me", "--address-prefix=dana/omp", "--forward-comments", "--ref=demo#ab12", "--", "omp", "@/p.md"}; !slices.Equal(on, want) {
 		t.Errorf("on: %q, want %q", on, want)
 	}
 	if line := AgentCommandLine("me", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp"}, AgentRoute{}, []string{"omp"}, "/p.md"); slices.Contains(line, "--forward-comments") {
@@ -1394,10 +1394,10 @@ func TestAgentConfigMessageFromIsPerProjectAndValidated(t *testing.T) {
 
 func TestAgentCommandLinePassesEveryMessageFromActorOnlyWithAnAddress(t *testing.T) {
 	line := AgentCommandLine("me", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", MessageFrom: []string{"dana-laptop", "eve"}}, AgentRoute{}, []string{"omp"}, "/p.md")
-	if want := []string{"tern-kata", "agent", "--as", "me", "--address-prefix", "dana/omp", "--message-from", "dana-laptop", "--message-from", "eve", "--ref", "demo#ab12", "--", "omp", "@/p.md"}; !slices.Equal(line, want) {
+	if want := []string{"tern-kata", "agent", "--as=me", "--address-prefix=dana/omp", "--message-from=dana-laptop", "--message-from=eve", "--ref=demo#ab12", "--", "omp", "@/p.md"}; !slices.Equal(line, want) {
 		t.Errorf("with an address: %q, want %q", line, want)
 	}
-	if line := AgentCommandLine("me", "demo#ab12", AgentMessaging{MessageFrom: []string{"eve"}}, AgentRoute{}, []string{"codex"}, "/p.md"); slices.Contains(line, "--message-from") {
+	if line := AgentCommandLine("me", "demo#ab12", AgentMessaging{MessageFrom: []string{"eve"}}, AgentRoute{}, []string{"codex"}, "/p.md"); hasFlag(line, "--message-from") {
 		t.Errorf("no address: %q holds --message-from", line)
 	}
 }
@@ -1421,8 +1421,8 @@ func TestStartingAnAgentRecordsAndPassesItsMessageFrom(t *testing.T) {
 	if got.Entry.MessageFrom != "dana-laptop" {
 		t.Errorf("entry message_from %q", got.Entry.MessageFrom)
 	}
-	if i := slices.Index(ran, "--message-from"); i < 0 || ran[i+1] != "dana-laptop" {
-		t.Errorf("ran %q, want --message-from dana-laptop", ran)
+	if !slices.Contains(ran, "--message-from=dana-laptop") {
+		t.Errorf("ran %q, want --message-from=dana-laptop", ran)
 	}
 	text, err := os.ReadFile(got.Entry.PromptFile)
 	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana", []string{"dana-laptop"}, model.TeamRole{}) {
@@ -1534,7 +1534,7 @@ func TestAgentStartedFromAPaneOnAnotherDaemonCarriesThePanesRoute(t *testing.T) 
 					want[i] = filepath.Join(os.Getenv("HOME"), ".kata")
 				}
 			}
-			want = append(append([]string{"new", "tab", "--cwd", "/bound", "--json", "--", "tern-kata", "agent"}, want...), "--ref", "demo#cd34", "--", "omp")
+			want = append(append([]string{"new", "tab", "--cwd", "/bound", "--json", "--", "tern-kata", "agent"}, want...), "--ref=demo#cd34", "--", "omp")
 			if len(ran) < len(want) || !slices.Equal(ran[:len(want)], want) {
 				t.Fatalf("ran %q, want a prefix %q", ran, want)
 			}
@@ -1769,7 +1769,7 @@ func TestRoutedAgentCarriesThePanesStorageButNeverADSNOnTheCommandLine(t *testin
 		t.Fatal(got.Err)
 	}
 	dsnFile := got.Entry.PromptFile + ".dsn"
-	want := []string{"tern-kata", "agent", "--home", filepath.Join(cwd, "rel-home"), "--db", filepath.Join(cwd, "rel.db"), "--schema", "kata_s", "--dsn-file", dsnFile, "--ref", "demo#cd34", "--", "omp"}
+	want := []string{"tern-kata", "agent", "--home", filepath.Join(cwd, "rel-home"), "--db", filepath.Join(cwd, "rel.db"), "--schema", "kata_s", "--dsn-file", dsnFile, "--ref=demo#cd34", "--", "omp"}
 	if i := slices.Index(ran, "tern-kata"); i < 0 || !slices.Equal(ran[i:i+len(want)], want) {
 		t.Fatalf("ran %q, want ... %q", ran, want)
 	}
@@ -2054,5 +2054,21 @@ func TestRunningAgentsAreTheMappedOnesTheSavedRelayHasNotShownExited(t *testing.
 	raw, _ := os.ReadFile(filepath.Join(dirs.State, AgentStatesFile))
 	if !strings.Contains(string(raw), `"block": "2"`) {
 		t.Fatalf("block 2's saved state was erased: %s", raw)
+	}
+}
+
+// hasFlag reports whether args hold flag, as a word of its own or as flag=value.
+func hasFlag(args []string, flag string) bool {
+	return slices.ContainsFunc(args, func(a string) bool { return a == flag || strings.HasPrefix(a, flag+"=") })
+}
+
+// A Project named like a flag (kata allows "--odd") puts "--" at the start of the ref; the wrapper takes a separate value that starts
+// with "--" for a missing one, so every value flag is written as --flag=value.
+func TestAgentCommandLineWritesValueFlagsAsOneWord(t *testing.T) {
+	m := AgentMessaging{AddressPrefix: "--odd/omp", MessageFrom: []string{"--eve"}, Coordinator: "--odd/omp-7"}
+	got := AgentCommandLine("--me", "--odd#12", m, AgentRoute{}, []string{"omp"}, "/p.md")
+	want := []string{"tern-kata", "agent", "--as=--me", "--address-prefix=--odd/omp", "--message-from=--eve", "--coordinator=--odd/omp-7", "--ref=--odd#12", "--", "omp", "@/p.md"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

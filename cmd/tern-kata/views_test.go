@@ -19,7 +19,7 @@ import (
 // views runs `tern-kata views args...` as main does, as actor amy.
 func (f subcommandFixture) views(t *testing.T, args ...string) (string, error) {
 	t.Helper()
-	plan, err := PlanLaunch(append([]string{"views", "--as", "amy"}, args...), func(string) (string, bool) { return "", false }, "test")
+	plan, err := PlanLaunch(append([]string{"views"}, args...), func(key string) (string, bool) { return "amy", key == "KATA_AUTHOR" }, "test")
 	if err != nil {
 		return "", err
 	}

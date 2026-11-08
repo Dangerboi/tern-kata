@@ -70,23 +70,28 @@ func Write(path string, dirMode fs.FileMode, token Token, next []byte) error {
 	}})
 }
 
-// resolveLink is the file a write to path must replace: the file a symlink (a dotfiles repo) points at, so the rename keeps the
-// link; where a dangling link points, so the target is created there; path itself otherwise.
+// resolveLink is the file a write to path must replace: the end of the chain of symlinks (a dotfiles repo) path starts, so
+// the rename keeps every link; where a dangling chain points, so the target is created there; path itself otherwise.
 func resolveLink(path string) (string, error) {
-	resolved, err := filepath.EvalSymlinks(path)
-	if err == nil {
-		return resolved, nil
-	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		return "", err
-	}
-	if dest, linkErr := os.Readlink(path); linkErr == nil {
+	start := path
+	for range 40 {
+		info, err := os.Lstat(path)
+		if errors.Is(err, fs.ErrNotExist) || err == nil && info.Mode()&fs.ModeSymlink == 0 {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		dest, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
 		if !filepath.IsAbs(dest) {
 			dest = filepath.Join(filepath.Dir(path), dest)
 		}
-		return dest, nil
+		path = dest
 	}
-	return path, nil
+	return "", fmt.Errorf("%s: too many levels of symbolic links", start)
 }
 
 const updateTries = 20

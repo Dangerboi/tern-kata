@@ -36,25 +36,25 @@ const AgentWrapperProgram = "tern-kata"
 func AgentCommandLine(actor, ref string, messaging AgentMessaging, route AgentRoute, command []string, promptFile string) []string {
 	line := []string{AgentWrapperProgram, "agent"}
 	if actor != "" {
-		line = append(line, "--as", actor)
+		line = append(line, "--as="+actor)
 	}
 	if messaging.AddressPrefix != "" {
-		line = append(line, "--address-prefix", messaging.AddressPrefix)
+		line = append(line, "--address-prefix="+messaging.AddressPrefix)
 		if messaging.ForwardComments {
 			line = append(line, "--forward-comments")
 		}
 		for _, actor := range messaging.MessageFrom {
-			line = append(line, "--message-from", actor)
+			line = append(line, "--message-from="+actor)
 		}
 		if messaging.Coordinator != "" {
-			line = append(line, "--coordinator", messaging.Coordinator)
+			line = append(line, "--coordinator="+messaging.Coordinator)
 		}
 		if messaging.Coordinating {
 			line = append(line, "--coordinating")
 		}
 	}
 	line = append(line, route.Args()...)
-	line = append(line, "--ref", ref, "--")
+	line = append(line, "--ref="+ref, "--")
 	line = append(line, command...)
 	line = append(line, messaging.ExtensionArgs...)
 	return append(line, "@"+promptFile)

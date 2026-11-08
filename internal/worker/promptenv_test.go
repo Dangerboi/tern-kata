@@ -12,6 +12,7 @@ func TestPromptEnv(t *testing.T) {
 		environ         []string
 		caseInsensitive bool
 		secrets         map[string]string
+		hidden          map[string]bool
 		want            []string
 	}{
 		{
@@ -41,6 +42,20 @@ func TestPromptEnv(t *testing.T) {
 			want:    []string{"KEEP=1", "KATA_AUTHOR=ann", "API_KEY=v"},
 		},
 		{
+			name:    "a variable a secret source reads is dropped, and the job's own secret is added back",
+			environ: []string{"KEEP=1", "GITHUB_TOKEN=gh", "OTHER=2"},
+			secrets: map[string]string{"GITHUB_TOKEN": "gh"},
+			hidden:  map[string]bool{"GITHUB_TOKEN": true},
+			want:    []string{"KEEP=1", "OTHER=2", "KATA_AUTHOR=ann", "GITHUB_TOKEN=gh"},
+		},
+		{
+			name:            "Windows compares a source's variable case-insensitively",
+			environ:         []string{"Github_Token=gh", "Path=C:\\bin"},
+			hidden:          map[string]bool{"GITHUB_TOKEN": true},
+			caseInsensitive: true,
+			want:            []string{"Path=C:\\bin", "KATA_AUTHOR=ann"},
+		},
+		{
 			name:    "names are case-sensitive off Windows",
 			environ: []string{"kata_ref=abcd", "Kata_Home=/k"},
 			want:    []string{"kata_ref=abcd", "Kata_Home=/k", "KATA_AUTHOR=ann"},
@@ -54,7 +69,7 @@ func TestPromptEnv(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := promptEnv(c.environ, "ann", c.secrets, c.caseInsensitive)
+			got := promptEnv(c.environ, "ann", c.secrets, c.hidden, c.caseInsensitive)
 			if !slices.Equal(got, c.want) {
 				t.Errorf("promptEnv = %q, want %q", got, c.want)
 			}
@@ -65,12 +80,12 @@ func TestPromptEnv(t *testing.T) {
 func TestChildEnvDropsInheritedIssueBinding(t *testing.T) {
 	t.Setenv("KATA_REF", "abcd")
 	t.Setenv("KATA_HOME", "/k")
-	for _, kv := range childEnv("ann", nil) {
+	for _, kv := range childEnv("ann", nil, nil) {
 		if strings.HasPrefix(kv, "KATA_REF=") {
 			t.Fatalf("childEnv kept %q", kv)
 		}
 	}
-	if !slices.Contains(childEnv("ann", nil), "KATA_HOME=/k") {
+	if !slices.Contains(childEnv("ann", nil, nil), "KATA_HOME=/k") {
 		t.Error("childEnv dropped KATA_HOME")
 	}
 }
@@ -80,13 +95,13 @@ func TestCommandEnvDropsReservedNamesByTheirCase(t *testing.T) {
 	j := &Journal{RunUID: "r1", ProjectName: "demo"}
 	secrets := map[string]string{"TOKEN": "s"}
 
-	got := commandEnv(environ, j, "/run", secrets, true)
+	got := commandEnv(environ, j, "/run", secrets, nil, true)
 	want := []string{"PATH=/bin", "TOKEN=s", "TERN_KATA_RUN=r1", "TERN_KATA_RUN_DIR=/run", "KATA_PROJECT=demo"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("case-insensitive: got %q, want %q", got, want)
 	}
 
-	got = commandEnv(environ, j, "/run", secrets, false)
+	got = commandEnv(environ, j, "/run", secrets, nil, false)
 	want = []string{"PATH=/bin", "kata_auth_token=x", "Tern_Kata_Run=old", "TOKEN=s", "TERN_KATA_RUN=r1", "TERN_KATA_RUN_DIR=/run", "KATA_PROJECT=demo"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("case-sensitive: got %q, want %q", got, want)
