@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -626,5 +628,38 @@ func TestAReconcileClearsTheMessageAtTheAddressOfARecordWithNoEntry(t *testing.T
 	}
 	if got := f.records(t); len(got) != 0 {
 		t.Errorf("records %v, want the entry-less one dropped", got)
+	}
+}
+
+func TestAFailedClearOfAnAgentAddressKeepsItsRecordForTheNextDrop(t *testing.T) {
+	f := newRecordFixture(t, "host = \"laptop\"\n")
+	hostID := f.hostID(t)
+	f.put(t, model.AgentRecord{Address: "dana/omp-31", Host: "laptop", HostID: hostID, Block: "31", Name: "claude", Actor: "dana", MessageFrom: []string{}})
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodGet || !strings.Contains(r.URL.Path, f.uid) {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"status":500,"error":{"code":"internal","message":"try again"}}`))
+		return true
+	}
+	records := map[string]json.RawMessage{}
+	for key, raw := range (issueFixture{kata: f.kata}).issue(t, f.uid).Metadata {
+		if _, _, ok := model.ParseAgentRecordKey(key); ok {
+			b, _ := json.Marshal(raw)
+			records[key] = b
+		}
+	}
+	f.kata.intercept.Store(&hook)
+	err := f.gateway.withDaemon(context.Background(), f.work, func(c *Client) error {
+		return c.dropAgentRecords(context.Background(), f.project.ID, f.uid, hostID, records, func(string, *model.AgentRecord) bool { return true })
+	})
+	f.kata.intercept.Store(nil)
+	if err == nil {
+		t.Fatal("drop answered nil, want the failed clear")
+	}
+	if left := f.records(t); len(left) != 1 {
+		t.Fatalf("records %+v, want the record kept for the next drop", left)
 	}
 }

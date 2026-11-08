@@ -179,11 +179,24 @@ type noRunError struct {
 	quarantined bool
 }
 
+// The wording of the two answers that say a uid names no run this worker can resume; cmd/tern-kata matches them by text, since
+// the answer crosses the socket as a string.
+const (
+	notARunUIDSuffix = " is not a run uid"
+	noRunPrefix      = "this worker has no run "
+)
+
+// AnsweredNoSuchRun reports whether err is the worker's own answer that a uid names no run it can resume.
+func AnsweredNoSuchRun(err error) bool {
+	msg := err.Error()
+	return strings.HasSuffix(msg, notARunUIDSuffix) || strings.HasPrefix(msg, noRunPrefix)
+}
+
 func (e *noRunError) Error() string {
 	if e.quarantined {
 		return fmt.Sprintf("run %s has a damaged journal, set aside in quarantine; run `tern-kata worker doctor`", e.uid)
 	}
-	return fmt.Sprintf("this worker has no run %s", e.uid)
+	return noRunPrefix + e.uid
 }
 
 func (w *Worker) ownRun(uid string) (*Journal, error) {

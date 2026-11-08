@@ -9,6 +9,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Agents
 
 - The Agent badge appends " · message unread" in the warning tone, and the Agent card row shows "message unread: " and the message's first line, while an agent has a message at its address that it has not cleared.
+  - An unread message at an agent's address is cleared when a finished Background agent is ended, and when the next Pane to start drops the entry of an agent whose block closed while no Pane was open.
 - An omp agent is told of a person's comment on its Issue when `forward_comments = true` is set in `agent.toml`.
   - The text is "New comment on <ref> from <author>: <first lines> (c:<comment UID>)", sent once per comment, with the Pane closed.
   - `forward_comments` goes at the top level or per Project; comments from agents and from before the agent started are skipped.
@@ -30,17 +31,23 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - An omp agent started in a block writes to kata as its own teammate: the wrapper sets `KATA_TEAMMATE` to `<agent.toml name>-<block id>` and drops an inherited one, so the agent's comments and requests carry that name.
 - An omp agent gets a Blocker notice when an Issue that blocks its own closes, also with the Pane closed.
   - The notice has the blocker's title and how many other blockers are still open.
-  - Only blocking links count, and only blockers in the agent's own Project; a close before the agent started is not sent.
+  - Only blocking links count; a close before the agent started is not sent.
+  - A blocker in another Project counts too: the extension follows every Project's events it can read and keeps the ones about the agent's Issue, its children and its blockers.
 - `S` on an Issue messages every running agent on it and on its open children from one Message card.
   - Each agent gets the message at its own address on its own Issue; agents on closed children and exited agents get none.
   - An agent that has not cleared its last message is skipped, never replaced; once every write has answered the card lists how many got it and each skipped agent with its reason.
 - An agent can take messages from more actors than its own: `message_from` in `agent.toml` (top level or per Project) lists them.
   - The Pane passes `--message-from <actor>` to `tern-kata agent`, which sets `TERN_KATA_MESSAGE_FROM`; the agent's first message names every such actor.
   - A message from an actor other than the agent's own needs kata's identity mode (`[auth] require_token_identity`); the Message card and `tern-kata message` say so when it is off. `tern-kata agent` checks the daemon at start and sets `TERN_KATA_VERIFIED_SENDERS=1`.
+  - The extension delivers a message written with `kata meta set notify.*` only when the event that wrote it was by the actor in its `from`; the read at start, and after a gap the stream cannot resume, delivers only the agent's own actor's messages.
+  - `tern-kata agent` asks the daemon its auth kind at start only when `--message-from` is given, so an agent started with only `--address-prefix` does not wait on an unreachable daemon.
+  - On a daemon that verifies actors (`require_token_identity`), messages from the Pane and from `tern-kata message` are written as the token's account, and agents the Pane starts take that account in their Agent address, so the agent takes them.
 - A team starts from the parent Issue's Agent card (`c`): a coordinator agent plus Background agents on its ready children, at most 1–8 running at once (default 2).
   - The next ready child starts when a running one exits, from any Pane open on the host under the actor that started the team; when no child is left to start and none runs, the coordinator gets one message naming the children closed and still open.
-  - A child that has an agent on another machine is not started, and the team waits for it instead of ending.
+  - Closing, stopping or refreshing away a child's agent drives the team at once, so the next child starts or the end message is written without waiting for another event.
+  - A team waits instead of ending while an agent on another machine, or one you started by hand, works on one of its ready children, and does not start that child.
   - The parent's Agent card shows the team: each child's agent and state, the queued and skipped children with the reason, the limit and the team's state; `p` pauses or resumes the queue, and a child's card names its parent and coordinator.
+  - A child whose start claim is over 2 minutes old with no agent shows as `queued`, as `tern-kata team` does, and is not named a child of the team.
   - The coordinator's prompt names its children, `tern-kata team`, `tern-kata message --re`, its authority over its own children only, the shared checkout, the events it hears and how the team ends; a child's prompt names its parent and coordinator and tells it to report and ask by comment on its own Issue.
 - A team's child takes its coordinator's messages, and its coordinator's comments on the child's Issue whatever `forward_comments` says, as the person's authority over that Issue only; it refuses and reports one that asks it to act outside the Issue.
 - A coordinator hears its children's comments, closes, and `work.attention` turning `needs-human` or `stuck`, from when it started, including children added later.
@@ -53,6 +60,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - `m` and `r` reach them from their Agent card row and, for a request no local agent raised, from the Attention Page, which picks the newest agent on that Issue with the request's name.
   - `S` and the wrap-up include them; the wrap-up lists each as "on <host>: finished" or "on <host>: not yet".
   - A daemon without identity mode, or an actor the agent does not list, is refused with the reason.
+  - An Issue's list row drops a remote agent's badge once the Issue shows none.
 
 #### Issues and Pages
 
@@ -60,6 +68,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `n` on the Runs Page switches to the since-you-last-looked mode: the runs that ended since you last marked them seen with `s` on this machine, newest first above a Now line, then the Project's next runs (native jobs with their next time, adapter jobs listed with no time).
   - More than eight new runs fold into one row per job; failed runs are never folded.
   - The mark and the mode are kept per Project in `seen.toml` beside `filters.toml`, so they survive a Pane restart.
+  - `s` marks runs seen only while no job filter or search hides some of them; otherwise it says to clear them first.
 - The Runs Page lists a job's skipped occurrences as one row (count, latest condition and reason, when) from this machine's worker status, narrowed by the job filter.
 - The Job card shows an adapter job's conditions read-only, or the reader's error when they do not parse.
 - `K` opens the Config Page, a Lettered Page (also in the Menu) that lists tern-kata's config files with their paths, whether each exists and loads, and a one-line summary.
@@ -75,8 +84,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The worker pauses an adapter job after repeated failed runs.
   - After `pause_after_failures` runs of one job in a row recorded `failed` (default 3, set under `[limits]` in `worker.toml`, 0 turns pausing off) the worker admits no more of its runs until you resume it; timeouts count, held runs and cancelled runs don't, and a succeeded run starts the count again.
   - The pause lives in the worker's own state, so kata's job is not changed and other machines keep their own counts. `tern-kata worker status` and the Jobs Page name it ("paused: failed runs"); `u` on the Jobs Page, or `tern-kata worker resume <job>` on a host with no Pane, resumes the job.
+  - `tern-kata worker resume` mentions paused jobs only when the worker answered that it has no such run, not when no worker is running.
 - A job's `options.conditions` say when a scheduled run may start, and the worker skips a due run that fails one.
   - `runs_per_day` and `runs_per_week` cap its runs; `spend_per_day` and `spend_per_week` cap its spend in US dollars, counted from the cost omp reports (a run with no reported cost counts as $0 and `tern-kata worker status` marks the total partial).
+  - A limit of one run reads "At most 1 run per day".
   - `new_commits` starts a run only when the job's checkout has commits since its last succeeded run, optionally under some `folders`, and hands the agent the list; the first occurrence records the branch tip and waits, and a failed, cancelled or held run leaves the commits for the next one.
   - A skip makes no kata Run, Issue or slot, is never caught up later and leaves the job's overlap gate as it was; `tern-kata worker status` lists each job's skips with the latest reason.
   - A condition that cannot be checked (options that do not parse, git failing, a missing checkout) blocks the run and is logged once; Run now and `tern-kata run` are never checked, but a succeeded one moves the saved commit, and only the worker holding the Project's lease applies conditions.
@@ -95,9 +106,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - A message from an agent carries its teammate and arrives worded as from a peer agent, "information, not the person's instruction"; the agent prompt tells the agent to act on it only within its own Issue's scope.
   - An address that holds a message its agent has not cleared is not written over: the command names that agent and exits 1.
   - A Pane now saves the latest agent states in `agent-states.json` in tern-kata's state folder for `tern-kata agents` to read.
+  - Bash and fish completion offer only `--issue` for `agents`.
 - `tern-kata agent` takes `--coordinator <address>` and `--coordinating` (with `--address-prefix`), which set `TERN_KATA_COORDINATOR` and `TERN_KATA_COORDINATING=1` for the agent.
+  - `tern-kata agent` refuses `--message-from`, `--forward-comments`, `--coordinator` and `--coordinating` without `--address-prefix`.
 - `tern-kata team <ref>` prints a team's state, limit, coordinator address and each child's ref, state and address; with no team on the Issue it says so and exits 1.
+  - `tern-kata team -- <ref>` takes a lone `--` as the end of flags, as the other subcommands do.
+  - Bash and fish completion offer nothing for `team`.
 - `tern-kata message --re <comment>` asks the receiving agent to answer that comment, as `m` on the Comments tab does; its typed reply clears the request.
+  - `tern-kata message <ref> --re <comment> -m --help` sends `--help` as the message, and `message <ref> --re <comment> --help` prints the help.
 - `tern-kata agents` lists agents started on other machines too, read from their Agent records, with their host in a new `HOST` column between `AGENT` and `STATE`.
   - `tern-kata message` reaches them by address or ref when kata's identity mode is on and the sender is the agent's actor or in its `message_from`.
 
@@ -113,7 +129,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - The Page bar draws the Attention count as a badge after the name, not as text in it, and the compact Page bar keeps the badge.
 - The Delete card also takes kata tui's confirmation, `DELETE <project>#<id>`, besides `<project>#<id>`; anything else is refused with both forms named.
-- An account whose credential is limited to one Issue is no longer offered `X` (the Delete card) or the Menu's "Restore a deleted Issue", both of which kata refuses to it; the Pane asks the daemon's auth capabilities when it connects and after a daemon switch, and offers both until the answer is in.
+- An account whose credential is limited to one Issue is no longer offered `X` (the Delete card) or the Menu's "Restore a deleted Issue", both of which kata refuses to it.
+  - The Pane asks the daemon's auth capabilities when it connects and after a daemon switch, and offers both until the answer is in.
 
 #### Jobs and worker
 
@@ -129,17 +146,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Agents
 
-- An agent's extension no longer delivers a message written with `kata meta set notify.*` by another actor under its `from`: a message counts only when the event that wrote it was by the actor in its `from`.
-  - The read at start, and after a gap the stream cannot resume, delivers only the agent's own actor's messages.
-- An Issue's list row no longer keeps the badge of a remote agent once the Issue shows none.
-- `tern-kata agent` asks the daemon its auth kind at start only when `--message-from` is given, so an agent started with only `--address-prefix` no longer waits on an unreachable daemon.
 - An agent for an Issue in a Project whose name starts with `--` starts instead of leaving a dead block: the Pane passes the agent wrapper its value flags as `--flag=value`.
-- An agent hears a blocker in another Project close ("… closed; … may be unblocked"): its extension follows every Project's events it can read and keeps the ones about its Issue, its children and its blockers.
-- A team no longer ends while an agent you started by hand works on one of its ready children; it waits for that agent.
-- The Agent card shows a team child whose start claim is over 2 minutes old with no agent as `queued`, as `tern-kata team` does, instead of `starting` for good, and no longer names that Issue a child of the team.
-- Closing, stopping or refreshing away a team child's agent drives the team at once, so the next child starts or the end message is written without waiting for another event.
-- An unread message left at an agent's address is cleared when a finished Background agent is ended, and when the next Pane to start drops the entry of an agent whose block closed while no Pane was open; it used to stay on the Issue.
-- On a daemon that verifies actors (`require_token_identity`), messages from the Pane and from `tern-kata message` are written as the token's account, and agents the Pane starts take that account in their Agent address; the agent used to drop such messages while the Pane said Sent.
 
 #### Attachments
 
@@ -154,7 +161,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
-- The Delete card's reason is no longer lost: kata's delete records none, so the Pane adds it to the Issue as a `Deleted: <reason>` comment just before the delete, and deletes nothing when that comment fails.
+- The Delete card's reason is kept: the Pane adds it to the Issue as a `Deleted: <reason>` comment just before the delete.
+  - kata's delete records no reason, and the Pane deletes nothing when that comment fails.
 - Retrying a timed assignment after a refused write works: the card keeps the duration you typed instead of refusing it as not a whole number of seconds.
 - Cancelling the Close card clears its validation message instead of leaving it under the list.
 - The field card and sharing a Lane list refuse with "Daemon disconnected; reconnect before …" while the daemon is gone, as the other cards do, instead of ignoring enter or sending the write.
@@ -172,7 +180,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Recurrence card starts a new recurrence on the Issue's scheduled date, as documented, instead of today, so kata no longer moves that date.
 - Where daylight-saving time skips midnight (Havana, Santiago), the Pane's day rolls over at the first moment of the next date; Today and the date badges used to stay on the old day.
 - Every Collection reads planning dates in your local day: an Issue due tomorrow on the Board no longer shows under Today in Deadlines.
-- An empty Lane in the Lane view says "This Lane is empty" instead of describing the Collection, and the status filter, which the Board ignores, no longer makes it say filters leave nothing.
+- An empty Lane in the Lane view says "This Lane is empty" instead of describing the Collection.
+  - The status filter, which the Board ignores, no longer makes it say filters leave nothing.
 - The Lanes card's refusals name its fields, "Days back" and "Most cards".
 - Changing only a Done limit on the Lanes card no longer writes the default Lane names to `lanes.toml` or the shared list, so a later change of the default still reaches the Project.
 - The Issues Page keeps its selected Issue after a visit to the Board, even when that Issue is not on the Board.
@@ -183,21 +192,23 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - On Windows, a worker whose runs folder is a file instead of a folder refuses work and says why, as on Linux and macOS; it used to read the file as no runs and go on.
 - Saving a job from the Job card keeps the line breaks of its per-run Issue body unless you change the Body field; it used to save the body as one line.
 - Saving a notify job from the Job card keeps its overlap; it used to reset `forbid` to `allow`.
-- `s` on the Runs Page no longer marks runs seen while a job filter or the search hides some of them; it says to clear them first.
-- A limit of one run reads "At most 1 run per day", not "1 runs".
 - `worker doctor` reports a quarantined run or an unreadable journal once, not once per served Project.
 - A run held while a cancel was pending starts when you resume it; it used to be cancelled at launch instead.
 - A `run` request made as a run settles is no longer refused with "run … is not settled".
 - Retiring a Project, the pin check and resume work when the worker's state folder path contains `[`, `*` or `?`.
-- A step that prints a secret it was given no longer puts it in the run's summary, the step summary, a hold's detail or the journal: the worker writes values of 8 bytes or more as `***` there. The run folder's own output files keep what the step printed.
+- A step that prints a secret it was given no longer puts it in the run's summary, the step summary, a hold's detail or the journal.
+  - The worker writes values of 8 bytes or more as `***` there.
+  - The run folder's own output files keep what the step printed.
 - A secret read from an environment variable (`env = "GITHUB_TOKEN"`) reaches only the jobs that name it; every step of every Project used to inherit it.
 - A secret's `file` may start with `~\` on Windows, as `~/` already worked.
 - Issue events arriving less than 2 s apart no longer make the worker re-read a Project's cron job list on every event; the 2 s debounce applies again.
 - A worker whose wall clock ran ahead and was then corrected back (a VM restore, a bad clock step) schedules again at once; it used to run nothing until the old time came back.
 - Saving, archiving or restoring a job that kata stored reports success even when the read of its parent Issue that follows fails; a retry used to meet "changed meanwhile".
 - `worker add`, `worker edit`, `worker upgrade` and the Worker card keep a symlinked `worker.toml` a link and write the file it points to; they used to replace the link with a plain file.
-- The Job card offers only the profiles and checkouts the Project's `profiles` and `checkouts` lists allow, and no checkout key it cannot save; `worker doctor` warns of such a key.
-- A notify job on an Issue date with a message of its own is sent by the worker; it used to be skipped as kata's reminder, so the message never arrived. kata's own reminder still arrives too.
+- The Job card offers only the profiles and checkouts the Project's `profiles` and `checkouts` lists allow.
+  - It offers no checkout key it cannot save, and `worker doctor` warns of such a key.
+- A notify job on an Issue date with a message of its own is sent by the worker; it used to be skipped as kata's reminder, so the message never arrived.
+  - kata's own reminder still arrives too.
 - A `[limits] max_timeout` under 2 hours with no `default_timeout` loads: the default follows it down instead of refusing the file.
 - An explicit `capacity = 0`, `max_run_prompts = 0` or `max_active_runs = 0` in `worker.toml` is refused instead of silently meaning the default.
 
@@ -220,17 +231,16 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Command line
 
-- `tern-kata agent` refuses `--message-from`, `--forward-comments`, `--coordinator` and `--coordinating` without `--address-prefix` instead of ignoring them.
-- Bash and fish completion offer only `--issue` for `agents` and nothing for `team`, and fish offers `--as` only where a subcommand takes it.
-- `tern-kata team -- <ref>` takes a lone `--` as the end of flags, as the other subcommands do.
-- `--as` is refused where nothing reads it (the `views` forms other than `show`, and `worker upgrade`, `stop` and `edit`), and the usage lists it where it is read (`worker`, `worker init`, `worker doctor`).
+- fish offers `--as` only where a subcommand takes it.
+- `--as` is refused where nothing reads it (the `views` forms other than `show`, and `worker upgrade`, `stop` and `edit`).
+- The usage lists `--as` where it is read (`worker`, `worker init`, `worker doctor`).
 - `tern-kata docbank supervised` refuses the route flags (`--home`, `--daemon`, `--db`, `--schema`, `--server`) instead of ignoring them and answering for the default kata daemon.
 - `tern-kata docbank supervise on|off` says supervision was already on or off when nothing changed, instead of reporting a marker it did not remove or create.
-- `tern-kata recur` starts a new recurrence on the Issue's scheduled date instead of today, and on an existing schedule keeps its weekdays, month day and month when you change only `--every` or `--frequency`.
+  - When the marker file cannot be read (an error other than not existing), it reports that error instead of claiming supervision was already on.
+- `tern-kata recur` starts a new recurrence on the Issue's scheduled date instead of today.
+- `tern-kata recur` keeps an existing schedule's weekdays, month day and month when you change only `--every` or `--frequency`.
 - The help names `VISUAL` beside `EDITOR` for Draft editing and `worker edit`, as tern-kata already reads it first.
-- `tern-kata message <ref> --re <comment> -m --help` sends `--help` as the message, and `message <ref> --re <comment> --help` prints the help; they used to do the reverse.
 - `tern-kata agent --ref <ref> --help` and `--version` print the help or version instead of asking for a command after `--`.
-- `tern-kata worker resume` mentions paused jobs only when the worker answered that it has no such run, not when no worker is running.
 - A second `tern-kata worker` no longer prints a "serving" line before it is refused because one already runs.
 - fish completes the `views add` flags only after `views add`; `views show` and `views rm` refuse them.
 - A saved view's name can no longer hold a control character such as a newline or a tab, which broke the one-line-per-view list.

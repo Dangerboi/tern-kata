@@ -115,7 +115,7 @@ func (w *Worker) handle(ctx context.Context, req Request) Response {
 	switch req.Op {
 	case OpRunDetail, OpResume, OpAbandon:
 		if _, err := ulid.ParseStrict(req.Run); err != nil {
-			return Response{Error: fmt.Sprintf("%q is not a run uid", req.Run)}
+			return Response{Error: fmt.Sprintf("%q%s", req.Run, notARunUIDSuffix)}
 		}
 	}
 	if _, known := whileStopping[req.Op]; known {

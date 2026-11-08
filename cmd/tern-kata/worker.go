@@ -210,7 +210,7 @@ func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 	}
 	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: verb, Run: uid, Actor: plan.Actor})
 	if err != nil {
-		if verb == "resume" && answeredNoSuchRun(err) {
+		if verb == "resume" && worker.AnsweredNoSuchRun(err) {
 			err = fmt.Errorf("%w; no job this worker paused is %q", err, uid)
 		}
 		return subcommandError{err}
@@ -231,14 +231,6 @@ func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 		_, err = fmt.Fprintf(out, "Run %s of job %q in Project %s abandoned: kata will record it cancelled and its slot is free.\n", t.RunUID, t.Job, t.Project)
 	}
 	return err
-}
-
-// answeredNoSuchRun reports whether err is the worker's own answer that uid names no run it can resume (not a run uid, or a
-// run it has no journal of), the only failures after which "no paused job has it either" is true. The answer crosses the
-// socket as text, so the wording is shared with internal/worker.
-func answeredNoSuchRun(err error) bool {
-	msg := err.Error()
-	return strings.HasSuffix(msg, " is not a run uid") || strings.HasPrefix(msg, "this worker has no run ")
 }
 
 // resumePausedJob is `worker resume <job>`: when ref names a job the worker paused after repeated failed runs (its uid, or
