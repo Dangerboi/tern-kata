@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -121,7 +122,7 @@ func (c *Client) activeDaemon(auth g.AuthInfoOut) (name, endpoint, authText stri
 	entry, named := c.entry, c.entry.Name != ""
 	endpoint = "local"
 	if c.kind == model.DaemonRemote {
-		endpoint = cmp.Or(entry.URL, os.Getenv("KATA_SERVER"), "remote")
+		endpoint = cmp.Or(entry.URL, os.Getenv("KATA_SERVER"), c.pinURL, "remote")
 	}
 	name = "local"
 	switch {
@@ -193,6 +194,9 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 		HasLastError:                wire.LastError != nil,
 		LastError:                   derefString(wire.LastError),
 	}
+	if wire.Embedding != nil {
+		spoke.Embedding = embeddingFields(*wire.Embedding)
+	}
 	if wire.AllowInsecure != nil {
 		spoke.AllowInsecure = *wire.AllowInsecure
 	}
@@ -204,6 +208,34 @@ func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {
 			FirstEventID: q.FirstEventID, LastEventID: q.LastEventID, CreatedAt: q.CreatedAt, Error: q.ErrorData})
 	}
 	return spoke
+}
+
+// embeddingFields is the spoke's embedding status as kata's FederationEmbeddingStatus.DisplayFields words it (kata's package is internal).
+func embeddingFields(s g.FederationEmbeddingStatus) []string {
+	fields := []string{"embedding: " + s.State}
+	if r := derefString(s.Reason); r != "" {
+		fields = append(fields, "embedding reason: "+r)
+	}
+	if e := derefString(s.LastError); e != "" {
+		fields = append(fields, "embedding last error: "+e)
+	}
+	if s.Producer != nil {
+		fields = append(fields, "embedding producer: "+s.Producer.ProducerInstanceUID,
+			fmt.Sprintf("embedding recipe: %s / %d dimensions", s.Producer.Recipe.Model, s.Producer.Recipe.Dimensions))
+	} else {
+		fields = append(fields, "embedding producer: none")
+	}
+	counts := map[string]int{}
+	for _, a := range s.Artifacts {
+		counts[a.State]++
+	}
+	fields = append(fields, fmt.Sprintf("embedding artifacts: generated=%d reused=%d incompatible=%d stored_unindexed=%d",
+		counts["generated"], counts["reused"], counts["incompatible"], counts["stored_unindexed"]))
+	inventory := fmt.Sprintf("embedding inventory: %d retained / %d limit", len(s.Artifacts), s.ArtifactLimit)
+	if s.Limited {
+		inventory += " (limited)"
+	}
+	return append(fields, inventory)
 }
 
 // displayCapabilities is kata's display spelling of a hub grant's capabilities: pull, push, lease (stored as claim), in that order.

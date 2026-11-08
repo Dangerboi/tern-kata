@@ -174,7 +174,7 @@ func startDraft(m Model, comment bool) Model {
 		if comment {
 			text = ""
 		}
-		m = putDraft(m, uid, Draft{Editor: NewTextEditor(text), ProjectID: issue.ProjectID, BaseText: issue.Body, BaseRevision: issue.Revision, Comment: comment})
+		m = putDraft(m, uid, Draft{Editor: NewTextEditor(normalizeLineBreaks(text)), ProjectID: issue.ProjectID, BaseText: issue.Body, BaseRevision: issue.Revision, Comment: comment})
 	}
 	m.EditorUID = uid
 	return m.focusDetail()
@@ -209,7 +209,11 @@ func sendDraft(m Model, force bool) (Model, []Cmd) {
 	}
 	draft.Saving = true
 	draft.Err = nil
-	cmd := SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: draft.Editor.Text, Comment: draft.Comment, Actor: m.Actor, ReplyTo: draft.ReplyTo, ReplyKind: draft.ReplyKind, Force: force}
+	text := draft.Editor.Text
+	if !draft.Comment && text == normalizeLineBreaks(draft.BaseText) {
+		text = draft.BaseText // the Draft opened with line breaks normalised; unedited, it saves the stored bytes, so kata sees no change
+	}
+	cmd := SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: text, Comment: draft.Comment, Actor: m.Actor, ReplyTo: draft.ReplyTo, ReplyKind: draft.ReplyKind, Force: force}
 	if draft.Comment {
 		request := cmd
 		request.BaseText, request.Force = "", false // kata fingerprints neither, so a resend that differs in them keeps its key

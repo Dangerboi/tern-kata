@@ -91,6 +91,10 @@ func runFederationLeave(m Model) (Model, []Cmd) {
 	if f.Leaving {
 		return m, nil
 	}
+	if m.Daemons.Switching != "" {
+		f.LeaveErr = errDaemonSwitching
+		return m, nil
+	}
 	f.Leaving, f.LeaveErr = true, nil
 	return m, []Cmd{LeaveFederation{Workspace: m.Workspace, Attempt: f.attempts.Ask(), Draft: f.Leave}}
 }

@@ -121,3 +121,26 @@ func TestDeadlinesMoveToTheNewDayAfterTheWakeWithoutADaemonEvent(t *testing.T) {
 func hasRead(cmds []model.Cmd) bool {
 	return slices.ContainsFunc(cmds, func(cmd model.Cmd) bool { _, ok := cmd.(model.ReadSnapshot); return ok })
 }
+
+func TestTheDayEndsAtTheFirstInstantOfTheNextDateWhereMidnightIsSkipped(t *testing.T) {
+	for _, tc := range []struct{ zone, day, next string }{
+		{"America/Havana", "2026-03-07", "2026-03-08"},
+		{"America/Santiago", "2026-09-05", "2026-09-06"},
+		{"America/Los_Angeles", "2026-03-08", "2026-03-09"},
+	} {
+		loc, err := time.LoadLocation(tc.zone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cal := model.NewPaneCalendar(tc.day, tc.zone, "")
+		noon, _ := time.ParseInLocation(time.DateOnly, tc.day, loc)
+		end := cal.DayEnds(noon.Add(12 * time.Hour))
+		if got := end.In(loc).Format(time.DateOnly); got != tc.next || end.Add(-time.Second).In(loc).Format(time.DateOnly) != tc.day {
+			t.Errorf("%s: day %s ends at %s; want the first instant of %s", tc.zone, tc.day, end.In(loc), tc.next)
+		}
+		_, cmds := loadFirst(model.Model{}, model.ProjectLoaded{}, model.SnapshotLoaded{LocalDate: tc.day, TimeZone: tc.zone})
+		if got := wakes(cmds); len(got) != 1 || !got[0].At.Equal(end) {
+			t.Errorf("%s: the wake is %+v, want one at %s", tc.zone, got, end)
+		}
+	}
+}

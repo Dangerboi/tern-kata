@@ -286,3 +286,25 @@ func TestPaneClosableFollowsConfirmQuit(t *testing.T) {
 		}
 	}
 }
+
+func TestEditDraftDropsTheNewlineAnEditorAppends(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake editors use sh")
+	}
+	for _, tt := range []struct{ name, original, script, want string }{
+		{"no-op save appends one", "abc", `printf '\n' >> "$1"`, "abc"},
+		{"empty original", "", `printf '\n' >> "$1"`, ""},
+		{"original already ended in a newline", "abc\n", `printf '\n' >> "$1"`, "abc\n\n"},
+		{"a real edit stays as typed", "abc", `printf 'd\n' >> "$1"`, "abcd\n"},
+		{"two added newlines keep the second", "abc", `printf '\n\n' >> "$1"`, "abc\n\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TMPDIR", t.TempDir())
+			got, kept := editDraft(model.OpenDraftEditor{Text: tt.original}, "x", fakeEditor(tt.script))
+			os.Remove(kept)
+			if got.Err != nil || got.Text != tt.want {
+				t.Errorf("text %q (err %v), want %q", got.Text, got.Err, tt.want)
+			}
+		})
+	}
+}

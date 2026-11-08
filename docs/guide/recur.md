@@ -16,11 +16,11 @@ tern-kata recur <ref> --stop                                  # existing Occurre
 |---|---|
 | `--frequency daily\|weekly\|monthly\|yearly` | How often it recurs |
 | `--every N` | Every N periods |
-| `--on mon,thu` | Weekdays |
-| `--day 15\|last\|"2nd tue"` | Day of the month |
-| `--month 1-12` | Month |
+| `--on mon,thu` | Weekdays; an Issue that already recurs keeps its weekdays when you don't give them |
+| `--day 15\|last\|"2nd tue"` | Day of the month; an Issue that already recurs keeps its day when you don't give one |
+| `--month 1-12` | Month; an Issue that already recurs keeps its month when you don't give one |
 | `--until DATE` or `--count N` | When it ends |
-| `--start DATE` | Start date; defaults to the Issue's scheduled date or today; an Issue that already recurs keeps its stored start |
+| `--start DATE` | Start date; defaults to the Issue's scheduled date (its day, when the date has a time) or today; an Issue that already recurs keeps its stored start |
 | `--zone <IANA>` | Time zone; defaults to this machine's IANA zone or UTC; an Issue that already recurs keeps its stored zone |
 | `--rule 'RRULE'` | A raw RRULE instead of the frequency flags |
 | `--stop` | Stop the recurrence; existing Occurrences stay |

@@ -232,7 +232,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
   A card with several Relationships shows every tag and takes the ring of the first of blocks this, blocked by this, parent, child, related. The selected card keeps its own ring and Done cards keep their muted ring. The highlight follows the selection and shows nothing without one.
 - The selected card also shows a **Relationships line**: `parent a1b2`, `6 children, 2 open` (counted from each child's status), `blocks c3d4` (open Issues only), `blocked by e5f6` (open blockers only) and `related g7h8`. A part with nothing in it is left out, and a card with no Relationships has no line. Ids are short inside the Project and `project#id` outside it, cut to three and "+N", and Issues the Board doesn't draw count.
 - Click an id to select that card and scroll it into view in its Lane (in the Lane view, the Pane switches to that Lane). If the Board doesn't draw it (filtered out, closed beyond Done) the click opens its detail beside the Lane view, and Esc goes back to the card you came from, then to the Lane view and the Board. An id of another Project switches the Pane to that Project's Board (or, when that Board doesn't draw the Issue, its Lane view with the detail), and Esc returns to where you came from. `^` selects the parent's card the same way, or leaves "<id> has no parent." when there is none.
-- An open card with a deadline or a scheduled date shows one **Date badge** in its id row, after the priority badge and before the Relationship tags, for the most pressing date, read as the Today, Upcoming and Deadlines Collections read it and compared as days in the Pane calendar. In order:
+- An open card with a deadline or a scheduled date shows one **Date badge** in its id row, after the priority badge and before the Relationship tags, for the most pressing date, read in the Pane calendar's zone on every Collection and compared as days in the Pane calendar. In order:
 
   | Date | Badge | Tone |
   |---|---|---|
@@ -244,7 +244,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
   | deadline after tomorrow | "due 10-24" | muted |
   | scheduled date after today | "scheduled tomorrow" or "scheduled 10-28" | muted |
 
-  A date in another year than today reads YYYY-MM-DD. Done cards and cards without dates have no badge. Before the Pane knows today's date the badge shows the earlier date plainly, muted ("due 2026-10-24"). The wording moves on at local midnight without a key. An open Issue row in the list shows the same badge, in the same tone, after its title; a row whose whole title, Agent badge and badge do not fit the list drops the badge (beside the detail only short titles keep it), and closed and undated rows have none.
+  A date in another year than today reads YYYY-MM-DD. Done cards and cards without dates have no badge. Before the Pane knows today's date the badge shows the earlier date plainly, muted ("due 2026-10-24"). The wording moves on at local midnight (the first instant of the next local date) without a key. An open Issue row in the list shows the same badge, in the same tone, after its title; a row whose whole title, Agent badge and badge do not fit the list drops the badge (beside the detail only short titles keep it), and closed and undated rows have none.
 - The selected card also shows a **Dates line**, "scheduled 2026-10-28 · due 2026-11-02", with an absent date left out and no line without dates. See [Dates](dates.md) for setting them.
 
 ### Lane view

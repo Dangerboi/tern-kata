@@ -138,10 +138,10 @@ func agentIssueRead(m Model, msg AgentIssueRead) (Model, []Cmd) {
 	return m, append(raised, ended...)
 }
 
-func agentClosed(m Model, msg AgentClosed) Model {
+func agentClosed(m Model, msg AgentClosed) (Model, []Cmd) {
 	if msg.Err != nil {
 		m.Notice = fmt.Sprintf("Cannot close the agent: %s", msg.Err)
-		return m
+		return m, nil
 	}
 	if msg.Kept {
 		// An agent the file does not call background is refused until the mapping shows it as one.
@@ -151,8 +151,12 @@ func agentClosed(m Model, msg AgentClosed) Model {
 			m.AgentClose.refused = append(slices.Clone(m.AgentClose.refused), msg.Block)
 		}
 	}
+	freed := m.freesTeamPlace(msg.Agents)
 	m.AgentMapping = msg.Agents
-	return m
+	if freed {
+		return driveTeams(m, false)
+	}
+	return m, nil
 }
 
 // StopAgent is the Agent card's Stop: it closes the agent's block with `tern close` and removes its entry and prompt file, whatever
@@ -237,12 +241,31 @@ func agentStopped(m Model, msg AgentStopped) (Model, []Cmd) {
 	if entry != nil && !msg.Gone {
 		handOff = m.stopHandOff(*entry)
 	}
+	freed := m.freesTeamPlace(msg.Agents)
 	m = m.noteGoneAgents(msg.Agents)
 	m.AgentMapping = msg.Agents
 	m.Agents = m.Agents.trimmed(m.agentMapped)
 	m.Notice = "Stopped " + stopped + "."
 	m, raised := raiseAgentAttention(m, false)
+	if freed {
+		var driven []Cmd
+		m, driven = driveTeams(m, false)
+		raised = append(raised, driven...)
+	}
 	return m, append(raised, handOff...)
+}
+
+// freesTeamPlace says next, agents.json as a close or a stop left it, no longer holds the agent of a child a team started: the
+// relay that sent the close also drove the teams, and that drive read agents.json before the entry went, so the team is driven again.
+func (m Model) freesTeamPlace(next []AgentEntry) bool {
+	for _, t := range m.Teams {
+		for _, c := range t.Children {
+			if c.Block != "" && m.agentMapped(c.Block) && !slices.ContainsFunc(next, func(e AgentEntry) bool { return e.Block == c.Block }) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // stopHandOff is the hand-off write for a stopped agent whose Issue is open, none otherwise; the labels are swapped only when the

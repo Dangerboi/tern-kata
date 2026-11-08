@@ -304,15 +304,22 @@ func (m Model) keepFresh(answer []AgentEntry, seq int64) ([]AgentEntry, Model) {
 }
 
 func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
+	freed := false
 	if msg.Err == nil {
 		var next []AgentEntry
 		next, m = m.keepFresh(msg.Agents, msg.Seq)
+		freed = m.freesTeamPlace(next)
 		m = m.noteGoneAgents(next)
 		m.AgentMapping = next
 		m.Agents = m.Agents.trimmed(m.agentMapped)
 	}
 	m.Agents.inFlight = false
 	m, raised := raiseAgentAttention(m, false)
+	if freed {
+		var driven []Cmd
+		m, driven = driveTeams(m, false)
+		raised = append(raised, driven...)
+	}
 	if msg.Err == nil && !m.Agents.again {
 		var followed []Cmd
 		m, followed = followBackground(m)

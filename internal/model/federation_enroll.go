@@ -859,8 +859,14 @@ func confirmFederationPreview(m Model) (Model, []Cmd) {
 	return runFederationEnroll(m)
 }
 
+// runFederationEnroll refuses while a daemon switch is out: the switch's answer starts the Pane over on another daemon and would drop
+// this run's answer with it, the recovery of a grant above all.
 func runFederationEnroll(m Model) (Model, []Cmd) {
 	f := &m.Federation
+	if m.Daemons.Switching != "" {
+		f.EnrollErr = errDaemonSwitching
+		return m, nil
+	}
 	f.Enrolling, f.EnrollErr = true, nil
 	return m, []Cmd{EnrollFederation{Workspace: m.Workspace, Attempt: f.attempts.Ask(), InstanceUID: strings.TrimSpace(f.InstanceUID), Draft: f.Draft}}
 }

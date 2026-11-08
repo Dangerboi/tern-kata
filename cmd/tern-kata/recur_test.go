@@ -212,3 +212,38 @@ func TestTheScheduleDefaultsComeFromTheStartGivenAndExplicitFlagsWin(t *testing.
 		})
 	}
 }
+
+func TestAnIssueMadeToRecurStartsOnItsScheduledDateAndKeepsIt(t *testing.T) {
+	f := newSubcommandFixture(t)
+	gateway := data.NewGateway(f.locate).WithHost(testHost)
+	defer gateway.Close()
+	saved := send(t, gateway, model.SetDatesCmd{Workspace: f.repo, UID: f.uid, Actor: "tester", ProjectID: f.projectID,
+		Changes: []model.DateChange{{Key: model.ScheduledKey, Label: "Scheduled", Value: "2031-12-01"}}}).(model.DatesResultMsg)
+	if saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	out, err := f.recur(t, "--frequency", "monthly")
+	if err != nil || !strings.Contains(out, "start 2031-12-01") {
+		t.Fatalf("stdout %q, err %v; want the start to be the Issue's scheduled date, 2031-12-01", out, err)
+	}
+}
+
+func TestChangingOnlyEveryKeepsTheStoredWeekdaysDayAndMonth(t *testing.T) {
+	f := newSubcommandFixture(t)
+	for _, tc := range []struct {
+		first, change []string
+		want          string
+	}{
+		{[]string{"--frequency", "weekly", "--on", "mon,thu", "--start", "2026-11-08"}, []string{"--frequency", "weekly", "--every", "2"}, "Every 2 weeks on Mon, Thu"},
+		{[]string{"--frequency", "monthly", "--day", "2nd tue", "--start", "2026-11-08"}, []string{"--frequency", "monthly", "--every", "2"}, "2nd Tuesday"},
+		{[]string{"--frequency", "yearly", "--month", "3", "--day", "15", "--start", "2026-11-08"}, []string{"--frequency", "yearly", "--every", "2"}, "15"},
+	} {
+		if out, err := f.recur(t, tc.first...); err != nil {
+			t.Fatalf("recur %v: %q, %v", tc.first, out, err)
+		}
+		out, err := f.recur(t, tc.change...)
+		if err != nil || !strings.Contains(out, tc.want) || strings.Contains(out, "Sun") {
+			t.Fatalf("recur %v after %v: stdout %q, err %v; want %q", tc.change, tc.first, out, err, tc.want)
+		}
+	}
+}

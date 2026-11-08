@@ -672,3 +672,16 @@ func TestATeamWithAChildHeldByAnotherHostDoesNotEnd(t *testing.T) {
 		t.Fatalf("team %+v, want it running while a child waits on another host's agent", team)
 	}
 }
+
+func TestATeamWithAReadyChildAPersonRunsAnAgentOnDoesNotEnd(t *testing.T) {
+	h := newTeamHost(t, 1)
+	h.startTeam(1)
+	seedAgent(t, h.dirs, model.AgentEntry{IssueUID: h.children[0], IssueRef: "demo#c1", Block: "900"})
+	got := h.drive(h.gateway)
+	if got.Err != nil || len(got.Started) != 0 {
+		t.Fatalf("drive %+v, want nothing started and no error", got)
+	}
+	if team := h.team(); team.State != model.TeamRunning {
+		t.Fatalf("team %+v, want it running while a person's agent works on the only child", team)
+	}
+}

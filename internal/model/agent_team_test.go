@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -187,5 +188,62 @@ func TestThePauseAnswerKeepsTheTeamsAndResumingDrivesTheQueue(t *testing.T) {
 	m, _ = model.Update(m, model.TeamPausedSet{ParentRef: "work#a", Paused: true, Err: errors.New(model.TeamEndingReason)})
 	if !strings.Contains(m.Notice, "Cannot pause the team on work#a") {
 		t.Errorf("notice %q", m.Notice)
+	}
+}
+
+func TestACardShowsAChildWhoseStartClaimExpiredAsQueuedLikeTheCommandLine(t *testing.T) {
+	m := teamModel()
+	m.Now = time.Now()
+	team := model.Team{ParentUID: "a", ParentRef: "work#a", Project: "work", State: model.TeamPaused, Limit: 1,
+		Children: []model.TeamChild{{UID: "c", Ref: "work#c", StartedAt: m.Now.Add(-time.Hour)}}}
+	m.Teams = []model.Team{team}
+	m.Snapshot.Links = []model.Link{{ID: 1, Type: "parent", FromIssueUID: "c", FromQualifiedID: "work#c", FromStatus: "open", ToIssueUID: "a"}}
+	rows := m.TeamRows(team)
+	if len(rows) != 1 || rows[0].UID != "c" || rows[0].State != model.TeamChildQueued {
+		t.Fatalf("card rows %+v, want the child once, queued", rows)
+	}
+	fresh := team
+	fresh.Children = []model.TeamChild{{UID: "c", Ref: "work#c", StartedAt: m.Now}}
+	if rows := m.TeamRows(fresh); len(rows) != 1 || rows[0].State != model.TeamChildStarting {
+		t.Errorf("card rows %+v, want a recent claim to read as starting", rows)
+	}
+}
+
+// teamChildClosing is a Pane that drives a team whose child "c" runs in block 31 and whose agent is still mapped.
+func teamChildClosing(t *testing.T) model.Model {
+	t.Helper()
+	m := drivingModel(t)
+	m, _ = model.Update(m, model.TeamsDriven{Teams: []model.Team{{ParentUID: "a", State: model.TeamRunning, Limit: 1,
+		Children: []model.TeamChild{{UID: "c", Block: "31"}}}}})
+	m.AgentMapping = append(m.AgentMapping, model.AgentEntry{IssueUID: "c", IssueRef: "work#c", Block: "31", Background: true, PaneBlock: "9"})
+	return m
+}
+
+func TestTheTeamsAreDrivenAgainWhenACloseAStopOrARefreshFreesAChildsPlace(t *testing.T) {
+	for name, msg := range map[string]model.Msg{
+		"AgentClosed":     model.AgentClosed{Block: "31"},
+		"AgentStopped":    model.AgentStopped{Block: "31"},
+		"AgentsRefreshed": model.AgentsRefreshed{},
+	} {
+		_, cmds := model.Update(teamChildClosing(t), msg)
+		if _, driven := agentCmd[model.DriveTeams](cmds); !driven {
+			t.Errorf("%s: cmds %#v, want the teams driven again", name, cmds)
+		}
+	}
+}
+
+func TestTheTeamsAreNotDrivenWhenAnAgentOfNoTeamChildGoes(t *testing.T) {
+	m := teamChildClosing(t)
+	m.AgentMapping = append(m.AgentMapping, model.AgentEntry{IssueUID: "x", IssueRef: "work#x", Block: "40", Background: true, PaneBlock: "9"})
+	keep := []model.AgentEntry{m.AgentMapping[len(m.AgentMapping)-2]}
+	for name, msg := range map[string]model.Msg{
+		"AgentClosed":     model.AgentClosed{Block: "40", Agents: keep},
+		"AgentStopped":    model.AgentStopped{Block: "40", Agents: keep},
+		"AgentsRefreshed": model.AgentsRefreshed{Agents: keep},
+	} {
+		_, cmds := model.Update(m, msg)
+		if _, driven := agentCmd[model.DriveTeams](cmds); driven {
+			t.Errorf("%s: cmds %#v, want no drive for an agent no team child runs", name, cmds)
+		}
 	}
 }

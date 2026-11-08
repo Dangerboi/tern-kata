@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -89,6 +90,9 @@ func clearDaemons(m Model) Model {
 	m.Daemons = DaemonsState{reads: d.reads.Discarded(), Switching: d.Switching, switches: d.switches}
 	return m
 }
+
+// errDaemonSwitching is why a federation run does not start while a daemon switch is out: the switch's answer would drop the run's.
+var errDaemonSwitching = errors.New("a daemon switch is still connecting; wait for it before changing federation")
 
 // switchSelectedDaemon is Enter: it connects this Pane to the daemon under the cursor. A switch already out is waited for.
 func switchSelectedDaemon(m Model) (Model, []Cmd) {

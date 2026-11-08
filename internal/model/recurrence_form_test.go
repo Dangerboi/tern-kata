@@ -531,3 +531,29 @@ func TestClearingAnEmptyFieldKeepsTheCardError(t *testing.T) {
 		})
 	}
 }
+
+func TestRecurrenceCardStartsOnTheScheduledDateKataKeepsOnlyInMetadata(t *testing.T) {
+	m := recurrenceBase()
+	m, _ = model.Update(m, model.DetailLoaded{UID: "parent", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "parent", Metadata: map[string]any{model.ScheduledKey: "2026-10-26T09:00:00Z"}}}})
+	_, cmds := saveRecurrence(openRecurrenceCard(m))
+	if len(cmds) != 1 || cmds[0].(model.CreateRecurrenceCmd).Start != "2026-10-26" {
+		t.Fatalf("sent %#v, want the start 2026-10-26", cmds)
+	}
+}
+
+func TestRecurFlagsThatDoNotSetTheDaysKeepTheStoredRulesDays(t *testing.T) {
+	target := func(rule string) model.RecurTarget {
+		return model.RecurTarget{UID: "p", Today: "2026-11-08", Zone: "UTC", Recurrence: &model.Recurrence{RecurrenceTerms: model.RecurrenceTerms{Rule: rule, Start: "2026-11-08", TimeZone: "UTC"}}}
+	}
+	for _, tc := range []struct{ stored, flags, want string }{
+		{"FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TH", "weekly 2", "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH"},
+		{"FREQ=MONTHLY;INTERVAL=1;BYDAY=2TU", "monthly 3", "FREQ=MONTHLY;INTERVAL=3;BYDAY=2TU"},
+		{"FREQ=YEARLY;INTERVAL=1;BYMONTH=3;BYMONTHDAY=15", "yearly 2", "FREQ=YEARLY;INTERVAL=2;BYMONTH=3;BYMONTHDAY=15"},
+	} {
+		freq, every, _ := strings.Cut(tc.flags, " ")
+		terms, err := target(tc.stored).Terms(map[string]string{"frequency": freq, "every": every})
+		if err != nil || terms.Rule != tc.want {
+			t.Errorf("%s with %s: rule %q, err %v; want %q", tc.stored, tc.flags, terms.Rule, err, tc.want)
+		}
+	}
+}

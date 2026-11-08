@@ -103,8 +103,8 @@ func (f RecurrenceFormState) EndText() string {
 func newRecurrenceForm(cal PaneCalendar, issue *Issue) RecurrenceFormState {
 	f := RecurrenceFormState{Open: true, Field: RecurrenceFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Frequency: Weekly, Every: "1", Month: 1,
 		Start: cal.Date, Zone: realZone(cal.Zone(), "UTC")}
-	if issue.ScheduledOnDate != nil && *issue.ScheduledOnDate != "" {
-		f.Start = *issue.ScheduledOnDate
+	if scheduled := IssueDate(issue.ScheduledOnDate, issue.Metadata, ScheduledKey); scheduled != "" {
+		f.Start = scheduled
 	}
 	if start, err := time.Parse(time.DateOnly, f.Start); err == nil {
 		f.Weekdays[start.Weekday()] = true

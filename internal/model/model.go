@@ -461,7 +461,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case TeamPausedSet:
 		return teamPausedSet(m, msg)
 	case AgentClosed:
-		m = agentClosed(m, msg)
+		return agentClosed(m, msg)
 	case AgentStopped:
 		return agentStopped(m, msg)
 	case AgentInterrupted:

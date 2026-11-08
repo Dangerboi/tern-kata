@@ -18,8 +18,8 @@ type CollectionDef struct {
 	Title      string
 	DaemonView string
 	Members    Membership
-	// Dated says the read needs the local calendar: the daemon projects planning dates into the zone, and a dated daemon view
-	// or Membership compares them with the day.
+	// Dated says the Collection is about planning dates: its daemon view or Membership compares them with the day, and
+	// `views` shows them. Every read is made in the local calendar either way.
 	Dated    bool
 	Grouping Grouping
 	Headings bool

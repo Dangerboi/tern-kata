@@ -423,6 +423,27 @@ func TestPopupCardSharedBehaviour(t *testing.T) {
 					}
 				}
 			})
+			t.Run(c.name+"/caret steps by grapheme", func(t *testing.T) {
+				for _, tt := range []struct {
+					typed string
+					keys  []string
+					want  string
+				}{
+					{"a🇯🇵", []string{"backspace"}, "a"},
+					{"a👨\u200d👩\u200d👧", []string{"backspace"}, "a"},
+					{"xe\u0301", []string{"left", "backspace"}, "e\u0301"},
+					{"e\u0301x", []string{"left", "left", "delete"}, "x"},
+					{"a🇯🇵b", []string{"left", "left", "delete"}, "ab"},
+				} {
+					m := typeKeys(focused(), model.KeyMsg{Text: tt.typed})
+					for _, k := range tt.keys {
+						m = typeKeys(m, model.KeyMsg{Chord: k})
+					}
+					if got := c.text(m, c.textField); got != tt.want {
+						t.Fatalf("%q then %v = %q, want %q", tt.typed, tt.keys, got, tt.want)
+					}
+				}
+			})
 			t.Run(c.name+"/clear", func(t *testing.T) {
 				m := typeKeys(focused(), model.KeyMsg{Text: "abc"}, model.KeyMsg{Chord: "ctrl+u"})
 				if got := c.text(m, c.textField); got != "" {

@@ -122,9 +122,7 @@ func (c *Client) ReadRecurTarget(ctx context.Context, cmd model.LoadRecurTarget)
 	out := model.RecurTarget{Ref: cmd.Ref, UID: target.issue.UID, ShortID: target.issue.ShortID, ProjectID: target.issue.ProjectID}
 	out.Today, out.Zone, _ = systemCalendar.Today()
 	if issue := detail.Selected.Issue; issue != nil {
-		if issue.ScheduledOnDate != nil {
-			out.ScheduledOnDate = *issue.ScheduledOnDate
-		}
+		out.ScheduledOnDate = model.IssueDate(issue.ScheduledOnDate, issue.Metadata, model.ScheduledKey)
 		if issue.RecurrenceID != nil {
 			if detail.Selected.Recurrence == nil {
 				return model.RecurTarget{}, model.ErrRecurrenceWithheld

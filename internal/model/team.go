@@ -39,6 +39,12 @@ type TeamChild struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
+// ClaimExpired says the child was recorded without a block for TeamPendingMaxAge or longer: a Pane died between the record and the
+// start, so the child counts as neither running nor started.
+func (c TeamChild) ClaimExpired(now time.Time) bool {
+	return c.Block == "" && now.Sub(c.StartedAt) >= TeamPendingMaxAge
+}
+
 type TeamChildRef struct{ Ref, Title string }
 
 // TeamRole is what an agent's prompt says of its team. A coordinator has Coordinating, the Project's open Children at the start

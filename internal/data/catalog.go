@@ -3,6 +3,7 @@ package data
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,30 @@ import (
 	"github.com/BurntSushi/toml"
 	oklogulid "github.com/oklog/ulid/v2"
 )
+
+// sameURL says whether two daemon URLs name one endpoint as the daemon does: the scheme and host in lower case, a default port
+// (80 for http, 443 for https) dropped, a trailing slash ignored.
+func sameURL(a, b string) bool { return canonicalURL(a) == canonicalURL(b) }
+
+func canonicalURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return strings.TrimRight(raw, "/")
+	}
+	u.Scheme = strings.ToLower(u.Scheme)
+	host := strings.ToLower(u.Hostname())
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	if port := u.Port(); port != "" && !(port == "80" && u.Scheme == "http") && !(port == "443" && u.Scheme == "https") {
+		host += ":" + port
+	}
+	u.Host = host
+	u.Path = strings.TrimRight(u.Path, "/")
+	u.RawPath = ""
+	return u.String()
+}
 
 // shortcut: kata's client lists the catalog (client.DaemonCatalog) and connects a local entry by name (client.Discover) but exposes no entry's url, token_env,
 // inline token, allow_insecure, home or instance_uid, and no [tui] preferences. tern-kata needs those to set a started agent's environment

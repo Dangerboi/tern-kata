@@ -89,7 +89,7 @@ var RecurFlagNames = []string{"frequency", "every", "on", "day", "month", "until
 // Terms reads the schedule flags of `recur` (names without dashes, values as typed) into the terms to send, through the
 // Recurrence card's own reading, so both refuse the same input with the same message. Defaults are the card's: weekly
 // on the start date's weekday, every 1, never ending; the start date is --start, else the Issue's scheduled date, else today (an Issue
-// that recurs keeps its start), and the weekday, day and month defaults come from it; the zone is the Pane's. --rule replaces the frequency flags.
+// that recurs keeps its start), and the weekday, day and month defaults come from it, or from the stored rule when there is one; the zone is the Pane's. --rule replaces the frequency flags.
 func (t RecurTarget) Terms(flags map[string]string) (RecurrenceTerms, error) {
 	issue := &Issue{UID: t.UID, ProjectID: t.ProjectID}
 	zone := t.Zone
@@ -108,6 +108,19 @@ func (t RecurTarget) Terms(flags map[string]string) (RecurrenceTerms, error) {
 		issue.ScheduledOnDate = &v
 	}
 	f := newRecurrenceForm(NewPaneCalendar(t.Today, zone, ""), issue)
+	if rec := t.Recurring(); rec != nil && !rec.Schedule().IsRaw() {
+		// Flags that do not set the weekdays, month or day keep the stored rule's.
+		s, stored := rec.Schedule(), changeRecurrenceForm(NewPaneCalendar(t.Today, zone, ""), issue, *rec)
+		if len(s.Weekdays) > 0 {
+			f.Weekdays, f.WeekdayAt = stored.Weekdays, stored.WeekdayAt
+		}
+		if s.Month > 0 {
+			f.Month = stored.Month
+		}
+		if s.Day != DayFromStart {
+			f.Day = stored.Day
+		}
+	}
 	if v, ok := flags["zone"]; ok {
 		f.Zone = v
 	}

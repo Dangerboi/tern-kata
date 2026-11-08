@@ -135,6 +135,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `tern-kata agent` asks the daemon its auth kind at start only when `--message-from` is given, so an agent started with only `--address-prefix` no longer waits on an unreachable daemon.
 - An agent for an Issue in a Project whose name starts with `--` starts instead of leaving a dead block: the Pane passes the agent wrapper its value flags as `--flag=value`.
 - An agent hears a blocker in another Project close ("… closed; … may be unblocked"): its extension follows every Project's events it can read and keeps the ones about its Issue, its children and its blockers.
+- A team no longer ends while an agent you started by hand works on one of its ready children; it waits for that agent.
+- The Agent card shows a team child whose start claim is over 2 minutes old with no agent as `queued`, as `tern-kata team` does, instead of `starting` for good.
+- Closing, stopping or refreshing away a team child's agent drives the team at once, so the next child starts or the end message is written without waiting for another event.
 
 #### Attachments
 
@@ -157,6 +160,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A daemon that accepts a request and never answers no longer leaves a card in Saving for good: each daemon call gives up after 30 seconds and reports that the outcome is unknown.
 - A delete whose reason comment fails no longer clears the Undo history: nothing was deleted.
 - A close whose answer was lost and resent no longer lets `u` undo an older, unrelated change; the Undo history is cleared instead.
+- Editing an Issue body that kata stores with CRLF line endings no longer leaves a stray carriage return in it, and a body saved unedited stays as stored.
+- Closing vi, vim or nano without a change no longer adds a trailing newline to a body or a blank line to a comment.
+- Backspace, Delete and the arrow keys move over a whole visible character (a flag, a family emoji, an accented letter) in Drafts and text fields; they used to split it.
+- The Recurrence card starts a new recurrence on the Issue's scheduled date, as documented, instead of today, so kata no longer moves that date.
+- Where daylight-saving time skips midnight (Havana, Santiago), the Pane's day rolls over at the first moment of the next date; Today and the date badges used to stay on the old day.
+- Every Collection reads planning dates in your local day: an Issue due tomorrow on the Board no longer shows under Today in Deadlines.
 
 #### Jobs and worker
 
@@ -181,6 +190,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The hub picker and the hub browser say a catalog daemon with an inline `token` has a token, as the active daemon's line already did.
 - A late Lane list from the daemon you just switched away from no longer replaces the new daemon's Lanes on the Board.
 - When creating a token ends in an unclear answer (a 5xx, a timeout), the Pane says the token may exist and to check the Credentials Page.
+- A `.kata.local.toml` `[server].url` pin shows its URL on the Federation Page and in the recovery join command, instead of "remote".
+- The hub step no longer offers the Pane's own daemon, and enrollment refuses it, when the Pane reached it through a url pin or `KATA_SERVER`.
+- An enrollment or leave no longer starts while a daemon switch is still connecting; the switch's answer used to drop the run's result, recovery token included.
+- Hub calls find the hub's catalog entry, and send its token, when the entry's URL differs only in scheme or host case, a default port or a trailing slash.
+- The spoke detail shows the embedding status (state, reason, last error, producer, recipe, artifact counts, inventory) above the Project, as kata tui does.
 
 #### Tern window
 
@@ -196,6 +210,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `--as` is refused where nothing reads it (the `views` forms other than `show`, and `worker upgrade`, `stop` and `edit`), and the usage lists it where it is read (`worker`, `worker init`, `worker doctor`).
 - `tern-kata docbank supervised` refuses the route flags (`--home`, `--daemon`, `--db`, `--schema`, `--server`) instead of ignoring them and answering for the default kata daemon.
 - `tern-kata docbank supervise on|off` says supervision was already on or off when nothing changed, instead of reporting a marker it did not remove or create.
+- `tern-kata recur` starts a new recurrence on the Issue's scheduled date instead of today, and on an existing schedule keeps its weekdays, month day and month when you change only `--every` or `--frequency`.
 - The help names `VISUAL` beside `EDITOR` for Draft editing and `worker edit`, as tern-kata already reads it first.
 
 ## [0.9.0] - 2026-11-06

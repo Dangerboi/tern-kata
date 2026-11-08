@@ -263,7 +263,7 @@ func (g *Gateway) dial(ctx, connectCtx context.Context, locate Locator, current,
 	catalog, catalogErr := ReadCatalog()
 	// The pin read serves every caller waiting on this dial and its result is cached: one caller's cancellation must not
 	// leave an unnamed client behind. resolveEntry bounds it by the deadline.
-	name, entry, err := resolveCatalogEntry(context.WithoutCancel(ctx), g.deadline, workspace, catalog, catalogErr, current)
+	name, entry, pinURL, err := resolveCatalogEntry(context.WithoutCancel(ctx), g.deadline, workspace, catalog, catalogErr, current)
 	if err != nil {
 		return nil, fmt.Errorf("daemon catalog: %w", err)
 	}
@@ -271,7 +271,7 @@ func (g *Gateway) dial(ctx, connectCtx context.Context, locate Locator, current,
 	if err != nil {
 		return nil, err
 	}
-	c.name, c.entry, c.deadline = name, entry, g.deadline
+	c.name, c.entry, c.pinURL, c.deadline = name, entry, pinURL, g.deadline
 	return c, nil
 }
 
@@ -290,30 +290,34 @@ func connectLocated(ctx context.Context, locate Locator, workspace string) (*Cli
 // so stays unnamed. A pin kata would refuse to resolve leaves the connection unnamed, so no entry's token is ever sent to another
 // daemon. It takes no lock: the pin read runs git.
 func resolveEntry(ctx context.Context, deadline time.Duration, workspace string, catalog Catalog, current string) (string, CatalogEntry) {
-	name, entry, _ := resolveCatalogEntry(ctx, deadline, workspace, catalog, nil, current)
+	name, entry, _, _ := resolveCatalogEntry(ctx, deadline, workspace, catalog, nil, current)
 	return name, entry
 }
 
 // resolveCatalogEntry is resolveEntry for a catalog that may have failed to read (catalogErr). It returns that error only where the
-// catalog decides the answer: kata never reads config.toml for KATA_SERVER or a [server].url pin, so neither fails on it.
-func resolveCatalogEntry(ctx context.Context, deadline time.Duration, workspace string, catalog Catalog, catalogErr error, current string) (string, CatalogEntry, error) {
+// catalog decides the answer: kata never reads config.toml for KATA_SERVER or a [server].url pin, so neither fails on it. A [server].url
+// pin's URL is the third result: the unnamed connection's endpoint.
+func resolveCatalogEntry(ctx context.Context, deadline time.Duration, workspace string, catalog Catalog, catalogErr error, current string) (string, CatalogEntry, string, error) {
 	if current != "" || os.Getenv("KATA_SERVER") != "" {
 		entry, _ := catalog.Entry(current)
 		if os.Getenv("KATA_SERVER") != "" {
 			catalogErr = nil
 		}
-		return current, entry, catalogErr
+		return current, entry, "", catalogErr
 	}
 	// Its own bounded context: the remainder of the connect's after locate and dial may be too short for git, and a failed
 	// tracked-file check inside a worktree would leave a valid pin unnamed.
 	pinCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 	pin, err := workspacePin(pinCtx, workspace)
-	if err != nil || pin.URL != "" {
-		return "", CatalogEntry{}, nil
+	if err != nil {
+		return "", CatalogEntry{}, "", nil
+	}
+	if pin.URL != "" {
+		return "", CatalogEntry{}, pin.URL, nil
 	}
 	if catalogErr != nil {
-		return "", CatalogEntry{}, catalogErr
+		return "", CatalogEntry{}, "", catalogErr
 	}
 	name := pin.Daemon
 	if name == "" {
@@ -321,9 +325,9 @@ func resolveCatalogEntry(ctx context.Context, deadline time.Duration, workspace 
 	}
 	entry, found := catalog.Entry(name)
 	if !found || pin.Daemon == "" && entry.Local && entry.Home == "" {
-		return "", CatalogEntry{}, nil
+		return "", CatalogEntry{}, "", nil
 	}
-	return name, entry, nil
+	return name, entry, "", nil
 }
 
 // workspacePin reads [server] of the .kata.local.toml kata honours for workspace (the working directory when empty), by kata's

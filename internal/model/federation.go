@@ -44,6 +44,8 @@ type FederationSpoke struct {
 	LastSuccessfulSyncAt, LastErrorAt    time.Time
 	LastError                            string
 	HasLastError                         bool
+	// Embedding is the spoke's embedding status as kata words it, one field per line; empty when the daemon reports none.
+	Embedding []string
 }
 
 // LoadFederation asks for the daemon's instance and federation status. Request numbers the asks: an answer to an older one is
@@ -338,26 +340,33 @@ func (s FederationSpoke) Footer() string {
 }
 
 func (s FederationSpoke) DetailLines() []string {
-	lines := []string{
-		oneLine(s.ProjectName),
-		"spoke name: " + s.SpokeLabel(),
-		"hub URL: " + oneLine(s.HubURL),
-		"hub project ID: " + strconv.FormatInt(s.HubProjectID, 10),
-		"hub project UID: " + dashLine(s.HubProjectUID),
-		"actor: " + dashLine(s.BoundActor),
-		"capabilities: " + oneLine(s.Capabilities),
-		"push enabled: " + strconv.FormatBool(s.PushEnabled),
-		"credential: " + dashLine(s.CredentialStatus),
-		"allow_insecure: " + strconv.FormatBool(s.AllowInsecure),
-		"",
-		"pull cursor: " + strconv.FormatInt(s.PullCursorEventID, 10),
-		"push cursor: " + strconv.FormatInt(s.PushCursorEventID, 10),
-		"pending push: " + strconv.FormatInt(s.PendingPushCount, 10),
-		"pending push high water: " + strconv.FormatInt(s.PendingPushHighWaterEventID, 10),
-		"pending claims: " + strconv.FormatInt(s.PendingClaimCount, 10),
-		"live claims: " + strconv.FormatInt(s.LiveClaimCount, 10),
-		"quarantine count: " + strconv.FormatInt(s.ActiveQuarantineCount, 10),
+	var lines []string
+	for _, field := range s.Embedding {
+		lines = append(lines, oneLine(field))
 	}
+	if len(lines) > 0 {
+		lines = append(lines, "")
+	}
+	lines = append(lines,
+		oneLine(s.ProjectName),
+		"spoke name: "+s.SpokeLabel(),
+		"hub URL: "+oneLine(s.HubURL),
+		"hub project ID: "+strconv.FormatInt(s.HubProjectID, 10),
+		"hub project UID: "+dashLine(s.HubProjectUID),
+		"actor: "+dashLine(s.BoundActor),
+		"capabilities: "+oneLine(s.Capabilities),
+		"push enabled: "+strconv.FormatBool(s.PushEnabled),
+		"credential: "+dashLine(s.CredentialStatus),
+		"allow_insecure: "+strconv.FormatBool(s.AllowInsecure),
+		"",
+		"pull cursor: "+strconv.FormatInt(s.PullCursorEventID, 10),
+		"push cursor: "+strconv.FormatInt(s.PushCursorEventID, 10),
+		"pending push: "+strconv.FormatInt(s.PendingPushCount, 10),
+		"pending push high water: "+strconv.FormatInt(s.PendingPushHighWaterEventID, 10),
+		"pending claims: "+strconv.FormatInt(s.PendingClaimCount, 10),
+		"live claims: "+strconv.FormatInt(s.LiveClaimCount, 10),
+		"quarantine count: "+strconv.FormatInt(s.ActiveQuarantineCount, 10),
+	)
 	for _, q := range s.ActiveQuarantines {
 		lines = append(lines, fmt.Sprintf("quarantine #%d: %s events %d-%d at %s: %s", q.ID, oneLine(q.Direction), q.FirstEventID, q.LastEventID,
 			q.CreatedAt.UTC().Format("2006-01-02 15:04:05Z"), oneLine(q.Error)))

@@ -1,8 +1,11 @@
 package model
 
 import (
+	"slices"
 	"strings"
 	"unicode/utf16"
+
+	"github.com/clipperhouse/uax29/v2/graphemes"
 )
 
 type TextSelection struct {
@@ -23,6 +26,37 @@ func len16(text string) int {
 		}
 	}
 	return length
+}
+
+// graphemeBounds are the offsets of text's grapheme cluster boundaries, 0 and the end included: in UTF-16 units when
+// utf16Units, else in runes.
+func graphemeBounds(text string, utf16Units bool) []int {
+	bounds := []int{0}
+	at := 0
+	for it := graphemes.FromString(text); it.Next(); {
+		if utf16Units {
+			at += len16(it.Value())
+		} else {
+			at += len([]rune(it.Value()))
+		}
+		bounds = append(bounds, at)
+	}
+	return bounds
+}
+
+// prevBound is the nearest boundary before p, 0 when there is none.
+func prevBound(bounds []int, p int) int {
+	i, _ := slices.BinarySearch(bounds, p)
+	return bounds[max(i-1, 0)]
+}
+
+// nextBound is the nearest boundary after p, the last one when there is none.
+func nextBound(bounds []int, p int) int {
+	i, found := slices.BinarySearch(bounds, p)
+	if found {
+		i++
+	}
+	return bounds[min(i, len(bounds)-1)]
 }
 
 func NewTextEditor(text string) TextEditor {
@@ -99,20 +133,9 @@ func (e TextEditor) Key(action Action, selectText bool) TextEditor {
 	}
 	units := utf16.Encode([]rune(e.Text))
 	pos := e.Cursor
-	previous := func(p int) int {
-		p = max(0, p-1)
-		if !boundary(units, p) {
-			p--
-		}
-		return p
-	}
-	next := func(p int) int {
-		p = min(len(units), p+1)
-		if !boundary(units, p) {
-			p++
-		}
-		return p
-	}
+	bounds := graphemeBounds(e.Text, true)
+	previous := func(p int) int { return prevBound(bounds, p) }
+	next := func(p int) int { return nextBound(bounds, p) }
 	switch action {
 	case EditorBackspace, EditorDelete:
 		from, to := min(e.Cursor, e.Anchor), max(e.Cursor, e.Anchor)
@@ -176,8 +199,8 @@ func (e TextEditor) Key(action Action, selectText bool) TextEditor {
 				pos = min(start+column, end)
 			}
 		}
-		if !boundary(units, pos) {
-			pos--
+		if !slices.Contains(bounds, pos) {
+			pos = prevBound(bounds, pos)
 		}
 	default:
 		return e

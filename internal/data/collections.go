@@ -11,16 +11,15 @@ import (
 )
 
 // ReadSnapshot is the one read of a Collection snapshot, for the first load, a Collection switch, a filter change and a live
-// refresh, in one daemon request: the snapshot's links carry the child counts. A dated Collection is asked for today's calendar
-// date; the result reports the calendar and holds the Collection's part of its daemon view's read. A matching ETag answers 304.
+// refresh, in one daemon request: the snapshot's links carry the child counts. Every read is asked for today's calendar
+// date, so no Collection reads kata's UTC-projected days; the result reports the calendar and holds the Collection's part
+// of its daemon view's read. A matching ETag answers 304.
 func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (model.SnapshotLoaded, error) {
 	date, zone, note := systemCalendar.Today()
 	result := model.SnapshotLoaded{Request: cmd.Request, Query: cmd.Query, LocalDate: date, TimeZone: zone, TimeZoneNote: note}
 	def := model.Collection{View: *cmd.Query.View}.Def()
 	query := wireQuery(cmd.Query, def.DaemonView)
-	if def.Dated {
-		query.LocalDate, query.TimeZone = &date, &zone
-	}
+	query.LocalDate, query.TimeZone = &date, &zone
 	options := &g.ReadUISnapshotRequestOptions{Query: &query}
 	if cmd.ETag != "" {
 		options.Header = &g.ReadUISnapshotHeaders{IfNoneMatch: &cmd.ETag}

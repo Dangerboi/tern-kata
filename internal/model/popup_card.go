@@ -890,7 +890,8 @@ func eraseText(value string, c *Caret, field Field, action Action) (string, bool
 	if at == 0 {
 		return value, false
 	}
-	return string(slices.Delete(runes, at-1, at)), true
+	from := prevBound(graphemeBounds(value, false), at)
+	return string(slices.Delete(runes, from, at)), true
 }
 
 // editText applies one key to a single-line text field called field, whose caret is c. The caret chords move
@@ -908,12 +909,13 @@ func editText(value string, c *Caret, field Field, bound bool, msg KeyMsg) (stri
 		if at == n {
 			return value, false
 		}
-		*c = Caret{field, n - at - 1}
-		return string(slices.Delete(runes, at, at+1)), true
+		to := nextBound(graphemeBounds(value, false), at)
+		*c = Caret{field, n - at - (to - at)}
+		return string(slices.Delete(runes, at, to)), true
 	case msg.Chord == "left":
-		*c = Caret{field, n - max(at-1, 0)}
+		*c = Caret{field, n - prevBound(graphemeBounds(value, false), at)}
 	case msg.Chord == "right":
-		*c = Caret{field, n - min(at+1, n)}
+		*c = Caret{field, n - nextBound(graphemeBounds(value, false), at)}
 	case msg.Chord == "home" || msg.Chord == "ctrl+a" || msg.Chord == "meta+a":
 		*c = Caret{field, n}
 	case msg.Chord == "end" || msg.Chord == "ctrl+e" || msg.Chord == "meta+e":

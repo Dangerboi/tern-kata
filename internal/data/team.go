@@ -335,9 +335,16 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 		}
 	}
 	var candidates []gen.IssueOut
+	// A ready child with an agent here (one a person started by hand) is not startable either, and it is not finished: the team
+	// waits for that agent instead of ending while it works.
+	localHeld := false
 	for _, c := range ready {
-		if childOf[c.UID] && c.ProjectID == t.ProjectID && !t.Started(c.UID) && !issueHasAgent(entries, cmd.Exited, c.UID) &&
-			model.RemoteHostOn(c.Metadata, hostID) == "" {
+		if !childOf[c.UID] || c.ProjectID != t.ProjectID || t.Started(c.UID) || model.RemoteHostOn(c.Metadata, hostID) != "" {
+			continue
+		}
+		if issueHasAgent(entries, cmd.Exited, c.UID) {
+			localHeld = true
+		} else {
 			candidates = append(candidates, c)
 		}
 	}
@@ -373,7 +380,7 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 		}
 		out.Started = append(out.Started, started.Entry)
 	}
-	if held || failed || remoteHeld {
+	if held || failed || remoteHeld || localHeld {
 		return nil
 	}
 	// Read the record again: children another Pane started are in it now.
@@ -582,7 +589,7 @@ func (c *Client) ResolveComment(ctx context.Context, cmd model.ResolveComment) (
 func settleClaims(t *model.Team, entries []model.AgentEntry, now time.Time) {
 	for j := range t.Children {
 		child := &t.Children[j]
-		if child.Block != "" || now.Sub(child.StartedAt) < model.TeamPendingMaxAge {
+		if !child.ClaimExpired(now) {
 			continue
 		}
 		if k := slices.IndexFunc(entries, func(e model.AgentEntry) bool {
@@ -591,7 +598,5 @@ func settleClaims(t *model.Team, entries []model.AgentEntry, now time.Time) {
 			child.Block = entries[k].Block
 		}
 	}
-	t.Children = slices.DeleteFunc(t.Children, func(child model.TeamChild) bool {
-		return child.Block == "" && now.Sub(child.StartedAt) >= model.TeamPendingMaxAge
-	})
+	t.Children = slices.DeleteFunc(t.Children, func(child model.TeamChild) bool { return child.ClaimExpired(now) })
 }

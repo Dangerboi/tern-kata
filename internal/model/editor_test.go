@@ -140,3 +140,41 @@ func TestDraftOpensTheFullStoredBodyIncludingParentSection(t *testing.T) {
 		t.Errorf("draft text %q, want %q", got, body)
 	}
 }
+
+func crlfModel(body string) model.Model {
+	issue := model.Issue{UID: "a", ProjectID: 2, Body: body, Revision: 7}
+	return withDetail(model.Model{Workspace: "/repo", SelectedUID: "a", Focus: model.ColumnDetail}, &model.IssueDetailData{Issue: &issue})
+}
+
+func TestDraftOpensStoredCRLFBodyNormalised(t *testing.T) {
+	m := crlfModel("ab\r\ncd")
+	for _, msg := range []model.Msg{model.KeyMsg{Chord: "e"}, model.KeyMsg{Chord: "up"}, model.KeyMsg{Chord: "end"}, model.KeyMsg{Chord: "X", Text: "X"}} {
+		m, _ = model.Update(m, msg)
+	}
+	if got := m.Drafts["a"].Editor.Text; got != "abX\ncd" {
+		t.Fatalf("typed at End of a CRLF line: %q", got)
+	}
+	if m.Drafts["a"].BaseText != "ab\r\ncd" {
+		t.Fatalf("BaseText must stay raw: %q", m.Drafts["a"].BaseText)
+	}
+}
+
+func TestDraftBackspaceOverStoredCRLF(t *testing.T) {
+	m := crlfModel("ab\r\ncd")
+	for _, msg := range []model.Msg{model.KeyMsg{Chord: "e"}, model.KeyMsg{Chord: "up"}, model.KeyMsg{Chord: "down"}, model.KeyMsg{Chord: "home"}, model.KeyMsg{Chord: "backspace"}} {
+		m, _ = model.Update(m, msg)
+	}
+	if got := m.Drafts["a"].Editor.Text; got != "abcd" {
+		t.Fatalf("backspace over a line break: %q", got)
+	}
+}
+
+func TestDraftUnchangedCRLFBodySavesStoredBytes(t *testing.T) {
+	m := crlfModel("ab\r\ncd")
+	m, _ = model.Update(m, model.KeyMsg{Chord: "e"})
+	_, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	want := []model.Cmd{model.SaveDraft{Workspace: "/repo", UID: "a", ProjectID: 2, BaseText: "ab\r\ncd", Text: "ab\r\ncd"}}
+	if !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("unchanged save: %#v", cmds)
+	}
+}

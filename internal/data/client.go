@@ -26,6 +26,8 @@ type Client struct {
 	// catalog's active_daemon, which a switch leaves where it was.
 	name  string
 	entry CatalogEntry
+	// pinURL is the endpoint a workspace's [server].url pin gave this unnamed connection, empty otherwise.
+	pinURL string
 	// deadline bounds the instance read that names the daemon's account; the data client has no HTTP timeout of its own: each one-shot call is bounded by the Gateway's callBudget. Zero reads
 	// as connectDeadline.
 	deadline time.Duration

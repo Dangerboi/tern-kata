@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/clipperhouse/uax29/v2 v2.7.0
 	github.com/doordash-oss/oapi-codegen-dd/v3 v3.76.5
 	github.com/mattn/go-runewidth v0.0.31
 	github.com/netresearch/go-cron v0.16.1
@@ -24,7 +25,6 @@ require (
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cenkalti/backoff/v7 v7.0.2 // indirect
-	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/danielgtaylor/huma/v2 v2.40.0 // indirect
 	github.com/dunglas/httpsfv v1.1.2 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect

@@ -45,9 +45,22 @@ func (c *Client) ListFederationHubs(_ context.Context, cmd model.LoadFederationH
 	}
 	loaded := model.FederationHubsLoaded{Request: cmd.Request}
 	for _, entry := range catalog.Daemons {
-		loaded.Hubs = append(loaded.Hubs, catalogHub(entry, entry.Name == c.name))
+		loaded.Hubs = append(loaded.Hubs, catalogHub(entry, c.isActive(entry)))
 	}
 	return loaded, nil
+}
+
+// isActive says whether the catalog entry is the daemon this client talks to: by name for a catalog connection, else (a url pin or
+// KATA_SERVER) by URL, as kata tui matches an unnamed connection.
+func (c *Client) isActive(entry CatalogEntry) bool {
+	if c.name != "" {
+		return entry.Name == c.name
+	}
+	if entry.Local || c.kind != model.DaemonRemote {
+		return false
+	}
+	_, endpoint, _ := c.activeDaemon(g.AuthInfoOut{})
+	return sameURL(entry.URL, endpoint)
 }
 
 func (c *Client) hubEntry(name string) (CatalogEntry, error) {
@@ -59,7 +72,7 @@ func (c *Client) hubEntry(name string) (CatalogEntry, error) {
 	switch {
 	case !ok:
 		return CatalogEntry{}, fmt.Errorf("daemon %q is not in kata's daemon catalog", name)
-	case entry.Name == c.name:
+	case c.isActive(entry):
 		return CatalogEntry{}, errors.New("active daemon cannot be selected as hub")
 	case entry.Local:
 		return CatalogEntry{}, errors.New("local hub targets cannot be used for federation enrollment; select a hub daemon with a spoke-reachable URL")

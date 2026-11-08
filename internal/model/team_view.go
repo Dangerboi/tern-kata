@@ -121,7 +121,7 @@ func TeamRows(t Team, entries []AgentEntry, states []AgentState, kids []TeamKid,
 	var rows []TeamRow
 	started := make(map[string]bool, len(t.Children))
 	for _, c := range t.Children {
-		if c.Block == "" && now.Sub(c.StartedAt) >= TeamPendingMaxAge {
+		if c.ClaimExpired(now) {
 			continue // neither running nor started
 		}
 		started[c.UID] = true

@@ -177,6 +177,20 @@ func editInTerminal(t *terminal, draft model.OpenDraftEditor, build func(editor,
 	return result, err
 }
 
+// dropEditorNewline undoes the final line break vi, vim and nano add on save: edited is original plus exactly one
+// line break, and original did not end in one. Any other edit stays as typed.
+func dropEditorNewline(original, edited string) string {
+	if strings.HasSuffix(original, "\n") || strings.HasSuffix(original, "\r") {
+		return edited
+	}
+	for _, br := range []string{"\n", "\r\n"} {
+		if edited == original+br {
+			return original
+		}
+	}
+	return edited
+}
+
 // editDraft round-trips the Draft text through a temp file edited by the command build returns for editor. It returns
 // the file's path only when the editor succeeded; the caller removes it once the text is safe.
 func editDraft(cmd model.OpenDraftEditor, editor string, build func(editor, file string) *exec.Cmd) (model.DraftEditorClosed, string) {
@@ -212,6 +226,6 @@ func editDraft(cmd model.OpenDraftEditor, editor string, build func(editor, file
 		result.Err = err
 		return result, ""
 	}
-	result.Text = string(text)
+	result.Text = dropEditorNewline(cmd.Text, string(text))
 	return result, file.Name()
 }

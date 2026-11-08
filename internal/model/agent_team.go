@@ -217,7 +217,12 @@ func (m Model) TeamRows(t Team) []TeamRow {
 		}
 	}
 	var rows, queued, others []TeamRow
+	started := make(map[string]bool, len(t.Children))
 	for _, c := range t.Children {
+		if c.ClaimExpired(m.Now) {
+			continue // neither running nor started: the child is queued or not ready below, as `tern-kata team` shows it
+		}
+		started[c.UID] = true
 		var agent *IssueAgent
 		for _, a := range m.IssueAgents(c.UID) {
 			if a.Block == c.Block && a.State != AgentExited {
@@ -228,7 +233,7 @@ func (m Model) TeamRows(t Team) []TeamRow {
 		rows = append(rows, startedChildRow(c, agent, true, status[c.UID] == "closed"))
 	}
 	for _, uid := range order {
-		if t.Started(uid) || status[uid] != "open" {
+		if started[uid] || status[uid] != "open" {
 			continue
 		}
 		var agent *IssueAgent

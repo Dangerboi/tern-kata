@@ -39,10 +39,17 @@ func (c PaneCalendar) Read(t, now time.Time) string {
 	return c.Stamp(t)
 }
 
-// DayEnds is local midnight of the day after the one now falls on; daylight-saving days are 23 or 25 hours long.
+// DayEnds is the first instant of the local date after the one now falls on: local midnight, or where daylight-saving time
+// skips midnight (Havana, Santiago) the first moment after the gap. Daylight-saving days are 23 or 25 hours long.
 func (c PaneCalendar) DayEnds(now time.Time) time.Time {
+	loc := c.location()
 	y, mo, d := c.in(now).Date()
-	return time.Date(y, mo, d+1, 0, 0, 0, 0, c.location())
+	end := time.Date(y, mo, d+1, 0, 0, 0, 0, loc)
+	// In a gap time.Date gives the instant before it, still on the old date.
+	for end.In(loc).Day() == d {
+		end = end.Add(15 * time.Minute)
+	}
+	return end
 }
 
 func (c PaneCalendar) EndOfDate() (time.Time, bool) {

@@ -138,7 +138,7 @@ func leaveHubError(err error) error {
 }
 
 // hubAdminClient is the client for a binding's hub. Its token is the one of the catalog entry whose URL is the hub's, ignoring a
-// trailing slash; that entry gives the token and nothing else, so the request goes to the binding's URL. Without a matching
+// trailing slash, the case of scheme and host and a default port (sameURL); that entry gives the token and nothing else, so the request goes to the binding's URL. Without a matching
 // entry the client sends no token, and allow_insecure is the binding's: the global token is never sent to a hub. With one, only
 // the entry's allow_insecure counts, since the binding's is what the spoke's daemon reports and the token is the user's.
 func hubAdminClient(ctx context.Context, hubURL string, bindingInsecure bool) (*client.Client, error) {
@@ -146,7 +146,7 @@ func hubAdminClient(ctx context.Context, hubURL string, bindingInsecure bool) (*
 	// An unreadable catalog leaves the hub unmatched; the hub then refuses the unauthenticated request in words the Pane shows.
 	catalog, _ := ReadCatalog()
 	for _, entry := range catalog.Daemons {
-		if !entry.Local && strings.TrimRight(entry.URL, "/") == want {
+		if !entry.Local && sameURL(entry.URL, want) {
 			return hubEntryClient(ctx, entry)
 		}
 	}
