@@ -29,7 +29,7 @@ ba_stop() {
   ba_daemon_pid=
   pkill -f -- "$ba_standin" 2>/dev/null || true
 }
-trap 'ba_status=$?; ba_stop; (exit $ba_status); cleanup' EXIT
+trap 'ba_status=$?; ba_stop; set +e; (exit $ba_status); cleanup' EXIT
 tern daemon --socket "$ba_sock" >"$tmp/ba-daemon.log" 2>&1 &
 ba_daemon_pid=$!
 for ((attempt = 0; attempt < 100; attempt++)); do
@@ -68,12 +68,12 @@ ba_wait_tabs --arg n "smoke#$ba_short" '[.[] | select(.name == $n)] | length == 
 ba_block=$(ba_tabs | jq -r --arg n "smoke#$ba_short" '.[] | select(.name == $n) | .blocks[0]')
 # Hidden: the session is not shown, so the block is not beside the Pane.
 ba_tern ls --json | jq -e '[.sessions[] | select(.name == "kata agents")][0].shown == false' >/dev/null
-# With no actor in agent.toml the block's command still runs through `tern-kata agent` with the Issue's ref (and no --as), then the
-# stand-in with the Issue's prompt file as omp's first message. The Pane runs with KATA_HOME set, so the wrapper also gets --home to
-# reach the Pane's daemon. The command is as the daemon lists it; the block's login shell resets PATH, so the wrapper is not run to
-# the stand-in here.
+# With no actor in agent.toml the block's command still runs through `tern-kata agent` with the Issue's ref (as --ref=, and no
+# --as), then the stand-in with the Issue's prompt file as omp's first message. The Pane runs with KATA_HOME set, so the wrapper
+# also gets --home to reach the Pane's daemon. The command is as the daemon lists it; the block's login shell resets PATH, so the
+# wrapper is not run to the stand-in here.
 ba_command=$(ba_tern ls --json | jq -r --arg b "$ba_block" '[.sessions[].tabs[].blocks[] | select(.id == ($b | tonumber)) | .command][0]')
-[[ $ba_command == "tern-kata agent --home $KATA_HOME --ref 'smoke#$ba_short' -- $ba_standin @"*"/agent-prompts/prompt-"*".md" ]]
+[[ $ba_command == "tern-kata agent --home $KATA_HOME '--ref=smoke#$ba_short' -- $ba_standin @"*"/agent-prompts/prompt-"*".md" ]]
 # agents.json (the Agent mapping) holds the block as a background agent that is not open.
 jq -e --arg block "$ba_block" --arg uid "$ba_uid" '.agents | length == 1 and .[0].block == $block and .[0].issue_uid == $uid and .[0].background == true and .[0].open == false' \
   "$ba_state/tern-kata/agents.json" >/dev/null

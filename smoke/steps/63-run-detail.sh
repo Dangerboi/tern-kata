@@ -55,7 +55,7 @@ rd_stop() {
   rd_worker_pid=
   pkill -9 -f -- '--stub-hang-first' 2>/dev/null || true
 }
-trap 'rd_status=$?; rd_stop; (exit $rd_status); cleanup' EXIT
+trap 'rd_status=$?; rd_stop; set +e; (exit $rd_status); cleanup' EXIT
 rd_start_worker
 
 quit_app
