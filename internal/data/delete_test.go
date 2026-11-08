@@ -27,7 +27,6 @@ func (f *undoFixture) deleteIssue(uid, reason string) model.IssueDeleted {
 	return as[model.IssueDeleted](f.t, run(f.t, f.gateway, f.deleteCmd(uid, f.qualified(uid), reason)))
 }
 
-// listed says the Collection snapshot of the Project holds the Issue.
 func (f *undoFixture) listed(uid string) bool {
 	f.t.Helper()
 	view := "project"
@@ -200,13 +199,11 @@ func TestDeleteIsAcceptedOnlyWithKatasConfirmation(t *testing.T) {
 		}
 	}
 
-	// kata's own words reach the card.
 	got := as[model.IssueDeleted](t, run(t, f.gateway, f.deleteCmd(uid, "demo#nope", "")))
 	if got.Err == nil || !strings.Contains(got.Err.Error(), "X-Kata-Confirm header value does not match") || !strings.Contains(got.Err.Error(), "expected DELETE "+qualified) {
 		t.Errorf("refusal %v", got.Err)
 	}
 
-	// Without the header kata asks for it.
 	c, err := connect(context.Background(), f.kata.target())
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +235,6 @@ func TestADeletedIssueLeavesTheCollectionAndRestoreBringsItBackWithItsHistory(t 
 		t.Fatal("a deleted Issue is still in the Collection snapshot")
 	}
 
-	// It is read with deleted Issues included, by ULID and by short id.
 	_, issueShort, _ := strings.Cut(qualified, "#")
 	for name, got := range map[string]model.DeletedLooked{
 		"ULID":     f.lookup(uid, 0, true),
@@ -310,7 +306,6 @@ func TestUndoOfADeleteRestoresTheIssue(t *testing.T) {
 		t.Fatal("undo did not bring the Issue back")
 	}
 
-	// Undoing it again: the Issue is no longer deleted.
 	if again := f.undo(e); again.Result != model.UndoAlready || again.Err != nil {
 		t.Fatalf("second undo %+v, want already restored", again)
 	}

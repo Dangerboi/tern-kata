@@ -38,8 +38,8 @@ func TestARelayThatOmitsAMappedBlockLeavesItsStateAlone(t *testing.T) {
 		if len(m.Agents.Changes) != 0 {
 			t.Fatalf("an omitted block or a repeated state counted as a change: %+v", m.Agents.Changes)
 		}
-		if suspects, _ := suspectsOf(cmds); len(suspects) != 0 && !reflect.DeepEqual(suspects, []string{"7"}) {
-			t.Fatalf("suspects %v", suspects)
+		if suspects, _ := suspectsOf(cmds); !reflect.DeepEqual(suspects, []string{"7"}) {
+			t.Fatalf("suspects %v, want just the omitted block", suspects)
 		}
 		m, _ = model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping})
 		m, _ = relayed(m, model.AgentState{Block: "7", State: "working"}, model.AgentState{Block: "8", State: "idle"})
@@ -77,11 +77,10 @@ func TestOnlyOneRefreshIsOutAndTheNextRelayThatNeedsOneGetsItWhenTheAnswerIsIn(t
 	if want := []model.Cmd{model.RefreshAgents{Suspects: []string{"8"}, PaneBlock: "9", Seq: 2}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("after the answer: %#v, want %#v", cmds, want)
 	}
-	m, cmds = model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping})
+	_, cmds = model.Update(m, model.AgentsRefreshed{Agents: m.AgentMapping})
 	if len(cmds) != 0 {
 		t.Fatalf("an answer with nothing waiting asked again: %#v", cmds)
 	}
-	_ = m
 }
 
 func TestThePrunedBlocksStateAndEveryUnmappedUnlistedStateGoWithThem(t *testing.T) {
@@ -185,7 +184,8 @@ func TestAnAdoptedAgentGetsAttentionGoingBackAndAutoCloseFromThisPane(t *testing
 
 func TestThePruneAtStartCarriesThePanesBlock(t *testing.T) {
 	_, cmds := model.Update(model.Model{PaneBlock: "9"}, model.Start{Workspace: "/repo"})
-	if want := []model.Cmd{model.LoadProject{Workspace: "/repo"}, model.LoadViews{}, model.PruneAgents{Workspace: "/repo", PaneBlock: "9", Seq: 1}, model.LoadAuthCapabilities{Workspace: "/repo", Account: true}}; !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("cmds %#v", cmds)
+	prune, ok := agentCmd[model.PruneAgents](cmds)
+	if !ok || prune.Workspace != "/repo" || prune.PaneBlock != "9" {
+		t.Fatalf("cmds %#v, want a prune of /repo for Pane 9", cmds)
 	}
 }

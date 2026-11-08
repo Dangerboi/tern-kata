@@ -90,26 +90,6 @@ checkout = "/work/plain"
 	}
 }
 
-func TestAgentTomlRefusesWhatItCannotUse(t *testing.T) {
-	for name, c := range map[string]struct{ text, want string }{
-		"unknown key":         {"colour = \"red\"\n", "unknown key colour"},
-		"unknown project key": {"[projects.demo]\nbranch = \"x\"\n", "unknown key projects.demo.branch"},
-		"top level checkout":  {"checkout = \"/work\"\n", "unknown key checkout"},
-		"relative checkout":   {"[projects.demo]\ncheckout = \"work/demo\"\n", "not an absolute directory"},
-		"empty command":       {"command = []\n", "must name a program"},
-		"blank program":       {"[projects.demo]\ncommand = [\"\"]\n", "must name a program"},
-		"not toml":            {"actor = \n", "agent.toml"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			path := writeAgentFile(t, filepath.Join(t.TempDir(), "agent.toml"), c.text)
-			_, err := ReadAgentConfig(path)
-			if err == nil || !strings.Contains(err.Error(), c.want) || !strings.Contains(err.Error(), "agent.toml") {
-				t.Fatalf("error %v, want one naming agent.toml and %q", err, c.want)
-			}
-		})
-	}
-}
-
 func TestTheAgentDirectoryIsTheBindingThenAgentTomlThenWorkerToml(t *testing.T) {
 	dir := t.TempDir()
 	workerPath := writeAgentFile(t, filepath.Join(dir, "worker.toml"), `
@@ -143,33 +123,6 @@ name = "open"
 		if got, err := AgentDir("", c.project, AgentSettings{}, c.path); err == nil || !strings.Contains(err.Error(), "agent.toml") {
 			t.Errorf("%s: %q, %v; want a refusal naming agent.toml", c.project, got, err)
 		}
-	}
-}
-
-func TestAgentArgvBuilders(t *testing.T) {
-	line := AgentCommandLine("", "demo#ab12", AgentMessaging{}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
-	if want := []string{"tern-kata", "agent", "--ref", "demo#ab12", "--", "omp", "--fast", "@/state/p.md"}; !slices.Equal(line, want) {
-		t.Errorf("without an actor %q, want %q", line, want)
-	}
-	wrapped := AgentCommandLine("me-agent", "demo#ab12", AgentMessaging{}, AgentRoute{}, []string{"omp"}, "/state/p.md")
-	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--ref", "demo#ab12", "--", "omp", "@/state/p.md"}; !slices.Equal(wrapped, want) {
-		t.Errorf("with an actor %q, want %q", wrapped, want)
-	}
-	// An agent messages reach: the wrapper gets its Agent address up to the block id, omp loads the extension before the prompt.
-	messaging := AgentCommandLine("me-agent", "demo#ab12", AgentMessaging{AddressPrefix: "dana/omp", ExtensionArgs: []string{"-e", "/state/omp/tern-kata.ts"}}, AgentRoute{}, []string{"omp", "--fast"}, "/state/p.md")
-	if want := []string{"tern-kata", "agent", "--as", "me-agent", "--address-prefix", "dana/omp", "--ref", "demo#ab12", "--", "omp", "--fast", "-e", "/state/omp/tern-kata.ts", "@/state/p.md"}; !slices.Equal(messaging, want) {
-		t.Errorf("with messaging %q, want %q", messaging, want)
-	}
-	split := AgentSplitArgs("24489903521795", "/work/my repo", line)
-	if want := []string{"split", "24489903521795", "right", "--cwd", "/work/my repo", "--json", "--", "tern-kata", "agent", "--ref", "demo#ab12", "--", "omp", "--fast", "@/state/p.md"}; !slices.Equal(split, want) {
-		t.Errorf("split %q, want %q", split, want)
-	}
-	if got := AgentSplitArgs("", "/w", line); got[1] != "@focused" {
-		t.Errorf("a Pane that cannot name its block splits %q", got[1])
-	}
-	tab := AgentTabArgs("/work", wrapped)
-	if want := []string{"new", "tab", "--cwd", "/work", "--json", "--", "tern-kata", "agent", "--as", "me-agent", "--ref", "demo#ab12", "--", "omp", "@/state/p.md"}; !slices.Equal(tab, want) {
-		t.Errorf("tab %q, want %q", tab, want)
 	}
 }
 
@@ -267,6 +220,10 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 	if len(ran) < 12 || !slices.Equal(ran[:11], []string{"new", "tab", "--cwd", "/bound", "--json", "--", "tern-kata", "agent", "--ref", "demo#cd34", "--"}) || ran[11] != "omp" {
 		t.Fatalf("W ran %q", ran)
 	}
+	as[model.AgentStarted](t, run(t, g, model.StartAgent{Placement: model.AgentSplit, IssueRef: "demo#ef56", ProjectName: "demo", Workspace: "/bound"}))
+	if len(ran) < 2 || ran[1] != "@focused" {
+		t.Fatalf("a split from a Pane with no block ran %q", ran)
+	}
 }
 
 func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnAgentAddressAndSaysWhy(t *testing.T) {
@@ -324,9 +281,6 @@ func TestAnOmpAgentWithTrustedExtensionInItsArgsLoadsTheExtensionThroughThatFlag
 		if !slices.Contains(ran, "--address-prefix") {
 			t.Errorf("%s: ran %q, want an address prefix", command, ran)
 		}
-	}
-	if text, err := os.ReadFile(extension); err != nil || !bytes.Equal(text, ompext.Source) {
-		t.Fatalf("the extension file holds %d bytes, %v; want the embedded %d", len(text), err, len(ompext.Source))
 	}
 }
 
@@ -467,7 +421,6 @@ func TestPruningDropsTheEntriesTernNoLongerListsWithTheirPrompts(t *testing.T) {
 	if _, err := os.Stat(live); err != nil {
 		t.Errorf("a live entry's prompt file went: %v", err)
 	}
-	// When tern cannot be asked nothing is dropped.
 	g.runTern = func(context.Context, []string) ([]byte, error) { return nil, errors.New("exit status 1") }
 	failed := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{}))
 	if failed.Err == nil {
@@ -763,25 +716,6 @@ func TestFocusingAnAgentRunsTernFocusAndReportsItsOutput(t *testing.T) {
 	}
 }
 
-func TestTheBackgroundArgvBuilders(t *testing.T) {
-	line := []string{"omp", "@/p.md"}
-	for name, c := range map[string]struct{ got, want []string }{
-		"new session": {agentNewArgs(false, launchArgs("/work", line)...), []string{"new", "session", "kata agents", "--cwd", "/work", "--json", "--", "omp", "@/p.md"}},
-		"new tab":     {agentNewArgs(true, launchArgs("/work", line)...), []string{"new", "tab", "kata agents", "--cwd", "/work", "--json", "--", "omp", "@/p.md"}},
-		"rename":      {RenameAgentArgs("31", "demo#ab12"), []string{"rename", "31", "demo#ab12"}},
-		"open":        {MoveRightOfArgs("31", "7"), []string{"move", "31", "right-of", "7", "--json"}},
-		"open focus":  {MoveRightOfArgs("31", ""), []string{"move", "31", "right-of", "@focused", "--json"}},
-		"new-tab":     {MoveNewTabArgs("31"), []string{"move", "31", "new-tab", "--json"}},
-		"shell tab":   {agentNewArgs(true, "--json"), []string{"new", "tab", "kata agents", "--json"}},
-		"shell sess":  {agentNewArgs(false, "--json"), []string{"new", "session", "kata agents", "--json"}},
-		"close":       {CloseBlockArgs("40"), []string{"close", "40", "--json"}},
-	} {
-		if !slices.Equal(c.got, c.want) {
-			t.Errorf("%s: %q, want %q", name, c.got, c.want)
-		}
-	}
-}
-
 const lsWithAgents = `{"sessions":[{"id":1,"name":"main","shown":true,"tabs":[{"id":2,"blocks":[{"id":7}]}]},
 {"id":3,"name":"kata agents","shown":false,"tabs":[{"id":4,"name":"x#1","blocks":[{"id":18494129176578},{"id":55}]}]}]}`
 
@@ -815,13 +749,13 @@ func TestStartingABackgroundAgentUsesTheHiddenSessionAsItIs(t *testing.T) {
 		replies map[string]func() ([]byte, error)
 		want    []string
 	}{
-		"session exists": {lsWithAgents, "", map[string]func() ([]byte, error){"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new tab kata agents", "rename 31 demo#ab12"}},
-		"no session":     {lsWithoutAgents, "", map[string]func() ([]byte, error){"new session kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents", "rename 31 demo#ab12"}},
+		"session exists": {lsWithAgents, "", map[string]func() ([]byte, error){"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new tab kata agents --cwd /bound --json --", "rename 31 demo#ab12"}},
+		"no session":     {lsWithoutAgents, "", map[string]func() ([]byte, error){"new session kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents --cwd /bound --json --", "rename 31 demo#ab12"}},
 		"a race for the session": {lsWithoutAgents, lsWithAgents, map[string]func() ([]byte, error){
 			"new session kata agents": func() ([]byte, error) {
 				return []byte("tern new: a session is already called `kata agents`\n"), errors.New("exit status 1")
 			},
-			"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents", "ls --json", "new tab kata agents", "rename 31 demo#ab12"}},
+			"new tab kata agents": ternOut(`{"session":3,"tab":9,"block":31}`)}, []string{"ls --json", "new session kata agents --cwd /bound --json --", "ls --json", "new tab kata agents --cwd /bound --json --", "rename 31 demo#ab12"}},
 	} {
 		g, dirs := agentGateway(t)
 		lsCalls := 0
@@ -843,6 +777,9 @@ func TestStartingABackgroundAgentUsesTheHiddenSessionAsItIs(t *testing.T) {
 			p := prefix(*calls, i)
 			if p == "rename 31 demo#ab12" || p == "ls --json" {
 				p = strings.Join((*calls)[i], " ")
+			}
+			if (*calls)[i][0] == "new" {
+				p = strings.Join((*calls)[i][:min(len((*calls)[i]), 7)], " ")
 			}
 			seen = append(seen, p)
 		}
@@ -869,7 +806,6 @@ func TestABackgroundAgentThatCannotStartLeavesNothing(t *testing.T) {
 	if left, _ := os.ReadDir(filepath.Join(dirs.State, AgentPromptsFolder)); len(left) != 0 {
 		t.Errorf("prompt files left: %v", left)
 	}
-	// A tab that cannot be named leaves the agent started and says so.
 	ternScript(g, map[string]func() ([]byte, error){
 		"ls":      ternOut(lsWithAgents),
 		"new tab": ternOut(`{"block":31}`),
@@ -922,7 +858,6 @@ func TestOpeningABackgroundAgentMovesItBesideThePaneAndMarksItOpen(t *testing.T)
 	if stored, _ := ReadAgents(file); !stored[0].Open {
 		t.Errorf("agents.json %+v", stored)
 	}
-	// A refusal moves nothing and writes nothing.
 	seedAgent(t, dirs, model.AgentEntry{Block: "32", Background: true})
 	ternScript(g, map[string]func() ([]byte, error){"move": func() ([]byte, error) { return []byte("no block\n"), errors.New("exit status 1") }})
 	refused := as[model.AgentPlaced](t, run(t, g, model.OpenAgent{Block: "32", PaneBlock: "7"}))
@@ -931,6 +866,12 @@ func TestOpeningABackgroundAgentMovesItBesideThePaneAndMarksItOpen(t *testing.T)
 	}
 	if stored, _ := ReadAgents(file); stored[1].Open {
 		t.Errorf("agents.json after a refusal %+v", stored)
+	}
+	seedAgent(t, dirs, model.AgentEntry{Block: "33", Background: true})
+	focused := ternScript(g, map[string]func() ([]byte, error){"move": ternOut(`{"block":33}`)})
+	as[model.AgentPlaced](t, run(t, g, model.OpenAgent{Block: "33"}))
+	if !reflect.DeepEqual(*focused, [][]string{{"move", "33", "right-of", "@focused", "--json"}}) {
+		t.Errorf("open with no Pane block ran %q", *focused)
 	}
 }
 
@@ -978,7 +919,6 @@ func TestAFailedStepGoingBackShowsTernsWordsAndKeepsTheAgentOpen(t *testing.T) {
 	if stored, _ := ReadAgents(file); !stored[0].Open {
 		t.Errorf("agents.json %+v", stored)
 	}
-	// A tab that cannot be named: the agent is back, the entry closed, the failure shown.
 	ternScript(g, map[string]func() ([]byte, error){"ls": ternOut(lsWithAgents), "move": ternOut(`{"block":31}`),
 		"rename": func() ([]byte, error) { return []byte("no block\n"), errors.New("exit status 1") }})
 	named := as[model.AgentPlaced](t, run(t, g, model.SendAgentBack{Block: "31", IssueRef: "demo#ab12"}))
@@ -1771,7 +1711,6 @@ func TestAgentRouteEnvDeletesThePaneWrittenTokenFileButNotThePanesOwn(t *testing
 	if _, err := os.Stat(own); err != nil {
 		t.Errorf("the Pane's own KATA_AUTH_TOKEN_FILE was touched: %v", err)
 	}
-	// The Pane's preflight reads nothing and deletes nothing.
 	kept := tokenFile(t, "pane-token\n")
 	if err := (AgentRoute{Server: "https://s", TokenFile: kept}).Preflight(""); err != nil {
 		t.Fatal(err)
@@ -2112,7 +2051,6 @@ func TestRunningAgentsAreTheMappedOnesTheSavedRelayHasNotShownExited(t *testing.
 	if got, err := g.ReadRunningAgents(); err != nil || len(got) != 1 || got[0].Block != "3" || got[0].State != model.AgentIdle {
 		t.Fatalf("a relay listing only block 3 erased another Pane's saved states: %+v, %v", got, err)
 	}
-	// The exited blocks stay exited: 1 and 2 were not listed by that relay.
 	raw, _ := os.ReadFile(filepath.Join(dirs.State, AgentStatesFile))
 	if !strings.Contains(string(raw), `"block": "2"`) {
 		t.Fatalf("block 2's saved state was erased: %s", raw)

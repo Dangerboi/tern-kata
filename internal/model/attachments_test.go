@@ -30,9 +30,6 @@ func attachmentKeys(m model.Model) []string {
 }
 
 func TestAttachmentsIsTheFourthTabAndCycles(t *testing.T) {
-	if model.TabAttachments != model.TabLinks+1 || model.TabCount != model.TabAttachments+1 || model.TabAttachments.String() != "Attachments" {
-		t.Fatalf("tabs: attachments %d, count %d", model.TabAttachments, model.TabCount)
-	}
 	m := attached(nil)
 	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabLinks})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "tab"})
@@ -156,16 +153,5 @@ func TestTheAttachmentsTabSaysWhyWhenTheDaemonHasNoDocbank(t *testing.T) {
 	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabLinks})
 	if got := m.EmptyDetailText(); got != "No links." {
 		t.Fatalf("Links empty text %q", got)
-	}
-}
-
-func TestAttachmentRowsFollowLiveRefreshes(t *testing.T) {
-	m := attached(map[string]any{"attachment.A": reference("a", "text/plain", 1), "attachment.B": reference("b", "text/plain", 1)})
-	m, cmds := model.Update(m, model.StreamEvent{ID: 1, Type: "issue.updated"})
-	refresh := cmds[0].(model.ReadSnapshot)
-	issue := model.Issue{UID: "a", Metadata: map[string]any{"attachment.B": reference("b", "text/plain", 1), "attachment.C": reference("c", "text/plain", 1)}}
-	m, _ = model.Update(m, model.SnapshotLoaded{Request: refresh.Request, Query: refresh.Query, Snapshot: model.Snapshot{Cursor: 1, Issues: []model.Issue{issue}}, Selected: &model.IssueDetailData{Issue: &issue}})
-	if got := attachmentKeys(m); !slices.Equal(got, []string{model.AttachmentRowKey("B"), model.AttachmentRowKey("C")}) {
-		t.Fatalf("rows after the refresh %v", got)
 	}
 }

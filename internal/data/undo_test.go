@@ -173,9 +173,8 @@ func TestUndoRestoresEachChange(t *testing.T) {
 	if status := f.detail(uid).Issue.Status; status != "open" {
 		t.Fatalf("status %q after undoing a close", status)
 	}
-	closed = as[model.CloseResultMsg](t, run(t, f.gateway, model.CloseIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Quick: true, Reason: model.ReasonDone, Key: "k-2"}))
+	as[model.CloseResultMsg](t, run(t, f.gateway, model.CloseIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester", Quick: true, Reason: model.ReasonDone, Key: "k-2"}))
 	reopened := as[model.CloseResultMsg](t, run(t, f.gateway, model.ReopenIssueCmd{Workspace: f.workspace, UID: uid, ProjectID: f.project.ID, Actor: "tester"}))
-	_ = closed
 	e = f.entry(reopened.Record)
 	f.restores(e)
 	if issue := f.detail(uid).Issue; issue.Status != "closed" || issue.ClosedReason == nil || *issue.ClosedReason != "done" {
@@ -448,7 +447,6 @@ func TestUndoPutsBothDatesBack(t *testing.T) {
 	if meta[model.ScheduledKey] != "2026-10-12" || meta[model.DeadlineKey] != "2026-10-30" {
 		t.Fatalf("dates %v, want the earlier two back", meta)
 	}
-	// A first date is cleared by undoing it.
 	other := f.issue("Zebra crossing")
 	first := as[model.DatesResultMsg](t, run(t, f.gateway, model.SetDatesCmd{Workspace: f.workspace, UID: other, ProjectID: f.project.ID, Actor: "tester", Changes: []model.DateChange{{Key: model.ScheduledKey, Label: "Scheduled", Value: "2026-11-01"}}}))
 	f.restores(f.entry(first.Record))
@@ -676,7 +674,7 @@ func TestAWriteRecordsAnUnknownOutcomeOnlyWhenItMayHaveLanded(t *testing.T) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)
-			_, _ = w.Write([]byte(`{"status":` + http.StatusText(0) + `0,"error":{"code":"x","message":"no"}}`))
+			_, _ = w.Write([]byte(`{"status":0,"error":{"code":"x","message":"no"}}`))
 			return true
 		}
 		f.kata.intercept.Store(&hook)
@@ -696,7 +694,6 @@ func TestBoundariesTheDaemonDecidesAreRecordedWithTheirReason(t *testing.T) {
 	if rec.Entry != nil || rec.Boundary != "owner edit involving an expiry cannot be undone" {
 		t.Fatalf("record %+v", rec)
 	}
-	// A write that changed nothing leaves the history alone.
 	if rec := f.field(uid, model.AssignOwnerAction, "bob"); rec.Entry != nil || rec.Boundary != "" || rec.Unknown {
 		t.Fatalf("a write that changed nothing recorded %+v", rec)
 	}

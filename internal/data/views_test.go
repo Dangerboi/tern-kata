@@ -76,7 +76,6 @@ func TestViewsRoundTripKeepsCommentsAndUnknownKeys(t *testing.T) {
 		t.Fatalf("fixed view: %+v", got)
 	}
 
-	// Rename and edit the first view, add a third, delete the second.
 	if err := s.Replace(r.Token, "mine", model.SavedView{Name: "Morning", Base: model.Collection{View: "today"}, Filters: model.Filters{Owner: "@me", Search: `say "hi"`}}); err != nil {
 		t.Fatal(err)
 	}

@@ -74,7 +74,6 @@ func TestGatewayLeavesHubRowsOutOfTheSpokeList(t *testing.T) {
 	if !roles["spoke"] {
 		t.Fatalf("the daemon's status rows have roles %v, want a spoke", roles)
 	}
-	// An unfederated Project is not a spoke and stays out of the list.
 	gateway := newGateway(t, newLocator(kata.target()))
 	project(t, gateway, "plain")
 	loaded := as[model.FederationLoaded](t, run(t, gateway, model.LoadFederation{Workspace: t.TempDir(), Request: 1}))

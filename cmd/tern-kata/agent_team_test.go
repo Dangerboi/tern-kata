@@ -31,15 +31,7 @@ func TestAgentSetsTheTeamVariablesOnlyWithAnAddressPrefix(t *testing.T) {
 	}
 }
 
-func TestPlanAgentCarriesTheTeamFlags(t *testing.T) {
-	plan, err := PlanLaunch([]string{"agent", "--address-prefix", "dangerboi/omp", "--coordinator", "dangerboi/omp-7", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
-	if err != nil || plan.AgentCoordinator != "dangerboi/omp-7" || plan.AgentCoordinating {
-		t.Errorf("--coordinator: plan %+v, err %v", plan, err)
-	}
-	plan, err = PlanLaunch([]string{"agent", "--address-prefix", "dangerboi/omp", "--coordinating", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
-	if err != nil || plan.AgentCoordinator != "" || !plan.AgentCoordinating {
-		t.Errorf("--coordinating: plan %+v, err %v", plan, err)
-	}
+func TestPlanAgentRefusesAValueForCoordinating(t *testing.T) {
 	if plan, err := PlanLaunch([]string{"agent", "--coordinating=1", "--", "omp"}, func(string) (string, bool) { return "", false }, "v"); err == nil {
 		t.Errorf("--coordinating=1 was accepted: %+v", plan)
 	}

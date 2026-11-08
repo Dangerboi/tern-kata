@@ -6,7 +6,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// withHistory is m with one undoable change in the Undo history.
 func withHistory(m model.Model) model.Model {
 	entry := model.UndoEntry{Kind: model.UndoPriority, UID: "zzz", ProjectID: 2, ShortID: "zzzz", InstanceUID: "i", Revision: 2}
 	m, _ = model.Update(m, model.FieldWritten{UID: "zzz", Record: model.WriteRecord{Entry: &entry}})

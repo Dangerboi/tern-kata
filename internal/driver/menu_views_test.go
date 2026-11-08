@@ -100,16 +100,6 @@ func TestMenuLeavesTheViewsLevelOnViewsByBackEscAndBackspace(t *testing.T) {
 	}
 }
 
-func TestMenuPAndIStillOpenProjectsAndInbox(t *testing.T) {
-	bound := loadedWith(t, 160, model.Project{ID: 7, UID: "p", Name: "work"}, model.Snapshot{Issues: []model.Issue{alpha}, Catalog: menuCatalog()})
-	if got := pressed(bound, "shift+p").Model; !got.Picker.Open || got.Picker.Level != model.MenuProjects {
-		t.Errorf("P: Menu open %v level %v", got.Picker.Open, got.Picker.Level)
-	}
-	if got := pressed(bound, "shift+i").Model; got.Collection != model.InboxCollection() {
-		t.Errorf("I: Collection %+v", got.Collection)
-	}
-}
-
 func TestMenuFilterAtTheTopFindsCollectionsProjectsAndEntries(t *testing.T) {
 	top := boundMenu(t)
 	for filter, want := range map[string]string{

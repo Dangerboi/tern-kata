@@ -127,7 +127,6 @@ func TestAnIssueOutsideTheCollectionIsReadAndClosesOnAClosedAnswer(t *testing.T)
 	if want := []model.ReadAgentIssue{{Workspace: "/w", ProjectID: 3, UID: "a"}}; !reflect.DeepEqual(reads(cmds), want) || len(closes(cmds)) != 0 {
 		t.Fatalf("cmds %#v", cmds)
 	}
-	// A read in flight is not asked again.
 	m, cmds = relayed(m, model.AgentState{Block: "5", State: "idle"})
 	if len(reads(cmds)) != 0 {
 		t.Fatalf("second read: %#v", cmds)
@@ -136,7 +135,6 @@ func TestAnIssueOutsideTheCollectionIsReadAndClosesOnAClosedAnswer(t *testing.T)
 	if want := []model.CloseAgent{{Block: "5"}}; !reflect.DeepEqual(closes(cmds), want) {
 		t.Fatalf("cmds %#v", cmds)
 	}
-	// Nothing closes twice.
 	_, cmds = relayed(m, model.AgentState{Block: "5", State: "idle"})
 	if len(closes(cmds)) != 0 || len(reads(cmds)) != 0 {
 		t.Fatalf("repeat: %#v", cmds)

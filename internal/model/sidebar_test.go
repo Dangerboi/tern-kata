@@ -25,13 +25,11 @@ func TestUnboundSidebarGoesWhenAProjectIsEntered(t *testing.T) {
 		t.Fatalf("unbound start: columns %v", got)
 	}
 
-	// Entering a Project from the sidebar hides it, and the directory stays unbound.
 	entered, _ := model.Update(m, model.CollectionSelected{Collection: projectCollection(m, "alpha")})
 	if got := entered.VisibleColumns(); !reflect.DeepEqual(got, sidebarHidden) || entered.Bound {
 		t.Fatalf("Project entered: columns %v bound %v", got, entered.Bound)
 	}
 
-	// A fixed Collection picked again, from the popup, brings it back.
 	reopened, _ := menuKeys(entered, "enter", "down", "enter")
 	if reopened.Collection.View != "inbox" || reopened.Picker.Open || !reflect.DeepEqual(reopened.VisibleColumns(), sidebarShown) {
 		t.Fatalf("fixed Collection again: %+v columns %v", reopened.Collection, reopened.VisibleColumns())

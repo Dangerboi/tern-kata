@@ -75,7 +75,6 @@ func (p federatedPair) leave(t *testing.T, draft model.FederationLeaveDraft) mod
 	return as[model.FederationLeft](t, run(t, newGateway(t, newLocator(p.spoke.target())), model.LeaveFederation{Workspace: t.TempDir(), Attempt: 7, Draft: draft}))
 }
 
-// enrollments is what the hub lists as grants: id to whether it is revoked.
 func (p federatedPair) enrollments(t *testing.T) map[int64]bool {
 	t.Helper()
 	listed, err := p.hub.target().Client.ListFederationEnrollmentsWithResponse(context.Background())
@@ -128,7 +127,6 @@ func TestLeaveRevokesTheSpokesGrantOnTheHubThenDetachesTheReplica(t *testing.T) 
 	if spokes := pair.spokes(t); len(spokes) != 0 {
 		t.Errorf("spoke still lists %+v after the leave", spokes)
 	}
-	// Detached: the Project stays on the spoke, standalone.
 	projects, err := pair.spoke.target().Client.ListProjectsWithResponse(context.Background(), nil)
 	if err != nil || projects.JSON200 == nil {
 		t.Fatalf("list projects: %v", err)

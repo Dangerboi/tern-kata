@@ -123,7 +123,6 @@ func TestAttentionPageListsRequestsNewestFirstWithTheirSenderTagHandleAndFirstLi
 	wantText(t, "other Project's request", attentionCardText(t, s, "other-bb22"), "other#bb22", "Review the schema", "pip/scout", "request", "c:vwxyz0", "Is this right?")
 	wantText(t, "reply notice", attentionCardText(t, s, "work-cc33"), "work#cc33", "worker", "reply", "broadcast", "Run held: needs the owner")
 
-	// The drawn order is the order kata's read gave.
 	text := wireTextOf(t, s)
 	first, second, third := strings.Index(text, "work#aa11"), strings.Index(text, "other#bb22"), strings.Index(text, "work#cc33")
 	if !(first >= 0 && first < second && second < third) {
@@ -178,7 +177,6 @@ func TestAttentionPageFailedReadShowsKatasErrorAndKeepsTheRows(t *testing.T) {
 	text := wireTextOf(t, failed)
 	wantText(t, "failed Page", text, "the daemon hiccuped", "work#aa11", "other#bb22", "work#cc33", "for dana · 3 requests")
 
-	// A later good read ends the failure.
 	again := step(t, failed, key("ctrl+r"))
 	recovered := answerAttention(t, again, attentionRequests(t)[:1], 0)
 	if strings.Contains(wireTextOf(t, recovered), "the daemon hiccuped") {
@@ -207,10 +205,8 @@ func TestAttentionPageRefusedAddressShowsTheReasonAndReadsNothing(t *testing.T) 
 		s := attentionPane(t)
 		set(&s.Model)
 		out := step(t, s, key("6"))
-		if cmds := out.Cmds; len(cmds) != 0 {
-			if _, asked := askedAttention(cmds); asked {
-				t.Errorf("%s: a read was asked for", name)
-			}
+		if _, asked := askedAttention(out.Cmds); asked {
+			t.Errorf("%s: a read was asked for", name)
 		}
 		wantText(t, name, wireTextOf(t, out.State), "refused")
 		if strings.Contains(wireTextOf(t, out.State), "Nothing is waiting on") || strings.Contains(wireTextOf(t, out.State), "requests ·") {
@@ -336,7 +332,6 @@ func TestSixReturnsToTheAttentionPageAsItWas(t *testing.T) {
 	if _, ok := askedAttention(back.Cmds); !ok {
 		t.Error("returning to the Page reads no fresh requests")
 	}
-	// The rows stay on screen while the new read is out, and its answer keeps the selection.
 	done := answerAttention(t, back, attentionRequests(t), 0)
 	if done.Model.Attention.Selected != "other-bb22" {
 		t.Errorf("selected %q after the read, want other-bb22", done.Model.Attention.Selected)
@@ -413,7 +408,6 @@ func TestCSendsOneGuardedClearAndKeysOnTheRowWaitUntilItIsAnswered(t *testing.T)
 		t.Errorf("enter on the row being cleared left the Page for %v", waiting.State.Model.Page)
 	}
 
-	// Another row is not waiting.
 	other := step(t, out.State, key("down"))
 	if clears := askedClear(step(t, other.State, key("c")).Cmds); len(clears) != 1 || clears[0].UID != "other-bb22" {
 		t.Errorf("c on another row sent %#v", clears)
@@ -663,11 +657,9 @@ func TestEnterOnARequestNamingACommentOpensTheCommentsTabOnThatComment(t *testin
 	if m.ActiveTab() != model.TabComments || detailRowKey(m) != namedComment {
 		t.Fatalf("tab %v row %q, want the Comments tab on %s", m.ActiveTab(), detailRowKey(m), namedComment)
 	}
-	// R replies to the comment under the cursor.
 	if draft, ok := step(t, s, key("shift+r")).State.Model.ActiveDraft(); !ok || draft.ReplyTo != namedComment {
 		t.Errorf("R starts a draft replying to %q (open %v), want %q", draft.ReplyTo, ok, namedComment)
 	}
-	// 6 returns with the state as it was.
 	back := step(t, s, key("6")).State.Model
 	if back.Page != model.PageAttention || back.Attention.Selected != "work-aa11" || len(back.Attention.Requests) != 1 {
 		t.Errorf("6 gave page %v with %+v", back.Page, back.Attention)

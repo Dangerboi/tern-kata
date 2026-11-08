@@ -200,19 +200,6 @@ func TestAnIdleStopWithNothingRunningExitsAtOnce(t *testing.T) {
 	h.exits(r)
 }
 
-func TestStopSaysItWillNotRestartWhenTheSupervisionMarkerIsBesideTheConfig(t *testing.T) {
-	h := newHarness(t)
-	if err := os.WriteFile(h.dirs.ManualPath(), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	r := h.start(worker.Hooks{}, func(o *worker.Options) { o.Supervisor = worker.SupervisorTern })
-	h.admitting(r)
-	if resp := h.ask(worker.Request{Op: "stop"}); !resp.OK || resp.Stop.Restarts {
-		t.Fatalf("stop: %+v", resp)
-	}
-	h.exits(r)
-}
-
 // The promise is read at each stop: a marker made or removed between two stops changes the second answer.
 func TestAStopPromisesARestartFromTheSupervisionRuleAtThatMoment(t *testing.T) {
 	gate := filepath.Join(t.TempDir(), "release")

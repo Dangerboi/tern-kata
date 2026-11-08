@@ -148,8 +148,8 @@ func TestWorkerAddAppendsASecondProjectAndKeepsTheRestByteForByte(t *testing.T) 
 	if k := strings.Index(after, "beta = "); k < at || k > next {
 		t.Errorf("checkout line outside [checkouts]:\n%s", after)
 	}
-	for _, want := range []string{"worker.toml", "worker status", "only at start"} {
-		if !strings.Contains(out, want) && want != "worker.toml" {
+	for _, want := range []string{"worker status", "only at start"} {
+		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}

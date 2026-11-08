@@ -43,7 +43,6 @@ func TestWOpensTheAgentCardInEveryIssueModeWithOrWithoutAgents(t *testing.T) {
 			if seq == 0 || got.State.Model.TopCard() != model.CardAgent || len(got.Cmds) != 1+len(reads) || (with == "agents") != (len(reads) == 1) {
 				t.Errorf("%s, %s: card %v, cmds %#v", name, with, got.State.Model.TopCard(), got.Cmds)
 			}
-			// Shift+w and shift+s start nothing on the Issue.
 			for _, chord := range []string{"shift+w", "shift+s"} {
 				if off := step(t, state, key(chord)); off.State.Model.TopCard() == model.CardAgent || len(off.Cmds) != 0 {
 					t.Errorf("%s, %s, %s: card %v, cmds %#v", name, with, chord, off.State.Model.TopCard(), off.Cmds)
@@ -100,12 +99,6 @@ func TestTheAgentCardKeysReachTheGateway(t *testing.T) {
 	open := func() driver.State {
 		return step(t, withAgentRows(agentPanes(t, agentIssue("t1"))["list"]), key("w")).State
 	}
-	for chord, placement := range map[string]model.AgentPlacement{"s": model.AgentSplit, "t": model.AgentTab, "g": model.AgentBackground} {
-		got := step(t, open(), key(chord))
-		if start, ok := startedAgent(got.Cmds); !ok || start.Placement != placement || got.State.Model.TopCard() == model.CardAgent {
-			t.Errorf("w then %s: cmds %#v", chord, got.Cmds)
-		}
-	}
 	got := feed(t, open(), key("down"), key("enter"))
 	if len(got.Cmds) != 1 || got.Cmds[0] != (model.FocusAgent{Block: "32"}) {
 		t.Errorf("down, enter: cmds %#v, want focus of 32", got.Cmds)
@@ -116,21 +109,6 @@ func TestTheAgentCardKeysReachTheGateway(t *testing.T) {
 	}
 	if esc := step(t, open(), key("escape")); esc.State.Model.TopCard() == model.CardAgent || len(esc.Cmds) != 0 {
 		t.Errorf("esc: card %v, cmds %#v", esc.State.Model.TopCard(), esc.Cmds)
-	}
-}
-
-func TestTheAgentCardWhereColumnNamesBackgroundAndOpenAgents(t *testing.T) {
-	s := withAgentRows(agentPanes(t, agentIssue("t1"))["list"])
-	s.Model.AgentMapping[0].Background = true
-	s.Model.AgentMapping[1].Background, s.Model.AgentMapping[1].Open = true, true
-	s = step(t, s, key("w")).State
-	for block, want := range map[string]string{
-		"31": "agent working · started 2026-10-30 09:05 · background",
-		"32": "agent waiting for you · started 2026-10-30 10:05 · open",
-	} {
-		if rows := rowsNamed(t, s.Model, view.AgentListID, want); len(rows) != 1 || rows[0] != view.AgentItemID(block) {
-			t.Errorf("rows reading %q: %v", want, rows)
-		}
 	}
 }
 

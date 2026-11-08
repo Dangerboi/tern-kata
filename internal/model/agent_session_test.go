@@ -66,7 +66,6 @@ func TestACardClosedDuringThePauseReadsNothingWhenItEnds(t *testing.T) {
 	if len(cmds) != 0 {
 		t.Errorf("a closed card read after the pause: %#v", cmds)
 	}
-	// The loop ended, so reopening starts a fresh one.
 	_, cmds = press(closed, "w")
 	sessionRead(t, cmds)
 }

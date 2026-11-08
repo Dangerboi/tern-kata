@@ -17,7 +17,6 @@ func TestCalendarToday(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// zoneFile makes the zoneinfo file for name under root and returns its root-relative path.
 	zoneFile := func(t *testing.T, root, dir, name string) string {
 		t.Helper()
 		rel := filepath.Join(dir, "zoneinfo", name)

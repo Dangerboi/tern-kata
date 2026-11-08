@@ -23,6 +23,8 @@ func TestCheckAgentConfigAppliesEveryRuleAnAgentStartApplies(t *testing.T) {
 		"empty command":            {"command = []\n", "command: must name a program"},
 		"blank program":            {"[projects.a]\ncommand = [\" \"]\n", "projects.a.command:"},
 		"relative checkout":        {"[projects.a]\ncheckout = \"rel\"\n", "projects.a.checkout:"},
+		"relative checkout reason": {"[projects.a]\ncheckout = \"rel\"\n", "not an absolute directory"},
+		"top level checkout":       {"checkout = \"/work\"\n", "unknown key checkout"},
 		"message_from comma":       {"message_from = [\"a,b\"]\n", "message_from:"},
 		"Project message_from":     {"[projects.a]\nmessage_from = [\"\"]\n", "projects.a.message_from:"},
 		"not toml":                 {"name = \n", "agent.toml"},
@@ -51,7 +53,6 @@ func TestCheckAgentConfigAppliesEveryRuleAnAgentStartApplies(t *testing.T) {
 	}
 }
 
-// tomlKeys are the keys a struct decodes from, by its toml tags.
 func tomlKeys(v any) map[string]bool {
 	keys := map[string]bool{}
 	typ := reflect.TypeOf(v)

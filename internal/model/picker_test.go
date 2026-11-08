@@ -602,25 +602,6 @@ func TestPickerViewsLevelListsBackAndTheFixedCollections(t *testing.T) {
 	}
 }
 
-func TestPickerLeavesTheViewsLevelOnViews(t *testing.T) {
-	base := viewsLevel(t)
-	viaEsc, _ := pickerKeys(base, "escape")
-	viaBackspace, _ := pickerKeys(base, "backspace")
-	viaBack, _ := pickerKeys(base, "enter")
-	viaClick, _ := model.Update(base, model.PickerSelected{Key: "back"})
-	if !viaEsc.Picker.Open || viaEsc.Picker.Level != model.MenuTop || pickerTitles(viaEsc)[viaEsc.Picker.Cursor] != "Views" {
-		t.Fatalf("esc: open=%v level=%v entries=%q cursor=%d", viaEsc.Picker.Open, viaEsc.Picker.Level, pickerTitles(viaEsc), viaEsc.Picker.Cursor)
-	}
-	for name, got := range map[string]model.Model{"backspace": viaBackspace, "enter on Back": viaBack, "click on Back": viaClick} {
-		if !reflect.DeepEqual(got, viaEsc) {
-			t.Errorf("%s left %+v, esc left %+v", name, got.Picker, viaEsc.Picker)
-		}
-	}
-	if closed, _ := pickerKeys(viaEsc, "escape"); closed.Picker.Open {
-		t.Fatal("esc on the top level did not close the Menu")
-	}
-}
-
 func TestPickerViewsClickAndPAndI(t *testing.T) {
 	top, _ := menuKeys(pickerStart(120, true))
 	if into, _ := model.Update(top, model.PickerSelected{Key: "views"}); !reflect.DeepEqual(into, viewsLevel(t)) {
@@ -628,10 +609,6 @@ func TestPickerViewsClickAndPAndI(t *testing.T) {
 	}
 	if p, _ := pickerKeys(viewsLevel(t), "shift+p"); p.Picker.Level != model.MenuViews {
 		t.Fatalf("shift+p typed into the Views level's filter must not move the level, got %v", p.Picker.Level)
-	}
-	p, _ := pickerKeys(pickerStart(120, true), "shift+p")
-	if !p.Picker.Open || p.Picker.Level != model.MenuProjects {
-		t.Fatalf("P: open=%v level=%v, want the Projects level", p.Picker.Open, p.Picker.Level)
 	}
 	i, cmds := pickerKeys(pickerStart(120, true), "shift+i")
 	if i.Collection.View != "inbox" || !readsCollection(cmds, i, "") {

@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -123,14 +122,6 @@ func TestAClickOnAnAgentRowMovesTheCursor(t *testing.T) {
 	}
 }
 
-func TestAgentWhereReadsTheStartedPlacementAndDefaultsToASplit(t *testing.T) {
-	for placement, want := range map[model.AgentPlacement]string{"": "split", model.AgentSplit: "split", model.AgentTab: "tab"} {
-		if got := model.AgentWhere(model.AgentEntry{Placement: placement, StartedAt: time.Time{}}); got != want {
-			t.Errorf("%q: %q, want %q", placement, got, want)
-		}
-	}
-}
-
 func TestTheCardsStartKeysStartWhereTheyNameAndCloseTheCard(t *testing.T) {
 	for name, withAgent := range map[string]bool{"no agents": false, "an agent": true} {
 		for chord, want := range map[string]model.AgentPlacement{"s": model.AgentSplit, "t": model.AgentTab, "g": model.AgentBackground} {
@@ -211,14 +202,19 @@ func TestEnterOnAClosedBackgroundAgentOpensItBesideThePane(t *testing.T) {
 	}
 }
 
-func TestAgentWhereNamesBackgroundAndOpenAgents(t *testing.T) {
-	for want, e := range map[string]model.AgentEntry{
-		"background": {Background: true, Placement: model.AgentBackground},
-		"open":       {Background: true, Open: true, Placement: model.AgentBackground},
-		"tab":        {Placement: model.AgentTab},
+func TestAgentWhereNamesThePlacementAndDefaultsToASplit(t *testing.T) {
+	for _, tt := range []struct {
+		e    model.AgentEntry
+		want string
+	}{
+		{model.AgentEntry{}, "split"},
+		{model.AgentEntry{Placement: model.AgentSplit}, "split"},
+		{model.AgentEntry{Placement: model.AgentTab}, "tab"},
+		{model.AgentEntry{Background: true, Placement: model.AgentBackground}, "background"},
+		{model.AgentEntry{Background: true, Open: true, Placement: model.AgentBackground}, "open"},
 	} {
-		if got := model.AgentWhere(e); got != want {
-			t.Errorf("%+v: %q, want %q", e, got, want)
+		if got := model.AgentWhere(tt.e); got != tt.want {
+			t.Errorf("%+v: %q, want %q", tt.e, got, tt.want)
 		}
 	}
 }

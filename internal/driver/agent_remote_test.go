@@ -59,7 +59,6 @@ func TestTheAgentCardListsRemoteAgentsAfterTheLocalOnesWithTheirHost(t *testing.
 	if got := len(s.Model.AgentCardRows()) + len(s.Model.AgentCardRemoteRows()); got != 5 {
 		t.Errorf("the card lists %d rows, want 3 local and 2 remote", got)
 	}
-	// The cursor walks past the local rows onto the remote ones, and stops on the last.
 	s = feed(t, s, key("end")).State
 	if r, ok := s.Model.AgentCardSelectedRemote(); !ok || r.Host != "mac" {
 		t.Errorf("end selects %+v, %v; want the agent on mac", r, ok)
@@ -84,7 +83,6 @@ func TestARemoteRowOffersOnlyForgetAmongTheAgentKeys(t *testing.T) {
 			t.Errorf("%s: cmds %#v, card %v, mode %s, notice %q; want the card open with %q and nothing sent", chord, got.Cmds, m.TopCard(), m.CurrentMode(), m.Notice, want)
 		}
 	}
-	// Forget is for another host's agent only.
 	local := step(t, remotePane(t), key("w")).State
 	if got := step(t, local, key("f")); got.State.Model.Notice != model.AgentForgetLocalReason || got.State.Model.AgentCard.Forgetting != "" || len(got.Cmds) != 0 {
 		t.Errorf("f on a local row: notice %q, cmds %#v", got.State.Model.Notice, got.Cmds)

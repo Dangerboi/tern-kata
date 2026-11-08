@@ -76,7 +76,6 @@ func (r enrollRig) spokeInstanceUID(t *testing.T) string {
 	return instance.JSON200.InstanceUID
 }
 
-// hubEnrollments is what the hub lists as grants.
 func (r enrollRig) hubEnrollments(t *testing.T) []g.FederationEnrollmentOut {
 	t.Helper()
 	listed, err := r.hub.target().Client.ListFederationEnrollmentsWithResponse(context.Background())
@@ -112,7 +111,6 @@ func watch(s *kataServer, answer func(http.ResponseWriter, *http.Request) bool) 
 	return log
 }
 
-// seen are the calls whose path ends in suffix, in order.
 func (l *callLog) seen(suffix string) []call {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -484,7 +482,7 @@ func TestAFailureJoiningTheSpokeAfterTheGrantKeepsTheMetadataInTheCommand(t *tes
 		t.Errorf("error %q, recovery %+v", got.Err, rec)
 	}
 	command := rec.Command
-	if command.HubProjectUID != acme.UID || command.ProjectName != "acme" || command.ReplayHorizonEventID == 0 && command.BaselineThroughEventID == 0 && command.HubProjectUID == "" {
+	if command.HubProjectUID != acme.UID || command.ProjectName != "acme" || (command.ReplayHorizonEventID == 0 && command.BaselineThroughEventID == 0) {
 		t.Errorf("command %+v, want the hub Project's uid and the metadata it read", command)
 	}
 	if line := command.String(); !strings.Contains(line, "--hub-project-uid "+acme.UID) || !strings.Contains(line, "--token "+command.Token) {
@@ -675,7 +673,6 @@ func TestTheRecoveryCommandOfALocalSpokeNamesTheCatalogEntryItWasReachedThrough(
 	}
 }
 
-// hubSpokeNames are the names the hub keeps for its enrollments, by spoke instance.
 func (r enrollRig) hubSpokeNames(t *testing.T) map[string]string {
 	t.Helper()
 	names := map[string]string{}

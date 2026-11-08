@@ -33,7 +33,6 @@ func newIssueFixture(t *testing.T) issueFixture {
 	return fixtureOn(t, startKata(t, "0.21.0"))
 }
 
-// fixtureOn is a fixture whose Project lives on the daemon kata.
 func fixtureOn(t *testing.T, kata *kataServer) issueFixture {
 	t.Helper()
 	const host = "TestBox"

@@ -148,7 +148,6 @@ func TestNewProjectRejectionKeepsTheForm(t *testing.T) {
 		t.Fatalf("rejection moved on: bound=%v collection=%+v mode=%s", rejected.Bound, rejected.Collection, rejected.CurrentMode())
 	}
 
-	// Editing the name clears the message, and the corrected name goes out again.
 	retried, cmds := pickerKeys(rejected, "backspace", "enter")
 	if retried.ProjectForm.Err != nil || !retried.ProjectForm.Saving || !reflect.DeepEqual(cmds, []model.Cmd{model.BindProject{Workspace: newProjectWorkspace, Actor: "alice", Name: "my-repo"}}) {
 		t.Fatalf("retry: cmds=%#v form=%+v", cmds, retried.ProjectForm)
@@ -185,7 +184,6 @@ func TestNewProjectBindOpensTheProjectFirst(t *testing.T) {
 		t.Fatalf("heading %q loading=%v", got.Collection.Title, got.Loading)
 	}
 
-	// The snapshot that arrives lists the Project, which is now the pinned entry.
 	snapshot := model.Snapshot{Catalog: append(pickerCatalog(), model.CatalogProject{Project: created})}
 	loaded, _ := model.Update(got, model.SnapshotLoaded{Request: got.RefreshRequest(), Query: got.SnapshotQuery(), Snapshot: snapshot})
 	if loaded.Loading || !reflect.DeepEqual(pickerTitles(loaded)[:2], []string{"my-repo", "Views"}) {
@@ -211,7 +209,6 @@ func TestPickerNewProjectOpensTheFormAndEscReturnsToThePicker(t *testing.T) {
 			if back.CurrentMode() != model.ModePicker || back.Picker.Filter != tt.filter || back.Collection != opened.Collection || len(cmds) != 0 {
 				t.Fatalf("esc: mode=%s picker=%+v cmds=%#v", back.CurrentMode(), back.Picker, cmds)
 			}
-			// The picker is back as it was: the cursor still rests on New Project.
 			entries := back.PickerEntries()
 			if entries[back.Picker.Cursor].Title != "New Project" {
 				t.Fatalf("cursor on %q", entries[back.Picker.Cursor].Title)
@@ -241,7 +238,6 @@ func TestPickerNewProjectOnlyCreates(t *testing.T) {
 		t.Fatalf("heading %q, picker pins %q", got.Collection.Title, pickerTitles(got)[0])
 	}
 
-	// An Issue created before the snapshot arrives belongs to the new Project.
 	drafting, _ := pickerKeys(got, "n")
 	if drafting.Create.ProjectID != 9 {
 		t.Fatalf("Issue draft targets Project %d, want 9", drafting.Create.ProjectID)
@@ -291,13 +287,11 @@ func TestNewProjectRejectionInTheBoundPickerKeepsTheForm(t *testing.T) {
 		t.Fatalf("rejection: cmds=%#v form=%+v mode=%s", cmds, rejected.ProjectForm, rejected.CurrentMode())
 	}
 
-	// The retry only creates, as the first try did.
 	_, cmds = pickerKeys(rejected, "enter")
 	if want := []model.Cmd{model.CreateProject{Workspace: newProjectWorkspace, Actor: "alice", Name: "my-repo"}}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("retry requested %#v, want %#v", cmds, want)
 	}
 
-	// Leaving returns to the picker, and the next form starts clean.
 	back, _ := pickerKeys(rejected, "x", "escape")
 	reopened, _ := pickerKeys(back, "enter")
 	if back.CurrentMode() != model.ModePicker || reopened.ProjectForm.Name != "my-repo" || reopened.ProjectForm.Err != nil {

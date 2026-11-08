@@ -642,7 +642,6 @@ func TestDraftCardsSaveErrorKeepsTheDraft(t *testing.T) {
 			if len(cmds) == 0 {
 				t.Fatalf("save sent nothing: mode %s", m.CurrentMode())
 			}
-			// While saving, nothing edits the Draft.
 			before := body.text(m)
 			m, _ = model.Update(typed(m, "z"), model.EditMsg{Target: body.target, From: 0, To: 0, Text: "e", Cursor: 1, Len: 1})
 			if body.text(m) != before {
@@ -655,7 +654,6 @@ func TestDraftCardsSaveErrorKeepsTheDraft(t *testing.T) {
 			if body.err(m) == nil {
 				t.Fatal("the save error was not kept")
 			}
-			// The card is editable again, and the next edit clears the error.
 			if m = typed(body.focus(m), "!"); body.text(m) != before+"!" {
 				t.Fatalf("Draft not editable after the error: %q", body.text(m))
 			}
@@ -702,7 +700,6 @@ func TestDraftCardsTakeNativeEditsAndUndo(t *testing.T) {
 			if m, _ = model.Update(m, model.UndoMsg{Target: body.target}); body.text(m) != "" {
 				t.Fatalf("after undo: %q", body.text(m))
 			}
-			// An edit for the other card's body does not reach this one.
 			other := model.EditCreateBody
 			if body.target == other {
 				other = model.EditDraftBody

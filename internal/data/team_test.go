@@ -114,7 +114,6 @@ func (h *teamHost) runCount() int {
 	return len(h.runs)
 }
 
-// runLines are the tern command lines that started agents, as text.
 func (h *teamHost) runLines() []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -165,7 +164,6 @@ func TestStartingATeamRunsTheCoordinatorAndRecordsTheTeam(t *testing.T) {
 		team.CoordinatorBlock != got.Entry.Block || team.CoordinatorAddress != "dana/omp-"+got.Entry.Block || len(team.Children) != 0 {
 		t.Fatalf("team %+v", team)
 	}
-	// A second team on the Issue is refused and starts nothing.
 	again := h.startTeam(2)
 	if again.Err == nil || again.Err.Error() != model.TeamExistsReason || h.runCount() != 1 {
 		t.Fatalf("second team: %+v, %d runs", again, h.runCount())
@@ -226,11 +224,9 @@ func TestATeamStartsTheLimitAsBackgroundChildrenAndTheNextWhenOneExits(t *testin
 	if !slices.Equal(childUIDs(team), []string{driven.Started[0].IssueUID, driven.Started[1].IssueUID}) || team.Children[0].Block != driven.Started[0].Block {
 		t.Fatalf("team %+v", team)
 	}
-	// Nothing more starts while both run, and a drive again starts nothing.
 	if again := h.drive(h.gateway); len(again.Started) != 0 || h.runCount() != 3 {
 		t.Fatalf("a full team started %+v", again.Started)
 	}
-	// One exits: the third child starts, and an exited child is never started again.
 	third := h.drive(h.gateway, driven.Started[0].Block)
 	if len(third.Started) != 1 || third.Started[0].IssueUID != left[0] {
 		t.Fatalf("after an exit: %+v", third.Started)
@@ -366,7 +362,6 @@ func TestTheEndMessageIsWrittenOnceAndTheRecordGoes(t *testing.T) {
 		h.close(c)
 	}
 	blocks := []string{started[0].Block, started[1].Block}
-	// One child still runs: no message.
 	h.drive(h.gateway, blocks[0])
 	if held := h.slotOnParent(coordinator.Address); held != "" || h.team().State != model.TeamRunning {
 		t.Fatalf("a team with a child running ended: %q, %+v", held, h.team())
@@ -385,7 +380,6 @@ func TestTheEndMessageIsWrittenOnceAndTheRecordGoes(t *testing.T) {
 	if teams, _ := ReadTeams(h.teamsFile()); len(teams) != 0 {
 		t.Fatalf("the record stayed after the message: %+v", teams)
 	}
-	// The coordinator clears the message; nothing writes it again.
 	other := h.another()
 	if _, err := other.call(context.Background(), h.workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
 		_, err := c.clearSlot(ctx, h.project.ID, h.parent, "dana", model.NotificationKey(coordinator.Address), raw)

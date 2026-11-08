@@ -6,8 +6,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// TestUndoStillTakesBackTheLastIssueChangeAfterTheLaneListIsSharedWithTheProject saves the Lane list to the Project and then
-// presses `u`.
 func TestUndoStillTakesBackTheLastIssueChangeAfterTheLaneListIsSharedWithTheProject(t *testing.T) {
 	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{})
 	m, _ = clickPress(m, "b")

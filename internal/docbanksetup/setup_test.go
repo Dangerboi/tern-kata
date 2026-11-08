@@ -33,33 +33,6 @@ func TestWriteSectionRefusesAConfigThatChangedSinceItWasRead(t *testing.T) {
 	}
 }
 
-func TestWriteKeyFileTightensAReusedKeyFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows has no permission bits")
-	}
-	path := filepath.Join(t.TempDir(), KeyFileName)
-	if err := os.WriteFile(path, []byte("secret\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(path, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	var out strings.Builder
-	if err := (Env{Out: &out}).writeKeyFile(path, "secret"); err != nil {
-		t.Fatal(err)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Errorf("mode = %o; want 600", info.Mode().Perm())
-	}
-	if !strings.Contains(out.String(), "0600") {
-		t.Errorf("output does not say the mode was tightened: %q", out.String())
-	}
-}
-
 // noRunRunner finds every program and fails the test when one is run: a setup that must stop early runs none.
 type noRunRunner struct{ t *testing.T }
 
@@ -128,7 +101,8 @@ func TestSetupLocalTightensAReusedKeyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.Runner = fakeRunner{}
-	e.Out = io.Discard
+	var out strings.Builder
+	e.Out = &out
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // the run after the key file is not the subject; Docbank's status is the first step to fail
 	_ = e.SetupLocal(ctx, Local{})
@@ -138,6 +112,9 @@ func TestSetupLocalTightensAReusedKeyFile(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %o; want 600", info.Mode().Perm())
+	}
+	if !strings.Contains(out.String(), "0600") {
+		t.Errorf("output does not say the mode was tightened: %q", out.String())
 	}
 }
 

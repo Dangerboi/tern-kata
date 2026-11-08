@@ -10,7 +10,7 @@ import (
 )
 
 // The table below pins every transition of the Run lifecycle from every Phase: a legal one produces the expected
-// Journal, any other returns an error and changes nothing. It reaches the lifecycle only through its transitions.
+// Journal, any other returns an error and changes nothing. It calls the Journal's unexported transitions directly.
 
 var allPhases = []Phase{PhasePrepared, PhaseAdmitted, PhaseLaunching, PhaseStarted, PhaseResuming, PhaseFinished, PhaseSettled}
 

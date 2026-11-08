@@ -98,12 +98,10 @@ func TestSlashSearchesEachPagesRowsAndTheSelectionStaysOnAVisibleRow(t *testing.
 			if got := p.selected(s.Model); got != p.second {
 				t.Errorf("selected %q after the search narrowed the rows, want the visible %s", got, p.second)
 			}
-			// enter keeps the narrowed list and gives the keys back to the Page.
 			s = step(t, s, key("enter")).State
 			if s.Model.CurrentMode() == model.ModePageSearch || !searchInputDrawn(t, s) || len(p.rows(s.Model)) != 1 {
 				t.Fatalf("enter: mode %s, input drawn %v, rows %v; want the list kept narrowed under the shown search", s.Model.CurrentMode(), searchInputDrawn(t, s), p.rows(s.Model))
 			}
-			// esc clears it and brings every row back.
 			s = step(t, s, key("escape")).State
 			if got := p.rows(s.Model); len(got) != 2 || s.Model.Page == model.PageIssues || s.Model.PageSearch != (model.PageSearchState{}) || searchInputDrawn(t, s) {
 				t.Fatalf("esc: rows %v, page %v, search %+v; want both rows back on the same Page with no search", got, s.Model.Page, s.Model.PageSearch)

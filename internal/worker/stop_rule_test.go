@@ -5,29 +5,29 @@ import (
 	"testing"
 )
 
-// One table says what every worker command does in every stop mode.
-func TestEveryCommandAgainstEveryStopMode(t *testing.T) {
-	commands := []string{cmdStatus, cmdRunDetail, cmdStop, cmdRun, cmdResume, cmdAbandon, cmdIdentity}
-	// refused[command] lists the stop modes ("" is serving) in which the command is refused for stopping.
-	refused := map[string][]string{
-		cmdStatus:    nil,
-		cmdRunDetail: nil,
-		cmdStop:      nil,
-		cmdRun:       {StopIdle, StopNow},
-		cmdResume:    {StopIdle, StopNow},
-		cmdAbandon:   {StopNow},
-		cmdIdentity:  nil,
-	}
-	for _, command := range commands {
-		for _, mode := range []string{"", StopIdle, StopNow} {
-			want := false
-			for _, m := range refused[command] {
-				want = want || m == mode
-			}
-			err := refusedWhileStopping(command, mode)
-			if want != (err != nil) || err != nil && !errors.Is(err, errStopping) {
-				t.Errorf("%s during mode %q: refused with %v, want refused=%v with %q", command, mode, err, want, errStopping)
-			}
+// A stopping Worker refuses the commands that would start or continue work and answers the rest.
+func TestCommandsRefusedWhileStopping(t *testing.T) {
+	for _, c := range []struct {
+		command, mode string
+		refused       bool
+	}{
+		{cmdRun, "", false},
+		{cmdRun, StopIdle, true},
+		{cmdRun, StopNow, true},
+		{cmdResume, "", false},
+		{cmdResume, StopIdle, true},
+		{cmdResume, StopNow, true},
+		{cmdAbandon, "", false},
+		{cmdAbandon, StopIdle, false},
+		{cmdAbandon, StopNow, true},
+		{cmdStatus, StopNow, false},
+		{cmdRunDetail, StopNow, false},
+		{cmdStop, StopNow, false},
+		{cmdIdentity, StopNow, false},
+	} {
+		err := refusedWhileStopping(c.command, c.mode)
+		if c.refused != (err != nil) || err != nil && !errors.Is(err, errStopping) {
+			t.Errorf("%s during mode %q: got %v, want refused=%v", c.command, c.mode, err, c.refused)
 		}
 	}
 }

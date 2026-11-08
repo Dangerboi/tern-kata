@@ -49,10 +49,9 @@ func TestParentRowSelectedByKeyAndByClickEndsInTheSameState(t *testing.T) {
 	toggle := model.ActionMsg{Action: model.ToggleExpansion, Value: "parent"}
 	selectParent := model.SelectMsg{UID: "parent"}
 	for _, tt := range []struct {
-		name string
-		from []string // keys to the starting state
-		keys []string
-		// A click on the row; a parent row's click both selects and folds.
+		name     string
+		from     []string // keys to the starting state
+		keys     []string
 		click    []model.Msg
 		expanded bool
 	}{

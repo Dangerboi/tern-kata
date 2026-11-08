@@ -35,7 +35,6 @@ func TestAnAgentThatExitsHasWhatIsLeftAtItsAddressClearedOnce(t *testing.T) {
 	if got, want := addressClears(cmds), []model.Cmd{clearAddress("u1", 3, "11", "dana/omp-11")}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("clears %v, want this Pane's exited agent only", got)
 	}
-	// The exit request is raised as before.
 	if got, want := attentionWrites(cmds), []model.Cmd{raise("u1", 3, "agent exited without closing kata-u1")}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("attention writes %v, want %v", got, want)
 	}
@@ -43,7 +42,6 @@ func TestAnAgentThatExitsHasWhatIsLeftAtItsAddressClearedOnce(t *testing.T) {
 	if got := addressClears(cmds); len(got) != 0 {
 		t.Fatalf("a second relay of the same exit cleared again: %v", got)
 	}
-	// Its block closing later clears nothing more.
 	if _, cmds = pruned(m, "11"); len(addressClears(cmds)) != 0 {
 		t.Fatalf("the block of a cleared agent going cleared again: %v", cmds)
 	}

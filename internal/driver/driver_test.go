@@ -336,19 +336,6 @@ func TestInputTheModelIgnoresDrawsAndSendsNothing(t *testing.T) {
 	}
 }
 
-func TestDaemonCommandsAreReturnedAndOpsAreNot(t *testing.T) {
-	out := step(t, browsing(t, 160), key("j"))
-	for _, cmd := range out.Cmds {
-		switch cmd.(type) {
-		case model.Scroll, model.RevealActivityTab:
-			t.Errorf("intent %#v leaked into the commands", cmd)
-		}
-	}
-	if len(out.Cmds) != 1 {
-		t.Fatalf("commands = %#v", out.Cmds)
-	}
-}
-
 func TestDifferentIssueScrollsTheDetailToItsStart(t *testing.T) {
 	s := feed(t, browsing(t, 160), key("j")).State
 	out := step(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &beta}})

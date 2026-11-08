@@ -93,7 +93,4 @@ func TestArrowKeysAreHintedAndHelped(t *testing.T) {
 			t.Errorf("%s footer lacks arrows: %s", mode, joined)
 		}
 	}
-	if binding, _ := model.LookupBindingForMode("left", model.ModeDetail); binding.Action != model.DrillOut {
-		t.Errorf("detail left: %+v", binding)
-	}
 }

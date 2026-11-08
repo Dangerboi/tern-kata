@@ -74,7 +74,6 @@ func TestSnapshotForAnotherQueryIsIgnoredOnEveryPath(t *testing.T) {
 			read := readIn(t, cmds)
 			before := uids(m)
 
-			// The reader moves on while the read is out: its query no longer answers the current one.
 			moved := m
 			moved.Filters.Owner = "someone"
 			got, _ := model.Update(moved, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: workSnapshot("late")})
@@ -82,7 +81,6 @@ func TestSnapshotForAnotherQueryIsIgnoredOnEveryPath(t *testing.T) {
 				t.Fatalf("a result for the old query was applied: %v, want %v", uids(got), before)
 			}
 
-			// A result of a read that was superseded by a newer one is dropped too.
 			got, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request + 1, Query: read.Query, Snapshot: workSnapshot("late")})
 			if !reflect.DeepEqual(uids(got), before) {
 				t.Fatalf("a result of another request was applied: %v, want %v", uids(got), before)
@@ -156,7 +154,6 @@ func TestPendingSelectionAfterCreate(t *testing.T) {
 		if m.SelectedUID != "created" {
 			t.Fatalf("selected %q after the Issue appeared", m.SelectedUID)
 		}
-		// consumed: a later snapshot does not pull the cursor back
 		m, _ = model.Update(m, model.SelectMsg{UID: "first"})
 		m = arrives(m)
 		if m.SelectedUID != "first" {

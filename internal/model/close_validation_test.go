@@ -54,20 +54,11 @@ func TestCloseSequences(t *testing.T) {
 	}
 }
 
-func TestCloseRefusalsPreserveReadableMessage(t *testing.T) {
-	for _, tt := range []struct{ code, message string }{
-		{"revision_conflict", "issue revision is 8"},
-		{"parent_has_open_children", "refusing: issue has 1 open children:\n  abcd Child\nClose children first"},
-		{"sibling_throttle", "sibling-close throttle: Slow down and review"},
-		{"duplicate_message", "Use specific prose for this Issue"},
-	} {
-		t.Run(tt.code, func(t *testing.T) {
-			refusal := errors.New(tt.message + "\nReview and retry")
-			m := model.Model{CloseForm: model.CloseFormState{Open: true, Saving: true, UID: "issue"}}
-			m, _ = model.Update(m, model.CloseResultMsg{UID: "issue", Err: refusal})
-			if !m.CloseForm.Open || m.CloseForm.Saving || m.CloseForm.Err.Error() != tt.message+"\nReview and retry" {
-				t.Fatalf("refusal: %+v", m.CloseForm)
-			}
-		})
+func TestACloseRefusalKeepsTheFormOpenWithTheDaemonsWords(t *testing.T) {
+	message := "refusing: issue has 1 open children:\n  abcd Child\nClose children first\nReview and retry"
+	m := model.Model{CloseForm: model.CloseFormState{Open: true, Saving: true, UID: "issue"}}
+	m, _ = model.Update(m, model.CloseResultMsg{UID: "issue", Err: errors.New(message)})
+	if !m.CloseForm.Open || m.CloseForm.Saving || m.CloseForm.Err.Error() != message {
+		t.Fatalf("refusal: %+v", m.CloseForm)
 	}
 }

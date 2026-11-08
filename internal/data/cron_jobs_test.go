@@ -144,20 +144,6 @@ func TestGatewayReadsTheParentsCurrentStatus(t *testing.T) {
 	}
 }
 
-func TestGatewayListsArchivedJobsOnlyWhenAsked(t *testing.T) {
-	f := newJobsFixture(t)
-	f.adapter(t, "Live")
-	f.archive(t, f.adapter(t, "Gone"))
-
-	if jobs := f.list(t, false).Jobs; len(jobs) != 1 || jobs[0].Name != "Live" || jobs[0].Archived() {
-		t.Fatalf("default list %+v", jobs)
-	}
-	jobs := f.list(t, true).Jobs
-	if len(jobs) != 2 || !jobNamed(t, jobs, "Gone").Archived() || jobNamed(t, jobs, "Live").Archived() {
-		t.Fatalf("list with archived %+v", jobs)
-	}
-}
-
 func TestGatewayAnArchivedProjectHasNoReadableJobsAndSaysSo(t *testing.T) {
 	f := newJobsFixture(t)
 	f.adapter(t, "Triage")

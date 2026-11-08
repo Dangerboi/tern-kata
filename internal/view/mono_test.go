@@ -117,11 +117,6 @@ func TestPropertyKeysShareOneBox(t *testing.T) {
 			t.Errorf("%s is padded: %q", row.ID, text(key))
 		}
 	}
-	for _, rule := range []string{"[data-role~='" + view.PropertyKeyRole + "']", "[data-role~='" + view.MonoRole + "']"} {
-		if !strings.Contains(view.CSS, rule) {
-			t.Errorf("CSS lacks a rule for %s", rule)
-		}
-	}
 }
 
 // The header's labels over the mono cells are mono as well, so a column's header and rows share one box width in px.

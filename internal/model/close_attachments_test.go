@@ -76,7 +76,6 @@ func TestClosePickerIsOnlyOfferedToADoneCloseOfAnIssueWithAttachments(t *testing
 	if m.CloseForm.ShowsAttachments() {
 		t.Fatal("a wontfix close is offered the picker")
 	}
-	// Tab skips the hidden picker.
 	m, _ = updated(m, model.FocusFieldMsg{Field: model.CloseExternal}, model.KeyMsg{Chord: "tab"})
 	if m.CloseForm.Field != model.CloseReference {
 		t.Fatalf("tab went to %q, want the field after the hidden picker", m.CloseForm.Field)

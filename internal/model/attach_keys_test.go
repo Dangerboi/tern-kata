@@ -76,7 +76,6 @@ func TestShiftUListsAttachmentNamesAndUnlinksTheChosenOne(t *testing.T) {
 	if got := strings.Join(m.FieldSuggestions(), ","); got != "a.png,b.log" {
 		t.Fatalf("names = %q", got)
 	}
-	// Choosing the second row sends it without a confirmation step.
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
 	want := model.UnlinkAttachment{Workspace: "/ws", UID: "issue", ProjectID: 7, Actor: "reviewer", ID: refID("b.log"), Name: "b.log"}

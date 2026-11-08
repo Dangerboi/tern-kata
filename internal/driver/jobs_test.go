@@ -246,7 +246,6 @@ func TestJobsPageInspectorShowsTheSelectedJobsDefinitionAndParent(t *testing.T) 
 		t.Error("an adapter job has no parent to show")
 	}
 
-	// A click on a card selects it too.
 	s = step(t, s, click(jobRow(t, s.Model, "J1"), view.JobClick("J1"))).State
 	wantText(t, "inspector after a click", inspectorText(t, s), "Weekly")
 }

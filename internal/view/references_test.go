@@ -140,22 +140,6 @@ func TestStatusBadgeIsShownOnceUnderTheTitle(t *testing.T) {
 	}
 }
 
-func TestLinksRowShowsThePeersTitleWhenLoaded(t *testing.T) {
-	m, _ := referencing(model.TabLinks)
-	nodes := render(t, m)
-	if got := text(nodes[view.DetailActivityID+".1.row.jump"]); got != "#peer - Peer" {
-		t.Errorf("reference and title = %q, want %q", got, "#peer - Peer")
-	}
-
-	ghost := model.Link{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
-	main := model.Issue{UID: "main", ShortID: "main", Title: "Main", Status: "open", ProjectName: "work"}
-	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Links: []model.Link{ghost}}}))
-	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "#ghost", "ghost")
-	if got := text(nodes[view.DetailActivityID+".2.row.jump"]); got != "#ghost" {
-		t.Errorf("a peer that is not loaded draws %q", got)
-	}
-}
-
 // drawn is a row's text after Tern's layout: each child loses its edge spaces and tabs (a no-break space survives),
 // and the children join without a gap.
 func drawn(row tern.WireNode) string {
@@ -184,6 +168,7 @@ func TestLinkRowReadsRelationReferenceDashTitle(t *testing.T) {
 
 	ghost := model.Link{ID: 3, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
 	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Links: []model.Link{ghost}}}))
+	assertReference(t, nodes, view.DetailActivityID+".3.row.jump", "#ghost", "ghost")
 	if got := drawn(nodes[view.DetailActivityID+".3.row"]); got != "related | #ghost" {
 		t.Errorf("row without a title draws %q", got)
 	}

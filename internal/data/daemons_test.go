@@ -32,7 +32,6 @@ func remoteEntry(name string, server *kataServer) string {
 	return "[[daemon]]\nname = \"" + name + "\"\nurl = \"" + server.URL + "\"\nallow_insecure = true\n\n"
 }
 
-// switched runs a switch to name and returns its answer.
 func switched(t *testing.T, gateway *Gateway, workspace, name string) model.DaemonSwitched {
 	t.Helper()
 	return as[model.DaemonSwitched](t, run(t, gateway, model.SwitchDaemon{Workspace: workspace, Request: 1, Name: name}))

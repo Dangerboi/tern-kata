@@ -144,6 +144,9 @@ func TestLaneViewWorksLikeTheList(t *testing.T) {
 	if got := step(t, s, key("b")).State; laneHeader(t, got) != "" || !drawnIDs(t, view.Render(got.Model, now))[view.IssueListID] {
 		t.Error("b did not bring the list back")
 	}
+	if got := step(t, s, key("shift+l")).State; drawsDetail(t, got) {
+		t.Error("L left the detail drawn")
+	}
 }
 
 func TestMovingInTheLaneViewSelectsTheNextCardInTheLane(t *testing.T) {

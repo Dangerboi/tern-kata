@@ -36,6 +36,15 @@ func fitWidths(t *testing.T, cols listColumns, parts rowParts) int {
 	if first < 0 {
 		t.Fatal("no width keeps the Date badge")
 	}
+	laid := layoutRow(cols, first, parts)
+	total := rowPadding + itemDetailWidth
+	for _, span := range append(laid.label, laid.value...) {
+		total += displayWidth(span.T)
+	}
+	// The owner column is drawn outside the spans, so a list showing it has that room left over.
+	if total > first || !cols.ownerShown && total != first {
+		t.Errorf("row is %d cells wide in the narrowest list that keeps its badge, of %d", total, first)
+	}
 	return first
 }
 
@@ -54,14 +63,6 @@ func TestLayoutRowKeepsTheDateBadgeOnlyWhereTheWholeRowFits(t *testing.T) {
 	if got := dropped.label[len(dropped.label)-1].T; got != cellGap+parts.title {
 		t.Errorf("last span of the row without the badge = %q, want the whole title", got)
 	}
-	// With the owner column hidden the spans are the whole row: the first fitting width holds it to the cell.
-	total := rowPadding + itemDetailWidth
-	for _, span := range append(kept.label, kept.value...) {
-		total += displayWidth(span.T)
-	}
-	if total != first {
-		t.Errorf("row with its badge is %d cells wide, in the narrowest list that keeps it, of %d", total, first)
-	}
 }
 
 func TestLayoutRowHasNoDateBadgeToKeepWhenTheIssueHasNone(t *testing.T) {
@@ -72,26 +73,12 @@ func TestLayoutRowHasNoDateBadgeToKeepWhenTheIssueHasNone(t *testing.T) {
 	}
 }
 
-func TestLayoutRowNeedsRoomForTheOwnerColumnOnlyWhenItIsShown(t *testing.T) {
-	parts := datedParts()
-	hidden := fitWidths(t, listColumns{id: 4, owner: ownerWidth}, parts)
-	shown := fitWidths(t, listColumns{id: 4, owner: ownerWidth, ownerShown: true}, parts)
-	if want := hidden + displayWidth(cellGap) + ownerWidth; shown != want {
-		t.Errorf("owner shown needs %d cells, hidden %d, want the owner box and its gap more", shown, hidden)
-	}
-}
-
-func TestLayoutRowCountsWhatStandsAheadOfTheTitle(t *testing.T) {
-	cols := listColumns{id: 4, owner: ownerWidth}
-	plain := fitWidths(t, cols, datedParts())
-	badged := fitWidths(t, cols, datedParts("agent"))
-	both := fitWidths(t, cols, datedParts("agent", "review"))
-	// The badge takes its gap of cellGap and the title then one cell, a cell less than the title's own gap.
-	if want := plain + displayWidth(cellGap+"agent") - 1; badged != want {
-		t.Errorf("Agent badge needs %d cells, plain row %d, want %d", badged, plain, want)
-	}
-	if want := badged + displayWidth(" review"); both != want {
-		t.Errorf("Agent badge and Work attention word need %d cells, Agent badge alone %d, want %d", both, badged, want)
+func TestLayoutRowFillsExactlyTheNarrowestListThatKeepsItsBadge(t *testing.T) {
+	for _, parts := range []rowParts{datedParts(), datedParts("agent"), datedParts("agent", "review")} {
+		hidden := fitWidths(t, listColumns{id: 4, owner: ownerWidth}, parts)
+		if shown := fitWidths(t, listColumns{id: 4, owner: ownerWidth, ownerShown: true}, parts); shown <= hidden {
+			t.Errorf("owner shown needs %d cells, hidden %d, want more for the owner column", shown, hidden)
+		}
 	}
 }
 

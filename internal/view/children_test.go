@@ -196,9 +196,6 @@ func TestSelectingAChildRowJumpsToTheChild(t *testing.T) {
 			t.Errorf("select %s = %v, want %v", uid, got, want)
 		}
 	}
-	if got := view.DecodeAction("any", "jump", "kid"); got != (model.JumpIssueMsg{UID: "kid"}) {
-		t.Errorf("jump action = %v", got)
-	}
 }
 
 func TestClosedChildIsMutedAndOpenChildIsNot(t *testing.T) {

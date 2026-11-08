@@ -111,13 +111,6 @@ func TestPreflightAcceptsAWorkerConfigTheNewBinaryCanLoad(t *testing.T) {
 	}
 }
 
-func TestPreflightCommandLine(t *testing.T) {
-	plan, err := PlanLaunch([]string{"update", "--preflight"}, lookupFrom(nil), "v")
-	if err != nil || plan.Subcommand != "update" || !plan.Preflight || plan.Force {
-		t.Errorf("update --preflight: %+v, %v", plan, err)
-	}
-}
-
 const refusingKata = `{"refusals":[{"kind":"kata","message":"tern-kata v0.2.0 needs kata v0.21.0 or newer; this machine's daemon is v0.19.0: upgrade kata, then run tern-kata update again"}],"warnings":["a warning"]}`
 const refusingConfig = `{"refusals":[{"kind":"config","message":"worker.toml: unknown key x; after updating, fix it with ` + "`tern-kata worker upgrade`" + ` or ` + "`tern-kata worker edit`" + `"}],"warnings":[]}`
 

@@ -123,20 +123,6 @@ func TestPlanAgent(t *testing.T) {
 	}
 }
 
-func TestPlanAgentCarriesTheRef(t *testing.T) {
-	plan, err := PlanLaunch([]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
-	if err != nil || plan.AgentRef != "demo#ab12" {
-		t.Errorf("AgentRef = %q, err %v", plan.AgentRef, err)
-	}
-}
-
-func TestPlanAgentCarriesTheAgentAddressPrefix(t *testing.T) {
-	plan, err := PlanLaunch([]string{"agent", "--address-prefix", "dangerboi/omp", "--ref", "demo#ab12", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
-	if err != nil || plan.AgentAddressPrefix != "dangerboi/omp" {
-		t.Errorf("AgentAddressPrefix = %q, err %v", plan.AgentAddressPrefix, err)
-	}
-}
-
 func TestAgentEnvironmentHasTheIssueRefAndNoInbox(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses sh")
@@ -210,10 +196,6 @@ func TestAgentForwardCommentsSetsTheExtensionsVariable(t *testing.T) {
 	}
 	if plan, err := PlanLaunch([]string{"agent", "--forward-comments=1", "--", "omp"}, func(string) (string, bool) { return "", false }, "v"); err == nil {
 		t.Errorf("--forward-comments=1 was accepted: %+v", plan)
-	}
-	plan, err := PlanLaunch([]string{"agent", "--forward-comments", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
-	if err != nil || !plan.AgentForwardComments {
-		t.Errorf("AgentForwardComments = %v, err %v", plan.AgentForwardComments, err)
 	}
 }
 
@@ -306,12 +288,8 @@ func TestAgentWrapperRoutesKataToThePanesDaemon(t *testing.T) {
 	})
 }
 
-func TestPlanAgentRouteFlags(t *testing.T) {
+func TestPlanAgentRouteFlagsRefuseBadCombinations(t *testing.T) {
 	lookup := func(string) (string, bool) { return "", false }
-	plan, err := PlanLaunch([]string{"agent", "--home", "/h", "--server=https://s", "--token-file", "/t", "--allow-insecure", "--ref", "demo#ab12", "--", "omp"}, lookup, "v")
-	if err != nil || plan.AgentRoute.Home != "/h" || plan.AgentRoute.Server != "https://s" || plan.AgentRoute.TokenFile != "/t" || !plan.AgentRoute.AllowInsecure || plan.AgentRef != "demo#ab12" {
-		t.Errorf("plan %+v, err %v", plan, err)
-	}
 	for _, args := range [][]string{
 		{"agent", "--daemon", "work", "--server", "https://s", "--", "omp"},
 		{"agent", "--daemon", "--", "omp"},
@@ -344,11 +322,7 @@ func TestAgentWrapperSetsTheCredentialVariablesUnderTheirOwnNamesAndDeletesTheFi
 	}
 }
 
-func TestPlanAgentCollectsEveryMessageFromActor(t *testing.T) {
-	plan, err := PlanLaunch([]string{"agent", "--address-prefix", "dana/omp", "--message-from", "dana-laptop", "--message-from=eve", "--", "omp"}, func(string) (string, bool) { return "", false }, "v")
-	if err != nil || !slices.Equal(plan.AgentMessageFrom, []string{"dana-laptop", "eve"}) {
-		t.Errorf("AgentMessageFrom = %q, err %v", plan.AgentMessageFrom, err)
-	}
+func TestPlanAgentRefusesMessageFromWithoutAValue(t *testing.T) {
 	if _, err := PlanLaunch([]string{"agent", "--message-from", "--", "omp"}, func(string) (string, bool) { return "", false }, "v"); err == nil {
 		t.Error("--message-from without a value was accepted")
 	}

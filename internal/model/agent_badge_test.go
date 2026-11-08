@@ -113,13 +113,6 @@ func TestTheRefreshedMappingReplacesTheModelsAndAnErrorKeepsIt(t *testing.T) {
 	}
 }
 
-func TestAClickOnTheBadgeFocusesAnAgentThatIsNotInTheBackground(t *testing.T) {
-	_, cmds := model.Update(model.Model{}, model.AgentJumpMsg{Block: "7"})
-	if want := []model.Cmd{model.FocusAgent{Block: "7"}}; !reflect.DeepEqual(cmds, want) {
-		t.Fatalf("cmds %#v", cmds)
-	}
-}
-
 func TestAnAgentOfAnUnknownSplitPromptFileReReadsAgentsJSONOnceAndEveryNameShapeMatches(t *testing.T) {
 	for _, name := range []string{"prompt-24734716657667-3836283849.md", "prompt-3836283849.md", "prompt-4-5.md"} {
 		m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "7", 1)}}

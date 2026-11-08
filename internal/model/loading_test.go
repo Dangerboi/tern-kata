@@ -91,14 +91,12 @@ func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.
 		t.Fatalf("fixture: tab=%v cursor on %q", m.ActiveTab(), cursorKey(m))
 	}
 
-	// The same Issue reloads (after saving a Draft) where the reader was.
 	m, _ = model.Update(m, model.DraftSaved{UID: "a"})
 	m, _ = model.Update(m, model.DetailLoaded{UID: "a", Selected: a})
 	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || cursorKey(m) != "two" {
 		t.Fatalf("reload moved the reader: issue=%q tab=%v cursor on %q", m.DetailIssueUID(), m.ActiveTab(), cursorKey(m))
 	}
 
-	// Another Issue starts at its first row on the same tab, while the previous detail stays until it arrives.
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
 	if m.DetailIssueUID() != "a" || m.ActiveTab() != model.TabComments || cursorKey(m) != "one" {
 		t.Fatalf("selecting b: issue=%q tab=%v cursor on %q", m.DetailIssueUID(), m.ActiveTab(), cursorKey(m))

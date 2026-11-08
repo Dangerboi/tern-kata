@@ -125,7 +125,6 @@ func TestDocbankSupervisionRowGivesTheRulesReasonWhenItFails(t *testing.T) {
 		if !strings.HasPrefix(row.Summary, "off: ") || !strings.Contains(row.Summary, tc.reason) || row.Supervised {
 			t.Errorf("%s: summary %q supervised %v, want off with %q", name, row.Summary, row.Supervised, tc.reason)
 		}
-		// Turning it on removes the marker and the row gives the reason that is left.
 		if done := runOnce(t, g, model.SetDocbankSupervision{On: true}).(model.DocbankSupervisionSet); done.Err != nil {
 			t.Fatalf("%s: %v", name, done.Err)
 		}

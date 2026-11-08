@@ -180,13 +180,6 @@ func TestALoadThatDropsTheNarrowLaneViewsLaneRepicksIt(t *testing.T) {
 	}
 }
 
-func TestLaneViewTogglesTheDetailLikeTheList(t *testing.T) {
-	s := feed(t, laneBoard(t, 160), key("enter")).State
-	if got := step(t, s, key("shift+l")).State; drawsDetail(t, got) {
-		t.Error("L left the detail drawn")
-	}
-}
-
 func savingLanesCard(t *testing.T) driver.State {
 	t.Helper()
 	s := typed(t, step(t, lanesCard(t), key("ctrl+u")).State, "wip, shipping")
@@ -251,21 +244,7 @@ func TestALanesSaveResultAfterCancelOrForAnotherProjectChangesNoCard(t *testing.
 	}
 }
 
-func TestLanesCardRefusesDoneLimitsAboveTheMaximumNamingTheField(t *testing.T) {
-	for _, tt := range []struct {
-		tabs       int
-		text, want string
-	}{{1, "3651", "Done days"}, {2, "501", "Done cards"}} {
-		s := lanesCard(t)
-		for range tt.tabs {
-			s = step(t, s, key("tab")).State
-		}
-		out := step(t, typed(t, s, tt.text), key("enter"))
-		msg, ok := errorOnCard(t, out.State.Model)
-		if len(out.Cmds) != 0 || !ok || !strings.Contains(msg, tt.want) {
-			t.Errorf("%s: cmds %v error %q, want a refusal naming %q", tt.text, out.Cmds, msg, tt.want)
-		}
-	}
+func TestLanesCardAcceptsDoneDaysAtTheMaximum(t *testing.T) {
 	s := typed(t, step(t, lanesCard(t), key("tab")).State, "3650")
 	if out := step(t, s, key("enter")); len(out.Cmds) != 1 {
 		t.Errorf("3650 refused: %v", out.Cmds)

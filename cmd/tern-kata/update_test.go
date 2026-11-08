@@ -331,6 +331,9 @@ func TestUpdatePauseWaitsForEnterOnlyOnSuccess(t *testing.T) {
 }
 
 func TestUpdateCommandLine(t *testing.T) {
+	if plan, err := PlanLaunch([]string{"update", "--preflight"}, lookupFrom(nil), "v"); err != nil || !plan.Preflight || plan.Force {
+		t.Errorf("update --preflight: %+v, %v", plan, err)
+	}
 	plan, err := PlanLaunch([]string{"update", "--force", "--pause"}, lookupFrom(nil), "v")
 	if err != nil || plan.Subcommand != "update" || !plan.Force || !plan.Pause {
 		t.Errorf("update --force --pause: %+v, %v", plan, err)

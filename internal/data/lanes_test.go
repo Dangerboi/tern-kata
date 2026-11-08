@@ -138,7 +138,6 @@ func TestASaveThatCannotCompleteLeavesTheLaneListAndDefaultFilterFilesAsTheyWere
 	}
 }
 
-// lanes reads the Project's Lane list through gateway, as the Pane does.
 func (f configFixture) lanes(t *testing.T, gateway *Gateway) model.LanesLoaded {
 	t.Helper()
 	return as[model.LanesLoaded](t, run(t, gateway, model.LoadLanes{Workspace: f.workspace, ProjectUID: f.project.UID}))

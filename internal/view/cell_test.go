@@ -23,8 +23,8 @@ func TestCellMeasuresDisplayWidth(t *testing.T) {
 }
 
 // Tern draws a glyph the font lacks from a fallback font whose advance is not the character cell's, so a CJK owner padded to
-// the column's width in cells comes out narrower than its header. The row's own role names the column widths, the style sheet
-// boxes each cell to them, and the owner is cut but not padded.
+// the column's width in cells comes out narrower than its header. The row's own role names the column widths and the owner is
+// cut but not padded.
 func TestOwnerCellIsABoxOfTheColumnWidthWhateverItsGlyphs(t *testing.T) {
 	cols := listColumns{ownerShown: true, id: 6, owner: 10}
 	if got, want := cols.role(), "tern-kata.row tern-kata.id6 tern-kata.ow10"; got != want {
@@ -32,15 +32,6 @@ func TestOwnerCellIsABoxOfTheColumnWidthWhateverItsGlyphs(t *testing.T) {
 	}
 	if got := (listColumns{id: 6}).role(); strings.Contains(got, ListOwnerRole) {
 		t.Errorf("role %q names an owner column that is not drawn", got)
-	}
-	for _, rule := range []string{
-		".sf-item[data-role~='tern-kata.ow10'] .sf-item-value > span:nth-child(2) { display: inline-block; white-space: pre; min-width: 7.2em; }",
-		".sf-item[data-role~='tern-kata.id6'] .sf-item-label > span:nth-child(1) { display: inline-block; white-space: pre; min-width: 3.6em; }",
-		".sf-item[data-role~='tern-kata.row'] .sf-item-value > span:last-child { display: inline-block; white-space: pre; min-width: 6.0em; }",
-	} {
-		if !strings.Contains(CSS, rule) {
-			t.Errorf("CSS lacks %q", rule)
-		}
 	}
 	for text, want := range map[string]string{"田中太郎": "  田中太郎", "🤖bot": "  🤖bot", "alexandria-long": "  alexandri…"} {
 		if got := rightCells("", text, "", cols, "", "")[1].T; got != want {

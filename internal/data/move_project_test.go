@@ -77,23 +77,6 @@ func TestGatewayMovePreviewWithoutARevisionReadsTheCurrentOne(t *testing.T) {
 	}
 }
 
-func TestGatewayMoveWithTheCurrentRevisionMovesTheIssue(t *testing.T) {
-	f := newMoveFixture(t)
-	before := f.issue(t)
-
-	moved := f.move(t, false, before.Revision)
-	if moved.Err != nil || moved.Conflict || moved.DryRun || moved.NewShortID == "" {
-		t.Fatalf("moved %+v, want a move that reports the new short id", moved)
-	}
-	after := f.issue(t)
-	if after.ProjectName != "extra" || after.ShortID != moved.NewShortID || after.UID != f.uid {
-		t.Errorf("Issue now %s %s (%s), want extra %s", after.ProjectName, after.ShortID, after.UID, moved.NewShortID)
-	}
-	if after.Revision <= before.Revision {
-		t.Errorf("revision %d after the move, was %d", after.Revision, before.Revision)
-	}
-}
-
 func TestGatewayMoveWithAStaleRevisionIsRefusedAndMovesNothing(t *testing.T) {
 	f := newMoveFixture(t)
 	opened := f.issue(t)
@@ -118,7 +101,6 @@ func TestGatewayMoveToTheIssuesOwnProjectShowsKatasRefusal(t *testing.T) {
 	}
 }
 
-// child is an Issue created under the fixture's Issue.
 func (f moveFixture) child(t *testing.T) string {
 	t.Helper()
 	created := as[model.IssueCreated](t, run(t, f.gateway, model.CreateIssueCmd{Workspace: f.workspace, Actor: f.actor, ProjectID: f.from.ID, Title: "Child", Body: "body", ParentUID: f.uid}))
@@ -161,11 +143,11 @@ func TestGatewayMoveTakesTheDescendantsUnlessOnlyThisIssue(t *testing.T) {
 			}
 
 			moved := f.moveWith(t, false, single, preview.Revision)
-			if moved.Err != nil || moved.Count != wantDescendants+1 || moved.NewShortID == "" {
-				t.Fatalf("moved %+v, want %d Issues", moved, wantDescendants+1)
+			if moved.Err != nil || moved.Conflict || moved.DryRun || moved.Count != wantDescendants+1 || moved.NewShortID == "" {
+				t.Fatalf("moved %+v, want %d Issues and the new short id", moved, wantDescendants+1)
 			}
-			if got := f.projectOf(t, f.uid); got != "extra" {
-				t.Errorf("parent is in %s, want extra", got)
+			if parent := f.issue(t); parent.ProjectName != "extra" || parent.ShortID != moved.NewShortID {
+				t.Errorf("parent is %s %s, want extra %s", parent.ProjectName, parent.ShortID, moved.NewShortID)
 			}
 			wantChild := "extra"
 			if single {
@@ -199,23 +181,5 @@ func TestMoveRefusalNamingADescendantIsASubtreeRefusal(t *testing.T) {
 	}
 	if _, err := moveRefusal(refused("recurrence_pinned", "descendant demo#7: issue is pinned", named)); !strings.Contains(err.Error(), "descendant demo#7") {
 		t.Errorf("err = %v, want kata's words naming the descendant", err)
-	}
-}
-
-func TestGatewayMoveFindsARestartedDaemonAgain(t *testing.T) {
-	first := startKata(t, "0.21.0")
-	l := newLocator(first.target())
-	gateway := newGateway(t, l)
-	workspace, from := project(t, gateway, "demo")
-	created := as[model.ProjectSaved](t, run(t, gateway, model.CreateProject{Workspace: t.TempDir(), Actor: "tester", Name: "extra"}))
-	uid := createIssue(t, gateway, workspace, from, "Move me")
-
-	second := serve(t, first.handler, "0.21.0")
-	l.target.Store(new(second.target()))
-	first.Close()
-
-	answer := as[model.ProjectMoveAnswer](t, run(t, gateway, model.MoveToProjectCmd{Workspace: workspace, UID: uid, Actor: "tester", ProjectID: from.ID, ToProjectUID: created.Project.UID, DryRun: true}))
-	if answer.Err != nil || answer.Conflict {
-		t.Fatalf("answer %+v, want the preview from the restarted daemon", answer)
 	}
 }

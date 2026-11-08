@@ -143,11 +143,13 @@ func TestRunRefusalsSayWhy(t *testing.T) {
 	}
 }
 
-func TestWorkerStatusWithNoWorkerSaysSo(t *testing.T) {
+func TestWorkerCommandsWithNoWorkerSaySo(t *testing.T) {
 	f := newWorkerFixture(t, "")
-	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}})
-	if !errors.As(err, new(subcommandError)) || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
-		t.Fatalf("error %v", err)
+	for _, operands := range [][]string{{"status"}, {"stop"}, {"abandon", "01M5J9AAAAAAAAAAAAAAAAAAAA"}} {
+		_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: operands})
+		if !errors.As(err, new(subcommandError)) || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
+			t.Errorf("worker %v: error %v", operands, err)
+		}
 	}
 }
 
@@ -217,7 +219,7 @@ func TestWorkerStatusSaysHowItIsSupervised(t *testing.T) {
 		if err != nil || !strings.Contains(out, tc.want) {
 			t.Errorf("supervisor %q: want %q in:\n%s (err %v)", tc.supervisor, tc.want, out, err)
 		}
-		if tc.supervisor != "" && !strings.Contains(out, "create "+worker.SupervisionOffWords+".") {
+		if tc.supervisor != "" && !strings.Contains(out, "create worker.manual beside worker.toml.") {
 			t.Errorf("supervised status does not say how to turn supervision off:\n%s", out)
 		}
 	}
@@ -458,14 +460,6 @@ func TestWorkerResumeAndAbandonSettleRunsHeldByARestart(t *testing.T) {
 	}
 }
 
-func TestWorkerResumeWithNoWorkerSaysSo(t *testing.T) {
-	f := newWorkerFixture(t, "")
-	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"abandon", "01M5J9AAAAAAAAAAAAAAAAAAAA"}})
-	if !errors.As(err, new(subcommandError)) || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
-		t.Fatalf("error %v", err)
-	}
-}
-
 func TestWorkerAbandonStopsARunThatIsRunning(t *testing.T) {
 	stub := workertest.BuildStub(t)
 	f := newWorkerFixture(t, "[profiles.stuck]\ncommand = "+quote(stub)+"\nargs = [\"--stub-hang\"]\n")
@@ -524,12 +518,9 @@ func TestWorkerStopSaysNothingWillStartItAgainInTheSupervisionRulesWords(t *test
 	defer stop()
 
 	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"stop"}})
-	want := "Stopping when idle: 0 runs in flight, so the worker exits now. Nothing will start it again: start one with `tern-kata worker`, or let the plugin (" + worker.SupervisionOnWords + ").\n"
+	want := "Stopping when idle: 0 runs in flight, so the worker exits now. Nothing will start it again: start one with `tern-kata worker`, or let the plugin (a worker.toml without worker.manual beside it).\n"
 	if err != nil || out != want {
 		t.Fatalf("stop printed %q, %v; want %q", out, err, want)
-	}
-	if !strings.Contains(worker.SupervisionOnWords, worker.ConfigFileName) || !strings.Contains(worker.SupervisionOnWords, worker.ManualFileName) {
-		t.Errorf("the rule's words %q do not name %s and %s", worker.SupervisionOnWords, worker.ConfigFileName, worker.ManualFileName)
 	}
 }
 
@@ -625,14 +616,6 @@ func TestWorkerStatusSaysHowTheWorkerReachesTheInstalledVersion(t *testing.T) {
 		if !strings.Contains(got, c.want) || strings.Contains(got, c.not) {
 			t.Errorf("%s: %q, want %q and not %q", c.name, got, c.want, c.not)
 		}
-	}
-}
-
-func TestWorkerStopWithNoWorkerSaysSo(t *testing.T) {
-	f := newWorkerFixture(t, "")
-	_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"stop"}})
-	if !errors.As(err, new(subcommandError)) || !strings.Contains(err.Error(), "no tern-kata worker is running on this machine") {
-		t.Fatalf("error %v", err)
 	}
 }
 

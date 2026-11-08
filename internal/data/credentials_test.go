@@ -103,6 +103,9 @@ func TestGatewayReportsAFailedCapabilityCheckAndTokenReadInTheAskingMessage(t *t
 	if got := run(t, gateway, model.LoadAuthCapabilities{Request: 3}); got != (model.AuthCapabilitiesLoaded{Request: 3, Err: boom}) {
 		t.Errorf("capabilities failure %#v", got)
 	}
+	if got := run(t, gateway, model.LoadAuthCapabilities{Request: 5, Account: true}); got != (model.AuthCapabilitiesLoaded{Request: 5, Account: true, Err: boom}) {
+		t.Errorf("capabilities failure for the Pane's ask %#v", got)
+	}
 	if got := run(t, gateway, model.LoadCredentials{Request: 4}); got.(model.CredentialsLoaded).Request != 4 || !errors.Is(got.(model.CredentialsLoaded).Err, boom) {
 		t.Errorf("token list failure %#v", got)
 	}
@@ -183,16 +186,6 @@ func TestGatewayReportsAnIssueScopedAccountAndEchoesWhoAsked(t *testing.T) {
 	page := as[model.AuthCapabilitiesLoaded](t, run(t, gateway, model.LoadAuthCapabilities{Workspace: workspace, Request: 3}))
 	if page.Account || !page.IssueScoped {
 		t.Fatalf("the Credentials Page's ask came back %+v, want Account false", page)
-	}
-}
-
-func TestGatewayEchoesWhoAskedWhenTheCapabilityReadFails(t *testing.T) {
-	l := newLocator(Target{})
-	boom := context.DeadlineExceeded
-	l.err.Store(&boom)
-	gateway := newGateway(t, l)
-	if got := run(t, gateway, model.LoadAuthCapabilities{Request: 5, Account: true}); got != (model.AuthCapabilitiesLoaded{Request: 5, Account: true, Err: boom}) {
-		t.Errorf("failure %#v", got)
 	}
 }
 

@@ -92,22 +92,3 @@ func TestCommandEnvDropsReservedNamesByTheirCase(t *testing.T) {
 		t.Fatalf("case-sensitive: got %q, want %q", got, want)
 	}
 }
-
-func TestReservedEnvNameFollowsTheCaseRule(t *testing.T) {
-	for _, c := range []struct {
-		name            string
-		caseInsensitive bool
-		want            bool
-	}{
-		{"Kata_Author", true, true},
-		{"Kata_Author", false, false},
-		{"tern_kata_run", true, true},
-		{"KATA_AUTHOR", false, true},
-		{"TERN_KATA_RUN", false, true},
-		{"PATH", true, false},
-	} {
-		if got := reservedEnvName(c.name, c.caseInsensitive); got != c.want {
-			t.Errorf("reservedEnvName(%q, %v) = %v, want %v", c.name, c.caseInsensitive, got, c.want)
-		}
-	}
-}

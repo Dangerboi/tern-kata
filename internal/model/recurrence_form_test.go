@@ -406,7 +406,6 @@ func TestRecurrenceCardOpensAsChangeRecurrencePrefilledFromTheSchedule(t *testin
 	if f.Frequency != model.Monthly || f.Every != "2" || f.Day != "2 tue" || f.Ends != model.EndCount || f.Count != "5" || f.Start != "2026-10-19" || f.Zone != "Europe/Zurich" {
 		t.Fatalf("prefill %+v", f)
 	}
-	// Saving what the card shows sends the same rule, to the recurrence it read, with what it read as the guard.
 	_, cmds := saveRecurrence(m)
 	terms := model.RecurrenceTerms{Rule: "FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU;COUNT=5", Start: "2026-10-19", TimeZone: "Europe/Zurich"}
 	want := model.ChangeRecurrenceCmd{Workspace: "/repo", UID: "parent", RecurrenceUID: "rec-uid", RecurrenceTerms: terms, Opened: terms}
@@ -486,7 +485,6 @@ func TestRecurrenceCardOfANewRecurrenceHasNoStop(t *testing.T) {
 }
 
 func TestRecurrenceCardFillsAnEmptyDayWithTheStartDatesDay(t *testing.T) {
-	// A rule the web UI writes without a day opens with the start date's day, and saving writes the explicit day.
 	m := openRecurrenceCard(recurring("FREQ=MONTHLY;INTERVAL=1"))
 	if m.RecurrenceForm.Day != "19" {
 		t.Fatalf("Day %q, want the start date's day 19", m.RecurrenceForm.Day)
@@ -495,7 +493,6 @@ func TestRecurrenceCardFillsAnEmptyDayWithTheStartDatesDay(t *testing.T) {
 	if got := cmds[0].(model.ChangeRecurrenceCmd).Rule; got != "FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=19" {
 		t.Fatalf("rule %q, want the explicit day", got)
 	}
-	// Changing the frequency fills a Day the user emptied.
 	m = openRecurrenceCard(recurrenceBase())
 	m = fillField(choose(m, model.RecurrenceFrequency, frequency(model.Monthly)), model.RecurrenceDay, "")
 	if m = choose(m, model.RecurrenceFrequency, frequency(model.Yearly)); m.RecurrenceForm.Day != "21" {

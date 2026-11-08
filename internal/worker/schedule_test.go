@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	_ "time/tzdata" // the zone database, so the Berlin case never skips on a host without one
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/worker"
@@ -159,7 +160,7 @@ func TestACronJobRunsInItsTriggerZoneAndEveryIsAnAnchoredInterval(t *testing.T) 
 	h := newHarness(t)
 	berlin, err := time.LoadLocation("Europe/Berlin")
 	if err != nil {
-		t.Skip("no time zone data")
+		t.Fatal(err)
 	}
 	cron := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "morning", Prompt: "Do it.", Trigger: cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "Europe/Berlin"}})
 	every := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "every", Prompt: "Do it.", Trigger: cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "@every 2h"}})

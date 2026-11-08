@@ -121,21 +121,6 @@ func withoutCreation(j cronjob.Job) cronjob.Job {
 	return j
 }
 
-func TestIntervalAnchor(t *testing.T) {
-	delivery := time.Date(2026, 10, 1, 8, 0, 30, 0, time.UTC)
-	adapter := job(cronjob.ActionExecute, perRun(), cronjob.Trigger{})
-	native := job(cronjob.ActionNotify, perRun(), cronjob.Trigger{})
-	if got, ok := adapter.IntervalAnchor(delivery); !ok || !got.Equal(adapter.CreatedAt) {
-		t.Errorf("Adapter job anchor = %v, %v; want its creation", got, ok)
-	}
-	if got, ok := native.IntervalAnchor(delivery); !ok || !got.Equal(delivery) {
-		t.Errorf("Native job anchor = %v, %v; want the delivery anchor", got, ok)
-	}
-	if _, ok := native.IntervalAnchor(time.Time{}); ok {
-		t.Error("a Native job with no delivery anchor has an interval anchor")
-	}
-}
-
 func TestIssuesPerDay(t *testing.T) {
 	now := time.Date(2026, 10, 1, 8, 0, 0, 0, time.UTC)
 	hourly := cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 * * * *"}

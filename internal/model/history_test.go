@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -103,7 +104,8 @@ const same = `{"from":"dana","message":"all hands","broadcast":true}`
 // slotEvent is an issue.metadata_updated event that sets (or, for null, clears) the slots of the given addresses.
 func slotEvent(slots map[string]string) model.Event {
 	var parts []string
-	for address, value := range slots {
+	for _, address := range slices.Sorted(maps.Keys(slots)) {
+		value := slots[address]
 		parts = append(parts, `"`+model.NotificationKey(address)+`":{"from":null,"to":`+value+`}`)
 	}
 	return model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{` + strings.Join(parts, ",") + `}}`}

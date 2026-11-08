@@ -306,7 +306,6 @@ func TestSkipRecordsSurviveARestartReplaceTheSameOccurrenceAndArePrunedByRetenti
 			t.Fatal(err)
 		}
 	}
-	// the same occurrence again replaces its record
 	if err := store.Add(skip("B", now, now.Add(time.Minute))); err != nil {
 		t.Fatal(err)
 	}

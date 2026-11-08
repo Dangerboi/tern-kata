@@ -352,13 +352,6 @@ func TestDocbankSetupLocalRefusesADifferentKataDocbankSectionBeforeTouchingDocba
 	}
 }
 
-func TestDocbankSetupLocalFlagRules(t *testing.T) {
-	plan, err := PlanLaunch([]string{"docbank", "setup", "--port", "9000"}, func(string) (string, bool) { return "robot", true }, "test")
-	if err != nil || plan.Docbank.Port != 9000 || plan.Docbank.URL != "" {
-		t.Errorf("local form: %+v, %v", plan.Docbank, err)
-	}
-}
-
 func TestDocbankSetupLocalReusesAKeyFileKataAlreadyHolds(t *testing.T) {
 	f := newLocalFixture(t)
 	const stored = "a-key-already-stored-for-kata"

@@ -81,14 +81,6 @@ func TestEnterOnAChildRowJumpsToItAndEscComesBack(t *testing.T) {
 	}
 }
 
-func TestEnterOnAnUnloadedChildStillJumps(t *testing.T) {
-	m, _ := clickPress(parentDetail(), "j", "j")
-	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
-	if m.SelectedUID != "gone" {
-		t.Fatalf("selected %s", m.SelectedUID)
-	}
-}
-
 func TestEnterOnAnActivityRowBelowTheChildrenDoesNotJump(t *testing.T) {
 	m, cmds := clickPress(parentDetail(), "j", "j", "j", "enter")
 	if m.SelectedUID != "parent" || cursorKey(m) != "c1" || len(cmds) != 0 {

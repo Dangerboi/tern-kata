@@ -196,7 +196,6 @@ func TestIOpensTheRunsIssueOnTheIssuesPage(t *testing.T) {
 	if !loaded {
 		t.Errorf("cmds %#v, want the Issue's detail loaded", opened.Cmds)
 	}
-	// From the detail view too.
 	inspected := feed(t, runsPane(t, 160, finishedRun("R1")), key("enter")).State
 	if got := step(t, inspected, key("i")).State.Model; got.Page != model.PageIssues || got.SelectedUID != "parent-a" {
 		t.Errorf("i in the detail leaves page %v selected %q", got.Page, got.SelectedUID)

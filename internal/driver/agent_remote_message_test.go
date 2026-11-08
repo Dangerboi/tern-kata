@@ -201,13 +201,6 @@ func TestABroadcastOnAnUnverifiedDaemonListsRemoteAgentsSkippedButWritesToLocalO
 	wantShown(t, "the outcome", s, "1 agent got the message.", "Skipped omp on work#p: "+model.AgentUnverifiedRefusal, "Skipped omp on work#c1: "+model.AgentUnverifiedRefusal)
 }
 
-func TestABroadcastOnAnIssueWithOnlyRemoteAgentsOpensTheCard(t *testing.T) {
-	s := broadcastRemotePane(t, true)
-	if open := step(t, s, tern.Key{Name: "s", Shift: true}); open.State.Model.TopCard() != model.CardAgentMessage {
-		t.Fatalf("card %v notice %q, want the Message card", open.State.Model.TopCard(), open.State.Model.Notice)
-	}
-}
-
 func TestTheSweepIncludesAgentsOnOtherHostsOnAnyIssueAndFollowsThemToFinished(t *testing.T) {
 	s := broadcastRemotePane(t, true, broadcastAgent("p", "31"))
 	sending := step(t, s, view.DecodeAction("", string(model.WrapUpSweepAction), ""))
@@ -253,17 +246,6 @@ func TestTheSweepIncludesAgentsOnOtherHostsOnAnyIssueAndFollowsThemToFinished(t 
 	s = withRemoteRecords(s, "c1")
 	wantShown(t, "after mac's record went", s, "2 of 4 agents have finished the wrap-up.", "omp on work#c1, on mac: finished")
 	wantShown(t, "the record still there", s, "omp on work#c2, on mac: not yet")
-}
-
-func TestTheSweepOnAnUnverifiedDaemonListsRemoteAgentsSkipped(t *testing.T) {
-	s := broadcastRemotePane(t, false, broadcastAgent("p", "31"))
-	sending := step(t, s, view.DecodeAction("", string(model.WrapUpSweepAction), ""))
-	if got := sentMessages(sending.Cmds); len(got) != 1 || got["dana/omp-31"].UID != "p" {
-		t.Fatalf("cmds %#v, want one write to the local agent", sending.Cmds)
-	}
-	s = step(t, sending.State, model.AgentMessageSent{UID: "p", Address: "dana/omp-31"}).State
-	wantShown(t, "the sweep", s, "0 of 1 agents have finished the wrap-up.", "Skipped omp on work#p: "+model.AgentUnverifiedRefusal)
-	wantNotShown(t, "the sweep", s, "on desk: not yet")
 }
 
 func TestTheSweepWithOnlyRemoteAgentsOpensTheCard(t *testing.T) {

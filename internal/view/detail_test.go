@@ -274,27 +274,21 @@ func TestDetailDatesAreToneByTheirOwnDateAgainstThePaneCalendar(t *testing.T) {
 	}
 }
 
-func TestCommentsAndEventsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
+func TestCommentsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
 	processZoneIsUTC(t)
-	when := "2026-10-09 03:05" // the model zone, not the process zone
-	for _, tt := range []struct {
-		tab model.ActivityTab
-		key string
-	}{{model.TabComments, "c1"}} {
-		card := render(t, detailWithActivity(tt.tab))[view.DetailActivityID+"."+tt.key]
-		if card.K != "card" || card.P["variant"] != "bare" {
-			t.Fatalf("%s is %s %v, want a bare card", tt.key, card.K, card.P["variant"])
-		}
-		want := [][2]string{{"dana", "strong"}, {"  ", ""}, {when, "muted mono"}}
-		var got [][2]string
-		for _, span := range card.P["head"].([]any) {
-			f := span.(map[string]any)
-			style, _ := f["s"].(string)
-			got = append(got, [2]string{f["t"].(string), style})
-		}
-		if !slices.Equal(got, want) {
-			t.Errorf("%s head = %v, want %v", tt.key, got, want)
-		}
+	card := render(t, detailWithActivity(model.TabComments))[view.DetailActivityID+".c1"]
+	if card.K != "card" || card.P["variant"] != "bare" {
+		t.Fatalf("c1 is %s %v, want a bare card", card.K, card.P["variant"])
+	}
+	want := [][2]string{{"dana", "strong"}, {"  ", ""}, {"2026-10-09 03:05", "muted mono"}} // the model zone, not the process zone
+	var got [][2]string
+	for _, span := range card.P["head"].([]any) {
+		f := span.(map[string]any)
+		style, _ := f["s"].(string)
+		got = append(got, [2]string{f["t"].(string), style})
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("c1 head = %v, want %v", got, want)
 	}
 }
 
@@ -472,13 +466,6 @@ func TestAttachmentsTabIsFourthWithItsCount(t *testing.T) {
 	}
 	if got := text(nodes[view.DetailActivityID+".tabs.tab2"]); got != "Links (0)" {
 		t.Errorf("third tab = %q", got)
-	}
-}
-
-func TestEmptyAttachmentsTabSaysHowToAttach(t *testing.T) {
-	nodes := attachmentsTab(t, map[string]any{"scheduled_on": "2026-10-20"})
-	if got := text(nodes[view.DetailActivityID+".empty"]); got != "No attachments, @ to attach" {
-		t.Errorf("empty text = %q", got)
 	}
 }
 

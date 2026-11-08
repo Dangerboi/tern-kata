@@ -39,37 +39,30 @@ func TestUpdateStopsASupervisedWorkerWhenIdleAndPrintsTheAnswerAsWorkerStopDoes(
 	eventually(t, "the worker to exit", func() bool { return !workerAnswers(f) })
 }
 
-func TestUpdateOnlyNamesAWorkerStartedByHand(t *testing.T) {
-	w := newWorkerFixture(t, "")
-	w.serve(t)
-	f := updateWithWorker(t, w)
-	if err := f.run(LaunchPlan{Subcommand: "update"}); err != nil {
-		t.Fatal(err)
-	}
-	if want := "The worker was started by hand or supervision is off: restart it to use v0.2.0\n"; !strings.Contains(f.out.String(), want) || strings.Contains(f.out.String(), "Stopping") {
-		t.Errorf("output:\n%s", f.out.String())
-	}
-	if !workerAnswers(f) {
-		t.Error("the worker was stopped")
-	}
-}
-
-func TestUpdateOnlyNamesASupervisedWorkerWhileSupervisionIsOff(t *testing.T) {
-	w := newWorkerFixture(t, "")
-	w.env.Supervisor = worker.SupervisorTern
-	w.serve(t)
-	if err := os.WriteFile(filepath.Join(w.env.Dirs.Config, worker.ManualFileName), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	f := updateWithWorker(t, w)
-	if err := f.run(LaunchPlan{Subcommand: "update"}); err != nil {
-		t.Fatal(err)
-	}
-	if want := "The worker was started by hand or supervision is off: restart it to use v0.2.0\n"; !strings.Contains(f.out.String(), want) || strings.Contains(f.out.String(), "Stopping") {
-		t.Errorf("output:\n%s", f.out.String())
-	}
-	if !workerAnswers(f) {
-		t.Error("the worker was stopped")
+func TestUpdateOnlyNamesAWorkerItDoesNotSupervise(t *testing.T) {
+	for name, supervisionOff := range map[string]bool{"started by hand": false, "supervision turned off": true} {
+		t.Run(name, func(t *testing.T) {
+			w := newWorkerFixture(t, "")
+			if supervisionOff {
+				w.env.Supervisor = worker.SupervisorTern
+			}
+			w.serve(t)
+			if supervisionOff {
+				if err := os.WriteFile(filepath.Join(w.env.Dirs.Config, worker.ManualFileName), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f := updateWithWorker(t, w)
+			if err := f.run(LaunchPlan{Subcommand: "update"}); err != nil {
+				t.Fatal(err)
+			}
+			if want := "The worker was started by hand or supervision is off: restart it to use v0.2.0\n"; !strings.Contains(f.out.String(), want) || strings.Contains(f.out.String(), "Stopping") {
+				t.Errorf("output:\n%s", f.out.String())
+			}
+			if !workerAnswers(f) {
+				t.Error("the worker was stopped")
+			}
+		})
 	}
 }
 

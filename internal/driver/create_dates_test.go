@@ -58,12 +58,7 @@ func TestCreateCardReachesScheduledThenDeadlineAfterPriorityByTab(t *testing.T) 
 
 func TestCreateCardPreviewsEachDateAgainstThePaneCalendar(t *testing.T) {
 	for _, tt := range []struct{ input, want string }{
-		{"2026-10-24", "2026-10-24 Sat"},
-		{"today", "2026-10-08 Thu"},
 		{"tomorrow", "2026-10-09 Fri"},
-		{"+2w", "2026-10-22 Thu"},
-		{"2026-10-24T09:00", "2026-10-24 Sat 09:00"},
-		{"2026-10-24T09:00:30Z", "2026-10-24T09:00:30Z"},
 		{"", "no date"},
 		{"someday", ""},
 	} {

@@ -134,7 +134,6 @@ func TestTheOpenFlagFollowsWhereTheRelayShowsAnOwnBackgroundAgent(t *testing.T) 
 	if _, cmds = relayed(m, at("5", "waiting_input", model.SeenShown)); len(flagWrites(cmds)) != 0 {
 		t.Fatalf("nothing changed, yet %#v", cmds)
 	}
-	// Back in the hidden session clears it.
 	m, cmds = relayed(m, at("5", "waiting_input", model.SeenHidden))
 	if want := []model.SetAgentOpen{{Block: "5", Open: false}}; !reflect.DeepEqual(flagWrites(cmds), want) {
 		t.Fatalf("back in the hidden session: %#v", cmds)

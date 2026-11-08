@@ -34,9 +34,6 @@ func TestHierarchyRows(t *testing.T) {
 	if !reflect.DeepEqual(uids, []string{"parent", "root"}) || m.SelectedUID != "parent" || !reflect.DeepEqual(cmds, []model.Cmd{model.Subscribe{Generation: 1}, model.LoadDetail{UID: "parent"}}) {
 		t.Fatalf("collapsed rows=%v selected=%q commands=%#v", uids, m.SelectedUID, cmds)
 	}
-	if _, ok := cmds[0].(model.Subscribe); !ok {
-		t.Fatalf("load commands=%#v", cmds)
-	}
 	if rows[0].Depth != 0 || !rows[0].HasChildren || rows[0].Expanded || rows[1].HasChildren {
 		t.Fatalf("row hierarchy: %+v", rows)
 	}

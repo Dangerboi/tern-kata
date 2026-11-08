@@ -5,20 +5,21 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
 func TestAnAnswerListingCredentialsDaemonsOrConfigFilesRevealsNoRow(t *testing.T) {
 	for name, tc := range map[string]struct {
-		s   model.Model
+		s   driver.State
 		msg model.Msg
 	}{
-		"Credentials": {tokenList(t).Model, model.CredentialsLoaded{}},
-		"Daemons":     {daemonsListed(t).Model, model.DaemonsLoaded{}},
-		"Config":      {configListed(t).Model, model.ConfigFilesLoaded{}},
+		"Credentials": {tokenList(t), model.CredentialsLoaded{}},
+		"Daemons":     {daemonsListed(t), model.DaemonsLoaded{}},
+		"Config":      {configListed(t), model.ConfigFilesLoaded{}},
 	} {
-		if id := view.SelectionRevealID(tc.s, tc.msg, "other"); id != "" {
-			t.Errorf("%s: the list answer revealed %q, a row Tern does not know yet", name, id)
+		for _, op := range step(t, tc.s, tc.msg).Ops {
+			if op[0] == "reveal" {
+				t.Errorf("%s: the list answer sent %v, a reveal of a row Tern does not know yet", name, op)
+			}
 		}
 	}
 }

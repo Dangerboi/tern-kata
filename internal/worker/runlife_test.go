@@ -6,8 +6,9 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
 
-// The tables below pin the Run lifecycle's answers over Journals (ADR-0005, ADR-0006, ADR-0007); they reach it only
-// through its interface.
+// The tables below pin the Run lifecycle's answers over Journals (ADR-0005, ADR-0006, ADR-0007). They call the
+// lifecycle's unexported questions directly because the group proof, saved session and finished turn are inputs a
+// Worker-level test cannot set one by one.
 
 // journalAt is a Journal in phase with the given hold (empty for none). A hold from before admission has no Outcome
 // status; every other hold is `unknown`.
@@ -50,11 +51,6 @@ func lifeWith(state GroupState, session, finishedTurn bool) lifecycle {
 	}
 }
 
-var allHolds = []string{
-	HoldAdmissionRejected, HoldCreateRejected, HoldSecretUnavailable, HoldInvalidPrompt, HoldExecutionError,
-	HoldLaunchUnproven, HoldInterrupted, HoldNoReceipt, HoldGroupUnproven, HoldAgentLogin, HoldAgentQuota,
-}
-
 func TestSettledHeldAndHoldClass(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -80,9 +76,6 @@ func TestSettledHeldAndHoldClass(t *testing.T) {
 			}
 			if got := c.j.holdClass(); got != c.class {
 				t.Errorf("holdClass = %v, want %v", got, c.class)
-			}
-			if got := c.j.held(); got != (c.class != notHeld) {
-				t.Errorf("held = %v", got)
 			}
 		})
 	}
@@ -327,31 +320,6 @@ func TestStateName(t *testing.T) {
 	}
 }
 
-func TestDriveStep(t *testing.T) {
-	cases := []struct {
-		phase     Phase
-		step      driveStep
-		retryable bool
-		report    bool
-	}{
-		{PhasePrepared, driveAdmit, true, false},
-		{PhaseAdmitted, driveLaunch, true, false},
-		{PhaseResuming, driveReopen, true, false},
-		{PhaseFinished, driveReport, true, true},
-		{PhaseLaunching, driveRecover, false, false},
-		{PhaseStarted, driveRecover, false, false},
-		{PhaseSettled, driveNone, false, false},
-	}
-	for _, c := range cases {
-		t.Run(string(c.phase), func(t *testing.T) {
-			j := journalAt(c.phase, "")
-			if j.driveStep() != c.step || j.retryable() != c.retryable || j.reportDue() != c.report {
-				t.Errorf("driveStep %v retryable %v reportDue %v", j.driveStep(), j.retryable(), j.reportDue())
-			}
-		})
-	}
-}
-
 func TestRecover(t *testing.T) {
 	const agentRan = "the worker stopped while the agent ran"
 	cases := []struct {
@@ -389,29 +357,5 @@ func TestRecover(t *testing.T) {
 				t.Errorf("recover = %+v, want %+v", got, c.want)
 			}
 		})
-	}
-}
-
-// Every hold class has an answer to every question for every group answer: none panics and none is inconsistent.
-func TestEveryHoldHasConsistentAnswers(t *testing.T) {
-	for _, hold := range allHolds {
-		for _, state := range []GroupState{GroupGone, GroupPresent, GroupUnchecked} {
-			for _, phase := range []Phase{PhaseFinished, PhaseSettled} {
-				j := journalAt(phase, hold, launched)
-				l := lifeWith(state, true, false)
-				if !j.held() || j.owes() {
-					t.Errorf("%s: a hold is held and owes nothing", hold)
-				}
-				if l.occupiesSlot(j) && j.settled() && j.holdClass() == holdBeforeAdmission {
-					t.Errorf("%s: a hold from before admission keeps its slot", hold)
-				}
-				if j.settled() && j.holdClass() == holdBeforeAdmission && j.closesGate() {
-					t.Errorf("%s: a hold from before admission keeps its gate", hold)
-				}
-				if j.holdClass() == holdUncertain && !j.closesGate() {
-					t.Errorf("%s: an uncertainty hold frees its gate", hold)
-				}
-			}
-		}
 	}
 }

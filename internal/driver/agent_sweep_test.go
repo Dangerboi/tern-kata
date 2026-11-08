@@ -1,7 +1,6 @@
 package driver_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -124,13 +123,6 @@ func TestTheSweepWithNoRunningAgentOpensNoCard(t *testing.T) {
 	if m := out.State.Model; m.TopCard() != model.NoCard || m.Notice != model.NoAgentsToSweepRefusal || len(out.Cmds) != 0 {
 		t.Fatalf("card %v notice %q cmds %v, want no card and the refusal", m.TopCard(), m.Notice, out.Cmds)
 	}
-}
-
-func TestTheSweepListsAFailedWriteAsSkipped(t *testing.T) {
-	s := broadcastPane(t, nil, broadcastAgent("p", "31"))
-	s = step(t, s, view.DecodeAction("", string(model.WrapUpSweepAction), "")).State
-	s = step(t, s, model.AgentMessageSent{UID: "p", Address: "dana/omp-31", Err: errors.New("daemon down")}).State
-	wantShown(t, "the sweep", s, "0 of 0 agents", "daemon down")
 }
 
 func sweepReads(cmds []model.Cmd) []model.ReadSweepComments {

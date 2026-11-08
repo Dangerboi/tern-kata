@@ -285,7 +285,6 @@ func TestEditOpensThePrefilledCardAndARenameNamesTheOldView(t *testing.T) {
 	if got.Self != "work bugs" || got.View.Name != "work bugs!" {
 		t.Fatalf("save = %+v", got)
 	}
-	// keeping its own name ignoring case is not a clash
 	m.ViewForm.Name = "WORK BUGS"
 	if _, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"}); len(cmds) != 1 {
 		t.Fatalf("own name refused: %v", cmds)

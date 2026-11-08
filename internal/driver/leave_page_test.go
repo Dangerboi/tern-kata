@@ -76,7 +76,6 @@ func TestLeavingAPageWhoseSecondColumnIsTheIssueDetailKeepsItFocusedAndOtherwise
 	}
 	for _, hidden := range []bool{false, true} {
 		for _, how := range toIssuesHows {
-			// The Lane view shows the detail and focus can move to it.
 			lane := boardInLane(t, hiddenBefore(t, hidden))
 			lane = step(t, lane, key("tab")).State
 			if lane.Model.Focus != model.ColumnDetail || !lane.Model.LaneViewShown() {
@@ -88,7 +87,6 @@ func TestLeavingAPageWhoseSecondColumnIsTheIssueDetailKeepsItFocusedAndOtherwise
 					hidden, how, m.Page, m.Focus, m.DetailHidden())
 			}
 
-			// Workflows: focus on the detail when the Page is left.
 			flows := workflows(t, hiddenBefore(t, hidden))
 			flows.Model.Focus = model.ColumnDetail
 			shown := flows.Model.DetailHidden()
@@ -98,7 +96,6 @@ func TestLeavingAPageWhoseSecondColumnIsTheIssueDetailKeepsItFocusedAndOtherwise
 					hidden, how, m.Page, m.Focus, m.DetailHidden())
 			}
 
-			// Focus on the list or the Menu: the column goes back as it was.
 			for name, from := range map[string]func(*testing.T, driver.State) driver.State{"Board": boardColumns, "Workflows": workflows} {
 				for _, focus := range []model.Column{model.ColumnList, model.ColumnCollections} {
 					s := from(t, hiddenBefore(t, hidden))

@@ -107,7 +107,7 @@ func TestLanesCardRefusesBadDoneLimitsNamingTheField(t *testing.T) {
 		text, want string
 	}{
 		{1, "0", "Done days"}, {1, "-3", "Done days"}, {1, "x", "Done days"}, {1, "1.5", "Done days"},
-		{2, "0", "Done cards"}, {2, "ten", "Done cards"},
+		{1, "3651", "Done days"}, {2, "0", "Done cards"}, {2, "ten", "Done cards"}, {2, "501", "Done cards"},
 	} {
 		t.Run(fmt.Sprintf("%d %s", tt.tabs, tt.text), func(t *testing.T) {
 			s := lanesCard(t)

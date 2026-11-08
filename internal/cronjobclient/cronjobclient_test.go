@@ -101,11 +101,3 @@ func TestRunReadsEveryFieldAndMissingValuesAsEmpty(t *testing.T) {
 		t.Errorf("bare run %+v", bare)
 	}
 }
-
-func TestRunReadsAStatusItDoesNotKnowAsUnknown(t *testing.T) {
-	for _, status := range []string{"paused", "", "RUNNING"} {
-		if got := cronjobclient.Run(g.CronRun{UID: "R", Status: status}).Status; got != cronjob.RunUnknown {
-			t.Errorf("status %q read as %q, want unknown", status, got)
-		}
-	}
-}

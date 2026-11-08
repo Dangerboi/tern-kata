@@ -60,7 +60,7 @@ func TestInstallWritesTheExtensionOnlyWhenItsContentDiffers(t *testing.T) {
 	}
 	_, err = Install(folder)
 	_ = os.Chmod(folder, 0o700)
-	if err != nil && os.Geteuid() != 0 {
+	if err != nil {
 		t.Fatalf("a current file was written again: %v", err)
 	}
 	// An older tern-kata's extension is replaced.
