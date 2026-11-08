@@ -127,7 +127,8 @@ State lives in `$XDG_STATE_HOME/tern-kata` (else `~/.local/state/tern-kata`):
 - `worker.lock`: a second worker on the machine is refused;
 - the control socket;
 - each run's journal (`runs/<run uid>/run.json` with its prompt, session and output);
-- the pins.
+- the pins;
+- each Project's skip records (`projects/<project uid>/skips.json`, see [Conditions and skips](#conditions-and-skips)).
 
 Across machines, the worker holds a lease for each Project in the Project's own kata metadata (`tern_kata.lease`, renewed every 3 minutes, expiring after 10). A Project whose lease another worker holds admits nothing here and `worker status` says which worker owns it. `tern-kata worker --takeover` moves it on purpose.
 
@@ -225,6 +226,22 @@ A job that fails every time keeps costing a failed Run, maybe a per-run Issue, a
 - **Turning it off.** Setting `pause_after_failures` to `0` stops new pauses, but a job that is already paused stays paused until you resume it.
 - **Seeing it.** `tern-kata worker status` lists each paused job with its failure count and the resume command; the Jobs Page shows it as the pause reason "paused: failed runs".
 - **Resuming.** `u` on the Jobs Page, or `tern-kata worker resume <job>` (the job's uid, or its name when one paused job has it) sends a `resume-job` request over the control socket. A job that is not paused is refused. The count starts from none; `worker resume <run-uid>` still continues a held run.
+
+## Conditions and skips
+
+A job's `options` can hold **conditions**: what a due scheduled run must meet, or the worker skips it. The worker checks them when the occurrence is due, after it reads the job afresh and before it takes a slot. Only a scheduled occurrence of an `execute` job is checked: `tern-kata run`, Run now and a notify job never are. Kata stores the conditions with the job, so every client of the definition shares them; `worker.toml` holds none. The first condition is a limit on runs.
+
+```json
+{ "options": { "conditions": { "runs_per_day": 3, "runs_per_week": 10 } } }
+```
+
+- **`runs_per_day` and `runs_per_week`** are whole numbers of at least 1. A due occurrence is skipped once that many runs of the job have started in the current day or week. The count comes from this machine's run journals and includes runs made with Run now. Days run from local midnight and weeks from Monday, in the zone of the job's trigger: a cron trigger's timezone (or its `CRON_TZ=` zone), else the trigger's `timezone`, else UTC.
+- **A skip is not a Run.** Kata gets no Run and no per-run Issue, and no slot is taken. The worker writes a skip record (job, occurrence, condition, reason, time) to `projects/<project uid>/skips.json` and removes the occurrence from the job's waiting list, so catch-up `all`, `latest` and `skip` never retry it, and the job's Overlap gate is as it was: the next occurrence is judged on its own. The job runs again at its next occurrence, or with Run now.
+- **Records are kept as long as run journals:** 14 days. They survive a restart.
+- **An occurrence that already has a run journal is never skipped.** After a crash between the journal and the checkpoint save the occurrence is admitted again, and the journal that covers it answers, even when the limit is now reached.
+- **A condition that cannot be checked blocks the run.** Options that do not parse (a limit that is not a whole number, an unknown condition name, `conditions` that is not an object) or a run count that cannot be read leave the occurrence waiting and the job unstarted. The worker logs the reason once until the cause changes, and `worker status` lists the job as blocked.
+- **Seeing skips.** `tern-kata worker status` lists, per job, how many skips are on record and the latest reason; the same fields are in `worker status --json` (`Skipped`, and `Blocked` for the blocked jobs).
+- **Which worker holds the lease matters.** The conditions are read by the worker that holds the Project's lease. A worker on another machine that does not know them runs the job anyway, as it does for any option it does not read. Skip records are local to the machine that held the lease.
 
 ## Workflow runs
 

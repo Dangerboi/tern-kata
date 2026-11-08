@@ -70,6 +70,11 @@ func (d Dirs) ProjectDir(projectUID string) string {
 	return filepath.Join(d.State, "projects", projectUID)
 }
 
+// Skips is the Project's skip record file: the occurrences its conditions skipped (ADR-0016).
+func (d Dirs) Skips(projectUID string) string {
+	return filepath.Join(d.ProjectDir(projectUID), "skips.json")
+}
+
 // Config is worker.toml, strictly decoded (ADR-0010). It names what the worker may serve and holds no secret value.
 type Config struct {
 	// Executor labels this worker's runs and its Project leases; unique and stable, at most 256 bytes, no whitespace.

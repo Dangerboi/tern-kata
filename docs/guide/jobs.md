@@ -149,6 +149,21 @@ kata's own date sweeper already notifies the owner or author of the trigger's Is
 
 It applies to cron, interval and once triggers. **Enabled** turns the job on or off. Turning a paused recurring child back on from the card, with catch-up on every missed run and runs missed, opens the [Backfill card](#backfill-card) first, as `p` does; it sends the card's draft with the answer, and Esc returns to the card.
 
+### Conditions
+
+An adapter `execute` job can start a scheduled run only when conditions in its `options` say yes: `options.conditions.runs_per_day` and `options.conditions.runs_per_week` cap how many runs of the job may start in a day or a week (counted in the zone of the job's trigger). A due occurrence that fails a condition is **skipped**: no kata Run, no per-run Issue and no slot. The worker records the skip with the reason in its own state, and `tern-kata worker status` shows each job's skips. A skipped occurrence is never caught up later, whatever the catch-up policy, and it does not close the job's overlap gate. The job runs again at its next occurrence, or with Run now.
+
+```json
+{ "options": { "conditions": { "runs_per_day": 3 } } }
+```
+
+- Write conditions into the job's `options` with kata. The Job card does not edit them yet, and keeps what it does not edit.
+- Run now and `tern-kata run` are never checked, though a run they start counts toward a limit.
+- Conditions that do not parse, or a run count the worker cannot read, block the job's due run instead of starting it unchecked; the worker logs the reason once and `worker status` lists the job as blocked.
+- Only the worker that holds the Project's lease checks them. A worker on another machine that does not know conditions ignores them and runs the job anyway.
+
+See [Conditions and skips](worker-reference.md#conditions-and-skips) for the rules.
+
 ### Saving
 
 `ctrl+o` saves (or the button).

@@ -121,6 +121,10 @@ type projectState struct {
 	nextRun           time.Time
 	// waiting names the jobs whose occurrences wait for their Issue to be ready, with the reason.
 	waiting []JobNote
+	// blockedJobs names the jobs whose conditions could not be checked, with the reason; skipped is each job's recent skips
+	// (ADR-0016). Both are guarded by Worker.mu.
+	blockedJobs []JobNote
+	skipped     []JobSkips
 	// aside and warnings are the jobs the worker sets aside with their reasons, and the per-run Issue jobs that create
 	// many Issues a day, as of the last definition refresh (guarded by Worker.mu).
 	aside, warnings []JobNote

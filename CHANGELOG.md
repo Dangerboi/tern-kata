@@ -49,6 +49,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The worker pauses an adapter job after repeated failed runs.
   - After `pause_after_failures` runs of one job in a row recorded `failed` (default 3, set under `[limits]` in `worker.toml`, 0 turns pausing off) the worker admits no more of its runs until you resume it; timeouts count, held runs and cancelled runs don't, and a succeeded run starts the count again.
   - The pause lives in the worker's own state, so kata's job is not changed and other machines keep their own counts. `tern-kata worker status` and the Jobs Page name it ("paused: failed runs"); `u` on the Jobs Page, or `tern-kata worker resume <job>` on a host with no Pane, resumes the job.
+- A job's `options.conditions` can cap its scheduled runs per day or per week (`runs_per_day`, `runs_per_week`), and the worker skips a due run over the cap.
+  - A skip makes no kata Run, Issue or slot, is never caught up later and leaves the job's overlap gate as it was; `tern-kata worker status` lists each job's skips with the latest reason.
+  - Options that do not parse, or a run count the worker cannot read, block the run and are logged once; Run now and `tern-kata run` are never checked, and only the worker holding the Project's lease applies them.
 
 #### Tern window
 

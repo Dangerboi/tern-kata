@@ -53,6 +53,10 @@ type ProjectStatus struct {
 	Aside, Warnings []JobNote
 	// Waiting lists the jobs whose queued occurrences wait for their Issue (someday or scheduled later), with the reason.
 	Waiting []JobNote
+	// Blocked lists the jobs whose conditions could not be checked, with the reason: their due occurrence waits and the
+	// job does not start. Skipped lists each job's recent skips, one entry per job (ADR-0016).
+	Blocked []JobNote
+	Skipped []JobSkips
 }
 
 // RunStatus is one run of this machine.
@@ -101,6 +105,7 @@ func (w *Worker) Status() Status {
 			}
 		}
 		p.Aside, p.Warnings, p.Waiting = slices.Clone(ps.aside), slices.Clone(ps.warnings), slices.Clone(ps.waiting)
+		p.Blocked, p.Skipped = slices.Clone(ps.blockedJobs), slices.Clone(ps.skipped)
 		s.Projects = append(s.Projects, p)
 	}
 	w.mu.Unlock()
@@ -214,6 +219,12 @@ func (s Status) String() string {
 		}
 		for _, n := range p.Waiting {
 			fmt.Fprintf(&b, "  Job %q is waiting: %s\n", n.Name, n.Text)
+		}
+		for _, n := range p.Blocked {
+			fmt.Fprintf(&b, "  Job %q is blocked: %s\n", n.Name, n.Text)
+		}
+		for _, k := range p.Skipped {
+			fmt.Fprintf(&b, "  Job %q skipped %d %s, latest %s (%s): %s\n", k.Name, k.Count, plural(k.Count, "occurrence", "occurrences"), k.LatestOccurrence.Local().Format("2006-01-02 15:04"), k.LatestCondition, k.LatestReason)
 		}
 		for _, n := range p.Warnings {
 			fmt.Fprintf(&b, "  Job %q %s\n", n.Name, n.Text)

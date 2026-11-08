@@ -136,11 +136,15 @@ The marker cannot stop a worker that already runs: create it first, or the host 
 
 `tern plugin remove tern-kata`, or disabling the plugin in Tern's settings, removes the host half altogether, together with the window half.
 
+## Only when: conditions and skips
+
+A job whose `options.conditions` caps its runs (`runs_per_day`, `runs_per_week`) starts a scheduled run only while the cap has room. When a due occurrence is over the limit the worker skips it: no kata Run, no Issue, no slot, and no catch-up later. `tern-kata worker status` lists each job's recent skips with the latest reason, and a job whose conditions cannot be checked as blocked. Only the worker that holds the Project's lease applies the conditions; a worker on another machine that does not know them runs the job anyway. See [Conditions and skips](worker-reference.md#conditions-and-skips).
+
 ## Commands
 
 ```sh
 tern-kata worker doctor      # checks the file, checkouts, commands, secrets, kata and each Project's lease; says how to fix them
-tern-kata worker status      # what it serves, runs and refuses; held runs with their reasons
+tern-kata worker status      # what it serves, runs and refuses; held runs with their reasons; each job's recent skips
 tern-kata worker             # runs in the foreground; ctrl+c stops it (a supervised worker needs no start)
 tern-kata worker stop [--now]
 tern-kata run <job-uid>      # run an adapter prompt job now

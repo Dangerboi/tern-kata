@@ -183,6 +183,14 @@ type jobSchedule struct {
 	parked []time.Time
 	// catchup is the policy the last plan applied, which decides how many pending occurrences a park records.
 	catchup string
+	// name is the job's name as of the last plan. conditions and conditionsProblem are its options.conditions as the
+	// last plan read them (conditionsProblem is why they cannot be read); zone is where its days and weeks are counted.
+	// blockedBy is why admission could not check the conditions in the last pass.
+	name              string
+	conditions        cronjob.Conditions
+	conditionsProblem string
+	zone              *time.Location
+	blockedBy         string
 }
 
 // checkpoint is projects/<uid>/schedule/<job uid>.json (ADR-0006): everything decided through a time and the
@@ -254,6 +262,13 @@ type projectSchedule struct {
 	// resumeChecked holds the enabled jobs whose checkpoint markResumed already looked at, so a refusal that lasts reads
 	// (and reports) it once; a job that is disabled is taken out again.
 	resumeChecked map[string]bool
+	// skips keeps the skip records; journalExists says whether a run journal covers a run uid, runStarts when the
+	// Project's journals of a job were prepared, and now is the clock. They serve conditions only, so a schedule built
+	// without them admits a job that has none exactly as before.
+	skips         skipStore
+	journalExists func(runUID string) (bool, error)
+	runStarts     func(jobUID string) ([]time.Time, error)
+	now           func() time.Time
 }
 
 // save writes the job's state as its checkpoint, which never carries the pause mark: a saved job is scheduled.
@@ -272,11 +287,15 @@ func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
 		admit: func(ctx context.Context, jobUID string, at time.Time) (string, bool, error) {
 			return w.RunOccurrence(ctx, name, jobUID, at)
 		},
-		issueDate: func(job cronjob.Job) (time.Time, bool) { return w.issueDate(ps, job) },
-		stopped:   w.halted.Load,
-		log:       log,
-		jobs:      map[string]*jobSchedule{},
-		paused:    map[string]bool{},
+		issueDate:     func(job cronjob.Job) (time.Time, bool) { return w.issueDate(ps, job) },
+		stopped:       w.halted.Load,
+		log:           log,
+		jobs:          map[string]*jobSchedule{},
+		paused:        map[string]bool{},
+		skips:         &fileSkips{path: w.opt.Dirs.Skips(ps.project.UID), log: log},
+		journalExists: w.journalExists,
+		runStarts:     func(jobUID string) ([]time.Time, error) { return w.runStarts(ps.project.UID, jobUID) },
+		now:           w.clock.Now,
 	}
 }
 
@@ -363,6 +382,10 @@ func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
 				resumed = true
 			}
 		}
+	}
+	st.name = job.Name
+	if st.conditions, st.conditionsProblem = readConditions(job); st.gated() {
+		st.zone = job.Definition.Trigger.Location()
 	}
 	changed := resumed
 	firstSight := st.through.IsZero()
@@ -488,6 +511,11 @@ func (w *Worker) tick(ctx context.Context, ps *projectState, issueEvent bool) ti
 	for i := range sum.waiting {
 		sum.waiting[i].Name = ps.jobs[sum.waiting[i].UID].Name
 	}
+	for i := range sum.blocked {
+		sum.blocked[i].Name = ps.jobs[sum.blocked[i].UID].Name
+	}
+	slices.SortFunc(sum.blocked, func(a, b JobNote) int { return strings.Compare(a.Name, b.Name) })
+	ps.skipped, ps.blockedJobs = sum.skips, sum.blocked
 	slices.SortFunc(sum.waiting, func(a, b JobNote) int { return strings.Compare(a.Name, b.Name) })
 	ps.scheduled, ps.queued, ps.nextRun, ps.waiting = sum.scheduled, sum.queued, sum.next, sum.waiting
 	w.mu.Unlock()
@@ -515,12 +543,21 @@ type summary struct {
 	queued, scheduled int
 	next, wake        time.Time
 	waiting           []JobNote
+	// blocked lists the jobs whose conditions could not be checked, with the reason; skips the recent skips per job.
+	blocked []JobNote
+	skips   []JobSkips
 }
 
 func (s *projectSchedule) summary(now time.Time) summary {
 	var sum summary
 	for uid, st := range s.jobs {
 		sum.queued += len(st.pending)
+		if len(st.pending) == 0 {
+			st.blockedBy = ""
+		}
+		if st.blockedBy != "" {
+			sum.blocked = append(sum.blocked, JobNote{UID: uid, Text: st.blockedBy})
+		}
 		if len(st.pending) == 0 {
 			st.waiting, st.wakeAt = "", time.Time{}
 		}
@@ -534,6 +571,9 @@ func (s *projectSchedule) summary(now time.Time) summary {
 		if !st.next.IsZero() && (sum.next.IsZero() || st.next.Before(sum.next)) {
 			sum.next = st.next
 		}
+	}
+	if s.skips != nil {
+		sum.skips = jobSkips(s.skips.Recent(now))
 	}
 	return sum
 }
@@ -679,10 +719,19 @@ func (s *projectSchedule) admitDue(ctx context.Context) {
 		return strings.Compare(a.job, b.job)
 	})
 	blocked := map[string]bool{}
+	for _, st := range s.jobs {
+		st.blockedBy = ""
+	}
 	for _, d := range queue {
 		st := s.jobs[d.job]
 		if blocked[d.job] || ctx.Err() != nil || s.stopped() {
 			continue
+		}
+		if st.gated() {
+			if !s.applyGate(d.job, st, d.at) {
+				blocked[d.job] = st.blockedBy != ""
+				continue
+			}
 		}
 		_, _, err := s.admit(ctx, d.job, d.at)
 		if err == nil {
