@@ -31,6 +31,8 @@ type AgentResult struct {
 	Terminal     bool   `json:"terminal,omitempty"`
 	InputTokens  *int64 `json:"input_tokens,omitempty"`
 	OutputTokens *int64 `json:"output_tokens,omitempty"`
+	// CostUSD is the sum of the cost omp reported (usage.cost.total) for the attempt; nil when it reported none.
+	CostUSD *float64 `json:"cost_usd,omitempty"`
 	// StderrTail is the last of the process's stderr, kept for the reason of a failure.
 	StderrTail string `json:"stderr_tail,omitempty"`
 }
@@ -40,6 +42,8 @@ type agentParser struct {
 	res      AgentResult
 	in, out  int64
 	sawUsage bool
+	cost     float64
+	sawCost  bool
 	// onSession is called once, with the session id, when it first appears.
 	onSession func(id string)
 }
@@ -56,6 +60,9 @@ type ompMessage struct {
 		Output     int64 `json:"output"`
 		CacheRead  int64 `json:"cacheRead"`
 		CacheWrite int64 `json:"cacheWrite"`
+		Cost       *struct {
+			Total *float64 `json:"total"`
+		} `json:"cost"`
 	} `json:"usage"`
 }
 
@@ -172,6 +179,10 @@ func (p *agentParser) messageEnd(m ompMessage) {
 		p.sawUsage = true
 		p.in += u.Input + u.CacheRead + u.CacheWrite // omp's `input` leaves cached prompt tokens out
 		p.out += u.Output
+		if u.Cost != nil && u.Cost.Total != nil {
+			p.sawCost = true
+			p.cost += *u.Cost.Total
+		}
 	}
 	p.final(m, text)
 }
@@ -235,12 +246,16 @@ func (p *agentParser) final(m ompMessage, text string) {
 	p.res.ErrorStatus = m.ErrorStatus
 }
 
-// Result is what the output said so far; tokens stay nil when omp reported no usage.
+// Result is what the output said so far; tokens and cost stay nil when omp reported none.
 func (p *agentParser) Result() AgentResult {
 	r := p.res
 	if p.sawUsage {
 		in, out := p.in, p.out
 		r.InputTokens, r.OutputTokens = &in, &out
+	}
+	if p.sawCost {
+		cost := p.cost
+		r.CostUSD = &cost
 	}
 	return r
 }
@@ -295,7 +310,9 @@ type PromptInput struct {
 	// Attempt is the step's attempt, 1 for the first. Resumed is set from the second on: the previous attempt's
 	// turn may have partly run, and the new prompt says so.
 	Attempt int
-	Resumed *ResumeNote
+	// NewCommits is the list of commits the job's New commits condition found, empty for none.
+	NewCommits string
+	Resumed    *ResumeNote
 	// Step is set for a workflow's prompt step; a prompt job's single step needs none.
 	Step *StepInput
 }
@@ -354,6 +371,11 @@ func BuildPrompt(in PromptInput) (string, error) {
 	if st := in.Step; st != nil && st.Failure != "" {
 		b.WriteString("\n# Retry\n\n")
 		fmt.Fprintf(&b, "This is attempt %d of this step: the previous attempt failed. Before redoing anything, check the checkout and this run's Issue (its comments, labels and status) for work that attempt left partly done, and carry on from there. Earlier steps of this workflow ran in other processes; what they did is in the checkout and the Issue.\n\nWhy it failed: %s\n", max(in.Attempt, 2), truncate(strings.TrimSpace(st.Failure), 2000))
+	}
+	if list := strings.TrimSpace(in.NewCommits); list != "" {
+		b.WriteString("\n# New commits\n\nThis job runs when its checkout has new commits. These came in since the last run of this job that succeeded, newest first (abbreviated id and subject):\n\n")
+		b.WriteString(list)
+		b.WriteString("\n")
 	}
 	b.WriteString("\n# Task\n\n")
 	b.WriteString(strings.TrimSpace(in.Task))

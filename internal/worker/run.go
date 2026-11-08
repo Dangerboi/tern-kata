@@ -400,7 +400,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	attempt, resumeID := j.attempt(), ""
 	in := PromptInput{
 		Actor: j.Actor, IssueRef: j.Issue.Ref, IssueTitle: j.Issue.Title, IssueBody: j.Issue.Body, ExistingIssue: j.Issue.Existing,
-		JobName: j.JobName, RunUID: j.RunUID, Occurrence: OccurrenceKey(j.Occurrence), Task: sp.task, Attempt: attempt,
+		JobName: j.JobName, RunUID: j.RunUID, Occurrence: OccurrenceKey(j.Occurrence), Task: sp.task, Attempt: attempt, NewCommits: j.NewCommits,
 	}
 	if sp.plan != nil {
 		in.Step = &StepInput{Workflow: j.Workflow.Name, About: j.Workflow.About, Key: sp.plan.Key, Number: sp.index + 1, Count: len(j.Workflow.Steps), Failure: sp.failure}
@@ -661,7 +661,7 @@ func classify(j *Journal) *Outcome {
 	if reason != "" && r.StderrTail != "" && r.ErrorText == "" {
 		reason += ": " + r.StderrTail
 	}
-	o := &Outcome{InputTokens: r.InputTokens, OutputTokens: r.OutputTokens}
+	o := &Outcome{InputTokens: r.InputTokens, OutputTokens: r.OutputTokens, CostUSD: r.CostUSD}
 	if reason == "" {
 		o.Status, o.Summary = cronjob.RunSucceeded, cmp.Or(final, "(the agent gave no final message)")
 	} else {
@@ -680,6 +680,7 @@ func classify(j *Journal) *Outcome {
 // unconfirmed (ADR-0004).
 func (w *Worker) report(ctx context.Context, ps *projectState, j *Journal) error {
 	w.noteOutcome(j)
+	w.noteCommit(j)
 	if err := w.checkRoute(ctx, ps, false); err != nil {
 		return fmt.Errorf("cannot confirm the kata route: %w", err)
 	}

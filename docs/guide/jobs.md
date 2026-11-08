@@ -151,15 +151,16 @@ It applies to cron, interval and once triggers. **Enabled** turns the job on or 
 
 ### Conditions
 
-An adapter `execute` job can start a scheduled run only when conditions in its `options` say yes: `options.conditions.runs_per_day` and `options.conditions.runs_per_week` cap how many runs of the job may start in a day or a week (counted in the zone of the job's trigger). A due occurrence that fails a condition is **skipped**: no kata Run, no per-run Issue and no slot. The worker records the skip with the reason in its own state, and `tern-kata worker status` shows each job's skips. A skipped occurrence is never caught up later, whatever the catch-up policy, and it does not close the job's overlap gate. The job runs again at its next occurrence, or with Run now.
+An adapter `execute` job can start a scheduled run only when conditions in its `options` say yes: `options.conditions.runs_per_day` and `options.conditions.runs_per_week` cap how many runs of the job may start in a day or a week, and `spend_per_day` and `spend_per_week` cap what the runs may cost in US dollars (all counted in the zone of the job's trigger). A due occurrence that fails a condition is **skipped**: no kata Run, no per-run Issue and no slot. The worker records the skip with the reason in its own state, and `tern-kata worker status` shows each job's skips. A skipped occurrence is never caught up later, whatever the catch-up policy, and it does not close the job's overlap gate. The job runs again at its next occurrence, or with Run now.
 
 ```json
-{ "options": { "conditions": { "runs_per_day": 3 } } }
+{ "options": { "conditions": { "runs_per_day": 3, "spend_per_day": 2.50 } } }
 ```
 
+- **New commits** starts a scheduled run only when the job's checkout has commits since the last run of the job that succeeded. Write `"new_commits": true`, or `"new_commits": { "folders": ["docs", "src/api"] }` to count only commits that touch those folders (paths under the checkout). The job needs a checkout (`checkout_key`), and the worker runs git in it on the branch that is checked out. The first scheduled occurrence only notes the branch tip and is skipped ("first run: waiting for new commits"). After that an occurrence with no new commits is skipped, and one with new commits starts, with the commits (abbreviated id and subject, newest first, at most 30 and 8 KiB) added to the agent's prompt. A run that fails, is cancelled or is held does not use the commits up: the next occurrence sees them again. A run that succeeds moves the saved commit to the commit it started at, and so does a succeeded Run now or `tern-kata run`, though those runs are not checked against conditions.
 - Write conditions into the job's `options` with kata. The Job card does not edit them yet, and keeps what it does not edit.
 - Run now and `tern-kata run` are never checked, though a run they start counts toward a limit.
-- Conditions that do not parse, or a run count the worker cannot read, block the job's due run instead of starting it unchecked; the worker logs the reason once and `worker status` lists the job as blocked.
+- Conditions that do not parse, a run count the worker cannot read, or new commits it cannot check (git fails, the checkout is gone, or the saved commit is no longer in the branch because history was rewritten) block the job's due run instead of starting it unchecked; the worker logs the reason once and `worker status` lists the job as blocked.
 - Only the worker that holds the Project's lease checks them. A worker on another machine that does not know conditions ignores them and runs the job anyway.
 
 See [Conditions and skips](worker-reference.md#conditions-and-skips) for the rules.

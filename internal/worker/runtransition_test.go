@@ -214,10 +214,11 @@ func TestRequestCancelFromEveryPhase(t *testing.T) {
 
 func TestAcceptResumeFromEveryPhase(t *testing.T) {
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	in := int64(5)
+	in, cost := int64(5), 0.25
 	terms := resumeTerms{
 		By: "ann", Generation: 3, At: at,
 		Tokens:    func(*Journal) (*int64, *int64) { return &in, nil },
+		Cost:      func(*Journal) *float64 { return &cost },
 		SessionID: func(*Journal) string { return "sess" },
 	}
 	life := lifeWith(GroupGone, true, false)
@@ -235,7 +236,7 @@ func TestAcceptResumeFromEveryPhase(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if j.Phase != PhaseResuming || j.Outcome != nil || j.Attempt != 2 || j.Generation != 3 || *j.CarriedInput != 5 ||
+			if j.Phase != PhaseResuming || j.Outcome != nil || j.Attempt != 2 || j.Generation != 3 || *j.CarriedInput != 5 || *j.CarriedCost != 0.25 ||
 				j.Resume == nil || j.Resume.SessionID != "sess" || j.Resume.Hold != HoldInterrupted || j.Resume.By != "ann" {
 				t.Errorf("journal = %+v resume = %+v", *j, j.Resume)
 			}

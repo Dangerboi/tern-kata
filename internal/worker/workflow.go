@@ -64,9 +64,10 @@ type StepRecord struct {
 	Launch      *LaunchRecord `json:"launch,omitempty"`
 	Exit        *ExitRecord   `json:"exit,omitempty"`
 	// StderrTail is the end of the last attempt's stderr, kept when the step concludes: stderr.log holds only its start.
-	StderrTail   string `json:"stderr_tail,omitempty"`
-	InputTokens  *int64 `json:"input_tokens,omitempty"`
-	OutputTokens *int64 `json:"output_tokens,omitempty"`
+	StderrTail   string   `json:"stderr_tail,omitempty"`
+	InputTokens  *int64   `json:"input_tokens,omitempty"`
+	OutputTokens *int64   `json:"output_tokens,omitempty"`
+	CostUSD      *float64 `json:"cost_usd,omitempty"`
 }
 
 func terminalStep(state string) bool {
@@ -518,4 +519,13 @@ func workflowExpiry(plan *WorkflowPlan, now time.Time, timeout time.Duration) ti
 		return time.Time{}
 	}
 	return now.Add(timeout)
+}
+
+// sumStepCost is the cost every attempt of every step reported; nil when none did.
+func sumStepCost(steps []StepRecord) *float64 {
+	var sum *float64
+	for _, r := range steps {
+		sum = addCost(sum, r.CostUSD)
+	}
+	return sum
 }

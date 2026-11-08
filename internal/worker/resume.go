@@ -88,7 +88,7 @@ func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, err
 	}
 	updated, err := w.store.Update(uid, "resume-accepted", func(j *Journal) error {
 		// Checked again under the journal's lock: a request that is not this worker's own cannot slip in between.
-		return w.life(j).acceptResume(j, resumeTerms{By: by, Generation: generation, At: w.clock.Now().UTC(), Tokens: w.heldTokens, SessionID: w.sessionID})
+		return w.life(j).acceptResume(j, resumeTerms{By: by, Generation: generation, At: w.clock.Now().UTC(), Tokens: w.heldTokens, Cost: w.heldCost, SessionID: w.sessionID})
 	})
 	if err != nil {
 		w.noteHook(err)
@@ -108,6 +108,14 @@ func (w *Worker) heldTokens(j *Journal) (in, out *int64) {
 	}
 	r := readOutput(w.heldFile(j, "output.jsonl"))
 	return r.InputTokens, r.OutputTokens
+}
+
+// heldCost is the cost the held attempt's agent reported, found the way heldTokens finds its tokens.
+func (w *Worker) heldCost(j *Journal) *float64 {
+	if r := j.Result; r != nil && r.CostUSD != nil {
+		return r.CostUSD
+	}
+	return readOutput(w.heldFile(j, "output.jsonl")).CostUSD
 }
 
 // Abandon ends a run the user no longer wants (ADR-0005 "Abandon"). A held run is recorded as cancelled, "abandoned

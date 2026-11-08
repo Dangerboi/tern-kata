@@ -69,7 +69,9 @@ type Worker struct {
 	// abandon one owner per run at a time.
 	gates, runOps keyedMutex
 	// streaks serializes the failure count of one job (see pause.go).
-	streaks   keyedMutex
+	streaks keyedMutex
+	// commits serializes a job's saved commit (see newcommits.go).
+	commits   keyedMutex
 	unchecked uncheckedLog             // the last reason each run group could not be checked, so the log says it once
 	cancels   map[string]*cancelSignal // guarded by mu: wakes the goroutine supervising a run that was asked to stop
 }
@@ -125,6 +127,7 @@ type projectState struct {
 	// (ADR-0016). Both are guarded by Worker.mu.
 	blockedJobs []JobNote
 	skipped     []JobSkips
+	spent       []JobSpend
 	// aside and warnings are the jobs the worker sets aside with their reasons, and the per-run Issue jobs that create
 	// many Issues a day, as of the last definition refresh (guarded by Worker.mu).
 	aside, warnings []JobNote

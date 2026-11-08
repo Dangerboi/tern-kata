@@ -190,6 +190,7 @@ type jobSchedule struct {
 	conditions        cronjob.Conditions
 	conditionsProblem string
 	zone              *time.Location
+	checkoutKey       string
 	blockedBy         string
 }
 
@@ -268,7 +269,12 @@ type projectSchedule struct {
 	skips         skipStore
 	journalExists func(runUID string) (bool, error)
 	runStarts     func(jobUID string) ([]time.Time, error)
-	now           func() time.Time
+	// runSpend is what the job's run journals spent, for the spend conditions.
+	runSpend func(jobUID string) ([]RunSpend, error)
+	now      func() time.Time
+	// checkCommits is the New commits check (skip: why nothing is new, blocked: why it cannot be told); nil for a
+	// schedule built without it.
+	checkCommits func(jobUID, checkoutKey string, folders []string) (skip, blocked string)
 }
 
 // save writes the job's state as its checkpoint, which never carries the pause mark: a saved job is scheduled.
@@ -295,7 +301,11 @@ func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
 		skips:         &fileSkips{path: w.opt.Dirs.Skips(ps.project.UID), log: log},
 		journalExists: w.journalExists,
 		runStarts:     func(jobUID string) ([]time.Time, error) { return w.runStarts(ps.project.UID, jobUID) },
+		runSpend:      func(jobUID string) ([]RunSpend, error) { return w.runSpend(ps.project.UID, jobUID) },
 		now:           w.clock.Now,
+		checkCommits: func(jobUID, checkoutKey string, folders []string) (string, string) {
+			return w.commitGate(ps, jobUID, checkoutKey, folders)
+		},
 	}
 }
 
@@ -386,6 +396,7 @@ func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
 	st.name = job.Name
 	if st.conditions, st.conditionsProblem = readConditions(job); st.gated() {
 		st.zone = job.Definition.Trigger.Location()
+		st.checkoutKey = job.Definition.CheckoutKey
 	}
 	changed := resumed
 	firstSight := st.through.IsZero()
@@ -515,7 +526,7 @@ func (w *Worker) tick(ctx context.Context, ps *projectState, issueEvent bool) ti
 		sum.blocked[i].Name = ps.jobs[sum.blocked[i].UID].Name
 	}
 	slices.SortFunc(sum.blocked, func(a, b JobNote) int { return strings.Compare(a.Name, b.Name) })
-	ps.skipped, ps.blockedJobs = sum.skips, sum.blocked
+	ps.skipped, ps.blockedJobs, ps.spent = sum.skips, sum.blocked, sum.spend
 	slices.SortFunc(sum.waiting, func(a, b JobNote) int { return strings.Compare(a.Name, b.Name) })
 	ps.scheduled, ps.queued, ps.nextRun, ps.waiting = sum.scheduled, sum.queued, sum.next, sum.waiting
 	w.mu.Unlock()
@@ -546,6 +557,8 @@ type summary struct {
 	// blocked lists the jobs whose conditions could not be checked, with the reason; skips the recent skips per job.
 	blocked []JobNote
 	skips   []JobSkips
+	// spend lists the spend in the window of each job with a spend limit.
+	spend []JobSpend
 }
 
 func (s *projectSchedule) summary(now time.Time) summary {
@@ -575,6 +588,7 @@ func (s *projectSchedule) summary(now time.Time) summary {
 	if s.skips != nil {
 		sum.skips = jobSkips(s.skips.Recent(now))
 	}
+	sum.spend = s.jobSpends(now)
 	return sum
 }
 

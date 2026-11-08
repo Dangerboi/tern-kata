@@ -138,7 +138,7 @@ The marker cannot stop a worker that already runs: create it first, or the host 
 
 ## Only when: conditions and skips
 
-A job whose `options.conditions` caps its runs (`runs_per_day`, `runs_per_week`) starts a scheduled run only while the cap has room. When a due occurrence is over the limit the worker skips it: no kata Run, no Issue, no slot, and no catch-up later. `tern-kata worker status` lists each job's recent skips with the latest reason, and a job whose conditions cannot be checked as blocked. Only the worker that holds the Project's lease applies the conditions; a worker on another machine that does not know them runs the job anyway. See [Conditions and skips](worker-reference.md#conditions-and-skips).
+A job whose `options.conditions` caps its runs (`runs_per_day`, `runs_per_week`) or their spend (`spend_per_day`, `spend_per_week`; counts only the cost omp reports) starts a scheduled run only while the cap has room, and with `new_commits` only when its checkout has commits since the last run of the job that succeeded (the worker runs git in the job's checkout and gives the agent the commit list). When a due occurrence is over the limit the worker skips it: no kata Run, no Issue, no slot, and no catch-up later. `tern-kata worker status` lists each job's recent skips with the latest reason, and a job whose conditions cannot be checked as blocked. Only the worker that holds the Project's lease applies the conditions; a worker on another machine that does not know them runs the job anyway. See [Conditions and skips](worker-reference.md#conditions-and-skips).
 
 ## Commands
 

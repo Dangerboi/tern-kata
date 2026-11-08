@@ -241,7 +241,9 @@ type Job struct {
 	Workflow string
 	Profile  string
 	// Adapter is the job's options.adapter, absent when blank.
-	Adapter     string
+	Adapter string
+	// Conditions is the job's options.conditions, absent when nil.
+	Conditions  map[string]any
 	Checkout    string
 	IssueTitle  string
 	ExistingUID string // an Issue the job reports to, instead of a per-run Issue
@@ -315,6 +317,12 @@ func (j Job) definition() g.CronJobDefinition {
 			def.Options = map[string]any{}
 		}
 		def.Options[key] = value
+	}
+	if j.Conditions != nil {
+		if def.Options == nil {
+			def.Options = map[string]any{}
+		}
+		def.Options["conditions"] = j.Conditions
 	}
 	if j.Checkout != "" {
 		def.CheckoutKey = &j.Checkout

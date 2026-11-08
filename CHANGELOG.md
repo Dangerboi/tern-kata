@@ -56,9 +56,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The worker pauses an adapter job after repeated failed runs.
   - After `pause_after_failures` runs of one job in a row recorded `failed` (default 3, set under `[limits]` in `worker.toml`, 0 turns pausing off) the worker admits no more of its runs until you resume it; timeouts count, held runs and cancelled runs don't, and a succeeded run starts the count again.
   - The pause lives in the worker's own state, so kata's job is not changed and other machines keep their own counts. `tern-kata worker status` and the Jobs Page name it ("paused: failed runs"); `u` on the Jobs Page, or `tern-kata worker resume <job>` on a host with no Pane, resumes the job.
-- A job's `options.conditions` can cap its scheduled runs per day or per week (`runs_per_day`, `runs_per_week`), and the worker skips a due run over the cap.
+- A job's `options.conditions` say when a scheduled run may start, and the worker skips a due run that fails one.
+  - `runs_per_day` and `runs_per_week` cap its runs; `spend_per_day` and `spend_per_week` cap its spend in US dollars, counted from the cost omp reports (a run with no reported cost counts as $0 and `tern-kata worker status` marks the total partial).
+  - `new_commits` starts a run only when the job's checkout has commits since its last succeeded run, optionally under some `folders`, and hands the agent the list; the first occurrence records the branch tip and waits, and a failed, cancelled or held run leaves the commits for the next one.
   - A skip makes no kata Run, Issue or slot, is never caught up later and leaves the job's overlap gate as it was; `tern-kata worker status` lists each job's skips with the latest reason.
-  - Options that do not parse, or a run count the worker cannot read, block the run and are logged once; Run now and `tern-kata run` are never checked, and only the worker holding the Project's lease applies them.
+  - A condition that cannot be checked (options that do not parse, git failing, a missing checkout) blocks the run and is logged once; Run now and `tern-kata run` are never checked, but a succeeded one moves the saved commit, and only the worker holding the Project's lease applies conditions.
 
 #### Tern window
 

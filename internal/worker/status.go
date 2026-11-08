@@ -57,6 +57,8 @@ type ProjectStatus struct {
 	// job does not start. Skipped lists each job's recent skips, one entry per job (ADR-0016).
 	Blocked []JobNote
 	Skipped []JobSkips
+	// Spent lists the spend in each window of the jobs that have a spend limit; only what omp reported counts.
+	Spent []JobSpend
 }
 
 // RunStatus is one run of this machine.
@@ -105,7 +107,7 @@ func (w *Worker) Status() Status {
 			}
 		}
 		p.Aside, p.Warnings, p.Waiting = slices.Clone(ps.aside), slices.Clone(ps.warnings), slices.Clone(ps.waiting)
-		p.Blocked, p.Skipped = slices.Clone(ps.blockedJobs), slices.Clone(ps.skipped)
+		p.Blocked, p.Skipped, p.Spent = slices.Clone(ps.blockedJobs), slices.Clone(ps.skipped), slices.Clone(ps.spent)
 		s.Projects = append(s.Projects, p)
 	}
 	w.mu.Unlock()
@@ -225,6 +227,15 @@ func (s Status) String() string {
 		}
 		for _, k := range p.Skipped {
 			fmt.Fprintf(&b, "  Job %q skipped %d %s, latest %s (%s): %s\n", k.Name, k.Count, plural(k.Count, "occurrence", "occurrences"), k.LatestOccurrence.Local().Format("2006-01-02 15:04"), k.LatestCondition, k.LatestReason)
+		}
+		for _, k := range p.Spent {
+			for _, w := range k.Windows {
+				fmt.Fprintf(&b, "  Job %q spent %s of %s this %s (since %s)", k.Name, dollars(w.Spent), dollars(w.Limit), w.Per, w.Since.Format("2006-01-02 15:04 MST"))
+				if note := partialNote(w.Unreported); note != "" {
+					fmt.Fprintf(&b, ", %s", note)
+				}
+				b.WriteString("\n")
+			}
 		}
 		for _, n := range p.Warnings {
 			fmt.Fprintf(&b, "  Job %q %s\n", n.Name, n.Text)

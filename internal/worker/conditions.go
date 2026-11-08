@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -213,7 +214,177 @@ func (s *projectSchedule) gate(st *jobSchedule, jobUID string, at time.Time) (sk
 			return &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: l.condition, Reason: reason, At: now.UTC()}, ""
 		}
 	}
+	if skip, blocked := s.gateSpend(st, jobUID, at, now); skip != nil || blocked != "" {
+		return skip, blocked
+	}
+	if st.conditions.NewCommits {
+		reason, why := s.checkCommits(jobUID, st.checkoutKey, st.conditions.Folders)
+		if why != "" {
+			return nil, fmt.Sprintf("its new commits cannot be checked: %s", why)
+		}
+		if reason != "" {
+			return &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: cronjob.ConditionNewCommits, Reason: reason, At: now.UTC()}, ""
+		}
+	}
 	return nil, ""
+}
+
+// RunSpend is what one run journal says a run spent: when it was prepared and the cost omp reported, nil when it
+// reported none (a run still going has reported none yet).
+type RunSpend struct {
+	Start   time.Time
+	CostUSD *float64
+}
+
+// spendWindow is the spend of one job in one window: the sum of the costs omp reported, and how many runs of the
+// window reported none, which makes the sum a partial total.
+type spendWindow struct {
+	Per        string
+	Limit      float64
+	Spent      float64
+	Since      time.Time
+	Unreported int
+}
+
+// spentSince sums the runs that started at or after from. A run with no reported cost adds nothing and is counted in
+// Unreported.
+func spentSince(runs []RunSpend, from time.Time) (spent float64, unreported int) {
+	for _, r := range runs {
+		if r.Start.Before(from) {
+			continue
+		}
+		if r.CostUSD == nil {
+			unreported++
+			continue
+		}
+		spent += *r.CostUSD
+	}
+	return math.Round(spent*1e6) / 1e6, unreported
+}
+
+// spendWindows are the job's spend limits with what each window has spent so far: day first, then week.
+func spendWindows(c cronjob.Conditions, loc *time.Location, now time.Time, runs []RunSpend) []spendWindow {
+	var out []spendWindow
+	for _, l := range []struct {
+		limit float64
+		week  bool
+		per   string
+	}{{c.SpendPerDay, false, "day"}, {c.SpendPerWeek, true, "week"}} {
+		if l.limit == 0 {
+			continue
+		}
+		from := windowStart(now, loc, l.week)
+		spent, unreported := spentSince(runs, from)
+		out = append(out, spendWindow{Per: l.per, Limit: l.limit, Spent: spent, Since: from, Unreported: unreported})
+	}
+	return out
+}
+
+// dollars writes an amount as cents, or to the significant digits of a smaller one.
+func dollars(x float64) string {
+	if x != 0 && x < 0.01 {
+		return fmt.Sprintf("$%.4f", x)
+	}
+	return fmt.Sprintf("$%.2f", x)
+}
+
+// partialNote says a total leaves out runs that reported no cost.
+func partialNote(unreported int) string {
+	if unreported == 0 {
+		return ""
+	}
+	return fmt.Sprintf("partial: %d %s reported no cost and count as $0", unreported, plural(unreported, "run", "runs"))
+}
+
+// gateSpend skips the occurrence when a window's spend has reached the job's spend limit.
+func (s *projectSchedule) gateSpend(st *jobSchedule, jobUID string, at, now time.Time) (skip *Skip, blocked string) {
+	if st.conditions.SpendPerDay == 0 && st.conditions.SpendPerWeek == 0 {
+		return nil, ""
+	}
+	runs, err := s.runSpend(jobUID)
+	if err != nil {
+		return nil, fmt.Sprintf("its spend cannot be counted: %v", err)
+	}
+	for _, w := range spendWindows(st.conditions, st.zone, now, runs) {
+		if w.Spent < w.Limit {
+			continue
+		}
+		condition := cronjob.ConditionSpendPerDay
+		if w.Per == "week" {
+			condition = cronjob.ConditionSpendPerWeek
+		}
+		reason := fmt.Sprintf("limit of %s per %s reached: %s spent since %s", dollars(w.Limit), w.Per, dollars(w.Spent), w.Since.Format("2006-01-02 15:04 MST"))
+		if note := partialNote(w.Unreported); note != "" {
+			reason += " (" + note + ")"
+		}
+		return &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: condition, Reason: reason, At: now.UTC()}, ""
+	}
+	return nil, ""
+}
+
+// JobSpend is one limited job's spend in each window it has a spend limit for, as `worker status` shows it.
+type JobSpend struct {
+	UID     string
+	Name    string
+	Windows []SpendWindow
+}
+
+// SpendWindow is one window of a JobSpend: the limit, what omp reported spent since the window began, and how many
+// runs of the window reported no cost, so that the total is partial.
+type SpendWindow struct {
+	Per        string // "day" or "week"
+	Limit      float64
+	Spent      float64
+	Since      time.Time
+	Unreported int
+}
+
+// jobSpends is the spend of every job that has a spend limit, jobs by name. A job whose runs cannot be read is left
+// out: the gate blocks it with the reason.
+func (s *projectSchedule) jobSpends(now time.Time) []JobSpend {
+	if s.runSpend == nil {
+		return nil
+	}
+	var out []JobSpend
+	for uid, st := range s.jobs {
+		if st.conditions.SpendPerDay == 0 && st.conditions.SpendPerWeek == 0 {
+			continue
+		}
+		runs, err := s.runSpend(uid)
+		if err != nil {
+			continue
+		}
+		j := JobSpend{UID: uid, Name: st.name}
+		for _, w := range spendWindows(st.conditions, st.zone, now, runs) {
+			j.Windows = append(j.Windows, SpendWindow(w))
+		}
+		out = append(out, j)
+	}
+	slices.SortFunc(out, func(a, b JobSpend) int { return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.UID, b.UID)) })
+	return out
+}
+
+// runSpend is what each run journal of the Project's job spent, whoever asked for the run. A notify run never calls
+// omp and is left out; any other run that reported no cost counts as zero.
+func (w *Worker) runSpend(projectUID, jobUID string) ([]RunSpend, error) {
+	journals, _, err := w.store.Scan()
+	if err != nil {
+		return nil, err
+	}
+	var runs []RunSpend
+	for _, j := range journals {
+		if j.ProjectUID != projectUID || j.JobUID != jobUID || j.Notify != nil {
+			continue
+		}
+		r := RunSpend{Start: j.StartedAt}
+		if j.Outcome != nil {
+			r.CostUSD = j.Outcome.CostUSD
+		} else {
+			r.CostUSD = sumStepCost(j.Steps) // a workflow still going has the cost of its finished steps
+		}
+		runs = append(runs, r)
+	}
+	return runs, nil
 }
 
 // runStarts is when each run journal of the Project's job was prepared, whoever asked for the run.

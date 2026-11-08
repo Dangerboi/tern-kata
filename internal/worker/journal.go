@@ -117,6 +117,11 @@ type Journal struct {
 	OccurrenceKey string    `json:"occurrence_key"`
 	Occurrence    time.Time `json:"occurrence"`
 	Manual        bool      `json:"manual,omitempty"`
+	// StartCommit is the commit of the job's checkout the run started at, noted when it was prepared for a job with the
+	// New commits condition; it becomes the job's saved commit when the run succeeds. NewCommits is the bounded list of
+	// the commits since the saved commit that the prompt hands to the agent (ADR-0016).
+	StartCommit string `json:"start_commit,omitempty"`
+	NewCommits  string `json:"new_commits,omitempty"`
 
 	Phase Phase `json:"phase"`
 	// Issue is the run's Issue once resolved; Existing marks a job's own Issue, which the worker never closes or labels.
@@ -145,6 +150,8 @@ type Journal struct {
 	// that a resume continued: each accepted resume adds the held attempt's, so the run's total sums every attempt.
 	CarriedInput  *int64 `json:"carried_input_tokens,omitempty"`
 	CarriedOutput *int64 `json:"carried_output_tokens,omitempty"`
+	// CarriedCost is the same for the cost omp reported.
+	CarriedCost *float64 `json:"carried_cost_usd,omitempty"`
 }
 
 // CancelRecord is who asked a running run to stop.
@@ -168,9 +175,25 @@ func addTokens(a, b *int64) *int64 {
 	return &sum
 }
 
-// withCarried adds the carried tokens of earlier resumed attempts to an outcome's own.
+// addCost sums two optional costs; nil only when neither is known.
+func addCost(a, b *float64) *float64 {
+	if a == nil && b == nil {
+		return nil
+	}
+	var sum float64
+	if a != nil {
+		sum += *a
+	}
+	if b != nil {
+		sum += *b
+	}
+	return &sum
+}
+
+// withCarried adds the carried tokens and cost of earlier resumed attempts to an outcome's own.
 func (j *Journal) withCarried(o *Outcome) *Outcome {
 	o.InputTokens, o.OutputTokens = addTokens(j.CarriedInput, o.InputTokens), addTokens(j.CarriedOutput, o.OutputTokens)
+	o.CostUSD = addCost(j.CarriedCost, o.CostUSD)
 	return o
 }
 
@@ -241,6 +264,9 @@ type Outcome struct {
 	// Tokens come from omp's JSON output; nil when it reported none.
 	InputTokens  *int64 `json:"input_tokens,omitempty"`
 	OutputTokens *int64 `json:"output_tokens,omitempty"`
+	// CostUSD is the cost omp reported for the run, resumed attempts included; nil when it reported none. It is never an
+	// estimate: spend conditions count only this.
+	CostUSD *float64 `json:"cost_usd,omitempty"`
 }
 
 // holdDetail is what the worker knew when it held the run: the summary after its reason, in either shape it was written in.

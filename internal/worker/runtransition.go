@@ -151,7 +151,7 @@ func (j *Journal) concludeCancel(at time.Time) error {
 	}
 	o := &Outcome{Status: cronjob.RunCancelled, Summary: fmt.Sprintf("abandoned by %s (was running)", j.Cancel.By), At: at}
 	if j.Result != nil {
-		o.InputTokens, o.OutputTokens = j.Result.InputTokens, j.Result.OutputTokens
+		o.InputTokens, o.OutputTokens, o.CostUSD = j.Result.InputTokens, j.Result.OutputTokens, j.Result.CostUSD
 	}
 	j.withCarried(o)
 	if j.Workflow != nil {
@@ -161,13 +161,15 @@ func (j *Journal) concludeCancel(at time.Time) error {
 				r.State, r.Summary, r.EndedAt = StepFailed, "cancelled by "+j.Cancel.By, at
 				r.Launch, r.Exit = j.Launch, j.Exit
 				r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, o.InputTokens), addTokens(r.OutputTokens, o.OutputTokens)
+				r.CostUSD = addCost(r.CostUSD, o.CostUSD)
 			case !terminalStep(r.State):
 				r.State, r.Summary = StepSkipped, "skipped: the run was cancelled"
 			}
 		}
 		o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
+		o.CostUSD = sumStepCost(j.Steps)
 	}
-	j.CarriedInput, j.CarriedOutput = nil, nil
+	j.CarriedInput, j.CarriedOutput, j.CarriedCost = nil, nil, nil
 	j.Outcome, j.Phase = o, PhaseFinished
 	return nil
 }
@@ -189,6 +191,7 @@ func (j *Journal) concludeStep(outcome *Outcome, at time.Time) error {
 	}
 	// A retried step keeps what its earlier attempts used; outcome already carries what a resume continued.
 	r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, outcome.InputTokens), addTokens(r.OutputTokens, outcome.OutputTokens)
+	r.CostUSD = addCost(r.CostUSD, outcome.CostUSD)
 	timedOut := j.Exit != nil && j.Exit.TimedOut
 	switch {
 	case outcome.Status == cronjob.RunSucceeded:
@@ -207,7 +210,7 @@ func (j *Journal) concludeStep(outcome *Outcome, at time.Time) error {
 		r.State = StepFailed
 	}
 	j.Launch, j.Exit, j.Result, j.Resume = nil, nil, nil, nil
-	j.CarriedInput, j.CarriedOutput = nil, nil
+	j.CarriedInput, j.CarriedOutput, j.CarriedCost = nil, nil, nil
 	j.Phase = PhaseAdmitted
 	return nil
 }
@@ -225,6 +228,7 @@ func (j *Journal) finishWorkflow(at time.Time) error {
 	}
 	o := &Outcome{Status: status, Summary: truncate(workflowSummary(j, status), maxSummaryBytes), At: at}
 	o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
+	o.CostUSD = sumStepCost(j.Steps)
 	j.Outcome, j.Phase = o, PhaseFinished
 	return nil
 }
@@ -244,6 +248,7 @@ func (j *Journal) timeOutWorkflow(at time.Time) error {
 	o := &Outcome{Status: cronjob.RunFailed, At: at}
 	o.Summary = truncate(reason+"\n\n"+workflowSummary(j, cronjob.RunFailed), maxSummaryBytes)
 	o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
+	o.CostUSD = sumStepCost(j.Steps)
 	j.Outcome, j.Phase = o, PhaseFinished
 	return nil
 }
@@ -255,6 +260,7 @@ type resumeTerms struct {
 	Generation int64
 	At         time.Time
 	Tokens     func(*Journal) (in, out *int64)
+	Cost       func(*Journal) *float64
 	SessionID  func(*Journal) string
 }
 
@@ -266,6 +272,7 @@ func (l lifecycle) acceptResume(j *Journal, t resumeTerms) error {
 	}
 	in, out := t.Tokens(j)
 	j.CarriedInput, j.CarriedOutput = addTokens(j.CarriedInput, in), addTokens(j.CarriedOutput, out)
+	j.CarriedCost = addCost(j.CarriedCost, t.Cost(j))
 	j.Attempt = j.attempt() + 1
 	j.Resume = &ResumeRecord{Attempt: j.Attempt, SessionID: t.SessionID(j), By: t.By, At: t.At, Hold: j.Outcome.Hold, Detail: j.Outcome.holdDetail()}
 	j.Generation = t.Generation

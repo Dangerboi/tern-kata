@@ -241,8 +241,8 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 			return nil, false, fmt.Errorf("job %q names profile %q, which is not available to Project %s in worker.toml", job.Name, profileName, ps.cfg.Name)
 		}
 		if d.CheckoutKey != "" {
-			dir, ok := w.opt.Config.Checkouts[d.CheckoutKey]
-			if !ok || !ps.cfg.allowsCheckout(d.CheckoutKey) {
+			dir, ok := w.checkoutFor(ps, d.CheckoutKey)
+			if !ok {
 				return nil, false, fmt.Errorf("job %q names checkout %q, which is not available to Project %s in worker.toml", job.Name, d.CheckoutKey, ps.cfg.Name)
 			}
 			checkout = dir
@@ -290,6 +290,13 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 	}
 	if err := w.pauseRefusal(ps, job); err != nil {
 		return nil, false, err
+	}
+	var startCommit, newCommitList string
+	if c, _ := readConditions(job); c.NewCommits && checkout != "" {
+		var err error
+		if startCommit, newCommitList, err = w.commitContext(ctx, ps, job, checkout, c.Folders, manual); err != nil {
+			return nil, false, err
+		}
 	}
 	if !w.reserve(ps) {
 		if w.isStopping() {
@@ -343,7 +350,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 		ProjectUID: ps.project.UID, ProjectID: ps.project.ID, ProjectName: ps.project.Name,
 		JobUID: job.UID, JobName: job.Name, DefinitionEventUID: job.DefinitionEventUID, Prompt: d.Action.Prompt, IssuePolicy: issuePolicy, Notify: notify, Workflow: workflow,
 		SecretRefs: d.SecretRefs, ProfileName: profileName, Profile: profile, Checkout: checkout, TimeoutSeconds: int64(timeout / time.Second),
-		OccurrenceKey: occurrenceKey, Occurrence: occurrence.UTC(), Manual: manual,
+		OccurrenceKey: occurrenceKey, Occurrence: occurrence.UTC(), Manual: manual, StartCommit: startCommit, NewCommits: newCommitList,
 		Steps:     stepsFor(workflow),
 		ExpiresAt: workflowExpiry(workflow, w.clock.Now().UTC(), timeout),
 		Phase:     PhasePrepared, StartedAt: w.clock.Now().UTC(),
