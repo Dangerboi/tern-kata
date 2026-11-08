@@ -93,6 +93,9 @@ func (s ShareLanes) same(o ShareLanes) bool {
 // refuses.
 func (m Model) shareLaneList(lanes []string, doneDays, doneCards int, stop bool) (Model, []Cmd) {
 	form := &m.LanesForm
+	if form.refuseStale(m, "sharing the Lane list") {
+		return m, nil
+	}
 	if form.ProjectID == 0 {
 		form.Err = errors.New("The Project could not be read, so its shared Lane list cannot be written.")
 		if m.Board.sharedErr != nil {

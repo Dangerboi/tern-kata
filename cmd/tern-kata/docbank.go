@@ -120,7 +120,7 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 			return docbanksetup.Env{}, err
 		}
 		if v.name != "KATA_HOME" || plan.AgentRoute.Home != "" {
-			fmt.Fprintf(&prefix, "%s=%s ", v.name, v.value)
+			fmt.Fprintf(&prefix, "%s=%s ", v.name, docbanksetup.ShellWord(v.value))
 		}
 	}
 	locate := data.Locator(data.LocateWithKata)

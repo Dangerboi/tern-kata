@@ -65,7 +65,7 @@ func TestGatewayLeavesHubRowsOutOfTheSpokeList(t *testing.T) {
 	joinReplica(t, kata, "acme")
 	roles := map[string]bool{}
 	status, err := kata.target().Client.GetFederationStatusWithResponse(context.Background(), nil)
-	if err != nil || status.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("status %v %+v", err, status)
 	}
 	for _, row := range status.JSON200.Statuses {

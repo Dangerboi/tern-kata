@@ -123,3 +123,36 @@ func TestTheOverlapIndexFollowsSavedJournalsWithoutReadingThem(t *testing.T) {
 		t.Fatalf("settled run closes the gate: %q", got)
 	}
 }
+
+// A journal saved as settled is never on disk while the overlap gate still reads it as closing the job.
+func TestTheOverlapGateAgreesWithTheSettledFileOnceItIsOnDisk(t *testing.T) {
+	dirs := worker.Dirs{Config: t.TempDir(), State: t.TempDir()}
+	const uid = "01M5JESXAK1NBYS6N2ZD9RTM9J"
+	inWindow, release := make(chan struct{}), make(chan struct{})
+	store := worker.NewStore(dirs, worker.Hooks{FailDirSync: func(point string) error {
+		if point == "settled" {
+			close(inWindow)
+			<-release
+		}
+		return nil
+	}})
+	j := &worker.Journal{Version: 1, RunUID: uid, ProjectUID: "p", JobUID: "j", Phase: worker.PhaseFinished}
+	if err := store.Create(j, "finished"); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = store.Update(uid, "settled", func(j *worker.Journal) error { j.Phase = worker.PhaseSettled; return nil })
+	}()
+	<-inWindow
+	got, err := store.Load(uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Phase == worker.PhaseSettled && store.ClosingRun("p", "j") != "" {
+		t.Error("the journal on disk is settled but the overlap gate still reads closed")
+	}
+	close(release)
+	<-done
+}

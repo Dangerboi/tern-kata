@@ -100,6 +100,16 @@ func planAgent(args []string) (LaunchPlan, error) {
 	if route := plan.AgentRoute; route.Daemon != "" && (route.Server != "" || route.AllowInsecure || route.TrustPrivate) {
 		return LaunchPlan{}, fmt.Errorf("agent: --daemon takes its server and credential from the catalog entry, so it excludes --server, --allow-insecure and --trust-private-network; %s", agentUsage)
 	}
+	if plan.AgentAddressPrefix == "" {
+		for _, f := range []struct {
+			flag string
+			set  bool
+		}{{"--forward-comments", plan.AgentForwardComments}, {"--message-from", len(plan.AgentMessageFrom) > 0}, {"--coordinator", plan.AgentCoordinator != ""}, {"--coordinating", plan.AgentCoordinating}} {
+			if f.set {
+				return LaunchPlan{}, fmt.Errorf("agent: %s needs --address-prefix; %s", f.flag, agentUsage)
+			}
+		}
+	}
 	plan.Actor = plan.fallbackAuthor
 	return plan, nil
 }

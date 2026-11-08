@@ -189,8 +189,7 @@ func sendTimedAssignment(m Model) (Model, []Cmd) {
 		m.FieldForm.Err = err
 		return m, nil
 	}
-	m.FieldForm.Value = strconv.FormatInt(seconds, 10)
-	return sendFieldWrite(m)
+	return writeFieldValue(m, strconv.FormatInt(seconds, 10))
 }
 
 func trimHash(v string) string { return strings.TrimPrefix(v, "#") }
@@ -243,7 +242,11 @@ func openField(m Model, action Action) (Model, []Cmd) {
 
 func submitField(m Model) (Model, []Cmd) {
 	f := &m.FieldForm
-	if f.Saving || m.Stale {
+	if f.Saving {
+		return m, nil
+	}
+	if m.Stale {
+		f.Err = errors.New("Daemon disconnected; reconnect before saving this field.")
 		return m, nil
 	}
 	spec := fieldSpecs[f.Action]
@@ -263,11 +266,14 @@ func submitField(m Model) (Model, []Cmd) {
 	return spec.send(m)
 }
 
-func sendFieldWrite(m Model) (Model, []Cmd) {
+func sendFieldWrite(m Model) (Model, []Cmd) { return writeFieldValue(m, m.FieldForm.Value) }
+
+// writeFieldValue sends value, which may differ from what the card holds, so a refused write can be retried as typed.
+func writeFieldValue(m Model, value string) (Model, []Cmd) {
 	f := &m.FieldForm
 	f.Saving = true
 	f.Err = nil
-	return m, []Cmd{WriteField{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Action: f.Action, Value: f.Value, Actor: m.Actor}}
+	return m, []Cmd{WriteField{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Action: f.Action, Value: value, Actor: m.Actor}}
 }
 
 func sendAttach(m Model) (Model, []Cmd) {

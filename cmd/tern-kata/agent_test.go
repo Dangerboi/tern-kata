@@ -360,10 +360,11 @@ func TestAgentWrapperSetsMessageFromAndVerifiedSendersFromTheDaemonOnItsRoute(t 
 		want   string
 	}{
 		{"a db token daemon", fakeInstance(t, "db_token").URL, []string{"--address-prefix", "dana/omp", "--message-from", "dana-laptop", "--message-from", "eve"}, "dana-laptop,eve|1"},
-		{"the bootstrap token", fakeInstance(t, "bootstrap").URL, []string{"--address-prefix", "dana/omp"}, "unset|1"},
-		{"a trusted proxy", fakeInstance(t, "trusted_proxy").URL, []string{"--address-prefix", "dana/omp"}, "unset|1"},
+		{"the bootstrap token", fakeInstance(t, "bootstrap").URL, []string{"--address-prefix", "dana/omp", "--message-from", "eve"}, "eve|1"},
+		{"a trusted proxy", fakeInstance(t, "trusted_proxy").URL, []string{"--address-prefix", "dana/omp", "--message-from", "eve"}, "eve|1"},
 		{"a daemon that takes the writer's word", fakeInstance(t, "none").URL, []string{"--address-prefix", "dana/omp", "--message-from", "eve"}, "eve|unset"},
-		{"a daemon that cannot be reached", closed.URL, []string{"--address-prefix", "dana/omp"}, "unset|unset"},
+		{"a daemon that cannot be reached", closed.URL, []string{"--address-prefix", "dana/omp", "--message-from", "eve"}, "eve|unset"},
+		{"no --message-from leaves the daemon unasked", fakeInstance(t, "db_token").URL, []string{"--address-prefix", "dana/omp"}, "unset|unset"},
 		{"no address prefix drops inherited ones", fakeInstance(t, "db_token").URL, nil, "unset|unset"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -374,5 +375,24 @@ func TestAgentWrapperSetsMessageFromAndVerifiedSendersFromTheDaemonOnItsRoute(t 
 				t.Errorf("status %d, output %q, stderr %q; want %q", status, out, stderr, tc.want)
 			}
 		})
+	}
+}
+
+func TestAgentWrapperDoesNotAskTheDaemonItsAuthKindWithoutMessageFrom(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	asked := make(chan string, 8)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked <- r.URL.Path
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+	block := agentBlockEnv + "=KATA_SERVER=" + server.URL + "\nKATA_ALLOW_INSECURE=1\nKATA_HOME=" + t.TempDir()
+	if _, status, stderr := runAgent(t, []string{block, "TERN_PANE=18494129176579"}, "agent", "--as", "claude", "--address-prefix", "dana/omp", "--ref", "demo#ab12", "--", "true"); status != 0 {
+		t.Fatalf("status %d, stderr %q", status, stderr)
+	}
+	if len(asked) != 0 {
+		t.Errorf("the wrapper sent the daemon %d requests with no --message-from", len(asked))
 	}
 }

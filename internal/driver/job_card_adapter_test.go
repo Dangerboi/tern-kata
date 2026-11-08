@@ -598,3 +598,34 @@ func TestAnIntervalTooLongForKataIsRefusedNamingTheFieldInsteadOfWrappingToZero(
 		t.Fatalf("saving sent %#v, focus %q, error %v", out.Cmds, out.State.Model.JobForm.Field, out.State.Model.JobForm.Err)
 	}
 }
+
+func TestRenamingAJobKeepsItsPerRunIssueBodyLineBreaks(t *testing.T) {
+	const body = "Check:\n\n- the inbox\n- the board"
+	native := guarded("J1", "Weekly", "EV1")
+	native.Definition.Issue.Body = body
+	adapter := promptJob("J2", "Triage")
+	adapter.DefinitionEventUID = "EV2"
+	adapter.Definition.Issue.Body = body
+	for _, job := range []model.CronJob{native, adapter} {
+		s := set(t, editedJob(t, job), model.JobFieldName, "Renamed")
+		if got := saved(t, s).Definition.Issue.Body; got != body {
+			t.Errorf("%s: saved body %q, want %q", job.UID, got, body)
+		}
+		s = set(t, editedJob(t, job), model.JobFieldBody, "New text")
+		if got := saved(t, s).Definition.Issue.Body; got != "New text" {
+			t.Errorf("%s: edited body %q", job.UID, got)
+		}
+	}
+}
+
+func TestEditingANotifyJobKeepsItsOverlap(t *testing.T) {
+	job := promptJob("J4", "Remind")
+	job.DefinitionEventUID = "EV4"
+	job.Definition.Overlap = "forbid"
+	job.Definition.Action = cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "alice", Message: "Look"}
+	job.Definition.Issue = &cronjob.IssuePolicy{Kind: cronjob.IssueExisting, UID: "ISSUE1"}
+	s := set(t, editedJob(t, job), model.JobFieldName, "Renamed")
+	if got := saved(t, s).Definition.Overlap; got != "forbid" {
+		t.Errorf("overlap %q, want forbid", got)
+	}
+}

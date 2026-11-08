@@ -251,6 +251,17 @@ func adapterCatchupShown(f JobFormState, name Field) bool {
 	return false
 }
 
+// foldBody is a per-run Issue body on the card's one-line Body field.
+func foldBody(body string) string { return strings.Join(strings.Fields(body), " ") }
+
+// savedBody is the body a save writes: the stored one, line breaks kept, while the Body field still shows it folded, else what was typed.
+func savedBody(f JobFormState, opened *cronjob.IssuePolicy) string {
+	if f.Change && opened != nil && strings.TrimSpace(f.Body) == foldBody(opened.Body) {
+		return opened.Body
+	}
+	return strings.TrimSpace(f.Body)
+}
+
 func loadExecute(f *JobFormState, job CronJob) {
 	d := job.Definition
 	f.Prompt, f.Workflow, f.Profile, f.Checkout, f.Secrets = d.Action.Prompt, d.Action.WorkflowUID, d.Profile, d.CheckoutKey, formatSecrets(d.SecretRefs)
@@ -267,7 +278,7 @@ func loadExecute(f *JobFormState, job CronJob) {
 		f.Issue = cmp.Or(f.Issue, p.UID)
 		return
 	}
-	f.Title, f.Body = p.Title, strings.Join(strings.Fields(p.Body), " ")
+	f.Title, f.Body = p.Title, foldBody(p.Body)
 	for _, offset := range []struct {
 		value *int64
 		into  *string
@@ -359,7 +370,7 @@ func executePolicy(f JobFormState) (*cronjob.IssuePolicy, error) {
 		}
 		return &cronjob.IssuePolicy{Kind: cronjob.IssueExisting}, nil
 	}
-	policy := cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, Title: strings.TrimSpace(f.Title), Body: strings.TrimSpace(f.Body)}
+	policy := cronjob.IssuePolicy{Kind: cronjob.IssuePerRun, Title: strings.TrimSpace(f.Title), Body: savedBody(f, f.Opened.Definition.Issue)}
 	if policy.Title == "" {
 		return nil, fieldError(JobFieldTitle, "must not be blank.")
 	}
@@ -411,6 +422,9 @@ var notifyJobKind = jobKind{
 	checkTrigger: func(cronjob.Trigger) error { return nil },
 	build: func(f JobFormState) (cronjob.Definition, string, error) {
 		def := cronjob.Definition{Overlap: "allow", Catchup: f.Catchup, Action: cronjob.Action{Kind: cronjob.ActionNotify, Recipient: recipientDefault}}
+		if f.Change {
+			def.Overlap = cmp.Or(f.Opened.Definition.Overlap, def.Overlap)
+		}
 		if err := notification(f, &def, true); err != nil {
 			return def, "", err
 		}

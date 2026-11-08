@@ -154,3 +154,54 @@ func TestUpdateReturnsTheChangesErrorAndWritesNothing(t *testing.T) {
 		t.Error("a file was written")
 	}
 }
+
+func TestWriteGoesThroughASymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "dotfiles", "views.toml")
+	link := filepath.Join(dir, "config", "views.toml")
+	if err := os.MkdirAll(filepath.Dir(real), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(link), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(real, []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	tok, err := Read(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Write(link, 0o700, tok, []byte("two\n")); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the link was replaced: %v, %v", info, err)
+	}
+	if got, _ := os.ReadFile(real); string(got) != "two\n" {
+		t.Errorf("the target holds %q, want the write", got)
+	}
+	if _, err := os.Lstat(link + ".lock"); err == nil {
+		t.Error("the lock was made beside the link, not the target")
+	}
+
+	// A dangling link: the write creates the target where the link points.
+	dangling := filepath.Join(dir, "config", "lanes.toml")
+	target := filepath.Join(dir, "dotfiles", "lanes.toml")
+	if err := os.Symlink(target, dangling); err != nil {
+		t.Fatal(err)
+	}
+	tok, _ = Read(dangling)
+	if err := Write(dangling, 0o700, tok, []byte("lane\n")); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(target); string(got) != "lane\n" {
+		t.Errorf("the dangling link's target holds %q", got)
+	}
+	if info, err := os.Lstat(dangling); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the dangling link was replaced: %v, %v", info, err)
+	}
+}

@@ -28,9 +28,6 @@ func (c *Client) ListJobs(ctx context.Context, cmd model.LoadJobs) (model.JobsLo
 		}
 		return model.JobsLoaded{}, daemonError(err)
 	}
-	if response.JSON200 == nil {
-		return model.JobsLoaded{}, errors.New("kata daemon returned no Cron jobs")
-	}
 	parents := newParentReader(c, cmd.ProjectID)
 	jobs := make([]model.CronJob, len(response.JSON200.Jobs))
 	for i, wire := range response.JSON200.Jobs {
@@ -79,9 +76,6 @@ func (c *Client) jobActivity(ctx context.Context, projectID int64, jobs []model.
 		if err != nil {
 			return nil, daemonError(err)
 		}
-		if response.JSON200 == nil {
-			return nil, errors.New("kata daemon returned no Runs")
-		}
 		for _, wire := range response.JSON200.Runs {
 			if run := (model.Run{Run: cronjobclient.Run(wire)}); run.JobUID != "" && !isNativeJob(jobs, run.JobUID) {
 				if held := activity[run.JobUID]; len(held.Runs) < model.JobActivityShown {
@@ -121,9 +115,6 @@ func (c *Client) projectArchived(ctx context.Context, projectID int64, err error
 	response, listErr := c.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{Query: &g.ListProjectsQuery{Include: &include}})
 	if listErr != nil {
 		return false, daemonError(listErr)
-	}
-	if response.JSON200 == nil {
-		return false, errors.New("kata daemon returned no Projects")
 	}
 	for _, p := range response.JSON200.Projects {
 		if p.ID == projectID && p.DeletedAt != nil {
@@ -185,8 +176,6 @@ func (p *parentReader) parent(ctx context.Context, uid string) (readParent, erro
 		read = readParent{parent: model.CronJobParent{UID: uid, Deleted: true}}
 	case err != nil:
 		return readParent{}, daemonError(err)
-	case response.JSON200 == nil:
-		return readParent{}, errors.New("kata daemon returned no parent Issue")
 	default:
 		issue := response.JSON200.Issue
 		read = readParent{

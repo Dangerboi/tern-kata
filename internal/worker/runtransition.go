@@ -278,6 +278,7 @@ func (l lifecycle) acceptResume(j *Journal, t resumeTerms) error {
 		j.Steps[i].StderrTail = "" // the resumed attempt writes its own
 	}
 	j.Outcome, j.Exit, j.Result, j.Intents = nil, nil, nil, nil
+	j.Cancel = nil // a cancel set before the hold is answered by the person's resume
 	j.Phase = PhaseResuming
 	return nil
 }

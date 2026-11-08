@@ -66,9 +66,6 @@ func connect(ctx context.Context, target Target) (*Client, error) {
 		}
 		return nil, err
 	}
-	if ping.JSON200 == nil {
-		return nil, fmt.Errorf("kata daemon returned no version")
-	}
 	version := ping.JSON200.Version
 	normalized := "v" + strings.TrimPrefix(version, "v")
 	if !semver.IsValid(normalized) {

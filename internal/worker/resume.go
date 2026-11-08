@@ -297,17 +297,25 @@ func (w *Worker) sessionID(j *Journal) string {
 // sessionIn is the session in an omp session folder: launched when its file is there, else (launched unknown) the only
 // session file. Empty when none.
 func sessionIn(dir, launched string) string {
+	entries, _ := os.ReadDir(dir)
+	var files []string // session files are named <timestamp>_<id>.jsonl
+	for _, e := range entries {
+		if name := e.Name(); strings.Contains(name, "_") && strings.HasSuffix(name, ".jsonl") && !e.IsDir() {
+			files = append(files, name)
+		}
+	}
 	if launched != "" {
-		if m, _ := filepath.Glob(filepath.Join(dir, "*_"+launched+".jsonl")); len(m) > 0 {
-			return launched
+		for _, name := range files {
+			if strings.HasSuffix(name, "_"+launched+".jsonl") {
+				return launched
+			}
 		}
 		return ""
 	}
-	files, _ := filepath.Glob(filepath.Join(dir, "*_*.jsonl"))
 	if len(files) != 1 {
 		return ""
 	}
-	name := strings.TrimSuffix(filepath.Base(files[0]), ".jsonl")
+	name := strings.TrimSuffix(files[0], ".jsonl")
 	return name[strings.LastIndexByte(name, '_')+1:]
 }
 

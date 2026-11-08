@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"path/filepath"
 	"slices"
 	"time"
 )
@@ -33,8 +32,7 @@ func (w *Worker) retireOnce(ctx context.Context, served map[string]bool) (done b
 	}
 	known := map[string]string{}     // Project uid -> the name it was served under
 	instances := map[string]string{} // Project uid -> the daemon instance its pin records
-	pins, _ := filepath.Glob(w.opt.Dirs.Pins())
-	for _, path := range pins {
+	for _, path := range w.opt.Dirs.pinFiles() {
 		if p, ok := readPin(path); ok && p.ProjectUID != "" {
 			known[p.ProjectUID] = p.Name
 			instances[p.ProjectUID] = p.InstanceUID

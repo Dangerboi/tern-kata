@@ -17,9 +17,6 @@ func (c *Client) CreateRecurrence(ctx context.Context, cmd model.CreateRecurrenc
 	if err != nil {
 		return daemonError(err)
 	}
-	if current.JSON200 == nil {
-		return errors.New("kata returned no Issue before making it recur")
-	}
 	issue := current.JSON200.Issue
 	_, err = c.CreateRecurrenceWithResponse(ctx, &g.CreateRecurrenceRequestOptions{
 		PathParams: &g.CreateRecurrencePath{ProjectID: cmd.ProjectID},
@@ -49,7 +46,7 @@ func (c *Client) currentRecurrence(ctx context.Context, projectID int64, uid str
 	if err != nil {
 		return model.Recurrence{}, err
 	}
-	if shown.JSON200 == nil || shown.JSON200.Recurrence.DeletedAt != nil {
+	if shown.JSON200.Recurrence.DeletedAt != nil {
 		return model.Recurrence{}, errRecurrenceStopped
 	}
 	return translateLiveRecurrence(shown.JSON200.Recurrence), nil

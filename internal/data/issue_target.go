@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -50,9 +49,6 @@ func (c *Client) readIssueTarget(ctx context.Context, workspace, ref string) (is
 		if err != nil {
 			return issueTarget{}, issueReadError(err)
 		}
-		if response.JSON200 == nil {
-			return issueTarget{}, errors.New("kata daemon returned no Issue")
-		}
 		target.issue = response.JSON200.Issue
 		return target, nil
 	}
@@ -82,9 +78,6 @@ func (c *Client) readIssueTarget(ctx context.Context, workspace, ref string) (is
 	if err != nil {
 		return issueTarget{}, issueReadError(err)
 	}
-	if response.JSON200 == nil {
-		return issueTarget{}, errors.New("kata daemon returned no Issue")
-	}
 	target.issue = response.JSON200.Issue
 	return target, nil
 }
@@ -93,9 +86,6 @@ func (c *Client) projectNames(ctx context.Context) (map[int64]string, error) {
 	response, err := c.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{})
 	if err != nil {
 		return nil, daemonError(err)
-	}
-	if response.JSON200 == nil {
-		return nil, errors.New("kata daemon returned no Projects")
 	}
 	names := map[int64]string{}
 	for _, p := range response.JSON200.Projects {

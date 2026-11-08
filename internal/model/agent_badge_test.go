@@ -211,3 +211,18 @@ func TestAMessageForAnotherAddressOrAnExitedAgentOrNotARequestShowsNothing(t *te
 }
 
 func first(b model.AgentBadge, _ bool) model.AgentBadge { return b }
+
+func TestTheBadgeIndexDropsARemoteBadgeTheShownIssueNoLongerCarries(t *testing.T) {
+	record := model.AgentRecord{HostID: "other", Host: "laptop", Block: "7", Name: "ana"}
+	stale := model.Issue{UID: "a", Metadata: map[string]any{model.AgentRecordKey("other", "7"): record}}
+	m := model.Model{HostID: "me", SelectedUID: "a", Issues: []model.Issue{stale}}
+	if _, ok := m.AgentBadges().For("a"); !ok {
+		t.Fatal("the listed Issue's remote agent shows no badge")
+	}
+	m = withDetail(m, &model.IssueDetailData{Issue: &model.Issue{UID: "a", Metadata: map[string]any{}}})
+	_, shown := m.AgentBadgeFor("a")
+	_, listed := m.AgentBadges().For("a")
+	if shown || listed {
+		t.Errorf("the emptied record still shows: badge for %v, row for %v", shown, listed)
+	}
+}

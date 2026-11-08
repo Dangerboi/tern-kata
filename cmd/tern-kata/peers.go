@@ -43,9 +43,12 @@ func planAgents(args []string, lookup func(string) (string, bool)) (LaunchPlan, 
 
 func planTeam(args []string) (LaunchPlan, error) {
 	plan := LaunchPlan{Subcommand: "team"}
+	flagsEnded := false
 	for _, arg := range args[1:] {
 		switch {
-		case strings.HasPrefix(arg, "--"):
+		case !flagsEnded && arg == "--":
+			flagsEnded = true
+		case !flagsEnded && strings.HasPrefix(arg, "--"):
 			return LaunchPlan{}, fmt.Errorf("team: unknown flag %s", arg)
 		case plan.TargetRef != "":
 			return LaunchPlan{}, fmt.Errorf("team: unexpected argument %s; %s", arg, teamUsage)

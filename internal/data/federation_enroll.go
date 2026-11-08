@@ -30,7 +30,7 @@ func catalogHub(entry CatalogEntry, active bool) model.FederationHub {
 	if !entry.Local {
 		endpoint = strings.TrimRight(entry.URL, "/")
 	}
-	if entry.TokenEnv != "" {
+	if entry.hasToken() {
 		auth = "token"
 	}
 	return model.FederationHub{Name: entry.Name, Endpoint: endpoint, Auth: auth, AllowInsecure: entry.AllowInsecure, Active: active, Local: entry.Local}
@@ -80,15 +80,9 @@ func readHub(ctx context.Context, hub *client.Client, entry CatalogEntry) (auth,
 	if err != nil {
 		return "", "", nil, daemonError(err)
 	}
-	if instance.JSON200 == nil {
-		return "", "", nil, errors.New("kata daemon returned no instance")
-	}
 	listed, err := hub.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{})
 	if err != nil {
 		return "", "", nil, daemonError(err)
-	}
-	if listed.JSON200 == nil {
-		return "", "", nil, errors.New("kata daemon returned no projects")
 	}
 	for _, p := range listed.JSON200.Projects {
 		projects = append(projects, translateProject(p))
@@ -96,7 +90,7 @@ func readHub(ctx context.Context, hub *client.Client, entry CatalogEntry) (auth,
 	if instance.JSON200.Auth.Actor != nil {
 		actor = strings.TrimSpace(*instance.JSON200.Auth.Actor)
 	}
-	return federationAuth(entry.TokenEnv != "", instance.JSON200.Auth), actor, projects, nil
+	return federationAuth(entry.hasToken(), instance.JSON200.Auth), actor, projects, nil
 }
 
 // ReadFederationHubProjects reads the Projects of one catalog hub for the hub Project step. A hub that is refused before anything is
@@ -194,7 +188,7 @@ func (c *Client) EnrollFederation(ctx context.Context, cmd model.EnrollFederatio
 	if err != nil {
 		return failed(daemonError(err))
 	}
-	if granted.JSON200 == nil || granted.JSON200.Token == nil || *granted.JSON200.Token == "" {
+	if granted.JSON200.Token == nil || *granted.JSON200.Token == "" {
 		return failed(errors.New("hub returned no enrollment token"))
 	}
 	token, actor := *granted.JSON200.Token, granted.JSON200.Actor
@@ -219,9 +213,6 @@ func (c *Client) EnrollFederation(ctx context.Context, cmd model.EnrollFederatio
 		PathParams: &g.GetFederationProjectMetadataPath{ProjectID: hubProject.ID}})
 	if err != nil {
 		return lapse("metadata", err)
-	}
-	if metadata.JSON200 == nil {
-		return lapse("metadata", errors.New("kata daemon returned no federation metadata"))
 	}
 	meta := *metadata.JSON200
 	name := meta.ProjectName
@@ -250,9 +241,6 @@ func (c *Client) EnrollFederation(ctx context.Context, cmd model.EnrollFederatio
 	if err != nil {
 		return lapse("join", err)
 	}
-	if joined.JSON200 == nil {
-		return lapse("join", errors.New("kata daemon returned no replica"))
-	}
 	outcome := model.FederationEnrollOutcome{Draft: d, HubURL: hubURL, Actor: actor, HubProjectID: meta.ProjectID, HubProjectUID: meta.ProjectUID}
 	if outcome.HubProjectID == 0 {
 		outcome.HubProjectID = hubProject.ID
@@ -273,9 +261,6 @@ func resolveHubProject(ctx context.Context, hub *client.Client, d model.Federati
 	initialized, err := hub.InitProjectWithResponse(ctx, &g.InitProjectRequestOptions{Body: &g.InitProjectBody{Name: &d.SpokeProjectName, Actor: &d.RequestedActor}})
 	if err != nil {
 		return model.Project{}, daemonError(err)
-	}
-	if initialized.JSON200 == nil {
-		return model.Project{}, errors.New("kata daemon returned no project")
 	}
 	return translateProject(initialized.JSON200.Project), nil
 }

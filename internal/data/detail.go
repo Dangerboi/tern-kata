@@ -17,7 +17,7 @@ func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded
 	if err != nil {
 		return model.DetailLoaded{}, daemonError(err)
 	}
-	if response.JSON200 == nil || response.JSON200.Selected == nil {
+	if response.JSON200.Selected == nil {
 		return model.DetailLoaded{}, fmt.Errorf("kata daemon returned no detail for Issue %s", uid)
 	}
 	return model.DetailLoaded{UID: uid, Selected: translateDetail(response.JSON200.Selected, response.JSON200.Capabilities)}, nil

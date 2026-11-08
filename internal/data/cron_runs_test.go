@@ -20,10 +20,10 @@ func (f *jobsFixture) observe(t *testing.T, body g.ObserveCronRunBody) string {
 		t.Fatal(err)
 	}
 	body.Actor = new("tester")
-	response, err := f.client.ObserveCronRunWithResponse(context.Background(), &g.ObserveCronRunRequestOptions{
+	_, err = f.client.ObserveCronRunWithResponse(context.Background(), &g.ObserveCronRunRequestOptions{
 		PathParams: &g.ObserveCronRunPath{ProjectID: f.demo.ID, RunUID: uid}, Body: &body,
 	})
-	if err != nil || response.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("observe run: %v", err)
 	}
 	return uid
@@ -41,7 +41,7 @@ func (f *jobsFixture) workflow(t *testing.T, name string) g.CronWorkflow {
 			Version: 1, Steps: []g.CronWorkflowStep{{Key: "build", Kind: "command", Command: new("make")}},
 		}},
 	})
-	if err != nil || response.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("put workflow %s: %v", name, err)
 	}
 	return response.JSON200.Workflow

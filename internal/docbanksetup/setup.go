@@ -206,7 +206,7 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 func (e Env) applyKata(ctx context.Context, c Common, keyEnv string) error {
 	command, prefix, env := "kata daemon restart", e.CommandPrefix, []string(nil)
 	if e.Daemon != "" {
-		prefix, env = "KATA_HOME="+e.KataHome+" ", []string{"KATA_HOME=" + e.KataHome}
+		prefix, env = "KATA_HOME="+ShellWord(e.KataHome)+" ", []string{"KATA_HOME=" + e.KataHome}
 	}
 	restart := c.Yes
 	if !c.Yes && !c.NoRestart && e.Confirm != nil {
@@ -580,4 +580,15 @@ func AskYesNo(in *bufio.Reader, out io.Writer, question string) (bool, error) {
 	}
 	answer := strings.ToLower(strings.TrimSpace(line))
 	return answer == "y" || answer == "yes", nil
+}
+
+// ShellWord is s as one shell word: unchanged when it holds only characters a shell never treats specially, else in single
+// quotes with each embedded quote written as '\”.
+func ShellWord(s string) string {
+	if s != "" && strings.IndexFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("_@%+=:,./-", r))
+	}) < 0 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

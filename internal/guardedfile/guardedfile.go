@@ -39,6 +39,10 @@ const lockWait = 10 * time.Second
 // exclusive lock on path+".lock", so another process writing through this package cannot slip between them; a lock held
 // longer than lockWait is an error. A writer that bypasses this package is not excluded.
 func Write(path string, dirMode fs.FileMode, token Token, next []byte) error {
+	path, err := resolveLink(path)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
 		return err
 	}
@@ -64,6 +68,25 @@ func Write(path string, dirMode fs.FileMode, token Token, next []byte) error {
 		}
 		return nil
 	}})
+}
+
+// resolveLink is the file a write to path must replace: the file a symlink (a dotfiles repo) points at, so the rename keeps the
+// link; where a dangling link points, so the target is created there; path itself otherwise.
+func resolveLink(path string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		return resolved, nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	if dest, linkErr := os.Readlink(path); linkErr == nil {
+		if !filepath.IsAbs(dest) {
+			dest = filepath.Join(filepath.Dir(path), dest)
+		}
+		return dest, nil
+	}
+	return path, nil
 }
 
 const updateTries = 20

@@ -53,7 +53,11 @@ type Limit struct {
 // Wording is the limit as the Pane shows it: "At most 3 runs per day", "At most $5 spent per week".
 func (l Limit) Wording() string {
 	if l.Runs != 0 {
-		return "At most " + strconv.Itoa(l.Runs) + " runs per " + l.Per
+		runs := " runs per "
+		if l.Runs == 1 {
+			runs = " run per "
+		}
+		return "At most " + strconv.Itoa(l.Runs) + runs + l.Per
 	}
 	return "At most $" + strconv.FormatFloat(l.Spend, 'f', -1, 64) + " spent per " + l.Per
 }

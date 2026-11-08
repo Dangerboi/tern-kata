@@ -202,7 +202,7 @@ var nativeJobKind = jobKind{
 		} else {
 			f.Parent = d.Issue.ParentUID
 		}
-		f.Title, f.Body = d.Issue.Title, strings.Join(strings.Fields(d.Issue.Body), " ")
+		f.Title, f.Body = d.Issue.Title, foldBody(d.Issue.Body)
 		if d.Action.Recipient != recipientDefault {
 			f.Recipient = d.Action.Recipient
 		}
@@ -229,7 +229,7 @@ var nativeJobKind = jobKind{
 		} else if utf8.RuneCountInString(policy.Title) > nativeChildTitleMax {
 			return def, "", fieldError(JobFieldTitle, "at most %d characters.", nativeChildTitleMax)
 		}
-		policy.Body = strings.TrimSpace(f.Body)
+		policy.Body = savedBody(f, f.Opened.Definition.Issue)
 		if err := notification(f, &def, false); err != nil {
 			return def, "", err
 		}

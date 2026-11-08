@@ -620,3 +620,19 @@ func TestDocbankSetupRerunSaysWhenTheKataDaemonCannotBeAsked(t *testing.T) {
 		t.Fatalf("rerun: %q, %v", out, err)
 	}
 }
+
+func TestDocbankSetupQuotesTheRestartCommandItPrints(t *testing.T) {
+	f := newDocbankSetupFixture(t)
+	home := filepath.Join(t.TempDir(), "my kata home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, err := f.run(t, "", "--home", home, "--db", "it's a db", "--url", f.fake.URL, "--key-file", f.keyFile(t), "--no-restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "KATA_HOME='" + home + "' KATA_DB='it'\\''s a db' kata daemon restart"
+	if !strings.Contains(out, want) {
+		t.Errorf("output does not print %q:\n%s", want, out)
+	}
+}

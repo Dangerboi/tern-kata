@@ -314,8 +314,7 @@ func (w *Worker) checkPin(p Project, actor string, instance Instance) string {
 	dir := w.opt.Dirs.ProjectDir(p.UID)
 	want := pin{ProjectUID: p.UID, InstanceUID: instance.UID, Name: p.Name, Actor: actor, AuthActor: instance.Actor, Executor: w.opt.Config.Executor}
 	// A name that earlier resolved to another uid is a different Project.
-	others, _ := filepath.Glob(w.opt.Dirs.Pins())
-	for _, path := range others {
+	for _, path := range w.opt.Dirs.pinFiles() {
 		if filepath.Dir(path) == dir {
 			continue
 		}

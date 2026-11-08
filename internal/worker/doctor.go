@@ -157,6 +157,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 		}
 		upgrade = o.checkProject(ctx, cfg, pc, projects[i], add) || upgrade
 	}
+	o.checkRuns(add)
 	for _, p := range projects {
 		if served[p.Name] {
 			continue
@@ -244,6 +245,25 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 			add("FAIL", subject, fmt.Sprintf("run %s is running in kata for this executor but this machine has no journal of it; it is never rerun", run.UID), "Record it as `unknown` (\"local state lost\") with `tern-kata worker abandon "+run.UID+"`; do not delete anything to unblock the job.")
 		}
 	}
+	runDirs, _ := os.ReadDir(o.Dirs.Runs())
+	for _, e := range runDirs {
+		if !e.IsDir() {
+			continue
+		}
+		j, err := store.Load(e.Name())
+		if err != nil || j.ProjectUID != p.UID || j.Executor != cfg.Executor {
+			continue
+		}
+		for _, why := range j.Inspections() {
+			add("FAIL", subject, fmt.Sprintf("run %s needs inspection: %s", j.RunUID, why), "Read the run in kata (`kata cron run show`) and decide what it should say; the worker never overwrites it.")
+		}
+	}
+	return upgrade
+}
+
+// checkRuns reports what belongs to no one Project: quarantined runs and run folders whose journal cannot be read.
+func (o DoctorOptions) checkRuns(add func(level, subject, detail, fix string)) {
+	store := NewStore(o.Dirs, Hooks{})
 	for _, uid := range store.Quarantine() {
 		detail := fmt.Sprintf("run %s: its journal could not be read and is kept whole under %s; the run is never repeated", uid, store.Quarantined(uid))
 		if by, seen := store.Acknowledged(uid); seen {
@@ -257,20 +277,9 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 		if !e.IsDir() {
 			continue
 		}
-		j, err := store.Load(e.Name())
-		if err != nil {
-			// A read failure is not damage, so the worker keeps the run in place and admits nothing until it can read it.
-			if !errors.Is(err, ErrNoJournal) && !errors.Is(err, errDamagedJournal) {
-				add("FAIL", subject, fmt.Sprintf("run %s: its journal cannot be read (%s), so the worker admits nothing", e.Name(), err), "Fix its permissions, or move the folder out of "+o.Dirs.Runs()+" if the run is gone; the worker recovers on its next pass.")
-			}
-			continue
-		}
-		if j.ProjectUID != p.UID || j.Executor != cfg.Executor {
-			continue
-		}
-		for _, why := range j.Inspections() {
-			add("FAIL", subject, fmt.Sprintf("run %s needs inspection: %s", j.RunUID, why), "Read the run in kata (`kata cron run show`) and decide what it should say; the worker never overwrites it.")
+		// A read failure is not damage, so the worker keeps the run in place and admits nothing until it can read it.
+		if _, err := store.Load(e.Name()); err != nil && !errors.Is(err, ErrNoJournal) && !errors.Is(err, errDamagedJournal) {
+			add("FAIL", "runs", fmt.Sprintf("run %s: its journal cannot be read (%s), so the worker admits nothing", e.Name(), err), "Fix its permissions, or move the folder out of "+o.Dirs.Runs()+" if the run is gone; the worker recovers on its next pass.")
 		}
 	}
-	return upgrade
 }

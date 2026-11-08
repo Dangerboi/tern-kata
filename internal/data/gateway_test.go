@@ -1040,12 +1040,12 @@ func (f *childCountFixture) remove(t *testing.T, uid string, project model.Proje
 		t.Fatal(err)
 	}
 	confirm := "DELETE " + detail.Issue.QualifiedID
-	response, err := c.DeleteIssueWithResponse(context.Background(), &g.DeleteIssueRequestOptions{
+	_, err = c.DeleteIssueWithResponse(context.Background(), &g.DeleteIssueRequestOptions{
 		PathParams: &g.DeleteIssuePath{ProjectID: project.ID, Ref: uid},
 		Header:     &g.DeleteIssueHeaders{XKataConfirm: &confirm},
 		Body:       &g.DeleteIssueBody{Actor: "tester"},
 	})
-	if err != nil || response.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("delete %s: %v", uid, err)
 	}
 }
@@ -1058,7 +1058,7 @@ func (f *childCountFixture) kataCounts(t *testing.T, uid string) model.ChildCoun
 		t.Fatal(err)
 	}
 	response, err := c.ListAllIssuesWithResponse(context.Background(), &g.ListAllIssuesRequestOptions{Query: &g.ListAllIssuesQuery{}})
-	if err != nil || response.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("list Issues: %v", err)
 	}
 	for _, issue := range response.JSON200.Issues {
@@ -1242,7 +1242,7 @@ func closePayload(t *testing.T, gateway *Gateway, workspace, uid string) map[str
 	}
 	limit := int64(1000)
 	events, err := client.PollEventsWithResponse(ctx, &g.PollEventsRequestOptions{Query: &g.PollEventsQuery{Limit: &limit}})
-	if err != nil || events.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("poll events: %v", err)
 	}
 	for _, e := range events.JSON200.Events {

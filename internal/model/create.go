@@ -188,7 +188,9 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 	case FieldLabelsLoaded:
 		if msg.UID == CreateDraftUID && m.Create.Open {
 			m.Create.Completion.Labels = msg.Labels
-			m.Create.Err = msg.Err
+			if m.Create.Err == nil {
+				m.Create.Err = msg.Err
+			}
 			return m, nil, true
 		}
 	}

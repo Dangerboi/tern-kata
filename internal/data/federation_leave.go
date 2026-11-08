@@ -66,9 +66,6 @@ func (c *Client) leaveReplica(ctx context.Context, draft model.FederationLeaveDr
 	if err != nil {
 		return g.LeaveFederationReplicaResultBody{}, daemonError(err)
 	}
-	if resp.JSON200 == nil {
-		return g.LeaveFederationReplicaResultBody{}, errors.New("kata daemon returned no leave result")
-	}
 	return *resp.JSON200, nil
 }
 
@@ -87,9 +84,6 @@ func revokeLeaveEnrollments(ctx context.Context, draft model.FederationLeaveDraf
 	listed, err := hub.ListFederationEnrollmentsWithResponse(ctx)
 	if err != nil {
 		return 0, nil, leaveHubError(daemonError(err))
-	}
-	if listed.JSON200 == nil {
-		return 0, nil, leaveHubError(errors.New("kata daemon returned no federation enrollments"))
 	}
 	ids, globals, foreign := matchLeaveEnrollments(listed.JSON200.Enrollments, draft.InstanceUID, draft.HubProjectID)
 	if len(ids) == 0 && len(foreign) > 0 {

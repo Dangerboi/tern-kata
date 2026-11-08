@@ -226,3 +226,18 @@ func TestRunLimitsSpendLimitsAndNewCommitsAreReadTogether(t *testing.T) {
 		t.Fatal("a spend limit alone is not a condition")
 	}
 }
+
+func TestALimitOfOneReadsInTheSingular(t *testing.T) {
+	for _, tt := range []struct {
+		limit cronjob.Limit
+		want  string
+	}{
+		{cronjob.Limit{Per: "day", Runs: 1}, "At most 1 run per day"},
+		{cronjob.Limit{Per: "day", Runs: 3}, "At most 3 runs per day"},
+		{cronjob.Limit{Per: "week", Spend: 1}, "At most $1 spent per week"},
+	} {
+		if got := tt.limit.Wording(); got != tt.want {
+			t.Errorf("%+v: %q, want %q", tt.limit, got, tt.want)
+		}
+	}
+}

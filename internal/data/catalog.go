@@ -43,6 +43,9 @@ func (e CatalogEntry) Token() (string, error) {
 	return token, nil
 }
 
+// hasToken says the entry names a token, inline or through token_env, which Token sends.
+func (e CatalogEntry) hasToken() bool { return e.InlineToken != "" || e.TokenEnv != "" }
+
 type Catalog struct {
 	Active  string
 	Daemons []CatalogEntry

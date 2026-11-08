@@ -366,7 +366,7 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	binding, bound := LookupBindingForMode(msg.Chord, ModeCloseForm)
 	switch {
 	case bound && binding.Action == CloseCancel:
-		f.Open = false
+		f.Open, f.Err = false, nil
 	case bound && binding.Action == CloseSave:
 		return submitClose(m, false)
 	case bound && binding.Action == CloseQuick:

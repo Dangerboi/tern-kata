@@ -89,7 +89,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if plan.AgentAddressPrefix != "" {
+		if len(plan.AgentMessageFrom) > 0 { // verified senders only decide whether a message_from actor's slot is delivered
 			plan.AgentVerifiedSenders = verifyAgentRoute(environ)
 		}
 		return execAgent(plan, environ)

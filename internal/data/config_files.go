@@ -145,8 +145,9 @@ func agentRow(path string) model.ConfigFile {
 }
 
 // saveAgentConfig replaces agent.toml with text an agent start accepts, when the file is still the base the edit began from. The
-// write takes the config folder's lock and replaces the file atomically, as the Lane, filter and view files are written. A text
-// that does not load is refused and a changed file is model.ErrAgentConfigChanged; nothing is written in either case.
+// write takes the config folder's lock and replaces the file atomically (through a symlink, not over it), as the Lane, filter and
+// view files are written. A text that does not load is refused and a changed file is model.ErrAgentConfigChanged; nothing is
+// written in either case.
 func (g *Gateway) saveAgentConfig(cmd model.SaveAgentConfig) model.AgentConfigSaved {
 	done := model.AgentConfigSaved{Text: cmd.Text}
 	folder, err := g.configFolder()
@@ -158,19 +159,6 @@ func (g *Gateway) saveAgentConfig(cmd model.SaveAgentConfig) model.AgentConfigSa
 		return done
 	}
 	path := filepath.Join(folder, AgentConfigFile)
-	// A symlinked agent.toml (a dotfiles repo) is written through: the atomic rename would otherwise replace the link.
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		path = resolved
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		done.Err = err
-		return done
-	} else if dest, linkErr := os.Readlink(path); linkErr == nil {
-		// A dangling link: the target is created where the link points.
-		if !filepath.IsAbs(dest) {
-			dest = filepath.Join(filepath.Dir(path), dest)
-		}
-		path = dest
-	}
 	token, err := guardedfile.Read(path)
 	if err != nil {
 		done.Err = err

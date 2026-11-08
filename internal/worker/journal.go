@@ -458,9 +458,8 @@ func (s *Store) write(j *Journal, point string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	renamed := false // the folder sync runs only once the rename landed
 	sync := func(dir string) error {
-		renamed = true
+		s.noteGate(j) // the folder sync runs only once the rename landed, so the index follows the file at once, even if the sync then fails
 		if s.hooks.FailDirSync != nil {
 			if err := s.hooks.FailDirSync(point); err != nil {
 				return err
@@ -469,9 +468,6 @@ func (s *Store) write(j *Journal, point string) error {
 		return syncDir(dir)
 	}
 	err = replaceFileSyncing(s.path(j.RunUID), raw, sync)
-	if renamed {
-		s.noteGate(j) // the file is replaced even when the folder sync failed
-	}
 	if err != nil {
 		return err
 	}

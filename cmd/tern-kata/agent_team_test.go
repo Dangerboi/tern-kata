@@ -15,11 +15,10 @@ func TestAgentSetsTheTeamVariablesOnlyWithAnAddressPrefix(t *testing.T) {
 		flags []string
 		want  string
 	}{
-		"child":                        {[]string{"--address-prefix", "dangerboi/omp", "--coordinator", "dangerboi/omp-7"}, "dangerboi/omp-7|unset"},
-		"coordinator":                  {[]string{"--address-prefix", "dangerboi/omp", "--coordinating"}, "unset|1"},
-		"neither drops inherited":      {[]string{"--address-prefix", "dangerboi/omp"}, "unset|unset"},
-		"child without a prefix":       {[]string{"--coordinator", "dangerboi/omp-7"}, "stale/omp-1|1"},
-		"coordinator without a prefix": {[]string{"--coordinating"}, "stale/omp-1|1"},
+		"child":                      {[]string{"--address-prefix", "dangerboi/omp", "--coordinator", "dangerboi/omp-7"}, "dangerboi/omp-7|unset"},
+		"coordinator":                {[]string{"--address-prefix", "dangerboi/omp", "--coordinating"}, "unset|1"},
+		"neither drops inherited":    {[]string{"--address-prefix", "dangerboi/omp"}, "unset|unset"},
+		"no prefix leaves inherited": {nil, "stale/omp-1|1"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			args := append(append([]string{"agent", "--as", "claude"}, tc.flags...), "--ref", "demo#ab12", "--", "sh", "-c", script)

@@ -153,9 +153,6 @@ func (c *Client) conflictingJob(ctx context.Context, projectID int64, uid string
 	if showErr != nil {
 		return model.CronJob{}, false, daemonError(showErr)
 	}
-	if response.JSON200 == nil {
-		return model.CronJob{}, false, errors.New("kata daemon returned no Cron job")
-	}
 	job, readErr := parents.translate(ctx, response.JSON200.Job)
 	return job, readErr == nil, readErr
 }
@@ -170,8 +167,6 @@ func (c *Client) resolveIssue(ctx context.Context, projectID int64, ref, label s
 		return "", fmt.Errorf("%s: no Issue %q in this Project.", label, ref)
 	case err != nil:
 		return "", daemonError(err)
-	case response.JSON200 == nil:
-		return "", errors.New("kata daemon returned no parent Issue")
 	}
 	return response.JSON200.Issue.UID, nil
 }

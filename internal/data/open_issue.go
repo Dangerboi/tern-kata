@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -13,9 +12,6 @@ func (c *Client) ResolveIssue(ctx context.Context, projectID int64, shortID stri
 	response, err := c.ResolveUIIssueReferenceWithResponse(ctx, &g.ResolveUIIssueReferenceRequestOptions{Query: &g.ResolveUIIssueReferenceQuery{ProjectID: projectID, Ref: shortID}})
 	if err != nil {
 		return "", daemonError(err)
-	}
-	if response.JSON200 == nil {
-		return "", fmt.Errorf("kata daemon returned no Issue reference")
 	}
 	return response.JSON200.Issue.UID, nil
 }

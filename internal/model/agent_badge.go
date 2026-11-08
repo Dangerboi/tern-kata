@@ -180,17 +180,19 @@ func (m Model) AgentBadges() AgentBadgeIndex {
 		agents[entry.IssueUID] = append(agents[entry.IssueUID], IssueAgent{AgentEntry: entry, State: states[entry.Block]})
 	}
 	remote := make(map[string][]RemoteAgent)
-	index := func(issue *Issue) {
+	index := func(issue *Issue, shown bool) {
 		markUnread(agents[issue.UID], issue)
 		if r := remoteAgentsIn(issue.Metadata, m.HostID); len(r) > 0 {
 			remote[issue.UID] = r
+		} else if shown {
+			delete(remote, issue.UID)
 		}
 	}
 	for i := range m.Issues {
-		index(&m.Issues[i])
+		index(&m.Issues[i], false)
 	}
 	if shown := m.shownIssue(); shown != nil {
-		index(shown)
+		index(shown, true)
 	}
 	return AgentBadgeIndex{agents: agents, remote: remote}
 }

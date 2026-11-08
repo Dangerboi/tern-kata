@@ -318,7 +318,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case FieldLabelsLoaded:
 		if m.FieldForm.Open && m.FieldForm.UID == msg.UID {
 			m.FieldForm.Labels = msg.Labels
-			m.FieldForm.Err = msg.Err
+			if m.FieldForm.Err == nil {
+				m.FieldForm.Err = msg.Err
+			}
 		}
 	case MoveResultMsg:
 		return updateMove(m, msg)

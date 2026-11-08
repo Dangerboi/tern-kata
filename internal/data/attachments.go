@@ -54,9 +54,6 @@ func (c *Client) attachmentsConfigured(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, daemonError(err)
 	}
-	if response.JSON200 == nil {
-		return false, errors.New("kata daemon returned no snapshot")
-	}
 	return docbankConfigured(response.JSON200.Capabilities), nil
 }
 
@@ -120,9 +117,6 @@ func (c *Client) upload(ctx context.Context, projectID int64, uid, actor, name, 
 	if err != nil {
 		return g.AddAttachmentResponseBody{}, attachmentError(err)
 	}
-	if response.JSON200 == nil {
-		return g.AddAttachmentResponseBody{}, errors.New("kata daemon returned no attachment")
-	}
 	return *response.JSON200, nil
 }
 
@@ -153,9 +147,6 @@ func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, act
 	r, err := c.PatchIssueMetadataWithResponse(ctx, options)
 	if err != nil {
 		return issueWrite{}, err
-	}
-	if r.JSON200 == nil {
-		return issueWrite{}, errors.New("kata daemon returned no metadata write")
 	}
 	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
 }

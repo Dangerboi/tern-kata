@@ -233,8 +233,22 @@ func (e Env) restartDocbank(ctx context.Context, addr string) error {
 	return err
 }
 
-// statusNames reports whether Docbank's status output names addr as a whole address (8080 is not 80801).
+// statusNames reports whether Docbank's status output names addr (a loopback host:port) as a whole address (8080 is not 80801).
+// Docbank reports a server bound to 0.0.0.0 as [::1]:port, so the loopback spellings 127.0.0.1, [::1] and localhost count alike.
 func statusNames(status, addr string) bool {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return namesWhole(status, addr)
+	}
+	for _, host := range []string{"127.0.0.1", "[::1]", "localhost"} {
+		if namesWhole(status, host+":"+port) {
+			return true
+		}
+	}
+	return false
+}
+
+func namesWhole(status, addr string) bool {
 	for rest := status; ; {
 		i := strings.Index(rest, addr)
 		if i < 0 {

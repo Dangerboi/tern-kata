@@ -17,9 +17,6 @@ func (c *Client) ListWorkflows(ctx context.Context, projectID int64) ([]model.Wo
 	if err != nil {
 		return nil, daemonError(err)
 	}
-	if listed.JSON200 == nil {
-		return nil, errors.New("kata returned no workflows")
-	}
 	workflows := make([]model.Workflow, len(listed.JSON200.Workflows))
 	for i, w := range listed.JSON200.Workflows {
 		workflows[i] = translateWorkflow(w)
@@ -31,9 +28,6 @@ func (c *Client) ShowWorkflow(ctx context.Context, projectID int64, uid string) 
 	shown, err := c.ShowCronWorkflowWithResponse(ctx, &g.ShowCronWorkflowRequestOptions{PathParams: &g.ShowCronWorkflowPath{ProjectID: projectID, CronUID: uid}})
 	if err != nil {
 		return model.Workflow{}, daemonError(err)
-	}
-	if shown.JSON200 == nil {
-		return model.Workflow{}, errors.New("kata returned no workflow")
 	}
 	return translateWorkflow(shown.JSON200.Workflow), nil
 }

@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -27,9 +26,6 @@ func (c *Client) readInstanceAuth(ctx context.Context) (g.AuthInfoOut, error) {
 	response, err := c.InstanceWithResponse(ctx)
 	if err != nil {
 		return g.AuthInfoOut{}, daemonError(err)
-	}
-	if response.JSON200 == nil {
-		return g.AuthInfoOut{}, errors.New("kata daemon returned no instance")
 	}
 	return response.JSON200.Auth, nil
 }
@@ -60,9 +56,6 @@ func (c *Client) ListCredentials(ctx context.Context, cmd model.LoadCredentials)
 	response, err := c.ListTokensWithResponse(ctx)
 	if err != nil {
 		return model.CredentialsLoaded{}, daemonError(err)
-	}
-	if response.JSON200 == nil {
-		return model.CredentialsLoaded{}, errors.New("kata daemon returned no tokens")
 	}
 	tokens := make([]model.Credential, len(response.JSON200.Tokens))
 	for i, wire := range response.JSON200.Tokens {

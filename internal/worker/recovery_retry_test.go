@@ -123,3 +123,28 @@ func TestAResumeThatCouldNotReadTheLeaseLeavesTheCachedLeaseHeld(t *testing.T) {
 		t.Fatalf("the Project stopped admitting after a transient lease read failure: %+v", s.Projects)
 	}
 }
+
+// A quarantined run belongs to the machine, not to a Project: doctor reports it once however many Projects are served.
+func TestDoctorReportsAQuarantinedRunOnceWhateverTheNumberOfProjects(t *testing.T) {
+	h := buildHarness(t)
+	h.kata.Project(t, "other")
+	h.config = strings.Replace(h.config, "[checkouts]", "[[projects]]\nname = \"other\"\n[checkouts]", 1)
+	h.dirs = workertest.WriteConfig(t, h.config)
+	uid := "01ABCDEF"
+	if err := os.MkdirAll(filepath.Join(h.dirs.Quarantine(), uid), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	report := worker.Doctor(context.Background(), worker.DoctorOptions{Dirs: h.dirs, Kata: h.kata.Kata, Clock: h.clock, Actor: "x"})
+	n := 0
+	for _, c := range report.Checks {
+		if c.Level == "FAIL" && strings.Contains(c.Detail, "run "+uid) {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("the quarantined run is reported %d times, want once:\n%s", n, report)
+	}
+	if got := report.Problems(); got != 1 {
+		t.Errorf("Problems() = %d, want 1:\n%s", got, report)
+	}
+}

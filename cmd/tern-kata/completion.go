@@ -38,7 +38,9 @@ _tern_kata() {
 		words="%[1]s --issue --as --version --help"
 	else
 		case ${COMP_WORDS[1]} in
-		migrate-attachments | run) [[ $cur == -* ]] && words="--as" ;;
+		migrate-attachments) [[ $cur == -* ]] && words="--as" ;;
+		agents) [[ $cur == -* ]] && words="--issue" ;;
+		run | team) ;;
 		message) [[ $cur == -* ]] && words="--as --re" ;;
 		recur) [[ $cur == -* ]] && words="%[2]s --stop --as" ;;
 		views)
@@ -111,13 +113,14 @@ func fishCompletion() string {
 	b.WriteString("# tern-kata completion for fish. Load it with: tern-kata completion fish | source\n")
 	line("-n __fish_use_subcommand -f -a '%s'", strings.Join(subcommands, " "))
 	line("-n __fish_use_subcommand -l issue -r -d 'open this Issue first'")
-	line("-l as -r -d 'author for edits'")
+	line("-n __fish_use_subcommand -l as -r -d 'author for edits'")
+	line("-n '__fish_seen_subcommand_from migrate-attachments recur views worker message' -l as -r -d 'author for edits'")
 	line("-l version -d 'print the version and exit'")
 	line("-s h -l help -d 'print the help and exit'")
 	line("-n '__fish_seen_subcommand_from migrate-attachments recur run views completion worker update agent agents team message' -f")
 	line("-n '__fish_seen_subcommand_from agents' -l issue -r -d 'only this Issue'")
 	line("-n '__fish_seen_subcommand_from message' -l re -r -d 'comment the message asks the agent to answer'")
-	fishTableFlags(line, agentFlags, "agent; and not contains -- -- (commandline -opc)", "as") // after the lone -- the words are the command's, which bash completion leaves alone too
+	fishTableFlags(line, agentFlags, "agent; and not contains -- -- (commandline -opc)") // after the lone -- the words are the command's, which bash completion leaves alone too
 	line("-n '__fish_seen_subcommand_from docbank; and not __fish_seen_subcommand_from %[1]s' -f -a '%[1]s'", strings.Join(docbankForms, " "))
 	line("-n '__fish_seen_subcommand_from supervise; and not __fish_seen_subcommand_from on off' -f -a 'on off'")
 	fishTableFlags(line, docbankFlags, "docbank")
@@ -144,7 +147,7 @@ func fishCompletion() string {
 }
 
 // fishTableFlags writes one fish completion per flag of table, offered where the subcommand condition holds. skip names a flag
-// another line already offers (the global --as).
+// another line already offers.
 func fishTableFlags(line func(string, ...any), table []tableFlag, condition string, skip ...string) {
 	for _, f := range table {
 		if slices.Contains(skip, f.name) {

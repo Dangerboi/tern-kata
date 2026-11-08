@@ -68,13 +68,24 @@ func (d Dirs) ProjectDir(projectUID string) string {
 	return filepath.Join(d.State, "projects", projectUID)
 }
 
-// Pin is the Project's pin file (see pin); Pins globs every Project's.
+// Pin is the Project's pin file (see pin); pinFiles lists every Project's.
 func (d Dirs) Pin(projectUID string) string {
 	return filepath.Join(d.ProjectDir(projectUID), "pin.json")
 }
 
-func (d Dirs) Pins() string {
-	return filepath.Join(d.State, "projects", "*", "pin.json")
+// pinFiles lists the pin files that exist. It reads the folder rather than globbing, since the state path may hold
+// glob characters.
+func (d Dirs) pinFiles() []string {
+	entries, _ := os.ReadDir(filepath.Join(d.State, "projects"))
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() {
+			if path := d.Pin(e.Name()); fileExists(path) {
+				files = append(files, path)
+			}
+		}
+	}
+	return files
 }
 
 // Skips is the Project's skip record file: the occurrences its conditions skipped (ADR-0016).

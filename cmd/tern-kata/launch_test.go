@@ -281,7 +281,6 @@ func TestPlanLaunchRefusesEmptyAsForEverySubcommand(t *testing.T) {
 		{"migrate-attachments"},
 		{"recur", "ab12"},
 		{"views", "show", "x"},
-		{"run", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
 		{"worker", "resume", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
 		{"worker", "abandon", "01M5J9AAAAAAAAAAAAAAAAAAAA"},
 	}
@@ -352,5 +351,30 @@ func TestSubcommandFlagsRefuseAFlagLikeWordAsTheirValue(t *testing.T) {
 	plan, err := planSubcommand([]string{"views", "add", "v", "--search=--x"}, lookupFrom(nil))
 	if err != nil || plan.ViewFlags["search"] != "--x" {
 		t.Errorf("--search=--x: plan %+v, err %v; want the value passed", plan.ViewFlags, err)
+	}
+}
+
+func TestPlanLaunchRunTakesNoAs(t *testing.T) {
+	for _, args := range [][]string{{"run", "01M5J9AAAAAAAAAAAAAAAAAAAA", "--as", "ann"}, {"run", "--as=ann", "01M5J9AAAAAAAAAAAAAAAAAAAA"}} {
+		if _, err := PlanLaunch(args, lookupFrom(nil), "v"); err == nil || !strings.HasPrefix(err.Error(), "run: unknown flag --as") {
+			t.Errorf("%v: error = %v, want run: unknown flag --as", args, err)
+		}
+	}
+}
+
+func TestPlanAgentRefusesRoutingFlagsWithoutAnAddressPrefix(t *testing.T) {
+	for _, flags := range [][]string{{"--message-from", "eve"}, {"--forward-comments"}, {"--coordinator", "dana/lead"}, {"--coordinating"}} {
+		args := append(append([]string{"agent"}, flags...), "--", "omp")
+		_, err := PlanLaunch(args, lookupFrom(nil), "v")
+		if err == nil || !strings.Contains(err.Error(), flags[0]) || !strings.Contains(err.Error(), "--address-prefix") {
+			t.Errorf("%v: error = %v, want a refusal naming %s and --address-prefix", args, err, flags[0])
+		}
+		if err != nil && exitStatus(err) != 2 {
+			t.Errorf("%v: exits %d, want 2", args, exitStatus(err))
+		}
+		args = append([]string{"agent", "--address-prefix", "dana/omp"}, args[1:]...)
+		if _, err := PlanLaunch(args, lookupFrom(nil), "v"); err != nil {
+			t.Errorf("%v: %v", args, err)
+		}
 	}
 }

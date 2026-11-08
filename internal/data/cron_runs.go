@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"go.kenn.io/kata/pkg/client"
@@ -32,9 +31,6 @@ func (c *Client) ListRuns(ctx context.Context, cmd model.LoadRuns) (model.RunsLo
 		}
 		return model.RunsLoaded{}, daemonError(err)
 	}
-	if response.JSON200 == nil {
-		return model.RunsLoaded{}, errors.New("kata daemon returned no Runs")
-	}
 	names, err := c.readRunNames(ctx, cmd.ProjectID)
 	if err != nil {
 		return model.RunsLoaded{}, err
@@ -55,9 +51,6 @@ func (c *Client) ShowRun(ctx context.Context, cmd model.ShowRun) (model.RunShown
 	if err != nil {
 		return model.RunShown{}, daemonError(err)
 	}
-	if response.JSON200 == nil {
-		return model.RunShown{}, errors.New("kata daemon returned no Run")
-	}
 	names, err := c.readOneRunNames(ctx, cmd.ProjectID, response.JSON200.Run)
 	if err != nil {
 		return model.RunShown{}, err
@@ -76,8 +69,6 @@ func (c *Client) readOneRunNames(ctx context.Context, projectID int64, wire g.Cr
 		case client.StatusCode(err) == http.StatusNotFound:
 		case err != nil:
 			return names, daemonError(err)
-		case response.JSON200 == nil:
-			return names, errors.New("kata daemon returned no Cron job")
 		default:
 			names.jobs[run.JobUID] = response.JSON200.Job.Name
 		}
@@ -88,8 +79,6 @@ func (c *Client) readOneRunNames(ctx context.Context, projectID int64, wire g.Cr
 		case client.StatusCode(err) == http.StatusNotFound:
 		case err != nil:
 			return names, daemonError(err)
-		case response.JSON200 == nil:
-			return names, errors.New("kata daemon returned no workflow")
 		default:
 			names.workflows[run.WorkflowUID] = response.JSON200.Workflow.Name
 		}
@@ -104,8 +93,6 @@ func (c *Client) readOneRunNames(ctx context.Context, projectID int64, wire g.Cr
 		case client.StatusCode(err) == http.StatusNotFound:
 		case err != nil:
 			return names, daemonError(err)
-		case response.JSON200 == nil:
-			return names, errors.New("kata daemon returned no Issue")
 		default:
 			names.issues[run.IssueUID] = model.Run{IssueShortID: response.JSON200.Issue.ShortID, IssueTitle: response.JSON200.Issue.Title}
 		}
@@ -135,9 +122,6 @@ func (c *Client) readRunNames(ctx context.Context, projectID int64) (runNames, e
 	if err != nil {
 		return names, daemonError(err)
 	}
-	if jobs.JSON200 == nil {
-		return names, errors.New("kata daemon returned no Cron jobs")
-	}
 	for _, job := range jobs.JSON200.Jobs {
 		names.jobs[job.UID] = job.Name
 	}
@@ -145,18 +129,12 @@ func (c *Client) readRunNames(ctx context.Context, projectID int64) (runNames, e
 	if err != nil {
 		return names, daemonError(err)
 	}
-	if workflows.JSON200 == nil {
-		return names, errors.New("kata daemon returned no workflows")
-	}
 	for _, workflow := range workflows.JSON200.Workflows {
 		names.workflows[workflow.UID] = workflow.Name
 	}
 	issues, err := c.ListIssuesWithResponse(ctx, &g.ListIssuesRequestOptions{PathParams: &g.ListIssuesPath{ProjectID: projectID}})
 	if err != nil {
 		return names, daemonError(err)
-	}
-	if issues.JSON200 == nil {
-		return names, errors.New("kata daemon returned no Issues")
 	}
 	for _, issue := range issues.JSON200.Issues {
 		names.issues[issue.UID] = model.Run{IssueShortID: issue.ShortID, IssueTitle: issue.Title}

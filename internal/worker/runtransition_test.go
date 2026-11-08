@@ -244,6 +244,23 @@ func TestAcceptResumeFromEveryPhase(t *testing.T) {
 	}
 }
 
+func TestAcceptResumeClearsTheCancelRequestedBeforeTheHold(t *testing.T) {
+	terms := resumeTerms{
+		By: "ann", Generation: 3, At: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		Tokens:    func(*Journal) (*int64, *int64) { return nil, nil },
+		Cost:      func(*Journal) *float64 { return nil },
+		SessionID: func(*Journal) string { return "sess" },
+	}
+	j := journalAt(PhaseSettled, HoldInterrupted)
+	j.Cancel = &CancelRecord{By: "ann"}
+	if err := lifeWith(GroupGone, true, false).acceptResume(j, terms); err != nil {
+		t.Fatal(err)
+	}
+	if j.Cancel != nil {
+		t.Fatalf("a resumed run keeps the cancel set before its hold: %+v", j.Cancel)
+	}
+}
+
 func TestAbandonFromEveryPhase(t *testing.T) {
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	life := lifeWith(GroupGone, true, false)

@@ -103,9 +103,6 @@ func (c *Client) SharedLanes(ctx context.Context, uid string) (model.LanesLoaded
 	if err != nil {
 		return model.LanesLoaded{}, daemonError(err)
 	}
-	if response.JSON200 == nil {
-		return model.LanesLoaded{}, errors.New("kata daemon returned no Projects")
-	}
 	for _, p := range response.JSON200.Projects {
 		if p.UID != uid {
 			continue
@@ -149,8 +146,6 @@ func (c *Client) ShareLanes(ctx context.Context, cmd model.ShareLanes) (model.La
 		return model.LanesShared{Share: cmd, Conflict: true, Current: current}, nil
 	case err != nil:
 		return model.LanesShared{}, daemonError(err)
-	case response.JSON200 == nil:
-		return model.LanesShared{}, errors.New("kata daemon returned no Project")
 	}
 	return model.LanesShared{Share: cmd, Revision: response.JSON200.Project.Revision}, nil
 }

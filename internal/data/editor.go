@@ -17,9 +17,6 @@ func (c *Client) SaveDraft(ctx context.Context, cmd model.SaveDraft) (model.Msg,
 	if err != nil {
 		return nil, daemonError(err)
 	}
-	if current.JSON200 == nil {
-		return nil, fmt.Errorf("kata returned no Issue before saving Draft")
-	}
 	if current.JSON200.Issue.Body != cmd.BaseText {
 		return c.draftConflict(ctx, cmd.UID)
 	}

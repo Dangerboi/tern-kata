@@ -54,9 +54,6 @@ func (c *Client) CreateToken(ctx context.Context, cmd model.CreateTokenCmd) (don
 	if err != nil {
 		return model.TokenCreated{}, daemonError(err)
 	}
-	if response.JSON200 == nil {
-		return model.TokenCreated{}, errors.New("kata daemon returned no token; the outcome is unknown, so check the token list")
-	}
 	id, secret := response.JSON200.Token.ID, response.JSON200.Plaintext
 	if err = checkIssued(response.JSON200, cmd, scope); err == nil {
 		err = writeSecret(file, path, secret)
@@ -148,14 +145,14 @@ func (c *Client) tokenScope(ctx context.Context, cmd model.CreateTokenCmd) (*g.T
 	if err != nil {
 		return nil, daemonError(err)
 	}
-	if instance.JSON200 == nil || !instance.JSON200.IssueSubtreeTokens {
+	if !instance.JSON200.IssueSubtreeTokens {
 		return nil, errors.New("the selected daemon does not support issue-scoped tokens (issue_subtree_tokens_unsupported)")
 	}
 	shown, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: cmd.ProjectID, Ref: cmd.ShortID}})
 	if err != nil {
 		return nil, daemonError(err)
 	}
-	if shown.JSON200 == nil || shown.JSON200.Issue.UID == "" || shown.JSON200.Issue.ProjectUID == nil || *shown.JSON200.Issue.ProjectUID == "" {
+	if shown.JSON200.Issue.UID == "" || shown.JSON200.Issue.ProjectUID == nil || *shown.JSON200.Issue.ProjectUID == "" {
 		return nil, errors.New("kata daemon returned incomplete Issue identity for the token's scope")
 	}
 	return &g.TokenScopeIn{Kind: g.IssueSubtree, ProjectUID: *shown.JSON200.Issue.ProjectUID, RootIssueUID: shown.JSON200.Issue.UID}, nil
@@ -166,9 +163,6 @@ func (c *Client) teamUIDs(ctx context.Context, selectors []string) ([]string, er
 	listed, err := c.ListTeamsWithResponse(ctx)
 	if err != nil {
 		return nil, daemonError(err)
-	}
-	if listed.JSON200 == nil {
-		return nil, errors.New("kata daemon returned no team list")
 	}
 	uids := make([]string, 0, len(selectors))
 	for _, selector := range selectors {
@@ -194,9 +188,6 @@ func (c *Client) RevokeToken(ctx context.Context, id int64) (model.Credential, e
 	response, err := c.RevokeTokenWithResponse(ctx, &g.RevokeTokenRequestOptions{PathParams: &g.RevokeTokenPath{ID: id}})
 	if err != nil {
 		return model.Credential{}, daemonError(err)
-	}
-	if response.JSON200 == nil {
-		return model.Credential{}, errors.New("kata daemon returned no token")
 	}
 	return translateCredential(response.JSON200.Token), nil
 }

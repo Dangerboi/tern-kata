@@ -136,3 +136,15 @@ func TestTeamNeedsTheChildrenFromKata(t *testing.T) {
 		t.Errorf("err %v", err)
 	}
 }
+
+func TestTeamAcceptsALoneDoubleDashBeforeTheRef(t *testing.T) {
+	for _, args := range [][]string{{"team", "--", "demo#aa11"}, {"team", "demo#aa11", "--"}} {
+		plan, err := PlanLaunch(args, peerEnv(nil), "test")
+		if err != nil || plan.Subcommand != "team" || plan.TargetRef != "demo#aa11" {
+			t.Errorf("%v: plan %+v, %v", args, plan, err)
+		}
+	}
+	if plan, err := PlanLaunch([]string{"team", "--", "--odd"}, peerEnv(nil), "test"); err != nil || plan.TargetRef != "--odd" {
+		t.Errorf("a ref after --: %+v, %v", plan, err)
+	}
+}

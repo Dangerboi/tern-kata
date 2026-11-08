@@ -20,9 +20,6 @@ func (c *Client) eachOpenIssuePage(ctx context.Context, projectID int64, fn func
 		if err != nil {
 			return daemonError(err)
 		}
-		if page.JSON200 == nil {
-			return errors.New("kata daemon returned no Issues")
-		}
 		if err := fn(page); err != nil {
 			return err
 		}

@@ -50,9 +50,6 @@ func (c *Client) account(ctx context.Context) (daemonAccount, error) {
 	if err != nil {
 		return daemonAccount{}, err
 	}
-	if r.JSON200 == nil {
-		return daemonAccount{}, errors.New("kata daemon returned no instance")
-	}
 	principal, err := json.Marshal(r.JSON200.Auth)
 	if err != nil {
 		return daemonAccount{}, err
@@ -65,9 +62,6 @@ func (c *Client) showIssue(ctx context.Context, projectID int64, uid string) (*g
 	r, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: uid}})
 	if err != nil {
 		return nil, err
-	}
-	if r.JSON200 == nil {
-		return nil, errors.New("kata returned no Issue")
 	}
 	return r.JSON200, nil
 }
@@ -503,9 +497,6 @@ func (c *Client) editBody(ctx context.Context, e model.UndoEntry, body string) (
 	r, err := c.EditIssueWithResponse(ctx, &g.EditIssueRequestOptions{PathParams: &g.EditIssuePath{ProjectID: fmt.Sprint(e.ProjectID), Ref: e.UID}, Body: &g.EditIssueBody{Body: &body, Actor: &actor}})
 	if err != nil {
 		return issueWrite{}, err
-	}
-	if r.JSON200 == nil {
-		return issueWrite{}, errors.New("kata daemon returned no edit")
 	}
 	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
 }

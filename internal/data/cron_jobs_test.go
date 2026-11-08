@@ -37,7 +37,7 @@ func (f *jobsFixture) put(t *testing.T, name string, def g.CronJobDefinition) g.
 		PathParams: &g.ReplaceCronJobPath{ProjectID: f.demo.ID, CronUID: uid},
 		Body:       &g.PutCronJobBody{Actor: new("tester"), Name: name, Definition: def},
 	})
-	if err != nil || response.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("put job %s: %v", name, err)
 	}
 	return response.JSON200.Job

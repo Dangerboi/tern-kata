@@ -60,7 +60,7 @@ type LaunchPlan struct {
 	// TERN_KATA_MESSAGE_FROM to them, comma-separated; it is read only with an address prefix.
 	AgentMessageFrom []string
 	// AgentVerifiedSenders is what the wrapper found on the agent's route at start: the daemon verifies the actor of every write
-	// (data.VerifiedAuthKind). It sets TERN_KATA_VERIFIED_SENDERS=1; it is read only with an address prefix.
+	// (data.VerifiedAuthKind). It sets TERN_KATA_VERIFIED_SENDERS=1, and is only asked for with --message-from.
 	AgentVerifiedSenders bool
 	// AgentCoordinator is `agent --coordinator`: the Agent address of the coordinator of this child's team, which the wrapper sets as
 	// TERN_KATA_COORDINATOR; AgentCoordinating is `agent --coordinating`, which sets TERN_KATA_COORDINATING=1 for the coordinator itself.
@@ -158,7 +158,7 @@ func subcommandFlag(sub string, args []string, i *int, plan *LaunchPlan) (matche
 	case "docbank":
 		matched, err = parseTableFlag(docbankFlags, "docbank", docbankUsage, args, i, plan)
 	}
-	if matched || err != nil || sub == "completion" || sub == "update" || sub == "docbank" || sub == "team" {
+	if matched || err != nil || sub == "completion" || sub == "update" || sub == "docbank" || sub == "team" || sub == "run" {
 		return matched, err // these write as no actor, or read their own --as
 	}
 	actor, matched, err := parseAs(args, i)
@@ -460,7 +460,7 @@ Usage:
   tern-kata recur <ref> [--frequency daily|weekly|monthly|yearly [--every N] [--on mon,thu]
                    [--day 15|last|"2nd tue"] [--month 1-12] [--until DATE | --count N]
                    | --rule <rrule>] [--start DATE] [--zone <iana>] [--stop] [--as <actor>]
-  tern-kata run <job-uid> [--as <actor>]
+  tern-kata run <job-uid>
   tern-kata views [--as <actor>]
   tern-kata views show <name> [--json] [--as <actor>]
   tern-kata views add <name> [--base <collection>|project:<name>] [--project <name>]
@@ -676,13 +676,14 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 --address-prefix gives <actor>/<name>: then KATA_INBOX_USER is
                                 <actor>/<name>-<block id>, the block id from TERN_PANE, and
                                 KATA_TEAMMATE is <name>-<block id> (left unset when kata would
-                                refuse it); --forward-comments (with --address-prefix) sets
+                                refuse it); --forward-comments (needs --address-prefix) sets
                                 TERN_KATA_FORWARD_COMMENTS=1, so the agent is told of a person's
-                                comment on its Issue; each --message-from (with --address-prefix) adds
+                                comment on its Issue; each --message-from (needs --address-prefix) adds
                                 an actor whose messages the agent acts on, joined with commas into
                                 TERN_KATA_MESSAGE_FROM, and TERN_KATA_VERIFIED_SENDERS=1 is set when
-                                the daemon on the agent's route verifies actors (identity mode);
-                                --coordinator <address> (with --address-prefix) sets
+                                the daemon on the agent's route verifies actors (identity mode;
+                                it is asked only when --message-from is given);
+                                --coordinator <address> (needs --address-prefix) sets
                                 TERN_KATA_COORDINATOR to the address of the coordinator of this
                                 child's team, --coordinating TERN_KATA_COORDINATING=1 for the
                                 coordinator itself; its

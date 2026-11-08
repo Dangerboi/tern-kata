@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"slices"
 
@@ -33,9 +32,6 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 	}
 	if err != nil {
 		return result, daemonError(err)
-	}
-	if response.JSON200 == nil {
-		return result, fmt.Errorf("kata daemon returned no Issue collection")
 	}
 	result.Snapshot = def.Keep(translateSnapshot(response.JSON200), date)
 	result.Selected = translateDetail(response.JSON200.Selected, response.JSON200.Capabilities)

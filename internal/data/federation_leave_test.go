@@ -33,7 +33,7 @@ func startPair(t *testing.T) federatedPair {
 	hub, spoke := pair.hub.target().Client, pair.spoke.target().Client
 
 	instance, err := spoke.InstanceWithResponse(ctx)
-	if err != nil || instance.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("spoke instance: %v", err)
 	}
 	pair.spokeInstanceUID = instance.JSON200.InstanceUID
@@ -47,7 +47,7 @@ func startPair(t *testing.T) federatedPair {
 	}
 	enrolled, err := hub.CreateFederationEnrollmentWithResponse(ctx, &g.CreateFederationEnrollmentRequestOptions{Body: &g.CreateFederationEnrollmentBody{
 		Actor: new("alice"), Capabilities: "pull,push", ProjectID: acme.ID, SpokeInstanceUID: pair.spokeInstanceUID}})
-	if err != nil || enrolled.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("create the enrollment: %v", err)
 	}
 	pair.enrollmentID = enrolled.JSON200.ID
@@ -78,7 +78,7 @@ func (p federatedPair) leave(t *testing.T, draft model.FederationLeaveDraft) mod
 func (p federatedPair) enrollments(t *testing.T) map[int64]bool {
 	t.Helper()
 	listed, err := p.hub.target().Client.ListFederationEnrollmentsWithResponse(context.Background())
-	if err != nil || listed.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("list enrollments: %v", err)
 	}
 	out := map[int64]bool{}
@@ -128,7 +128,7 @@ func TestLeaveRevokesTheSpokesGrantOnTheHubThenDetachesTheReplica(t *testing.T) 
 		t.Errorf("spoke still lists %+v after the leave", spokes)
 	}
 	projects, err := pair.spoke.target().Client.ListProjectsWithResponse(context.Background(), nil)
-	if err != nil || projects.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("list projects: %v", err)
 	}
 	kept := false

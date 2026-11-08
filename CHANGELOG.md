@@ -119,25 +119,59 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - A job whose workflow the worker cannot run is reported in `worker status` and the Pane with the run's own reason, `it runs workflow "<name>", which the worker does not run: <reason>`, also for a profile the job does not run with, a command step in a Project without `commands = true` and a step profile the Project cannot use.
 
+### Removed
+
+#### Command line
+
+- `tern-kata run` no longer takes `--as`: the worker never recorded who asked for a run, so the flag did nothing.
+
 ### Fixed
 
 #### Agents
 
 - An agent's extension no longer delivers a message written with `kata meta set notify.*` by another actor under its `from`: a message counts only when the event that wrote it was by the actor in its `from`.
   - The read at start, and after a gap the stream cannot resume, delivers only the agent's own actor's messages.
+- An Issue's list row no longer keeps the badge of a remote agent once the Issue shows none.
+- `tern-kata agent` asks the daemon its auth kind at start only when `--message-from` is given, so an agent started with only `--address-prefix` no longer waits on an unreachable daemon.
+
+#### Attachments
+
+- `tern-kata docbank setup` recognises a running Docbank bound to `0.0.0.0` instead of calling its port in use by something else.
+- The restart command `tern-kata docbank setup` prints for you to run shell-quotes its `KATA_HOME`, `KATA_DB` and `KATA_POSTGRES_SCHEMA` values, so a path with a space or a quote pastes as it is.
 
 #### Issues and Pages
 
 - The Delete card's reason is no longer lost: kata's delete records none, so the Pane adds it to the Issue as a `Deleted: <reason>` comment just before the delete, and deletes nothing when that comment fails.
-- An Issue metadata write the daemon answers without its result (an Attention clear, a date change, an attachment link) reports an error instead of stopping the Pane.
+- Retrying a timed assignment after a refused write works: the card keeps the duration you typed instead of refusing it as not a whole number of seconds.
+- Cancelling the Close card clears its validation message instead of leaving it under the list.
+- The field card and sharing a Lane list refuse with "Daemon disconnected; reconnect before …" while the daemon is gone, as the other cards do, instead of ignoring enter or sending the write.
+- A label list that loads late no longer clears or replaces the error the New Issue card or a field card shows.
+- A Lane, filter, view or agent file that is a symlink (a dotfiles repo) is written through the link instead of being replaced by a regular file.
 
 #### Jobs and worker
 
 - On Windows, a worker whose runs folder is a file instead of a folder refuses work and says why, as on Linux and macOS; it used to read the file as no runs and go on.
+- Saving a job from the Job card keeps the line breaks of its per-run Issue body unless you change the Body field; it used to save the body as one line.
+- Saving a notify job from the Job card keeps its overlap; it used to reset `forbid` to `allow`.
+- A limit of one run reads "At most 1 run per day", not "1 runs".
+- `worker doctor` reports a quarantined run or an unreadable journal once, not once per served Project.
+- A run held while a cancel was pending starts when you resume it; it used to be cancelled at launch instead.
+- A `run` request made as a run settles is no longer refused with "run … is not settled".
+- Retiring a Project, the pin check and resume work when the worker's state folder path contains `[`, `*` or `?`.
+
+#### Daemons and Federation
+
+- The hub picker and the hub browser say a catalog daemon with an inline `token` has a token, as the active daemon's line already did.
 
 #### Tern window
 
 - On Windows, the programs tern-kata runs in the background (`tern` opening a run's session tab, `git config user.name`, docbank setup, the update steps and the file opener) start without a console window, so none flashes up.
+
+#### Command line
+
+- `tern-kata agent` refuses `--message-from`, `--forward-comments`, `--coordinator` and `--coordinating` without `--address-prefix` instead of ignoring them.
+- Bash and fish completion offer only `--issue` for `agents` and nothing for `team`, and fish offers `--as` only where a subcommand takes it.
+- `tern-kata team -- <ref>` takes a lone `--` as the end of flags, as the other subcommands do.
 
 ## [0.9.0] - 2026-11-06
 

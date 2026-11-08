@@ -70,7 +70,7 @@ func (r enrollRig) spokeGateway(t *testing.T) *Gateway {
 func (r enrollRig) spokeInstanceUID(t *testing.T) string {
 	t.Helper()
 	instance, err := r.spoke.target().Client.InstanceWithResponse(context.Background())
-	if err != nil || instance.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("spoke instance: %v", err)
 	}
 	return instance.JSON200.InstanceUID
@@ -79,7 +79,7 @@ func (r enrollRig) spokeInstanceUID(t *testing.T) string {
 func (r enrollRig) hubEnrollments(t *testing.T) []g.FederationEnrollmentOut {
 	t.Helper()
 	listed, err := r.hub.target().Client.ListFederationEnrollmentsWithResponse(context.Background())
-	if err != nil || listed.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("list enrollments: %v", err)
 	}
 	return listed.JSON200.Enrollments
@@ -174,6 +174,12 @@ func TestTheHubStepListsKatasCatalogInFileOrderWithTheActiveDaemonMarked(t *test
 	}
 	if loaded.Err != nil || loaded.Request != 4 || !slices.Equal(loaded.Hubs, want) {
 		t.Fatalf("hubs %+v (request %d, error %v), want %+v", loaded.Hubs, loaded.Request, loaded.Err, want)
+	}
+
+	rig.writeCatalog(t, fmt.Sprintf("[[daemon]]\nname = \"hub\"\nurl = %q\ntoken = \"hub-secret\"\n", rig.hub.URL))
+	inline := as[model.FederationHubsLoaded](t, run(t, rig.spokeGateway(t), model.LoadFederationHubs{Workspace: t.TempDir(), Request: 6}))
+	if len(inline.Hubs) != 1 || inline.Hubs[0].Auth != "token" {
+		t.Errorf("a hub with an inline token listed %+v, want its auth as token", inline.Hubs)
 	}
 
 	rig.writeCatalog(t, "this is = not [valid toml")
@@ -378,7 +384,7 @@ func TestEnrollingAnExistingProjectAdoptsItIntoTheHubProjectOfTheSameNameCreatin
 	}
 	var hubZeta []g.ProjectOut
 	listed, err := rig.hub.target().Client.ListProjectsWithResponse(context.Background(), nil)
-	if err != nil || listed.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("list hub projects: %v", err)
 	}
 	for _, p := range listed.JSON200.Projects {
@@ -618,7 +624,7 @@ func TestAfterASwitchTheHubStepsAndRecoveryFollowTheConnectedDaemon(t *testing.T
 		return false
 	})
 	instance, err := rig.hub.target().Client.InstanceWithResponse(context.Background())
-	if err != nil || instance.JSON200 == nil {
+	if err != nil {
 		t.Fatalf("instance: %v", err)
 	}
 	draft := replicaDraft(acme)

@@ -264,7 +264,6 @@ func TestBashAndFishCompletionOfferTheSameFlagsForEverySubcommand(t *testing.T) 
 			}
 			maps.Copy(fish, fishFlags(t, words...))
 		}
-		delete(bash, "--as") // fish offers --as once, for every subcommand
 		if !maps.Equal(bash, fish) {
 			t.Errorf("%s: bash offers %v, fish offers %v", name, slices.Sorted(maps.Keys(bash)), slices.Sorted(maps.Keys(fish)))
 		}
@@ -300,5 +299,34 @@ func TestSubcommandOutputFailuresExitOne(t *testing.T) {
 	err := runWorkerCommand(t.Context(), LaunchPlan{Subcommand: "worker", Operands: []string{"supervised"}}, workerEnv{Dirs: dirs}, printableWriter{fullDisk{}})
 	if got := exitStatus(err); got != 1 {
 		t.Errorf("worker output: exit %d for %v, want 1", got, err)
+	}
+}
+
+func TestCompletionOffersExactlyWhatAgentsAndTeamAccept(t *testing.T) {
+	for _, tc := range []struct {
+		words []string
+		want  []string
+	}{
+		{[]string{"agents"}, []string{"--issue"}},
+		{[]string{"team", "x"}, nil},
+	} {
+		bash := complete(t, append(slices.Clone(tc.words), "--")...)
+		slices.Sort(bash)
+		if !slices.Equal(bash, tc.want) {
+			t.Errorf("bash offers %v for %v, want %v", bash, tc.words, tc.want)
+		}
+		fish := fishFlags(t, tc.words...)
+		var script bytes.Buffer
+		if err := writeCompletion("fish", &script); err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range strings.Split(script.String(), "\n") { // the lines with no condition apply everywhere
+			if m := regexp.MustCompile(`^complete -c tern-kata -l (\S+)`).FindStringSubmatch(l); m != nil && m[1] != "version" && m[1] != "help" {
+				fish["--"+m[1]] = true
+			}
+		}
+		if got := slices.Sorted(maps.Keys(fish)); !slices.Equal(got, tc.want) && !(len(got) == 0 && len(tc.want) == 0) {
+			t.Errorf("fish offers %v for %v, want %v", got, tc.words, tc.want)
+		}
 	}
 }

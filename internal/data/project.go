@@ -47,9 +47,6 @@ func (c *Client) readProject(ctx context.Context, workspace string, missingOK bo
 				return model.ProjectLoaded{}, notInitializedError(err)
 			}
 		} else {
-			if response.JSON200 == nil {
-				return model.ProjectLoaded{}, fmt.Errorf("kata daemon returned no Project")
-			}
 			project = translateProject(response.JSON200.Project)
 		}
 	}

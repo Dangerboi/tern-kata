@@ -126,3 +126,18 @@ func (fakeRunner) LookPath(name string) (string, error) { return "/bin/" + name,
 func (fakeRunner) Run(context.Context, []string, string, ...string) ([]byte, error) {
 	return nil, errors.New("not run")
 }
+
+func TestShellWordQuotesOnlyWhatAShellWouldSplitOrExpand(t *testing.T) {
+	for in, want := range map[string]string{
+		"/home/me/.kata": "/home/me/.kata",
+		"C:/kata/db_1":   "C:/kata/db_1",
+		"":               "''",
+		"a b":            "'a b'",
+		"it's":           `'it'\''s'`,
+		"$HOME":          "'$HOME'",
+	} {
+		if got := ShellWord(in); got != want {
+			t.Errorf("ShellWord(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

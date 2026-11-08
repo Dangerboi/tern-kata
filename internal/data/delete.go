@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -105,9 +104,6 @@ func (c *Client) showIssueIncludingDeleted(ctx context.Context, projectID int64,
 	if err != nil {
 		return nil, err
 	}
-	if r.JSON200 == nil {
-		return nil, errors.New("kata returned no Issue")
-	}
 	return r.JSON200, nil
 }
 
@@ -131,9 +127,6 @@ func (c *Client) LookupDeleted(ctx context.Context, cmd model.LookupDeleted) (mo
 		})
 		if err != nil {
 			return model.DeletedLooked{}, daemonError(err)
-		}
-		if r.JSON200 == nil {
-			return model.DeletedLooked{}, errors.New("kata returned no Issue")
 		}
 		shown = r.JSON200
 	} else {

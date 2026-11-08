@@ -290,8 +290,8 @@ func TestWorkerDoctorNamesAHeldLease(t *testing.T) {
 }
 
 func TestPlanLaunchWorkerSubcommands(t *testing.T) {
-	plan, err := PlanLaunch([]string{"run", "01M5J9AAAAAAAAAAAAAAAAAAAA", "--as", "ann"}, lookupFrom(nil), "v")
-	if err != nil || plan.Subcommand != "run" || plan.TargetRef != "01M5J9AAAAAAAAAAAAAAAAAAAA" || plan.Actor != "ann" {
+	plan, err := PlanLaunch([]string{"run", "01M5J9AAAAAAAAAAAAAAAAAAAA"}, lookupFrom(nil), "v")
+	if err != nil || plan.Subcommand != "run" || plan.TargetRef != "01M5J9AAAAAAAAAAAAAAAAAAAA" {
 		t.Fatalf("run: %+v, %v", plan, err)
 	}
 	plan, err = PlanLaunch([]string{"worker", "--takeover"}, lookupFrom(map[string]string{"USER": "bo"}), "v")

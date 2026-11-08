@@ -63,7 +63,7 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 // teammate name; a name kata would refuse leaves KATA_TEAMMATE unset. plan.AgentForwardComments sets
 // TERN_KATA_FORWARD_COMMENTS=1, which the extension reads, only when KATA_TEAMMATE is set (without it the agent's own comments
 // would be forwarded back to it); an inherited value is dropped. plan.AgentMessageFrom sets TERN_KATA_MESSAGE_FROM (comma-separated)
-// and plan.AgentVerifiedSenders TERN_KATA_VERIFIED_SENDERS=1, which the extension reads for whose messages it acts on; inherited values
+// and plan.AgentVerifiedSenders (asked of the daemon only when there is a --message-from) TERN_KATA_VERIFIED_SENDERS=1, which the extension reads for whose messages it acts on; inherited values
 // of both are dropped, so a person's shell cannot widen what the agent trusts. plan.AgentCoordinator sets TERN_KATA_COORDINATOR and
 // plan.AgentCoordinating TERN_KATA_COORDINATING=1, with an address prefix only, which also drops inherited values of both.
 func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string {

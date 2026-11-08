@@ -25,9 +25,6 @@ func (c *Client) ListAttention(ctx context.Context, cmd model.LoadAttention) (mo
 	if err != nil {
 		return model.AttentionLoaded{}, daemonError(err)
 	}
-	if listed.JSON200 == nil {
-		return model.AttentionLoaded{}, errors.New("kata returned no Issues")
-	}
 	// The slot is read from the body as sent, so its raw value is what kata holds, not a re-encoding of a decoded one.
 	var body struct {
 		Issues []struct {

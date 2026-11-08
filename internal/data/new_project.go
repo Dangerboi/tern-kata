@@ -79,9 +79,6 @@ func (c *Client) initProject(ctx context.Context, body g.InitProjectBody) (model
 	if err != nil {
 		return model.Project{}, false, daemonError(err)
 	}
-	if response.JSON200 == nil {
-		return model.Project{}, false, errors.New("kata daemon returned no Project")
-	}
 	return translateProject(response.JSON200.Project), response.JSON200.Created, nil
 }
 

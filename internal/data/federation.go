@@ -21,15 +21,9 @@ func (c *Client) ReadFederation(ctx context.Context, cmd model.LoadFederation) (
 	if err != nil {
 		return model.FederationLoaded{}, daemonError(err)
 	}
-	if instance.JSON200 == nil {
-		return model.FederationLoaded{}, errors.New("kata daemon returned no instance")
-	}
 	status, err := c.GetFederationStatusWithResponse(ctx, nil)
 	if err != nil {
 		return model.FederationLoaded{}, daemonError(err)
-	}
-	if status.JSON200 == nil {
-		return model.FederationLoaded{}, errors.New("kata daemon returned no federation status")
 	}
 	loaded := model.FederationLoaded{Request: cmd.Request, InstanceUID: instance.JSON200.InstanceUID}
 	loaded.Daemon, loaded.Endpoint, loaded.Auth = c.activeDaemon(instance.JSON200.Auth)
@@ -80,7 +74,7 @@ func hubSpokeName(ctx context.Context, hubURL string, allowInsecure bool, instan
 		return ""
 	}
 	listed, err := hub.ListFederationEnrollmentsWithResponse(ctx)
-	if err != nil || listed.JSON200 == nil {
+	if err != nil {
 		return ""
 	}
 	for _, e := range listed.JSON200.Enrollments {
@@ -139,7 +133,7 @@ func (c *Client) activeDaemon(auth g.AuthInfoOut) (name, endpoint, authText stri
 			name = u.Host
 		}
 	}
-	return name, endpoint, federationAuth(named && (entry.TokenEnv != "" || entry.InlineToken != ""), auth)
+	return name, endpoint, federationAuth(named && entry.hasToken(), auth)
 }
 
 // federationAuth is kata tui's auth display: how the connection authenticates, then who the daemon says it is. configuredToken says

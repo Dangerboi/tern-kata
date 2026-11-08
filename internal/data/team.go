@@ -541,9 +541,6 @@ func (c *Client) readTeamParent(ctx context.Context, projectID int64, parentUID 
 	if err != nil {
 		return nil, nil, daemonError(err)
 	}
-	if r.JSON200 == nil {
-		return nil, nil, errors.New("kata returned no ready Issues")
-	}
 	return shown, r.JSON200.Issues, nil
 }
 

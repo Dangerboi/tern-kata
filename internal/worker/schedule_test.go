@@ -261,6 +261,7 @@ func TestAJobKeyedToAnotherAdapterIsNeitherScheduledNorRunOnRequest(t *testing.T
 	h.quiet(other, 0)
 	h.advanceTo(first.Add(time.Minute))
 	h.quiet(other, 0)
+	h.eventually("the scheduled runs to free their slots", func() bool { return r.w.Status().Projects[0].InUse == 0 })
 
 	text := r.w.Status().String()
 	if want := `Job "other" is set aside: its options.adapter names "herdr-kata", not tern-kata`; !strings.Contains(text, want) {

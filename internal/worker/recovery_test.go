@@ -402,6 +402,10 @@ func TestAbandonRecordsCancelledAndFreesTheGate(t *testing.T) {
 	}
 	h.eventually("the abandon comment", func() bool { return count(h.issueOf(run).Comments, "The run was abandoned: abandoned by ann") == 1 })
 	h.eventually("the run to settle", func() bool { s, ok := h.runStatus(r, uid); return ok && s.State == "cancelled" && s.Pending == "" })
+	h.eventually("the journal to be settled", func() bool {
+		j, err := worker.NewStore(h.dirs, worker.Hooks{}).Load(uid)
+		return err == nil && j.Phase == worker.PhaseSettled
+	})
 	if resp := h.ask(worker.Request{Op: "abandon", Run: uid}); resp.OK || !strings.Contains(resp.Error, "cancelled, not held") {
 		t.Fatalf("abandoning twice: ok=%v %q", resp.OK, resp.Error)
 	}

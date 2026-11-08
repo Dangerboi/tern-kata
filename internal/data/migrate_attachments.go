@@ -121,10 +121,6 @@ func (c *Client) MigrateAttachments(ctx context.Context, host string, cmd model.
 		out.Err = daemonError(err)
 		return c.migrated(root, nil, out)
 	}
-	if page.JSON200 == nil {
-		out.Err = errors.New("kata daemon returned no Issues")
-		return c.migrated(root, nil, out)
-	}
 	var touched []string
 	for _, issue := range page.JSON200.Issues {
 		if c.migrateIssue(ctx, host, root, cmd.Actor, issue, &out) {
