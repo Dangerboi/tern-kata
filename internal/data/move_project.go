@@ -45,22 +45,20 @@ func (c *Client) MoveToProject(ctx context.Context, cmd model.MoveToProjectCmd) 
 		answer.Subtree, answer.Err = moveRefusal(err)
 		return answer, nil
 	}
-	if response.JSON200 != nil {
-		answer.Revision = response.JSON200.Issue.Revision
-		answer.Count = max(len(response.JSON200.Issues), 1)
-		for _, issue := range response.JSON200.Issues {
-			if issue.UID == cmd.UID {
-				continue
-			}
-			moved := model.MovedIssue{ShortID: issue.ShortID}
-			if issue.ProjectUID != nil {
-				moved.ProjectUID = *issue.ProjectUID
-			}
-			answer.Descendants = append(answer.Descendants, moved)
+	answer.Revision = response.JSON200.Issue.Revision
+	answer.Count = max(len(response.JSON200.Issues), 1)
+	for _, issue := range response.JSON200.Issues {
+		if issue.UID == cmd.UID {
+			continue
 		}
-		if response.JSON200.NewShortID != nil {
-			answer.NewShortID = *response.JSON200.NewShortID
+		moved := model.MovedIssue{ShortID: issue.ShortID}
+		if issue.ProjectUID != nil {
+			moved.ProjectUID = *issue.ProjectUID
 		}
+		answer.Descendants = append(answer.Descendants, moved)
+	}
+	if response.JSON200.NewShortID != nil {
+		answer.NewShortID = *response.JSON200.NewShortID
 	}
 	return answer, nil
 }

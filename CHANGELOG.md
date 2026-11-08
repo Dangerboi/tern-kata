@@ -136,7 +136,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - An agent for an Issue in a Project whose name starts with `--` starts instead of leaving a dead block: the Pane passes the agent wrapper its value flags as `--flag=value`.
 - An agent hears a blocker in another Project close ("… closed; … may be unblocked"): its extension follows every Project's events it can read and keeps the ones about its Issue, its children and its blockers.
 - A team no longer ends while an agent you started by hand works on one of its ready children; it waits for that agent.
-- The Agent card shows a team child whose start claim is over 2 minutes old with no agent as `queued`, as `tern-kata team` does, instead of `starting` for good.
+- The Agent card shows a team child whose start claim is over 2 minutes old with no agent as `queued`, as `tern-kata team` does, instead of `starting` for good, and no longer names that Issue a child of the team.
 - Closing, stopping or refreshing away a team child's agent drives the team at once, so the next child starts or the end message is written without waiting for another event.
 - An unread message left at an agent's address is cleared when a finished Background agent is ended, and when the next Pane to start drops the entry of an agent whose block closed while no Pane was open; it used to stay on the Issue.
 - On a daemon that verifies actors (`require_token_identity`), messages from the Pane and from `tern-kata message` are written as the token's account, and agents the Pane starts take that account in their Agent address; the agent used to drop such messages while the Pane said Sent.
@@ -200,7 +200,6 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A notify job on an Issue date with a message of its own is sent by the worker; it used to be skipped as kata's reminder, so the message never arrived. kata's own reminder still arrives too.
 - A `[limits] max_timeout` under 2 hours with no `default_timeout` loads: the default follows it down instead of refusing the file.
 - An explicit `capacity = 0`, `max_run_prompts = 0` or `max_active_runs = 0` in `worker.toml` is refused instead of silently meaning the default.
-- On Windows a secret's `file = '~\…'` loads; the check at load refused it although the worker could read it.
 
 #### Daemons and Federation
 

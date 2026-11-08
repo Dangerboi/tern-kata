@@ -48,14 +48,14 @@ func (c *Client) SaveWorkflow(ctx context.Context, cmd model.SaveWorkflow) (mode
 	if cmd.UID == "" {
 		var created *g.CreateCronWorkflowResp
 		created, err = c.CreateCronWorkflowWithResponse(ctx, &g.CreateCronWorkflowRequestOptions{PathParams: &g.CreateCronWorkflowPath{ProjectID: cmd.ProjectID}, Body: body})
-		if err == nil && created.JSON201 != nil {
+		if err == nil {
 			written = &created.JSON201.Workflow
 		}
 	} else {
 		body.ExpectedEventUID = &cmd.Expected
 		var replaced *g.ReplaceCronWorkflowResp
 		replaced, err = c.ReplaceCronWorkflowWithResponse(ctx, &g.ReplaceCronWorkflowRequestOptions{PathParams: &g.ReplaceCronWorkflowPath{ProjectID: cmd.ProjectID, CronUID: cmd.UID}, Body: body})
-		if err == nil && replaced.JSON200 != nil {
+		if err == nil {
 			written = &replaced.JSON200.Workflow
 		}
 	}
@@ -71,7 +71,7 @@ func (c *Client) ArchiveWorkflow(ctx context.Context, cmd model.ArchiveWorkflow)
 	}
 	var written *g.CronWorkflow
 	archived, err := c.ArchiveCronWorkflowWithResponse(ctx, &g.ArchiveCronWorkflowRequestOptions{PathParams: &g.ArchiveCronWorkflowPath{ProjectID: cmd.ProjectID, CronUID: cmd.UID}, Body: body})
-	if err == nil && archived.JSON200 != nil {
+	if err == nil {
 		written = &archived.JSON200.Workflow
 	}
 	return c.workflowWritten(ctx, cmd.ProjectID, cmd.ProjectUID, model.WorkflowOpArchive, cmd.UID, written, err)
@@ -84,7 +84,7 @@ func (c *Client) RestoreWorkflow(ctx context.Context, cmd model.RestoreWorkflow)
 	}
 	var written *g.CronWorkflow
 	restored, err := c.RestoreCronWorkflowWithResponse(ctx, &g.RestoreCronWorkflowRequestOptions{PathParams: &g.RestoreCronWorkflowPath{ProjectID: cmd.ProjectID, CronUID: cmd.UID}, Body: body})
-	if err == nil && restored.JSON200 != nil {
+	if err == nil {
 		written = &restored.JSON200.Workflow
 	}
 	return c.workflowWritten(ctx, cmd.ProjectID, cmd.ProjectUID, model.WorkflowOpRestore, cmd.UID, written, err)
@@ -95,12 +95,10 @@ func (c *Client) RestoreWorkflow(ctx context.Context, cmd model.RestoreWorkflow)
 func (c *Client) workflowWritten(ctx context.Context, projectID int64, projectUID string, op model.WorkflowOp, uid string, written *g.CronWorkflow, err error) (model.WorkflowWritten, error) {
 	out := model.WorkflowWritten{ProjectUID: projectUID, Op: op, UID: uid}
 	switch {
-	case err == nil && written != nil:
+	case err == nil:
 		w := translateWorkflow(*written)
 		out.Workflow, out.UID = &w, w.UID
 		return out, nil
-	case err == nil:
-		return out, errors.New("kata returned no workflow")
 	case daemonCode(err) != "cron_conflict":
 		return out, daemonError(err)
 	}

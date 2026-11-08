@@ -17,7 +17,7 @@
 //	--stub-hang-when T     like --stub-hang-first for a prompt that contains T: hang unless resumed
 //	--stub-leave-child FILE  before exiting, start a sleeping descendant in the agent's group and write its pid to FILE
 //	--stub-stderr-bytes N  before exiting, write N filler bytes then a closing line REAL-END-OF-STDERR to stderr
-//	--stub-error-status N  end the turn with a provider failure: stopReason error, errorStatus N, exit 1
+//	--stub-error-status N  end the turn with a provider failure: stopReason error, errorStatus N, exit 1; --stub-text, when given, ends the message
 package main
 
 import (
@@ -142,7 +142,7 @@ func main() {
 		case state = <-stdin:
 		case <-time.After(time.Second):
 		}
-		line, _ := json.Marshal(map[string]any{"args": os.Args[1:], "cwd": cwd, "author": os.Getenv("KATA_AUTHOR"), "secret": os.Getenv("STUB_SECRET"), "prompt": prompt, "stdin": state, "resume": resume})
+		line, _ := json.Marshal(map[string]any{"args": os.Args[1:], "cwd": cwd, "author": os.Getenv("KATA_AUTHOR"), "secret": os.Getenv("STUB_SECRET"), "env_secret": os.Getenv("TK_TEST_SECRET"), "prompt": prompt, "stdin": state, "resume": resume})
 		if f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 			_, _ = f.Write(append(line, '\n'))
 			_ = f.Close()
@@ -173,7 +173,11 @@ func main() {
 		"usage": map[string]any{"input": 10, "output": 2, "totalTokens": 12},
 	}
 	if errStatus != 0 {
-		msg["content"], msg["stopReason"], msg["errorStatus"], msg["errorMessage"] = []any{}, "error", errStatus, fmt.Sprintf("%d provider says no", errStatus)
+		errMsg := fmt.Sprintf("%d provider says no", errStatus)
+		if text != "done" {
+			errMsg += ": " + text
+		}
+		msg["content"], msg["stopReason"], msg["errorStatus"], msg["errorMessage"] = []any{}, "error", errStatus, errMsg
 		exit = 1
 	}
 	message, _ := json.Marshal(msg)

@@ -586,6 +586,7 @@ export function createFollower(deps: FollowerDeps): Follower {
       }
       await stream.exited;
     } catch {
+      // a broken stream is handled like an exit
     }
     if (gen !== generation) return;
     scheduleRestart(gen, sawLine);
@@ -630,7 +631,8 @@ export function createFollower(deps: FollowerDeps): Follower {
       try {
         child?.kill();
       } catch {
-        }
+        // already gone
+      }
       child = undefined;
     },
   };
@@ -777,7 +779,8 @@ export function createExtension(
           try {
             Promise.resolve(pi.sendUserMessage(text, { deliverAs: "aside" })).catch(() => {});
           } catch {
-              }
+            // delivery is best effort
+          }
         },
         setTimer: (fn, ms) => {
           const guarded = () => {

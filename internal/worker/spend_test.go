@@ -348,6 +348,27 @@ func TestAHeldRunCountsItsCostAndAResumeDoesNotCountItTwice(t *testing.T) {
 	}
 }
 
+func TestAHoldDetailIsMaskedOfTheRunsSecrets(t *testing.T) {
+	t.Setenv("TK_HOLD_SECRET", "s3cret-value")
+	store := NewStore(Dirs{Config: t.TempDir(), State: t.TempDir()}, Hooks{})
+	w := &Worker{store: store, clock: fixedClock{time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)},
+		opt: Options{Config: Config{Secrets: map[string]SecretSource{"token": {Env: "TK_HOLD_SECRET"}}}}}
+	j := &Journal{Version: 1, RunUID: "01M5JESXAK1NBYS6N2ZD9RTM0B", ProjectUID: "P", JobUID: "J", Phase: PhaseStarted, SecretRefs: map[string]string{"MY_TOKEN": "token"}}
+	if err := store.Create(j, "prepared"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.hold(j, HoldExecutionError, "failed with s3cret-value"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Load(j.RunUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome == nil || strings.Contains(got.Outcome.Summary, "s3cret-value") || !strings.Contains(got.Outcome.Summary, "failed with ***") {
+		t.Fatalf("outcome %+v, want the secret masked", got.Outcome)
+	}
+}
+
 func TestAbandoningAHeldRunKeepsItsCost(t *testing.T) {
 	day := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
 	store := NewStore(Dirs{Config: t.TempDir(), State: t.TempDir()}, Hooks{})

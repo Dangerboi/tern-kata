@@ -11,7 +11,8 @@ import (
 
 func TestJobCardTabSkipsTheFieldsThatDoNotApplyAndStepsItsChoices(t *testing.T) {
 	var m model.Model
-	m.JobForm = model.JobFormState{Open: true, Field: model.JobFieldKind, Kind: "native", Trigger: cronjob.TriggerCron, Enabled: true, Catchup: model.CatchupLatest}
+	m.JobForm = model.JobFormState{Kind: "native", Trigger: cronjob.TriggerCron, Enabled: true, Catchup: model.CatchupLatest}
+	m.JobForm.Open, m.JobForm.Field = true, model.JobFieldKind
 	want := []model.Field{model.JobFieldKind, model.JobFieldName, model.JobFieldTrigger, model.JobFieldCron, model.JobFieldZone, model.JobFieldParent,
 		model.JobFieldTitle, model.JobFieldBody, model.JobFieldRecipient, model.JobFieldMessage, model.JobFieldCatchup, model.JobFieldEnabled}
 	var visited []model.Field
@@ -36,8 +37,8 @@ func TestJobCardTabSkipsTheFieldsThatDoNotApplyAndStepsItsChoices(t *testing.T) 
 
 func TestSteppingAJobChoiceWithNoChoicesKeepsTheError(t *testing.T) {
 	var m model.Model
-	m.JobForm = model.JobFormState{Open: true, Field: model.JobFieldWorkflow, Kind: "workflow", Trigger: cronjob.TriggerCron, Enabled: true,
-		Catchup: model.CatchupLatest, WorkflowsRead: true, Err: errors.New("pick the workflow to run.")}
+	m.JobForm = model.JobFormState{Kind: "workflow", Trigger: cronjob.TriggerCron, Enabled: true, Catchup: model.CatchupLatest, WorkflowsRead: true}
+	m.JobForm.Open, m.JobForm.Field, m.JobForm.Err = true, model.JobFieldWorkflow, errors.New("pick the workflow to run.")
 	for _, chord := range []string{"space", "left", "right"} {
 		if next, _ := clickPress(m, chord); next.JobForm.Err == nil {
 			t.Errorf("%s on a workflow picker with no workflows dismissed the error", chord)

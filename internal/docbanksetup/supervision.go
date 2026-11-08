@@ -13,10 +13,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// ManualFileName is the supervision marker's name in tern-kata's config folder, spelled once in data. The Luau host half
-// (host.luau) holds no copy of the rule: it asks `tern-kata docbank supervised`, which answers from Env.Supervised.
-const ManualFileName = data.DocbankManualFileName
-
 // NewSupervisionEnv is the environment of the supervision rule: tern-kata's config folder, the default kata daemon's home and
 // Docbank's home. `docbank supervised`, `docbank supervise` and the Pane's gateway all build it here. A part that cannot be found
 // is left empty and the rule says so; the default daemon's home is empty with KATA_SERVER set, which no daemon then matches.
@@ -43,7 +39,7 @@ func docbankHome() (string, error) {
 	return filepath.Abs(home)
 }
 
-func (e Env) ManualPath() string { return filepath.Join(e.ConfigDir, ManualFileName) }
+func (e Env) ManualPath() string { return filepath.Join(e.ConfigDir, data.DocbankManualFileName) }
 
 // Supervised is whether the plugin keeps Docbank running, and when it does not, why (one sentence naming what is missing).
 // It is the one place the rule is decided; the host half asks `tern-kata docbank supervised`.
@@ -55,7 +51,7 @@ func (e Env) Supervised() (on bool, why string) {
 		return false, "cannot tell where the default kata daemon's home is"
 	}
 	if _, err := os.Stat(e.ManualPath()); err == nil {
-		return false, ManualFileName + " exists in " + e.ConfigDir
+		return false, data.DocbankManualFileName + " exists in " + e.ConfigDir
 	}
 	kataPath := filepath.Join(e.DefaultKataHome, "config.toml")
 	kataText, err := readConfig(kataPath)

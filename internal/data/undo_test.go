@@ -698,3 +698,17 @@ func TestBoundariesTheDaemonDecidesAreRecordedWithTheirReason(t *testing.T) {
 		t.Fatalf("a write that changed nothing recorded %+v", rec)
 	}
 }
+
+// A reopen carries no idempotency key, so it is never replayed: an Issue found changed after one was changed by someone else, and
+// the Pane must not call the outcome unknown. A keyed close is replayed, so the same finding there is a write that landed unseen.
+func TestLandedUnansweredCoversOnlyKeyedClose(t *testing.T) {
+	before := &g.ShowIssueResponseBody{Issue: g.ShowIssueOut{UID: "u", Status: "closed"}}
+	res := issueWrite{Issue: &g.Issue{UID: "u", Status: "open"}}
+	if landedUnanswered(model.UndoReopen, before, nil, res) {
+		t.Error("a reopen that found the Issue changed was called unanswered, but it is never replayed")
+	}
+	before.Issue.Status, res.Issue.Status = "open", "closed"
+	if !landedUnanswered(model.UndoClose, before, nil, res) {
+		t.Error("a close that found the Issue changed was not called unanswered")
+	}
+}

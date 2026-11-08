@@ -315,10 +315,8 @@ var intervalJobTrigger = jobTrigger{
 // JobFormState is the Job card. The text fields hold what was typed and the card reads them into a definition only when it
 // saves or previews, so every message comes from one place.
 type JobFormState struct {
-	Open, Saving bool
-	Field        Field
-	Caret        Caret
-	ProjectID    int64
+	formCard
+	ProjectID int64
 	// UID is the job's: for a new one the card minted it, so every send of the create is the same create.
 	UID string
 	// Change says the card edits Opened, the job as it was read, instead of making a new one. Its definition_event_uid is the
@@ -351,7 +349,6 @@ type JobFormState struct {
 	Workflows     []Workflow
 	WorkflowsRead bool
 	WorkflowsErr  error
-	Err           error
 }
 
 func (f JobFormState) kind() jobKind {
@@ -387,9 +384,6 @@ func (f JobFormState) Shows(name Field) bool {
 var jobTable = fieldTable[JobFormState]{
 	form:   func(m *Model) *JobFormState { return &m.JobForm },
 	busy:   func(f JobFormState) bool { return f.Saving || f.Conflict != nil },
-	focus:  func(f *JobFormState) *Field { return &f.Field },
-	caret:  func(f *JobFormState) *Caret { return &f.Caret },
-	err:    func(f *JobFormState) *error { return &f.Err },
 	hidden: func(m Model, name Field) bool { return !m.JobForm.Shows(name) },
 	fields: []formField[JobFormState]{
 		jobChoiceField(JobFieldKind),
@@ -581,7 +575,7 @@ func jobChoiceField(name Field) formField[JobFormState] {
 // blankJobForm is an open card on the first field with every field at its default: a cron trigger of every day at nine in UTC,
 // an hourly interval, catching up with the latest missed run.
 func blankJobForm(projectID int64, uid string, kind string, trigger cronjob.TriggerKind) JobFormState {
-	return JobFormState{Open: true, Field: JobFieldName, ProjectID: projectID, UID: uid, Kind: kind, Trigger: trigger,
+	return JobFormState{formCard: formCard{Open: true, Field: JobFieldName}, ProjectID: projectID, UID: uid, Kind: kind, Trigger: trigger,
 		Cron: "0 9 * * *", Zone: "UTC", Interval: "3600", Catchup: CatchupLatest, Policy: string(cronjob.IssuePerRun), Overlap: "forbid"}
 }
 

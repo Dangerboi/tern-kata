@@ -183,10 +183,8 @@ func (c *Client) FieldLabels(ctx context.Context, cmd model.LoadFieldLabels) (mo
 		return model.FieldLabelsLoaded{}, daemonError(e)
 	}
 	labels := []string{}
-	if r.JSON200 != nil {
-		for _, l := range r.JSON200.Labels {
-			labels = append(labels, l.Label)
-		}
+	for _, l := range r.JSON200.Labels {
+		labels = append(labels, l.Label)
 	}
 	return model.FieldLabelsLoaded{UID: cmd.UID, Labels: labels}, nil
 }

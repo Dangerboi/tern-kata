@@ -37,7 +37,7 @@ func supervisionGateway(t *testing.T, kata, docbank string) (*data.Gateway, stri
 	g := data.NewGateway(nil).WithDocbankSupervision(func() data.DocbankSupervision {
 		return docbanksetup.Env{ConfigDir: folder, DefaultKataHome: kataHome, DocbankHome: docbankHome}
 	})
-	return g, filepath.Join(folder, docbanksetup.ManualFileName)
+	return g, filepath.Join(folder, data.DocbankManualFileName)
 }
 
 func runOnce(t *testing.T, g *data.Gateway, cmd model.Cmd) model.Msg {

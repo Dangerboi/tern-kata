@@ -116,7 +116,7 @@ func (c *Client) describe(ctx context.Context) model.Daemon {
 	}
 	ctx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
-	if instance, err := c.InstanceWithResponse(ctx); err == nil && instance.JSON200 != nil {
+	if instance, err := c.InstanceWithResponse(ctx); err == nil {
 		if actor := instance.JSON200.Auth.Actor; actor != nil {
 			daemon.Account = strings.TrimSpace(*actor)
 		}

@@ -150,7 +150,7 @@ type Binding struct {
 }
 
 func withHeadlessTwins(rows []Binding) []Binding {
-	out := make([]Binding, 0, len(rows)+18)
+	out := make([]Binding, 0, len(rows)*2)
 	for _, b := range rows {
 		twin := b.twin
 		b.twin = false

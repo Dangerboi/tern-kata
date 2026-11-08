@@ -28,7 +28,12 @@ ctl() { tern ctl --control "$tmp/control.sock" "$@"; }
 
 # A staged plugin/ folder as a release carries it, with a version older than any release.
 mkdir -p "$tmp/plugin" "$tmp/dist" "$tmp/workspace" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
-cp "$repo"/*.luau "$tmp/plugin/"
+# The files come from the plugin_files line of scripts/release.sh, so the smoke stages what a release carries.
+plugin_files=$(sed -n 's/^plugin_files="\(.*\)"$/\1/p' "$repo/scripts/release.sh")
+[[ -n "$plugin_files" ]] || { echo "no plugin_files line in scripts/release.sh" >&2; exit 1; }
+for f in $plugin_files; do
+  [[ "$f" == plugin.toml ]] || cp "$repo/$f" "$tmp/plugin/"
+done
 sed 's/^version = .*/version = "0.0.1"/' "$repo/plugin.toml" >"$tmp/plugin/plugin.toml"
 printf '9.9.9\n' >"$tmp/dist/version.txt"
 export STENCIL_FIXTURE_ROOT="$tmp/crates/tern"

@@ -258,9 +258,10 @@ func (m Model) TeamRows(t Team) []TeamRow {
 	return slices.Concat(rows, queued, others)
 }
 
+// ChildTeam is the team that started the Issue's agent. An expired claim started nothing: TeamRows shows that child queued.
 func (m Model) ChildTeam(uid string) (Team, bool) {
 	for _, t := range m.Teams {
-		if t.Started(uid) {
+		if slices.ContainsFunc(t.Children, func(c TeamChild) bool { return c.UID == uid && !c.ClaimExpired(m.Now) }) {
 			return t, true
 		}
 	}

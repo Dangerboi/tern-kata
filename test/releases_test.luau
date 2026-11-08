@@ -157,6 +157,12 @@ test("the user's own TERN_KATA_BASE_URL is kept", function()
     assert(env.TERN_KATA_BASE_URL == "http://127.0.0.1:8000")
 end)
 
+test("the release folder: the user's base when set and not empty, else the version's or the latest", function()
+    assert(releases.releaseBase(nil, nil) == "https://github.com/Dangerboi/tern-kata/releases/latest/download")
+    assert(releases.releaseBase("", "1.2.3") == "https://github.com/Dangerboi/tern-kata/releases/download/v1.2.3")
+    assert(releases.releaseBase("http://x", nil) == "http://x")
+end)
+
 if failures > 0 then
     print(failures .. " failed")
     error("failures")

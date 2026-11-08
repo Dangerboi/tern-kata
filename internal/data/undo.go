@@ -125,7 +125,7 @@ func landedUnanswered(kind model.UndoKind, before *g.ShowIssueResponseBody, befo
 		return false
 	}
 	switch kind {
-	case model.UndoClose, model.UndoReopen:
+	case model.UndoClose:
 		return res.Issue.Status != before.Issue.Status || !equalStrings(res.Issue.ClosedReason, before.Issue.ClosedReason)
 	}
 	return false

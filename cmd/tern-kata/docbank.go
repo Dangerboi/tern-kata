@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"reflect"
@@ -195,6 +196,9 @@ func printDocbankSupervised(env docbanksetup.Env) error {
 func runDocbankSupervise(plan LaunchPlan, env docbanksetup.Env) error {
 	on := plan.Operands[1] == "on"
 	_, statErr := os.Stat(env.ManualPath())
+	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+		return subcommandError{statErr}
+	}
 	already := on == (statErr != nil) // on wants the marker absent, off wants it present
 	if err := env.SetSupervision(on); err != nil {
 		return subcommandError{err}

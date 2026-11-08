@@ -93,6 +93,15 @@ func TestTheAgentCardRowsShowStateStartAndWhere(t *testing.T) {
 			t.Errorf("rows reading %q: %v, want only %s", want, rows, view.AgentItemID(block))
 		}
 	}
+	at := time.Date(2026, 10, 30, 9, 5, 0, 0, time.UTC)
+	for want, entry := range map[string]model.AgentEntry{
+		"agent working · started 2026-10-30 09:05 · background": {Block: "41", StartedAt: at, Background: true},
+		"agent working · started 2026-10-30 09:05 · open":       {Block: "42", StartedAt: at, Background: true, Open: true},
+	} {
+		if got := view.AgentRowText(s.Model, model.IssueAgent{AgentEntry: entry, State: model.AgentWorking}); got != want {
+			t.Errorf("row %q, want %q", got, want)
+		}
+	}
 }
 
 func TestTheAgentCardKeysReachTheGateway(t *testing.T) {

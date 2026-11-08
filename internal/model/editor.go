@@ -211,7 +211,7 @@ func sendDraft(m Model, force bool) (Model, []Cmd) {
 	draft.Err = nil
 	text := draft.Editor.Text
 	if !draft.Comment && text == normalizeLineBreaks(draft.BaseText) {
-		text = draft.BaseText // the Draft opened with line breaks normalised; unedited, it saves the stored bytes, so kata sees no change
+		text = draft.BaseText // the Draft opened with line breaks normalised; unedited, it saves the stored bytes, so kata sees no change; an edited body saves with LF line breaks
 	}
 	cmd := SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: text, Comment: draft.Comment, Actor: m.Actor, ReplyTo: draft.ReplyTo, ReplyKind: draft.ReplyKind, Force: force}
 	if draft.Comment {

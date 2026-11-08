@@ -108,3 +108,44 @@ func TestAnEnvSecretReachesOnlyTheJobsThatListIt(t *testing.T) {
 		t.Fatalf("the command step saw %q in TK_TEST_SECRET, want nothing", got)
 	}
 }
+
+func TestAnAgentErrorMessageWithASecretDoesNotReachKataOrTheJournal(t *testing.T) {
+	h := buildHarness(t, "--stub-error-status", "500", "--stub-text", "rejected token s3cret-value")
+	t.Setenv("TK_TEST_SECRET", "s3cret-value")
+	h.allowToken()
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "leaky", Prompt: "Do it.", Secrets: map[string]string{"STUB_SECRET": "token"}})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	uid := h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID
+	h.settled(uid)
+
+	for what, text := range h.savedByTheWorker(uid) {
+		// The journal also holds the profile's arguments, which are where this test told the stub what to say.
+		text = strings.ReplaceAll(text, `"rejected token s3cret-value"`, "")
+		if strings.Contains(text, "s3cret-value") {
+			t.Errorf("the secret leaked into the %s", what)
+		}
+	}
+}
+
+func TestAnEnvSecretIsAbsentFromAnAgentOfAJobThatDoesNotListIt(t *testing.T) {
+	h := buildHarness(t)
+	t.Setenv("TK_TEST_SECRET", "s3cret-value")
+	h.config += "[secrets]\ntoken = { env = \"TK_TEST_SECRET\" }\n"
+	if err := os.WriteFile(h.dirs.ConfigPath(), []byte(h.config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "peek", Prompt: "Do it.", Checkout: "repo"})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	if run := h.settled(h.ask(worker.Request{Op: "run", Job: job.UID}).Run.RunUID); run.Status != "succeeded" {
+		t.Fatalf("run is %q: %q", run.Status, run.Summary)
+	}
+	launches := h.launches()
+	if len(launches) != 1 {
+		t.Fatalf("launches %v, want one", launches)
+	}
+	if got := launches[0]["env_secret"]; got != "" {
+		t.Fatalf("the agent saw %q in TK_TEST_SECRET, want nothing", got)
+	}
+}

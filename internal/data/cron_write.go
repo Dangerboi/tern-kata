@@ -128,9 +128,6 @@ func (c *Client) guardedFailure(ctx context.Context, projectID int64, uid string
 }
 
 func (c *Client) writtenJob(ctx context.Context, projectID int64, op model.JobOp, body *g.CronJobResponseBody, parents *parentReader) (model.JobWritten, error) {
-	if body == nil {
-		return model.JobWritten{}, errors.New("kata daemon returned no Cron job")
-	}
 	// The write has landed: a parent read that fails now must not fail the answer, or a retry meets the moved definition guard.
 	// The job comes back without its parent facts and the next refresh fills them.
 	job, err := parents.translate(ctx, body.Job)

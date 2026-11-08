@@ -247,3 +247,14 @@ func TestTheTeamsAreNotDrivenWhenAnAgentOfNoTeamChildGoes(t *testing.T) {
 		}
 	}
 }
+
+func TestAnExpiredClaimIsNotAChildOfItsTeam(t *testing.T) {
+	m := teamModel()
+	m.Teams = []model.Team{{ParentUID: "a", Children: []model.TeamChild{{UID: "c", StartedAt: m.Now.Add(-time.Hour)}, {UID: "d", StartedAt: m.Now}}}}
+	if _, ok := m.ChildTeam("c"); ok {
+		t.Error("an expired claim reads as a team child")
+	}
+	if _, ok := m.ChildTeam("d"); !ok {
+		t.Error("a fresh claim does not read as a team child")
+	}
+}

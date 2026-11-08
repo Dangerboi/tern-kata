@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -147,13 +146,9 @@ func fishCompletion() string {
 	return b.String()
 }
 
-// fishTableFlags writes one fish completion per flag of table, offered where the subcommand condition holds. skip names a flag
-// another line already offers.
-func fishTableFlags(line func(string, ...any), table []tableFlag, condition string, skip ...string) {
+// fishTableFlags writes one fish completion per flag of table, offered where the subcommand condition holds.
+func fishTableFlags(line func(string, ...any), table []tableFlag, condition string) {
 	for _, f := range table {
-		if slices.Contains(skip, f.name) {
-			continue
-		}
 		value := ""
 		if f.takesValue {
 			value = " -r"

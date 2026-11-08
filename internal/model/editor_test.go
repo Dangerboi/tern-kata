@@ -178,3 +178,15 @@ func TestDraftUnchangedCRLFBodySavesStoredBytes(t *testing.T) {
 		t.Fatalf("unchanged save: %#v", cmds)
 	}
 }
+
+func TestDraftEditedCRLFBodySavesNormalisedText(t *testing.T) {
+	m := crlfModel("ab\r\ncd")
+	for _, msg := range []model.Msg{model.KeyMsg{Chord: "e"}, model.KeyMsg{Chord: "X", Text: "X"}} {
+		m, _ = model.Update(m, msg)
+	}
+	_, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	save, ok := cmds[0].(model.SaveDraft)
+	if len(cmds) != 1 || !ok || save.Text != "ab\ncdX" {
+		t.Fatalf("edited save: %#v", cmds)
+	}
+}

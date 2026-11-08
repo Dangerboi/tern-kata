@@ -649,3 +649,17 @@ func TestDocbankSetupQuotesTheRestartCommandItPrints(t *testing.T) {
 		t.Errorf("output does not print %q:\n%s", want, out)
 	}
 }
+
+func TestDocbankSuperviseReportsAMarkerItCannotStat(t *testing.T) {
+	config := t.TempDir()
+	env := docbanksetup.Env{ConfigDir: config, Out: io.Discard}
+	if err := os.Symlink(env.ManualPath(), env.ManualPath()); err != nil { // a loop: stat fails with something other than "not there"
+		t.Skip("no symlinks here:", err)
+	}
+	var out strings.Builder
+	env.Out = &out
+	plan := LaunchPlan{Subcommand: "docbank", Operands: []string{"supervise", "on"}}
+	if err := runDocbankSupervise(plan, env); err == nil || out.String() != "" {
+		t.Fatalf("supervise on with an unstatable marker = %q, %v; want the stat error and no claim", out.String(), err)
+	}
+}
