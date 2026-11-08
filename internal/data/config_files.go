@@ -70,6 +70,22 @@ func (g *Gateway) loadConfigFiles(_ context.Context, cmd model.LoadConfigFiles) 
 			}
 			return summary, nil
 		}),
+		configRow(model.ConfigSeen, seenFileName, filepath.Join(folder, seenFileName), "not created: no Runs marked seen", enter, func(path string) (string, error) {
+			file, err := readTables[seenFile](path)
+			if err != nil {
+				return "", err
+			}
+			marked, timeline := 0, 0
+			for _, p := range file {
+				if !p.Seen.IsZero() {
+					marked++
+				}
+				if p.Timeline {
+					timeline++
+				}
+			}
+			return countOf(marked, "Project", "Projects") + " with a seen mark, " + strconv.Itoa(timeline) + " with since you last looked on", nil
+		}),
 		configRow(model.ConfigWorker, worker.ConfigFileName, dirs.ConfigPath(), "no worker set up", enter, func(path string) (string, error) {
 			cfg, err := worker.LoadConfig(path)
 			summary := ""

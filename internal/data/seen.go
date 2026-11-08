@@ -7,6 +7,9 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
+// seenFileName is the file's name in the config folder.
+const seenFileName = "seen.toml"
+
 // seenFile is what this machine has looked at on the Runs Page: one table per Project UID, named seen.toml beside filters.toml.
 // It is per machine, as kata has nowhere to keep it.
 //
@@ -34,7 +37,7 @@ func (g *Gateway) seenPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(folder, "seen.toml"), nil
+	return filepath.Join(folder, seenFileName), nil
 }
 
 // readSeen is the Project's table in the file at path. No file or no table is the zero value; an unreadable file is an error

@@ -19,6 +19,7 @@ func configAllRows() []model.ConfigFile {
 		{Key: model.ConfigLanes, Title: "lanes.toml", Path: "/cfg/tern-kata/lanes.toml", Actions: enter},
 		{Key: model.ConfigFilters, Title: "filters.toml", Path: "/cfg/tern-kata/filters.toml", Actions: enter},
 		{Key: model.ConfigViews, Title: "views.toml", Path: "/cfg/tern-kata/views.toml", Actions: enter},
+		{Key: model.ConfigSeen, Title: "seen.toml", Path: "/cfg/tern-kata/seen.toml", Actions: enter},
 		{Key: model.ConfigWorker, Title: "worker.toml", Path: "/cfg/tern-kata/worker.toml", Actions: enter},
 		{Key: model.ConfigAgent, Title: "agent.toml", Path: "/cfg/tern-kata/agent.toml", Actions: []model.ConfigAction{model.ConfigEdit}},
 		{Key: model.ConfigDocbank, Title: "docbank.manual (Docbank of the default kata daemon)", Path: "/cfg/tern-kata/docbank.manual",
@@ -125,6 +126,13 @@ func TestConfigEnterOnKataConfigOpensTheDaemonsPageWhoseBackReturnsToThePageBefo
 	}
 }
 
+func TestConfigEnterOnSeenOpensTheRunsPage(t *testing.T) {
+	m := step(t, configOn(t, projectPane(t, 160, boardCard("a")), configAllRows(), model.ConfigSeen), key("enter")).State.Model
+	if m.Page != model.PageRuns {
+		t.Fatalf("page %v, want the Runs Page", m.Page)
+	}
+}
+
 func TestConfigEnterOnAgentDoesNothing(t *testing.T) {
 	s := configOn(t, projectPane(t, 160, boardCard("a")), configAllRows(), model.ConfigAgent)
 	out := step(t, s, key("enter"))
@@ -139,7 +147,7 @@ func TestConfigJumpsThatNeedAProjectShowThePagesRefusalAndOpenNoCard(t *testing.
 		s.Model = loadFirst(s.Model, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha}}})
 		return s
 	}
-	for key_, want := range map[model.ConfigFileKey]string{model.ConfigLanes: "Board needs a Project", model.ConfigWorker: "Jobs Page needs a Project"} {
+	for key_, want := range map[model.ConfigFileKey]string{model.ConfigLanes: "Board needs a Project", model.ConfigWorker: "Jobs Page needs a Project", model.ConfigSeen: "Runs Page needs a Project"} {
 		m := step(t, configOn(t, unbound(), configAllRows(), key_), key("enter")).State.Model
 		if m.Page != model.PageIssues || !strings.Contains(m.Notice, want) || m.LanesForm.Open || m.WorkerCard.Open {
 			t.Errorf("%s: page %v, notice %q, Lanes card %v, Worker card %v", key_, m.Page, m.Notice, m.LanesForm.Open, m.WorkerCard.Open)
@@ -150,7 +158,7 @@ func TestConfigJumpsThatNeedAProjectShowThePagesRefusalAndOpenNoCard(t *testing.
 func TestConfigFooterAndHelpSheetNameWhatEnterOpensAndNothingForAgent(t *testing.T) {
 	labels := map[model.ConfigFileKey]string{
 		model.ConfigLanes: "open Lanes card", model.ConfigFilters: "open Filter card", model.ConfigViews: "open Views",
-		model.ConfigWorker: "open Worker card", model.ConfigKata: "open Daemons Page",
+		model.ConfigWorker: "open Worker card", model.ConfigSeen: "open Runs Page", model.ConfigKata: "open Daemons Page",
 	}
 	enterHint := func(m model.Model) (string, bool) {
 		for b := range model.BindingsForMode(m.CurrentMode(), true) {
@@ -222,7 +230,8 @@ func TestConfigDocbankRowShowsItsStateAndSTurnsSupervisionOffThenOn(t *testing.T
 	wantText(t, "after off", wireTextOf(t, done.State), "a Docbank that is running keeps running")
 	load, _ := askedConfigFiles(done.Cmds)
 	marker := configAllRows()
-	marker[5].Status, marker[5].Summary = model.ConfigLoads, "off: docbank.manual exists in /cfg/tern-kata"
+	i := slices.IndexFunc(marker, func(f model.ConfigFile) bool { return f.Key == model.ConfigDocbank })
+	marker[i].Status, marker[i].Summary = model.ConfigLoads, "off: docbank.manual exists in /cfg/tern-kata"
 	reread := step(t, done.State, model.ConfigFilesLoaded{Request: load.Request, Folder: "/cfg/tern-kata", Files: marker}).State
 	if f := reread.Model.SelectedConfigFile(); f == nil || f.Key != model.ConfigDocbank {
 		t.Fatalf("the cursor left the Docbank row after the read: %+v", f)

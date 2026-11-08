@@ -36,7 +36,7 @@ func configFiles(t *testing.T, tern map[string]string, kata string) (map[model.C
 		rows[f.Key] = f
 		order = append(order, f.Key)
 	}
-	want := []model.ConfigFileKey{model.ConfigLanes, model.ConfigFilters, model.ConfigViews, model.ConfigWorker, model.ConfigAgent, model.ConfigKata}
+	want := []model.ConfigFileKey{model.ConfigLanes, model.ConfigFilters, model.ConfigViews, model.ConfigSeen, model.ConfigWorker, model.ConfigAgent, model.ConfigKata}
 	if strings.Join(keyStrings(order), ",") != strings.Join(keyStrings(want), ",") || got.Request != 3 || got.Folder != dirs.Config {
 		t.Fatalf("rows %v, request %d, folder %q; want %v in order and folder %q", order, got.Request, got.Folder, want, dirs.Config)
 	}
@@ -57,6 +57,7 @@ func TestConfigFilesReadsEveryMissingFileWithWhatItsAbsenceImplies(t *testing.T)
 		model.ConfigLanes:   "not created: every Project uses the default Lanes",
 		model.ConfigFilters: "not created: no Project has a default filter",
 		model.ConfigViews:   "not created: no saved views",
+		model.ConfigSeen:    "not created: no Runs marked seen",
 		model.ConfigWorker:  "no worker set up",
 		model.ConfigAgent:   "agents start with the defaults",
 		model.ConfigKata:    "empty daemon catalog",
@@ -93,6 +94,7 @@ func TestConfigFilesSummarisesEveryFileThatLoads(t *testing.T) {
 		"lanes.toml":   "[\"01A\"]\nname = \"work\"\nlabels = [\"needs-triage\"]\n\n[\"01B\"]\nname = \"empty\"\n",
 		"filters.toml": "[\"01A\"]\nstatus = \"open\"\n\n[\"01B\"]\nname = \"none\"\n",
 		"views.toml":   "[[view]]\nname = \"Mine\"\nbase = \"today\"\n\n[[view]]\nname = \"Bad\"\nbase = \"nowhere\"\n",
+		"seen.toml":    "[\"01A\"]\nseen = 2026-11-07T08:00:00Z\ntimeline = true\n\n[\"01B\"]\nseen = 2026-11-06T08:00:00Z\n\n[\"01C\"]\ntimeline = true\n",
 		"worker.toml":  servingWork(repo),
 		"agent.toml":   "actor = \"me-agent\"\nhost = \"laptop\"\nname = \"builder\"\ncommand = [\"omp\", \"--fast\"]\nmessage_from = [\"dana\", \"dana-laptop\"]\n\n[projects.zeta]\nname = \"z\"\n\n[projects.alpha]\nname = \"a\"\n",
 	}, "[[daemon]]\nname = \"home\"\nlocal = true\n\n[tui]\nconfirm_quit = false\n")
@@ -100,6 +102,7 @@ func TestConfigFilesSummarisesEveryFileThatLoads(t *testing.T) {
 		model.ConfigLanes:   "1 Project with a Lane list",
 		model.ConfigFilters: "1 Project with a default filter",
 		model.ConfigViews:   "1 saved view, 1 skipped as invalid",
+		model.ConfigSeen:    "2 Projects with a seen mark, 2 with since you last looked on",
 		model.ConfigWorker:  "1 Project served · Supervision on",
 		model.ConfigAgent:   "actor me-agent · host laptop · name builder · command omp --fast · message from dana, dana-laptop · own table for alpha, zeta",
 		model.ConfigKata:    "1 daemon · q quits without asking",
@@ -122,6 +125,7 @@ func TestConfigFilesShowsEachBrokenFilesLoaderErrorOnItsOwnRowAndTheOthersStillR
 		"lanes.toml":   "[\"01A\"\n",
 		"filters.toml": "[\"01A\"]\nstatus = \n",
 		"views.toml":   "[[view]\n",
+		"seen.toml":    "[\"01A\"\n",
 		"worker.toml":  "executor = \n",
 		"agent.toml":   "nme = \"x\"\n",
 	}, "[[daemon]]\nname = \"a\"\n")
@@ -130,6 +134,7 @@ func TestConfigFilesShowsEachBrokenFilesLoaderErrorOnItsOwnRowAndTheOthersStillR
 	_, wantErr[model.ConfigLanes] = readLanes(filepath.Join(dirs.Config, "lanes.toml"))
 	_, wantErr[model.ConfigFilters] = readTables[filtersFile](filepath.Join(dirs.Config, "filters.toml"))
 	_, wantErr[model.ConfigViews] = NewViewsStore(dirs.Config).Read()
+	_, wantErr[model.ConfigSeen] = readTables[seenFile](filepath.Join(dirs.Config, "seen.toml"))
 	_, wantErr[model.ConfigWorker] = worker.LoadConfig(dirs.ConfigPath())
 	_, wantErr[model.ConfigAgent] = ReadAgentConfig(filepath.Join(dirs.Config, AgentConfigFile))
 	_, wantErr[model.ConfigKata] = ReadCatalogAt(filepath.Dir(rows[model.ConfigKata].Path))

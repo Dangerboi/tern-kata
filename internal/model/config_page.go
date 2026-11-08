@@ -19,6 +19,7 @@ const (
 	ConfigLanes   ConfigFileKey = "lanes"
 	ConfigFilters ConfigFileKey = "filters"
 	ConfigViews   ConfigFileKey = "views"
+	ConfigSeen    ConfigFileKey = "seen"
 	ConfigWorker  ConfigFileKey = "worker"
 	ConfigAgent   ConfigFileKey = "agent"
 	ConfigKata    ConfigFileKey = "kata"
@@ -298,6 +299,8 @@ func ConfigActionLabel(f ConfigFile, action ConfigAction) string {
 		return "open Filter card"
 	case ConfigViews:
 		return "open Views"
+	case ConfigSeen:
+		return "open Runs Page"
 	case ConfigWorker:
 		return "open Worker card"
 	case ConfigKata:
@@ -339,6 +342,8 @@ func openConfigFile(m Model) (Model, []Cmd) {
 		}
 		m, more := openMenuLevel(m, MenuViews)
 		return m, append(cmds, more...)
+	case ConfigSeen:
+		return showPage(PageRuns)(m)
 	case ConfigWorker:
 		m, cmds := showPage(PageJobs)(m)
 		if m.OnJobs() {
