@@ -239,3 +239,20 @@ func TestAMessageOnADaemonThatVerifiesActorsIsWrittenAsItsAccount(t *testing.T) 
 		t.Fatalf("sent %+v, want %+v", got, want)
 	}
 }
+
+// With a daemon that verifies actors a request is written as the account, so the agent whose request it is counts as ours by that name.
+func TestARequestFromTheDaemonsAccountIsOursWhenTheActorDiffers(t *testing.T) {
+	for name, tc := range map[string]struct {
+		verified bool
+		want     model.Card
+	}{
+		"verified":   {true, model.CardAgentMessage},
+		"unverified": {false, model.NoCard},
+	} {
+		s := messagePane(t, agentRaised(t), nil, ompAgent)
+		s.Model.Actor, s.Model.VerifiedSenders, s.Model.Daemon.Account = "someone-else", tc.verified, "dana"
+		if got := step(t, s, key("m")).State.Model.TopCard(); got != tc.want {
+			t.Errorf("%s: card %v, want %v", name, got, tc.want)
+		}
+	}
+}

@@ -281,38 +281,38 @@ func (c *Client) dropAgentRecords(ctx context.Context, projectID int64, uid, hos
 		if r, err := model.ReadAgentRecord(key, string(records[key])); err == nil {
 			rec, actor = &r, r.Actor
 		}
-		if pick(key, rec) {
-			errs = append(errs, c.patchRecords(ctx, projectID, uid, actor, map[string]any{key: nil}))
+		if !pick(key, rec) {
+			continue
 		}
+		// What is left at the Agent address is cleared first, so a failure keeps the record, the only note of where it is, for the next drop.
+		if rec != nil && rec.Address != "" {
+			if err := c.ClearAgentAddress(ctx, model.ClearAgentAddress{ProjectID: projectID, UID: uid, Actor: model.AgentAddressActor(rec.Address), Address: rec.Address}); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+		}
+		errs = append(errs, c.patchRecords(ctx, projectID, uid, actor, map[string]any{key: nil}))
 	}
 	return errors.Join(errs...)
 }
 
-// removeAgentRecordsOf clears what is left at the Agent address of each entry on its Issue, nobody reading it again, then removes
-// its record; an entry that does not name its Project cannot be found there. The record stays when the clear failed, so the
-// failure is returned and the message is not lost with the only note of where it is. A failure leaves the record for the next reconcile, which removes any record of this host with no entry, so it is returned for
-// the caller to show and never undoes what removed the entry.
-func (g *Gateway) removeAgentRecordsOf(ctx context.Context, entries []model.AgentEntry) error {
+// removeAgentRecordsOf removes the record of each entry from its Issue, clearing first what is left at its Agent address, nobody
+// reading it again; an entry that does not name its Project cannot be found there. A failure leaves the record for the next
+// reconcile, which removes any record of this host with no entry, so nothing is returned: it never undoes what removed the entry.
+func (g *Gateway) removeAgentRecordsOf(ctx context.Context, entries []model.AgentEntry) {
 	entries = slices.DeleteFunc(slices.Clone(entries), func(e model.AgentEntry) bool { return e.ProjectID == 0 || e.IssueUID == "" })
 	if len(entries) == 0 {
-		return nil
+		return
 	}
 	hostID, err := g.thisHostID()
 	if err != nil {
-		return err
+		return
 	}
-	var errs []error
 	for _, e := range entries {
-		errs = append(errs, g.withDaemon(ctx, "", func(c *Client) error {
-			if e.Address != "" {
-				if err := c.ClearAgentAddress(ctx, model.ClearAgentAddress{ProjectID: e.ProjectID, UID: e.IssueUID, Actor: model.AgentAddressActor(e.Address), Address: e.Address}); err != nil {
-					return err
-				}
-			}
+		_ = g.withDaemon(ctx, "", func(c *Client) error {
 			return c.removeHostRecord(ctx, e.ProjectID, e.IssueUID, hostID, e.Block)
-		}))
+		})
 	}
-	return errors.Join(errs...)
 }
 
 func (g *Gateway) removeAgentRecordOf(ctx context.Context, c *Client, projectID int64, uid, block string) error {

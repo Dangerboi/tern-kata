@@ -337,7 +337,7 @@ func TestCompletionOffersExactlyWhatAgentsAndTeamAccept(t *testing.T) {
 }
 
 func TestFishOffersTheViewsAddFlagsOnlyAfterAdd(t *testing.T) {
-	for _, flag := range append(dashed2(viewFlagNames), "--replace") {
+	for _, flag := range append(strings.Fields(dashed(viewFlagNames)), "--replace") {
 		for _, words := range [][]string{{"views"}, {"views", "show", "x"}, {"views", "rm", "x"}} {
 			if fishFlags(t, words...)[flag] {
 				t.Errorf("fish offers %s after %v, which refuse it", flag, words)
@@ -347,12 +347,4 @@ func TestFishOffersTheViewsAddFlagsOnlyAfterAdd(t *testing.T) {
 			t.Errorf("fish does not offer %s after views add", flag)
 		}
 	}
-}
-
-func dashed2(names []string) []string {
-	out := make([]string, len(names))
-	for i, n := range names {
-		out[i] = "--" + n
-	}
-	return out
 }

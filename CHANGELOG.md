@@ -234,7 +234,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A second `tern-kata worker` no longer prints a "serving" line before it is refused because one already runs.
 - fish completes the `views add` flags only after `views add`; `views show` and `views rm` refuse them.
 - A saved view's name can no longer hold a control character such as a newline or a tab, which broke the one-line-per-view list.
-- `tern-kata recur` with an empty or half-formed ref (`""`, `demo#`, `#7`) says `"<ref>" is not a valid issue ref`, as kata does, instead of a 404.
+- `tern-kata recur` with an empty or half-formed ref (`""`, `demo#`, `#`) says `"<ref>" is not a valid issue ref`, as kata does, instead of a 404.
 
 ## [0.9.0] - 2026-11-06
 

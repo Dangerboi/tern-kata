@@ -251,7 +251,7 @@ func TestChangingOnlyEveryKeepsTheStoredWeekdaysDayAndMonth(t *testing.T) {
 
 func TestRecurRefusesAMalformedRefBeforeAskingKata(t *testing.T) {
 	f := newSubcommandFixture(t)
-	for _, ref := range []string{"", " ", "demo#", "#7"} {
+	for _, ref := range []string{"", " ", "demo#", "#"} {
 		plan, err := PlanLaunch([]string{"recur", ref, "--as", "tester"}, func(string) (string, bool) { return "", false }, "test")
 		if err == nil {
 			err = runSubcommand(context.Background(), plan, data.NewGateway(f.locate).WithHost(testHost), &bytes.Buffer{})

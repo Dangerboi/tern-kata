@@ -40,10 +40,26 @@ func choose(t *testing.T, s driver.State, field model.Field, index int) driver.S
 func newJobCard(t *testing.T) driver.State {
 	t.Helper()
 	s := jobsPane(t, 160, guarded("J1", "Weekly", "EV1"))
-	s = step(t, s, key("n")).State
+	opened := step(t, s, key("n"))
+	wantPickersFor(t, opened.Cmds, "work")
+	s = opened.State
 	s = set(t, s, model.JobFieldName, "Report")
 	s = set(t, s, model.JobFieldParent, "parent-a")
 	return set(t, s, model.JobFieldTitle, "Report time")
+}
+
+// wantPickersFor checks that opening the Job card asked for the pickers of the named Project, which narrows them to its allowlists.
+func wantPickersFor(t *testing.T, cmds []model.Cmd, project string) {
+	t.Helper()
+	for _, cmd := range cmds {
+		if load, ok := cmd.(model.LoadWorkerPickers); ok {
+			if load.Project != project {
+				t.Errorf("pickers asked for Project %q, want %q", load.Project, project)
+			}
+			return
+		}
+	}
+	t.Fatalf("opening the card asked for no pickers: %#v", cmds)
 }
 
 func savedJob(cmds []model.Cmd) (model.SaveJobCmd, bool) {
@@ -164,7 +180,9 @@ func TestJOnAnIssueOpensTheCardWithThatIssueAsParentFromEveryMainSurface(t *test
 
 func TestEditOpensTheCardPrefilledAndSavesAGuardedReplaceKeepingTheParent(t *testing.T) {
 	s := jobsPane(t, 160, guarded("J1", "Weekly", "EV1"))
-	s = step(t, s, key("e")).State
+	opened := step(t, s, key("e"))
+	wantPickersFor(t, opened.Cmds, "work")
+	s = opened.State
 	if !s.Model.JobForm.Open || !s.Model.JobForm.Change {
 		t.Fatalf("the card did not open to change the job: %+v", s.Model.JobForm)
 	}

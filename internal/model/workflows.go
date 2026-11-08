@@ -527,7 +527,6 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 		if saving {
 			m.Workflows.Card = WorkflowCard{}
 			m.Workflows.Selected = msg.Workflow.UID
-			return m.selectWorkflow(row)
 		}
 		return m.selectWorkflow(row)
 	}

@@ -344,9 +344,11 @@ func TestRemoteAgentsAreTheRecordsOfOtherHostIdsOnAnIssueOrInTheProject(t *testi
 	f := newRecordFixture(t, "")
 	f.put(t, model.AgentRecord{Address: "dana/omp-9", Host: "desk", HostID: "feed0001", Block: "9", Name: "omp", Actor: "dana", MessageFrom: []string{"dana-laptop"}})
 	f.put(t, model.AgentRecord{Address: "dana/omp-3", Host: "laptop", HostID: f.hostID(t), Block: "3", Name: "omp", Actor: "dana"})
-	ref := "demo#" + issueFixture{kata: f.kata}.issue(t, f.uid).ShortID
+	short := issueFixture{kata: f.kata}.issue(t, f.uid).ShortID
+	ref := "demo#" + short
 	for name, cmd := range map[string]model.LoadRemoteAgents{
 		"an Issue by its ref":              {Workspace: f.work, Issue: ref},
+		"an Issue by its short id":         {Workspace: f.work, Issue: "#" + short},
 		"an Issue by its uid":              {Workspace: f.work, Issue: f.uid},
 		"the workspace's Project":          {Workspace: f.work},
 		"the Project of KATA_REF":          {Workspace: f.work, ScopeRef: ref},
@@ -601,5 +603,28 @@ func TestPruningAnAgentWhoseBlockClosedClearsWhatIsLeftAtItsAddress(t *testing.T
 	}
 	if _, held := issue.issue(t, f.uid).Metadata[key]; held {
 		t.Fatal("the message is still at the address of an agent that is gone")
+	}
+}
+
+func TestAReconcileClearsTheMessageAtTheAddressOfARecordWithNoEntry(t *testing.T) {
+	f := newRecordFixture(t, "host = \"laptop\"\n")
+	record := model.AgentRecord{Address: "dana/omp-55", Host: "laptop", HostID: f.hostID(t), Block: "55", Name: "omp", Actor: "dana", MessageFrom: []string{}}
+	f.put(t, record)
+	_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: f.project.ID, Ref: f.uid},
+		Body:       &g.PatchIssueMetadataBody{Actor: new("dana"), Patch: map[string]any{model.NotificationKey(record.Address): map[string]any{"from": "dana", "message": "hello"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gateway.syncAgentRecords(context.Background(), f.work, agentDirs{config: f.state, state: f.state}, filepath.Join(f.state, AgentsFile)); err != nil {
+		t.Fatal(err)
+	}
+	metadata := issueFixture{kata: f.kata}.issue(t, f.uid).Metadata
+	if _, held := metadata[model.NotificationKey(record.Address)]; held {
+		t.Errorf("the message at the address of the dropped record is still held")
+	}
+	if got := f.records(t); len(got) != 0 {
+		t.Errorf("records %v, want the entry-less one dropped", got)
 	}
 }

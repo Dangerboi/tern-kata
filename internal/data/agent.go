@@ -535,7 +535,7 @@ func (g *Gateway) retireAgents(ctx context.Context, gone []model.AgentEntry) {
 	for _, e := range gone {
 		removePrompt(e.PromptFile)
 	}
-	_ = g.removeAgentRecordsOf(ctx, gone)
+	g.removeAgentRecordsOf(ctx, gone)
 }
 
 // startBackground starts the agent in the hidden session: a new tab when `tern ls --json` lists the session, a new session when

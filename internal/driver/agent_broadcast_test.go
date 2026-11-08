@@ -106,3 +106,13 @@ func TestABroadcastWithNoRunningAgentOpensNoCard(t *testing.T) {
 		t.Fatalf("card %v notice %q, want no card and the refusal", m.TopCard(), m.Notice)
 	}
 }
+
+func TestABroadcastIsWrittenAsTheAccountOfADaemonThatVerifiesActors(t *testing.T) {
+	s := broadcastPane(t, nil, broadcastAgent("p", "31"))
+	s.Model.Actor, s.Model.VerifiedSenders, s.Model.Daemon.Account = "dangerboi", true, "dana"
+	s = step(t, step(t, s, tern.Key{Name: "s", Shift: true}).State, tern.Key{Text: "hello"}).State
+	got := sentMessages(step(t, s, key("enter")).Cmds)["dana/omp-31"]
+	if got.Actor != "dana" {
+		t.Fatalf("broadcast written as %q, want the daemon's account", got.Actor)
+	}
+}

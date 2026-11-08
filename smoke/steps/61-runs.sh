@@ -80,6 +80,11 @@ ctl key 3
 ctl key n
 expect_tree "[data-id='main.columns.list.runs.now']" '.ok and .count == 1'
 expect_tree "[data-id^='main.columns.list.runs.']" '.nodes as $n | def y(f): [$n[] | select(.text | f)][0].rect[1]; y(contains("the worker stopped")) as $a | y(contains("the provider answered")) as $b | y(contains("triaged nine items")) as $c | y(contains("triaged four items")) as $d | y(. == "Now") as $now | $a != null and $d != null and $now != null and $a < $b and $b < $c and $c < $d and $d < $now'
+# s refuses while the job filter `r` set is on, since the mark would also cover runs it hides; f lifts the filter.
+ctl key s
+expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("Clear the job filter"))'
+expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and .count == 1'
+ctl key f
 # s marks them seen: the mark is the newest end among the loaded runs.
 ctl key s
 expect_tree "[data-id='main.columns.list.runs.nothing-new']" '.ok and .count == 1 and (.nodes[0].text | contains("Nothing new since"))'

@@ -214,7 +214,7 @@ const maxKeyFileSize = 64 << 10
 
 // checkKeyFile refuses a key file that kata's own secret reader would refuse, with kata's reason, so that setup does not report
 // success for a config in which every upload fails "docbank unauthorized". The checks are kata's: a regular file, owned by the
-// current user, no group or other permission bits, at most 64 KiB, not blank.
+// current user, no group or other permission bits, at most 64 KiB.
 func checkKeyFile(path string) error {
 	refuse := func(reason string) error {
 		return fmt.Errorf("--key-file %s: kata would refuse it (%s), so nothing was changed", path, reason)

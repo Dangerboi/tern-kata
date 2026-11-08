@@ -40,7 +40,7 @@ type issueTarget struct {
 func (c *Client) readIssueTarget(ctx context.Context, workspace, ref string) (issueTarget, error) {
 	given := ref
 	ref = strings.TrimSpace(ref)
-	if projectName, shortID, qualified := strings.Cut(ref, "#"); ref == "" || qualified && (projectName == "" || shortID == "") {
+	if _, shortID, qualified := strings.Cut(ref, "#"); ref == "" || qualified && shortID == "" {
 		return issueTarget{}, errNoSuchIssue{fmt.Errorf("%q is not a valid issue ref", given)}
 	}
 	loaded, err := c.ReadProject(ctx, workspace)
