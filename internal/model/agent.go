@@ -70,6 +70,8 @@ type AgentEntry struct {
 	// AddressUsedBy is the host name of another host whose Agent record already held this agent's Address when it started, so the agent
 	// published no record of its own and stays local; "" when it published one.
 	AddressUsedBy string `json:"address_used_by,omitempty"`
+	// Coordinator is the Agent address of the coordinator of the team that started the agent as a child; "" for an agent no team started.
+	Coordinator string `json:"coordinator,omitempty"`
 }
 
 // MessageFromActors is the actors in MessageFrom, none for ""; a zero or legacy entry takes messages from its own actor only.

@@ -223,13 +223,17 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 	if missed > 0 {
 		return subcommandError{fmt.Errorf("the message was not written to %d of %d agents", missed, len(targets))}
 	}
+	if warning != "" {
+		return subcommandError{errors.New("agents on other hosts may have been missed")}
+	}
 	return nil
 }
 
 // messageTargets finds who plan.TargetRef reaches. An address one of this host's agents holds needs no daemon read. Otherwise the
 // target is read as an Issue first (its records join the local agents on it), and when it names none, as an address among the
 // agents on other hosts in the Project agents lists. A read that fails is the error unless the local agents already reach the
-// target: then they get the message and warning says the agents on other hosts could not be read.
+// target: then they get the message, and warning says the agents on other hosts could not be read, which runMessage turns into a
+// failed exit, for an agent on another host may have been missed.
 func messageTargets(plan LaunchPlan, workspace string, running []model.IssueAgent, send func(model.Cmd) model.Msg) (targets []model.IssueAgent, warning string, err error) {
 	if slices.ContainsFunc(running, func(a model.IssueAgent) bool { return a.Address != "" && a.Address == plan.TargetRef }) {
 		targets, err = model.MessageTargets(running, plan.TargetRef, plan.InboxUser)
@@ -252,7 +256,10 @@ func messageTargets(plan LaunchPlan, workspace string, running []model.IssueAgen
 	if err != nil && scanned.Err != nil && !errors.Is(scanned.Err, model.ErrNoRemoteScope) {
 		return nil, "", fmt.Errorf("%w; the agents on other hosts could not be read: %w", err, scanned.Err)
 	}
-	return targets, "", err
+	if err == nil && scanned.Err != nil && !errors.Is(scanned.Err, model.ErrNoRemoteScope) {
+		warning = fmt.Sprintf("cannot read the agents on other hosts: %v; messaging only the agents on this host.", scanned.Err)
+	}
+	return targets, warning, err
 }
 
 // daemonVerified reads, once and only when a target needs it, whether the daemon verifies the actor of every write: the Pane's own
@@ -299,9 +306,10 @@ func writeSlot(plan LaunchPlan, workspace string, a model.IssueAgent, text strin
 		return fmt.Sprintf("Cannot message %s on %s: %s", a.Address, place, sent.Err), false
 	case sent.Held != "":
 		unread, _, _ := strings.Cut(strings.TrimSpace(sent.Unread), "\n")
+		unread = model.PlainText(unread)
 		by := ""
 		if sent.UnreadFrom != "" {
-			by = " from " + sent.UnreadFrom
+			by = " from " + model.PlainText(sent.UnreadFrom)
 		}
 		return fmt.Sprintf("%s on %s holds a message%s it has not cleared (%s); nothing was written there. To clear it: kata notify %s --to %s --clear", a.Address, place, by, unread, a.IssueRef, a.Address), false
 	}

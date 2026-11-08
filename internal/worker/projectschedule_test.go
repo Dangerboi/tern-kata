@@ -63,13 +63,14 @@ func TestACrashBetweenAdmittingAnOccurrenceAndSavingTheCheckpointDoesNotRunItTwi
 	journals := &fakeJournals{journals: map[string]bool{}}
 	start := func() *projectSchedule {
 		return &projectSchedule{
-			store:     store,
-			admit:     journals.admit,
-			issueDate: func(cronjob.Job) (time.Time, bool) { return time.Time{}, false },
-			stopped:   func() bool { return false },
-			log:       func(string, ...any) {},
-			jobs:      map[string]*jobSchedule{},
-			paused:    map[string]bool{},
+			store:       store,
+			admit:       journals.admit,
+			issueDate:   func(cronjob.Job) (time.Time, bool) { return time.Time{}, false },
+			stopped:     func() bool { return false },
+			runsChanged: func() {},
+			log:         func(string, ...any) {},
+			jobs:        map[string]*jobSchedule{},
+			paused:      map[string]bool{},
 		}
 	}
 	jobs := []cronjob.Job{job}
@@ -117,13 +118,14 @@ func pausedHourlyJob(created time.Time, catchup string) cronjob.Job {
 
 func newMemSchedule(store checkpointStore) *projectSchedule {
 	return &projectSchedule{
-		store:     store,
-		admit:     (&fakeJournals{journals: map[string]bool{}}).admit,
-		issueDate: func(cronjob.Job) (time.Time, bool) { return time.Time{}, false },
-		stopped:   func() bool { return false },
-		log:       func(string, ...any) {},
-		jobs:      map[string]*jobSchedule{},
-		paused:    map[string]bool{},
+		store:       store,
+		admit:       (&fakeJournals{journals: map[string]bool{}}).admit,
+		issueDate:   func(cronjob.Job) (time.Time, bool) { return time.Time{}, false },
+		stopped:     func() bool { return false },
+		runsChanged: func() {},
+		log:         func(string, ...any) {},
+		jobs:        map[string]*jobSchedule{},
+		paused:      map[string]bool{},
 	}
 }
 

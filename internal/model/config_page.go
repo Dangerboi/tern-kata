@@ -66,6 +66,8 @@ type ConfigFile struct {
 	Text string
 	// Starter is the commented text an edit starts from when the file is missing or blank. Only the agent.toml row has it.
 	Starter string
+	// Supervised is the supervision rule's answer, set only on the Docbank row; the marker alone does not decide it.
+	Supervised bool
 }
 
 // Has says the row offers action.

@@ -10,19 +10,26 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
+	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
+	"github.com/Dangerboi/tern-kata/internal/filelock"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // HostIDFile holds the Host id in tern-kata's state folder.
 const HostIDFile = "host-id"
+
+// hostIDLockWait is how long a Pane waits for another Pane replacing an empty host-id file.
+const hostIDLockWait = 5 * time.Second
 
 // ReadHostID is the Host id kept in the state folder, made on the first call: random, written once, never changed (ADR-0018). An empty file is made again.
 // Two Panes asking at once both get the id the first one linked into place.
@@ -59,8 +66,8 @@ func ReadHostID(state string) (string, error) {
 		if id, err := readHostIDFile(path); err != nil || id != "" {
 			return id, err
 		}
-		if err := os.Rename(tmp.Name(), path); err != nil {
-			return "", err
+		if id, replaced, err := replaceEmptyHostID(path, tmp.Name()); err != nil || !replaced {
+			return id, err
 		}
 	}
 	id, err := readHostIDFile(path)
@@ -68,6 +75,24 @@ func ReadHostID(state string) (string, error) {
 		err = fmt.Errorf("%s is empty", path)
 	}
 	return id, err
+}
+
+// replaceEmptyHostID renames the file at tmp over the empty one at path, under a lock beside it, and reports that it did. Two Panes
+// both finding the file empty take the lock in turn: the second reads the id the first renamed in and keeps it.
+func replaceEmptyHostID(path, tmp string) (id string, replaced bool, err error) {
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return "", false, err
+	}
+	defer lock.Close()
+	if err := filelock.Wait(lock, hostIDLockWait); err != nil {
+		return "", false, err
+	}
+	defer filelock.Unlock(lock)
+	if id, err := readHostIDFile(path); err != nil || id != "" {
+		return id, false, err
+	}
+	return "", true, os.Rename(tmp, path)
 }
 
 // ThisHostID is the Host id of this machine's tern-kata state folder, "" when the folder cannot be read or made; the Pane then
@@ -135,6 +160,10 @@ func (g *Gateway) withDaemon(ctx context.Context, workspace string, fn func(*Cli
 // issueRecords reads the keys of an Issue's metadata that hold Agent records, as stored.
 func (c *Client) issueRecords(ctx context.Context, projectID int64, uid string) (map[string]json.RawMessage, error) {
 	r, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: uid}})
+	if client.StatusCode(err) == http.StatusNotFound {
+		// An Issue kata no longer has holds no records.
+		return map[string]json.RawMessage{}, nil
+	}
 	if err != nil {
 		return nil, daemonError(err)
 	}
@@ -205,6 +234,11 @@ func (c *Client) publishAgentRecord(ctx context.Context, host agentHost, e model
 	if err != nil {
 		return "", err
 	}
+	return c.publishAgentRecordOver(ctx, host, e, records)
+}
+
+// publishAgentRecordOver is publishAgentRecord given the records the Issue holds, as a listing already read them.
+func (c *Client) publishAgentRecordOver(ctx context.Context, host agentHost, e model.AgentEntry, records map[string]json.RawMessage) (usedBy string, err error) {
 	if usedBy = addressHolder(records, host.ID, e.Address); usedBy != "" {
 		return usedBy, nil
 	}
@@ -341,7 +375,8 @@ type issueRecordsListed struct {
 // to no Project), and the Issues of entries, with the records each holds. Nothing else of the daemon is read.
 func (c *Client) listIssueRecords(ctx context.Context, workspace string, entries []model.AgentEntry) (map[string]issueRecordsListed, error) {
 	issues := map[string]issueRecordsListed{}
-	loaded, err := c.ReadProject(ctx, workspace)
+	// A bound Project this daemon has not initialised is left unresolved: the entries' Issues are still reconciled.
+	loaded, err := c.readProject(ctx, workspace, true)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +467,13 @@ func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs a
 			if e.ProjectID == 0 || e.IssueUID == "" || exited[e.Block] {
 				continue
 			}
-			usedBy, err := c.publishAgentRecord(ctx, host, e)
+			var usedBy string
+			var err error
+			if listedIssue, ok := issues[e.IssueUID]; ok {
+				usedBy, err = c.publishAgentRecordOver(ctx, host, e, listedIssue.records)
+			} else {
+				usedBy, err = c.publishAgentRecord(ctx, host, e)
+			}
 			if err != nil {
 				errs = append(errs, err)
 				continue

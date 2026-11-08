@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -134,11 +135,22 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+// statsInFlight holds the checkouts with a stat that has not returned, as a hung mount never lets it. headCommit starts
+// no second stat on one, so a stuck checkout costs one goroutine, not one per check. statDir is a seam for tests.
+var (
+	statsInFlight sync.Map
+	statDir       = os.Stat
+)
+
 // headCommit is the commit the checkout's branch is at.
 func headCommit(ctx context.Context, dir string) (string, error) {
+	if _, busy := statsInFlight.LoadOrStore(dir, struct{}{}); busy {
+		return "", fmt.Errorf("the checkout %s still cannot be checked: the previous check of the checkout has not returned", dir)
+	}
 	statted := make(chan bool, 1)
 	go func() {
-		info, err := os.Stat(dir)
+		info, err := statDir(dir)
+		statsInFlight.Delete(dir)
 		statted <- err == nil && info.IsDir()
 	}()
 	select {

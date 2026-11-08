@@ -134,10 +134,9 @@ type Model struct {
 	AgentGone []AgentEntry
 	// AgentMessage is the Message card, which writes a message to an agent from the Attention Page.
 	AgentMessage AgentMessageState
-	// addressesCleared are the blocks of this Pane's exited agents whose Agent address the Pane has cleared, while they are mapped or gone.
-	addressesCleared []string
-	// addressesClearing are the blocks whose clear is asked and not answered; a failed one is dropped here, not recorded as cleared.
-	addressesClearing []string
+	// goneAgentClears says, by block, how far the clear of an exited agent's Agent address and record has got: asked, or done (kept
+	// while the agent is mapped or gone). A failed clear is dropped, so the next sweep asks again.
+	goneAgentClears map[string]goneAgentClear
 	// agentFresh are the agents started since a request was asked, by block, with the number of the last request asked before the
 	// start: an answer that read the file before the start wrote the entry does not hold it, and that is no sign the agent is gone.
 	// Only an answer to a later request settles it.

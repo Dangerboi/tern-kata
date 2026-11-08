@@ -40,7 +40,9 @@ func (g *Gateway) docbankRow() (model.ConfigFile, bool) {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		row.Status, row.Err = model.ConfigBroken, err.Error()
 	}
-	if on, why := env.Supervised(); on {
+	on, why := env.Supervised()
+	row.Supervised = on
+	if on {
 		row.Summary = "on: the plugin keeps Docbank running"
 	} else {
 		row.Summary = "off: " + why

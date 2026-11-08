@@ -36,8 +36,8 @@ func configPage(m model.Model) tern.Element {
 		case f.Status == model.ConfigBroken:
 			tone = ui.ToneError
 		case f.Key == model.ConfigDocbank:
-			// The row's file is the marker that turns supervision off: absent is the on state.
-			if f.Status != model.ConfigLoads {
+			// Green only when the rule says supervised; the marker's absence alone does not.
+			if f.Supervised {
 				tone = ui.ToneSuccess
 			}
 		case f.Status == model.ConfigLoads:

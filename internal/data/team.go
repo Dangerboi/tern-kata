@@ -275,7 +275,8 @@ func (g *Gateway) driveTeams(ctx context.Context, cmd model.DriveTeams) model.Te
 }
 
 // driveTeam is one team's step: a coordinator that exited makes it stopping; paused does nothing; stopping goes once no child
-// runs; ending writes the end message; running starts children and, with none to start and none running, ends.
+// runs; ending writes the end message; running starts children and, with none to start and none running, ends. The last two
+// steps belong to the Pane of the actor that started the team.
 func (g *Gateway) driveTeam(ctx context.Context, cmd model.DriveTeams, teamsFile, agentsFile, uid string, out *model.TeamsDriven) error {
 	teams, err := ReadTeams(teamsFile)
 	if err != nil {
@@ -286,9 +287,9 @@ func (g *Gateway) driveTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 		return nil
 	}
 	t := teams[i]
-	if t.Actor != "" && t.Actor != cmd.Actor {
-		return nil
-	}
+	// Any Pane retires a team (coordinator exited, stopping, gone); only the Pane of the actor that started it starts its children
+	// (under another actor they would carry the wrong Agent address) and writes its end message.
+	own := t.Actor == "" || t.Actor == cmd.Actor
 	entries, err := ReadAgents(agentsFile)
 	if err != nil {
 		return err
@@ -322,8 +323,14 @@ func (g *Gateway) driveTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 		})
 		return err
 	case model.TeamEnding:
+		if !own {
+			return nil
+		}
 		return g.writeEndMessage(ctx, cmd, teamsFile, uid)
 	case model.TeamRunning:
+		if !own {
+			return nil
+		}
 		return g.queueTeam(ctx, cmd, teamsFile, agentsFile, t, entries, out)
 	}
 	return nil
@@ -376,6 +383,14 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 	for _, c := range parent.Children {
 		childOf[c.UID] = true
 	}
+	// A child another host's record holds is neither startable nor finished: the team waits for that agent (Forget on the card
+	// clears a dead one) instead of ending with the child never run.
+	remoteHeld := false
+	for _, c := range parent.Children {
+		if c.Status != "closed" && c.ProjectID == t.ProjectID && !t.Started(c.UID) && model.RemoteHostOn(c.Metadata, hostID) != "" {
+			remoteHeld = true
+		}
+	}
 	var candidates []gen.IssueOut
 	for _, c := range ready {
 		if childOf[c.UID] && c.ProjectID == t.ProjectID && !t.Started(c.UID) && !issueHasAgent(entries, cmd.Exited, c.UID) &&
@@ -415,7 +430,7 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 		}
 		out.Started = append(out.Started, started.Entry)
 	}
-	if held || failed {
+	if held || failed || remoteHeld {
 		return nil
 	}
 	// Read the record again: children another Pane started are in it now.
@@ -624,14 +639,17 @@ func (c *Client) ResolveComment(ctx context.Context, cmd model.ResolveComment) (
 
 // settleClaims resolves the children recorded without a block for longer than teamPendingMaxAge: a Pane that died after starting
 // the agent but before recording its block left one whose agent runs, which takes that agent's block (an entry on the child's Issue
-// that started after the claim); a claim with no such agent goes, so the child can be started.
+// that this team's coordinator started after the claim; an agent a person started by hand is not the team's); a claim with no such
+// agent goes, so the child can be started.
 func settleClaims(t *model.Team, entries []model.AgentEntry, now time.Time) {
 	for j := range t.Children {
 		child := &t.Children[j]
 		if child.Block != "" || now.Sub(child.StartedAt) < teamPendingMaxAge {
 			continue
 		}
-		if k := slices.IndexFunc(entries, func(e model.AgentEntry) bool { return e.IssueUID == child.UID && !e.StartedAt.Before(child.StartedAt) }); k >= 0 {
+		if k := slices.IndexFunc(entries, func(e model.AgentEntry) bool {
+			return e.IssueUID == child.UID && t.CoordinatorAddress != "" && e.Coordinator == t.CoordinatorAddress && !e.StartedAt.Before(child.StartedAt)
+		}); k >= 0 {
 			child.Block = entries[k].Block
 		}
 	}

@@ -511,12 +511,24 @@ func TestMessageToAnUnknownTargetNamesWhyTheOtherHostsCouldNotBeRead(t *testing.
 	}
 	s = &sender{issueErr: errors.New("daemon unreachable")}
 	err = runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "demo#aa11", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
-	if err != nil || len(s.sent) != 1 || !strings.Contains(out.String(), "daemon unreachable") {
-		t.Errorf("lookup failing: err %v, sent %+v, output %q, want the local agent messaged and the failure said", err, s.sent, out.String())
+	var failed subcommandError
+	if !errors.As(err, &failed) || len(s.sent) != 1 || !strings.Contains(out.String(), "daemon unreachable") {
+		t.Errorf("lookup failing: err %v, sent %+v, output %q, want the local agent messaged, the failure said and exit 1", err, s.sent, out.String())
 	}
 	s = &sender{issueErr: errors.New("daemon unreachable")}
 	err = runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "demo#zz99", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
 	if err == nil || !strings.Contains(err.Error(), "daemon unreachable") || len(s.sent) != 0 {
 		t.Errorf("lookup failing with no local target: err %v, sent %+v, want the read error", err, s.sent)
+	}
+}
+
+func TestMessageToAnAddressHoldingAnUnreadOneShowsNoControlCharacters(t *testing.T) {
+	s := &sender{answer: func(c model.SendAgentMessage) model.AgentMessageSent {
+		return model.AgentMessageSent{UID: c.UID, Held: `{}`, Unread: "\x1b[2Jhi\rthere", UnreadFrom: "da\x1bna"}
+	}}
+	var out bytes.Buffer
+	_ = runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-1", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
+	if strings.ContainsAny(out.String(), "\x1b\r") || !strings.Contains(out.String(), "from da na") || !strings.Contains(out.String(), "[2Jhi there") {
+		t.Errorf("output %q, want control characters replaced by spaces", out.String())
 	}
 }

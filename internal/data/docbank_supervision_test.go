@@ -87,7 +87,7 @@ func docbankRow(t *testing.T, g *data.Gateway) model.ConfigFile {
 func TestDocbankSupervisionRowIsOnWhenTheRuleHoldsAndTheSwitchCreatesAndRemovesTheMarker(t *testing.T) {
 	g, marker := supervisionGateway(t, supervisedKata, supervisedServer)
 	row := docbankRow(t, g)
-	if row.Path != marker || row.Status != model.ConfigMissing || row.Summary != "on: the plugin keeps Docbank running" || !row.Has(model.ConfigSwitch) {
+	if row.Path != marker || row.Status != model.ConfigMissing || !row.Supervised || row.Summary != "on: the plugin keeps Docbank running" || !row.Has(model.ConfigSwitch) {
 		t.Fatalf("row %+v", row)
 	}
 
@@ -122,8 +122,8 @@ func TestDocbankSupervisionRowGivesTheRulesReasonWhenItFails(t *testing.T) {
 	} {
 		g, _ := supervisionGateway(t, tc.kata, tc.docbank)
 		row := docbankRow(t, g)
-		if !strings.HasPrefix(row.Summary, "off: ") || !strings.Contains(row.Summary, tc.reason) {
-			t.Errorf("%s: summary %q, want off with %q", name, row.Summary, tc.reason)
+		if !strings.HasPrefix(row.Summary, "off: ") || !strings.Contains(row.Summary, tc.reason) || row.Supervised {
+			t.Errorf("%s: summary %q supervised %v, want off with %q", name, row.Summary, row.Supervised, tc.reason)
 		}
 		// Turning it on removes the marker and the row gives the reason that is left.
 		if done := runOnce(t, g, model.SetDocbankSupervision{On: true}).(model.DocbankSupervisionSet); done.Err != nil {

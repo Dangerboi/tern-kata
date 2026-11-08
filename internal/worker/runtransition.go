@@ -298,7 +298,7 @@ func (l lifecycle) abandon(j *Journal, by string, at time.Time) error {
 	}
 	beforeAdmission := j.holdClass() == holdBeforeAdmission
 	held := j.Outcome
-	j.Outcome = &Outcome{Status: cronjob.RunCancelled, Summary: fmt.Sprintf("abandoned by %s (was held: %s)", by, held.holdLine()), At: at}
+	j.Outcome = &Outcome{Status: cronjob.RunCancelled, Summary: fmt.Sprintf("abandoned by %s (was held: %s)", by, held.holdLine()), At: at, CostUSD: held.CostUSD}
 	j.Intents = nil
 	j.Phase = PhaseFinished
 	if beforeAdmission {

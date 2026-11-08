@@ -38,10 +38,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The Pane passes `--message-from <actor>` to `tern-kata agent`, which sets `TERN_KATA_MESSAGE_FROM`; the agent's first message names every such actor.
   - A message from an actor other than the agent's own needs kata's identity mode (`[auth] require_token_identity`); the Message card and `tern-kata message` say so when it is off. `tern-kata agent` checks the daemon at start and sets `TERN_KATA_VERIFIED_SENDERS=1`.
 - A team starts from the parent Issue's Agent card (`c`): a coordinator agent plus Background agents on its ready children, at most 1–8 running at once (default 2).
-  - The next ready child starts when a running one exits, from any Pane open on the host; when no child is left to start and none runs, the coordinator gets one message naming the children closed and still open.
+  - The next ready child starts when a running one exits, from any Pane open on the host under the actor that started the team; when no child is left to start and none runs, the coordinator gets one message naming the children closed and still open.
   - The parent's Agent card shows the team: each child's agent and state, the queued and skipped children with the reason, the limit and the team's state; `p` pauses or resumes the queue, and a child's card names its parent and coordinator.
   - The coordinator's prompt names its children, `tern-kata team`, `tern-kata message --re`, its authority over its own children only, the shared checkout, the events it hears and how the team ends; a child's prompt names its parent and coordinator and tells it to report and ask by comment on its own Issue.
-- A team's child takes its coordinator's messages, and its coordinator's comments on the child's Issue whatever `forward_comments` says, as the person's authority over that Issue.
+- A team's child takes its coordinator's messages, and its coordinator's comments on the child's Issue whatever `forward_comments` says, as the person's authority over that Issue only; it refuses and reports one that asks it to act outside the Issue.
 - A coordinator hears its children's comments, closes, and `work.attention` turning `needs-human` or `stuck`, from when it started, including children added later.
 - Each agent a Pane starts publishes an Agent record on its Issue, so Panes on other machines can find it.
   - A Host id, made once in tern-kata's state folder, names the machine in the record; `host` at the top level of `agent.toml` sets the name other machines show (default the machine's host name).
@@ -49,7 +49,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - An agent whose address another machine already holds publishes no record and stays local; its Agent card row says which host uses the address.
 - The Agent card lists agents running on other machines after this host's own, as "on <host> · started <time>", read from their Agent records; `f` forgets one, after a question, and clears any message left at its address.
   - The Agent badge counts them too; an Issue with only remote agents reads "agent on <host>" or "agents on N hosts".
-  - `m` and `r` reach them from their Agent card row and, for a request no local agent raised, from the Attention Page (the newest agent on that Issue with the request's name); `S` and the wrap-up include them, the wrap-up listing each as "on <host>: finished" or "on <host>: not yet". A daemon without identity mode, or an actor the agent does not list, is refused with the reason.
+  - `m` and `r` reach them from their Agent card row and, for a request no local agent raised, from the Attention Page, which picks the newest agent on that Issue with the request's name.
+  - `S` and the wrap-up include them; the wrap-up lists each as "on <host>: finished" or "on <host>: not yet".
+  - A daemon without identity mode, or an actor the agent does not list, is refused with the reason.
 
 #### Issues and Pages
 
@@ -60,7 +62,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Runs Page lists a job's skipped occurrences as one row (count, latest condition and reason, when) from this machine's worker status, narrowed by the job filter.
 - The Job card shows an adapter job's conditions read-only, or the reader's error when they do not parse.
 - `K` opens the Config Page, a Lettered Page (also in the Menu) that lists tern-kata's config files with their paths, whether each exists and loads, and a one-line summary.
-  - The rows are `lanes.toml`, `filters.toml`, `views.toml`, `seen.toml`, `worker.toml` (with its supervision), `agent.toml` (with its actor, `host`, name, command and `message_from` actors), Docbank supervision and kata's own `config.toml`, read-only; each is read by the reader its feature uses, so a file that does not load shows that reader's error on its own row.
+  - The rows are `lanes.toml`, `filters.toml`, `views.toml`, `seen.toml`, `worker.toml` (with its supervision), `agent.toml` (with its actor, `host`, name, command and `message_from` actors), Docbank supervision and kata's own `config.toml`, read-only.
+  - Each file is read by the reader its feature uses, so a file that does not load shows that reader's error on its own row.
   - `enter` on a row opens the card or Page that edits the file: the Lanes card on the Board Page, the Filter card, the Menu's Views level, the Runs Page for `seen.toml`, the Worker card on the Jobs Page, and the Daemons Page for kata's `config.toml`.
   - The Docbank supervision row says whether the plugin keeps a local Docbank running, else why not, and `s` turns supervision off or on as `tern-kata docbank supervise off|on` does.
 - `e` on the Config Page's `agent.toml` row edits the file in `$VISUAL` or `$EDITOR`, starting from a commented starter that shows every key when there is no file.

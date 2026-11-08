@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -460,5 +461,62 @@ func TestAnEmptyHostIdFileIsMadeAgain(t *testing.T) {
 	}
 	if again, err := ReadHostID(state); err != nil || again != id {
 		t.Fatalf("second read %q, %v; want %q kept", again, err, id)
+	}
+}
+
+func TestClearingAnExitedAgentOnAnIssueKataNoLongerHasClearsOnceWithNoError(t *testing.T) {
+	f := newRecordFixture(t, "")
+	cleared := as[model.AgentAddressCleared](t, run(t, f.gateway, model.ClearAgentAddress{Workspace: f.work, ProjectID: f.project.ID, UID: "01ZZZZZZZZZZZZZZZZZZZZZZZZ", Actor: "dana", Block: "31", Address: "dana/omp-31"}))
+	if cleared.Err != nil || cleared.Block != "31" {
+		t.Fatalf("cleared %+v, want no error for an Issue kata no longer has", cleared)
+	}
+}
+
+func TestPanesFindingAnEmptyHostIDFileAllEndWithOneID(t *testing.T) {
+	state := t.TempDir()
+	if err := os.WriteFile(filepath.Join(state, HostIDFile), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const panes = 8
+	ids := make([]string, panes)
+	var wg sync.WaitGroup
+	for i := range panes {
+		wg.Go(func() {
+			id, err := ReadHostID(state)
+			if err != nil {
+				t.Error(err)
+			}
+			ids[i] = id
+		})
+	}
+	wg.Wait()
+	for _, id := range ids {
+		if id == "" || id != ids[0] {
+			t.Fatalf("ids %v, want one id for every Pane", ids)
+		}
+	}
+	if again, _ := ReadHostID(state); again != ids[0] {
+		t.Fatalf("file holds %q, Panes got %q", again, ids[0])
+	}
+}
+
+func TestListingRecordsToleratesAProjectTheDaemonDoesNotKnow(t *testing.T) {
+	f := newRecordFixture(t, "")
+	unknown := t.TempDir()
+	if err := os.WriteFile(filepath.Join(unknown, ".kata.toml"), []byte("version = 1\n\n[project]\nname = \"not-on-this-daemon\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entry := model.AgentEntry{IssueUID: f.uid, IssueRef: "demo#ab12", ProjectID: f.project.ID, Block: "31"}
+	var issues map[string]issueRecordsListed
+	err := f.gateway.withDaemon(context.Background(), unknown, func(c *Client) error {
+		var err error
+		issues, err = c.listIssueRecords(context.Background(), unknown, []model.AgentEntry{entry})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("listing: %v", err)
+	}
+	if _, ok := issues[f.uid]; !ok {
+		t.Fatalf("issues %v, want the entry's Issue listed", issues)
 	}
 }

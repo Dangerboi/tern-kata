@@ -152,6 +152,28 @@ func TestSaveAgentConfigWritesThroughASymlinkedFile(t *testing.T) {
 	}
 }
 
+func TestSaveAgentConfigCreatesTheTargetOfADanglingSymlink(t *testing.T) {
+	g, dirs := setupGateway(t)
+	target := filepath.Join(t.TempDir(), "dotfiles-agent.toml")
+	link := filepath.Join(dirs.Config, AgentConfigFile)
+	if err := os.MkdirAll(dirs.Config, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	got := as[model.AgentConfigSaved](t, run(t, g, model.SaveAgentConfig{Text: "name = \"two\"\n"}))
+	if got.Err != nil {
+		t.Fatalf("save over a dangling symlink: %v", got.Err)
+	}
+	if dest, err := os.Readlink(link); err != nil || dest != target {
+		t.Errorf("link now points to %q (err %v), want %q", dest, err, target)
+	}
+	if text := readFile(t, target); text != "name = \"two\"\n" {
+		t.Errorf("target holds %q, want the new text", text)
+	}
+}
+
 func TestSaveAgentConfigRefusedTextLeavesTheFileByteForByte(t *testing.T) {
 	g, dirs := setupGateway(t)
 	path := filepath.Join(dirs.Config, AgentConfigFile)

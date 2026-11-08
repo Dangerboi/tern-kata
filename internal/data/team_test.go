@@ -561,7 +561,7 @@ func TestAnExpiredClaimWhoseAgentRunsTakesItsBlockAndIsNotStartedAgain(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
-	seedAgent(t, h.dirs, model.AgentEntry{IssueUID: h.children[0], IssueRef: "demo#c1", Block: "900", StartedAt: claimed.Add(time.Minute)})
+	seedAgent(t, h.dirs, model.AgentEntry{IssueUID: h.children[0], IssueRef: "demo#c1", Block: "900", StartedAt: claimed.Add(time.Minute), Coordinator: h.team().CoordinatorAddress})
 	got := h.drive(h.gateway)
 	team := h.team()
 	if len(got.Started) != 0 || h.runCount() != ran || len(team.Children) != 1 || team.Children[0].Block != "900" {
@@ -627,5 +627,52 @@ func TestAChildWithAnAgentOnAnotherHostIsNotStarted(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("rows %+v, want the first child as having an agent on desk", rows)
+	}
+}
+
+func TestAnExpiredClaimDoesNotTakeAnAgentAPersonStartedByHand(t *testing.T) {
+	h := newTeamHost(t, 2)
+	h.startTeam(2)
+	claimed := time.Now().Add(-10 * time.Minute).UTC().Truncate(time.Second)
+	if _, err := UpdateTeams(h.teamsFile(), func(l []model.Team) []model.Team {
+		l[0].Children = []model.TeamChild{{UID: h.children[0], Ref: "demo#c1", StartedAt: claimed}}
+		return l
+	}); err != nil {
+		t.Fatal(err)
+	}
+	seedAgent(t, h.dirs, model.AgentEntry{IssueUID: h.children[0], IssueRef: "demo#c1", Block: "901", StartedAt: claimed.Add(time.Minute)})
+	h.drive(h.gateway)
+	for _, c := range h.team().Children {
+		if c.Block == "901" {
+			t.Fatalf("team %+v adopted an agent no team started", h.team())
+		}
+	}
+}
+
+func TestAPaneOfAnotherActorRetiresATeamWhoseCoordinatorExited(t *testing.T) {
+	h := newTeamHost(t, 1)
+	coordinator := h.startTeam(1).Entry
+	got := as[model.TeamsDriven](t, run(t, h.gateway, model.DriveTeams{Workspace: h.workspace, PaneBlock: "7", Actor: "erin", BoundProjectID: h.project.ID, Exited: []string{coordinator.Block}}))
+	if got.Err != nil || len(got.Started) != 0 {
+		t.Fatalf("driven %+v", got)
+	}
+	if teams, err := ReadTeams(h.teamsFile()); err != nil || len(teams) != 0 {
+		t.Fatalf("teams.json %+v, %v: a Pane of another actor must retire the team", teams, err)
+	}
+}
+
+func TestATeamWithAChildHeldByAnotherHostDoesNotEnd(t *testing.T) {
+	h := newTeamHost(t, 1)
+	h.startTeam(2)
+	record := model.AgentRecord{Address: "dana/omp-9", Host: "desk", HostID: "feed0001", Block: "9", Name: "omp", Actor: "dana", MessageFrom: []string{}}
+	if _, err := h.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: h.project.ID, Ref: h.children[0]},
+		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{model.AgentRecordKey(record.HostID, record.Block): record}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h.drive(h.gateway)
+	if team := h.team(); team.State != model.TeamRunning {
+		t.Fatalf("team %+v, want it running while a child waits on another host's agent", team)
 	}
 }

@@ -518,7 +518,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	}
 	entry := model.AgentEntry{IssueUID: cmd.IssueUID, IssueRef: cmd.IssueRef, ProjectID: cmd.ProjectID, Block: block, StartedAt: g.now().UTC().Truncate(time.Second),
 		Teammate: settings.Name, PromptFile: promptFile, PaneBlock: cmd.PaneBlock, Placement: cmd.Placement, Background: cmd.Placement == model.AgentBackground,
-		NoAddress: noAddress, Actor: cmd.Actor}
+		NoAddress: noAddress, Actor: cmd.Actor, Coordinator: cmd.Coordinator}
 	if messaging.AddressPrefix != "" {
 		entry.Address = AgentAddress(messaging.AddressPrefix, block)
 		entry.MessageFrom = strings.Join(messaging.MessageFrom, ",")

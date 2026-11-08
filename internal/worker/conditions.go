@@ -110,31 +110,36 @@ func (f *fileSkips) Add(s Skip) error {
 
 // trim keeps the newest maxSkipsPerJob records of the job; each record dropped is counted in the next oldest one.
 func (f *fileSkips) trim(jobUID string) {
-	var idx []int
-	for i, o := range f.skips {
+	n := 0
+	for _, o := range f.skips {
 		if o.JobUID == jobUID {
-			idx = append(idx, i)
+			n++
 		}
 	}
-	extra := len(idx) - maxSkipsPerJob
+	extra := n - maxSkipsPerJob
 	if extra <= 0 {
 		return
 	}
-	f.skips[idx[extra]].Merged += extra
-	for _, i := range idx[:extra] {
-		f.skips[idx[extra]].Merged += f.skips[i].Merged
-	}
-	drop := map[int]bool{}
-	for _, i := range idx[:extra] {
-		drop[i] = true
-	}
-	kept := f.skips[:0]
-	for i, o := range f.skips {
-		if !drop[i] {
-			kept = append(kept, o)
+	seen, merged := 0, 0
+	for i := range f.skips {
+		o := &f.skips[i]
+		if o.JobUID != jobUID {
+			continue
+		}
+		if seen++; seen <= extra {
+			merged += 1 + o.Merged
+		} else if seen == extra+1 {
+			o.Merged += merged
 		}
 	}
-	f.skips = kept
+	seen = 0
+	f.skips = slices.DeleteFunc(f.skips, func(o Skip) bool {
+		if o.JobUID != jobUID {
+			return false
+		}
+		seen++
+		return seen <= extra
+	})
 }
 
 func (f *fileSkips) Recent(now time.Time) []Skip {
@@ -254,7 +259,7 @@ func (s *projectSchedule) gate(ctx context.Context, st *jobSchedule, jobUID stri
 		}
 		if n >= l.max {
 			reason := fmt.Sprintf("limit of %d %s per %s reached: %d started since %s", l.max, plural(l.max, "run", "runs"), l.per, n, from.Format("2006-01-02 15:04 MST"))
-			return &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: l.condition, Reason: reason, At: now.UTC()}, ""
+			return st.newSkip(jobUID, at, l.condition, reason, now), ""
 		}
 	}
 	if skip, blocked := s.gateSpend(st, jobUID, at, now); skip != nil || blocked != "" {
@@ -266,10 +271,15 @@ func (s *projectSchedule) gate(ctx context.Context, st *jobSchedule, jobUID stri
 			return nil, fmt.Sprintf("its new commits cannot be checked: %s", why)
 		}
 		if reason != "" {
-			return &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: cronjob.ConditionNewCommits, Reason: reason, At: now.UTC()}, ""
+			return st.newSkip(jobUID, at, cronjob.ConditionNewCommits, reason, now), ""
 		}
 	}
 	return nil, ""
+}
+
+// newSkip is the record of the job's occurrence at being skipped by condition, stamped now.
+func (st *jobSchedule) newSkip(jobUID string, at time.Time, condition, reason string, now time.Time) *Skip {
+	return &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: condition, Reason: reason, At: now.UTC()}
 }
 
 // RunSpend is what one run journal says a run spent: when it was prepared and the cost omp reported, nil when it
@@ -360,7 +370,7 @@ func (s *projectSchedule) gateSpend(st *jobSchedule, jobUID string, at, now time
 		if note := partialNote(w.Unreported); note != "" {
 			reason += " (" + note + ")"
 		}
-		return &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: condition, Reason: reason, At: now.UTC()}, ""
+		return st.newSkip(jobUID, at, condition, reason, now), ""
 	}
 	return nil, ""
 }
@@ -385,9 +395,7 @@ type SpendWindow struct {
 // jobSpends is the spend of every job that has a spend limit, jobs by name. A job whose runs cannot be read is left
 // out: the gate blocks it with the reason.
 func (s *projectSchedule) jobSpends(now time.Time) []JobSpend {
-	if s.runsChanged != nil {
-		s.runsChanged()
-	}
+	s.runsChanged()
 	if s.runSpend == nil {
 		return nil
 	}
@@ -411,9 +419,9 @@ func (s *projectSchedule) jobSpends(now time.Time) []JobSpend {
 }
 
 // runLedger reads the Project's run journals once and serves every run-count and spend question from that read until
-// reset, so a tick with many limited jobs scans the journals once rather than once per job and per question.
+// reset, so a tick with many limited jobs scans the journals once per admission pass and after each admit rather than once per job and per question.
 type runLedger struct {
-	w          *Worker
+	scan       func() ([]*Journal, []string, error)
 	projectUID string
 	mu         sync.Mutex
 	loaded     bool
@@ -431,7 +439,7 @@ func (l *runLedger) read() ([]*Journal, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !l.loaded {
-		l.journals, _, l.err = l.w.store.Scan()
+		l.journals, _, l.err = l.scan()
 		l.loaded = true
 	}
 	return l.journals, l.err
@@ -489,10 +497,10 @@ func (w *Worker) journalExists(runUID string) (bool, error) {
 // checked, or a skip that cannot be recorded, leaves the occurrence pending and marks the job blocked; the message is
 // logged once until it changes, as a refusal is.
 func (s *projectSchedule) applyGate(ctx context.Context, jobUID string, st *jobSchedule, at time.Time) bool {
-	if s.runsChanged != nil {
-		s.runsChanged() // the previous occurrence may have created a run journal
-	}
 	skip, why := s.gate(ctx, st, jobUID, at)
+	if ctx.Err() != nil { // shutting down: whatever the gate could not check is no reason to block the job
+		return false
+	}
 	if skip != nil {
 		if err := s.skips.Add(*skip); err != nil {
 			why = fmt.Sprintf("the skip of %s cannot be recorded: %v", OccurrenceKey(at), err)
@@ -517,17 +525,17 @@ func (s *projectSchedule) applyGate(ctx context.Context, jobUID string, st *jobS
 		st.lastSkip = ""
 		return true
 	}
-	s.settleSkip(jobUID, st, at, skip)
+	s.settleSkip(jobUID, st, at, skip, skip.Condition+"\x00"+skip.Reason)
 	return false
 }
 
 // settleSkip settles an occurrence whose skip record is saved: it leaves the pending list like an admitted one, and the
-// skip is logged unless it repeats the job's previous one.
-func (s *projectSchedule) settleSkip(jobUID string, st *jobSchedule, at time.Time, skip *Skip) {
+// skip is logged unless its key repeats the job's previous one.
+func (s *projectSchedule) settleSkip(jobUID string, st *jobSchedule, at time.Time, skip *Skip, key string) {
 	st.pending = slices.DeleteFunc(st.pending, func(t time.Time) bool { return t.Equal(at) })
 	st.lastErr, st.waiting, st.wakeAt, st.parked = "", "", time.Time{}, nil
 	s.save(jobUID, st)
-	if key := skip.Condition + "\x00" + skip.Reason; key != st.lastSkip {
+	if key != st.lastSkip {
 		st.lastSkip = key
 		s.log("job %q: occurrence %s skipped: %s", st.name, OccurrenceKey(at), skip.Reason)
 	}
@@ -537,12 +545,11 @@ func (s *projectSchedule) settleSkip(jobUID string, st *jobSchedule, at time.Tim
 // took, so catch-up does not send several runs over one range. false means the skip could not be recorded and the
 // occurrence stays pending.
 func (s *projectSchedule) skipForClaimedCommits(jobUID string, st *jobSchedule, at, claimedBy time.Time) bool {
-	skip := &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: cronjob.ConditionNewCommits,
-		Reason: fmt.Sprintf("the new commits went to the run of %s", OccurrenceKey(claimedBy)), At: s.now().UTC()}
+	skip := st.newSkip(jobUID, at, cronjob.ConditionNewCommits, fmt.Sprintf("the new commits went to the run of %s", OccurrenceKey(claimedBy)), s.now())
 	if err := s.skips.Add(*skip); err != nil {
 		st.blockedBy = fmt.Sprintf("the skip of %s cannot be recorded: %v", OccurrenceKey(at), err)
 		return false
 	}
-	s.settleSkip(jobUID, st, at, skip)
+	s.settleSkip(jobUID, st, at, skip, cronjob.ConditionNewCommits+"\x00claimed") // the reason names the claimant, which differs per pass
 	return true
 }

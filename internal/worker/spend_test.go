@@ -246,7 +246,7 @@ func TestSpendIsCountedFromRunJournalsSurvivesARestartAndDropsWithTheirRetention
 	add("01M5JESXAK1NBYS6N2ZD9RTM0F", "J", day.Add(time.Hour), done(day.Add(time.Hour), nil), func(j *Journal) { j.Notify = &NotifySpec{Recipient: "x"} })
 
 	w := &Worker{store: NewStore(dirs, Hooks{})} // a restarted worker reads the same files
-	led := &runLedger{w: w, projectUID: "P"}
+	led := &runLedger{scan: w.store.Scan, projectUID: "P"}
 	runs, err := led.runSpend("J")
 	if err != nil || len(runs) != 4 {
 		t.Fatalf("runs %+v, %v; want the job's four runs, not the other job's or the notify run", runs, err)
@@ -285,7 +285,7 @@ func TestASpendCountIncludesTheCostCarriedByAResumedRunStillGoingAndNotTwiceOnce
 			t.Fatal(err)
 		}
 	}
-	led := &runLedger{w: &Worker{store: store}, projectUID: "P"}
+	led := &runLedger{scan: store.Scan, projectUID: "P"}
 	runs, err := led.runSpend("J")
 	if err != nil || len(runs) != 3 {
 		t.Fatalf("runs %+v, %v", runs, err)
@@ -310,7 +310,7 @@ func TestAHeldRunCountsItsCostAndAResumeDoesNotCountItTwice(t *testing.T) {
 		t.Fatal(err)
 	}
 	spent := func() float64 {
-		runs, err := (&runLedger{w: w, projectUID: "P"}).runSpend("J")
+		runs, err := (&runLedger{scan: w.store.Scan, projectUID: "P"}).runSpend("J")
 		if err != nil || len(runs) != 1 {
 			t.Fatalf("runs %+v, %v", runs, err)
 		}
@@ -345,5 +345,34 @@ func TestAHeldRunCountsItsCostAndAResumeDoesNotCountItTwice(t *testing.T) {
 	}
 	if got := spent(); got < 2.19 || got > 2.21 {
 		t.Fatalf("settled run counts %v, want 2.2", got)
+	}
+}
+
+func TestAbandoningAHeldRunKeepsItsCost(t *testing.T) {
+	day := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	store := NewStore(Dirs{Config: t.TempDir(), State: t.TempDir()}, Hooks{})
+	w := &Worker{store: store, clock: fixedClock{day.Add(2 * time.Hour)}}
+	j := &Journal{Version: 1, RunUID: "01M5JESXAK1NBYS6N2ZD9RTM0A", ProjectUID: "P", JobUID: "J", StartedAt: day.Add(time.Hour), Phase: PhaseStarted,
+		Result: &AgentResult{CostUSD: usd(1.9)}}
+	if err := store.Create(j, "prepared"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.hold(j, HoldInterrupted, "why"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Update(j.RunUID, "settled", func(j *Journal) error { j.Phase = PhaseSettled; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Update(j.RunUID, "abandoned", func(j *Journal) error {
+		return lifeWith(GroupGone, true, false).abandon(j, "ann", day.Add(3*time.Hour))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := (&runLedger{scan: store.Scan, projectUID: "P"}).runSpend("J")
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("runs %+v, %v", runs, err)
+	}
+	if spent, _ := spentSince(runs, day); spent != 1.9 {
+		t.Fatalf("abandoned run counts %v, want the 1.9 it cost", spent)
 	}
 }

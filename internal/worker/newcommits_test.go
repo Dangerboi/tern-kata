@@ -2,11 +2,13 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -277,6 +279,15 @@ func TestCatchupAllGivesTheNewCommitsToOneOccurrenceAndSkipsTheRest(t *testing.T
 	if r.journals.created != 1 || len(r.skips.records) != 2 || s.anyPending() {
 		t.Fatalf("%d runs, %d skips, pending %v; want one run and two skips", r.journals.created, len(r.skips.records), s.anyPending())
 	}
+	skipLogs := 0
+	for _, l := range r.logs {
+		if strings.Contains(l, "skipped") {
+			skipLogs++
+		}
+	}
+	if skipLogs != 1 {
+		t.Fatalf("%d skip log lines, want the repeated claimed-commits skip said once: %q", skipLogs, r.logs)
+	}
 	want := "the new commits went to the run of " + OccurrenceKey(created.Add(time.Hour))
 	for _, rec := range r.skips.records {
 		if rec.Condition != cronjob.ConditionNewCommits || rec.Reason != want {
@@ -319,5 +330,56 @@ func TestACancelledContextMakesTheCommitCheckFailAtOnce(t *testing.T) {
 	start := time.Now()
 	if _, err := headCommit(ctx, dir); err == nil || time.Since(start) > 5*time.Second {
 		t.Fatalf("err %v after %s; want a prompt failure", err, time.Since(start))
+	}
+}
+
+func TestAHungCheckoutIsNotStatedAgainWhileTheFirstStatIsStuck(t *testing.T) {
+	release := make(chan struct{})
+	var calls atomic.Int32
+	old := statDir
+	statDir = func(string) (os.FileInfo, error) { calls.Add(1); <-release; return nil, errors.New("gone") }
+	defer func() { statDir = old }()
+	dir := "/hung/checkout"
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := headCommit(ctx, dir); err == nil || !strings.Contains(err.Error(), "could not be read") {
+		t.Fatalf("first check: %v", err)
+	}
+	if _, err := headCommit(context.Background(), dir); err == nil || !strings.Contains(err.Error(), "the previous check of the checkout has not returned") {
+		t.Fatalf("second check: %v", err)
+	}
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("%d stats started, want 1", n)
+	}
+	close(release)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, busy := statsInFlight.Load(dir); !busy {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the stat never cleared its mark")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestAGateCancelledByShutdownLeavesTheJobUnblockedAndLogsNothing(t *testing.T) {
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	job := limitedJob(created, "skip", map[string]any{"new_commits": true})
+	job.Definition.CheckoutKey = "repo"
+	r := newConditionRig(created)
+	s := r.schedule()
+	ctx, cancel := context.WithCancel(context.Background())
+	s.checkCommits = func(context.Context, string, string, []string) (string, string) {
+		cancel()
+		return "", "git was cancelled"
+	}
+	r.plannedAt(s, []cronjob.Job{job}, created, created.Add(time.Hour))
+	logged := len(r.logs)
+	s.admitDue(ctx)
+	st := s.jobs[job.UID]
+	if st.blockedBy != "" || st.gateErr != "" || len(r.logs) != logged || !s.anyPending() {
+		t.Fatalf("blockedBy %q, gateErr %q, logs %q, pending %v; want nothing blocked or logged", st.blockedBy, st.gateErr, r.logs[logged:], s.anyPending())
 	}
 }

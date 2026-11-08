@@ -160,6 +160,12 @@ func (g *Gateway) saveAgentConfig(cmd model.SaveAgentConfig) model.AgentConfigSa
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		done.Err = err
 		return done
+	} else if dest, linkErr := os.Readlink(path); linkErr == nil {
+		// A dangling link: the target is created where the link points.
+		if !filepath.IsAbs(dest) {
+			dest = filepath.Join(filepath.Dir(path), dest)
+		}
+		path = dest
 	}
 	token, err := guardedfile.Read(path)
 	if err != nil {

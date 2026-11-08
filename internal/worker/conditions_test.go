@@ -63,7 +63,8 @@ func (r *conditionRig) schedule() *projectSchedule {
 			}
 			return r.starts[jobUID], nil
 		},
-		now: func() time.Time { return r.now },
+		runsChanged: func() {},
+		now:         func() time.Time { return r.now },
 	}
 }
 

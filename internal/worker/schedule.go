@@ -277,7 +277,7 @@ type projectSchedule struct {
 	// runSpend is what the job's run journals spent, for the spend conditions.
 	runSpend func(jobUID string) ([]RunSpend, error)
 	// runsChanged drops what runStarts and runSpend have read, so the next question scans the journals again; the
-	// schedule calls it once per gate evaluation and per summary. nil when the seams read afresh every time.
+	// schedule calls it at the start of each admission pass, after each admit and per summary. A schedule built without ledger seams sets a no-op.
 	runsChanged func()
 	now         func() time.Time
 	// checkCommits is the New commits check (skip: why nothing is new, blocked: why it cannot be told); nil for a
@@ -296,7 +296,7 @@ func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
 	log := func(format string, args ...any) {
 		w.opt.Log("Project %s: "+format, append([]any{name}, args...)...)
 	}
-	ledger := &runLedger{w: w, projectUID: ps.project.UID}
+	ledger := &runLedger{scan: w.store.Scan, projectUID: ps.project.UID}
 	return &projectSchedule{
 		store: fileCheckpoints{dir: filepath.Join(w.opt.Dirs.ProjectDir(ps.project.UID), "schedule"), log: log},
 		admit: func(ctx context.Context, jobUID string, at time.Time) (string, bool, error) {
@@ -747,6 +747,7 @@ func (s *projectSchedule) admitDue(ctx context.Context) {
 	for _, st := range s.jobs {
 		st.blockedBy = ""
 	}
+	s.runsChanged() // journals may have changed since the last pass; the ledger rescans after each admit below
 	for _, d := range queue {
 		st := s.jobs[d.job]
 		if blocked[d.job] || ctx.Err() != nil || s.stopped() {
@@ -765,6 +766,7 @@ func (s *projectSchedule) admitDue(ctx context.Context) {
 			}
 		}
 		_, _, err := s.admit(ctx, d.job, d.at)
+		s.runsChanged() // the admit may have created a run journal
 		if err == nil {
 			st.pending = slices.DeleteFunc(st.pending, func(t time.Time) bool { return t.Equal(d.at) })
 			st.lastErr, st.waiting, st.wakeAt, st.parked = "", "", time.Time{}, nil

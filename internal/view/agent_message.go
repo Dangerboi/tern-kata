@@ -33,12 +33,12 @@ func agentMessageLayer(m model.Model) tern.Element {
 	var children []tern.Element
 	var buttons []tern.Element
 	if m.AgentMessageMode() == model.ModeAgentMessageReplace {
-		unread := f.Unread
+		unread := model.PlainText(f.Unread)
 		if unread == "" {
 			unread = "(a value that does not read as a message)"
 		}
 		children = []tern.Element{
-			ui.Text{Common: ui.Common{Key: "held"}, Text: heldText(f.HeldFrom)},
+			ui.Text{Common: ui.Common{Key: "held"}, Text: heldText(f.UnreadFrom)},
 			toneText("unread", ui.ToneMuted, unread),
 		}
 		buttons = []tern.Element{cardButton("replace", model.ModeAgentMessageReplace, model.AgentMessageReplace, "Replace it", true), cardButton("keep", model.ModeAgentMessageReplace, model.AgentMessageKeep, "Keep editing", false)}
@@ -136,7 +136,7 @@ func skippedAndClose(m model.Model, children []tern.Element, withClose bool) []t
 func heldText(from string) string {
 	by := ""
 	if from != "" {
-		by = ", written by " + from + ","
+		by = ", written by " + model.PlainText(from) + ","
 	}
 	return "The agent has not cleared its last message" + by + " and kata keeps one per Issue. Replace it?"
 }

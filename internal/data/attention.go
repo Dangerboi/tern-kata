@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"slices"
 	"time"
 
+	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -178,9 +180,12 @@ func (c *Client) ClearAgentAddress(ctx context.Context, cmd model.ClearAgentAddr
 }
 
 // readSlot reads the raw value under key on an Issue from the body as sent, so a guard holds the value kata stores, not a
-// re-encoding of a decoded one; held is false when the Issue has no such key.
+// re-encoding of a decoded one; held is false when the Issue has no such key or kata has no such Issue.
 func (c *Client) readSlot(ctx context.Context, projectID int64, uid, key string) (raw string, held bool, err error) {
 	r, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: uid}})
+	if client.StatusCode(err) == http.StatusNotFound {
+		return "", false, nil
+	}
 	if err != nil {
 		return "", false, daemonError(err)
 	}
