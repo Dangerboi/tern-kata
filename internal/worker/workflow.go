@@ -507,7 +507,7 @@ func workflowExpiry(plan *WorkflowPlan, now time.Time, timeout time.Duration) ti
 func sumStepCost(steps []StepRecord) *float64 {
 	var sum *float64
 	for _, r := range steps {
-		sum = addCost(sum, r.CostUSD)
+		sum = addPtr(sum, r.CostUSD)
 	}
 	return sum
 }

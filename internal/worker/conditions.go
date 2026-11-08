@@ -417,7 +417,7 @@ func (l *runLedger) runSpend(jobUID string) ([]RunSpend, error) {
 		if j.Outcome != nil { // an outcome already holds the carried cost (withCarried)
 			r.CostUSD = j.Outcome.CostUSD
 		} else {
-			r.CostUSD = addCost(j.CarriedCost, sumStepCost(j.Steps)) // a run still going: its resumed attempts' cost and its finished steps'
+			r.CostUSD = addPtr(j.CarriedCost, sumStepCost(j.Steps)) // a run still going: its resumed attempts' cost and its finished steps'
 		}
 		runs = append(runs, r)
 	}

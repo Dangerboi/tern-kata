@@ -163,7 +163,7 @@ func (w *Worker) hold(j *Journal, reason, detail string) error {
 		}
 		// What the run has cost so far, so a spend limit counts a held run: resumed attempts, concluded steps and the
 		// held attempt. A resume moves the held attempt into CarriedCost, so the sum stays the same.
-		j.Outcome.CostUSD = addCost(sumStepCost(j.Steps), addCost(j.CarriedCost, w.heldCost(j)))
+		j.Outcome.CostUSD = addPtr(sumStepCost(j.Steps), addPtr(j.CarriedCost, w.heldCost(j)))
 		return nil
 	})
 }

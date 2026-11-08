@@ -153,25 +153,12 @@ type CancelRecord struct {
 	At time.Time `json:"at"`
 }
 
-func addTokens(a, b *int64) *int64 {
+// addPtr sums two optional counts: nil only when both are nil, else a new value.
+func addPtr[T int64 | float64](a, b *T) *T {
 	if a == nil && b == nil {
 		return nil
 	}
-	var sum int64
-	if a != nil {
-		sum += *a
-	}
-	if b != nil {
-		sum += *b
-	}
-	return &sum
-}
-
-func addCost(a, b *float64) *float64 {
-	if a == nil && b == nil {
-		return nil
-	}
-	var sum float64
+	var sum T
 	if a != nil {
 		sum += *a
 	}
@@ -182,8 +169,8 @@ func addCost(a, b *float64) *float64 {
 }
 
 func (j *Journal) withCarried(o *Outcome) *Outcome {
-	o.InputTokens, o.OutputTokens = addTokens(j.CarriedInput, o.InputTokens), addTokens(j.CarriedOutput, o.OutputTokens)
-	o.CostUSD = addCost(j.CarriedCost, o.CostUSD)
+	o.InputTokens, o.OutputTokens = addPtr(j.CarriedInput, o.InputTokens), addPtr(j.CarriedOutput, o.OutputTokens)
+	o.CostUSD = addPtr(j.CarriedCost, o.CostUSD)
 	return o
 }
 

@@ -208,8 +208,8 @@ func (j *Journal) skipUnfinished(from int) {
 }
 
 func (r *StepRecord) addUsage(o *Outcome) {
-	r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, o.InputTokens), addTokens(r.OutputTokens, o.OutputTokens)
-	r.CostUSD = addCost(r.CostUSD, o.CostUSD)
+	r.InputTokens, r.OutputTokens = addPtr(r.InputTokens, o.InputTokens), addPtr(r.OutputTokens, o.OutputTokens)
+	r.CostUSD = addPtr(r.CostUSD, o.CostUSD)
 }
 
 func (o *Outcome) sumSteps(steps []StepRecord) {
@@ -266,8 +266,8 @@ func (l lifecycle) acceptResume(j *Journal, t resumeTerms) error {
 		return fmt.Errorf("run %s cannot be resumed: %s", j.RunUID, reason)
 	}
 	in, out := t.Tokens(j)
-	j.CarriedInput, j.CarriedOutput = addTokens(j.CarriedInput, in), addTokens(j.CarriedOutput, out)
-	j.CarriedCost = addCost(j.CarriedCost, t.Cost(j))
+	j.CarriedInput, j.CarriedOutput = addPtr(j.CarriedInput, in), addPtr(j.CarriedOutput, out)
+	j.CarriedCost = addPtr(j.CarriedCost, t.Cost(j))
 	j.Attempt = j.attempt() + 1
 	j.Resume = &ResumeRecord{Attempt: j.Attempt, SessionID: t.SessionID(j), By: t.By, At: t.At, Hold: j.Outcome.Hold, Detail: j.Outcome.holdDetail()}
 	j.Generation = t.Generation
