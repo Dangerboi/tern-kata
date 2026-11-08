@@ -522,3 +522,70 @@ func TestPausingRefusesAStoppingEndingOrMissingTeamAndLeavesTheFileAsItIs(t *tes
 		t.Errorf("a missing team: %+v", got)
 	}
 }
+
+func TestAFailingChildStartIsNotRetriedBeforeItsClaimExpires(t *testing.T) {
+	h := newTeamHost(t, 1)
+	h.startTeam(2)
+	ran := h.runCount()
+	h.gateway.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if args[0] == "ls" {
+			return []byte(lsWithoutAgents), nil
+		}
+		h.mu.Lock()
+		h.runs = append(h.runs, args)
+		h.mu.Unlock()
+		return []byte("tern: refused\n"), os.ErrInvalid
+	}
+	first := h.drive(h.gateway)
+	if len(first.Failures) != 1 || len(first.Started) != 0 || h.runCount() != ran+1 {
+		t.Fatalf("first drive: %+v after %d runs", first, h.runCount())
+	}
+	if again := h.drive(h.gateway); len(again.Failures) != 0 || h.runCount() != ran+1 {
+		t.Fatalf("a failed start was retried: %+v after %d runs", again, h.runCount())
+	}
+	if team := h.team(); len(team.Children) != 1 || team.Children[0].Block != "" {
+		t.Fatalf("team %+v, want the claim kept", team)
+	}
+}
+
+func TestAnExpiredClaimWhoseAgentRunsTakesItsBlockAndIsNotStartedAgain(t *testing.T) {
+	h := newTeamHost(t, 1)
+	h.startTeam(2)
+	ran := h.runCount()
+	claimed := time.Now().Add(-10 * time.Minute).UTC().Truncate(time.Second)
+	if _, err := UpdateTeams(h.teamsFile(), func(l []model.Team) []model.Team {
+		l[0].Children = []model.TeamChild{{UID: h.children[0], Ref: "demo#c1", StartedAt: claimed}}
+		return l
+	}); err != nil {
+		t.Fatal(err)
+	}
+	seedAgent(t, h.dirs, model.AgentEntry{IssueUID: h.children[0], IssueRef: "demo#c1", Block: "900", StartedAt: claimed.Add(time.Minute)})
+	got := h.drive(h.gateway)
+	team := h.team()
+	if len(got.Started) != 0 || h.runCount() != ran || len(team.Children) != 1 || team.Children[0].Block != "900" {
+		t.Fatalf("started %+v after %d runs, team %+v", got.Started, h.runCount(), team)
+	}
+}
+
+func TestAPaneOfAnotherActorDoesNotDriveATeam(t *testing.T) {
+	h := newTeamHost(t, 1)
+	h.startTeam(1)
+	if team := h.team(); team.Actor != "dana" {
+		t.Fatalf("team %+v, want the starting Pane's actor", team)
+	}
+	other := as[model.TeamsDriven](t, run(t, h.gateway, model.DriveTeams{Workspace: h.workspace, PaneBlock: "7", Actor: "erin", BoundProjectID: h.project.ID}))
+	if len(other.Started) != 0 || h.runCount() != 1 {
+		t.Fatalf("another actor started %+v", other.Started)
+	}
+	if own := h.drive(h.gateway); len(own.Started) != 1 {
+		t.Fatalf("the team's actor started %+v", own.Started)
+	}
+	// A record written before the actor was kept is driven by any Pane.
+	if _, err := UpdateTeams(h.teamsFile(), func(l []model.Team) []model.Team { l[0].Actor = ""; return l }); err != nil {
+		t.Fatal(err)
+	}
+	h.close(h.children[0])
+	if legacy := as[model.TeamsDriven](t, run(t, h.gateway, model.DriveTeams{Workspace: h.workspace, PaneBlock: "7", Actor: "erin", BoundProjectID: h.project.ID})); legacy.Err != nil {
+		t.Fatal(legacy.Err)
+	}
+}

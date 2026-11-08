@@ -63,7 +63,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The rows are `lanes.toml`, `filters.toml`, `views.toml`, `seen.toml`, `worker.toml` (with its supervision), `agent.toml` (with its actor, `host`, name, command and `message_from` actors), Docbank supervision and kata's own `config.toml`, read-only; each is read by the reader its feature uses, so a file that does not load shows that reader's error on its own row.
   - `enter` on a row opens the card or Page that edits the file: the Lanes card on the Board Page, the Filter card, the Menu's Views level, the Runs Page for `seen.toml`, the Worker card on the Jobs Page, and the Daemons Page for kata's `config.toml`.
   - The Docbank supervision row says whether the plugin keeps a local Docbank running, else why not, and `s` turns supervision off or on as `tern-kata docbank supervise off|on` does.
-  - `e` on the `agent.toml` row edits it in `$VISUAL` or `$EDITOR`, starting from a commented starter that shows every key when there is no file; the text is checked with the rules an agent start uses and written only if it loads and the file did not change while you edited.
+- `e` on the Config Page's `agent.toml` row edits the file in `$VISUAL` or `$EDITOR`, starting from a commented starter that shows every key when there is no file.
+  - The text is checked with the rules an agent start uses, and written only if it loads and the file did not change while you edited.
 
 #### Jobs and worker
 
@@ -93,7 +94,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `tern-kata agent` takes `--coordinator <address>` and `--coordinating` (with `--address-prefix`), which set `TERN_KATA_COORDINATOR` and `TERN_KATA_COORDINATING=1` for the agent.
 - `tern-kata team <ref>` prints a team's state, limit, coordinator address and each child's ref, state and address; with no team on the Issue it says so and exits 1.
 - `tern-kata message --re <comment>` asks the receiving agent to answer that comment, as `m` on the Comments tab does; its typed reply clears the request.
-- `tern-kata agents` lists agents started on other machines too, read from their Agent records, in a new `HOST` column between `AGENT` and `STATE`; `tern-kata message` reaches them by address or ref when kata's identity mode is on and the sender is the agent's actor or in its `message_from`.
+- `tern-kata agents` lists agents started on other machines too, read from their Agent records, with their host in a new `HOST` column between `AGENT` and `STATE`.
+  - `tern-kata message` reaches them by address or ref when kata's identity mode is on and the sender is the agent's actor or in its `message_from`.
 
 ### Changed
 
@@ -102,9 +104,6 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `m` on the Attention Page messages the agent this actor started and passes over another actor's agent with the same name on the Issue.
   - Released 0.9.0 sent the message to the newest agent of that name, whose extension dropped it when another actor had started it.
 - The kata skill is written against kata v0.22 and tells agents that `kata cron job edit` and `kata cron workflow edit` need a terminal, so they change a definition with `update --file`.
-- The agent's extension delivers a message only when the event that wrote it was by the actor in the message's `from`.
-  - A `kata meta set notify.*` forgery by another actor is no longer delivered.
-  - The read at start, and after a gap the stream cannot resume, delivers only the agent's own actor's messages.
 
 #### Issues and Pages
 
@@ -113,6 +112,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - An account whose credential is limited to one Issue is no longer offered `X` (the Delete card) or the Menu's "Restore a deleted Issue", both of which kata refuses to it; the Pane asks the daemon's auth capabilities when it connects and after a daemon switch, and offers both until the answer is in.
 
 ### Fixed
+
+#### Agents
+
+- An agent's extension no longer delivers a message written with `kata meta set notify.*` by another actor under its `from`: a message counts only when the event that wrote it was by the actor in its `from`.
+  - The read at start, and after a gap the stream cannot resume, delivers only the agent's own actor's messages.
 
 #### Issues and Pages
 

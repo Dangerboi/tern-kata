@@ -246,7 +246,8 @@ func TestSpendIsCountedFromRunJournalsSurvivesARestartAndDropsWithTheirRetention
 	add("01M5JESXAK1NBYS6N2ZD9RTM0F", "J", day.Add(time.Hour), done(day.Add(time.Hour), nil), func(j *Journal) { j.Notify = &NotifySpec{Recipient: "x"} })
 
 	w := &Worker{store: NewStore(dirs, Hooks{})} // a restarted worker reads the same files
-	runs, err := w.runSpend("P", "J")
+	led := &runLedger{w: w, projectUID: "P"}
+	runs, err := led.runSpend("J")
 	if err != nil || len(runs) != 4 {
 		t.Fatalf("runs %+v, %v; want the job's four runs, not the other job's or the notify run", runs, err)
 	}
@@ -260,7 +261,8 @@ func TestSpendIsCountedFromRunJournalsSurvivesARestartAndDropsWithTheirRetention
 	if err != nil || len(removed) != 4 {
 		t.Fatalf("removed %v, %v", removed, err)
 	}
-	runs, err = w.runSpend("P", "J")
+	led.reset()
+	runs, err = led.runSpend("J")
 	if err != nil || len(runs) != 2 {
 		t.Fatalf("runs %+v, %v; want the two that remain", runs, err)
 	}

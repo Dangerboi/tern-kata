@@ -192,6 +192,8 @@ type jobSchedule struct {
 	zone              *time.Location
 	checkoutKey       string
 	blockedBy         string
+	// lastSkip is the condition and reason of the job's previous skip, so a repeated skip is logged once.
+	lastSkip string
 }
 
 // checkpoint is projects/<uid>/schedule/<job uid>.json (ADR-0006): everything decided through a time and the
@@ -271,7 +273,10 @@ type projectSchedule struct {
 	runStarts     func(jobUID string) ([]time.Time, error)
 	// runSpend is what the job's run journals spent, for the spend conditions.
 	runSpend func(jobUID string) ([]RunSpend, error)
-	now      func() time.Time
+	// runsChanged drops what runStarts and runSpend have read, so the next question scans the journals again; the
+	// schedule calls it once per gate evaluation and per summary. nil when the seams read afresh every time.
+	runsChanged func()
+	now         func() time.Time
 	// checkCommits is the New commits check (skip: why nothing is new, blocked: why it cannot be told); nil for a
 	// schedule built without it.
 	checkCommits func(jobUID, checkoutKey string, folders []string) (skip, blocked string)
@@ -288,6 +293,7 @@ func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
 	log := func(format string, args ...any) {
 		w.opt.Log("Project %s: "+format, append([]any{name}, args...)...)
 	}
+	ledger := &runLedger{w: w, projectUID: ps.project.UID}
 	return &projectSchedule{
 		store: fileCheckpoints{dir: filepath.Join(w.opt.Dirs.ProjectDir(ps.project.UID), "schedule"), log: log},
 		admit: func(ctx context.Context, jobUID string, at time.Time) (string, bool, error) {
@@ -300,8 +306,9 @@ func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
 		paused:        map[string]bool{},
 		skips:         &fileSkips{path: w.opt.Dirs.Skips(ps.project.UID), log: log},
 		journalExists: w.journalExists,
-		runStarts:     func(jobUID string) ([]time.Time, error) { return w.runStarts(ps.project.UID, jobUID) },
-		runSpend:      func(jobUID string) ([]RunSpend, error) { return w.runSpend(ps.project.UID, jobUID) },
+		runStarts:     ledger.runStarts,
+		runSpend:      ledger.runSpend,
+		runsChanged:   ledger.reset,
 		now:           w.clock.Now,
 		checkCommits: func(jobUID, checkoutKey string, folders []string) (string, string) {
 			return w.commitGate(ps, jobUID, checkoutKey, folders)

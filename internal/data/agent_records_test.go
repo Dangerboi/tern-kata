@@ -365,3 +365,33 @@ func TestRemoteAgentsAreTheRecordsOfOtherHostIdsOnAnIssueOrInTheProject(t *testi
 		t.Errorf("an Issue that does not exist: %+v, want NotFound", got)
 	}
 }
+
+func TestAReconcileKeepsTheRecordOfAnAgentAddedToTheMappingMeanwhile(t *testing.T) {
+	f := newRecordFixture(t, "host = \"laptop\"\n")
+	hostID := f.hostID(t)
+	record := model.AgentRecord{Address: "dana/omp-55", Host: "laptop", HostID: hostID, Block: "55", Name: "omp", Actor: "dana", MessageFrom: []string{}}
+	f.put(t, record)
+	// The entry is in agents.json when the reconcile looks, though a Pane read the file before it was written.
+	seedAgent(t, worker.Dirs{Config: f.state, State: f.state}, model.AgentEntry{IssueUID: f.uid, IssueRef: "demo#ab12", ProjectID: f.project.ID, Block: "55", PaneBlock: "7", Teammate: "omp",
+		Address: "dana/omp-55", Actor: "dana", StartedAt: time.Date(2026, 11, 8, 9, 0, 0, 0, time.UTC)})
+	if err := f.gateway.syncAgentRecords(context.Background(), "", agentDirs{config: f.state, state: f.state}, filepath.Join(f.state, AgentsFile)); err != nil {
+		t.Fatal(err)
+	}
+	if got := blocksOf(f.records(t)); !slices.Equal(got, []string{hostID + "/55"}) {
+		t.Fatalf("records %v, want the new agent's kept", got)
+	}
+}
+
+func TestAReconcileReplacesAStaleRecordWithTheSameKey(t *testing.T) {
+	f := newRecordFixture(t, "host = \"laptop\"\n")
+	hostID := f.hostID(t)
+	f.put(t, model.AgentRecord{Address: "dana/omp-40", Host: "laptop", HostID: hostID, Block: "40", Name: "old", Actor: "dana", MessageFrom: []string{}})
+	seedAgent(t, worker.Dirs{Config: f.state, State: f.state}, model.AgentEntry{IssueUID: f.uid, IssueRef: "demo#ab12", ProjectID: f.project.ID, Block: "40", PaneBlock: "7", Teammate: "fresh",
+		Address: "dana/fresh-40", Actor: "dana", StartedAt: time.Date(2026, 11, 8, 9, 0, 0, 0, time.UTC)})
+	f.live = []string{"7", "40"}
+	f.prune(t)
+	got := f.records(t)
+	if len(got) != 1 || got[0].Address != "dana/fresh-40" || got[0].Name != "fresh" {
+		t.Fatalf("records %+v, want the stale one replaced", got)
+	}
+}

@@ -320,6 +320,37 @@ func TestSkipRecordsSurviveARestartReplaceTheSameOccurrenceAndArePrunedByRetenti
 	}
 }
 
+func TestSkipRecordsOfOneJobStayBoundedAndTheStatusCountStaysRight(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "projects", "P1", "skips.json")
+	start := time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)
+	store := &fileSkips{path: path, log: func(string, ...any) {}}
+	const total = 4*maxSkipsPerJob + 7
+	for i := range total {
+		at := start.Add(time.Duration(i) * time.Minute)
+		s := Skip{JobUID: "A", JobName: "A", Occurrence: at, Condition: cronjob.ConditionRunsPerDay, Reason: "limit", At: at}
+		if err := store.Add(s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	other := start.Add(time.Hour)
+	if err := store.Add(Skip{JobUID: "B", JobName: "B", Occurrence: other, Condition: cronjob.ConditionRunsPerDay, Reason: "limit", At: other}); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := &fileSkips{path: path, log: func(string, ...any) {}}
+	got := restarted.Recent(other)
+	if len(got) != maxSkipsPerJob+1 {
+		t.Fatalf("%d records kept, want %d for A and 1 for B", len(got), maxSkipsPerJob)
+	}
+	jobs := jobSkips(got)
+	if len(jobs) != 2 || jobs[0].UID != "A" || jobs[0].Count != total || jobs[1].Count != 1 {
+		t.Fatalf("skips per job %+v, want A counted %d and B once", jobs, total)
+	}
+	if want := start.Add((total - 1) * time.Minute); !jobs[0].LatestOccurrence.Equal(want) {
+		t.Fatalf("latest occurrence %v, want %v", jobs[0].LatestOccurrence, want)
+	}
+}
+
 func TestSkipsAreListedPerJobWithACountAndTheLatestReason(t *testing.T) {
 	at := time.Date(2026, 1, 1, 3, 0, 0, 0, time.UTC)
 	got := jobSkips([]Skip{

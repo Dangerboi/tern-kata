@@ -29,7 +29,13 @@ type Skip struct {
 	Condition string    `json:"condition"`
 	Reason    string    `json:"reason"`
 	At        time.Time `json:"at"`
+	// Merged counts the older skips of this job the per-job cap dropped in favour of this record.
+	Merged int `json:"merged,omitempty"`
 }
+
+// maxSkipsPerJob bounds the skip records kept for one job: a job that polls often would otherwise grow the file, and
+// rewrite it whole, on every skip.
+const maxSkipsPerJob = 50
 
 // skipStore keeps a Project's skip records. Add replaces a record of the same job and occurrence, so a crash between
 // the record and the checkpoint save skips the occurrence once. Recent drops what the run journals' retention would
@@ -84,14 +90,50 @@ func (f *fileSkips) Add(s Skip) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.load()
-	f.skips = slices.DeleteFunc(f.skips, func(o Skip) bool { return o.JobUID == s.JobUID && o.Occurrence.Equal(s.Occurrence) })
+	f.skips = slices.DeleteFunc(f.skips, func(o Skip) bool {
+		same := o.JobUID == s.JobUID && o.Occurrence.Equal(s.Occurrence)
+		if same {
+			s.Merged += o.Merged
+		}
+		return same
+	})
 	f.skips = append(f.skips, s)
 	f.prune(s.At)
+	f.trim(s.JobUID)
 	raw, _ := json.Marshal(skipFile{Version: 1, Skips: f.skips})
 	if err := os.MkdirAll(filepath.Dir(f.path), 0o700); err != nil {
 		return err
 	}
 	return replaceFile(f.path, raw)
+}
+
+// trim keeps the newest maxSkipsPerJob records of the job; each record dropped is counted in the next oldest one.
+func (f *fileSkips) trim(jobUID string) {
+	var idx []int
+	for i, o := range f.skips {
+		if o.JobUID == jobUID {
+			idx = append(idx, i)
+		}
+	}
+	extra := len(idx) - maxSkipsPerJob
+	if extra <= 0 {
+		return
+	}
+	f.skips[idx[extra]].Merged += extra
+	for _, i := range idx[:extra] {
+		f.skips[idx[extra]].Merged += f.skips[i].Merged
+	}
+	drop := map[int]bool{}
+	for _, i := range idx[:extra] {
+		drop[i] = true
+	}
+	kept := f.skips[:0]
+	for i, o := range f.skips {
+		if !drop[i] {
+			kept = append(kept, o)
+		}
+	}
+	f.skips = kept
 }
 
 func (f *fileSkips) Recent(now time.Time) []Skip {
@@ -106,7 +148,7 @@ func (f *fileSkips) Recent(now time.Time) []Skip {
 type JobSkips struct {
 	UID  string
 	Name string
-	// Count is the skips still on record, which the run journals' retention bounds.
+	// Count is the skips still on record, which the run journals' retention bounds, with those the per-job cap folded in.
 	Count int
 	// Latest* describe the newest skip: the condition that said no, its reason, the occurrence it skipped and when.
 	LatestCondition  string
@@ -126,7 +168,7 @@ func jobSkips(skips []Skip) []JobSkips {
 			byJob[s.JobUID] = j
 			out = append(out, j)
 		}
-		j.Count++
+		j.Count += 1 + s.Merged
 		if !s.At.Before(j.LatestAt) {
 			j.Name, j.LatestCondition, j.LatestReason, j.LatestOccurrence, j.LatestAt = s.JobName, s.Condition, s.Reason, s.Occurrence, s.At
 		}
@@ -342,6 +384,9 @@ type SpendWindow struct {
 // jobSpends is the spend of every job that has a spend limit, jobs by name. A job whose runs cannot be read is left
 // out: the gate blocks it with the reason.
 func (s *projectSchedule) jobSpends(now time.Time) []JobSpend {
+	if s.runsChanged != nil {
+		s.runsChanged()
+	}
 	if s.runSpend == nil {
 		return nil
 	}
@@ -364,16 +409,43 @@ func (s *projectSchedule) jobSpends(now time.Time) []JobSpend {
 	return out
 }
 
+// runLedger reads the Project's run journals once and serves every run-count and spend question from that read until
+// reset, so a tick with many limited jobs scans the journals once rather than once per job and per question.
+type runLedger struct {
+	w          *Worker
+	projectUID string
+	mu         sync.Mutex
+	loaded     bool
+	journals   []*Journal
+	err        error
+}
+
+func (l *runLedger) reset() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.loaded, l.journals, l.err = false, nil, nil
+}
+
+func (l *runLedger) read() ([]*Journal, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.loaded {
+		l.journals, _, l.err = l.w.store.Scan()
+		l.loaded = true
+	}
+	return l.journals, l.err
+}
+
 // runSpend is what each run journal of the Project's job spent, whoever asked for the run. A notify run never calls
 // omp and is left out; any other run that reported no cost counts as zero.
-func (w *Worker) runSpend(projectUID, jobUID string) ([]RunSpend, error) {
-	journals, _, err := w.store.Scan()
+func (l *runLedger) runSpend(jobUID string) ([]RunSpend, error) {
+	journals, err := l.read()
 	if err != nil {
 		return nil, err
 	}
 	var runs []RunSpend
 	for _, j := range journals {
-		if j.ProjectUID != projectUID || j.JobUID != jobUID || j.Notify != nil {
+		if j.ProjectUID != l.projectUID || j.JobUID != jobUID || j.Notify != nil {
 			continue
 		}
 		r := RunSpend{Start: j.StartedAt}
@@ -388,14 +460,14 @@ func (w *Worker) runSpend(projectUID, jobUID string) ([]RunSpend, error) {
 }
 
 // runStarts is when each run journal of the Project's job was prepared, whoever asked for the run.
-func (w *Worker) runStarts(projectUID, jobUID string) ([]time.Time, error) {
-	journals, _, err := w.store.Scan()
+func (l *runLedger) runStarts(jobUID string) ([]time.Time, error) {
+	journals, err := l.read()
 	if err != nil {
 		return nil, err
 	}
 	var starts []time.Time
 	for _, j := range journals {
-		if j.ProjectUID == projectUID && j.JobUID == jobUID {
+		if j.ProjectUID == l.projectUID && j.JobUID == jobUID {
 			starts = append(starts, j.StartedAt)
 		}
 	}
@@ -416,6 +488,9 @@ func (w *Worker) journalExists(runUID string) (bool, error) {
 // checked, or a skip that cannot be recorded, leaves the occurrence pending and marks the job blocked; the message is
 // logged once until it changes, as a refusal is.
 func (s *projectSchedule) applyGate(jobUID string, st *jobSchedule, at time.Time) bool {
+	if s.runsChanged != nil {
+		s.runsChanged() // the previous occurrence may have created a run journal
+	}
 	skip, why := s.gate(st, jobUID, at)
 	if skip != nil {
 		if err := s.skips.Add(*skip); err != nil {
@@ -431,11 +506,15 @@ func (s *projectSchedule) applyGate(jobUID string, st *jobSchedule, at time.Time
 		return false
 	}
 	if skip == nil {
+		st.lastSkip = ""
 		return true
 	}
 	st.pending = slices.DeleteFunc(st.pending, func(t time.Time) bool { return t.Equal(at) })
 	st.lastErr, st.waiting, st.wakeAt, st.parked = "", "", time.Time{}, nil
 	s.save(jobUID, st)
-	s.log("job %q: occurrence %s skipped: %s", st.name, OccurrenceKey(at), skip.Reason)
+	if key := skip.Condition + "\x00" + skip.Reason; key != st.lastSkip {
+		st.lastSkip = key
+		s.log("job %q: occurrence %s skipped: %s", st.name, OccurrenceKey(at), skip.Reason)
+	}
 	return false
 }

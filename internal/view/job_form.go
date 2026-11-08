@@ -111,7 +111,7 @@ func jobConditions(f model.JobFormState) tern.Element {
 		return nil
 	}
 	if err != nil {
-		return toneText("conditions", ui.ToneError, "Conditions: not readable; "+err.Error()+". The worker skips every occurrence of this job until options.conditions is fixed.")
+		return toneText("conditions", ui.ToneError, "Conditions: not readable; "+err.Error()+". The worker holds every due occurrence of this job, and lists the job as blocked, until options.conditions is fixed.")
 	}
 	rows := []tern.Element{toneText("conditions-head", ui.ToneInfo, "Only when (set in options.conditions with kata):")}
 	for i, line := range lines {

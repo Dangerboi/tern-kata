@@ -352,11 +352,11 @@ func (c *Client) listIssueRecords(ctx context.Context) (map[string]issueRecordsL
 	return issues, nil
 }
 
-// syncAgentRecords is the Pane's reconcile of its records with agents.json (entries as just read): a mapped agent that has no
-// record gets one (written, unless another host id's record holds its Address, which is kept on the entry), and a record carrying
+// syncAgentRecords is the Pane's reconcile of its records with agents.json (read again after the slow listing of records, so an
+// agent started meanwhile keeps its record): a mapped agent whose record is missing or differs gets one (written, unless another host id's record holds its Address, which is kept on the entry), and a record carrying
 // this host id with no entry goes. An agent whose state says it exited is not published again: its record went with its address.
 // Records of other host ids are never touched.
-func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs agentDirs, file string, entries []model.AgentEntry) error {
+func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs agentDirs, file string) error {
 	host, err := g.hostOf(dirs)
 	if err != nil {
 		return err
@@ -366,15 +366,20 @@ func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs a
 	for _, s := range states {
 		exited[s.Block] = s.State == model.AgentExited
 	}
-	mapped := map[string]model.AgentEntry{}
-	for _, e := range entries {
-		mapped[e.Block] = e
-	}
 	var errs []error
 	err = g.withDaemon(ctx, workspace, func(c *Client) error {
 		issues, err := c.listIssueRecords(ctx)
 		if err != nil {
 			return err
+		}
+		// Read again after the slow listing: an agent another Pane started meanwhile has its record, which no entry of the first read holds.
+		fresh, err := ReadAgents(file)
+		if err != nil {
+			return err
+		}
+		mapped := map[string]model.AgentEntry{}
+		for _, e := range fresh {
+			mapped[e.Block] = e
 		}
 		for uid, issue := range issues {
 			errs = append(errs, c.dropAgentRecords(ctx, issue.projectID, uid, host.ID, issue.records, func(key string, _ *model.AgentRecord) bool {
@@ -383,14 +388,9 @@ func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs a
 				return !held
 			}))
 		}
-		for _, e := range entries {
+		for _, e := range fresh {
 			if e.ProjectID == 0 || e.IssueUID == "" || exited[e.Block] {
 				continue
-			}
-			if issue, ok := issues[e.IssueUID]; ok {
-				if _, held := issue.records[model.AgentRecordKey(host.ID, e.Block)]; held {
-					continue
-				}
 			}
 			usedBy, err := c.publishAgentRecord(ctx, host, e)
 			if err != nil {

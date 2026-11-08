@@ -57,15 +57,17 @@ type TeamRole struct {
 // Team is one record of teams.json. The coordinator runs on the parent Issue (ParentUID) in the block CoordinatorBlock, at the
 // Agent address CoordinatorAddress. Project is the parent's Project: only its children are started.
 type Team struct {
-	ParentUID          string      `json:"parent_uid"`
-	ParentRef          string      `json:"parent_ref"`
-	ProjectID          int64       `json:"project_id"`
-	Project            string      `json:"project"`
-	CoordinatorBlock   string      `json:"coordinator_block"`
-	CoordinatorAddress string      `json:"coordinator_address"`
-	Limit              int         `json:"limit"`
-	State              TeamState   `json:"state"`
-	Children           []TeamChild `json:"children"`
+	ParentUID          string `json:"parent_uid"`
+	ParentRef          string `json:"parent_ref"`
+	ProjectID          int64  `json:"project_id"`
+	Project            string `json:"project"`
+	CoordinatorBlock   string `json:"coordinator_block"`
+	CoordinatorAddress string `json:"coordinator_address"`
+	// Actor is the Pane's actor that started the team; only a Pane of that actor drives it. "" in a record written before it was kept, which any Pane drives.
+	Actor    string      `json:"actor,omitempty"`
+	Limit    int         `json:"limit"`
+	State    TeamState   `json:"state"`
+	Children []TeamChild `json:"children"`
 }
 
 // Started says the team has started (or is starting) the Issue uid.

@@ -154,6 +154,13 @@ func (g *Gateway) saveAgentConfig(cmd model.SaveAgentConfig) model.AgentConfigSa
 		return done
 	}
 	path := filepath.Join(folder, AgentConfigFile)
+	// A symlinked agent.toml (a dotfiles repo) is written through: the atomic rename would otherwise replace the link.
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		done.Err = err
+		return done
+	}
 	token, err := guardedfile.Read(path)
 	if err != nil {
 		done.Err = err

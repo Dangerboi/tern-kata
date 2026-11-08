@@ -157,7 +157,7 @@ func (g *Gateway) startTeam(ctx context.Context, cmd model.StartTeam) model.Team
 	}
 	entry := started.Entry
 	team := model.Team{ParentUID: cmd.IssueUID, ParentRef: cmd.IssueRef, ProjectID: cmd.ProjectID, Project: cmd.ProjectName,
-		CoordinatorBlock: entry.Block, CoordinatorAddress: entry.Address, Limit: cmd.Limit, State: model.TeamRunning, Children: []model.TeamChild{}}
+		CoordinatorBlock: entry.Block, CoordinatorAddress: entry.Address, Actor: cmd.Actor, Limit: cmd.Limit, State: model.TeamRunning, Children: []model.TeamChild{}}
 	recorded := false
 	_, err = UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
 		recorded = !slices.ContainsFunc(list, func(t model.Team) bool { return t.ParentUID == cmd.IssueUID })
@@ -286,6 +286,9 @@ func (g *Gateway) driveTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 		return nil
 	}
 	t := teams[i]
+	if t.Actor != "" && t.Actor != cmd.Actor {
+		return nil
+	}
 	entries, err := ReadAgents(agentsFile)
 	if err != nil {
 		return err
@@ -328,6 +331,18 @@ func (g *Gateway) driveTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 
 // queueTeam starts the next ready children while fewer than the limit run, and ends the team when none is left and none runs.
 func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile, agentsFile string, t model.Team, entries []model.AgentEntry, out *model.TeamsDriven) error {
+	settled, err := UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
+		if i := teamIndex(list, t.ParentUID); i >= 0 {
+			settleClaims(&list[i], entries, g.now())
+		}
+		return list
+	})
+	if err != nil {
+		return err
+	}
+	if i := teamIndex(settled, t.ParentUID); i >= 0 {
+		t = settled[i]
+	}
 	var parent *gen.ShowIssueResponseBody
 	var ready []gen.IssueOut
 	if _, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
@@ -383,12 +398,10 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 		if started.Err != nil {
 			failed = true
 			out.Failures = append(out.Failures, fmt.Sprintf("Cannot start an agent on %s for the team on %s: %s", c.QualifiedID, t.ParentRef, started.Err))
-			if err := forgetChild(teamsFile, t.ParentUID, c.UID, ""); err != nil {
-				return err
-			}
+			// The claim stays: it expires after teamPendingMaxAge, so a failing start is not retried on every event.
 			continue
 		}
-		if err := forgetChild(teamsFile, t.ParentUID, c.UID, started.Entry.Block); err != nil {
+		if err := setChildBlock(teamsFile, t.ParentUID, c.UID, started.Entry.Block); err != nil {
 			return err
 		}
 		out.Started = append(out.Started, started.Entry)
@@ -428,9 +441,7 @@ func claimChild(teamsFile, agentsFile string, exited []string, uid string, c gen
 			full = true
 			return list
 		}
-		t.Children = slices.DeleteFunc(t.Children, func(child model.TeamChild) bool {
-			return child.Block == "" && now.Sub(child.StartedAt) >= teamPendingMaxAge
-		})
+		settleClaims(t, entries, now)
 		if t.Started(c.UID) {
 			return list
 		}
@@ -451,19 +462,14 @@ func claimChild(teamsFile, agentsFile string, exited []string, uid string, c gen
 	return claimed && err == nil, full && err == nil, err
 }
 
-// forgetChild finishes a recorded start: with block set, the child's agent runs in that block; with "", the start failed and the
-// record of it goes, so the child can be started again.
-func forgetChild(teamsFile, parentUID, childUID, block string) error {
+// setChildBlock finishes a recorded start: the child's agent runs in block.
+func setChildBlock(teamsFile, parentUID, childUID, block string) error {
 	_, err := UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
 		i := teamIndex(list, parentUID)
 		if i < 0 {
 			return list
 		}
 		t := &list[i]
-		if block == "" {
-			t.Children = slices.DeleteFunc(t.Children, func(c model.TeamChild) bool { return c.UID == childUID && c.Block == "" })
-			return list
-		}
 		for j := range t.Children {
 			if t.Children[j].UID == childUID {
 				t.Children[j].Block = block
@@ -604,4 +610,22 @@ func (c *Client) ResolveComment(ctx context.Context, cmd model.ResolveComment) (
 		}
 	}
 	return model.CommentResolved{}, model.ErrNoSuchComment
+}
+
+// settleClaims resolves the children recorded without a block for longer than teamPendingMaxAge: a Pane that died after starting
+// the agent but before recording its block left one whose agent runs, which takes that agent's block (an entry on the child's Issue
+// that started after the claim); a claim with no such agent goes, so the child can be started.
+func settleClaims(t *model.Team, entries []model.AgentEntry, now time.Time) {
+	for j := range t.Children {
+		child := &t.Children[j]
+		if child.Block != "" || now.Sub(child.StartedAt) < teamPendingMaxAge {
+			continue
+		}
+		if k := slices.IndexFunc(entries, func(e model.AgentEntry) bool { return e.IssueUID == child.UID && !e.StartedAt.Before(child.StartedAt) }); k >= 0 {
+			child.Block = entries[k].Block
+		}
+	}
+	t.Children = slices.DeleteFunc(t.Children, func(child model.TeamChild) bool {
+		return child.Block == "" && now.Sub(child.StartedAt) >= teamPendingMaxAge
+	})
 }

@@ -32,11 +32,16 @@ func configPage(m model.Model) tern.Element {
 	cards := make([]tern.Element, len(c.Files))
 	for i, f := range c.Files {
 		tone := ui.ToneNeutral
-		switch f.Status {
-		case model.ConfigLoads:
-			tone = ui.ToneSuccess
-		case model.ConfigBroken:
+		switch {
+		case f.Status == model.ConfigBroken:
 			tone = ui.ToneError
+		case f.Key == model.ConfigDocbank:
+			// The row's file is the marker that turns supervision off: absent is the on state.
+			if f.Status != model.ConfigLoads {
+				tone = ui.ToneSuccess
+			}
+		case f.Status == model.ConfigLoads:
+			tone = ui.ToneSuccess
 		}
 		body := ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: f.Title, S: "strong"}, {T: " · " + f.StatusWords(), S: "muted"}}, Wrap: ui.WrapNone},
