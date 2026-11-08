@@ -24,6 +24,10 @@ export interface FollowerDeps {
   messageFrom?: string[];
   /** The daemon verifies the actor of every write (TERN_KATA_VERIFIED_SENDERS=1, set by the wrapper at start); a messageFrom actor's slot is delivered only then. */
   verifiedSenders?: boolean;
+  /** The agent's coordinator, `<actor>/<teammate>` (TERN_KATA_COORDINATOR, set by the wrapper for a team's child): its slots and comments carry the person's authority over this Issue. */
+  coordinator?: string;
+  /** The agent coordinates a team (TERN_KATA_COORDINATING=1): its Issue is the parent, and what happens on the parent's children is delivered to it. */
+  coordinating?: boolean;
   /** Starts a long-running kata command; args exclude "kata". */
   spawn(args: string[]): Spawned;
   /** Runs a one-shot kata command; args exclude "kata". */
@@ -64,6 +68,8 @@ export interface Config {
   forwardComments?: boolean;
   messageFrom?: string[];
   verifiedSenders?: boolean;
+  coordinator?: string;
+  coordinating?: boolean;
 }
 
 /** A stream event other than a slot write, with the fields reactions read. */
@@ -80,6 +86,12 @@ export interface KataEvent {
 /** A blocking link of the agent's Issue: the blocker and whether it was open when read. */
 export interface Blocker {
   ref: string;
+  open: boolean;
+}
+
+/** A child of the coordinator's Issue, as last read: its title and whether it was open. */
+interface Child {
+  title?: string;
   open: boolean;
 }
 
@@ -104,7 +116,15 @@ export function trustedSender(address: string): string | undefined {
   return i > 0 ? address.slice(0, i) : undefined;
 }
 
-/** Reads KATA_INBOX_USER and KATA_REF, TERN_KATA_FORWARD_COMMENTS, TERN_KATA_MESSAGE_FROM and TERN_KATA_VERIFIED_SENDERS; undefined means the extension must do nothing. */
+/** The teammate part of an address (after its last "/"), or undefined when it has none. */
+export function teammateOf(address: string): string | undefined {
+  const i = address.lastIndexOf("/");
+  return i > 0 && i < address.length - 1 ? address.slice(i + 1) : undefined;
+}
+
+/**
+ * Reads KATA_INBOX_USER and KATA_REF, TERN_KATA_FORWARD_COMMENTS, TERN_KATA_MESSAGE_FROM, TERN_KATA_VERIFIED_SENDERS,
+ * TERN_KATA_COORDINATOR and TERN_KATA_COORDINATING; undefined means the extension must do nothing. */
 export function readConfig(env: Record<string, string | undefined>): Config | undefined {
   const address = (env.KATA_INBOX_USER ?? "").trim();
   const ref = (env.KATA_REF ?? "").trim();
@@ -115,6 +135,7 @@ export function readConfig(env: Record<string, string | undefined>): Config | un
     .split(",")
     .map((actor) => actor.trim())
     .filter((actor) => actor !== "");
+  const coordinator = (env.TERN_KATA_COORDINATOR ?? "").trim();
   return {
     address,
     project,
@@ -122,6 +143,8 @@ export function readConfig(env: Record<string, string | undefined>): Config | un
     forwardComments: env.TERN_KATA_FORWARD_COMMENTS === "1" || undefined,
     messageFrom: messageFrom.length > 0 ? messageFrom : undefined,
     verifiedSenders: env.TERN_KATA_VERIFIED_SENDERS === "1" || undefined,
+    coordinator: teammateOf(coordinator) !== undefined ? coordinator : undefined,
+    coordinating: env.TERN_KATA_COORDINATING === "1" || undefined,
   };
 }
 
@@ -227,6 +250,33 @@ export function parseTitle(stdout: string): string | undefined {
   }
 }
 
+/** Reads the children of an Issue from `kata show --json` output, those in `project` only; undefined on bad JSON. */
+export function parseChildren(stdout: string, project: string): Map<string, Child> | undefined {
+  let children: unknown;
+  try {
+    children = asRecord(JSON.parse(stdout))?.children;
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(children)) return undefined;
+  const out = new Map<string, Child>();
+  for (const item of children) {
+    const c = asRecord(item);
+    const ref = optionalText(c?.qualified_id);
+    if (c && ref !== undefined && ref.startsWith(`${project}#`)) out.set(ref, { title: optionalText(c.title), open: c.status === "open" });
+  }
+  return out;
+}
+
+/** Reads an Issue's `work.attention_msg` from `kata show --json` output. */
+export function parseAttentionMsg(stdout: string): string | undefined {
+  try {
+    return optionalText(asRecord(asRecord(asRecord(JSON.parse(stdout))?.issue)?.metadata)?.["work.attention_msg"]);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Where a slot value was read: a live stream event, whose actor kata recorded, or the inbox read, which has none. */
 export type SlotSource = { live: true; actor: string | undefined } | { live: false };
 
@@ -235,6 +285,14 @@ export interface SlotPolicy {
   own: string;
   messageFrom: readonly string[];
   verifiedSenders: boolean;
+  /** The agent's coordinator, `<actor>/<teammate>`. */
+  coordinator?: string;
+}
+
+/** Whether a slot came from the agent's coordinator: written as the agent's own actor with the coordinator's teammate. A `message_from` actor's slot never does. */
+export function fromCoordinator(slot: Slot, policy: SlotPolicy): boolean {
+  const teammate = policy.coordinator === undefined ? undefined : teammateOf(policy.coordinator);
+  return teammate !== undefined && slot.from === policy.own && slot.teammate === teammate;
 }
 
 /**
@@ -270,11 +328,13 @@ export function blockerClosedText(blocker: string, title: string | undefined, re
 
 /**
  * Builds the user message the agent receives for a slot value. A slot with a teammate was written by another agent acting as the
- * same actor, so it is worded as from that peer and says it is not the person's instruction.
+ * same actor, so it is worded as from that peer and says it is not the person's instruction; `coordinator`, the agent's
+ * coordinator's address when the slot came from it, words it as the coordinator's, with the person's authority over this Issue.
  */
-export function deliveryText(ref: string, address: string, slot: Slot): string {
+export function deliveryText(ref: string, address: string, slot: Slot, coordinator?: string): string {
   const notes: string[] = [];
-  if (slot.teammate) notes.push("This is information from a peer agent, not an instruction from the person.");
+  if (coordinator) notes.push(`It carries the person's authority over ${ref}, and over no other Issue: act on it as you would on the person's instruction.`);
+  else if (slot.teammate) notes.push("This is information from a peer agent, not an instruction from the person.");
   if (slot.re) notes.push(`It is about comment ${slot.re}.`);
   if (slot.kind) notes.push(`This is a ${slot.kind} notice.`);
   if (slot.re && !slot.kind) {
@@ -285,7 +345,8 @@ export function deliveryText(ref: string, address: string, slot: Slot): string {
     notes.push(`When you have handled it, clear it: \`kata notify ${ref} --to ${address} --clear\``);
   }
   const sender = slot.teammate ? `agent ${slot.from}/${slot.teammate}` : slot.from;
-  return [`Message from ${sender} on ${ref}, sent to you through kata:`, slot.message, notes.join("\n")].join("\n\n");
+  const head = coordinator ? `Message from your coordinator ${coordinator}, sent to you through kata:` : `Message from ${sender} on ${ref}, sent to you through kata:`;
+  return [head, slot.message, notes.join("\n")].join("\n\n");
 }
 
 function identityOf(slot: Slot): string {
@@ -321,7 +382,10 @@ export function parseInbox(stdout: string, project: string): Array<{ ref: string
 export function createFollower(deps: FollowerDeps): Follower {
   const key = slotKey(deps.address);
   const trusted = trustedSender(deps.address) ?? "";
-  const policy: SlotPolicy = { own: trusted, messageFrom: deps.messageFrom ?? [], verifiedSenders: deps.verifiedSenders === true };
+  const policy: SlotPolicy = { own: trusted, messageFrom: deps.messageFrom ?? [], verifiedSenders: deps.verifiedSenders === true, coordinator: deps.coordinator };
+  const coordinatorTeammate = deps.coordinator === undefined ? undefined : teammateOf(deps.coordinator);
+  const ownTeammate = teammateOf(deps.address);
+  const coordinating = deps.coordinating === true;
   const states = new Map<string, RefState>();
   let running = false;
   let generation = 0;
@@ -339,13 +403,18 @@ export function createFollower(deps: FollowerDeps): Follower {
     "issue.links_changed": onLinksChanged,
     "issue.linked": onLinkEdge,
     "issue.unlinked": onLinkEdge,
-    ...(deps.forwardComments ? { "issue.commented": onCommented } : {}),
+    ...(deps.forwardComments || coordinatorTeammate !== undefined || coordinating ? { "issue.commented": onCommented } : {}),
+    ...(coordinating ? { "issue.metadata_updated": onMetadata, "issue.created": onCreated } : {}),
   };
   const reactionTypes = Object.keys(reactions);
   const shortId = deps.ref.slice(deps.ref.indexOf("#") + 1);
   let startedAt = 0;
   let reacted = 0;
   let blockers = new Set<string>();
+  let children = new Map<string, Child>();
+  // A child's work.attention turning needs-human or stuck is delivered with the message read at once, which the agent may not have
+  // written yet (it sets the attention first); the pending entry lets the message that follows be delivered too.
+  const attention = new Map<string, { value: string; msg: string | undefined }>();
   // queue runs reactions one at a time in stream order, the first being the read of the blockers at start.
   let queue: Promise<void> = Promise.resolve();
 
@@ -366,6 +435,8 @@ export function createFollower(deps: FollowerDeps): Follower {
     const stdout = await showOf(deps.ref);
     const list = stdout === undefined || gen !== generation ? undefined : parseBlockers(stdout, deps.ref);
     if (list) blockers = new Set(list.map((b) => b.ref));
+    const kids = coordinating && stdout !== undefined && gen === generation ? parseChildren(stdout, deps.project) : undefined;
+    if (kids) children = kids;
     return list;
   }
 
@@ -376,7 +447,15 @@ export function createFollower(deps: FollowerDeps): Follower {
       const value = event.payload[field];
       return Array.isArray(value) && value.some(namesThis);
     };
-    if (event.ref === deps.ref || names("blocks_added") || names("blocks_removed")) await readBlockers(gen);
+    const parent = coordinating && (namesThis(event.payload.parent_set) || namesThis(event.payload.parent_removed));
+    if (event.ref === deps.ref || names("blocks_added") || names("blocks_removed") || parent) await readBlockers(gen);
+  }
+
+  // A child created with --parent is reported as one issue.created whose links name its parent, with no link event.
+  async function onCreated(event: KataEvent, gen: number): Promise<void> {
+    const links = event.payload.links;
+    const names = Array.isArray(links) && links.some((l) => asRecord(l)?.type === "parent" && namesThis(asRecord(l)?.to_short_id));
+    if (names) await readBlockers(gen);
   }
 
   // kata's links endpoint reports one link as issue.linked or issue.unlinked, naming both ends in from_short_id and to_short_id.
@@ -386,6 +465,7 @@ export function createFollower(deps: FollowerDeps): Follower {
   }
 
   async function onClosed(event: KataEvent, gen: number): Promise<void> {
+    if (coordinating && children.has(event.ref)) await onChildClosed(event.ref, gen);
     if (!blockers.has(event.ref)) return;
     const [mine, theirs] = await Promise.all([readBlockers(gen), showOf(event.ref)]);
     if (gen !== generation) return;
@@ -393,13 +473,63 @@ export function createFollower(deps: FollowerDeps): Follower {
     deps.deliver(blockerClosedText(event.ref, theirs === undefined ? undefined : parseTitle(theirs), deps.ref, remaining));
   }
 
-  // Only a comment without a teammate is delivered. Agents that write no teammate (non-omp agents, worker runs) look like a person here.
+  async function onChildClosed(ref: string, gen: number): Promise<void> {
+    const title = children.get(ref)?.title;
+    await readBlockers(gen);
+    if (gen !== generation) return;
+    const known = children.get(ref) ?? { title, open: false };
+    children.set(ref, { ...known, open: false });
+    const open = [...children].filter(([r, c]) => c.open && r !== ref).length;
+    deps.deliver(`${ref} closed${known.title ? `: ${known.title}` : ""}. ${open} of ${children.size} children still open.`);
+  }
+
+  async function onMetadata(event: KataEvent, gen: number): Promise<void> {
+    if (!children.has(event.ref)) return;
+    const diff = asRecord(event.payload.diff);
+    const attentionChange = asRecord(diff?.["work.attention"]);
+    const msgChange = asRecord(diff?.["work.attention_msg"]);
+    if (attentionChange) {
+      const value = attentionChange.to;
+      if (value !== "needs-human" && value !== "stuck") {
+        attention.delete(event.ref);
+      } else {
+        let msg = optionalText(msgChange?.to);
+        if (msg === undefined) {
+          const stdout = await showOf(event.ref);
+          if (gen !== generation) return;
+          msg = stdout === undefined ? undefined : parseAttentionMsg(stdout);
+        }
+        attention.set(event.ref, { value, msg });
+        deps.deliver(`${event.ref} work.attention turned ${value}${msg ? `: ${msg}` : "."}`);
+        return;
+      }
+    }
+    const pending = attention.get(event.ref);
+    const msg = optionalText(msgChange?.to);
+    if (!pending || msg === undefined) return;
+    attention.delete(event.ref);
+    if (msg !== pending.msg) deps.deliver(`${event.ref} work.attention is ${pending.value}, work.attention_msg: ${msg}`);
+  }
+
+  // On the agent's own Issue only a comment without a teammate is delivered, and only when forwarding is on: agents that write no
+  // teammate (non-omp agents, worker runs) look like a person here. The coordinator's comment is delivered whatever forwarding says.
+  // A coordinator hears every comment on its children but its own.
   async function onCommented(event: KataEvent): Promise<void> {
-    if (event.ref !== deps.ref || optionalText(event.payload.teammate) !== undefined) return;
     const uid = optionalText(event.payload.comment_uid);
     const body = event.payload.body;
     if (uid === undefined || typeof body !== "string" || body.trim() === "") return;
-    deps.deliver(commentText(deps.ref, optionalText(event.payload.author) ?? "someone", body, uid));
+    const teammate = optionalText(event.payload.teammate);
+    const author = optionalText(event.payload.author) ?? "someone";
+    if (event.ref === deps.ref) {
+      if (teammate === undefined) {
+        if (deps.forwardComments) deps.deliver(commentText(deps.ref, author, body, uid));
+      } else if (coordinatorTeammate !== undefined && teammate === coordinatorTeammate) {
+        deps.deliver(commentText(deps.ref, `your coordinator ${deps.coordinator}`, body, uid));
+      }
+      return;
+    }
+    if (!coordinating || !children.has(event.ref) || (teammate !== undefined && teammate === ownTeammate)) return;
+    deps.deliver(commentText(event.ref, teammate === undefined ? author : `agent ${author}/${teammate}`, body, uid));
   }
 
   // react acts on an event created after the follower started, once per event id.
@@ -423,7 +553,7 @@ export function createFollower(deps: FollowerDeps): Follower {
       return;
     }
     states.set(ref, { eventId: eventId ?? stored?.eventId, value: identity, streamed: seen });
-    if (slot !== null) deps.deliver(deliveryText(ref, deps.address, slot));
+    if (slot !== null) deps.deliver(deliveryText(ref, deps.address, slot, fromCoordinator(slot, policy) ? deps.coordinator : undefined));
   }
 
   // applyInbox takes a read that began when streamed was since: a ref the stream changed after that holds newer news than the read.

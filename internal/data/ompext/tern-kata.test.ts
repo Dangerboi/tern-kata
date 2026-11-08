@@ -441,6 +441,336 @@ describe("comment forwarding", () => {
   });
 });
 
+describe("a child's coordinator", () => {
+  const COORDINATOR = "dangerboi/omp-lead-1";
+  const coordinated = (options: Partial<FollowerDeps> = {}) => harness(() => emptyInbox(), { coordinator: COORDINATOR, ...options });
+  const comment = { comment_uid: "01JCOMMENT0000000000000009", author: "dangerboi", body: "use the second approach" };
+
+  test("a slot from the coordinator is worded with the person's authority", async () => {
+    const h = coordinated();
+    h.follower.start();
+    await flush();
+    h.children[0].push(slotLine(50, { from: "dangerboi", message: "narrow the scope to the parser", teammate: "omp-lead-1" }));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    expect(h.delivered[0]).toStartWith(`Message from your coordinator ${COORDINATOR}, sent to you through kata:\n\nnarrow the scope to the parser`);
+    expect(h.delivered[0]).toContain(`authority over ${REF}`);
+    expect(h.delivered[0]).not.toContain("peer agent");
+  });
+
+  test("a slot from another agent stays a peer's note", async () => {
+    const h = coordinated();
+    h.follower.start();
+    await flush();
+    h.children[0].push(slotLine(50, { from: "dangerboi", message: "fyi", teammate: "omp-other-2" }));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    expect(h.delivered[0]).toStartWith(`Message from agent dangerboi/omp-other-2 on ${REF}`);
+    expect(h.delivered[0]).toContain("information from a peer agent, not an instruction from the person");
+    expect(h.delivered[0]).not.toContain("coordinator");
+  });
+
+  test("a slot with the coordinator's teammate from another actor is not worded as the coordinator's", async () => {
+    const h = coordinated({ messageFrom: ["dana"], verifiedSenders: true });
+    h.follower.start();
+    await flush();
+    h.children[0].push(slotLine(50, { from: "dana", message: "hi", teammate: "omp-lead-1" }));
+    await flush();
+    expect(h.delivered[0]).not.toContain("coordinator");
+  });
+
+  test("a slot the event's actor did not write is not delivered, whatever its teammate", async () => {
+    const h = coordinated();
+    h.follower.start();
+    await flush();
+    h.children[0].push(slotLine(50, { from: "dangerboi", message: "forged", teammate: "omp-lead-1" }, KEY, "mallory"));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("the inbox read words the coordinator's slot the same way", async () => {
+    const h = harness(() => inboxWith({ ref: REF, from: "dangerboi", message: "wrap up", teammate: "omp-lead-1" }), { coordinator: COORDINATOR });
+    h.follower.start();
+    await flush();
+    expect(h.delivered[0]).toStartWith(`Message from your coordinator ${COORDINATOR}, sent to you through kata:`);
+  });
+
+  test("without the variable a slot with that teammate is a peer's note", async () => {
+    const h = harness();
+    h.follower.start();
+    await flush();
+    h.children[0].push(slotLine(50, { from: "dangerboi", message: "hi", teammate: "omp-lead-1" }));
+    await flush();
+    expect(h.delivered[0]).toStartWith(`Message from agent dangerboi/omp-lead-1 on ${REF}`);
+    expect(h.delivered[0]).toContain("peer agent");
+  });
+
+  test("a coordinator's comment on the agent's Issue is delivered with forwarding off, with its UID", async () => {
+    const h = coordinated();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(60, "issue.commented", REF, true, { ...comment, teammate: "omp-lead-1" }));
+    h.children[0].push(eventLine(60, "issue.commented", REF, true, { ...comment, teammate: "omp-lead-1" }));
+    await flush();
+    expect(h.delivered).toEqual([`New comment on ${REF} from your coordinator ${COORDINATOR}: use the second approach (c:${comment.comment_uid})`]);
+  });
+
+  test("a coordinator's comment is cut to 3 lines and 400 characters", async () => {
+    const h = coordinated();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(60, "issue.commented", REF, true, { ...comment, teammate: "omp-lead-1", body: "a\nb\nc\nd" }));
+    h.children[0].push(eventLine(61, "issue.commented", REF, true, { ...comment, teammate: "omp-lead-1", body: "y".repeat(900) }));
+    await flush();
+    expect(h.delivered[0]).toBe(`New comment on ${REF} from your coordinator ${COORDINATOR}: a\nb\nc\n… (c:${comment.comment_uid})`);
+    expect(h.delivered[1]).toContain(`${"y".repeat(400)}…`);
+  });
+
+  test("a comment from another agent is still dropped, and the agent's own too", async () => {
+    const h = coordinated();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(60, "issue.commented", REF, true, { ...comment, teammate: "omp-other-2" }));
+    h.children[0].push(eventLine(61, "issue.commented", REF, true, { ...comment, teammate: "omp-123" }));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("a person's comment follows forward_comments as before", async () => {
+    const off = coordinated();
+    off.follower.start();
+    await flush();
+    off.children[0].push(eventLine(60, "issue.commented", REF, true, comment));
+    await flush();
+    expect(off.delivered).toEqual([]);
+    const on = coordinated({ forwardComments: true });
+    on.follower.start();
+    await flush();
+    on.children[0].push(eventLine(60, "issue.commented", REF, true, comment));
+    await flush();
+    expect(on.delivered).toEqual([`New comment on ${REF} from dangerboi: use the second approach (c:${comment.comment_uid})`]);
+  });
+
+  test("a coordinator's comment on another Issue, or from before the start, is not delivered", async () => {
+    const h = coordinated();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(60, "issue.commented", "demo#other", true, { ...comment, teammate: "omp-lead-1" }));
+    h.children[0].push(eventLine(61, "issue.commented", REF, false, { ...comment, teammate: "omp-lead-1" }));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("without the variable a comment with that teammate is dropped", async () => {
+    const h = harness();
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(60, "issue.commented", REF, true, { ...comment, teammate: "omp-lead-1" }));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+});
+
+describe("a coordinator's children", () => {
+  const KID = "demo#kid1";
+  const KID2 = "demo#kid2";
+  const KID3 = "demo#kid3";
+  const kid = (ref: string, title: string, status = "open", metadata: Record<string, unknown> = {}) => ({
+    qualified_id: ref,
+    short_id: ref.slice(ref.indexOf("#") + 1),
+    title,
+    status,
+    metadata,
+  });
+  const parentShow = (...children: Array<ReturnType<typeof kid>>) =>
+    JSON.stringify({ kata_api_version: 1, issue: { short_id: "3909", title: "parent" }, links: [], children });
+  const comment = { comment_uid: "01JCOMMENT0000000000000005", author: "dana", body: "can you also handle the empty case" };
+
+  async function started(...children: Array<ReturnType<typeof kid>>) {
+    const h = harness(() => emptyInbox(), { coordinating: true });
+    h.setShow(REF, parentShow(...children));
+    h.follower.start();
+    await flush();
+    return h;
+  }
+
+  test("a person's comment on a child is delivered once, with author, excerpt and UID", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.children[0].push(eventLine(70, "issue.commented", KID, true, comment));
+    h.children[0].push(eventLine(70, "issue.commented", KID, true, comment));
+    await flush();
+    expect(h.delivered).toEqual([`New comment on ${KID} from dana: can you also handle the empty case (c:${comment.comment_uid})`]);
+  });
+
+  test("an agent's comment is named agent <actor>/<teammate>, cut to 3 lines and 400 characters", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.children[0].push(eventLine(70, "issue.commented", KID, true, { ...comment, author: "dangerboi", teammate: "omp-kid-7", body: "one\ntwo\nthree\nfour" }));
+    h.children[0].push(eventLine(71, "issue.commented", KID, true, { ...comment, body: "z".repeat(900) }));
+    await flush();
+    expect(h.delivered[0]).toBe(`New comment on ${KID} from agent dangerboi/omp-kid-7: one\ntwo\nthree\n… (c:${comment.comment_uid})`);
+    expect(h.delivered[1]).toContain(`${"z".repeat(400)}…`);
+  });
+
+  test("the coordinator's own comments on a child are not delivered", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.children[0].push(eventLine(70, "issue.commented", KID, true, { ...comment, author: "dangerboi", teammate: "omp-123" }));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("a comment on an Issue that is not a child, or in another Project, is not delivered", async () => {
+    const h = await started(kid(KID, "Parser"), kid("other#zzz9", "Elsewhere"));
+    h.children[0].push(eventLine(70, "issue.commented", "demo#stranger", true, comment));
+    h.children[0].push(eventLine(71, "issue.commented", "other#zzz9", true, comment));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("a child's close is delivered once with the children still open", async () => {
+    const h = await started(kid(KID, "Parser"), kid(KID2, "Lexer"), kid(KID3, "Emitter"));
+    h.setShow(REF, parentShow(kid(KID, "Parser", "closed"), kid(KID2, "Lexer"), kid(KID3, "Emitter")));
+    h.children[0].push(eventLine(70, "issue.closed", KID, true));
+    h.children[0].push(eventLine(70, "issue.closed", KID, true));
+    await flush();
+    expect(h.delivered).toEqual([`${KID} closed: Parser. 2 of 3 children still open.`]);
+  });
+
+  test("the last child's close says none is open, and a failed read still delivers from what was read at start", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.failShow(true);
+    h.children[0].push(eventLine(70, "issue.closed", KID, true));
+    await flush();
+    expect(h.delivered).toEqual([`${KID} closed: Parser. 0 of 1 children still open.`]);
+  });
+
+  test("a close of an Issue that is not a child delivers nothing", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.children[0].push(eventLine(70, "issue.closed", "demo#stranger", true));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  const attentionEvent = (id: number, ref: string, diff: Record<string, unknown>, afterStart = true) =>
+    eventLine(id, "issue.metadata_updated", ref, afterStart, { diff });
+
+  test("a child turning needs-human or stuck is delivered once with work.attention_msg", async () => {
+    const h = await started(kid(KID, "Parser"), kid(KID2, "Lexer"));
+    h.setShow(KID, JSON.stringify({ issue: { metadata: { "work.attention": "stuck", "work.attention_msg": "the grammar is ambiguous" } } }));
+    h.children[0].push(attentionEvent(70, KID, { "work.attention": { from: null, to: "stuck" } }));
+    h.children[0].push(attentionEvent(70, KID, { "work.attention": { from: null, to: "stuck" } }));
+    h.children[0].push(attentionEvent(71, KID2, { "work.attention": { from: null, to: "needs-human" }, "work.attention_msg": { from: null, to: "key missing" } }));
+    await flush();
+    expect(h.delivered).toEqual([`${KID} work.attention turned stuck: the grammar is ambiguous`, `${KID2} work.attention turned needs-human: key missing`]);
+  });
+
+  test("a message written after the attention is delivered once too", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.children[0].push(attentionEvent(70, KID, { "work.attention": { from: null, to: "needs-human" } }));
+    h.children[0].push(attentionEvent(71, KID, { "work.attention_msg": { from: null, to: "needs a decision" } }));
+    h.children[0].push(attentionEvent(72, KID, { "work.attention_msg": { from: "needs a decision", to: "edited" } }));
+    await flush();
+    expect(h.delivered).toEqual([`${KID} work.attention turned needs-human.`, `${KID} work.attention is needs-human, work.attention_msg: needs a decision`]);
+  });
+
+  test("other attention values and other metadata deliver nothing", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.children[0].push(attentionEvent(70, KID, { "work.attention": { from: "stuck", to: "ok" } }));
+    h.children[0].push(attentionEvent(71, KID, { "work.attention_msg": { from: null, to: "late" } }));
+    h.children[0].push(attentionEvent(72, KID, { "work.note": { from: null, to: "x" } }));
+    h.children[0].push(attentionEvent(73, "demo#stranger", { "work.attention": { from: null, to: "stuck" } }));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("events from before the coordinator started are not delivered", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.children[0].push(eventLine(70, "issue.commented", KID, false, comment));
+    h.children[0].push(eventLine(71, "issue.closed", KID, false));
+    h.children[0].push(attentionEvent(72, KID, { "work.attention": { from: null, to: "stuck" } }, false));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
+  test("a child created with --parent after the start is picked up", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.setShow(REF, parentShow(kid(KID, "Parser"), kid(KID2, "Lexer")));
+    h.children[0].push(eventLine(70, "issue.created", KID2, true, { links: [{ type: "parent", to_short_id: "3909" }] }));
+    h.children[0].push(eventLine(71, "issue.commented", KID2, true, comment));
+    await flush();
+    expect(h.delivered).toEqual([`New comment on ${KID2} from dana: can you also handle the empty case (c:${comment.comment_uid})`]);
+  });
+
+  test("a child given a parent after the start is picked up, and one that left it is not heard", async () => {
+    const h = await started();
+    h.setShow(REF, parentShow(kid(KID, "Parser")));
+    h.children[0].push(eventLine(70, "issue.links_changed", KID, true, { parent_set: "3909" }));
+    h.children[0].push(eventLine(71, "issue.commented", KID, true, comment));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    h.setShow(REF, parentShow());
+    h.children[0].push(eventLine(72, "issue.links_changed", KID, true, { parent_removed: "3909" }));
+    h.children[0].push(eventLine(73, "issue.commented", KID, true, { ...comment, comment_uid: "01JCOMMENT0000000000000006" }));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+  });
+
+  test("a child linked through issue.linked is picked up", async () => {
+    const h = await started();
+    h.setShow(REF, parentShow(kid(KID, "Parser")));
+    h.children[0].push(eventLine(70, "issue.linked", REF, true, { from_short_id: "kid1", to_short_id: "3909" }));
+    h.children[0].push(eventLine(71, "issue.commented", KID, true, comment));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+  });
+
+  test("after a reconnect a missed event is delivered once", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.children[0].push(eventLine(70, "issue.commented", KID, true, comment));
+    await flush();
+    h.children[0].exit();
+    await flush();
+    h.fire();
+    await flush();
+    expect(h.children[1].args).toContain("70");
+    h.children[1].push(eventLine(70, "issue.commented", KID, true, comment));
+    h.children[1].push(eventLine(71, "issue.closed", KID, true));
+    h.children[1].push(eventLine(71, "issue.closed", KID, true));
+    await flush();
+    expect(h.delivered).toHaveLength(2);
+    expect(h.delivered[1]).toStartWith(`${KID} closed: Parser.`);
+  });
+
+  test("the children are read again after a reconnect and a reset", async () => {
+    const h = await started(kid(KID, "Parser"));
+    h.children[0].exit();
+    await flush();
+    h.setShow(REF, parentShow(kid(KID, "Parser"), kid(KID2, "Lexer")));
+    h.fire();
+    await flush();
+    h.children[1].push(eventLine(70, "issue.commented", KID2, true, comment));
+    await flush();
+    expect(h.delivered).toHaveLength(1);
+    h.setShow(REF, parentShow(kid(KID, "Parser"), kid(KID2, "Lexer"), kid(KID3, "Emitter")));
+    h.children[1].push(JSON.stringify({ reset_required: true, reset_after_id: 90 }));
+    await flush();
+    h.children[1].push(eventLine(91, "issue.commented", KID3, true, comment));
+    await flush();
+    expect(h.delivered).toHaveLength(2);
+  });
+
+  test("without TERN_KATA_COORDINATING nothing on a child is delivered", async () => {
+    const h = harness();
+    h.setShow(REF, parentShow(kid(KID, "Parser")));
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(70, "issue.commented", KID, true, comment));
+    h.children[0].push(eventLine(71, "issue.closed", KID, true));
+    h.children[0].push(attentionEvent(72, KID, { "work.attention": { from: null, to: "stuck" } }));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+});
+
 describe("createFollower", () => {
   test("a trusted slot write delivers once with the delivery text", async () => {
     const h = harness();
@@ -745,6 +1075,17 @@ describe("readConfig", () => {
     expect(config?.verifiedSenders).toBe(true);
     expect(readConfig({ ...base, TERN_KATA_VERIFIED_SENDERS: "0" })?.verifiedSenders).toBeUndefined();
     expect(readConfig(base)?.messageFrom).toBeUndefined();
+  });
+
+  test("TERN_KATA_COORDINATOR names the coordinator when it is actor/teammate, TERN_KATA_COORDINATING=1 marks a coordinator", () => {
+    const base = { KATA_INBOX_USER: ADDRESS, KATA_REF: "p#1" };
+    expect(readConfig({ ...base, TERN_KATA_COORDINATOR: " dangerboi/omp-lead-1 " })?.coordinator).toBe("dangerboi/omp-lead-1");
+    expect(readConfig({ ...base, TERN_KATA_COORDINATOR: "lead" })?.coordinator).toBeUndefined();
+    expect(readConfig({ ...base, TERN_KATA_COORDINATOR: "dangerboi/" })?.coordinator).toBeUndefined();
+    expect(readConfig(base)?.coordinator).toBeUndefined();
+    expect(readConfig({ ...base, TERN_KATA_COORDINATING: "1" })?.coordinating).toBe(true);
+    expect(readConfig({ ...base, TERN_KATA_COORDINATING: "0" })?.coordinating).toBeUndefined();
+    expect(readConfig(base)?.coordinating).toBeUndefined();
   });
 
   test("blank address, missing project or an address without / yields nothing", () => {

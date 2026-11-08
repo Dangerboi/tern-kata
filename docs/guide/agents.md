@@ -134,6 +134,14 @@ The **Wrap up every running agent** palette command ends the working day: it sen
 
 `r` on the Attention Page (on a request an agent raised) and on the Agent card (on the selected agent) opens a picker with three canned replies: `1` "continue", `2` "wrap up: commit what you have and comment your status", `3` "commit and close if the acceptance criteria hold". The key sends at once; `esc` cancels. A quick reply is the typed message with that text: the same address, the same delivery, the same question before replacing an unread message, and `r` is off, with the same reason, wherever `m` is.
 
+### Teams
+
+`c` on the Agent card of a parent Issue starts a team: a coordinator agent on the parent and a queue of Background agents on its ready children, at most 1 to 8 running at once. The record lives in `teams.json` in tern-kata's state folder, and any Pane on the host drives it.
+
+The parent's card shows the team under its agents: a heading with the state (`running`, `paused`, `coordinator exited` or `ending`) and the limit, then a row per child. A child the team started reads with its agent's state (`agent working`, `agent idle`, `agent waiting for you`) or how it ended (`ran: closed`, `ran: exited, Issue open`, `starting` while its start is recorded). The children still to run read `queued`; the ones the team will not start read `skipped: other Project`, `skipped: has an agent` or `skipped: not ready` (blocked by an open Issue). A child's own card names its team's parent and the coordinator's address.
+
+`p` on the parent's card pauses a running team and resumes a paused one (the button reads "Pause the team" or "Resume the team"). A paused team starts no child and never ends by itself; resuming lets the queue go on at once. `p` is off, with the reason as a Notice, on an Issue without a team and on a team whose coordinator exited or that is ending. Stopping an agent stays `x`, per agent.
+
 ### Blocker closes
 
 When an Issue that blocks an agent's Issue closes, the agent is told, with no one writing a message and with the Pane closed. The text is "<blocker ref> closed: <title>. <ref> may be unblocked."; when the agent's Issue still has other open blockers it adds how many ("1 other blocker is still open."). The message arrives the way a [message to an agent](#messages-to-an-agent) does, and nothing is left for the agent to clear.
@@ -151,6 +159,25 @@ With `forward_comments = true` in `agent.toml` for the agent's name (top level o
 - **Only the agent's own Issue**: comments on other Issues send nothing.
 - **Only comments after the agent started**: an older comment is not sent, and one the agent missed while its stream was down is sent once it is back.
 - **Which agents**: the omp agents the Pane starts; an agent started before you set the key keeps its old setting.
+
+### Messages and comments from a coordinator
+
+An agent started with `TERN_KATA_COORDINATOR=<actor>/<teammate>` (the wrapper's `--coordinator`, which a team's children get) has a coordinator. Its extension then:
+
+- delivers a message slot written as the agent's own actor with the coordinator's teammate as "Message from your coordinator <address>, sent to you through kata:", saying it carries the person's authority over this Issue and no other, instead of the peer's note;
+- delivers a comment on the agent's own Issue whose teammate is the coordinator's as "New comment on <ref> from your coordinator <address>: <first lines> (c:<comment UID>)", the first 3 lines and at most 400 characters, whatever `forward_comments` says.
+
+A slot or comment with any other teammate stays a peer's note or is dropped, as before, and without the variable nothing changes. A slot is still delivered only when the event's actor is its `from`. On a daemon without identity tokens the teammate is advisory: any process that writes as the agent's actor can set it.
+
+### What a coordinator hears
+
+An agent started with `TERN_KATA_COORDINATING=1` (the wrapper's `--coordinating`) is the coordinator of its Issue's children. Its extension reads the children (`kata show --json`) at start, after a stream reset or restart, and when a link event adds or removes one, and delivers, for children in the Issue's own Project and for events after it started, with no slot:
+
+- **Comments**: every comment on a child except the coordinator's own, "New comment on <child> from <author>: <first lines> (c:<comment UID>)" for a person, "from agent <actor>/<teammate>" for an agent; the first 3 lines, at most 400 characters.
+- **Closes**: "<child> closed: <title>. N of M children still open."
+- **Attention**: "<child> work.attention turned needs-human: <work.attention_msg>" (or `stuck`). An agent sets `work.attention_msg` after `work.attention`, so a message written after the first is delivered as one more line: "<child> work.attention is needs-human, work.attention_msg: <message>".
+
+A missed event is delivered once when the stream is back.
 
 ### Agents messaging each other
 

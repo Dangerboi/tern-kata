@@ -39,6 +39,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - A message from an actor other than the agent's own needs kata's identity mode (`[auth] require_token_identity`); the Message card and `tern-kata message` say so when it is off. `tern-kata agent` checks the daemon at start and sets `TERN_KATA_VERIFIED_SENDERS=1`.
 - A team starts from the parent Issue's Agent card (`c`): a coordinator agent plus Background agents on its ready children, at most 1–8 running at once (default 2).
   - The next ready child starts when a running one exits, from any Pane open on the host; when no child is left to start and none runs, the coordinator gets one message naming the children closed and still open.
+- A team's child takes its coordinator's messages, and its coordinator's comments on the child's Issue whatever `forward_comments` says, as the person's authority over that Issue.
+- A coordinator hears its children's comments, closes, and `work.attention` turning `needs-human` or `stuck`, from when it started, including children added later.
 
 #### Issues and Pages
 
