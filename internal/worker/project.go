@@ -163,6 +163,9 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		if !recovered && w.leaseHeld(ps) {
 			wake = minTime(wake, now.Add(10*time.Second))
 		}
+		if dirty && w.jobsListedAt(ps).After(dirtyAt) {
+			dirty = false // a listing after the event already satisfied it
+		}
 		if w.leaseHeld(ps) {
 			if next := w.tick(ctx, ps, issueEvent && !dirty); !next.IsZero() {
 				wake = minTime(wake, next)

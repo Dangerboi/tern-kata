@@ -264,10 +264,16 @@ func canMarkRunsSeen(m Model) bool {
 	return m.Runs.Timeline && m.Runs.seenRead && m.Runs.SeenErr == nil
 }
 
-// markRunsSeen is s: every Run loaded that has ended is marked seen, so the mode lists nothing until more ends. The mark is the
+// markRunsSeen is s: every Run loaded that has ended is marked seen, so the mode lists nothing until more ends. The mark is
+// per Project, so it is refused while a job filter or the Page search hides Runs: the mark would also cover a Run the user was
+// never shown. The mark is the
 // newest end among them, not the clock, so a Run that ended before the key but is not loaded yet, or whose executor's clock is
 // behind, still shows as new. With no ended Run loaded the mark stays.
 func markRunsSeen(m Model) (Model, []Cmd) {
+	if m.Runs.JobUID != "" || m.searchingPage(PageRuns) {
+		m.Notice = "Clear the job filter and the search before marking seen: it would also cover runs not shown."
+		return m, nil
+	}
 	seen := newestEnd(m.Runs.Runs, m.Runs.Seen)
 	if seen.Equal(m.Runs.Seen) {
 		return m, nil

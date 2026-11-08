@@ -328,6 +328,7 @@ func TestACancelledContextMakesTheCommitCheckFailAtOnce(t *testing.T) {
 	dir, _ := newRepo(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+	t.Cleanup(waitForStats)
 	start := time.Now()
 	if _, err := headCommit(ctx, dir); err == nil || time.Since(start) > 5*time.Second {
 		t.Fatalf("err %v after %s; want a prompt failure", err, time.Since(start))
@@ -337,6 +338,7 @@ func TestACancelledContextMakesTheCommitCheckFailAtOnce(t *testing.T) {
 func TestAHungCheckoutIsNotStatedAgainWhileTheFirstStatIsStuck(t *testing.T) {
 	release := make(chan struct{})
 	var calls atomic.Int32
+	waitForStats()
 	old := statDir
 	statDir = func(string) (os.FileInfo, error) { calls.Add(1); <-release; return nil, errors.New("gone") }
 	defer func() { statDir = old }()
@@ -370,13 +372,14 @@ func TestAHungCheckoutIsNotStatedAgainWhileTheFirstStatIsStuck(t *testing.T) {
 func TestConcurrentChecksOfOneCheckoutShareASlowStat(t *testing.T) {
 	dir, _ := newRepo(t)
 	var calls atomic.Int32
+	waitForStats()
 	old := statDir
 	statDir = func(d string) (os.FileInfo, error) {
 		calls.Add(1)
 		time.Sleep(200 * time.Millisecond)
 		return os.Stat(d)
 	}
-	defer func() { statDir = old }()
+	defer func() { waitForStats(); statDir = old }()
 	var wg sync.WaitGroup
 	errs := make([]error, 4)
 	tips := make([]string, 4)
@@ -415,5 +418,18 @@ func TestAGateCancelledByShutdownLeavesTheJobUnblockedAndLogsNothing(t *testing.
 	st := s.jobs[job.UID]
 	if st.blockedBy != "" || st.gateErr != "" || len(r.logs) != logged || !s.anyPending() {
 		t.Fatalf("blockedBy %q, gateErr %q, logs %q, pending %v; want nothing blocked or logged", st.blockedBy, st.gateErr, r.logs[logged:], s.anyPending())
+	}
+}
+
+// waitForStats returns once no stat goroutine is running, so a test may swap statDir without racing a stat an earlier
+// test left behind (headCommit returns on a cancelled context without waiting for it).
+func waitForStats() {
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
+		statsMu.Lock()
+		n := len(statsInFlight)
+		statsMu.Unlock()
+		if n == 0 {
+			return
+		}
 	}
 }

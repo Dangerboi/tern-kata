@@ -62,6 +62,10 @@ func (m Model) historyRow(event Event) DetailRow {
 		verb, object = metadataChanged(payload)
 	case "issue.scheduled_reached":
 		verb, object = "reached", "the scheduled date "+oneLine(payload.text("value"))
+	case "issue.assignment_renewed":
+		verb = assignmentRenewed(payload)
+	case "issue.assignment_expired":
+		verb = assignmentExpired(payload)
 	case "issue.moved":
 		verb, object = "moved", movedTo(event, payload)
 	case "issue.soft_deleted":
@@ -84,6 +88,29 @@ func (m Model) historyRow(event Event) DetailRow {
 		}
 	}
 	return row
+}
+
+// assignmentRenewed and assignmentExpired word the timed-assignment events as kata tui does, with the time as the payload has it.
+func assignmentRenewed(p payloadMap) string {
+	owner, until := p.text("owner"), p.text("assignment_expires_on")
+	switch {
+	case owner != "" && until != "":
+		return "renewed assignment for " + owner + " until " + until
+	case owner != "":
+		return "renewed assignment for " + owner
+	}
+	return "renewed assignment"
+}
+
+func assignmentExpired(p payloadMap) string {
+	owner, at := p.text("previous_owner"), p.text("assignment_expires_on")
+	switch {
+	case owner != "" && at != "":
+		return "assignment for " + owner + " expired at " + at
+	case owner != "":
+		return "assignment for " + owner + " expired"
+	}
+	return "assignment expired"
 }
 
 type payloadMap map[string]any

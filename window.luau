@@ -335,8 +335,9 @@ end
 local PLACE_TRIES = 10
 local placed: { [number]: boolean } = {}
 
+-- An agent block's unset command is tern.json.null, not nil, so both readers check for a string.
 local function markerOf(text: string?): number?
-    local block = text and text:match("prompt%-(%d+)%-%w+%.md")
+    local block = if type(text) == "string" then text:match("prompt%-(%d+)%-%w+%.md") else nil
     return block and tonumber(block) or nil
 end
 
@@ -435,7 +436,7 @@ end
 local lastKata: number? = nil
 
 local function isPromptCommand(command: string?): boolean
-    return command ~= nil and command:find("agent%-prompts[/\\]prompt%-") ~= nil
+    return type(command) == "string" and command:find("agent%-prompts[/\\]prompt%-") ~= nil
 end
 
 local function openFocusedAgent(cx: WindowCx, pane: number, tab: number)
@@ -809,7 +810,8 @@ end
 
 -- Polls once a second until the update's Pane ends: a non-zero exit marks it exited and the Pane stays to be read (a
 -- failure); a Pane that is gone, or marked exited with status 0, is success. A window plugin already at the release's
--- version is not installed again, as `tern-kata update` leaves a plugin copy of the same version alone.
+-- version is not installed again, as `tern-kata update` leaves a plugin copy of the same version alone, and a linked one
+-- (a checkout) is left as it is, as the install script would.
 local function watchUpdate(pane: number, version: string, remote: boolean)
     tern.timer(1000, function(cx)
         if not cx then return end
@@ -821,7 +823,13 @@ local function watchUpdate(pane: number, version: string, remote: boolean)
             cx:toast("info", "tern-kata plugin v" .. version .. " is up to date")
             return
         end
-        updatePlugin(cx, version)
+        withPluginDir(function()
+            if releases.isLinked(tern.plugin.dir, pluginDir) then
+                cx:toast("info", "tern-kata plugin is linked, left as it is")
+                return
+            end
+            updatePlugin(cx, version)
+        end)
     end)
 end
 

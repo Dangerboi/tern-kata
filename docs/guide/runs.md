@@ -53,7 +53,7 @@ In the mode the list has two halves around a **Now** line:
 
 With nothing new the top half is one line, "Nothing new since 08:00." (the time of the last mark, with the date when it was another day).
 
-`s` marks the runs read so far as seen: the highlighted runs leave the list and the mark moves to the end of the newest ended run among them, not to the clock, so a run that ended before the key but was not read yet, or whose executor's clock is behind, still shows as new. With no ended run read the mark stays. The mark is per machine, as kata has nowhere to keep it, so two machines disagree. It is `seen.toml` in tern-kata's config folder, beside `filters.toml`: one table per Project UID.
+`s` marks the runs read so far as seen: the highlighted runs leave the list and the mark moves to the end of the newest ended run among them, not to the clock, so a run that ended before the key but was not read yet, or whose executor's clock is behind, still shows as new. With no ended run read the mark stays. While a job filter or the Page search is on, `s` does nothing but say so in a Notice, because the mark is per Project and would also cover runs the list does not show; clear them first. The mark is per machine, as kata has nowhere to keep it, so two machines disagree. It is `seen.toml` in tern-kata's config folder, beside `filters.toml`: one table per Project UID.
 
 ```toml
 ["01JABC..."]

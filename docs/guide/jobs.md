@@ -151,7 +151,7 @@ kata's own date sweeper already notifies the owner or author of the trigger's Is
 - every missed run;
 - skip runs older than the **grace** in seconds, which skip requires for a recurring child and takes as optional for a worker's job.
 
-It applies to cron, interval and once triggers. **Enabled** turns the job on or off. Turning a paused recurring child back on from the card, with catch-up on every missed run and runs missed, opens the [Backfill card](#backfill-card) first, as `p` does; it sends the card's draft with the answer, and Esc returns to the card.
+On the day a cron trigger's zone falls back, a time inside the repeated hour runs twice (two runs); on the day it springs forward, a skipped time such as midnight can fail to run that day. It applies to cron, interval and once triggers. **Enabled** turns the job on or off. Turning a paused recurring child back on from the card, with catch-up on every missed run and runs missed, opens the [Backfill card](#backfill-card) first, as `p` does; it sends the card's draft with the answer, and Esc returns to the card.
 
 ### Conditions
 

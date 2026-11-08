@@ -101,6 +101,11 @@ func GroupIssues(collection Collection, issues []Issue, cal PaneCalendar) []Issu
 		if grouping == GroupClosedDate {
 			return cmp.Compare(b.ID, a.ID)
 		}
+		if grouping == GroupProject {
+			if c := cmp.Compare(a.Title, b.Title); c != 0 {
+				return c
+			}
+		}
 		return cmp.Compare(a.ID, b.ID)
 	})
 	return result

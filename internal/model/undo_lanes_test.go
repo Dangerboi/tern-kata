@@ -28,3 +28,17 @@ func TestUndoStillTakesBackTheLastIssueChangeAfterTheLaneListIsSharedWithTheProj
 		t.Fatalf("after sharing the Lane list u says %q, want it to take back the last Issue change", got)
 	}
 }
+
+func TestALateLaneListFromTheOldDaemonDoesNotReplaceTheNewDaemonsLanes(t *testing.T) {
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{})
+	m, _ = clickPress(m, "b")
+	old := m.LanesRequest()
+	m, ask := switchDaemon(t, m)
+	m, _ = model.Update(m, model.DaemonSwitched{Request: ask.Request, Name: "other"})
+	m, _ = loadFirst(m, model.ProjectLoaded{Connection: m.Connection, Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{})
+	m, _ = clickPress(m, "b")
+	m, _ = model.Update(m, model.LanesLoaded{ProjectUID: "p", Request: old, Lanes: []string{"stale"}})
+	if len(m.Board.Lanes) != 0 {
+		t.Fatalf("an answer from the old daemon set the Lanes to %v", m.Board.Lanes)
+	}
+}

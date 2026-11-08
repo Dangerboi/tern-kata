@@ -443,6 +443,9 @@ func (s *projectSchedule) plan(job cronjob.Job, now time.Time) {
 		return
 	}
 	cands := slices.Clone(st.pending)
+	if st.through.After(now) { // the clock ran ahead and was corrected back: occurrences in the wrong-clock span are not invented
+		st.through, changed = now, true
+	}
 	if now.After(st.through) {
 		from := maxTime(st.through, now.Add(-catchupWindow))
 		var fresh []time.Time

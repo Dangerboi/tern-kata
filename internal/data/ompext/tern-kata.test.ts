@@ -210,6 +210,39 @@ describe("blocker closes", () => {
     expect(h.delivered).toEqual([`demo#aaaa closed: Ship the parser. ${REF} may be unblocked. 1 other blocker is still open.`]);
   });
 
+  test("a blocker in another Project closing is delivered, and the stream covers every Project", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "other#ds0f", REF)]));
+    h.follower.start();
+    await flush();
+    expect(h.children[0].args).toContain("--all");
+    expect(h.children[0].args).not.toContain("--project");
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "other#ds0f", REF, "closed")]));
+    h.setShow("other#ds0f", showJson("other#ds0f", "Elsewhere", []));
+    h.children[0].push(eventLine(30, "issue.closed", "other#ds0f", true));
+    await flush();
+    expect(h.delivered).toEqual([`other#ds0f closed: Elsewhere. ${REF} may be unblocked.`]);
+  });
+
+  test("another Project's events about nothing this Issue follows, and its slot writes, deliver nothing", async () => {
+    const h = harness();
+    h.setShow(REF, showJson(REF, "mine", [link("blocks", "other#ds0f", REF)]));
+    h.follower.start();
+    await flush();
+    h.children[0].push(eventLine(30, "issue.closed", "other#zzzz", true));
+    h.children[0].push(eventLine(31, "issue.closed", "other#aaaa", true, {}));
+    h.children[0].push(JSON.stringify({
+      event_id: 32,
+      type: "issue.metadata_updated",
+      actor: "dangerboi",
+      project_name: "other",
+      issue_short_id: "ds0f",
+      payload: { diff: { [KEY]: { from: null, to: hello } } },
+    }));
+    await flush();
+    expect(h.delivered).toEqual([]);
+  });
+
   test("the last blocker closing names no remaining count", async () => {
     const h = harness();
     h.setShow(REF, showJson(REF, "mine", [link("blocks", "demo#aaaa", REF)]));
@@ -783,7 +816,7 @@ describe("createFollower", () => {
       `Message from dangerboi on ${REF}, sent to you through kata:\n\nhello there\n\n` +
         `When you have handled it, clear it: \`kata notify ${REF} --to ${ADDRESS} --clear\``,
     ]);
-    expect(h.children[0].args).toEqual(["events", "--tail", "--json", "--project", "demo"]);
+    expect(h.children[0].args).toEqual(["events", "--tail", "--json", "--all"]);
     expect(h.runs).toEqual([["inbox", "--for", ADDRESS, "--json", "--project", "demo"]]);
   });
 
@@ -991,7 +1024,7 @@ describe("createFollower", () => {
     await flush();
     expect(h.children).toHaveLength(2);
     expect(h.children[1].args).toEqual([
-      "events", "--tail", "--json", "--project", "demo", "--last-event-id", "12",
+      "events", "--tail", "--json", "--all", "--last-event-id", "12",
     ]);
     expect(h.runs).toHaveLength(2);
   });

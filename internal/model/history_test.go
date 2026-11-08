@@ -155,3 +155,18 @@ func inZone(zone string) model.Model {
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: m.RefreshRequest(), Query: m.SnapshotQuery(), LocalDate: "2026-10-08", TimeZone: zone})
 	return m
 }
+
+func TestAssignmentEventsReadAsKataTuiDoes(t *testing.T) {
+	for _, c := range []struct{ typ, payload, want string }{
+		{"issue.assignment_expired", `{"previous_owner":"alice","assignment_expires_on":"2026-10-08T10:00:00Z"}`, "assignment for alice expired at 2026-10-08T10:00:00Z"},
+		{"issue.assignment_expired", `{"previous_owner":"alice"}`, "assignment for alice expired"},
+		{"issue.assignment_expired", `{}`, "assignment expired"},
+		{"issue.assignment_renewed", `{"owner":"alice","assignment_expires_on":"2026-10-08T10:00:00Z"}`, "renewed assignment for alice until 2026-10-08T10:00:00Z"},
+		{"issue.assignment_renewed", `{"owner":"alice"}`, "renewed assignment for alice"},
+		{"issue.assignment_renewed", `{}`, "renewed assignment"},
+	} {
+		if got := historyRow(t, model.Event{Type: c.typ, Payload: c.payload}).History.Verb; got != c.want {
+			t.Errorf("%s %s: %q, want %q", c.typ, c.payload, got, c.want)
+		}
+	}
+}

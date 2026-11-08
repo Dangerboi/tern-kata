@@ -206,3 +206,29 @@ func TestEnteringTheModeForAnotherProjectDropsTheJobsOfTheFirst(t *testing.T) {
 		t.Error("the next runs are not marked as loading")
 	}
 }
+
+func TestSRefusesWhileAJobFilterHidesRuns(t *testing.T) {
+	m := runsPageInTimeline(t, nil, endedRun("a", "j1", cronjob.RunSucceeded, 10))
+	m.Runs.JobUID = "j1"
+	m, cmds := model.Update(m, model.KeyMsg{Chord: "s"})
+	if !m.Runs.Seen.IsZero() || len(cmds) != 0 || m.Notice == "" {
+		t.Fatalf("seen %v, commands %#v, notice %q", m.Runs.Seen, cmds, m.Notice)
+	}
+}
+
+func TestSRefusesWhileTheSearchHidesRuns(t *testing.T) {
+	a := endedRun("a", "j1", cronjob.RunSucceeded, 10)
+	a.JobName = "backup"
+	b := endedRun("b", "j2", cronjob.RunFailed, 20)
+	b.JobName = "deploy"
+	m := runsPageInTimeline(t, nil, a, b)
+	m.PageSearch.Text = "backup"
+	m, cmds := model.Update(m, model.KeyMsg{Chord: "s"})
+	if !m.Runs.Seen.IsZero() || len(cmds) != 0 || m.Notice == "" {
+		t.Fatalf("seen %v, commands %#v, notice %q", m.Runs.Seen, cmds, m.Notice)
+	}
+	m.PageSearch.Text = ""
+	if got := m.Timeline(timelineEpoch).RunCount; got != 2 {
+		t.Errorf("%d runs new after the search ended, want 2", got)
+	}
+}

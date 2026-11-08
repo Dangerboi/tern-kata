@@ -154,7 +154,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.Focus, m.HelpOpen, m.EditorUID = ColumnList, false, ""
 	m.Filters, m.DefaultFilters, m.Search, m.IDSearch, m.FilterForm = Filters{}, Filters{}, SearchState{}, IDSearch{}, FilterFormState{}
 	m.IssueDetail = m.IssueDetail.cleared()
-	m.Board = BoardState{}
+	m.Board = BoardState{reads: m.Board.reads.Discarded()}
 	for _, def := range pageDefs {
 		if def.reset != nil {
 			m = def.reset(m, "")

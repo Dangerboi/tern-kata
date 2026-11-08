@@ -480,8 +480,16 @@ export function createFollower(deps: FollowerDeps): Follower {
     deps.deliver(commentText(event.ref, teammate === undefined ? author : `agent ${author}/${teammate}`, body, uid));
   }
 
+  // The stream covers every Project so a blocker in another one is heard closing. An event outside this Project counts only when
+  // it is about a blocker, or its payload names this Issue (a link written from the other side); everything else is dropped as
+  // a Project-scoped stream would have.
+  function relevant(event: KataEvent): boolean {
+    if (event.ref.startsWith(`${deps.project}#`) || blockers.has(event.ref)) return true;
+    return Object.values(event.payload).some((v) => v === deps.ref || (Array.isArray(v) && v.includes(deps.ref)));
+  }
+
   function react(event: KataEvent): void {
-    if (event.createdAt <= startedAt || event.eventId <= reacted) return;
+    if (event.createdAt <= startedAt || event.eventId <= reacted || !relevant(event)) return;
     reacted = event.eventId;
     const gen = generation;
     enqueue(gen, () => reactions[event.type](event, gen));
@@ -555,11 +563,11 @@ export function createFollower(deps: FollowerDeps): Follower {
       enqueueBlockers(generation);
       return;
     }
-    handle(event.ref, event.eventId, event.actor, event.to);
+    if (event.ref.startsWith(`${deps.project}#`)) handle(event.ref, event.eventId, event.actor, event.to);
   }
 
   function spawnStream(): Spawned | undefined {
-    const args = ["events", "--tail", "--json", "--project", deps.project];
+    const args = ["events", "--tail", "--json", "--all"];
     if (cursor > 0) args.push("--last-event-id", String(cursor));
     try {
       return deps.spawn(args);

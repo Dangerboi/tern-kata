@@ -134,6 +134,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - An Issue's list row no longer keeps the badge of a remote agent once the Issue shows none.
 - `tern-kata agent` asks the daemon its auth kind at start only when `--message-from` is given, so an agent started with only `--address-prefix` no longer waits on an unreachable daemon.
 - An agent for an Issue in a Project whose name starts with `--` starts instead of leaving a dead block: the Pane passes the agent wrapper its value flags as `--flag=value`.
+- An agent hears a blocker in another Project close ("… closed; … may be unblocked"): its extension follows every Project's events it can read and keeps the ones about its Issue, its children and its blockers.
 
 #### Attachments
 
@@ -151,12 +152,15 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A label list that loads late no longer clears or replaces the error the New Issue card or a field card shows.
 - A Lane, filter, view or agent file that is a symlink (a dotfiles repo) is written through the link instead of being replaced by a regular file.
   - A chain of links keeps every link, and a link loop is refused naming the file.
+- All Open orders its Project groups by Project name, as kata's web UI does, so `app` comes before `app 2` and `tern` before `tern-kata`.
+- The Events tab words timed-assignment events as kata tui does, naming the owner and the expiry time.
 
 #### Jobs and worker
 
 - On Windows, a worker whose runs folder is a file instead of a folder refuses work and says why, as on Linux and macOS; it used to read the file as no runs and go on.
 - Saving a job from the Job card keeps the line breaks of its per-run Issue body unless you change the Body field; it used to save the body as one line.
 - Saving a notify job from the Job card keeps its overlap; it used to reset `forbid` to `allow`.
+- `s` on the Runs Page no longer marks runs seen while a job filter or the search hides some of them; it says to clear them first.
 - A limit of one run reads "At most 1 run per day", not "1 runs".
 - `worker doctor` reports a quarantined run or an unreadable journal once, not once per served Project.
 - A run held while a cancel was pending starts when you resume it; it used to be cancelled at launch instead.
@@ -165,14 +169,19 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A step that prints a secret it was given no longer puts it in the run's summary, the step summary, a hold's detail or the journal: the worker writes values of 8 bytes or more as `***` there. The run folder's own output files keep what the step printed.
 - A secret read from an environment variable (`env = "GITHUB_TOKEN"`) reaches only the jobs that name it; every step of every Project used to inherit it.
 - A secret's `file` may start with `~\` on Windows, as `~/` already worked.
+- Issue events arriving less than 2 s apart no longer make the worker re-read a Project's cron job list on every event; the 2 s debounce applies again.
+- A worker whose wall clock ran ahead and was then corrected back (a VM restore, a bad clock step) schedules again at once; it used to run nothing until the old time came back.
 
 #### Daemons and Federation
 
 - The hub picker and the hub browser say a catalog daemon with an inline `token` has a token, as the active daemon's line already did.
+- A late Lane list from the daemon you just switched away from no longer replaces the new daemon's Lanes on the Board.
 
 #### Tern window
 
 - On Windows, the programs tern-kata runs in the background (`tern` opening a run's session tab, `git config user.name`, docbank setup, the update steps and the file opener) start without a console window, so none flashes up.
+- An agent block whose command Tern leaves unset no longer stops the window plugin from relaying agent states to kata Panes, counting waiting agents or opening a hidden agent's tab.
+- **Update tern-kata** from a window on another machine says the window's plugin is linked and left as it is, instead of saying nothing.
 
 #### Command line
 

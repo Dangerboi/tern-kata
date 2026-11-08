@@ -177,3 +177,26 @@ func TestReEnablingAJobDropsAParkedOccurrenceAndAnUnadmittedOne(t *testing.T) {
 		}
 	}
 }
+
+// A wall clock that ran ahead (a VM restore, a bad RTC or NTP step), ticked and was corrected back leaves the saved
+// Through in the future; the schedule brings it back to now, so the corrected clock schedules again, across a restart.
+func TestAClockCorrectedBackAfterRunningAheadSchedulesAgainAcrossARestart(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	job := pausedHourlyJob(start, "skip")
+	store := &memCheckpoints{saved: map[string]checkpoint{}}
+	s := newMemSchedule(store)
+
+	s.planAll([]cronjob.Job{job}, nil, start)
+	s.planAll([]cronjob.Job{job}, nil, start.Add(72*time.Hour)) // the clock jumped ahead and ticked
+	s.planAll([]cronjob.Job{job}, nil, start)                   // and was corrected back
+	if got := store.saved[job.UID].Through; got.After(start) {
+		t.Fatalf("saved Through %s is after the corrected clock %s", got, start)
+	}
+
+	restarted := newMemSchedule(store)
+	restarted.planAll([]cronjob.Job{job}, nil, start)
+	restarted.planAll([]cronjob.Job{job}, nil, start.Add(6*time.Hour))
+	if !restarted.anyPending() {
+		t.Fatal("no occurrence due six hours after the corrected clock")
+	}
+}
