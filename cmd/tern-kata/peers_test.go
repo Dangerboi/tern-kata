@@ -183,7 +183,7 @@ func TestMessageFromAnAgentWithoutATeammateNameWritesNothing(t *testing.T) {
 
 func TestMessageToAnAddressHoldingAnUnreadOneWritesNothingAndExitsNonZero(t *testing.T) {
 	s := &sender{answer: func(c model.SendAgentMessage) model.AgentMessageSent {
-		return model.AgentMessageSent{UID: c.UID, Held: `{"from":"dana"}`, Unread: "rebase first\nthen test", UnreadFrom: "dana-phone"}
+		return model.AgentMessageSent{UID: c.UID, Held: `{"from":"dana"}`, Unread: "rebase first", UnreadFrom: "dana-phone"}
 	}}
 	var out bytes.Buffer
 	err := runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-1", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
@@ -519,16 +519,5 @@ func TestMessageToAnUnknownTargetNamesWhyTheOtherHostsCouldNotBeRead(t *testing.
 	err = runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "demo#zz99", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
 	if err == nil || !strings.Contains(err.Error(), "daemon unreachable") || len(s.sent) != 0 {
 		t.Errorf("lookup failing with no local target: err %v, sent %+v, want the read error", err, s.sent)
-	}
-}
-
-func TestMessageToAnAddressHoldingAnUnreadOneShowsNoControlCharacters(t *testing.T) {
-	s := &sender{answer: func(c model.SendAgentMessage) model.AgentMessageSent {
-		return model.AgentMessageSent{UID: c.UID, Held: `{}`, Unread: "\x1b[2Jhi\rthere", UnreadFrom: "da\x1bna"}
-	}}
-	var out bytes.Buffer
-	_ = runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-1", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
-	if strings.ContainsAny(out.String(), "\x1b\r") || !strings.Contains(out.String(), "from da na") || !strings.Contains(out.String(), "[2Jhi there") {
-		t.Errorf("output %q, want control characters replaced by spaces", out.String())
 	}
 }

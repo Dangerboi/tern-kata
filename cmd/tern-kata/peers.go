@@ -305,13 +305,11 @@ func writeSlot(plan LaunchPlan, workspace string, a model.IssueAgent, text strin
 	case sent.Err != nil:
 		return fmt.Sprintf("Cannot message %s on %s: %s", a.Address, place, sent.Err), false
 	case sent.Held != "":
-		unread, _, _ := strings.Cut(strings.TrimSpace(sent.Unread), "\n")
-		unread = model.PlainText(unread)
 		by := ""
 		if sent.UnreadFrom != "" {
-			by = " from " + model.PlainText(sent.UnreadFrom)
+			by = " from " + sent.UnreadFrom
 		}
-		return fmt.Sprintf("%s on %s holds a message%s it has not cleared (%s); nothing was written there. To clear it: kata notify %s --to %s --clear", a.Address, place, by, unread, a.IssueRef, a.Address), false
+		return fmt.Sprintf("%s on %s holds a message%s it has not cleared (%s); nothing was written there. To clear it: kata notify %s --to %s --clear", a.Address, place, by, sent.Unread, a.IssueRef, a.Address), false
 	}
 	return fmt.Sprintf("Sent the message to %s on %s.", a.Address, place), true
 }

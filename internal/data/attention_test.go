@@ -386,10 +386,10 @@ func TestAMessageToAnAgentIsWrittenOnlyOverWhatThePersonAgreedToReplace(t *testi
 		t.Fatalf("the unread message was replaced without asking: %+v", got.Slot)
 	}
 	// Someone rewrites the slot after the person agreed to replace the first message: the new value is held instead.
-	f.put(t, f.workP, uid, agent, map[string]any{"from": "bob", "message": "from bob"})
+	f.put(t, f.workP, uid, agent, map[string]any{"from": "bo\x1bb", "message": "\x1b[2Jfrom\rbob\nsecond line"})
 	again := send("no, the third", held.Held)
-	if again.Err != nil || again.Held == "" || again.Held == held.Held || again.Unread != "from bob" {
-		t.Fatalf("replacing a value that changed meanwhile: %+v", again)
+	if again.Err != nil || again.Held == "" || again.Held == held.Held || again.Unread != " [2Jfrom bob" || again.UnreadFrom != "bo b" {
+		t.Fatalf("replacing a value that changed meanwhile: %+v, want the first line with control characters made spaces", again)
 	}
 	if got := send("no, the third", again.Held); got.Err != nil || got.Held != "" {
 		t.Fatalf("replacing the value held: %+v", got)

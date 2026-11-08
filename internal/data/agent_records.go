@@ -157,15 +157,20 @@ func (g *Gateway) withDaemon(ctx context.Context, workspace string, fn func(*Cli
 	return err
 }
 
-// issueRecords reads the keys of an Issue's metadata that hold Agent records, as stored.
+// issueRecords reads the keys of an Issue's metadata that hold Agent records, as stored. An Issue kata no longer has holds none.
 func (c *Client) issueRecords(ctx context.Context, projectID int64, uid string) (map[string]json.RawMessage, error) {
+	records, _, err := c.readIssueRecords(ctx, projectID, uid)
+	return records, err
+}
+
+// readIssueRecords is issueRecords that also tells whether kata has the Issue.
+func (c *Client) readIssueRecords(ctx context.Context, projectID int64, uid string) (map[string]json.RawMessage, bool, error) {
 	r, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: uid}})
 	if client.StatusCode(err) == http.StatusNotFound {
-		// An Issue kata no longer has holds no records.
-		return map[string]json.RawMessage{}, nil
+		return map[string]json.RawMessage{}, false, nil
 	}
 	if err != nil {
-		return nil, daemonError(err)
+		return nil, false, daemonError(err)
 	}
 	var body struct {
 		Issue struct {
@@ -173,9 +178,9 @@ func (c *Client) issueRecords(ctx context.Context, projectID int64, uid string) 
 		} `json:"issue"`
 	}
 	if err := json.Unmarshal(r.Body, &body); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return recordsOf(body.Issue.Metadata), nil
+	return recordsOf(body.Issue.Metadata), true, nil
 }
 
 func recordsOf(metadata map[string]json.RawMessage) map[string]json.RawMessage {
@@ -234,13 +239,19 @@ func (c *Client) publishAgentRecord(ctx context.Context, host agentHost, e model
 	if err != nil {
 		return "", err
 	}
-	return c.publishAgentRecordOver(ctx, host, e, records)
+	usedBy, write := planAgentRecord(records, host, e)
+	if !write {
+		return usedBy, nil
+	}
+	rec := agentRecordOf(host, e)
+	return "", c.patchRecords(ctx, e.ProjectID, e.IssueUID, rec.Actor, map[string]any{model.AgentRecordKey(host.ID, e.Block): rec})
 }
 
-// publishAgentRecordOver is publishAgentRecord given the records the Issue holds, as a listing already read them.
-func (c *Client) publishAgentRecordOver(ctx context.Context, host agentHost, e model.AgentEntry, records map[string]json.RawMessage) (usedBy string, err error) {
+// planAgentRecord decides, over the records an Issue holds, what publishing e needs: the host name of another host id's record that
+// holds its Address (nothing to write then), or whether its record is missing or differs and must be written.
+func planAgentRecord(records map[string]json.RawMessage, host agentHost, e model.AgentEntry) (usedBy string, write bool) {
 	if usedBy = addressHolder(records, host.ID, e.Address); usedBy != "" {
-		return usedBy, nil
+		return usedBy, false
 	}
 	rec := agentRecordOf(host, e)
 	key := model.AgentRecordKey(host.ID, e.Block)
@@ -248,10 +259,10 @@ func (c *Client) publishAgentRecordOver(ctx context.Context, host agentHost, e m
 		if again, err := model.ReadAgentRecord(key, string(raw)); err == nil && again.Address == rec.Address && again.Host == rec.Host &&
 			again.Name == rec.Name && again.Actor == rec.Actor && again.NoAddress == rec.NoAddress && again.StartedAt.Equal(rec.StartedAt) &&
 			slices.Equal(again.MessageFrom, rec.MessageFrom) {
-			return "", nil
+			return "", false
 		}
 	}
-	return "", c.patchRecords(ctx, e.ProjectID, e.IssueUID, rec.Actor, map[string]any{key: rec})
+	return "", true
 }
 
 // removeAgentRecords removes, from the Issue, the records that carry hostID and that match picks (by key and, when it reads, value).
@@ -365,10 +376,12 @@ func (g *Gateway) noteAddressHolder(file string, e model.AgentEntry, usedBy stri
 	return e, err
 }
 
-// issueRecordsListed is what a read of Issues found of Agent records: per Issue its Project and the record keys it holds.
+// issueRecordsListed is what a read of Issues found of Agent records: per Issue its Project and the record keys it holds, and
+// whether kata no longer has the Issue (nothing is published on it).
 type issueRecordsListed struct {
 	projectID int64
 	records   map[string]json.RawMessage
+	missing   bool
 }
 
 // listIssueRecords reads the Issues the Pane shows, as its Project's open Issues page by page (none when the workspace is bound
@@ -414,11 +427,11 @@ func (c *Client) listIssueRecords(ctx context.Context, workspace string, entries
 		if _, seen := issues[e.IssueUID]; seen || e.ProjectID == 0 || e.IssueUID == "" {
 			continue
 		}
-		records, err := c.issueRecords(ctx, e.ProjectID, e.IssueUID)
+		records, found, err := c.readIssueRecords(ctx, e.ProjectID, e.IssueUID)
 		if err != nil {
 			continue // an Issue that cannot be read now keeps its records until the next reconcile
 		}
-		issues[e.IssueUID] = issueRecordsListed{projectID: e.ProjectID, records: records}
+		issues[e.IssueUID] = issueRecordsListed{projectID: e.ProjectID, records: records, missing: !found}
 	}
 	return issues, nil
 }
@@ -467,12 +480,9 @@ func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs a
 			if e.ProjectID == 0 || e.IssueUID == "" || exited[e.Block] {
 				continue
 			}
-			var usedBy string
-			var err error
-			if listedIssue, ok := issues[e.IssueUID]; ok {
-				usedBy, err = c.publishAgentRecordOver(ctx, host, e, listedIssue.records)
-			} else {
-				usedBy, err = c.publishAgentRecord(ctx, host, e)
+			usedBy, skip, err := c.publishListed(ctx, host, e, issues[e.IssueUID])
+			if skip {
+				continue
 			}
 			if err != nil {
 				errs = append(errs, err)
@@ -484,4 +494,24 @@ func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs a
 		return nil
 	})
 	return errors.Join(append(errs, err)...)
+}
+
+// publishListed publishes e given what a listing found on its Issue (the zero value when the listing did not read it). The listing
+// is seconds old: a record that must be written is decided again over a read taken now, so a record of another host that appeared
+// since still keeps the Address from being published twice. Nothing is read or written when the listing shows the record in place.
+// skip is true for an Issue kata no longer has.
+func (c *Client) publishListed(ctx context.Context, host agentHost, e model.AgentEntry, listed issueRecordsListed) (usedBy string, skip bool, err error) {
+	if listed.records == nil {
+		usedBy, err = c.publishAgentRecord(ctx, host, e)
+		return usedBy, false, err
+	}
+	if listed.missing {
+		return "", true, nil // nothing to publish on
+	}
+	usedBy, write := planAgentRecord(listed.records, host, e)
+	if !write {
+		return usedBy, false, nil
+	}
+	usedBy, err = c.publishAgentRecord(ctx, host, e)
+	return usedBy, false, err
 }

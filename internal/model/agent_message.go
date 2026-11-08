@@ -395,15 +395,20 @@ const (
 	clearDone
 )
 
+// clonedGoneAgentClears is a copy of the gone-agent notes, never nil, for a change that must not touch the Model it came from.
+func (m Model) clonedGoneAgentClears() map[string]goneAgentClear {
+	if clears := maps.Clone(m.goneAgentClears); clears != nil {
+		return clears
+	}
+	return map[string]goneAgentClear{}
+}
+
 // sweepGoneAgents clears what is left at the address of each agent this Pane started that has exited or whose block went, and
 // removes its Agent record (an agent with no address has one too), once per agent: nobody reads that address again. A clear that
 // failed is asked again at the next sweep. The sweep keeps a note only of the agents still mapped or gone.
 func sweepGoneAgents(m Model) (Model, []Cmd) {
 	var cmds []Cmd
-	clears := maps.Clone(m.goneAgentClears)
-	if clears == nil {
-		clears = map[string]goneAgentClear{}
-	}
+	clears := m.clonedGoneAgentClears()
 	clearOnce := func(e AgentEntry) {
 		project := m.projectOf(e)
 		if _, noted := clears[e.Block]; project == 0 || noted {
@@ -435,10 +440,7 @@ func (m Model) addressForgotten(block string) bool {
 }
 
 func agentAddressCleared(m Model, msg AgentAddressCleared) Model {
-	clears := maps.Clone(m.goneAgentClears)
-	if clears == nil {
-		clears = map[string]goneAgentClear{}
-	}
+	clears := m.clonedGoneAgentClears()
 	switch {
 	case msg.Err != nil:
 		delete(clears, msg.Block)

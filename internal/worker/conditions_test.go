@@ -343,6 +343,16 @@ func TestSkipRecordsOfOneJobStayBoundedAndTheStatusCountStaysRight(t *testing.T)
 	if len(got) != maxSkipsPerJob+1 {
 		t.Fatalf("%d records kept, want %d for A and 1 for B", len(got), maxSkipsPerJob)
 	}
+	merged, kept := 0, 0
+	for _, s := range got {
+		if s.JobUID == "A" {
+			merged += s.Merged
+			kept++
+		}
+	}
+	if merged+kept != total {
+		t.Fatalf("A: merged %d + kept %d, want %d added", merged, kept, total)
+	}
 	jobs := jobSkips(got)
 	if len(jobs) != 2 || jobs[0].UID != "A" || jobs[0].Count != total || jobs[1].Count != 1 {
 		t.Fatalf("skips per job %+v, want A counted %d and B once", jobs, total)

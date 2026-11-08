@@ -322,14 +322,12 @@ func (g *Gateway) driveTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 			return slices.Delete(list, i, i+1)
 		})
 		return err
-	case model.TeamEnding:
+	case model.TeamEnding, model.TeamRunning:
 		if !own {
 			return nil
 		}
-		return g.writeEndMessage(ctx, cmd, teamsFile, uid)
-	case model.TeamRunning:
-		if !own {
-			return nil
+		if t.State == model.TeamEnding {
+			return g.writeEndMessage(ctx, cmd, teamsFile, uid)
 		}
 		return g.queueTeam(ctx, cmd, teamsFile, agentsFile, t, entries, out)
 	}
@@ -380,13 +378,11 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 		return nil //nolint:nilerr // the parent is another daemon's, or kata is not reachable now: the team waits for the next trigger
 	}
 	childOf := make(map[string]bool, len(parent.Children))
-	for _, c := range parent.Children {
-		childOf[c.UID] = true
-	}
 	// A child another host's record holds is neither startable nor finished: the team waits for that agent (Forget on the card
 	// clears a dead one) instead of ending with the child never run.
 	remoteHeld := false
 	for _, c := range parent.Children {
+		childOf[c.UID] = true
 		if c.Status != "closed" && c.ProjectID == t.ProjectID && !t.Started(c.UID) && model.RemoteHostOn(c.Metadata, hostID) != "" {
 			remoteHeld = true
 		}

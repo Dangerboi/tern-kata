@@ -135,27 +135,47 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// statsInFlight holds the checkouts with a stat that has not returned, as a hung mount never lets it. headCommit starts
-// no second stat on one, so a stuck checkout costs one goroutine, not one per check. statDir is a seam for tests.
+// dirStat is one stat of a checkout folder; isDir is valid once done is closed.
+type dirStat struct {
+	done  chan struct{}
+	isDir bool
+}
+
+// statsInFlight holds the checkouts with a stat that has not returned, as a hung mount never lets it. headCommit
+// starts no second stat on one: later callers wait on the running stat, so a stuck checkout costs one goroutine, not
+// one per check. statDir is a seam for tests.
 var (
-	statsInFlight sync.Map
+	statsMu       sync.Mutex
+	statsInFlight = map[string]*dirStat{}
 	statDir       = os.Stat
 )
 
-// headCommit is the commit the checkout's branch is at.
-func headCommit(ctx context.Context, dir string) (string, error) {
-	if _, busy := statsInFlight.LoadOrStore(dir, struct{}{}); busy {
-		return "", fmt.Errorf("the checkout %s still cannot be checked: the previous check of the checkout has not returned", dir)
+// startStat returns the running stat of dir, starting one when there is none.
+func startStat(dir string) *dirStat {
+	statsMu.Lock()
+	defer statsMu.Unlock()
+	if s, ok := statsInFlight[dir]; ok {
+		return s
 	}
-	statted := make(chan bool, 1)
+	s := &dirStat{done: make(chan struct{})}
+	statsInFlight[dir] = s
 	go func() {
 		info, err := statDir(dir)
-		statsInFlight.Delete(dir)
-		statted <- err == nil && info.IsDir()
+		s.isDir = err == nil && info.IsDir()
+		statsMu.Lock()
+		delete(statsInFlight, dir)
+		statsMu.Unlock()
+		close(s.done)
 	}()
+	return s
+}
+
+// headCommit is the commit the checkout's branch is at.
+func headCommit(ctx context.Context, dir string) (string, error) {
+	stat := startStat(dir)
 	select {
-	case ok := <-statted:
-		if !ok {
+	case <-stat.done:
+		if !stat.isDir {
 			return "", fmt.Errorf("the checkout %s is not a directory", dir)
 		}
 	case <-ctx.Done():

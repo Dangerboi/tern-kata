@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -340,13 +341,12 @@ func TestAHungCheckoutIsNotStatedAgainWhileTheFirstStatIsStuck(t *testing.T) {
 	statDir = func(string) (os.FileInfo, error) { calls.Add(1); <-release; return nil, errors.New("gone") }
 	defer func() { statDir = old }()
 	dir := "/hung/checkout"
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	if _, err := headCommit(ctx, dir); err == nil || !strings.Contains(err.Error(), "could not be read") {
-		t.Fatalf("first check: %v", err)
-	}
-	if _, err := headCommit(context.Background(), dir); err == nil || !strings.Contains(err.Error(), "the previous check of the checkout has not returned") {
-		t.Fatalf("second check: %v", err)
+	for range 3 {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+		if _, err := headCommit(ctx, dir); err == nil || !strings.Contains(err.Error(), "could not be read") {
+			t.Fatalf("check: %v", err)
+		}
+		cancel()
 	}
 	if n := calls.Load(); n != 1 {
 		t.Fatalf("%d stats started, want 1", n)
@@ -354,13 +354,47 @@ func TestAHungCheckoutIsNotStatedAgainWhileTheFirstStatIsStuck(t *testing.T) {
 	close(release)
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if _, busy := statsInFlight.Load(dir); !busy {
+		statsMu.Lock()
+		n := len(statsInFlight)
+		statsMu.Unlock()
+		if n == 0 {
 			break
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("the stat never cleared its mark")
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestConcurrentChecksOfOneCheckoutShareASlowStat(t *testing.T) {
+	dir, _ := newRepo(t)
+	var calls atomic.Int32
+	old := statDir
+	statDir = func(d string) (os.FileInfo, error) {
+		calls.Add(1)
+		time.Sleep(200 * time.Millisecond)
+		return os.Stat(d)
+	}
+	defer func() { statDir = old }()
+	var wg sync.WaitGroup
+	errs := make([]error, 4)
+	tips := make([]string, 4)
+	for i := range errs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tips[i], errs[i] = headCommit(context.Background(), dir)
+		}()
+	}
+	wg.Wait()
+	for i := range errs {
+		if errs[i] != nil || tips[i] == "" || tips[i] != tips[0] {
+			t.Fatalf("caller %d: %q, %v", i, tips[i], errs[i])
+		}
+	}
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("%d stats started, want 1", n)
 	}
 }
 

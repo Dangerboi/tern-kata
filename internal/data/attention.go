@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"go.kenn.io/kata/pkg/client"
@@ -156,7 +157,9 @@ func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessag
 		if held && (expect == nil || raw != *expect) {
 			sent := model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address, Held: raw}
 			if slot, err := model.ReadNotificationSlot(key, raw); err == nil {
-				sent.Unread, sent.UnreadFrom = slot.Message, slot.From
+				// The first line, with control characters made spaces: both are shown to people, and text another actor wrote must not steer a terminal.
+				first, _, _ := strings.Cut(strings.TrimSpace(slot.Message), "\n")
+				sent.Unread, sent.UnreadFrom = model.PlainText(first), model.PlainText(slot.From)
 			}
 			return sent, nil
 		}

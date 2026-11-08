@@ -520,3 +520,65 @@ func TestListingRecordsToleratesAProjectTheDaemonDoesNotKnow(t *testing.T) {
 		t.Fatalf("issues %v, want the entry's Issue listed", issues)
 	}
 }
+
+func TestAnAddressAnotherHostTookAfterTheListingIsNotPublishedAgain(t *testing.T) {
+	f := newRecordFixture(t, "")
+	host, err := f.gateway.hostOf(agentDirs{config: f.state, state: f.state})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := model.AgentEntry{IssueUID: f.uid, IssueRef: "demo#ab12", ProjectID: f.project.ID, Block: "31", Teammate: "omp", Address: "dana/omp-31", Actor: "dana"}
+	var usedBy string
+	err = f.gateway.withDaemon(context.Background(), f.work, func(c *Client) error {
+		issues, err := c.listIssueRecords(context.Background(), f.work, []model.AgentEntry{entry})
+		if err != nil {
+			return err
+		}
+		// The other host publishes after the listing was read.
+		f.put(t, model.AgentRecord{Address: "dana/omp-31", Host: "desktop", HostID: "0000000000000000", Block: "5", Name: "omp", Actor: "dana", MessageFrom: []string{}})
+		var skip bool
+		usedBy, skip, err = c.publishListed(context.Background(), host, entry, issues[f.uid])
+		if skip {
+			t.Error("skipped an Issue kata has")
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usedBy != "desktop" {
+		t.Fatalf("used by %q, want desktop", usedBy)
+	}
+	if got := blocksOf(f.records(t)); !slices.Equal(got, []string{"0000000000000000/5"}) {
+		t.Fatalf("records %v, want the other host's only", got)
+	}
+}
+
+func TestAReconcileSkipsAnIssueKataNoLongerHas(t *testing.T) {
+	f := newRecordFixture(t, "")
+	seedAgent(t, worker.Dirs{Config: f.state, State: f.state}, model.AgentEntry{IssueUID: "01ZZZZZZZZZZZZZZZZZZZZZZZZ", IssueRef: "demo#gone", ProjectID: f.project.ID, Block: "40", PaneBlock: "7", Teammate: "omp", Address: "dana/omp-40", Actor: "dana"})
+	host, err := f.gateway.hostOf(agentDirs{config: f.state, state: f.state})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := ReadAgents(filepath.Join(f.state, AgentsFile))
+	err = f.gateway.withDaemon(context.Background(), f.work, func(c *Client) error {
+		issues, err := c.listIssueRecords(context.Background(), f.work, entries)
+		if err != nil {
+			return err
+		}
+		if !issues["01ZZZZZZZZZZZZZZZZZZZZZZZZ"].missing {
+			t.Errorf("issues %+v, want the gone Issue marked missing", issues)
+		}
+		if _, skip, err := c.publishListed(context.Background(), host, entries[0], issues["01ZZZZZZZZZZZZZZZZZZZZZZZZ"]); !skip || err != nil {
+			t.Errorf("skip %v, err %v; want the gone Issue skipped with no publish", skip, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gateway.syncAgentRecords(context.Background(), f.work, agentDirs{config: f.state, state: f.state}, filepath.Join(f.state, AgentsFile)); err != nil {
+		t.Fatalf("reconcile: %v, want no error for a gone Issue", err)
+	}
+}
