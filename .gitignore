@@ -9,3 +9,4 @@ tern.d.luau
 /dist
 .omp/
 __pycache__/
+/cmd/tern-kata/tern-kata
