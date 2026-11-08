@@ -181,7 +181,7 @@ func openRecurrence(m Model) Model {
 
 var (
 	errRecurrenceStoppedHere = errors.New("The recurrence was stopped; kata can't make this Issue recur again.")
-	errRecurrenceWithheld    = errors.New("kata does not show this recurrence to your access, so it can't be changed from here.")
+	ErrRecurrenceWithheld    = errors.New("kata does not show this recurrence to your access, so it can't be changed from here.")
 )
 
 // openWantedRecurrence opens the card for the loaded recurrence of the Issue the detail shows. A stopped one, or one kata
@@ -191,7 +191,7 @@ func openWantedRecurrence(m Model) Model {
 	switch {
 	case issue == nil:
 	case rec == nil:
-		m.RecurrenceForm = RecurrenceFormState{Open: true, Refused: true, UID: issue.UID, Err: errRecurrenceWithheld}
+		m.RecurrenceForm = RecurrenceFormState{Open: true, Refused: true, UID: issue.UID, Err: ErrRecurrenceWithheld}
 	case rec.Stopped:
 		m.RecurrenceForm = RecurrenceFormState{Open: true, Refused: true, UID: issue.UID, Err: errRecurrenceStoppedHere}
 	default:

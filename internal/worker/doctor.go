@@ -9,7 +9,6 @@ import (
 	"maps"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -90,7 +89,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 	if len(cfg.Projects) == 0 {
 		add("FAIL", "projects", "no Project is served", "Add a [[projects]] table with name = \"<kata Project>\" to worker.toml.")
 	}
-	if resp, err := Ask(ctx, o.Dirs, Request{Op: "status"}); err == nil && resp.OK {
+	if resp, err := Ask(ctx, o.Dirs, Request{Op: OpStatus}); err == nil && resp.OK {
 		add("ok", "worker", fmt.Sprintf("running as process %d", resp.Status.PID), "")
 	} else {
 		add("note", "worker", "not running on this machine", "Start it with `tern-kata worker`.")
@@ -203,9 +202,8 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 		return
 	}
 	actor := cmp.Or(pc.Actor, cfg.Actor, o.Actor)
-	dir := filepath.Join(o.Dirs.State, "projects", p.UID)
 	now := pin{ProjectUID: p.UID, InstanceUID: instance.UID, Name: p.Name, Actor: actor, AuthActor: instance.Actor, Executor: cfg.Executor}
-	if prev, ok := readPin(filepath.Join(dir, "pin.json")); ok {
+	if prev, ok := readPin(o.Dirs.Pin(p.UID)); ok {
 		if diff := pinDifferences(prev, now); len(diff) > 0 {
 			add("FAIL", subject, "its pinned route differs: "+strings.Join(diff, "; "), "There is no repin command: restore the old values, or use a new state folder and executor.")
 			return

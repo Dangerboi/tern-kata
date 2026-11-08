@@ -104,8 +104,7 @@ func unreadMessage(metadata map[string]any, address string) string {
 	if kind, _ := slot["kind"].(string); kind != "" || strings.TrimSpace(from) == "" {
 		return ""
 	}
-	first, _, _ := strings.Cut(strings.TrimSpace(message), "\n")
-	return strings.TrimSpace(first)
+	return firstLine(message)
 }
 
 // AgentBadge is what the Agent badge says about an Issue's agents and the one agent a click on it focuses.

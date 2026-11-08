@@ -51,7 +51,7 @@ func Write(path string, dirMode fs.FileMode, token Token, next []byte) error {
 		return fmt.Errorf("%s: %w", filepath.Base(path), err)
 	}
 	defer filelock.Unlock(lock)
-	return atomicfile.Write(path, next, atomicfile.Options{Mode: 0o600, DirMode: dirMode, Check: func(string) error {
+	return atomicfile.Write(path, next, atomicfile.Options{Mode: 0o600, Check: func(string) error {
 		disk, err := os.ReadFile(path)
 		switch {
 		case errors.Is(err, fs.ErrNotExist):

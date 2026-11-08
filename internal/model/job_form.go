@@ -110,6 +110,14 @@ var jobFieldTitles = map[Field]string{ //nolint:gosec // G101: field prompts ("S
 	JobFieldEnabled:      "Enabled",
 }
 
+// positiveText is n as form text, empty when n is not above zero.
+func positiveText(n int64) string {
+	if n <= 0 {
+		return ""
+	}
+	return strconv.FormatInt(n, 10)
+}
+
 func JobPrompt(name Field) string { return jobFieldTitles[name] }
 
 func jobFieldName(name Field) string {
@@ -199,9 +207,7 @@ var nativeJobKind = jobKind{
 			f.Recipient = d.Action.Recipient
 		}
 		f.Message, f.Catchup = d.Action.Message, d.Catchup
-		if d.GraceSeconds > 0 {
-			f.Grace = strconv.FormatInt(d.GraceSeconds, 10)
-		}
+		f.Grace = positiveText(d.GraceSeconds)
 	},
 	checkTrigger: func(t cronjob.Trigger) error {
 		if t.Kind == cronjob.TriggerInterval && t.IntervalSeconds < nativeMinInterval {

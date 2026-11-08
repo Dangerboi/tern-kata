@@ -122,12 +122,10 @@ func toggleJob(m Model) (Model, []Cmd) {
 	case job.Archived():
 		return refuse(m, "The job is archived; restore it first.")
 	case job.Definition.Enabled:
-		return pauseJob(m, job)
+		return writeJobEnabled(m, job, false)
 	}
 	return resumeJob(m, job)
 }
-
-func pauseJob(m Model, job CronJob) (Model, []Cmd) { return writeJobEnabled(m, job, false) }
 
 // writeJobEnabled writes the job enabled or disabled, guarded. A resume goes through resumeJob, which asks about a Backfill first.
 func writeJobEnabled(m Model, job CronJob, enabled bool) (Model, []Cmd) {

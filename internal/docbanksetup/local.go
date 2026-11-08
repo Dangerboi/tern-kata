@@ -61,16 +61,14 @@ func (e Env) setupLocal(ctx context.Context, l Local) error {
 		return errors.New(kataMissing)
 	}
 
-	for _, p := range []string{
-		filepath.Join(e.DocbankHome, "config.toml"),
-		filepath.Join(e.KataHome, "config.toml"),
-		filepath.Join(e.KataHome, KeyFileName),
-	} {
+	docPath := filepath.Join(e.DocbankHome, "config.toml")
+	kataPath := filepath.Join(e.KataHome, "config.toml")
+	keyPath := filepath.Join(e.KataHome, KeyFileName)
+	for _, p := range []string{docPath, kataPath, keyPath} {
 		if _, err := resolveLink(p); err != nil {
 			return err
 		}
 	}
-	docPath := filepath.Join(e.DocbankHome, "config.toml")
 	docText, err := readConfig(docPath)
 	if err != nil {
 		return err
@@ -103,7 +101,6 @@ func (e Env) setupLocal(ctx context.Context, l Local) error {
 		port = DefaultPort
 	}
 
-	keyPath := filepath.Join(e.KataHome, KeyFileName)
 	diskKey, err := readKeyFile(keyPath)
 	if errors.Is(err, fs.ErrNotExist) {
 		diskKey, err = "", nil // no key stored yet
@@ -126,7 +123,6 @@ func (e Env) setupLocal(ctx context.Context, l Local) error {
 	addr := "127.0.0.1:" + strconv.Itoa(port)
 	base := "http://" + addr
 	want := kataSection{URL: base, Folder: folder, APIKeyFile: keyPath}
-	kataPath := filepath.Join(e.KataHome, "config.toml")
 	kataText, err := readConfig(kataPath)
 	if err != nil {
 		return err

@@ -409,9 +409,7 @@ func init() {
 			return model.CredentialsLoaded{Request: cmd.Request, Err: err}
 		})
 	local(func(g *Gateway, ctx context.Context, cmd model.LoadCredentials) model.Msg {
-		if cmd.After > 0 {
-			g.pause(ctx, cmd.After)
-		}
+		g.pause(ctx, cmd.After)
 		return loadCredentials(g, ctx, cmd)
 	})
 

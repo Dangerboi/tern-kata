@@ -379,7 +379,7 @@ func (h *harness) foreignLease(owner string, heartbeat time.Time, generation int
 			h.t.Error(err)
 			return
 		}
-		_, err = h.kata.Kata.PatchProjectMetadata(context.Background(), h.proj.ID, p.Revision, "desktop-user", map[string]any{"tern_kata.lease": value})
+		err = h.kata.Kata.PatchProjectMetadata(context.Background(), h.proj.ID, p.Revision, "desktop-user", map[string]any{"tern_kata.lease": value})
 		if !errors.Is(err, worker.ErrRevisionConflict) {
 			if err != nil {
 				h.t.Error(err)

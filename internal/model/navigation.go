@@ -50,36 +50,10 @@ func moveSelection(m Model, action Action) Model {
 	if len(rows) == 0 {
 		return m
 	}
-	index := 0
-	for i, issue := range rows {
-		if issue.UID == m.SelectedUID {
-			index = i
-			break
-		}
-	}
-	switch action {
-	case MoveDown:
-		index = min(index+1, len(rows)-1)
-	case MoveUp:
-		index = max(index-1, 0)
-	case MoveFirst:
-		index = 0
-	case MoveLast:
-		index = len(rows) - 1
-	case PageDown:
-		index = min(index+pageRows, len(rows)-1)
-	case PageUp:
-		index = max(index-pageRows, 0)
-	}
-	m.SelectedUID = rows[index].UID
+	at := slices.IndexFunc(rows, func(issue IssueRow) bool { return issue.UID == m.SelectedUID })
+	m.SelectedUID = rows[movedIndex(at, len(rows), listPage, action)].UID
 	return m
 }
-
-// pageRows is how far Page Up/Page Down move the Issue list selection; the
-// 'nearest' reveal then keeps it in view. Tern's scroll op does not drive that
-// list's own scroller and the Pane's rows are unknown here.
-// ponytail: a fixed step, not a measured page; if ResizeMsg ever carries rows, use rows minus the chrome.
-const pageRows = 10
 
 func (m Model) Position() (selected, total int) {
 	if m.OnConfig() {

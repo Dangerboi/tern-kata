@@ -54,7 +54,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "unavailable"}, Text: "This Issue is unavailable or no longer visible."})
 	default:
 		issue := m.DetailAuthority().Issue
-		title := []ui.Span{{T: detailID(m, *issue), S: mono(toneStyle(issueLaneTone(m, *issue)))}, {T: " - " + issue.Title, S: "strong"}}
+		title := []ui.Span{{T: detailID(m, *issue), S: mono(toneStyle(issueLaneToneIn(m.LaneList(), *issue)))}, {T: " - " + issue.Title, S: "strong"}}
 		if m.DetailLoading() {
 			title = append(title, loadingMarker)
 		}

@@ -273,7 +273,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	if next, cmds, handled := updatePages(m, msg); handled {
 		return next, cmds
 	}
-	if next, cmds, handled := workerEditorClosedMsg(m, msg); handled {
+	if next, cmds, handled := workerEditorClosed(m, msg); handled {
 		return next, cmds
 	}
 	if next, cmds, handled := updateEditor(m, msg); handled {
@@ -536,11 +536,4 @@ func runChord(m Model, chord string, mode Mode) (next Model, cmds []Cmd, ran boo
 	}
 	next, cmds = binding.run(m)
 	return next, cmds, true
-}
-
-func workerEditorClosedMsg(m Model, msg Msg) (Model, []Cmd, bool) {
-	if closed, ok := msg.(DraftEditorClosed); ok {
-		return workerEditorClosed(m, closed)
-	}
-	return m, nil, false
 }

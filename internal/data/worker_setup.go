@@ -107,7 +107,7 @@ func (g *Gateway) saveWorkerSetup(cmd model.SaveWorkerSetup) model.WorkerSetupSa
 // stopWorker sends the stop request: mode idle drains, mode now ends the worker at once. No worker answering is not an error here, it is
 // what the stop was after.
 func (g *Gateway) stopWorker(ctx context.Context, cmd model.StopWorker) model.WorkerStopped {
-	resp, err := g.ask(ctx, worker.Request{Op: "stop", Mode: cmd.Mode})
+	resp, err := g.ask(ctx, worker.Request{Op: worker.OpStop, Mode: cmd.Mode})
 	switch {
 	case errors.Is(err, worker.ErrNoWorker):
 		return model.WorkerStopped{Mode: cmd.Mode, Gone: true}

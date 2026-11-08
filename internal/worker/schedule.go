@@ -239,7 +239,7 @@ func (f fileCheckpoints) Save(jobUID string, c checkpoint) {
 }
 
 // projectSchedule is one Project's schedule: it owns the checkpoints, plans what became due and admits waiting
-// occurrences. It reaches the rest of the worker through four seams: the checkpoint store, admit (run preparation: one
+// occurrences. It reaches the rest of the worker through function fields and stores: the checkpoint store, admit (run preparation: one
 // occurrence is always one run, and a journal that already covers it is returned with created false), issueDate and
 // stopped. log is the Project's own logger, prefixed with its name. It belongs to the Project loop.
 type projectSchedule struct {
@@ -304,12 +304,15 @@ func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
 	}
 }
 
-func (w *Worker) kick(ps *projectState) {
+// poke wakes the loop behind ch without blocking when it is already woken.
+func poke(ch chan<- struct{}) {
 	select {
-	case ps.kick <- struct{}{}:
+	case ch <- struct{}{}:
 	default:
 	}
 }
+
+func (w *Worker) kick(ps *projectState) { poke(ps.kick) }
 
 // selectOccurrences applies a job's catchup policy to every occurrence not yet run (ADR-0011). Occurrences within
 // onTimeSlack are never missed. `all` keeps the rest, `latest` only the newest of everything, and `skip` at most one

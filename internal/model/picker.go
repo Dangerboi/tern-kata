@@ -347,14 +347,8 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 		return editSavedView(m, true), nil
 	case AskDeleteView:
 		return askDeleteView(m, true), nil
-	case MoveDown:
-		m.Picker.Cursor = max(0, min(m.Picker.Cursor+1, last))
-	case MoveUp:
-		m.Picker.Cursor = max(0, m.Picker.Cursor-1)
-	case MoveFirst:
-		m.Picker.Cursor = 0
-	case MoveLast:
-		m.Picker.Cursor = max(0, last)
+	case MoveDown, MoveUp, MoveFirst, MoveLast:
+		moveCursor(&m.Picker.Cursor, last+1, binding.Action)
 	}
 	return m, nil
 }

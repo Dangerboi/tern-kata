@@ -6,6 +6,8 @@ import "strings"
 const (
 	WorkAttentionKey    = "work.attention"
 	WorkAttentionMsgKey = "work.attention_msg"
+
+	WorkAttentionNeedsHuman = "needs-human"
 )
 
 // WorkAttention is what an Issue's `work.attention` metadata asks of its reader: "needs-human" or "stuck", with the agent's
@@ -23,13 +25,6 @@ func (w WorkAttention) Word() string {
 	return "needs human"
 }
 
-func (w WorkAttention) Text() string {
-	if w.Msg == "" {
-		return w.Word()
-	}
-	return w.Word() + ": " + w.Msg
-}
-
 // IssueWorkAttention reads the Issue's `work.attention`; ok is false for a closed Issue (its leftover signal asks nothing), "ok",
 // an absent key, an unknown value or a value that is not text.
 func IssueWorkAttention(issue Issue) (WorkAttention, bool) {
@@ -39,7 +34,7 @@ func IssueWorkAttention(issue Issue) (WorkAttention, bool) {
 	value, _ := issue.Metadata[WorkAttentionKey].(string)
 	var w WorkAttention
 	switch value {
-	case "needs-human":
+	case WorkAttentionNeedsHuman:
 	case "stuck":
 		w.Stuck = true
 	default:

@@ -194,9 +194,7 @@ var issueDeadlineJobTrigger = jobTrigger{
 	id: cronjob.TriggerIssueDeadline, label: "Issue's deadline", fields: []Field{JobFieldIssue, JobFieldLead},
 	load: func(f *JobFormState, t cronjob.Trigger) {
 		f.Issue = t.IssueUID
-		if t.LeadSeconds > 0 {
-			f.Lead = strconv.FormatInt(t.LeadSeconds, 10)
-		}
+		f.Lead = positiveText(t.LeadSeconds)
 	},
 	build: func(f JobFormState) (cronjob.Trigger, error) {
 		lead, err := seconds(JobFieldLead, f.Lead, 0)
@@ -258,12 +256,8 @@ func loadExecute(f *JobFormState, job CronJob) {
 	f.Prompt, f.Workflow, f.Profile, f.Checkout, f.Secrets = d.Action.Prompt, d.Action.WorkflowUID, d.Profile, d.CheckoutKey, formatSecrets(d.SecretRefs)
 	f.Adapter = job.Adapter()
 	f.Overlap, f.Catchup = cmp.Or(d.Overlap, f.Overlap), cmp.Or(d.Catchup, f.Catchup)
-	if d.GraceSeconds > 0 {
-		f.Grace = strconv.FormatInt(d.GraceSeconds, 10)
-	}
-	if d.TimeoutSeconds > 0 {
-		f.Timeout = strconv.FormatInt(d.TimeoutSeconds, 10)
-	}
+	f.Grace = positiveText(d.GraceSeconds)
+	f.Timeout = positiveText(d.TimeoutSeconds)
 	p := d.Issue
 	if p == nil {
 		return
@@ -406,9 +400,7 @@ var notifyJobKind = jobKind{
 			f.Recipient = d.Action.Recipient
 		}
 		f.Message, f.Catchup, f.Adapter = d.Action.Message, cmp.Or(d.Catchup, f.Catchup), job.Adapter()
-		if d.GraceSeconds > 0 {
-			f.Grace = strconv.FormatInt(d.GraceSeconds, 10)
-		}
+		f.Grace = positiveText(d.GraceSeconds)
 		switch {
 		case d.Issue != nil && DateTrigger(d.Trigger.Kind):
 			f.Report = d.Issue.UID

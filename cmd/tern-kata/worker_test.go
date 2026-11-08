@@ -280,7 +280,7 @@ func TestWorkerDoctorNamesAHeldLease(t *testing.T) {
 	f := newWorkerFixture(t, "")
 	p, _ := f.kata.Kata.Project(context.Background(), f.proj.ID)
 	lease := map[string]any{"version": 1, "owner": "desktop", "generation": 3, "heartbeat": time.Now().UTC()}
-	if _, err := f.kata.Kata.PatchProjectMetadata(context.Background(), f.proj.ID, p.Revision, "x", map[string]any{"tern_kata.lease": lease}); err != nil {
+	if err := f.kata.Kata.PatchProjectMetadata(context.Background(), f.proj.ID, p.Revision, "x", map[string]any{"tern_kata.lease": lease}); err != nil {
 		t.Fatal(err)
 	}
 	out, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"doctor"}, Actor: "robot"})

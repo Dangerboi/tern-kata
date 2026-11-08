@@ -192,13 +192,7 @@ type WorkerState struct {
 	// Read says an answer arrived; Running that something answered on the control socket.
 	Read, Running bool
 	Err           error
-	Executor      string
-	PID           int
-	Supervised    bool
-	Stopping      string
-	InFlight      int
-	Projects      []WorkerProject
-	Runs          []LocalRun
+	WorkerStatus
 	// Setup is the last read of this machine's worker.toml and the Pane folder's Binding; SetupRead says an answer arrived and
 	// SetupErr is a read that failed.
 	Setup     WorkerSetup
@@ -230,11 +224,9 @@ func workerLoaded(m Model, msg WorkerLoaded) (Model, []Cmd) {
 	polled := w.polling
 	w.inflight, w.polling = false, false
 	w.Read, w.Running, w.Err = true, msg.Running, msg.Err
-	w.Executor, w.Projects, w.Runs = msg.Status.Executor, msg.Status.Projects, msg.Status.Runs
-	w.PID, w.Supervised, w.Stopping, w.InFlight = msg.Status.PID, msg.Status.Supervised, msg.Status.Stopping, msg.Status.InFlight
+	w.WorkerStatus = msg.Status
 	if !msg.Running {
-		w.Executor, w.Projects, w.Runs, w.Detail, w.asked = "", nil, nil, nil, ""
-		w.PID, w.Supervised, w.Stopping, w.InFlight = 0, false, "", 0
+		w.WorkerStatus, w.Detail, w.asked = WorkerStatus{}, nil, ""
 	}
 	w.detailStale = true
 	if !m.OnRuns() || !m.runsRunning() {
@@ -597,46 +589,41 @@ func runSessionOpened(m Model, msg RunSessionOpened) Model {
 
 // localFacts are the inspector's lines that only the worker knows, for a Run of this machine: why it is held and which verbs
 // would work, its steps, and the tail of what the agent said.
-func (m Model) localFacts(run Run) (hold []RunFact, rest []RunFact) {
+func (m Model) localFacts(run Run) (hold, rest runFacts) {
 	local, ok := m.LocalRunOf(run.UID)
 	if !ok {
 		return nil, nil
 	}
-	add := func(into *[]RunFact, label, value string) {
-		if value != "" {
-			*into = append(*into, RunFact{label, value})
-		}
-	}
-	add(&hold, "Worker state", local.State)
+	hold.add("Worker state", local.State)
 	if local.Held {
-		add(&hold, "Held because", holdWords(local.Hold))
-		add(&hold, "Hold detail", local.Detail)
+		hold.add("Held because", holdWords(local.Hold))
+		hold.add("Hold detail", local.Detail)
 		if local.Resumable {
-			add(&hold, "Resume", "u continues the agent's session as a new attempt")
+			hold.add("Resume", "u continues the agent's session as a new attempt")
 		} else {
-			add(&hold, "Resume", "not now: "+local.ResumeRefusal)
+			hold.add("Resume", "not now: "+local.ResumeRefusal)
 		}
 	}
 	if local.Abandonable {
-		add(&hold, "Abandon", "A cancels the run")
+		hold.add("Abandon", "A cancels the run")
 	}
 	if local.Attempt > 1 {
-		add(&hold, "Attempt", strconv.Itoa(local.Attempt))
+		hold.add("Attempt", strconv.Itoa(local.Attempt))
 	}
-	add(&hold, "Unreported", local.Pending)
+	hold.add("Unreported", local.Pending)
 	d := m.LocalDetail()
 	if d == nil || d.UID != run.UID {
 		return hold, nil
 	}
 	for _, s := range d.Steps {
-		add(&rest, "Step "+strconv.Itoa(s.Index), stepWords(s))
+		rest.add("Step "+strconv.Itoa(s.Index), stepWords(s))
 	}
-	add(&rest, "Output", strings.TrimSpace(d.OutputTail))
+	rest.add("Output", strings.TrimSpace(d.OutputTail))
 	if !local.Settled() || local.Held || d.StderrTail != "" && run.Status != cronjob.RunSucceeded {
-		add(&rest, "Stderr", strings.TrimSpace(d.StderrTail))
+		rest.add("Stderr", strings.TrimSpace(d.StderrTail))
 	}
 	if d.SessionID != "" {
-		add(&rest, "Session", d.SessionID+" (o opens it)")
+		rest.add("Session", d.SessionID+" (o opens it)")
 	}
 	return hold, rest
 }

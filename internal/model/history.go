@@ -139,6 +139,12 @@ func plain(v any) string {
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
+// firstLine is the trimmed first line of s.
+func firstLine(s string) string {
+	first, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(first)
+}
+
 func (m Model) currentMetadata() map[string]any {
 	if m.authority == nil || m.authority.Issue == nil {
 		return nil

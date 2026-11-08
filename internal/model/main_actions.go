@@ -94,17 +94,7 @@ func moveSidebar(m Model, action Action) Model {
 	if len(entries) == 0 {
 		return m
 	}
-	last := len(entries) - 1
-	switch action {
-	case MoveDown:
-		m.CollectionCursor = min(m.CollectionCursor+1, last)
-	case MoveUp:
-		m.CollectionCursor = max(0, m.CollectionCursor-1)
-	case MoveFirst:
-		m.CollectionCursor = 0
-	case MoveLast:
-		m.CollectionCursor = last
-	}
+	moveCursor(&m.CollectionCursor, len(entries), action)
 	return m
 }
 
@@ -130,6 +120,8 @@ var (
 	boardAndDetail = []Mode{ModeBoard, ModeLane, ModeDetail}
 	listModes      = []Mode{ModeList, ModeLane}
 	laneModes      = []Mode{ModeBoard, ModeLane}
+	menuModes      = []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}
+	projectModes   = []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation, ModeDaemons, ModeConfig}
 	jobsModes      = []Mode{ModeJobs, ModeJobInspector}
 	runsModes      = []Mode{ModeRuns, ModeRunInspector}
 	searching      = []Mode{ModeSearch, ModeSearchResults}
@@ -299,12 +291,12 @@ var mainRows = []actionEntry{
 	{action: OpenRecurrenceAction, modes: issueModes, keys: keys("shift+o", "O"), help: "make or change recurrence", sheet: []sheetLine{{sheetDetail, 16, "make or change recurrence"}}, handle: pure(openRecurrence)},
 	{action: NewChild, modes: issueModes, keys: keys("shift+n", "N"), help: "child", footer: issueModes, sheet: []sheetLine{{sheetChildren, 1, "new child"}}, handle: func(m Model) (Model, []Cmd) { return openCreate(m, true) }},
 	{action: ToggleDetail, modes: []Mode{ModeList, ModeLane, ModeDetail}, keys: keys("shift+l", "L"), help: "layout", footer: []Mode{ModeList, ModeLane, ModeDetail}, sheet: []sheetLine{{sheetGlobal, 6, "toggle layout"}}, handle: pure(Model.toggleDetail)},
-	{action: ShowMenu, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("escape", "esc"), help: "Menu", footer: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, sheet: []sheetLine{{sheetGlobal, 5, "menu, or end the search of the Jobs and Runs Pages"}}, handle: pageSearchEscape},
-	{action: DrillOut, modes: []Mode{ModeList, ModeBoard, ModeJobs, ModeRuns, ModeAttention}, keys: keys("backspace", "⌫"), help: "back", handle: backWithoutMenu},
+	{action: ShowMenu, modes: menuModes, keys: keys("escape", "esc"), help: "Menu", footer: menuModes, sheet: []sheetLine{{sheetGlobal, 5, "menu, or end the search of the Jobs and Runs Pages"}}, handle: pageSearchEscape},
+	{action: DrillOut, modes: menuModes, keys: keys("backspace", "⌫"), help: "back", handle: backWithoutMenu},
 	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
 	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
-	{action: OpenProjects, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation, ModeDaemons, ModeConfig}, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: openProjects},
-	{action: OpenInbox, modes: []Mode{ModeCollections, ModeList, ModeBoard, ModeLane, ModeDetail, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials, ModeFederation, ModeDaemons, ModeConfig}, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
+	{action: OpenProjects, modes: projectModes, keys: keys("shift+p", "P"), help: "projects", sheet: []sheetLine{{sheetGlobal, 4, "projects"}}, handle: openProjects},
+	{action: OpenInbox, modes: projectModes, keys: keys("shift+i", "I"), help: "inbox", sheet: []sheetLine{{sheetGlobal, 3, "inbox"}}, handle: openInbox},
 	{action: RetryAction, modes: []Mode{ModeError}, keys: keys("ctrl+r", "ctrl+r"), help: "retry daemon", footer: []Mode{ModeError}, handle: func(m Model) (Model, []Cmd) { return updateLive(m, Retry{}) }},
 	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc", "backspace", "⌫"), help: "close help", footer: []Mode{ModeHelp}, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
 	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: global, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},
@@ -347,7 +339,7 @@ func buildKeymap() {
 
 func orGlobal(list []Mode) []Mode {
 	if len(list) == 0 {
-		return []Mode{""}
+		return global
 	}
 	return list
 }

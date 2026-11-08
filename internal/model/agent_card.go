@@ -211,14 +211,9 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return startAgent(m, AgentCardTab, AgentTab)
 	case AgentCardNewBackground:
 		return startAgent(m, AgentCardNewBackground, AgentBackground)
-	case MoveDown:
-		m.AgentCard.Cursor = min(cursor+1, max(0, len(rows)+len(m.AgentCardRemoteRows())-1))
-	case MoveUp:
-		m.AgentCard.Cursor = max(0, cursor-1)
-	case MoveFirst:
-		m.AgentCard.Cursor = 0
-	case MoveLast:
-		m.AgentCard.Cursor = max(0, len(rows)+len(m.AgentCardRemoteRows())-1)
+	case MoveDown, MoveUp, MoveFirst, MoveLast:
+		m.AgentCard.Cursor = cursor
+		moveCursor(&m.AgentCard.Cursor, len(rows)+len(m.AgentCardRemoteRows()), binding.Action)
 	}
 	return m, nil
 }

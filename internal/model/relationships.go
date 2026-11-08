@@ -107,13 +107,12 @@ const (
 	HighlightRelated       Highlight = "related"
 )
 
-// Find is the Relationships of uid to the Issue these Relationships belong to, in ring precedence, each with the ref to uid
-// as the Issue's Relationships name it; nil when unrelated.
-func (r Relationships) Find(uid string) []Found {
-	var out []Found
+// HighlightsOf are the Relationships of uid to the Issue these Relationships belong to, in ring precedence, nil when unrelated.
+func (r Relationships) HighlightsOf(uid string) []Highlight {
+	var out []Highlight
 	look := func(h Highlight, refs ...RelationshipRef) {
-		if i := slices.IndexFunc(refs, func(x RelationshipRef) bool { return x.UID == uid }); i >= 0 {
-			out = append(out, Found{h, refs[i]})
+		if slices.ContainsFunc(refs, func(x RelationshipRef) bool { return x.UID == uid }) {
+			out = append(out, h)
 		}
 	}
 	look(HighlightBlocksThis, r.BlockedBy...)
@@ -123,20 +122,6 @@ func (r Relationships) Find(uid string) []Found {
 	}
 	look(HighlightChild, r.Children...)
 	look(HighlightRelated, r.Related...)
-	return out
-}
-
-type Found struct {
-	Highlight Highlight
-	Ref       RelationshipRef
-}
-
-// HighlightsOf are the Relationships of uid to the Issue these Relationships belong to, in ring precedence, nil when unrelated.
-func (r Relationships) HighlightsOf(uid string) []Highlight {
-	var out []Highlight
-	for _, f := range r.Find(uid) {
-		out = append(out, f.Highlight)
-	}
 	return out
 }
 

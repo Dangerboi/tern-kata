@@ -196,7 +196,7 @@ func runsTimeline(m model.Model, now time.Time) tern.Element {
 	}
 	items = append(items, ui.Rule{Common: ui.Common{Key: "now"}, Label: ui.T("Now")})
 	for _, next := range t.Upcoming {
-		items = append(items, upcomingRun(m, next))
+		items = append(items, upcomingRun(next))
 	}
 	if len(t.Upcoming) == 0 {
 		words := "No next runs. Native jobs show their next time; adapter jobs show only that the worker starts them."
@@ -237,7 +237,7 @@ func skippedJob(m model.Model, s model.JobSkips, now time.Time) tern.Element {
 		ui.Text{Common: ui.Common{Key: "latest"}, Spans: latest}, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})}
 }
 
-func upcomingRun(m model.Model, next model.UpcomingRun) tern.Element {
+func upcomingRun(next model.UpcomingRun) tern.Element {
 	when := "started by the worker"
 	if next.Next != "" {
 		when = next.Next

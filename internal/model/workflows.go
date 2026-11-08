@@ -282,11 +282,7 @@ func (m Model) selectedRow() int {
 }
 
 func moveWorkflow(m Model, action Action) Model {
-	visible := m.VisibleWorkflows()
-	if len(visible) == 0 {
-		return m
-	}
-	m.Workflows.Selected = visible[movedIndex(m.selectedRow(), len(visible), max(m.Rows-2, 1), action)].UID
+	moveSelected(m.VisibleWorkflows(), func(w Workflow) string { return w.UID }, &m.Workflows.Selected, max(m.Rows-2, 1), action)
 	return m
 }
 
@@ -407,15 +403,11 @@ func withReading(readings map[string]WorkerReading, uid string, reading WorkerRe
 // readingOf keeps the reading that came with a stored version of the workflow, and drops the old one when none came.
 func readingOf(readings map[string]WorkerReading, uid string, reading *WorkerReading) map[string]WorkerReading {
 	if reading == nil {
-		return withoutReading(readings, uid)
+		out := maps.Clone(readings)
+		delete(out, uid)
+		return out
 	}
 	return withReading(readings, uid, *reading)
-}
-
-func withoutReading(readings map[string]WorkerReading, uid string) map[string]WorkerReading {
-	out := maps.Clone(readings)
-	delete(out, uid)
-	return out
 }
 
 func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
@@ -542,7 +534,7 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 	return m
 }
 
-// workflowCard is the Workflow card's key handler: the shared Draft keys for save, discard and $EDITOR, over the card's own
+// workflowCardKey is the Workflow card's key handler: the shared Draft keys for save, discard and $EDITOR, over the card's own
 // text, and Overwrite and Discard Draft once a save found the workflow changed.
 func workflowCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	c := m.Workflows.Card

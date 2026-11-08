@@ -73,7 +73,7 @@ func (m Model) sendBack(pick func(block string) bool) (Model, []Cmd) {
 }
 
 // followBackground is what a re-read of agents.json settles for the agents another Pane may have sent to the background, which
-// no relay shows: one whose user answered it (agentStatesRelay.recheck) goes back when it is now a background agent that is open
+// no relay shows: one whose user answered it (Agents.recheck) goes back when it is now a background agent that is open
 // or shown, and ending a finished background agent is decided again.
 func followBackground(m Model) (Model, []Cmd) {
 	recheck := m.Agents.recheck

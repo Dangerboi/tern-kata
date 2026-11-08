@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -28,7 +27,7 @@ type RunAccepted struct {
 // first and the run is frozen from that fresh definition; when they cannot be read the request is refused (ADR-0011).
 // The run itself then proceeds in the background.
 func (w *Worker) RequestRun(ctx context.Context, jobUID string) (RunAccepted, error) {
-	ps, _, err := w.findJob(ctx, jobUID)
+	ps, err := w.findJob(ctx, jobUID)
 	if err != nil {
 		return RunAccepted{}, err
 	}
@@ -91,27 +90,27 @@ func (w *Worker) RunOccurrence(ctx context.Context, project, jobUID string, occu
 
 // findJob locates the job in a served Project, refreshing the definitions once before giving up. When it belongs to
 // a Project this worker doesn't serve it says so, because unserved Projects never run.
-func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, cronjob.Job, error) {
-	lookup := func() (*projectState, cronjob.Job, bool) {
+func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, error) {
+	lookup := func() (*projectState, bool) {
 		w.mu.Lock()
 		defer w.mu.Unlock()
 		for _, ps := range w.projects {
-			if j, ok := ps.jobs[jobUID]; ok {
-				return ps, j, true
+			if _, ok := ps.jobs[jobUID]; ok {
+				return ps, true
 			}
 		}
-		return nil, cronjob.Job{}, false
+		return nil, false
 	}
-	if ps, j, ok := lookup(); ok {
-		return ps, j, nil
+	if ps, ok := lookup(); ok {
+		return ps, nil
 	}
 	for _, ps := range w.projects {
 		if w.admitsNothing(ps) == "" {
 			_ = w.refreshJobs(ctx, ps)
 		}
 	}
-	if ps, j, ok := lookup(); ok {
-		return ps, j, nil
+	if ps, ok := lookup(); ok {
+		return ps, nil
 	}
 	var notes []string
 	if projects, err := w.opt.Kata.Projects(ctx); err == nil {
@@ -122,7 +121,7 @@ func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, cro
 			if jobs, err := w.opt.Kata.Jobs(ctx, p.ID); err == nil {
 				for _, j := range jobs {
 					if j.UID == jobUID {
-						return nil, cronjob.Job{}, fmt.Errorf("job %s (%s) belongs to Project %s, which this worker does not serve; list it in worker.toml to serve it", jobUID, j.Name, p.Name)
+						return nil, fmt.Errorf("job %s (%s) belongs to Project %s, which this worker does not serve; list it in worker.toml to serve it", jobUID, j.Name, p.Name)
 					}
 				}
 			}
@@ -137,7 +136,7 @@ func (w *Worker) findJob(ctx context.Context, jobUID string) (*projectState, cro
 	if len(notes) > 0 {
 		msg += " (" + strings.Join(notes, "; ") + ")"
 	}
-	return nil, cronjob.Job{}, errors.New(msg)
+	return nil, errors.New(msg)
 }
 
 // admitsNothing is why a Project can't start runs right now, empty when it can.
@@ -231,7 +230,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 			return nil, false, fmt.Errorf("job %q %s", job.Name, why)
 		}
 		issuePolicy = *d.Issue
-		profileName = cmp.Or(d.Profile, "default")
+		profileName = profileOf(d)
 		var ok bool
 		profile, ok = w.opt.Config.Profiles[profileName]
 		if !ok || !ps.cfg.allowsProfile(profileName) {
@@ -244,10 +243,7 @@ func (w *Worker) prepare(ctx context.Context, ps *projectState, job cronjob.Job,
 			}
 			checkout = dir
 		}
-		timeout = w.opt.Config.defaultTimeout()
-		if d.TimeoutSeconds > 0 {
-			timeout = time.Duration(d.TimeoutSeconds) * time.Second
-		}
+		timeout = w.opt.Config.timeoutFor(d)
 		if timeout > w.opt.Config.maxTimeout() {
 			return nil, false, fmt.Errorf("job %q asks for a timeout of %s, over max_timeout %s (default_timeout is %s)", job.Name, timeout, w.opt.Config.maxTimeout(), w.opt.Config.defaultTimeout())
 		}

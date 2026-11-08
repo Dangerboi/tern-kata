@@ -21,7 +21,7 @@ func TestAFinalObservationIsNotDeliveredWhenKataHoldsTheSameStatusWithAnotherSum
 			return nil
 		}
 		once.Do(func() {
-			_, _, err := h.kata.Kata.Observe(context.Background(), j.ProjectID, worker.Observation{
+			_, err := h.kata.Kata.Observe(context.Background(), j.ProjectID, worker.Observation{
 				RunUID: j.RunUID, JobUID: j.JobUID, DefinitionEventUID: j.DefinitionEventUID, OccurrenceKey: j.OccurrenceKey, IssueUID: j.Issue.UID,
 				Executor: j.Executor, Actor: j.Actor, Status: j.Outcome.Status, Message: "carol wrote another summary", StartedAt: j.StartedAt, ExpectedRevision: j.Revision,
 			})

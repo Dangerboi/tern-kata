@@ -107,16 +107,16 @@ func TeamRows(t Team, entries []AgentEntry, states []AgentState, kids []TeamKid,
 		}
 		return kids[i], true
 	}
-	agentOn := func(pick func(AgentEntry) bool) (IssueAgent, bool) {
+	agentOn := func(pick func(AgentEntry) bool) *IssueAgent {
 		for _, e := range entries {
 			if !pick(e) {
 				continue
 			}
 			if a := agentWithState(e, states); a.State != AgentExited {
-				return a, true
+				return &a
 			}
 		}
-		return IssueAgent{}, false
+		return nil
 	}
 	var rows []TeamRow
 	started := make(map[string]bool, len(t.Children))
@@ -125,11 +125,7 @@ func TeamRows(t Team, entries []AgentEntry, states []AgentState, kids []TeamKid,
 			continue // neither running nor started
 		}
 		started[c.UID] = true
-		a, alive := agentOn(func(e AgentEntry) bool { return e.Block == c.Block })
-		var agent *IssueAgent
-		if alive {
-			agent = &a
-		}
+		agent := agentOn(func(e AgentEntry) bool { return e.Block == c.Block })
 		k, found := kid(c.UID)
 		rows = append(rows, startedChildRow(c, agent, found, k.Closed))
 	}
@@ -137,11 +133,7 @@ func TeamRows(t Team, entries []AgentEntry, states []AgentState, kids []TeamKid,
 		if started[k.UID] || k.Closed {
 			continue
 		}
-		a, alive := agentOn(func(e AgentEntry) bool { return e.IssueUID == k.UID })
-		var agent *IssueAgent
-		if alive {
-			agent = &a
-		}
+		agent := agentOn(func(e AgentEntry) bool { return e.IssueUID == k.UID })
 		rows = append(rows, otherChildRow(k.UID, k.Ref, k.ProjectID == t.ProjectID, agent, k.RemoteHost, k.Ready))
 	}
 	return rows
@@ -192,7 +184,7 @@ func otherChildRow(uid, ref string, sameProject bool, agent *IssueAgent, remoteH
 
 func TeamReport(t Team, rows []TeamRow) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Team on %s: %s, limit %d, coordinator %s\n", t.ParentRef, t.State, t.Limit, dashWord(t.CoordinatorAddress))
+	fmt.Fprintf(&b, "Team on %s: %s, limit %d, coordinator %s\n", t.ParentRef, t.State, t.Limit, dashIfEmpty(t.CoordinatorAddress))
 	if len(rows) == 0 {
 		b.WriteString("No children.\n")
 		return b.String()
@@ -204,14 +196,7 @@ func TeamReport(t Team, rows []TeamRow) string {
 	}
 	fmt.Fprintf(&b, "%-*s  %-*s  %s\n", width, "CHILD", stateWidth, "STATE", "ADDRESS")
 	for _, r := range rows {
-		fmt.Fprintf(&b, "%-*s  %-*s  %s\n", width, r.Ref, stateWidth, r.State, dashWord(r.Address))
+		fmt.Fprintf(&b, "%-*s  %-*s  %s\n", width, r.Ref, stateWidth, r.State, dashIfEmpty(r.Address))
 	}
 	return b.String()
-}
-
-func dashWord(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
 }

@@ -469,22 +469,30 @@ func (g *Gateway) wake(ctx context.Context, cmd model.WakeAt, messages chan<- mo
 	g.wakeCancel = cancel
 	g.wakeMu.Unlock()
 	defer cancel()
+	if !g.waitUntil(ctx, cmd.At) {
+		return
+	}
+	select {
+	case messages <- model.DayEnded{Day: cmd.Day}:
+	case <-ctx.Done():
+	}
+}
+
+// waitUntil blocks until the wall clock reaches at, re-checking it at least every wakePoll, and reports false if ctx ended first.
+func (g *Gateway) waitUntil(ctx context.Context, at time.Time) bool {
+	// Round(0) drops the monotonic reading, which does not advance while the machine sleeps.
+	at = at.Round(0)
 	for {
-		// Round(0) drops the monotonic reading, which does not advance while the machine sleeps.
-		left := cmd.At.Round(0).Sub(g.now().Round(0))
+		left := at.Sub(g.now().Round(0))
 		if left <= 0 {
-			break
+			return true
 		}
 		timer := time.NewTimer(min(left, g.wakePoll))
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
 			timer.Stop()
-			return
+			return false
 		}
-	}
-	select {
-	case messages <- model.DayEnded{Day: cmd.Day}:
-	case <-ctx.Done():
 	}
 }

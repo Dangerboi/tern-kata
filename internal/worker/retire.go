@@ -33,7 +33,7 @@ func (w *Worker) retireOnce(ctx context.Context, served map[string]bool) (done b
 	}
 	known := map[string]string{}     // Project uid -> the name it was served under
 	instances := map[string]string{} // Project uid -> the daemon instance its pin records
-	pins, _ := filepath.Glob(filepath.Join(w.opt.Dirs.State, "projects", "*", "pin.json"))
+	pins, _ := filepath.Glob(w.opt.Dirs.Pins())
 	for _, path := range pins {
 		if p, ok := readPin(path); ok && p.ProjectUID != "" {
 			known[p.ProjectUID] = p.Name

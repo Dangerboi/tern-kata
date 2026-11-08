@@ -136,7 +136,7 @@ func init() {
 	pageDefs = []pageDef{
 		{page: PageIssues, id: "issues", label: "Issues", chord: "1", action: ShowIssuesPage, moves: issueMoves(ModeList),
 			keymap: []keySegment{pageMoveActions}},
-		{page: PageJobs, id: "jobs", label: "Jobs", chord: "2", action: ShowJobsPage, needs: "Jobs Page", second: SecondInspector, enter: enterJobs, clear: clearJobs,
+		{page: PageJobs, id: "jobs", label: "Jobs", chord: "2", action: ShowJobsPage, needs: "Jobs Page", second: SecondInspector, enter: reloadJobs, clear: clearJobs,
 			filledFor: jobsFilledFor, reset: resetJobs, mode: inspectorMode(ModeJobs, ModeJobInspector), update: updateJobs, list: ListNodeJobs, settleSearch: func(m Model, _ int) Model { return m.settleJobSelection() },
 			moves:  pageMoves{mode: ModeJobs, noun: "job", move: moveJob, sheet: [6]sheetLine{{sheetJobs, 1, "next job"}, {sheetJobs, 2, "previous job"}, {sheetJobs, 3, "first job"}, {sheetJobs, 4, "last job"}}},
 			scroll: pageScroll{mode: ModeJobInspector, sheet: sheetLine{sheetJobs, 9, "scroll the inspector"}},
@@ -153,7 +153,7 @@ func init() {
 		{page: PageBoard, id: "board", label: "Board", chord: "5", action: ShowBoardPage, needs: "Board", second: SecondIssueDetail, enter: enterBoard, clear: clearBoard,
 			mode: boardMode, update: updateBoard, moves: issueMoves(ModeLane),
 			keymap: []keySegment{pageMoveActions, rowsOf(listRows)}},
-		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, also: keys("shift+t", "T"), second: SecondInspector, enter: enterAttention,
+		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, also: keys("shift+t", "T"), second: SecondInspector, enter: askAttention,
 			mode: func(Model) Mode { return ModeAttention }, update: updateAttention, list: ListNodeAttention,
 			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "next request"}, {sheetAttention, 2, "previous request"}}},
 			keymap: []keySegment{pageMoveActions, rowsOf(attentionRows)}},
@@ -333,14 +333,6 @@ func switchPage(m Model, target Page) (Model, []Cmd) {
 	}
 	m = m.leavePage()
 	def := pageDefs[target]
-	if def.lettered {
-		m.letteredFrom = from
-		m.Page = target
-		m.pageDetailHidden = m.DetailHidden()
-		m.hidden = true
-		m.Focus = ColumnList
-		return def.enter(m)
-	}
 	if def.enter == nil {
 		return m, nil
 	}
@@ -350,6 +342,9 @@ func switchPage(m Model, target Page) (Model, []Cmd) {
 		if m, cmds, ok = enterProjectPage(m, def.needs); !ok {
 			return m, nil
 		}
+	}
+	if def.lettered {
+		m.letteredFrom = from
 	}
 	m.Page = target
 	m.pageDetailHidden = m.DetailHidden()

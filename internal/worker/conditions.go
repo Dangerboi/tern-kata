@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"slices"
 	"sync"
 	"time"
@@ -100,11 +99,7 @@ func (f *fileSkips) Add(s Skip) error {
 	f.skips = append(f.skips, s)
 	f.prune(s.At)
 	f.trim(s.JobUID)
-	raw, _ := json.Marshal(skipFile{Version: 1, Skips: f.skips})
-	if err := os.MkdirAll(filepath.Dir(f.path), 0o700); err != nil {
-		return err
-	}
-	return replaceFile(f.path, raw)
+	return saveJSON(f.path, skipFile{Version: 1, Skips: f.skips})
 }
 
 func (f *fileSkips) trim(jobUID string) {
@@ -236,7 +231,7 @@ func (s *projectSchedule) gate(ctx context.Context, st *jobSchedule, jobUID stri
 			}
 			counted = true
 		}
-		from := windowStart(now, st.zone, l.Week)
+		from := windowStart(now, st.zone, l.Per == "week")
 		n := 0
 		for _, t := range starts {
 			if !t.Before(from) {
@@ -296,7 +291,7 @@ func spendWindows(c cronjob.Conditions, loc *time.Location, now time.Time, runs 
 		if l.Spend == 0 {
 			continue
 		}
-		from := windowStart(now, loc, l.Week)
+		from := windowStart(now, loc, l.Per == "week")
 		spent, unreported := spentSince(runs, from)
 		out = append(out, SpendWindow{Condition: l.Condition, Per: l.Per, Limit: l.Spend, Spent: spent, Since: from, Unreported: unreported})
 	}

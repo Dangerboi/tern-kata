@@ -55,11 +55,7 @@ func (t RecurTarget) WithRecurrence(rec Recurrence) RecurTarget {
 	return t
 }
 
-var (
-	ErrRecurrenceWithheld = errRecurrenceWithheld
-
-	ErrRecurrenceMovedMeanwhile = errors.New("The schedule changed meanwhile; nothing was written. The current schedule is printed above.")
-)
+var ErrRecurrenceMovedMeanwhile = errors.New("The schedule changed meanwhile; nothing was written. The current schedule is printed above.")
 
 func NotRecurringError(shortID string) error {
 	return fmt.Errorf("%s does not recur; nothing was written.", shortID)

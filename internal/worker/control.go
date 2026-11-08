@@ -100,11 +100,11 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 				_ = json.NewEncoder(conn).Encode(Response{Error: "unreadable request"})
 				return
 			}
-			if req.Op == cmdStop {
+			if req.Op == OpStop {
 				unhook() // the last run may end before the answer is written, and that cancels ctx; the deadline still bounds it
 			}
 			_ = json.NewEncoder(conn).Encode(w.handle(ctx, req))
-			if req.Op == cmdStop {
+			if req.Op == OpStop {
 				w.finishDrain()
 			}
 		})
@@ -113,7 +113,7 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 
 func (w *Worker) handle(ctx context.Context, req Request) Response {
 	switch req.Op {
-	case cmdRunDetail, cmdResume, cmdAbandon:
+	case OpRunDetail, OpResume, OpAbandon:
 		if _, err := ulid.ParseStrict(req.Run); err != nil {
 			return Response{Error: fmt.Sprintf("%q is not a run uid", req.Run)}
 		}
@@ -124,26 +124,26 @@ func (w *Worker) handle(ctx context.Context, req Request) Response {
 		}
 	}
 	switch req.Op {
-	case cmdStatus:
+	case OpStatus:
 		s := w.Status()
 		return Response{OK: true, Status: &s}
-	case cmdIdentity:
+	case OpIdentity:
 		return Response{OK: true, Identity: &Identity{PID: w.pid, Version: w.opt.Version, Supervisor: w.opt.Supervisor}}
-	case cmdRun:
+	case OpRun:
 		accepted, err := w.RequestRun(ctx, req.Job)
 		return answer(Response{Run: &accepted}, err)
-	case cmdResumeJob:
+	case OpResumeJob:
 		p, err := w.ResumeJob(req.Job)
 		return answer(Response{Resumed: &p}, err)
-	case cmdStop:
+	case OpStop:
 		a, err := w.Stop(req.Mode)
 		return answer(Response{Stop: &a}, err)
-	case cmdRunDetail:
+	case OpRunDetail:
 		d, err := w.RunDetail(req.Run)
 		return answer(Response{Detail: &d}, err)
-	case cmdResume, cmdAbandon:
+	case OpResume, OpAbandon:
 		verb := w.Resume
-		if req.Op == cmdAbandon {
+		if req.Op == OpAbandon {
 			verb = w.Abandon
 		}
 		t, err := verb(ctx, req.Run, req.Actor)

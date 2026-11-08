@@ -256,9 +256,9 @@ func (f FederationState) Notice() (FederationNotice, bool) {
 	return FederationNotice{}, false
 }
 
-func dashLine(s string) string { return federationDash(oneLine(s)) }
+func dashLine(s string) string { return dashIfEmpty(oneLine(s)) }
 
-func federationDash(s string) string {
+func dashIfEmpty(s string) string {
 	if s == "" {
 		return "-"
 	}

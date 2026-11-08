@@ -193,7 +193,10 @@ func (e viewsEnv) show(name string) error {
 	if !ok {
 		return usageError{fmt.Errorf("no view named %q; the views are %s", strings.TrimSpace(name), names(read.Views))}
 	}
-	collection, filters := model.Collection{}, model.Filters{}
+	var (
+		collection model.Collection
+		filters    model.Filters
+	)
 	if ref.Collection != nil {
 		collection = *ref.Collection
 	} else {

@@ -85,7 +85,7 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 	if len(d.Action.Prompt) > MaxPromptBytes {
 		return fmt.Sprintf("its prompt is over %d KiB", MaxPromptBytes>>10), false
 	}
-	profile := cmp.Or(d.Profile, "default")
+	profile := profileOf(d)
 	if _, ok := cfg.Profiles[profile]; !ok || !pc.allowsProfile(profile) {
 		return fmt.Sprintf("it names profile %q, which is not available to Project %s in worker.toml", profile, pc.Name), false
 	}
@@ -104,10 +104,7 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 			return fmt.Sprintf("it names secret %q, which is not available to Project %s in worker.toml", name, pc.Name), true
 		}
 	}
-	timeout := cfg.defaultTimeout()
-	if d.TimeoutSeconds > 0 {
-		timeout = time.Duration(d.TimeoutSeconds) * time.Second
-	}
+	timeout := cfg.timeoutFor(d)
 	if timeout > cfg.maxTimeout() {
 		return fmt.Sprintf("it asks for a timeout of %s, over max_timeout %s", timeout, cfg.maxTimeout()), false
 	}
@@ -135,4 +132,15 @@ func otherAdapterProblem(job cronjob.Job) string {
 		return fmt.Sprintf("its options.adapter names %q, not %s", name, cronjob.AdapterName)
 	}
 	return ""
+}
+
+// profileOf is the Profile a job runs under: the one it names, else "default".
+func profileOf(d cronjob.Definition) string { return cmp.Or(d.Profile, "default") }
+
+// timeoutFor is the job's own timeout when it sets one, else the default.
+func (c Config) timeoutFor(d cronjob.Definition) time.Duration {
+	if d.TimeoutSeconds > 0 {
+		return time.Duration(d.TimeoutSeconds) * time.Second
+	}
+	return c.defaultTimeout()
 }

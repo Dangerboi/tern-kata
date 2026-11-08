@@ -43,7 +43,10 @@ cross() { # cross <os> <arch>
   GOOS=$1 GOARCH=$2 go build -trimpath -o "$out/bin/$1_$2/$bin" ./cmd/tern-kata
 }
 
-placement_tests() { luau test/placement_test.luau && luau test/releases_test.luau && luau test/panecommands_test.luau && luau test/waitingtext_test.luau && luau test/waitingagents_test.luau; }
+placement_tests() {
+  local t
+  for t in test/*_test.luau; do luau "$t" || return 1; done
+}
 
 static() {
   local status=0 pid pids=()

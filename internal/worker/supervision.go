@@ -73,7 +73,7 @@ func (d Dirs) RestartsAfterStop(supervisor string) bool { return supervisor != "
 func RunningWorker(ctx context.Context, d Dirs) (Identity, bool) {
 	ctx, cancel := context.WithTimeout(ctx, identityWait)
 	defer cancel()
-	resp, err := Ask(ctx, d, Request{Op: cmdIdentity})
+	resp, err := Ask(ctx, d, Request{Op: OpIdentity})
 	if errors.Is(err, ErrNoWorker) {
 		return Identity{}, false
 	}

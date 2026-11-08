@@ -42,29 +42,30 @@ func (w *Worker) Stop(mode string) (StopAnswer, error) {
 	return answer, nil
 }
 
+// Op values name the control commands a Request carries on the socket.
 const (
-	cmdStatus    = "status"
-	cmdRunDetail = "run-detail"
-	cmdStop      = "stop"
-	cmdRun       = "run"
-	cmdResume    = "resume"
-	cmdAbandon   = "abandon"
-	cmdResumeJob = "resume-job"
-	cmdIdentity  = "identity"
+	OpStatus    = "status"
+	OpRunDetail = "run-detail"
+	OpStop      = "stop"
+	OpRun       = "run"
+	OpResume    = "resume"
+	OpAbandon   = "abandon"
+	OpResumeJob = "resume-job"
+	OpIdentity  = "identity"
 )
 
 // whileStopping is the one rule for what each command may do once a stop was asked (ADR-0012), by stop mode: idle
 // drains and refuses what starts work, now ends the worker at once and refuses what changes runs. An abandon is
 // accepted during an idle drain because it ends a run instead of starting one.
 var whileStopping = map[string]struct{ idle, now bool }{
-	cmdStatus:    {idle: true, now: true},
-	cmdRunDetail: {idle: true, now: true},
-	cmdStop:      {idle: true, now: true},
-	cmdRun:       {},
-	cmdResume:    {},
-	cmdAbandon:   {idle: true},
-	cmdResumeJob: {},
-	cmdIdentity:  {idle: true, now: true},
+	OpStatus:    {idle: true, now: true},
+	OpRunDetail: {idle: true, now: true},
+	OpStop:      {idle: true, now: true},
+	OpRun:       {},
+	OpResume:    {},
+	OpAbandon:   {idle: true},
+	OpResumeJob: {},
+	OpIdentity:  {idle: true, now: true},
 }
 
 // refusedWhileStopping is errStopping when command may not run in stop mode ("" while serving), nil otherwise.

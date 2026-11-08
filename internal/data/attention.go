@@ -82,7 +82,7 @@ func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAt
 // = the reason, then, when asked, the label ready-for-agent removed and ready-for-human added, as the Pane's actor. It stops at the
 // first write that fails.
 func (c *Client) HandOffAgent(ctx context.Context, cmd model.HandOffAgent) error {
-	for _, kv := range [][2]string{{"work.attention", "needs-human"}, {"work.attention_msg", cmd.Message}} {
+	for _, kv := range [][2]string{{model.WorkAttentionKey, model.WorkAttentionNeedsHuman}, {model.WorkAttentionMsgKey, cmd.Message}} {
 		if err := c.writeMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, kv[0], kv[1]); err != nil {
 			return daemonError(err)
 		}

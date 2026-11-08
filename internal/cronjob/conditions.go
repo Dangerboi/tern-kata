@@ -44,9 +44,8 @@ type Conditions struct {
 type Limit struct {
 	// Condition is the key in options.conditions and the name a skip record carries.
 	Condition string
-	// Per is "day" or "week"; Week is true for "week".
+	// Per is "day" or "week".
 	Per   string
-	Week  bool
 	Runs  int
 	Spend float64
 }
@@ -70,9 +69,9 @@ type limitRow struct {
 func (c *Conditions) limits() []limitRow {
 	return []limitRow{
 		{Limit: Limit{Condition: ConditionRunsPerDay, Per: "day"}, runs: &c.RunsPerDay},
-		{Limit: Limit{Condition: ConditionRunsPerWeek, Per: "week", Week: true}, runs: &c.RunsPerWeek},
+		{Limit: Limit{Condition: ConditionRunsPerWeek, Per: "week"}, runs: &c.RunsPerWeek},
 		{Limit: Limit{Condition: ConditionSpendPerDay, Per: "day"}, spend: &c.SpendPerDay},
-		{Limit: Limit{Condition: ConditionSpendPerWeek, Per: "week", Week: true}, spend: &c.SpendPerWeek},
+		{Limit: Limit{Condition: ConditionSpendPerWeek, Per: "week"}, spend: &c.SpendPerWeek},
 	}
 }
 

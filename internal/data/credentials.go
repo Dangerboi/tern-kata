@@ -91,19 +91,5 @@ func timeOrZero(t *time.Time) time.Time {
 }
 
 func (g *Gateway) pause(ctx context.Context, d time.Duration) {
-	// Round(0) drops the monotonic reading, which does not advance while the machine sleeps.
-	deadline := g.now().Round(0).Add(d)
-	for {
-		left := deadline.Sub(g.now().Round(0))
-		if left <= 0 {
-			return
-		}
-		timer := time.NewTimer(min(left, g.wakePoll))
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			timer.Stop()
-			return
-		}
-	}
+	g.waitUntil(ctx, g.now().Add(d))
 }

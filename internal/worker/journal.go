@@ -232,6 +232,14 @@ type LaunchRecord struct {
 	At         time.Time `json:"at"`
 }
 
+// session is the omp session the launch recorded, empty for a nil record or one omp had not named yet.
+func (l *LaunchRecord) session() string {
+	if l == nil {
+		return ""
+	}
+	return l.SessionID
+}
+
 type ExitRecord struct {
 	Code     int       `json:"code"`
 	Signal   string    `json:"signal,omitempty"`

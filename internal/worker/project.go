@@ -47,6 +47,10 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		// issueEvent is set when the loop woke for an Issue event: only that tick may reuse a young job listing.
 		issueEvent bool
 	)
+	// dirtyDue is when events that dirtied the job list may refresh it: after a short settle and the debounce.
+	dirtyDue := func() time.Time {
+		return maxTime(dirtyAt.Add(250*time.Millisecond), w.jobsListedAt(ps).Add(jobRefreshDebounce))
+	}
 	starting, ok := w.beginStarting(ctx)
 	if !ok {
 		return
@@ -100,7 +104,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			state := claimLease(ctx, w.opt.Kata, w.clock, w.opt.Config.Executor, ps.actor, ps.project.ID, takeover)
 			takeover = false
 			w.mu.Lock()
-			ps.lease, ps.leaseAt = state, now
+			ps.lease = state
 			w.mu.Unlock()
 			switch {
 			case state.Held:
@@ -140,7 +144,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			default:
 			}
 			due := nextDefs.IsZero() || !now.Before(nextDefs)
-			if dirty && !now.Before(maxTime(dirtyAt.Add(250*time.Millisecond), w.jobsListedAt(ps).Add(jobRefreshDebounce))) {
+			if dirty && !now.Before(dirtyDue()) {
 				due = true
 			}
 			if due {
@@ -169,7 +173,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			wake = minTime(wake, nextDefs)
 		}
 		if dirty {
-			wake = minTime(wake, maxTime(dirtyAt.Add(250*time.Millisecond), w.jobsListedAt(ps).Add(jobRefreshDebounce)))
+			wake = minTime(wake, dirtyDue())
 		}
 		if ps.resolved {
 			wake = minTime(wake, nextRoute)
@@ -272,17 +276,11 @@ func (w *Worker) follow(ctx context.Context, ps *projectState) {
 			cursor = max(cursor, e.ID)
 			if strings.HasPrefix(e.Type, "issue.") {
 				ps.datesDirty.Store(true)
-				select {
-				case ps.issueKick <- struct{}{}:
-				default:
-				}
+				poke(ps.issueKick)
 			}
 			if strings.HasPrefix(e.Type, "cron.job.") || strings.HasPrefix(e.Type, "cron.workflow.") {
 				w.writeCursor(ps.project.UID, cursor)
-				select {
-				case ps.wake <- struct{}{}:
-				default:
-				}
+				poke(ps.wake)
 			}
 		})
 		w.mu.Lock()
@@ -298,10 +296,7 @@ func (w *Worker) follow(ctx context.Context, ps *projectState) {
 				cursor = reset.After
 				w.writeCursor(ps.project.UID, cursor)
 			}
-			select {
-			case ps.wake <- struct{}{}:
-			default:
-			}
+			poke(ps.wake)
 		}
 		if delivered || (!opened.IsZero() && w.clock.Now().Sub(opened) >= 5*time.Minute) {
 			backoff = 500 * time.Millisecond

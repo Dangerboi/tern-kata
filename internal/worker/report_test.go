@@ -37,7 +37,7 @@ func TestAFinalObservationNeverOverwritesANewerObservationBySomeoneElse(t *testi
 			return nil
 		}
 		once.Do(func() { // a person records the run as unknown while the worker has it finished
-			_, _, err := h.kata.Kata.Observe(context.Background(), j.ProjectID, worker.Observation{
+			_, err := h.kata.Kata.Observe(context.Background(), j.ProjectID, worker.Observation{
 				RunUID: j.RunUID, JobUID: j.JobUID, DefinitionEventUID: j.DefinitionEventUID, OccurrenceKey: j.OccurrenceKey, IssueUID: j.Issue.UID,
 				Executor: j.Executor, Actor: j.Actor, Status: "unknown", Message: "carol is checking this by hand", StartedAt: j.StartedAt, ExpectedRevision: j.Revision,
 			})

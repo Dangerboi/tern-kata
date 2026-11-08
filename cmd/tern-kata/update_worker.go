@@ -23,7 +23,7 @@ const (
 // named. A hold stops nothing, since the new binary may not load the config. It never runs `worker upgrade`. A failure is a
 // warning on out.
 func updateWorker(ctx context.Context, env updateEnv, version string, hold workerHold, out io.Writer) {
-	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: "status"})
+	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: worker.OpStatus})
 	if errors.Is(err, worker.ErrNoWorker) {
 		return
 	}
@@ -37,7 +37,7 @@ func updateWorker(ctx context.Context, env updateEnv, version string, hold worke
 	case hold == holdConfig:
 		fmt.Fprintln(out, "The worker was not stopped: worker.toml does not load under "+version+". Run `tern-kata worker upgrade` (or `worker edit`), then `tern-kata worker stop`.")
 	case env.Dirs.RestartsAfterStop(resp.Status.Supervisor):
-		stop, err := askWorker(ctx, env.Dirs, worker.Request{Op: "stop", Mode: worker.StopIdle})
+		stop, err := askWorker(ctx, env.Dirs, worker.Request{Op: worker.OpStop, Mode: worker.StopIdle})
 		if err != nil {
 			fmt.Fprintf(out, "warning: could not stop the worker: %v\n", err)
 			return

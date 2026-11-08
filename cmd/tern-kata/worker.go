@@ -66,7 +66,7 @@ func runWorkerCommand(ctx context.Context, plan LaunchPlan, env workerEnv, out i
 	case len(plan.Operands) == 1 && plan.Operands[0] == "upgrade":
 		return upgradeWorkerConfig(ctx, env, out)
 	case len(plan.Operands) == 1 && plan.Operands[0] == "status":
-		resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: "status"})
+		resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: worker.OpStatus})
 		if err != nil {
 			return subcommandError{err}
 		}
@@ -164,7 +164,7 @@ func stopWorker(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writ
 	if plan.Now {
 		mode = worker.StopNow
 	}
-	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: "stop", Mode: mode})
+	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: worker.OpStop, Mode: mode})
 	if errors.Is(err, worker.ErrNoWorker) {
 		return subcommandError{errors.New("no tern-kata worker is running on this machine: there is nothing to stop")}
 	}
@@ -237,7 +237,7 @@ func settleHeldRun(ctx context.Context, plan LaunchPlan, env workerEnv, out io.W
 // its name when one paused job has it), it lifts the pause and says so; done is false when ref names no paused job, and
 // the caller treats it as a held run's uid.
 func resumePausedJob(ctx context.Context, env workerEnv, ref string, out io.Writer) (done bool, err error) {
-	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: "status"})
+	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: worker.OpStatus})
 	if err != nil || resp.Status == nil {
 		return false, nil //nolint:nilerr // the held-run path asks again and reports what is wrong
 	}
@@ -254,7 +254,7 @@ func resumePausedJob(ctx context.Context, env workerEnv, ref string, out io.Writ
 	default:
 		return true, subcommandError{fmt.Errorf("%d paused jobs are named %q (in Projects %s); resume one by its uid", len(match), ref, projectNames(match))}
 	}
-	if _, err = askWorker(ctx, env.Dirs, worker.Request{Op: "resume-job", Job: match[0].JobUID}); err != nil {
+	if _, err = askWorker(ctx, env.Dirs, worker.Request{Op: worker.OpResumeJob, Job: match[0].JobUID}); err != nil {
 		return true, subcommandError{err}
 	}
 	_, err = fmt.Fprintf(out, "Job %q in Project %s resumed: the worker admits its runs again and counts failed runs from none.\n", match[0].Name, match[0].Project)
@@ -270,7 +270,7 @@ func projectNames(jobs []worker.PausedJob) string {
 }
 
 func runJobNow(ctx context.Context, plan LaunchPlan, env workerEnv, out io.Writer) error {
-	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: "run", Job: plan.TargetRef})
+	resp, err := askWorker(ctx, env.Dirs, worker.Request{Op: worker.OpRun, Job: plan.TargetRef})
 	if err != nil {
 		return subcommandError{err}
 	}

@@ -90,9 +90,6 @@ func TestTriggerKindsPerAction(t *testing.T) {
 	for _, action := range []cronjob.ActionKind{cronjob.ActionExecute, cronjob.ActionNotify, "page"} {
 		for _, trigger := range all {
 			want := !slices.Contains(refused[action], trigger)
-			if got := cronjob.AllowsTrigger(action, trigger); got != want {
-				t.Errorf("AllowsTrigger(%s, %s) = %v; want %v", action, trigger, got, want)
-			}
 			if got := slices.Contains(cronjob.TriggersFor(action), trigger); got != want {
 				t.Errorf("TriggersFor(%s) holds %s = %v; want %v", action, trigger, got, want)
 			}

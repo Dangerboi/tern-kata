@@ -52,9 +52,6 @@ const (
 var workerTable = fieldTable[WorkerCardState]{
 	form:   func(m *Model) *WorkerCardState { return &m.WorkerCard },
 	busy:   func(f WorkerCardState) bool { return f.Saving || f.Stopping || f.Switching || f.Restart || f.AskOff },
-	focus:  func(f *WorkerCardState) *Field { return &f.Field },
-	caret:  func(f *WorkerCardState) *Caret { return &f.Caret },
-	err:    func(f *WorkerCardState) *error { return &f.Err },
 	hidden: func(m Model, name Field) bool { return !m.WorkerCardShows(name) },
 	fields: []formField[WorkerCardState]{
 		textField(WorkerFieldExecutor, func(f *WorkerCardState) *string { return &f.Executor }),
@@ -196,18 +193,15 @@ func (WorkerSupervisionSet) msg() {}
 // WorkerCardState is the Worker card. What it shows about the machine is Model.Worker; the card holds what was typed, and the step
 // it is in after a save.
 type WorkerCardState struct {
-	Open bool
+	formCard
 	// Saving, Stopping and Switching say a write, a stop request or a supervision change has not answered; the card then takes no key.
-	Saving, Stopping, Switching bool
+	Stopping, Switching bool
 	// AskOff says the card asks how to stop the running worker as supervision goes off; Supervision is what the last change did.
 	AskOff      bool
 	Supervision string
-	Field       Field
-	Caret       Caret
 	// Executor, Actor, Command, Model and Thinking are the setup fields, prefilled as `worker init` would; Trusted is the trust choice.
 	Executor, Actor, Command, Model, Thinking string
 	Trusted                                   bool
-	Err                                       error
 	// Saved is what the card says after the file was written and Next what happens to the worker now. Restart says a worker was running then, so the card asks how to
 	// restart it.
 	Saved, Next string
@@ -448,8 +442,9 @@ func (m Model) workerWritten(saved string) (Model, []Cmd) {
 
 // workerEditorClosed takes the text back from $EDITOR: an unchanged or blank result changes nothing, anything else is sent to be
 // checked and written.
-func workerEditorClosed(m Model, msg DraftEditorClosed) (Model, []Cmd, bool) {
-	if msg.UID != WorkerDraftUID {
+func workerEditorClosed(m Model, in Msg) (Model, []Cmd, bool) {
+	msg, ok := in.(DraftEditorClosed)
+	if !ok || msg.UID != WorkerDraftUID {
 		return m, nil, false
 	}
 	f := &m.WorkerCard

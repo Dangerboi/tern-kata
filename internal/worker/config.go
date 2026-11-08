@@ -68,6 +68,15 @@ func (d Dirs) ProjectDir(projectUID string) string {
 	return filepath.Join(d.State, "projects", projectUID)
 }
 
+// Pin is the Project's pin file (see pin); Pins globs every Project's.
+func (d Dirs) Pin(projectUID string) string {
+	return filepath.Join(d.ProjectDir(projectUID), "pin.json")
+}
+
+func (d Dirs) Pins() string {
+	return filepath.Join(d.State, "projects", "*", "pin.json")
+}
+
 // Skips is the Project's skip record file: the occurrences its conditions skipped (ADR-0016).
 func (d Dirs) Skips(projectUID string) string {
 	return filepath.Join(d.ProjectDir(projectUID), "skips.json")

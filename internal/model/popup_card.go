@@ -259,7 +259,7 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardField, name: "fields", open: func(m Model) bool { return m.FieldForm.Open },
-			modes: []Mode{ModeFieldForm}, mode: func(Model) Mode { return ModeFieldForm },
+			modes:  []Mode{ModeFieldForm},
 			key:    updateFieldKey,
 			busy:   func(m Model) bool { return m.FieldForm.Saving },
 			fields: []FieldSpec{}, input: true,
@@ -275,7 +275,7 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardClose, name: "close",
-			modes: []Mode{ModeCloseForm}, mode: func(Model) Mode { return ModeCloseForm },
+			modes:   []Mode{ModeCloseForm},
 			key:     closeKey,
 			table:   &closeTable,
 			editing: []fieldEditing{{mode: ModeCloseForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
@@ -294,16 +294,16 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardToken, name: "token", open: func(m Model) bool { return m.TokenForm.Open },
-			modes: []Mode{ModeTokenForm}, mode: func(Model) Mode { return ModeTokenForm },
+			modes:   []Mode{ModeTokenForm},
 			key:     updateTokenFormKey,
 			table:   &tokenTable,
 			editing: []fieldEditing{{mode: ModeTokenForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
 		},
 		{
 			card: CardRevoke, name: "revoke", open: func(m Model) bool { return m.RevokeCard.Open },
-			modes: []Mode{ModeRevokeToken}, mode: func(Model) Mode { return ModeRevokeToken },
-			key:  updateRevokeKey,
-			busy: func(m Model) bool { return m.RevokeCard.Saving }, fields: []FieldSpec{},
+			modes: []Mode{ModeRevokeToken},
+			key:   updateRevokeKey,
+			busy:  func(m Model) bool { return m.RevokeCard.Saving }, fields: []FieldSpec{},
 		},
 		{
 			card: CardMove, name: "move", open: func(m Model) bool { return m.MoveProject.Open },
@@ -340,14 +340,14 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardDelete, name: "delete",
-			modes: []Mode{ModeDeleteForm}, mode: func(Model) Mode { return ModeDeleteForm },
+			modes:   []Mode{ModeDeleteForm},
 			key:     deleteTable.plainKey(ModeDeleteForm, DeleteSubmit, DeleteCancel, submitDelete),
 			table:   &deleteTable,
 			editing: []fieldEditing{{mode: ModeDeleteForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
 		},
 		{
 			card: CardFederationAdopt, name: "federation-adopt", open: func(m Model) bool { return m.Federation.Adopting },
-			modes: []Mode{ModeFederationAdopt}, mode: func(Model) Mode { return ModeFederationAdopt },
+			modes:  []Mode{ModeFederationAdopt},
 			key:    federationAdoptKey,
 			busy:   func(Model) bool { return false },
 			fields: []FieldSpec{}, input: true,
@@ -357,7 +357,7 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardFederationName, name: "federation-name", open: func(m Model) bool { return m.Federation.Name.Open },
-			modes: []Mode{ModeFederationName}, mode: func(Model) Mode { return ModeFederationName },
+			modes:  []Mode{ModeFederationName},
 			key:    federationNameKey,
 			busy:   func(m Model) bool { return m.Federation.Name.Saving },
 			fields: []FieldSpec{}, input: true,
@@ -384,9 +384,9 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardBackfill, name: "backfill", open: func(m Model) bool { return m.Backfill.Open },
-			modes: []Mode{ModeBackfill}, mode: func(Model) Mode { return ModeBackfill },
-			key:  backfillKey,
-			busy: func(Model) bool { return false }, fields: []FieldSpec{},
+			modes: []Mode{ModeBackfill},
+			key:   backfillKey,
+			busy:  func(Model) bool { return false }, fields: []FieldSpec{},
 		},
 		{
 			card: CardJob, name: "job", open: func(m Model) bool { return m.JobForm.Open },
@@ -404,7 +404,7 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardProject, name: "project", open: func(m Model) bool { return m.ProjectForm.Open },
-			modes: []Mode{ModeProjectForm}, mode: func(Model) Mode { return ModeProjectForm },
+			modes:  []Mode{ModeProjectForm},
 			key:    updateProjectFormKey,
 			busy:   func(m Model) bool { return m.ProjectForm.Saving },
 			fields: []FieldSpec{}, input: true,
@@ -419,8 +419,8 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardLanes, name: "lanes",
-			modes: []Mode{ModeLanesForm}, mode: func(Model) Mode { return ModeLanesForm },
-			key: updateLanesFormKey, cancel: LanesCancel,
+			modes: []Mode{ModeLanesForm},
+			key:   updateLanesFormKey, cancel: LanesCancel,
 			table:   &lanesTable,
 			editing: []fieldEditing{{mode: ModeLanesForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}}},
 			choices: lanesChoiceSet,
@@ -444,16 +444,16 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardFilter, name: "filters",
-			modes: []Mode{ModeFilterForm}, mode: func(Model) Mode { return ModeFilterForm },
-			key: filterFormKey, cancel: CancelFilters,
+			modes: []Mode{ModeFilterForm},
+			key:   filterFormKey, cancel: CancelFilters,
 			table:   &filterTable,
 			editing: []fieldEditing{{mode: ModeFilterForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: ResetFilterForm}},
 			choices: filterChoiceSet,
 		},
 		{
 			card: CardView, name: "view",
-			modes: []Mode{ModeViewForm}, mode: func(Model) Mode { return ModeViewForm },
-			key: viewFormKey, cancel: CancelViewForm,
+			modes: []Mode{ModeViewForm},
+			key:   viewFormKey, cancel: CancelViewForm,
 			table:   &viewTable,
 			editing: []fieldEditing{{mode: ModeViewForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}, nextAlso: []string{"enter"}, before: SaveViewForm}},
 			choices: viewChoiceSet,
@@ -486,6 +486,10 @@ func buildCards() []cardEntry {
 	for i := range list {
 		if list[i].table != nil {
 			list[i].table.fill(&list[i])
+		}
+		if list[i].mode == nil {
+			only := list[i].modes[0]
+			list[i].mode = func(Model) Mode { return only }
 		}
 		if list[i].choices != nil {
 			list[i].modes = append(list[i].modes, ModeDropdown)

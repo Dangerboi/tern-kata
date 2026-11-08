@@ -89,8 +89,7 @@ type projectState struct {
 	recoverErr    string
 	loggedScanErr string
 
-	lease   LeaseState
-	leaseAt time.Time
+	lease LeaseState
 	// route is the last route check; instanceUID is the daemon instance the Project is pinned to.
 	route       routeState
 	instanceUID string
@@ -315,7 +314,7 @@ func (w *Worker) checkPin(p Project, actor string, instance Instance) string {
 	dir := w.opt.Dirs.ProjectDir(p.UID)
 	want := pin{ProjectUID: p.UID, InstanceUID: instance.UID, Name: p.Name, Actor: actor, AuthActor: instance.Actor, Executor: w.opt.Config.Executor}
 	// A name that earlier resolved to another uid is a different Project.
-	others, _ := filepath.Glob(filepath.Join(w.opt.Dirs.State, "projects", "*", "pin.json"))
+	others, _ := filepath.Glob(w.opt.Dirs.Pins())
 	for _, path := range others {
 		if filepath.Dir(path) == dir {
 			continue
@@ -324,7 +323,7 @@ func (w *Worker) checkPin(p Project, actor string, instance Instance) string {
 			return fmt.Sprintf("Project name %q was pinned to uid %s and now resolves to %s; use a new state folder and executor to serve it", p.Name, prev.ProjectUID, p.UID)
 		}
 	}
-	path := filepath.Join(dir, "pin.json")
+	path := w.opt.Dirs.Pin(p.UID)
 	prev, ok := readPin(path)
 	if !ok {
 		if _, err := os.Stat(path); err == nil {

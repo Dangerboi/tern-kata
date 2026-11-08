@@ -11,19 +11,19 @@ func TestCommandsRefusedWhileStopping(t *testing.T) {
 		command, mode string
 		refused       bool
 	}{
-		{cmdRun, "", false},
-		{cmdRun, StopIdle, true},
-		{cmdRun, StopNow, true},
-		{cmdResume, "", false},
-		{cmdResume, StopIdle, true},
-		{cmdResume, StopNow, true},
-		{cmdAbandon, "", false},
-		{cmdAbandon, StopIdle, false},
-		{cmdAbandon, StopNow, true},
-		{cmdStatus, StopNow, false},
-		{cmdRunDetail, StopNow, false},
-		{cmdStop, StopNow, false},
-		{cmdIdentity, StopNow, false},
+		{OpRun, "", false},
+		{OpRun, StopIdle, true},
+		{OpRun, StopNow, true},
+		{OpResume, "", false},
+		{OpResume, StopIdle, true},
+		{OpResume, StopNow, true},
+		{OpAbandon, "", false},
+		{OpAbandon, StopIdle, false},
+		{OpAbandon, StopNow, true},
+		{OpStatus, StopNow, false},
+		{OpRunDetail, StopNow, false},
+		{OpStop, StopNow, false},
+		{OpIdentity, StopNow, false},
 	} {
 		err := refusedWhileStopping(c.command, c.mode)
 		if c.refused != (err != nil) || err != nil && !errors.Is(err, errStopping) {

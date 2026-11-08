@@ -86,7 +86,7 @@ func claimLease(ctx context.Context, k *Kata, clock Clock, executor, actor strin
 			gen++
 		}
 		value := leaseValue{Version: 1, Owner: executor, Generation: gen, Heartbeat: now}
-		_, err = k.PatchProjectMetadata(ctx, projectID, p.Revision, actor, map[string]any{leaseKey: value})
+		err = k.PatchProjectMetadata(ctx, projectID, p.Revision, actor, map[string]any{leaseKey: value})
 		if errors.Is(err, ErrRevisionConflict) {
 			continue
 		}
@@ -136,7 +136,7 @@ func releaseLease(ctx context.Context, k *Kata, clock Clock, executor, actor str
 			return err
 		}
 		value := leaseValue{Version: 1, Generation: cur.Generation, Heartbeat: clock.Now().UTC()}
-		_, err = k.PatchProjectMetadata(ctx, projectID, p.Revision, actor, map[string]any{leaseKey: value})
+		err = k.PatchProjectMetadata(ctx, projectID, p.Revision, actor, map[string]any{leaseKey: value})
 		if errors.Is(err, ErrRevisionConflict) {
 			continue
 		}

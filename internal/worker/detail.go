@@ -57,13 +57,7 @@ func stepKind(j *Journal, i int) cronjob.StepKind {
 func stepsOf(j *Journal) []StepDetail {
 	if j.Workflow == nil {
 		st := StepDetail{Index: 1, Kind: cronjob.StepPrompt, Attempt: j.attempt(), State: j.stateName()}
-		if l := j.Launch; l != nil {
-			st.PID, st.SessionID, st.StartedAt = l.PID, l.SessionID, l.At
-		}
-		if e := j.Exit; e != nil {
-			code := e.Code
-			st.ExitCode, st.Signal, st.TimedOut, st.EndedAt, st.Unrecorded = &code, e.Signal, e.TimedOut, e.At, e.Unrecorded
-		}
+		st.fill(j.Launch, j.Exit)
 		return []StepDetail{st}
 	}
 	steps := make([]StepDetail, len(j.Steps))
@@ -74,16 +68,21 @@ func stepsOf(j *Journal) []StepDetail {
 		if i == active { // the attempt in flight keeps its records on the run until it concludes
 			launch, exit = j.Launch, j.Exit
 		}
-		if launch != nil {
-			st.PID, st.SessionID, st.StartedAt = launch.PID, launch.SessionID, launch.At
-		}
-		if exit != nil {
-			code := exit.Code
-			st.ExitCode, st.Signal, st.TimedOut, st.EndedAt, st.Unrecorded = &code, exit.Signal, exit.TimedOut, exit.At, exit.Unrecorded
-		}
+		st.fill(launch, exit)
 		steps[i] = st
 	}
 	return steps
+}
+
+// fill copies what an attempt's launch and exit records say; either may be nil.
+func (st *StepDetail) fill(launch *LaunchRecord, exit *ExitRecord) {
+	if launch != nil {
+		st.PID, st.SessionID, st.StartedAt = launch.PID, launch.SessionID, launch.At
+	}
+	if exit != nil {
+		code := exit.Code
+		st.ExitCode, st.Signal, st.TimedOut, st.EndedAt, st.Unrecorded = &code, exit.Signal, exit.TimedOut, exit.At, exit.Unrecorded
+	}
 }
 
 func (w *Worker) RunDetail(uid string) (RunDetail, error) {
@@ -149,12 +148,8 @@ func (w *Worker) sessionOf(j *Journal) (folder, id string) {
 		if i == active {
 			launch = j.Launch
 		}
-		var launched string
-		if launch != nil {
-			launched = launch.SessionID
-		}
 		dir := sessionFolder(filepath.Join(runDir, r.Dir))
-		if id := sessionIn(dir, launched); id != "" {
+		if id := sessionIn(dir, launch.session()); id != "" {
 			return dir, id
 		}
 	}

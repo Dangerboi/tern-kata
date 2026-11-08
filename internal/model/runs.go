@@ -251,6 +251,15 @@ func (m Model) SelectedRun() *Run {
 
 type RunFact struct{ Label, Value string }
 
+type runFacts []RunFact
+
+// add appends the fact unless its value is empty.
+func (f *runFacts) add(label, value string) {
+	if value != "" {
+		*f = append(*f, RunFact{label, value})
+	}
+}
+
 // RunFacts are the inspector's lines for the selected Run: its status and reason code, what it ran and for which Issue, who ran it
 // and when, the summary's message after its reason line and token counts, and the references kata holds. Lines the Run has no
 // value for are left out.
@@ -259,12 +268,8 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 	if run == nil {
 		return nil
 	}
-	var facts []RunFact
-	add := func(label, value string) {
-		if value != "" {
-			facts = append(facts, RunFact{label, value})
-		}
-	}
+	var facts runFacts
+	add := facts.add
 	count := func(n *int64) string {
 		if n == nil {
 			return ""
@@ -423,24 +428,12 @@ func runShown(m Model, msg RunShown) Model {
 }
 
 func (m Model) settleRunSelection() Model {
-	runs := m.searchedRuns()
-	if slices.ContainsFunc(runs, func(r Run) bool { return r.UID == m.Runs.Selected }) {
-		return m
-	}
-	m.Runs.Selected = ""
-	if len(runs) > 0 {
-		m.Runs.Selected = runs[0].UID
-	}
+	keepSelected(m.searchedRuns(), func(r Run) string { return r.UID }, &m.Runs.Selected)
 	return m
 }
 
 func moveRun(m Model, action Action) Model {
-	runs := m.searchedRuns()
-	if len(runs) == 0 {
-		return m
-	}
-	at := slices.IndexFunc(runs, func(r Run) bool { return r.UID == m.Runs.Selected })
-	m.Runs.Selected = runs[movedIndex(at, len(runs), listPage, action)].UID
+	moveSelected(m.searchedRuns(), func(r Run) string { return r.UID }, &m.Runs.Selected, listPage, action)
 	return m
 }
 

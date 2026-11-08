@@ -33,10 +33,6 @@ func laneTone(lanes []string, lane string) ui.Tone {
 	return ui.ToneNeutral
 }
 
-func issueLaneTone(m model.Model, issue model.Issue) ui.Tone {
-	return issueLaneToneIn(m.LaneList(), issue)
-}
-
 func issueLaneToneIn(lanes []string, issue model.Issue) ui.Tone {
 	return laneTone(lanes, model.LaneOf(issue, lanes))
 }

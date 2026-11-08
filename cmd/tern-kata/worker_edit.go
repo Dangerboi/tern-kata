@@ -124,7 +124,7 @@ func stripProblem(text string) string {
 }
 
 func reportEdit(ctx context.Context, env workerEnv, path string, out io.Writer) error {
-	if _, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: "status"}); errors.Is(err, worker.ErrNoWorker) {
+	if _, err := worker.Ask(ctx, env.Dirs, worker.Request{Op: worker.OpStatus}); errors.Is(err, worker.ErrNoWorker) {
 		_, err = fmt.Fprintf(out, "Wrote %s. No worker is running; the next one reads it.\n", path)
 		return err
 	}

@@ -32,7 +32,7 @@ type RunTransition struct {
 // expiry before anything starts; the held attempt's prompt is never sent again. by is the actor recorded for the
 // resume. One request owns a run at a time, so two resumes of one hold accept one and the other never touches its slot.
 func (w *Worker) Resume(ctx context.Context, uid, by string) (RunTransition, error) {
-	if err := w.stopRefusal(cmdResume); err != nil {
+	if err := w.stopRefusal(OpResume); err != nil {
 		return RunTransition{}, err
 	}
 	op := w.runOps.get(uid)
@@ -119,7 +119,7 @@ func (w *Worker) heldCost(j *Journal) *float64 {
 // that is settled, still being reported, or whose recorded process group is still present, and every Project that
 // admits nothing apart from stopping, as run and resume do; an idle stop still accepts it.
 func (w *Worker) Abandon(ctx context.Context, uid, by string) (RunTransition, error) {
-	if err := w.stopRefusal(cmdAbandon); err != nil {
+	if err := w.stopRefusal(OpAbandon); err != nil {
 		return RunTransition{}, err
 	}
 	op := w.runOps.get(uid)
@@ -217,7 +217,7 @@ func (w *Worker) heldRun(uid string) (*Journal, *projectState, error) {
 
 // reopen confirms the resumed Run's running observation in kata, keeping the original start time and clearing the end,
 // then lets the attempt launch. A crash before the journal is saved replays it: an identical stored observation counts as sent.
-func (w *Worker) reopen(ctx context.Context, ps *projectState, j *Journal) error {
+func (w *Worker) reopen(ctx context.Context, j *Journal) error {
 	r := j.Resume
 	if r == nil {
 		return errors.New("a resuming run has no resume record")
@@ -228,7 +228,7 @@ func (w *Worker) reopen(ctx context.Context, ps *projectState, j *Journal) error
 		return err
 	}
 	if !(stored.Status == cronjob.RunRunning && stored.Summary == msg) {
-		stored, _, err = w.opt.Kata.Observe(ctx, j.ProjectID, w.observation(j, cronjob.RunRunning, msg, stored.Revision))
+		stored, err = w.opt.Kata.Observe(ctx, j.ProjectID, w.observation(j, cronjob.RunRunning, msg, stored.Revision))
 		if errors.Is(err, ErrConflict) {
 			current, serr := w.opt.Kata.ShowRun(ctx, j.ProjectID, j.RunUID)
 			if serr != nil || current.Status != cronjob.RunRunning || current.Summary != msg {
@@ -291,11 +291,7 @@ func readOutput(path string) AgentResult {
 // sessionID is the omp session a resume would continue: the one the run recorded or, when the worker stopped before
 // saving it, the only session file in the run's session folder. Empty when no session file exists.
 func (w *Worker) sessionID(j *Journal) string {
-	var launched string
-	if j.Launch != nil {
-		launched = j.Launch.SessionID
-	}
-	return sessionIn(sessionFolder(w.attemptDir(j)), launched)
+	return sessionIn(sessionFolder(w.attemptDir(j)), j.Launch.session())
 }
 
 // sessionIn is the session in an omp session folder: launched when its file is there, else (launched unknown) the only

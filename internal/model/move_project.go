@@ -350,14 +350,8 @@ func moveProjectKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return chooseMoveTarget(m)
 	case MoveProjectSend:
 		return confirmMove(m)
-	case MoveDown:
-		f.Cursor = max(0, min(f.Cursor+1, last))
-	case MoveUp:
-		f.Cursor = max(0, f.Cursor-1)
-	case MoveFirst:
-		f.Cursor = 0
-	case MoveLast:
-		f.Cursor = max(0, last)
+	case MoveDown, MoveUp, MoveFirst, MoveLast:
+		moveCursor(&f.Cursor, last+1, binding.Action)
 	}
 	return m, nil
 }

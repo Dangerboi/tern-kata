@@ -37,11 +37,8 @@ const (
 // tokenTable declares the Token card's fields, in tab order, and its busy condition: the card is busy while it saves and
 // once the token is made.
 var tokenTable = fieldTable[TokenFormState]{
-	form:  func(m *Model) *TokenFormState { return &m.TokenForm },
-	busy:  func(f TokenFormState) bool { return f.Saving || f.Done },
-	focus: func(f *TokenFormState) *Field { return &f.Field },
-	caret: func(f *TokenFormState) *Caret { return &f.Caret },
-	err:   func(f *TokenFormState) *error { return &f.Err },
+	form: func(m *Model) *TokenFormState { return &m.TokenForm },
+	busy: func(f TokenFormState) bool { return f.Saving || f.Done },
 	fields: []formField[TokenFormState]{
 		textField(TokenActor, func(f *TokenFormState) *string { return &f.Values.Actor }),
 		textField(TokenName, func(f *TokenFormState) *string { return &f.Values.Name }),
@@ -90,14 +87,11 @@ func (v TokenValues) Value(name Field) string {
 
 // TokenFormState is the Token card. Once a token is made DoneID and DoneFile name it; the secret is in the file alone.
 type TokenFormState struct {
-	Open, Saving bool
-	Field        Field
-	Values       TokenValues
-	Caret        Caret
-	Err          error
-	Done         bool
-	DoneID       int64
-	DoneFile     string
+	formCard
+	Values   TokenValues
+	Done     bool
+	DoneID   int64
+	DoneFile string
 }
 
 type RevokeState struct {

@@ -61,7 +61,7 @@ func (w *Worker) abandonLost(ctx context.Context, lost *noRunError, by string) (
 		}
 		end := w.clock.Now().UTC()
 		obs.EndedAt = &end
-		if _, _, err := w.opt.Kata.Observe(ctx, ps.project.ID, obs); err != nil {
+		if _, err := w.opt.Kata.Observe(ctx, ps.project.ID, obs); err != nil {
 			return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: kata did not accept the record: %w", lost.uid, err)
 		}
 	case run.Status == cronjob.RunUnknown && run.Summary == lostStateSummary:

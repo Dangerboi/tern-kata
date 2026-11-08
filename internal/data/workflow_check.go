@@ -45,7 +45,7 @@ func (b promptBudget) reading(d cronjob.WorkflowDefinition) model.WorkerReading 
 }
 
 func (g *Gateway) readWorkflowText(ctx context.Context, cmd model.ReadWorkflowText) model.WorkflowTextRead {
-	pause(ctx, cmd.After)
+	g.pause(ctx, cmd.After)
 	return model.WorkflowTextRead{Request: cmd.Request, Reading: g.readPromptBudget().reading(cmd.Definition)}
 }
 

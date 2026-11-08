@@ -66,8 +66,7 @@ func CommentHandle(id string) string {
 }
 
 func (r AttentionRequest) FirstLine() string {
-	line, _, _ := strings.Cut(strings.TrimSpace(r.Slot.Message), "\n")
-	return strings.TrimSpace(line)
+	return firstLine(r.Slot.Message)
 }
 
 func OrderAttention(requests []AttentionRequest) {
@@ -211,8 +210,6 @@ func attentionChangesTheCount(eventType string) bool {
 	return strings.HasPrefix(eventType, "issue.") || strings.HasPrefix(eventType, "project.") || eventType == "sync.reset_required"
 }
 
-func enterAttention(m Model) (Model, []Cmd) { return askAttention(m) }
-
 // attentionLoaded applies the answer to the latest read. A failed read keeps the requests held; a good one replaces them and
 // keeps the selection on the same Issue, else on the row now at its place.
 func attentionLoaded(m Model, msg AttentionLoaded) (Model, []Cmd) {
@@ -251,22 +248,7 @@ func moveAttention(m Model, action Action) Model {
 	if count == 0 {
 		return m
 	}
-	index := max(m.attentionIndex(), 0)
-	switch action {
-	case MoveDown:
-		index = min(index+1, count-1)
-	case MoveUp:
-		index = max(index-1, 0)
-	case MoveFirst:
-		index = 0
-	case MoveLast:
-		index = count - 1
-	case PageDown:
-		index = min(index+pageRows, count-1)
-	case PageUp:
-		index = max(index-pageRows, 0)
-	}
-	m.Attention.Selected = m.Attention.Requests[index].IssueUID
+	m.Attention.Selected = m.Attention.Requests[movedIndex(m.attentionIndex(), count, listPage, action)].IssueUID
 	return m
 }
 
@@ -301,8 +283,6 @@ func attentionCleared(m Model, msg AttentionCleared) (Model, []Cmd) {
 	}
 	return askAttention(m)
 }
-
-func reloadAttention(m Model) (Model, []Cmd) { return askAttention(m) }
 
 func openAttention(m Model) (Model, []Cmd) {
 	request, ok := m.SelectedAttention()
@@ -388,5 +368,5 @@ var attentionRows = []actionEntry{
 	{action: MessageAgent, modes: []Mode{ModeAttention}, keys: keys("m", "m"), help: "message agent", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 5, "message the agent that raised the request"}}, handle: openAgentMessage},
 	{action: QuickReplyAgent, modes: []Mode{ModeAttention}, keys: keys("r", "r"), help: "quick reply", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 6, "send the agent a canned reply: continue, wrap up, or commit and close"}}, handle: openAgentQuickReply},
 	{action: UndoAction, modes: []Mode{ModeAttention}, keys: keys("u", "u"), help: "undo", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 8, "undo the delete the Pane just made"}}, handle: startUndo, when: newestUndoIsDelete},
-	{action: ReloadAttention, modes: []Mode{ModeAttention}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetAttention, 7, "read the requests again"}}, handle: reloadAttention},
+	{action: ReloadAttention, modes: []Mode{ModeAttention}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetAttention, 7, "read the requests again"}}, handle: askAttention},
 }

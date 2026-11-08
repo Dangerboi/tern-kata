@@ -224,8 +224,8 @@ func (k *Kata) Project(ctx context.Context, id int64) (Project, error) {
 	return projectOf(r.JSON200.Project), nil
 }
 
-// PatchProjectMetadata writes patch only while the Project is still at revision (ADR-0003), returning the new revision.
-func (k *Kata) PatchProjectMetadata(ctx context.Context, id, revision int64, actor string, patch map[string]any) (int64, error) {
+// PatchProjectMetadata writes patch only while the Project is still at revision (ADR-0003).
+func (k *Kata) PatchProjectMetadata(ctx context.Context, id, revision int64, actor string, patch map[string]any) error {
 	etag := `"rev-` + strconv.FormatInt(revision, 10) + `"`
 	r, err := call(ctx, k, false, func(ctx context.Context) (*g.PatchProjectMetadataResp, error) {
 		return k.c.PatchProjectMetadataWithResponse(ctx, &g.PatchProjectMetadataRequestOptions{
@@ -235,12 +235,12 @@ func (k *Kata) PatchProjectMetadata(ctx context.Context, id, revision int64, act
 		})
 	})
 	if err != nil {
-		return 0, apiError(err)
+		return apiError(err)
 	}
 	if r.JSON200 == nil {
-		return 0, errors.New("kata daemon returned no Project")
+		return errors.New("kata daemon returned no Project")
 	}
-	return r.JSON200.Project.Revision, nil
+	return nil
 }
 
 type Capabilities struct {
@@ -351,7 +351,7 @@ type Observation struct {
 	ExpectedRevision           int64
 }
 
-func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (cronjob.Run, bool, error) {
+func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (cronjob.Run, error) {
 	msg := o.Message
 	body := &g.ObserveCronRunBody{
 		Actor: &o.Actor, JobUID: &o.JobUID, DefinitionEventUID: &o.DefinitionEventUID, OccurrenceKey: &o.OccurrenceKey,
@@ -366,12 +366,12 @@ func (k *Kata) Observe(ctx context.Context, projectID int64, o Observation) (cro
 		return k.c.ObserveCronRunWithResponse(ctx, &g.ObserveCronRunRequestOptions{PathParams: &g.ObserveCronRunPath{ProjectID: projectID, RunUID: o.RunUID}, Body: body})
 	})
 	if err != nil {
-		return cronjob.Run{}, false, apiError(err)
+		return cronjob.Run{}, apiError(err)
 	}
 	if r.JSON200 == nil {
-		return cronjob.Run{}, false, errors.New("kata daemon returned no Run")
+		return cronjob.Run{}, errors.New("kata daemon returned no Run")
 	}
-	return cronjobclient.Run(r.JSON200.Run), r.JSON200.Replayed, nil
+	return cronjobclient.Run(r.JSON200.Run), nil
 }
 
 type Issue struct {
@@ -397,7 +397,7 @@ func (i Issue) Someday() bool {
 	return v
 }
 
-// CreateIssue creates the per-run Issue, always keyed and with force_new (ADR-0002), and says whether kata made a new one.
+// CreateIssue creates the per-run Issue, always keyed and with force_new (ADR-0002).
 func (k *Kata) CreateIssue(ctx context.Context, projectID int64, actor, key, title, body string, metadata map[string]any) (Issue, error) {
 	force := true
 	r, err := call(ctx, k, false, func(ctx context.Context) (*g.CreateIssueResp, error) {

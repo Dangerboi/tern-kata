@@ -37,18 +37,9 @@ func (g *Gateway) ask(ctx context.Context, req worker.Request) (worker.Response,
 	return resp, nil
 }
 
-func pause(ctx context.Context, d time.Duration) {
-	if d > 0 {
-		select {
-		case <-time.After(d):
-		case <-ctx.Done():
-		}
-	}
-}
-
 func (g *Gateway) loadWorker(ctx context.Context, cmd model.LoadWorker) model.WorkerLoaded {
-	pause(ctx, cmd.After)
-	resp, err := g.ask(ctx, worker.Request{Op: "status"})
+	g.pause(ctx, cmd.After)
+	resp, err := g.ask(ctx, worker.Request{Op: worker.OpStatus})
 	switch {
 	case errors.Is(err, worker.ErrNoWorker):
 		return model.WorkerLoaded{Request: cmd.Request}
@@ -61,7 +52,7 @@ func (g *Gateway) loadWorker(ctx context.Context, cmd model.LoadWorker) model.Wo
 }
 
 func (g *Gateway) loadLocalRun(ctx context.Context, cmd model.LoadLocalRun) model.LocalRunLoaded {
-	resp, err := g.ask(ctx, worker.Request{Op: "run-detail", Run: cmd.UID})
+	resp, err := g.ask(ctx, worker.Request{Op: worker.OpRunDetail, Run: cmd.UID})
 	if err == nil && resp.Detail == nil {
 		err = errors.New("the worker answered no detail")
 	}
@@ -72,7 +63,7 @@ func (g *Gateway) loadLocalRun(ctx context.Context, cmd model.LoadLocalRun) mode
 }
 
 func (g *Gateway) runJobNow(ctx context.Context, cmd model.RunJobNow) model.JobRunRequested {
-	resp, err := g.ask(ctx, worker.Request{Op: "run", Job: cmd.JobUID})
+	resp, err := g.ask(ctx, worker.Request{Op: worker.OpRun, Job: cmd.JobUID})
 	if err == nil && resp.Run == nil {
 		err = errors.New("the worker accepted the request but named no run")
 	}
@@ -83,7 +74,7 @@ func (g *Gateway) runJobNow(ctx context.Context, cmd model.RunJobNow) model.JobR
 }
 
 func (g *Gateway) resumeJob(ctx context.Context, cmd model.ResumeJob) model.JobResumed {
-	_, err := g.ask(ctx, worker.Request{Op: "resume-job", Job: cmd.JobUID})
+	_, err := g.ask(ctx, worker.Request{Op: worker.OpResumeJob, Job: cmd.JobUID})
 	return model.JobResumed{JobUID: cmd.JobUID, JobName: cmd.JobName, Err: err}
 }
 

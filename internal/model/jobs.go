@@ -285,6 +285,14 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 			facts = append(facts, JobFact{Label: label, Value: value})
 		}
 	}
+	addList := func(label string, values []string) {
+		for i, v := range values {
+			if i > 0 {
+				label = ""
+			}
+			facts = append(facts, JobFact{Label: label, Value: v})
+		}
+	}
 	pause := m.JobPause(*job)
 	add("Name", job.Name)
 	add("State", pause.StateText())
@@ -295,32 +303,22 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 	if runs, reason := m.NextRuns(*job, now); reason != "" {
 		add("Next runs", reason)
 	} else {
-		for i, r := range runs {
-			label := ""
-			if i == 0 {
-				label = "Next runs"
-			}
-			facts = append(facts, JobFact{Label: label, Value: r})
-		}
+		addList("Next runs", runs)
 	}
 	if !job.Archived() {
 		add("Warning", m.highRateWarning(*job, now))
 	}
 	activity := m.Jobs.Activity[job.UID]
-	for i, r := range activity.Runs[:min(len(activity.Runs), JobActivityShown)] {
-		label := ""
-		if i == 0 {
-			label = "Recent runs"
-		}
-		facts = append(facts, JobFact{Label: label, Value: m.runWords(r, now)})
+	var recent []string
+	for _, r := range activity.Runs[:min(len(activity.Runs), JobActivityShown)] {
+		recent = append(recent, m.runWords(r, now))
 	}
-	for i, c := range activity.Children[:min(len(activity.Children), JobActivityShown)] {
-		label := ""
-		if i == 0 {
-			label = "Recent children"
-		}
-		facts = append(facts, JobFact{Label: label, Value: c.Words() + " · " + m.Calendar.Read(c.When(), now)})
+	addList("Recent runs", recent)
+	recent = nil
+	for _, c := range activity.Children[:min(len(activity.Children), JobActivityShown)] {
+		recent = append(recent, c.Words()+" · "+m.Calendar.Read(c.When(), now))
 	}
+	addList("Recent children", recent)
 	switch t.Kind {
 	case cronjob.TriggerCron:
 		zone, expression := cronjob.Zone(t.Cron, t.Timezone)
@@ -430,14 +428,6 @@ func enterProjectPage(m Model, name string) (Model, []Cmd, bool) {
 	return m.resetPagesForProject(), cmds, true
 }
 
-// enterJobs is the Jobs Page's own work on entry (see switchPage). The jobs load as soon as the Project's id is known.
-func enterJobs(m Model) (Model, []Cmd) {
-	// The Page keeps its selection while another Page is shown; the jobs are read again.
-	m.Jobs.stale = true
-	m, ask := m.askWorker(0)
-	return m, []Cmd{ask, LoadWorkerSetup{Workspace: m.Workspace}}
-}
-
 // clearJobs drops the Jobs Page's loading marker and the Issue detail's read of its job list when the Page is left.
 func clearJobs(m Model) Model {
 	m.Jobs.Loading = false
@@ -497,24 +487,12 @@ func jobsLoaded(m Model, msg JobsLoaded) Model {
 }
 
 func (m Model) settleJobSelection() Model {
-	jobs := m.visibleJobs()
-	if slices.ContainsFunc(jobs, func(j CronJob) bool { return j.UID == m.Jobs.Selected }) {
-		return m
-	}
-	m.Jobs.Selected = ""
-	if len(jobs) > 0 {
-		m.Jobs.Selected = jobs[0].UID
-	}
+	keepSelected(m.visibleJobs(), func(j CronJob) string { return j.UID }, &m.Jobs.Selected)
 	return m
 }
 
 func moveJob(m Model, action Action) Model {
-	jobs := m.visibleJobs()
-	if len(jobs) == 0 {
-		return m
-	}
-	at := slices.IndexFunc(jobs, func(j CronJob) bool { return j.UID == m.Jobs.Selected })
-	m.Jobs.Selected = jobs[movedIndex(at, len(jobs), listPage, action)].UID
+	moveSelected(m.visibleJobs(), func(j CronJob) string { return j.UID }, &m.Jobs.Selected, listPage, action)
 	return m
 }
 
@@ -525,6 +503,8 @@ func toggleArchivedJobs(m Model) Model {
 	return m.settleJobSelection()
 }
 
+// reloadJobs is also the Jobs Page's own work on entry (see switchPage): the Page keeps its selection while another Page is
+// shown, and the jobs are read again as soon as the Project's id is known.
 func reloadJobs(m Model) (Model, []Cmd) {
 	m.Jobs.stale = true
 	m, cmd := m.askWorker(0)

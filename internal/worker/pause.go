@@ -137,7 +137,7 @@ func (w *Worker) pauseRefusal(ps *projectState, job cronjob.Job) error {
 
 // ResumeJob lifts a job's pause and starts its count again from none. It refuses a job that is not paused.
 func (w *Worker) ResumeJob(jobUID string) (PausedJob, error) {
-	if err := w.stopRefusal(cmdResumeJob); err != nil {
+	if err := w.stopRefusal(OpResumeJob); err != nil {
 		return PausedJob{}, err
 	}
 	for _, p := range w.PausedJobs() {

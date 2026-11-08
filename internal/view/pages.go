@@ -9,8 +9,6 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-const PageBarID = "main.topbar.left.pages"
-
 type barFit uint8
 
 const (

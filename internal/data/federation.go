@@ -1,6 +1,7 @@
 package data
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/url"
@@ -126,7 +127,7 @@ func (c *Client) activeDaemon(auth g.AuthInfoOut) (name, endpoint, authText stri
 	entry, named := c.entry, c.entry.Name != ""
 	endpoint = "local"
 	if c.kind == model.DaemonRemote {
-		endpoint = firstNonEmpty(entry.URL, os.Getenv("KATA_SERVER"), "remote")
+		endpoint = cmp.Or(entry.URL, os.Getenv("KATA_SERVER"), "remote")
 	}
 	name = "local"
 	switch {
@@ -169,15 +170,6 @@ func federationAuth(configuredToken bool, auth g.AuthInfoOut) string {
 		return base + " bootstrap"
 	}
 	return base + " " + kind
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 func translateSpoke(wire g.FederationProjectStatus) model.FederationSpoke {

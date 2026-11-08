@@ -95,9 +95,9 @@ func (w *Worker) advance(ctx context.Context, ps *projectState, uid string) (err
 		case driveAdmit:
 			err = w.admit(ctx, ps, j)
 		case driveReopen:
-			err = w.reopen(ctx, ps, j)
+			err = w.reopen(ctx, j)
 		case driveLaunch:
-			err = w.launch(ctx, ps, j)
+			err = w.launch(ctx, j)
 		case driveReport:
 			err = w.report(ctx, ps, j)
 		case driveNone:
@@ -204,7 +204,7 @@ func (w *Worker) admit(ctx context.Context, ps *projectState, j *Journal) error 
 		j.Issue = issue
 	}
 	obs := w.observation(j, cronjob.RunRunning, "admitted "+j.JournalID, 0)
-	run, _, err := w.opt.Kata.Observe(ctx, j.ProjectID, obs)
+	run, err := w.opt.Kata.Observe(ctx, j.ProjectID, obs)
 	switch {
 	case errors.Is(err, ErrConflict):
 		return w.preAdmissionHold(j, HoldAdmissionRejected, "kata holds a different observation of this run: "+err.Error())
@@ -329,7 +329,7 @@ func promptEnv(environ []string, actor string, secrets map[string]string, caseIn
 	return env
 }
 
-func (w *Worker) launch(ctx context.Context, ps *projectState, j *Journal) error {
+func (w *Worker) launch(ctx context.Context, j *Journal) error {
 	if j.Cancel != nil {
 		return w.concludeCancel(j)
 	}
@@ -802,7 +802,7 @@ func (w *Worker) send(ctx context.Context, j *Journal, it Intent) (int64, error)
 	obs := w.observation(j, j.Outcome.Status, j.Outcome.Summary, j.Revision)
 	end := j.Outcome.At
 	obs.EndedAt, obs.InputTokens, obs.OutputTokens = &end, j.Outcome.InputTokens, j.Outcome.OutputTokens
-	stored, _, err := w.opt.Kata.Observe(ctx, j.ProjectID, obs)
+	stored, err := w.opt.Kata.Observe(ctx, j.ProjectID, obs)
 	if !errors.Is(err, ErrConflict) {
 		return stored.Revision, err
 	}
