@@ -108,6 +108,7 @@ const (
 	ShowConfigPage          Action = "show-config-page"
 	OpenConfigFile          Action = "open-config-file"
 	SwitchDocbank           Action = "switch-docbank-supervision"
+	EditAgentConfig         Action = "edit-agent-config"
 	SwitchDaemonAction      Action = "switch-daemon"
 	RefreshFederation       Action = "refresh-federation"
 	OpenFederationDetail    Action = "open-federation-detail"
@@ -317,6 +318,7 @@ var cardBindings = []Binding{
 	{Chord: "i", Key: "i", Action: AgentCardInterrupt, Help: "interrupt", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "x", Key: "x", Action: AgentCardStop, Help: "stop agent", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "r", Key: "r", Action: AgentCardQuickReply, Help: "quick reply", Mode: ModeAgentCard, ShowInFooter: true},
+	{Chord: "f", Key: "f", Action: AgentCardForget, Help: "forget agent on another host", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentCardCancel, Help: "cancel", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "s", Key: "s", Action: AgentCardTeamSplit, Help: "coordinator in a split", Mode: ModeAgentCardTeam, ShowInFooter: true},
 	{Chord: "t", Key: "t", Action: AgentCardTeamTab, Help: "coordinator in a tab", Mode: ModeAgentCardTeam, ShowInFooter: true},
@@ -330,6 +332,9 @@ var cardBindings = []Binding{
 	{Chord: "y", Key: "y", Action: AgentCardStopConfirm, Help: "stop agent", Mode: ModeAgentCardStop, ShowInFooter: true},
 	{Chord: "n", Key: "n", Action: AgentCardStopKeep, Help: "keep agent", Mode: ModeAgentCardStop, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: AgentCardStopKeep, Help: "keep agent", Mode: ModeAgentCardStop},
+	{Chord: "y", Key: "y", Action: AgentCardForgetConfirm, Help: "forget agent", Mode: ModeAgentCardForget, ShowInFooter: true},
+	{Chord: "n", Key: "n", Action: AgentCardForgetKeep, Help: "keep record", Mode: ModeAgentCardForget, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: AgentCardForgetKeep, Help: "keep record", Mode: ModeAgentCardForget},
 	// Message card: one message field, so every other key is typed; once kata holds an unread message, it asks before replacing it.
 	{Chord: "enter", Key: "enter", Action: AgentMessageSend, Help: "send", Mode: ModeAgentMessage, ShowInFooter: true},
 	{Chord: "ctrl+s", Key: "ctrl+s", Action: AgentMessageSend, Help: "send", Mode: ModeAgentMessage},

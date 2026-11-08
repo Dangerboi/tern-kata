@@ -146,6 +146,9 @@ func init() {
 	}, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveWorkerEdit) model.Msg { return g.saveWorkerEdit(cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.StopWorker) model.Msg { return g.stopWorker(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, _ context.Context, cmd model.SaveAgentConfig) model.Msg {
+		return g.saveAgentConfig(cmd)
+	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.SetDocbankSupervision) model.Msg {
 		return g.setDocbankSupervision(ctx, cmd)
 	}, nil, nil)
@@ -756,6 +759,25 @@ func init() {
 		func(cmd model.ResolveComment, err error) model.Msg { return model.CommentResolved{Err: err} },
 		nil, nil)
 
+	// Records of this host's own id are left out, so the Host id is read where the state folder is.
+	local(func(g *Gateway, ctx context.Context, cmd model.LoadRemoteAgents) model.Msg {
+		state, err := g.stateDir()
+		if err != nil {
+			return model.RemoteAgentsLoaded{Err: err}
+		}
+		hostID, err := ReadHostID(state)
+		if err != nil {
+			return model.RemoteAgentsLoaded{Err: err}
+		}
+		msg, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+			return ok(c.ReadRemoteAgents(ctx, hostID, cmd))
+		})
+		if err != nil {
+			return model.RemoteAgentsLoaded{Err: err}
+		}
+		return msg
+	}, nil, nil)
+
 	// An exited agent's record goes beside its address: nobody reads either again.
 	local(func(g *Gateway, ctx context.Context, cmd model.ClearAgentAddress) model.Msg {
 		msg, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
@@ -767,6 +789,16 @@ func init() {
 		}
 		return msg
 	}, nil, nil)
+
+	daemonCall(
+		func(cmd model.ForgetAgentRecord) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ForgetAgentRecord) (model.Msg, error) {
+			return ok(model.AgentRecordForgotten{Host: cmd.Host}, c.ForgetAgentRecord(ctx, cmd))
+		},
+		func(cmd model.ForgetAgentRecord, err error) model.Msg {
+			return model.AgentRecordForgotten{Host: cmd.Host, Err: err}
+		},
+		nil, nil)
 
 	daemonCall(
 		func(cmd model.SaveWorkflow) string { return cmd.Workspace },

@@ -30,11 +30,11 @@ tern-kata recur <ref> --stop                            # stops the Recurrence; 
 
 ## Agents and teams
 
-Agents tern-kata started on this host can find and message each other. `tern-kata agents` lists the running ones; `tern-kata message` writes to one; `tern-kata team` prints a team.
+Agents tern-kata started, on this host or another, can find and message each other. `tern-kata agents` lists the running ones; `tern-kata message` writes to one; `tern-kata team` prints a team (this host's agents only).
 
 ```bash
-tern-kata agents [--issue <ref>]                 # Issue, agent name, state and Agent address of each running agent
-tern-kata message <address|ref> -m <text>        # write to that address, or to every agent that can receive one on that Issue
+tern-kata agents [--issue <ref>]                 # Issue, agent name, host, state and Agent address of each running agent, other hosts' included
+tern-kata message <address|ref> -m <text>        # write to that address, or to every agent (any host) that can receive one on that Issue
 tern-kata message <address|ref> -m <text> --re c:abc123   # ask the agent to answer that comment
 tern-kata team <ref>                             # the team on that parent Issue: state, limit, coordinator, each child's ref, state and address
 ```
@@ -42,6 +42,7 @@ tern-kata team <ref>                             # the team on that parent Issue
 - `--re <comment>` takes the comment's handle (`c:abc123`). The receiver clears the request by answering that comment with `kata comment <ref> --reply` (or `--confirm`, `--refute`, `--supersede`); a plain `kata notify --clear` also clears it. It needs no team.
 - `team` states for a child: its agent's own state, `starting`, `queued`, `ran: closed`, `ran: exited with the Issue open`, `skipped: other Project` or `not ready`. No team on `<ref>` prints that and exits 1. `<ref>` is `<project>#<short id>`, `<project>/<short id>`, a short id or a uid.
 - `message` is never written over an unread message: that agent is named and the exit status is 1.
+- Agents started on another machine are listed with their host (`-` is this machine) and state `-`, from their Agent records: on `--issue`'s Issue, else on the open Issues of `KATA_REF`'s Project or the workspace's bound Project. `message` reaches them by address or ref. A message to an agent on another host needs kata's identity mode (`[auth] require_token_identity`) and a sender that is the agent's actor or in its `message_from`; otherwise it is refused with the reason and nothing is written for that agent.
 
 ## Views
 

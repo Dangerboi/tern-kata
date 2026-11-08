@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -14,7 +15,8 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// AgentConfigFile is agent.toml, beside lanes.toml in tern-kata's config folder. The user writes it by hand; the Pane never does.
+// AgentConfigFile is agent.toml, beside lanes.toml in tern-kata's config folder. The user writes it by hand or through the Config
+// Page's e, which checks it with CheckAgentConfig before writing it. The Pane writes it nowhere else.
 //
 //	actor = "me-agent"
 //	host = "laptop"
@@ -60,11 +62,27 @@ type AgentProject struct {
 
 // ReadAgentConfig reads and validates path; a missing file is an empty configuration. Any other failure names the file.
 func ReadAgentConfig(path string) (AgentConfig, error) {
-	var c AgentConfig
-	meta, err := toml.DecodeFile(path, &c)
+	text, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return AgentConfig{}, nil
 	}
+	if err != nil {
+		return AgentConfig{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return parseAgentConfig(path, string(text))
+}
+
+// CheckAgentConfig applies to text every rule an agent start applies to the file, so an edit is written only if the next start
+// accepts it. The error names the key.
+func CheckAgentConfig(text string) error {
+	_, err := parseAgentConfig(AgentConfigFile, text)
+	return err
+}
+
+// parseAgentConfig is the one definition of agent.toml's rules; name is what an error calls the file.
+func parseAgentConfig(path, text string) (AgentConfig, error) {
+	var c AgentConfig
+	meta, err := toml.Decode(text, &c)
 	if err != nil {
 		return AgentConfig{}, fmt.Errorf("%s: %w", path, err)
 	}

@@ -25,6 +25,9 @@ type IssueAgent struct {
 	// Unread is the first line of the message the Issue's metadata holds at the agent's address, which the agent has not cleared;
 	// "" when the slot is empty, does not read as a request, or the agent has exited.
 	Unread string
+	// Host and HostID are the display name and the Host id of the host of an agent another host published (an Agent record);
+	// both are "" for an agent this host started.
+	Host, HostID string
 }
 
 // pressing ranks a state word: lower is more pressing. A word nobody knows ranks with "no state".
@@ -136,20 +139,29 @@ func ChooseAgent(agents []IssueAgent) (IssueAgent, bool) {
 // AgentBadgeFor is the Agent badge of an Issue: the chosen agent's state, plus " · N" for N > 1 mapped agents. ok is false
 // when no agent is mapped to the Issue; a closed Issue keeps its badge.
 func (m Model) AgentBadgeFor(issueUID string) (AgentBadge, bool) {
-	return badgeOf(m.IssueAgents(issueUID))
+	return badgeOf(m.IssueAgents(issueUID), m.RemoteAgents(issueUID))
 }
 
-func badgeOf(agents []IssueAgent) (AgentBadge, bool) {
+// badgeOf is the badge of an Issue's local and remote agents: the state word comes from the local ones, the count includes the
+// remote ones, and an Issue with only remote agents says where they run. Its Block is "" then, for no local block can be focused.
+func badgeOf(agents []IssueAgent, remote []RemoteAgent) (AgentBadge, bool) {
 	best, ok := ChooseAgent(agents)
-	if !ok {
+	if !ok && len(remote) == 0 {
 		return AgentBadge{}, false
 	}
-	badge := AgentBadge{Block: best.Block}
-	badge.Text, badge.Tone = AgentStateWords(best.State)
-	if len(agents) > 1 {
-		badge.Text += fmt.Sprintf(" · %d", len(agents))
+	badge := AgentBadge{Tone: AgentToneMuted}
+	countless := false // "agents on N hosts" already counts
+	if ok {
+		badge.Block = best.Block
+		badge.Text, badge.Tone = AgentStateWords(best.State)
+	} else {
+		badge.Text = RemoteBadgeWords(remote)
+		countless = strings.HasPrefix(badge.Text, "agents on")
 	}
-	if slices.ContainsFunc(agents, func(a IssueAgent) bool { return a.Unread != "" }) {
+	if n := len(agents) + len(remote); n > 1 && !countless {
+		badge.Text += fmt.Sprintf(" · %d", n)
+	}
+	if slices.ContainsFunc(agents, func(a IssueAgent) bool { return a.Unread != "" }) || slices.ContainsFunc(remote, func(r RemoteAgent) bool { return r.Unread != "" }) {
 		badge.Text += " · " + UnreadMessageWords
 		badge.Tone = AgentToneWarning
 	}
@@ -160,13 +172,11 @@ func badgeOf(agents []IssueAgent) (AgentBadge, bool) {
 // so a row costs a lookup rather than a scan of the Agent mapping and the relayed states.
 type AgentBadgeIndex struct {
 	agents map[string][]IssueAgent
+	remote map[string][]RemoteAgent
 }
 
 // AgentBadges indexes the agents of every Issue that has one, for a frame that asks the badge of every row.
 func (m Model) AgentBadges() AgentBadgeIndex {
-	if len(m.AgentMapping) == 0 {
-		return AgentBadgeIndex{}
-	}
 	states := make(map[string]AgentStateWord, len(m.Agents.States))
 	for _, s := range m.Agents.States {
 		if _, seen := states[s.Block]; !seen {
@@ -184,18 +194,25 @@ func (m Model) AgentBadges() AgentBadgeIndex {
 			}
 		}
 	}
+	remote := make(map[string][]RemoteAgent)
 	for i := range m.Issues {
 		unread(&m.Issues[i])
+		if r := remoteAgentsIn(m.Issues[i].Metadata, m.HostID); len(r) > 0 {
+			remote[m.Issues[i].UID] = r
+		}
 	}
 	if shown := m.shownIssue(); shown != nil {
 		unread(shown)
+		if r := remoteAgentsIn(shown.Metadata, m.HostID); len(r) > 0 {
+			remote[shown.UID] = r
+		}
 	}
-	return AgentBadgeIndex{agents: agents}
+	return AgentBadgeIndex{agents: agents, remote: remote}
 }
 
 // For is the Agent badge of the Issue, as AgentBadgeFor.
 func (x AgentBadgeIndex) For(issueUID string) (AgentBadge, bool) {
-	return badgeOf(x.agents[issueUID])
+	return badgeOf(x.agents[issueUID], x.remote[issueUID])
 }
 
 // AgentJumpMsg is a click on an Agent badge: Block is the agent it names, as decimal text.

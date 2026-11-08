@@ -40,6 +40,20 @@ type TeamChild struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
+// TeamChildRef is a child Issue a coordinator's prompt names at start.
+type TeamChildRef struct{ Ref, Title string }
+
+// TeamRole is what an agent's prompt says of its team. A coordinator has Coordinating, the Project's open Children at the start
+// and the Limit; a child has Coordinator (the coordinator's Agent address) and Parent (the parent's qualified ref). The zero value
+// is an agent on no team.
+type TeamRole struct {
+	Coordinating bool
+	Coordinator  string
+	Parent       string
+	Children     []TeamChildRef
+	Limit        int
+}
+
 // Team is one record of teams.json. The coordinator runs on the parent Issue (ParentUID) in the block CoordinatorBlock, at the
 // Agent address CoordinatorAddress. Project is the parent's Project: only its children are started.
 type Team struct {

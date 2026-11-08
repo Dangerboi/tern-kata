@@ -332,7 +332,7 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardAgent, name: "agent", open: func(m Model) bool { return m.AgentCard.Open },
-			modes: []Mode{ModeAgentCard, ModeAgentCardStop, ModeAgentCardTeam}, mode: Model.AgentCardMode,
+			modes: []Mode{ModeAgentCard, ModeAgentCardStop, ModeAgentCardForget, ModeAgentCardTeam}, mode: Model.AgentCardMode,
 			key:  updateAgentCardKey,
 			busy: func(Model) bool { return false }, fields: []FieldSpec{},
 		},

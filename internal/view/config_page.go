@@ -46,7 +46,7 @@ func configPage(m model.Model) tern.Element {
 		for _, a := range []struct {
 			action model.ConfigAction
 			key    string
-		}{{model.ConfigOpen, "↵"}, {model.ConfigSwitch, "s"}} {
+		}{{model.ConfigOpen, "↵"}, {model.ConfigEdit, "e"}, {model.ConfigSwitch, "s"}} {
 			if f.Has(a.action) {
 				body = append(body, ui.Button{Common: ui.Common{Key: string(a.action), Actions: &ui.Actions{Click: ConfigActClick(f.Key, a.action)}}, Text: model.ConfigActionLabel(f, a.action), Keys: []string{a.key}})
 			}

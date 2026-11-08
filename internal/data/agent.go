@@ -437,6 +437,13 @@ func ternFailure(err error, out []byte) error {
 	return err
 }
 
+// teamRole is the team section of the prompt of an agent started as a coordinator or a child.
+func teamRole(cmd model.StartAgent) model.TeamRole {
+	role := cmd.Role
+	role.Coordinating, role.Coordinator = cmd.Coordinating, cmd.Coordinator
+	return role
+}
+
 // startAgent starts an agent on the Issue: it resolves the actor, command and directory (agent.toml is read on every start),
 // writes the prompt file, asks tern for the block, and records the agent in agents.json.
 func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.AgentStarted {
@@ -480,7 +487,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 			MessageFrom: settings.MessageFrom, Coordinator: cmd.Coordinator, Coordinating: cmd.Coordinating}
 		sender = cmd.Actor
 	}
-	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle, sender, messaging.MessageFrom))
+	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle, sender, messaging.MessageFrom, teamRole(cmd)))
 	if err != nil {
 		return failed(err)
 	}

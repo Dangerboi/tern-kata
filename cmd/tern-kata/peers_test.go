@@ -32,9 +32,29 @@ type sender struct {
 	answer   func(model.SendAgentMessage) model.AgentMessageSent
 	verified bool
 	reads    int
+	// remote is what the daemon's Agent records hold for other hosts (the agents of every Issue a scan reads, the ones on the
+	// Issue a lookup names); issues are Issues that exist without such an agent. remoteErr fails a scan, issueErr a lookup.
+	remote    []model.IssueAgent
+	issues    []string
+	remoteErr error
+	issueErr  error
+	loads     []model.LoadRemoteAgents
 }
 
 func (s *sender) send(cmd model.Cmd) model.Msg {
+	if l, ok := cmd.(model.LoadRemoteAgents); ok {
+		s.loads = append(s.loads, l)
+		if l.Issue == "" {
+			return model.RemoteAgentsLoaded{Agents: s.remote, Err: s.remoteErr}
+		}
+		var found []model.IssueAgent
+		for _, a := range s.remote {
+			if a.OnIssue(l.Issue) {
+				found = append(found, a)
+			}
+		}
+		return model.RemoteAgentsLoaded{Agents: found, NotFound: len(found) == 0 && !slices.Contains(s.issues, l.Issue), Err: s.issueErr}
+	}
 	if _, ok := cmd.(model.LoadAuthCapabilities); ok {
 		s.reads++
 		return model.AuthCapabilitiesLoaded{Account: true, VerifiedSenders: s.verified}
@@ -114,13 +134,13 @@ func TestAgentsListsTheRunningOnesAndCutsToAnIssue(t *testing.T) {
 	list[0].State = model.AgentWaitingInput
 	list = slices.Delete(list, 2, 3) // block 3 exited: the relay does not list it among the running
 	var all, one bytes.Buffer
-	if err := runAgents(LaunchPlan{}, list, &all); err != nil {
+	if err := runAgents(LaunchPlan{}, "/w", list, (&sender{}).send, &all); err != nil {
 		t.Fatal(err)
 	}
-	if err := runAgents(LaunchPlan{TargetRef: "aa11"}, list, &one); err != nil {
+	if err := runAgents(LaunchPlan{TargetRef: "aa11"}, "/w", list, (&sender{}).send, &one); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"demo#aa11  omp    waiting_input  dana/omp-1", "demo#bb22  omp    -              dana/omp-2", "demo#aa11  other  -              -"} {
+	for _, want := range []string{"demo#aa11  omp    -     waiting_input  dana/omp-1", "demo#bb22  omp    -     -              dana/omp-2", "demo#aa11  other  -     -              -"} {
 		if !strings.Contains(all.String(), want) {
 			t.Errorf("all agents:\n%s\nwant a line %q", all.String(), want)
 		}
@@ -129,7 +149,7 @@ func TestAgentsListsTheRunningOnesAndCutsToAnIssue(t *testing.T) {
 		t.Errorf("cut to aa11:\n%s", one.String())
 	}
 	var none bytes.Buffer
-	if err := runAgents(LaunchPlan{TargetRef: "zz99"}, list, &none); err != nil || !strings.Contains(none.String(), "No running agents.") {
+	if err := runAgents(LaunchPlan{TargetRef: "zz99"}, "/w", list, (&sender{}).send, &none); err != nil || !strings.Contains(none.String(), "No running agents.") {
 		t.Errorf("no match: %q, %v", none.String(), err)
 	}
 }
@@ -298,5 +318,200 @@ func TestMessageReTakesAValueAndOnlyOnce(t *testing.T) {
 	}
 	if plan, err := PlanLaunch([]string{"message", "a", "-m", "x", "--re", "-h"}, peerEnv(nil), "test"); err != nil || plan.Help || plan.MessageRe != "-h" {
 		t.Errorf("--re -h: %+v, %v", plan, err)
+	}
+}
+
+// remoteOmp is an omp agent another host published a record for, as the daemon's loader returns it.
+func remoteOmp(ref, block, address, host string, messageFrom ...string) model.IssueAgent {
+	_, short, _ := strings.Cut(ref, "#")
+	return model.RemoteIssueAgent(model.AgentRecord{Address: address, Host: host, HostID: "id-" + host, Block: block, Name: "omp", Actor: model.AgentAddressActor(address), MessageFrom: messageFrom}, ref, "uid-"+short, 3)
+}
+
+func TestAgentsHasAHostColumnAndListsAgentsOnOtherHostsWithNoState(t *testing.T) {
+	local := running(omp("demo#aa11", "1", "dana/omp-1"))
+	local[0].State = model.AgentWorking
+	s := &sender{remote: []model.IssueAgent{remoteOmp("demo#aa11", "7", "dana/omp-7", "laptop"), remoteOmp("demo#bb22", "8", "dana/omp-8", "desk")}}
+	var out bytes.Buffer
+	if err := runAgents(LaunchPlan{}, "/w", local, s.send, &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"ISSUE      AGENT  HOST    STATE    ADDRESS", "demo#aa11  omp    -       working  dana/omp-1", "demo#aa11  omp    laptop  -        dana/omp-7", "demo#bb22  omp    desk    -        dana/omp-8"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output:\n%s\nwant a line %q", out.String(), want)
+		}
+	}
+}
+
+func TestAgentsWithoutAnIssueScansKataRefsProjectAndWithOneReadsThatIssue(t *testing.T) {
+	s := &sender{remote: []model.IssueAgent{remoteOmp("demo#aa11", "7", "dana/omp-7", "laptop"), remoteOmp("demo#bb22", "8", "dana/omp-8", "desk")}}
+	var scanned, cut bytes.Buffer
+	scan, err := PlanLaunch([]string{"agents"}, peerEnv(map[string]string{"KATA_REF": " demo#cc33 "}), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runAgents(scan, "/w", nil, s.send, &scanned); err != nil {
+		t.Fatal(err)
+	}
+	one, err := PlanLaunch([]string{"agents", "--issue", "bb22"}, peerEnv(map[string]string{"KATA_REF": "demo#cc33"}), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runAgents(one, "/w", nil, s.send, &cut); err != nil {
+		t.Fatal(err)
+	}
+	if want := (model.LoadRemoteAgents{Workspace: "/w", ScopeRef: "demo#cc33"}); s.loads[0] != want {
+		t.Errorf("scan asked %+v, want %+v", s.loads[0], want)
+	}
+	if want := (model.LoadRemoteAgents{Workspace: "/w", Issue: "bb22", ScopeRef: "demo#cc33"}); s.loads[1] != want {
+		t.Errorf("--issue asked %+v, want %+v", s.loads[1], want)
+	}
+	if !strings.Contains(scanned.String(), "omp-7") || !strings.Contains(scanned.String(), "omp-8") {
+		t.Errorf("scan:\n%s\nwant both remote agents", scanned.String())
+	}
+	if strings.Contains(cut.String(), "omp-7") || !strings.Contains(cut.String(), "omp-8") {
+		t.Errorf("--issue bb22:\n%s\nwant only the agent on bb22", cut.String())
+	}
+}
+
+func TestAgentsKeepsTheLocalListWhenTheRemoteOnesCannotBeRead(t *testing.T) {
+	local := running(omp("demo#aa11", "1", "dana/omp-1"))
+	var noScope bytes.Buffer
+	s := &sender{remoteErr: model.ErrNoRemoteScope}
+	if err := runAgents(LaunchPlan{}, "/w", local, s.send, &noScope); err != nil {
+		t.Fatalf("no Project to scan: %v", err)
+	}
+	if !strings.Contains(noScope.String(), "dana/omp-1") || !strings.Contains(noScope.String(), "Agents on other hosts are not listed: no Project to look in") {
+		t.Errorf("output:\n%s\nwant the local agent and why no other host's are listed", noScope.String())
+	}
+	var down bytes.Buffer
+	s = &sender{remoteErr: errors.New("daemon unreachable")}
+	err := runAgents(LaunchPlan{}, "/w", local, s.send, &down)
+	var failed subcommandError
+	if !errors.As(err, &failed) || !strings.Contains(err.Error(), "daemon unreachable") || !strings.Contains(down.String(), "dana/omp-1") {
+		t.Errorf("err %v, output %q, want the local agent and an exit status 1 naming the failure", err, down.String())
+	}
+	var none bytes.Buffer
+	s = &sender{}
+	if err := runAgents(LaunchPlan{}, "/w", nil, s.send, &none); err != nil || !strings.Contains(none.String(), "No running agents.") {
+		t.Errorf("nothing anywhere: %q, %v", none.String(), err)
+	}
+}
+
+func TestMessageToAnAddressOnAnotherHostIsFoundByScanAndNeedsAVerifiedDaemon(t *testing.T) {
+	remote := []model.IssueAgent{remoteOmp("demo#aa11", "7", "dana/omp-7", "laptop")}
+	for name, tc := range map[string]struct {
+		verified bool
+		wantSent bool
+		wantText string
+	}{
+		"verified":   {true, true, "Sent the message to dana/omp-7 on demo#aa11 (host laptop)."},
+		"unverified": {false, false, "[auth] require_token_identity"},
+	} {
+		s := &sender{remote: remote, verified: tc.verified}
+		var out bytes.Buffer
+		plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_REF": "demo#bb22"}, "dana/omp-7", "-m", "hi")
+		err := runMessage(plan, "/w", running(omp("demo#bb22", "2", "dana/omp-2")), s.send, &out)
+		if (err == nil) != tc.wantSent || (len(s.sent) == 1) != tc.wantSent || !strings.Contains(out.String(), tc.wantText) || s.reads != 1 {
+			t.Errorf("%s: err %v, output %q, sent %+v, reads %d", name, err, out.String(), s.sent, s.reads)
+		}
+		if len(s.loads) != 2 || s.loads[1] != (model.LoadRemoteAgents{Workspace: "/w", ScopeRef: "demo#bb22"}) {
+			t.Errorf("%s: loads %+v, want the Issue lookup then a scan of KATA_REF's Project", name, s.loads)
+		}
+		if tc.wantSent && (s.sent[0].UID != "uid-aa11" || s.sent[0].ProjectID != 3 || s.sent[0].Actor != "dana") {
+			t.Errorf("%s: sent %+v, want the slot on the record's Issue as dana", name, s.sent)
+		}
+	}
+}
+
+func TestMessageToALocalAddressReadsNothingFromOtherHosts(t *testing.T) {
+	s := &sender{remote: []model.IssueAgent{remoteOmp("demo#aa11", "7", "dana/omp-7", "laptop")}}
+	var out bytes.Buffer
+	if err := runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-1", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if len(s.loads) != 0 || s.reads != 0 {
+		t.Errorf("loads %+v, auth reads %d: a local message from the agent's own actor needs neither", s.loads, s.reads)
+	}
+}
+
+func TestMessageToARefReachesLocalAndRemoteAgentsOnTheIssueButTheSender(t *testing.T) {
+	s := &sender{verified: true, remote: []model.IssueAgent{
+		remoteOmp("demo#aa11", "7", "dana/omp-7", "laptop"), remoteOmp("demo#aa11", "8", "dana/builder-8", "desk"), remoteOmp("demo#bb22", "9", "dana/omp-9", "laptop"),
+	}}
+	list := running(omp("demo#aa11", "1", "dana/omp-1"), omp("demo#bb22", "2", "dana/omp-2"))
+	var out bytes.Buffer
+	plan := message(t, map[string]string{"KATA_AUTHOR": "dana", "KATA_REF": "demo#aa11", "KATA_INBOX_USER": "dana/builder-8", "KATA_TEAMMATE": "builder-8"}, "demo#aa11", "-m", "heads up")
+	if err := runMessage(plan, "/w", list, s.send, &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	var addrs []string
+	for _, c := range s.sent {
+		addrs = append(addrs, c.Address)
+	}
+	if want := []string{"dana/omp-1", "dana/omp-7"}; !slices.Equal(addrs, want) {
+		t.Errorf("written to %v, want %v (local first; not the sender, not another Issue)", addrs, want)
+	}
+	if len(s.loads) != 1 || s.loads[0].Issue != "demo#aa11" {
+		t.Errorf("loads %+v, want one lookup of the Issue", s.loads)
+	}
+}
+
+func TestMessageToARefOnAnUnverifiedDaemonRefusesRemoteAgentsButNotLocalOnes(t *testing.T) {
+	s := &sender{remote: []model.IssueAgent{remoteOmp("demo#aa11", "7", "dana/omp-7", "laptop")}}
+	list := running(omp("demo#aa11", "1", "dana/omp-1"))
+	var out bytes.Buffer
+	err := runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "demo#aa11", "-m", "hi"), "/w", list, s.send, &out)
+	if err == nil || !strings.Contains(err.Error(), "not written to 1 of 2 agents") {
+		t.Errorf("err %v, want the one remote agent counted as not written", err)
+	}
+	if len(s.sent) != 1 || s.sent[0].Address != "dana/omp-1" {
+		t.Errorf("sent %+v, want only the local agent", s.sent)
+	}
+	for _, want := range []string{"Sent the message to dana/omp-1 on demo#aa11.", "Cannot message dana/omp-7 on demo#aa11 (host laptop): ", "[auth] require_token_identity"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output %q lacks %q", out.String(), want)
+		}
+	}
+}
+
+func TestMessageToARemoteAgentTakesTheRecordsMessageFrom(t *testing.T) {
+	remote := []model.IssueAgent{remoteOmp("demo#aa11", "7", "dana/omp-7", "laptop", "dana-laptop")}
+	for name, tc := range map[string]struct {
+		actor    string
+		verified bool
+		wantSent bool
+		wantText string
+	}{
+		"a listed actor, verified":   {"dana-laptop", true, true, "Sent the message"},
+		"a listed actor, unverified": {"dana-laptop", false, false, "[auth] require_token_identity"},
+		"an unlisted actor":          {"bob", true, false, "message_from"},
+		"the agent's own actor":      {"dana", true, true, "Sent the message"},
+	} {
+		s := &sender{remote: remote, verified: tc.verified}
+		var out bytes.Buffer
+		plan := message(t, map[string]string{"KATA_AUTHOR": tc.actor}, "demo#aa11", "-m", "hi")
+		err := runMessage(plan, "/w", nil, s.send, &out)
+		if (err == nil) != tc.wantSent || (len(s.sent) == 1) != tc.wantSent || !strings.Contains(out.String(), tc.wantText) {
+			t.Errorf("%s: err %v, output %q, sent %+v", name, err, out.String(), s.sent)
+		}
+	}
+}
+
+func TestMessageToAnUnknownTargetNamesWhyTheOtherHostsCouldNotBeRead(t *testing.T) {
+	var out bytes.Buffer
+	s := &sender{remoteErr: errors.New("daemon unreachable")}
+	err := runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-9", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
+	if err == nil || !strings.Contains(err.Error(), "no running agent") || !strings.Contains(err.Error(), "daemon unreachable") || len(s.sent) != 0 {
+		t.Errorf("scan failing: err %v, sent %+v", err, s.sent)
+	}
+	s = &sender{remoteErr: model.ErrNoRemoteScope}
+	err = runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-9", "-m", "hi"), "/w", nil, s.send, &out)
+	if err == nil || !strings.Contains(err.Error(), "no running agent") || strings.Contains(err.Error(), "could not be read") {
+		t.Errorf("no scope: err %v, want only the unknown-target refusal", err)
+	}
+	s = &sender{issueErr: errors.New("daemon unreachable")}
+	err = runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "demo#aa11", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
+	if err == nil || !strings.Contains(err.Error(), "daemon unreachable") || len(s.sent) != 0 {
+		t.Errorf("lookup failing: err %v, sent %+v, want nothing written", err, s.sent)
 	}
 }

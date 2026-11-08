@@ -107,7 +107,9 @@ type Model struct {
 	// InboxUser is KATA_INBOX_USER as read at launch: the Inbox address when not blank, else the actor is.
 	InboxUser string
 	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
-	Host      string
+	Host string
+	// HostID is this host's Host id (tern-kata's state folder, ADR-0018): Agent records that carry another one are remote agents. "" when it could not be read, which lists none.
+	HostID    string
 	FieldForm FieldFormState
 	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
 	Notice string
@@ -490,6 +492,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return agentAttentionWritten(m, msg), nil
 	case AgentAddressCleared:
 		return agentAddressCleared(m, msg), nil
+	case AgentRecordForgotten:
+		return agentRecordForgotten(m, msg), nil
 	case AgentJumpMsg:
 		return jumpToAgent(m, msg.Block)
 	case AgentPlaced:

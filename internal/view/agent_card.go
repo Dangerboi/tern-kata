@@ -57,8 +57,21 @@ func teamSection(m model.Model) []tern.Element {
 func AgentRowText(m model.Model, a model.IssueAgent) string {
 	state, _ := model.AgentStateWords(a.State)
 	text := state + " · started " + m.DetailTime(a.StartedAt) + " · " + model.AgentWhere(a.AgentEntry)
+	if a.AddressUsedBy != "" {
+		text += " · " + model.AddressUsedWords(a.AddressUsedBy)
+	}
 	if a.Unread != "" {
 		text += " · " + model.UnreadMessageWords + ": " + a.Unread
+	}
+	return text
+}
+
+// RemoteRowText is one agent on another host: where it runs, when it started and, while its address holds an uncleared message,
+// that message's first line. It has no state, for the record is static.
+func RemoteRowText(m model.Model, r model.RemoteAgent) string {
+	text := "on " + r.HostLabel() + " · started " + m.DetailTime(r.StartedAt)
+	if r.Unread != "" {
+		text += " · " + model.UnreadMessageWords + ": " + r.Unread
 	}
 	return text
 }
@@ -69,16 +82,22 @@ func agentLayer(m model.Model) tern.Element {
 		return nil
 	}
 	rows := m.AgentCardRows()
-	items := make([]tern.Element, 0, len(rows))
+	remote := m.AgentCardRemoteRows()
+	items := make([]tern.Element, 0, len(rows)+len(remote))
 	for _, a := range rows {
 		items = append(items, ui.Item{Common: ui.Common{Key: a.Block}, Label: ui.T(AgentRowText(m, a))})
 	}
+	for _, r := range remote {
+		items = append(items, ui.Item{Common: ui.Common{Key: r.Key()}, Label: ui.T(RemoteRowText(m, r))})
+	}
 	selected := ""
-	if len(rows) > 0 {
-		selected = AgentItemID(rows[m.AgentCardCursor()].Block)
+	if local, ok := m.AgentCardSelectedLocal(); ok {
+		selected = AgentItemID(local.Block)
+	} else if r, ok := m.AgentCardSelectedRemote(); ok {
+		selected = AgentItemID(r.Key())
 	}
 	list := tern.Element(ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Max: ui.MaxLines(12), Children: items})
-	if len(rows) == 0 {
+	if len(items) == 0 {
 		list = ui.Text{Common: ui.Common{Key: "none", Tone: ui.ToneMuted}, Text: "No agents on this Issue yet."}
 	}
 	if m.AgentCardMode() == model.ModeAgentCardStop {
@@ -87,12 +106,18 @@ func agentLayer(m model.Model) tern.Element {
 			buttonRow(destructive(cardButton("stop-yes", model.ModeAgentCardStop, model.AgentCardStopConfirm, "Stop agent", false)), cardButton("stop-keep", model.ModeAgentCardStop, model.AgentCardStopKeep, "Keep it", true)),
 		}))
 	}
+	if m.AgentCardMode() == model.ModeAgentCardForget {
+		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Forget agent"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeMD}, []tern.Element{
+			ui.Text{Common: ui.Common{Key: "forget-ask"}, Text: agentForgetQuestion(m)},
+			buttonRow(destructive(cardButton("forget-yes", model.ModeAgentCardForget, model.AgentCardForgetConfirm, "Forget agent", false)), cardButton("forget-keep", model.ModeAgentCardForget, model.AgentCardForgetKeep, "Keep it", true)),
+		}))
+	}
 	if m.AgentCardMode() == model.ModeAgentCardTeam {
 		return ui.Nodes(teamDialog(m))
 	}
 	children := append([]tern.Element{list}, teamSection(m)...)
-	if len(rows) > 0 {
-		for i, fact := range m.AgentFacts(rows[m.AgentCardCursor()].Block) {
+	if local, ok := m.AgentCardSelectedLocal(); ok {
+		for i, fact := range m.AgentFacts(local.Block) {
 			tone := ui.ToneNeutral
 			if fact.Muted {
 				tone = ui.ToneMuted
@@ -113,6 +138,7 @@ func agentLayer(m model.Model) tern.Element {
 			unavailable(cardButton("interrupt", model.ModeAgentCard, model.AgentCardInterrupt, "Interrupt", false), m.AgentCardUnavailable(model.AgentCardInterrupt)),
 			unavailable(cardButton("stop", model.ModeAgentCard, model.AgentCardStop, "Stop", false), m.AgentCardUnavailable(model.AgentCardStop)),
 			unavailable(cardButton("quick-reply", model.ModeAgentCard, model.AgentCardQuickReply, "Quick reply", false), m.AgentCardUnavailable(model.AgentCardQuickReply)),
+			unavailable(cardButton("forget", model.ModeAgentCard, model.AgentCardForget, "Forget", false), m.AgentCardUnavailable(model.AgentCardForget)),
 			cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)))
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Agents"), Meta: refMeta(card.IssueRef), Icon: ui.IconUsers, Modal: true, Size: ui.SizeLG}, children))
 }
@@ -132,6 +158,16 @@ func agentStopQuestion(m model.Model) string {
 		name = model.AgentLabel(e)
 	}
 	return "Stop " + name + " on " + m.AgentCard.IssueRef + "? Its block closes and any unsaved work in it is dropped."
+}
+
+// agentForgetQuestion is the forget prompt: it names the host and the start time of the record it removes.
+func agentForgetQuestion(m model.Model) string {
+	r, ok := m.AgentCardForgetTarget()
+	if !ok {
+		return "Forget this agent?"
+	}
+	return "Forget the agent on " + r.HostLabel() + " that started " + m.DetailTime(r.StartedAt) + " on " + m.AgentCard.IssueRef +
+		"? Its record and any message left at its address are removed; the other host is not touched."
 }
 
 // teamDialog is the start dialog of the Agent card's `c`: where the coordinator goes and how many children run at once.

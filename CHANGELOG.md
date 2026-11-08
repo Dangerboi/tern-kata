@@ -40,12 +40,15 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A team starts from the parent Issue's Agent card (`c`): a coordinator agent plus Background agents on its ready children, at most 1–8 running at once (default 2).
   - The next ready child starts when a running one exits, from any Pane open on the host; when no child is left to start and none runs, the coordinator gets one message naming the children closed and still open.
   - The parent's Agent card shows the team: each child's agent and state, the queued and skipped children with the reason, the limit and the team's state; `p` pauses or resumes the queue, and a child's card names its parent and coordinator.
+  - The coordinator's prompt names its children, `tern-kata team`, `tern-kata message --re`, its authority over its own children only, the shared checkout, the events it hears and how the team ends; a child's prompt names its parent and coordinator and tells it to report and ask by comment on its own Issue.
 - A team's child takes its coordinator's messages, and its coordinator's comments on the child's Issue whatever `forward_comments` says, as the person's authority over that Issue.
 - A coordinator hears its children's comments, closes, and `work.attention` turning `needs-human` or `stuck`, from when it started, including children added later.
 - Each agent a Pane starts publishes an Agent record on its Issue, so Panes on other machines can find it.
   - A Host id, made once in tern-kata's state folder, names the machine in the record; `host` at the top level of `agent.toml` sets the name other machines show (default the machine's host name).
   - The record goes when the agent exits, its block closes, it is stopped or its Background run ends; a Pane at start writes the record of an agent that has none and removes its own host's records that no agent matches.
-  - An agent whose address another machine already holds publishes no record and stays local.
+  - An agent whose address another machine already holds publishes no record and stays local; its Agent card row says which host uses the address.
+- The Agent card lists agents running on other machines after this host's own, as "on <host> · started <time>", read from their Agent records; `f` forgets one, after a question, and clears any message left at its address.
+  - The Agent badge counts them too; an Issue with only remote agents reads "agent on <host>" or "agents on N hosts".
 
 #### Issues and Pages
 
@@ -59,6 +62,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The rows are `lanes.toml`, `filters.toml`, `views.toml`, `worker.toml` (with its supervision), `agent.toml` (with its actor, `host`, name, command and `message_from` actors), Docbank supervision and kata's own `config.toml`, read-only; each is read by the reader its feature uses, so a file that does not load shows that reader's error on its own row.
   - `enter` on a row opens the card or Page that edits the file: the Lanes card on the Board Page, the Filter card, the Menu's Views level, the Worker card on the Jobs Page, and the Daemons Page for kata's `config.toml`.
   - The Docbank supervision row says whether the plugin keeps a local Docbank running, else why not, and `s` turns supervision off or on as `tern-kata docbank supervise off|on` does.
+  - `e` on the `agent.toml` row edits it in `$VISUAL` or `$EDITOR`, starting from a commented starter that shows every key when there is no file; the text is checked with the rules an agent start uses and written only if it loads and the file did not change while you edited.
 
 #### Jobs and worker
 
@@ -88,6 +92,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `tern-kata agent` takes `--coordinator <address>` and `--coordinating` (with `--address-prefix`), which set `TERN_KATA_COORDINATOR` and `TERN_KATA_COORDINATING=1` for the agent.
 - `tern-kata team <ref>` prints a team's state, limit, coordinator address and each child's ref, state and address; with no team on the Issue it says so and exits 1.
 - `tern-kata message --re <comment>` asks the receiving agent to answer that comment, as `m` on the Comments tab does; its typed reply clears the request.
+- `tern-kata agents` lists agents started on other machines too, read from their Agent records, in a new `HOST` column between `AGENT` and `STATE`; `tern-kata message` reaches them by address or ref when kata's identity mode is on and the sender is the agent's actor or in its `message_from`.
 
 ### Changed
 

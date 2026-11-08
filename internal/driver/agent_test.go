@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
@@ -45,7 +46,7 @@ func TestTheAgentCardStartsAnAgentOnTheSelectedIssueInEveryIssueMode(t *testing.
 				start, ok := startedAgent(got.Cmds)
 				want := model.StartAgent{Placement: placement, IssueUID: "t1", IssueRef: "work#t1", IssueTitle: "Title of t1", ProjectID: 7, ProjectName: "work",
 					Workspace: "/repo", PaneBlock: "24489903521795"}
-				if !ok || len(got.Cmds) != 1 || start != want || got.State.Model.TopCard() == model.CardAgent {
+				if !ok || len(got.Cmds) != 1 || !reflect.DeepEqual(start, want) || got.State.Model.TopCard() == model.CardAgent {
 					t.Fatalf("cmds %#v, want %#v", got.Cmds, want)
 				}
 			})

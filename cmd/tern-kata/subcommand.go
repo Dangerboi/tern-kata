@@ -37,7 +37,7 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 			return subcommandError{err}
 		}
 		if plan.Subcommand == "agents" {
-			return runAgents(plan, running, out)
+			return runAgents(plan, workspace, running, send, out)
 		}
 		return runMessage(plan, workspace, running, send, out)
 	}

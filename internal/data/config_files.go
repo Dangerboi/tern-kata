@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
@@ -77,13 +78,7 @@ func (g *Gateway) loadConfigFiles(_ context.Context, cmd model.LoadConfigFiles) 
 			}
 			return joinSummary(summary, workerSupervision(dirs)), err
 		}),
-		configRow(model.ConfigAgent, AgentConfigFile, filepath.Join(folder, AgentConfigFile), "agents start with the defaults", []model.ConfigAction{model.ConfigEdit}, func(path string) (string, error) {
-			cfg, err := ReadAgentConfig(path)
-			if err != nil {
-				return "", err
-			}
-			return agentSummary(cfg), nil
-		}),
+		agentRow(filepath.Join(folder, AgentConfigFile)),
 	}
 	if row, ok := g.docbankRow(); ok {
 		files = append(files, row)
@@ -110,6 +105,55 @@ func configRow(key model.ConfigFileKey, title, path, missing string, actions []m
 	}
 	row.Status = model.ConfigLoads
 	return row
+}
+
+// agentRow is the agent.toml row: read by the agent start's own reader, carrying the text the Page's edit starts from and the base
+// it must still find on disk.
+func agentRow(path string) model.ConfigFile {
+	row := configRow(model.ConfigAgent, AgentConfigFile, path, "agents start with the defaults", []model.ConfigAction{model.ConfigEdit}, func(path string) (string, error) {
+		cfg, err := ReadAgentConfig(path)
+		if err != nil {
+			return "", err
+		}
+		return agentSummary(cfg), nil
+	})
+	row.Starter = AgentConfigStarter
+	if token, err := guardedfile.Read(path); err == nil {
+		row.Text = token.Text()
+	}
+	return row
+}
+
+// saveAgentConfig replaces agent.toml with text an agent start accepts, when the file is still the base the edit began from. The
+// write takes the config folder's lock and replaces the file atomically, as the Lane, filter and view files are written. A text
+// that does not load is refused and a changed file is model.ErrAgentConfigChanged; nothing is written in either case.
+func (g *Gateway) saveAgentConfig(cmd model.SaveAgentConfig) model.AgentConfigSaved {
+	done := model.AgentConfigSaved{Text: cmd.Text}
+	folder, err := g.configFolder()
+	if err != nil {
+		done.Err = err
+		return done
+	}
+	if done.Err = CheckAgentConfig(cmd.Text); done.Err != nil {
+		return done
+	}
+	path := filepath.Join(folder, AgentConfigFile)
+	token, err := guardedfile.Read(path)
+	if err != nil {
+		done.Err = err
+		return done
+	}
+	if token.Text() != cmd.Base {
+		done.Err = model.ErrAgentConfigChanged
+		return done
+	}
+	switch err := guardedfile.Write(path, 0o700, token, []byte(cmd.Text)); {
+	case errors.Is(err, guardedfile.ErrChanged):
+		done.Err = model.ErrAgentConfigChanged
+	case err != nil:
+		done.Err = err
+	}
+	return done
 }
 
 // kataConfigRow is kata's own config.toml, read by the Daemon catalog reader; the Pane never writes it.

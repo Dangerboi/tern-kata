@@ -18,6 +18,7 @@ import (
 	g "go.kenn.io/kata/pkg/client/generated"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // HostIDFile holds the Host id in tern-kata's state folder.
@@ -58,6 +59,17 @@ func ReadHostID(state string) (string, error) {
 		err = fmt.Errorf("%s is empty", path)
 	}
 	return id, err
+}
+
+// ThisHostID is the Host id of this machine's tern-kata state folder, "" when the folder cannot be read or made; the Pane then
+// lists no remote agents, for it could not tell its own records from theirs.
+func ThisHostID() string {
+	dirs, err := worker.DefaultDirs()
+	if err != nil || dirs.State == "" {
+		return ""
+	}
+	id, _ := ReadHostID(dirs.State)
+	return id
 }
 
 func readHostIDFile(path string) (string, error) {
@@ -147,6 +159,18 @@ func (c *Client) patchRecords(ctx context.Context, projectID int64, uid, actor s
 	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
 		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid}, Body: &body})
 	return daemonError(err)
+}
+
+// ForgetAgentRecord removes the record of an agent on another host, whichever host id it carries, and the message left at its
+// address, which nobody reads again. The message goes first, so a failure leaves the record for another Forget. The other host is
+// never touched; one of its Panes finding the agent alive again publishes the record anew on its next reconcile.
+func (c *Client) ForgetAgentRecord(ctx context.Context, cmd model.ForgetAgentRecord) error {
+	if cmd.Address != "" {
+		if err := c.ClearAgentAddress(ctx, model.ClearAgentAddress{ProjectID: cmd.ProjectID, UID: cmd.UID, Actor: cmd.Actor, Address: cmd.Address}); err != nil {
+			return err
+		}
+	}
+	return c.patchRecords(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, map[string]any{model.AgentRecordKey(cmd.HostID, cmd.Block): nil})
 }
 
 // addressHolder is the host name of the record of another host id on the Issue that holds address, "" when none does.

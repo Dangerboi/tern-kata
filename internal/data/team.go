@@ -131,22 +131,27 @@ func (g *Gateway) startTeam(ctx context.Context, cmd model.StartTeam) model.Team
 	if slices.ContainsFunc(teams, func(t model.Team) bool { return t.ParentUID == cmd.IssueUID }) {
 		return failed(errors.New(model.TeamExistsReason))
 	}
-	open := false
+	var children []model.TeamChildRef
 	if _, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
 		shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.IssueUID)
 		if err != nil {
 			return nil, daemonError(err)
 		}
-		open = slices.ContainsFunc(shown.Children, func(child gen.IssueOut) bool { return child.ProjectID == cmd.ProjectID && child.Status == "open" })
+		for _, child := range shown.Children {
+			if child.ProjectID == cmd.ProjectID && child.Status == "open" {
+				children = append(children, model.TeamChildRef{Ref: child.QualifiedID, Title: child.Title})
+			}
+		}
 		return nil, nil
 	}); err != nil {
 		return failed(err)
 	}
-	if !open {
+	if len(children) == 0 {
 		return failed(fmt.Errorf("%s has no open child in the Project %s", cmd.IssueRef, cmd.ProjectName))
 	}
 	started := g.startAgent(ctx, model.StartAgent{Placement: cmd.Placement, IssueUID: cmd.IssueUID, IssueRef: cmd.IssueRef, IssueTitle: cmd.IssueTitle,
-		ProjectID: cmd.ProjectID, ProjectName: cmd.ProjectName, Workspace: cmd.Workspace, PaneBlock: cmd.PaneBlock, Actor: cmd.Actor, Coordinating: true})
+		ProjectID: cmd.ProjectID, ProjectName: cmd.ProjectName, Workspace: cmd.Workspace, PaneBlock: cmd.PaneBlock, Actor: cmd.Actor, Coordinating: true,
+		Role: model.TeamRole{Children: children, Limit: cmd.Limit}})
 	if started.Err != nil {
 		return failed(started.Err)
 	}
@@ -369,7 +374,8 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 			continue
 		}
 		start := model.StartAgent{Placement: model.AgentBackground, IssueUID: c.UID, IssueRef: c.QualifiedID, IssueTitle: c.Title,
-			ProjectID: c.ProjectID, ProjectName: t.Project, PaneBlock: cmd.PaneBlock, Actor: cmd.Actor, Coordinator: t.CoordinatorAddress}
+			ProjectID: c.ProjectID, ProjectName: t.Project, PaneBlock: cmd.PaneBlock, Actor: cmd.Actor, Coordinator: t.CoordinatorAddress,
+			Role: model.TeamRole{Parent: t.ParentRef}}
 		if cmd.BoundProjectID == t.ProjectID {
 			start.Workspace = cmd.Workspace
 		}

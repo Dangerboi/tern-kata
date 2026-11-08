@@ -60,6 +60,8 @@ type LaunchPlan struct {
 	// agent knows a peer wrote it; empty when a person sends. `agents --issue` and `message`'s address or ref are TargetRef.
 	MessageText string
 	Teammate    string
+	// ScopeRef is the sender's KATA_REF, the Issue whose Project `agents` and `message` look in for agents on other hosts.
+	ScopeRef string
 	// MessageRe is `message --re`: the handle of the comment the message asks the agent to answer; empty for none.
 	MessageRe string
 	// AgentRef is `agent --ref`: the qualified Issue ref the agent's KATA_REF is set to; empty leaves the agent without one.
@@ -679,10 +681,13 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 worker.toml it rejects); --pause waits for Enter after a success,
                                 so a Pane shows the result before it closes.
                                 Exit 0 when the binary is at the latest version, else 1
-  agents [--issue <ref>]        list the agents this machine's Panes started that have not
-                                exited: Issue, agent name, state (from the Pane's latest relay)
-                                and Agent address (- when no message reaches it); --issue cuts
-                                the list to one Issue
+  agents [--issue <ref>]        list the agents that have not exited: Issue, agent name, host
+                                (- for this machine), state (from the Pane's latest relay; -
+                                for an agent on another host) and Agent address (- when no
+                                message reaches it). Agents other machines' Panes started are
+                                listed from their Agent records: on --issue's Issue, else on
+                                the open Issues of KATA_REF's Project or the workspace's bound
+                                Project; --issue cuts the list to one Issue
   team <ref>                    print the team on that parent Issue: its state, limit and
                                 coordinator's Agent address, then each child with its ref,
                                 state (the agent's own, starting, queued, ran: closed, ran:
@@ -699,8 +704,14 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 asks the agent to answer: its reply to that comment with
                                 kata comment --reply settles the request. An address that holds a message its agent
                                 has not cleared is not written over: that agent is named and
-                                exit status 1 says so. Unknown address or ref, or no agent that
-                                can receive it, is refused
+                                exit status 1 says so. Messages to an agent on another host,
+                                or as an actor other than the agent's own, need kata's identity
+                                mode ([auth] require_token_identity) and a sender the agent
+                                lists (message_from); the refusal says which. An address or
+                                ref is looked for among the agents on other hosts too, in the
+                                open Issues of KATA_REF's Project or the workspace's Project.
+                                Unknown address or ref, or no agent that can receive it, is
+                                refused
   docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
                                 make attachments work. Without --url it sets Docbank up on this
                                 machine: it gives Docbank a fixed port (--port, default 8080) and an

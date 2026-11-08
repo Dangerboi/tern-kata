@@ -255,7 +255,7 @@ func TestStartingAnAgentWritesThePromptRunsTernAndRecordsTheBlock(t *testing.T) 
 		t.Fatalf("the extension file holds %d bytes, %v; want the embedded %d", len(text), err, len(ompext.Source))
 	}
 	text, err := os.ReadFile(e.PromptFile)
-	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana", nil) {
+	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana", nil, model.TeamRole{}) {
 		t.Fatalf("prompt %q, %v", text, err)
 	}
 	if stored, err := ReadAgents(filepath.Join(dirs.State, AgentsFile)); err != nil || len(stored) != 1 || stored[0] != e {
@@ -294,7 +294,7 @@ func TestAnAgentThatCannotLoadTheExtensionStartsWithoutAnAgentAddressAndSaysWhy(
 			t.Errorf("%s: ran %q, want no Agent address and no extension", c.command, ran)
 		}
 		text, err := os.ReadFile(got.Entry.PromptFile)
-		if err != nil || string(text) != AgentPrompt("demo#ab12", "", "", nil) {
+		if err != nil || string(text) != AgentPrompt("demo#ab12", "", "", nil, model.TeamRole{}) {
 			t.Errorf("%s: prompt %q, %v; want the prompt without messages", c.command, text, err)
 		}
 	}
@@ -510,7 +510,7 @@ func TestPruningKeepsAnEntryAddedAfterTheEntriesItChecked(t *testing.T) {
 }
 
 func TestTheAgentPromptIsStable(t *testing.T) {
-	if without := AgentPrompt("demo#ab12", "Fix it", "", nil); strings.Contains(without, "message") {
+	if without := AgentPrompt("demo#ab12", "Fix it", "", nil, model.TeamRole{}); strings.Contains(without, "message") {
 		t.Errorf("an agent no message reaches is told about messages:\n%s", without)
 	}
 	check := func(path, got string) {
@@ -532,8 +532,14 @@ func TestTheAgentPromptIsStable(t *testing.T) {
 		}
 	}
 	const title = "  Fix the\n# crash\tnow "
-	check("testdata/agent_prompt.golden", AgentPrompt("demo#ab12", title, "dana", nil))
-	check("testdata/agent_prompt_message_from.golden", AgentPrompt("demo#ab12", title, "dana", []string{"dana-laptop", "dana-phone"}))
+	check("testdata/agent_prompt.golden", AgentPrompt("demo#ab12", title, "dana", nil, model.TeamRole{}))
+	check("testdata/agent_prompt_message_from.golden", AgentPrompt("demo#ab12", title, "dana", []string{"dana-laptop", "dana-phone"}, model.TeamRole{}))
+	check("testdata/agent_prompt_coordinator.golden", AgentPrompt("demo#ab12", title, "dana", nil, model.TeamRole{Coordinating: true, Limit: 2,
+		Children: []model.TeamChildRef{{Ref: "demo#cd34", Title: "Add the\nqueue"}, {Ref: "demo#ef56", Title: "Write the docs"}, {Ref: "demo#gh78", Title: "Wire the card"}}}))
+	check("testdata/agent_prompt_child.golden", AgentPrompt("demo#cd34", "Add the queue", "dana", nil, model.TeamRole{Parent: "demo#ab12", Coordinator: "dana/omp-12"}))
+	if without := AgentPrompt("demo#cd34", "Add the queue", "", nil, model.TeamRole{Parent: "demo#ab12", Coordinator: "dana/omp-12"}); strings.Contains(without, "team") {
+		t.Errorf("an agent no message reaches is told about a team:\n%s", without)
+	}
 }
 
 func lsOf(blocks ...string) []byte {
@@ -1479,7 +1485,7 @@ func TestStartingAnAgentRecordsAndPassesItsMessageFrom(t *testing.T) {
 		t.Errorf("ran %q, want --message-from dana-laptop", ran)
 	}
 	text, err := os.ReadFile(got.Entry.PromptFile)
-	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana", []string{"dana-laptop"}) {
+	if err != nil || string(text) != AgentPrompt("demo#ab12", "Fix it", "dana", []string{"dana-laptop"}, model.TeamRole{}) {
 		t.Errorf("prompt %q, %v", text, err)
 	}
 }

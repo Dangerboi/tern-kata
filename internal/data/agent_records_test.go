@@ -304,3 +304,64 @@ func TestAgentTomlHostIsTopLevelOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestForgettingARemoteRecordRemovesItAndTheMessageAtItsAddressOnly(t *testing.T) {
+	f := newRecordFixture(t, "")
+	f.start(t, model.AgentSplit)
+	at := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	gone := model.AgentRecord{Address: "dana/omp-8", Host: "desk", HostID: "00ff00ff", Block: "8", Name: "omp", Actor: "dana", StartedAt: at, MessageFrom: []string{}}
+	other := model.AgentRecord{Address: "dana/omp-9", Host: "desk", HostID: "00ff00ff", Block: "9", Name: "omp", Actor: "dana", StartedAt: at.Add(time.Hour), MessageFrom: []string{}}
+	f.put(t, gone)
+	f.put(t, other)
+	for _, address := range []string{gone.Address, other.Address} {
+		_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+			PathParams: &g.PatchIssueMetadataPath{ProjectID: f.project.ID, Ref: f.uid},
+			Body:       &g.PatchIssueMetadataBody{Actor: new("dana"), Patch: map[string]any{model.NotificationKey(address): map[string]any{"from": "dana", "message": "hello"}}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	forgotten := as[model.AgentRecordForgotten](t, run(t, f.gateway, model.ForgetAgentRecord{Workspace: f.work, ProjectID: f.project.ID, UID: f.uid, Actor: "dana",
+		HostID: gone.HostID, Block: gone.Block, Address: gone.Address, Host: "desk"}))
+	if forgotten.Err != nil || forgotten.Host != "desk" {
+		t.Fatalf("forget: %+v", forgotten)
+	}
+	metadata := issueFixture{kata: f.kata}.issue(t, f.uid).Metadata
+	if _, held := metadata[model.NotificationKey(gone.Address)]; held {
+		t.Errorf("the message at the forgotten address is still held")
+	}
+	if _, held := metadata[model.NotificationKey(other.Address)]; !held {
+		t.Errorf("the message at another agent's address was cleared")
+	}
+	if got, want := slices.Sorted(slices.Values(blocksOf(f.records(t)))), slices.Sorted(slices.Values([]string{f.hostID(t) + "/31", "00ff00ff/9"})); !slices.Equal(got, want) {
+		t.Errorf("records %v, want %v: only the forgotten one goes, this host's own stays", got, want)
+	}
+}
+
+func TestRemoteAgentsAreTheRecordsOfOtherHostIdsOnAnIssueOrInTheProject(t *testing.T) {
+	f := newRecordFixture(t, "")
+	f.put(t, model.AgentRecord{Address: "dana/omp-9", Host: "desk", HostID: "feed0001", Block: "9", Name: "omp", Actor: "dana", MessageFrom: []string{"dana-laptop"}})
+	f.put(t, model.AgentRecord{Address: "dana/omp-3", Host: "laptop", HostID: f.hostID(t), Block: "3", Name: "omp", Actor: "dana"})
+	ref := "demo#" + issueFixture{kata: f.kata}.issue(t, f.uid).ShortID
+	for name, cmd := range map[string]model.LoadRemoteAgents{
+		"an Issue by its ref":              {Workspace: f.work, Issue: ref},
+		"an Issue by its uid":              {Workspace: f.work, Issue: f.uid},
+		"the workspace's Project":          {Workspace: f.work},
+		"the Project of KATA_REF":          {Workspace: f.work, ScopeRef: ref},
+		"the Project of KATA_REF by a uid": {Workspace: f.work, ScopeRef: f.uid},
+	} {
+		got := as[model.RemoteAgentsLoaded](t, run(t, f.gateway, cmd))
+		if got.Err != nil || got.NotFound || len(got.Agents) != 1 {
+			t.Errorf("%s: %+v, want the one record of another host id", name, got)
+			continue
+		}
+		a := got.Agents[0]
+		if a.Address != "dana/omp-9" || a.Host != "desk" || a.HostID != "feed0001" || a.IssueRef != ref || a.IssueUID != f.uid || a.ProjectID != f.project.ID || a.MessageFrom != "dana-laptop" || a.State != "" {
+			t.Errorf("%s: agent %+v", name, a)
+		}
+	}
+	if got := as[model.RemoteAgentsLoaded](t, run(t, f.gateway, model.LoadRemoteAgents{Workspace: f.work, Issue: "demo#zzzz"})); !got.NotFound || got.Err != nil {
+		t.Errorf("an Issue that does not exist: %+v, want NotFound", got)
+	}
+}

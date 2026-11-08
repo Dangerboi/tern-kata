@@ -23,7 +23,11 @@ func agentBadge(m model.Model, uid, key string) (ui.Badge, bool) {
 
 // agentBadgeElement is badge as the element agentBadge draws.
 func agentBadgeElement(badge model.AgentBadge, key string) ui.Badge {
-	return ui.Badge{Common: ui.Common{Key: key, Tone: agentTones[badge.Tone], Actions: &ui.Actions{Click: AgentClick(badge.Block)}}, Text: badge.Text}
+	common := ui.Common{Key: key, Tone: agentTones[badge.Tone]}
+	if badge.Block != "" { // an Issue with only remote agents has no block to focus
+		common.Actions = &ui.Actions{Click: AgentClick(badge.Block)}
+	}
+	return ui.Badge{Common: common, Text: badge.Text}
 }
 
 // attentionTone is the colour of an Issue's work attention: stuck is an error, needs-human a warning.

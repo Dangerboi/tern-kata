@@ -28,6 +28,15 @@ const (
 	AgentCardStopKeep    Action = "agent-card-stop-keep"
 )
 
+// ModeAgentCardForget is the Agent card asking whether to forget the record of the selected agent on another host;
+// AgentCardForgetConfirm removes it and AgentCardForgetKeep goes back to the list. AgentCardForget opens the question.
+const (
+	ModeAgentCardForget    Mode   = "agent-card-forget"
+	AgentCardForget        Action = "agent-card-forget"
+	AgentCardForgetConfirm Action = "agent-card-forget-confirm"
+	AgentCardForgetKeep    Action = "agent-card-forget-keep"
+)
+
 // Why the Agent card's Interrupt and Stop are off for the selected agent.
 const (
 	AgentCardExitedReason  = "That agent has exited."
@@ -43,6 +52,8 @@ type AgentCardState struct {
 	Cursor   int
 	// Stopping is the block the card asks about stopping; "" while it shows the list.
 	Stopping string
+	// Forgetting is the key of the remote agent's record the card asks about forgetting; "" while it shows the list.
+	Forgetting string
 	// Team is the team start dialog, which `c` opens.
 	Team TeamDialog
 }
@@ -55,9 +66,45 @@ func (m Model) AgentCardRows() []IssueAgent {
 	return m.IssueAgents(m.AgentCard.IssueUID)
 }
 
-// AgentCardCursor is the selected row, kept inside the list as agents come and go.
+// AgentCardRemoteRows are the agents on other hosts the card lists after the local ones, from the Issue's Agent records.
+func (m Model) AgentCardRemoteRows() []RemoteAgent {
+	if !m.AgentCard.Open {
+		return nil
+	}
+	return m.RemoteAgents(m.AgentCard.IssueUID)
+}
+
+// AgentCardCursor is the selected row, kept inside the list (local rows, then remote ones) as agents come and go.
 func (m Model) AgentCardCursor() int {
-	return max(0, min(m.AgentCard.Cursor, len(m.AgentCardRows())-1))
+	return max(0, min(m.AgentCard.Cursor, len(m.AgentCardRows())+len(m.AgentCardRemoteRows())-1))
+}
+
+// AgentCardSelectedLocal is the selected row's agent when it is one this host started.
+func (m Model) AgentCardSelectedLocal() (IssueAgent, bool) {
+	rows := m.AgentCardRows()
+	if i := m.AgentCardCursor(); i < len(rows) {
+		return rows[i], true
+	}
+	return IssueAgent{}, false
+}
+
+// AgentCardSelectedRemote is the selected row's agent when it runs on another host.
+func (m Model) AgentCardSelectedRemote() (RemoteAgent, bool) {
+	remote := m.AgentCardRemoteRows()
+	if i := m.AgentCardCursor() - len(m.AgentCardRows()); i >= 0 && i < len(remote) {
+		return remote[i], true
+	}
+	return RemoteAgent{}, false
+}
+
+// AgentCardForgetTarget is the remote agent the card asks about forgetting.
+func (m Model) AgentCardForgetTarget() (RemoteAgent, bool) {
+	for _, r := range m.AgentCardRemoteRows() {
+		if r.Key() == m.AgentCard.Forgetting {
+			return r, true
+		}
+	}
+	return RemoteAgent{}, false
 }
 
 // AgentWhere says where an agent's block is: "open" for a background agent that is out of the hidden session, "background" for one
@@ -87,6 +134,9 @@ func (m Model) AgentCardMode() Mode {
 	}
 	if m.AgentCard.Stopping != "" {
 		return ModeAgentCardStop
+	}
+	if m.AgentCard.Forgetting != "" {
+		return ModeAgentCardForget
 	}
 	return ModeAgentCard
 }
@@ -126,11 +176,71 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 		return m, nil
 	}
+	if m.AgentCard.Forgetting != "" {
+		target, found := m.AgentCardForgetTarget()
+		m.AgentCard.Forgetting = ""
+		if binding.Action != AgentCardForgetConfirm || !found {
+			return m, nil
+		}
+		issue := m.issueByUID(m.AgentCard.IssueUID)
+		if issue == nil {
+			return m, nil
+		}
+		m.AgentCard = AgentCardState{}
+		return m, []Cmd{ForgetAgentRecord{Workspace: m.Workspace, ProjectID: issue.ProjectID, UID: issue.UID, Actor: m.Actor, HostID: target.HostID,
+			Block: target.Block, Address: target.Address, Host: target.HostLabel()}}
+	}
 	rows := m.AgentCardRows()
 	cursor := m.AgentCardCursor()
+	remote, onRemote := m.AgentCardSelectedRemote()
 	switch binding.Action {
 	case AgentCardCancel:
 		m.AgentCard = AgentCardState{}
+	case AgentCardGo, AgentCardBackground, AgentCardInterrupt, AgentCardStop:
+		if onRemote {
+			m.Notice = RemoteAgentRefusal(remote.HostLabel())
+			return m, nil
+		}
+		return updateLocalAgentKey(m, binding.Action)
+	case AgentCardForget:
+		if reason := m.AgentCardUnavailable(AgentCardForget); reason != "" {
+			m.Notice = reason
+			return m, nil
+		}
+		m.AgentCard.Forgetting = remote.Key()
+		return m, nil
+	case AgentCardMessage, AgentCardQuickReply:
+		if len(rows)+len(m.AgentCardRemoteRows()) == 0 {
+			return m, nil
+		}
+		return openAgentCardMessage(m, binding.Action == AgentCardQuickReply)
+	case AgentCardTeam:
+		return openTeamDialog(m)
+	case AgentCardPause:
+		return pauseTeam(m)
+	case AgentCardSplit:
+		return startAgent(m, AgentCardSplit, AgentSplit)
+	case AgentCardTab:
+		return startAgent(m, AgentCardTab, AgentTab)
+	case AgentCardNewBackground:
+		return startAgent(m, AgentCardNewBackground, AgentBackground)
+	case MoveDown:
+		m.AgentCard.Cursor = min(cursor+1, max(0, len(rows)+len(m.AgentCardRemoteRows())-1))
+	case MoveUp:
+		m.AgentCard.Cursor = max(0, cursor-1)
+	case MoveFirst:
+		m.AgentCard.Cursor = 0
+	case MoveLast:
+		m.AgentCard.Cursor = max(0, len(rows)+len(m.AgentCardRemoteRows())-1)
+	}
+	return m, nil
+}
+
+// updateLocalAgentKey is Go, Background, Interrupt and Stop on a row of an agent this host started.
+func updateLocalAgentKey(m Model, action Action) (Model, []Cmd) {
+	rows := m.AgentCardRows()
+	cursor := m.AgentCardCursor()
+	switch action {
 	case AgentCardGo:
 		if m.AgentCardUnavailable(AgentCardGo) != "" {
 			return m, nil
@@ -143,11 +253,6 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		return sendToBackground(m, rows[cursor].AgentEntry)
-	case AgentCardMessage, AgentCardQuickReply:
-		if len(rows) == 0 {
-			return m, nil
-		}
-		return openAgentCardMessage(m, binding.Action == AgentCardQuickReply)
 	case AgentCardInterrupt:
 		if len(rows) == 0 {
 			return m, nil
@@ -163,25 +268,6 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m, nil
 		}
 		m.AgentCard.Stopping = rows[cursor].Block
-		return m, nil
-	case AgentCardTeam:
-		return openTeamDialog(m)
-	case AgentCardPause:
-		return pauseTeam(m)
-	case AgentCardSplit:
-		return startAgent(m, AgentCardSplit, AgentSplit)
-	case AgentCardTab:
-		return startAgent(m, AgentCardTab, AgentTab)
-	case AgentCardNewBackground:
-		return startAgent(m, AgentCardNewBackground, AgentBackground)
-	case MoveDown:
-		m.AgentCard.Cursor = min(cursor+1, max(0, len(rows)-1))
-	case MoveUp:
-		m.AgentCard.Cursor = max(0, cursor-1)
-	case MoveFirst:
-		m.AgentCard.Cursor = 0
-	case MoveLast:
-		m.AgentCard.Cursor = max(0, len(rows)-1)
 	}
 	return m, nil
 }
@@ -210,15 +296,21 @@ func interruptAgent(m Model, e AgentEntry) (Model, []Cmd) {
 	return m, []Cmd{InterruptAgent{Block: e.Block}}
 }
 
-// AgentCardSelected is a click on an agent of the card's list; Block is its block id.
+// AgentCardSelected is a click on an agent of the card's list; Block is its block id, or the record's key for an agent on another host.
 type AgentCardSelected struct{ Block string }
 
 func (AgentCardSelected) msg() {}
 
 func agentCardSelected(m Model, msg AgentCardSelected) Model {
-	for i, a := range m.AgentCardRows() {
+	rows := m.AgentCardRows()
+	for i, a := range rows {
 		if a.Block == msg.Block {
 			m.AgentCard.Cursor = i
+		}
+	}
+	for i, r := range m.AgentCardRemoteRows() {
+		if r.Key() == msg.Block {
+			m.AgentCard.Cursor = len(rows) + i
 		}
 	}
 	return m
@@ -228,29 +320,40 @@ func agentCardSelected(m Model, msg AgentCardSelected) Model {
 // reason as a Notice, and the card's buttons are drawn disabled with it; the one difference is that with no agent listed the card
 // stays open and says nothing.
 func (m Model) AgentCardUnavailable(action Action) string {
-	rows := m.AgentCardRows()
+	local, isLocal := m.AgentCardSelectedLocal()
+	remote, isRemote := m.AgentCardSelectedRemote()
+	switch action {
+	case AgentCardGo, AgentCardBackground, AgentCardMessage, AgentCardQuickReply, AgentCardInterrupt, AgentCardStop, AgentCardForget:
+		if !isLocal && !isRemote {
+			return noAgentReason
+		}
+	}
 	switch action {
 	case AgentCardGo:
-		if len(rows) == 0 {
-			return noAgentReason
+		if isRemote {
+			return RemoteAgentRefusal(remote.HostLabel())
 		}
 	case AgentCardBackground:
-		if len(rows) == 0 {
-			return noAgentReason
+		if isRemote {
+			return RemoteAgentRefusal(remote.HostLabel())
 		}
-		if e := rows[m.AgentCardCursor()]; e.Background && !e.Open {
+		if local.Background && !local.Open {
 			return "That agent is already in the background."
 		}
 	case AgentCardMessage, AgentCardQuickReply:
-		if len(rows) == 0 {
-			return noAgentReason
+		if isRemote {
+			return RemoteMessageRefusal
 		}
-		return m.agentMessageRefusal(rows[m.AgentCardCursor()].AgentEntry)
+		return m.agentMessageRefusal(local.AgentEntry)
+	case AgentCardForget:
+		if isLocal {
+			return AgentForgetLocalReason
+		}
 	case AgentCardInterrupt, AgentCardStop:
-		if len(rows) == 0 {
-			return noAgentReason
+		if isRemote {
+			return RemoteAgentRefusal(remote.HostLabel())
 		}
-		e := rows[m.AgentCardCursor()]
+		e := local
 		switch {
 		case e.State == AgentExited:
 			return AgentCardExitedReason

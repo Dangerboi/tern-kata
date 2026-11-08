@@ -4,13 +4,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
+	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
+
+// errNoSuchIssue marks a ref that names no Issue: kata's 404 or 400 on the read, an unknown Project, or a bare ref in an unbound
+// workspace. Its message is the underlying one.
+type errNoSuchIssue struct{ error }
+
+func (e errNoSuchIssue) Unwrap() error { return e.error }
+
+// issueReadError is daemonError, marked errNoSuchIssue when kata says there is no such Issue.
+func issueReadError(err error) error {
+	switch client.StatusCode(err) {
+	case http.StatusNotFound, http.StatusBadRequest:
+		return errNoSuchIssue{daemonError(err)}
+	}
+	return daemonError(err)
+}
 
 // ulid is the shape of a kata Issue UID; any other ref is a short id, optionally behind "<project>#".
 var ulid = regexp.MustCompile(`(?i)^[0-9A-HJKMNP-TV-Z]{26}$`)
@@ -32,7 +49,7 @@ func (c *Client) readIssueTarget(ctx context.Context, workspace, ref string) (is
 	if ulid.MatchString(ref) {
 		response, err := c.ShowIssueByUIDWithResponse(ctx, &g.ShowIssueByUIDRequestOptions{PathParams: &g.ShowIssueByUIDPath{UID: ref}})
 		if err != nil {
-			return issueTarget{}, daemonError(err)
+			return issueTarget{}, issueReadError(err)
 		}
 		if response.JSON200 == nil {
 			return issueTarget{}, errors.New("kata daemon returned no Issue")
@@ -57,14 +74,14 @@ func (c *Client) readIssueTarget(ctx context.Context, workspace, ref string) (is
 			}
 		}
 		if projectID == 0 {
-			return issueTarget{}, fmt.Errorf("kata Project %q not found", projectName)
+			return issueTarget{}, errNoSuchIssue{fmt.Errorf("kata Project %q not found", projectName)}
 		}
 	} else if target.binding.UID == "" {
-		return issueTarget{}, fmt.Errorf("This workspace is not bound to a kata Project, so %q does not name an Issue; give <project>#<short id> or the Issue's ULID.", ref)
+		return issueTarget{}, errNoSuchIssue{fmt.Errorf("This workspace is not bound to a kata Project, so %q does not name an Issue; give <project>#<short id> or the Issue's ULID.", ref)}
 	}
 	response, err := c.ShowIssueWithResponse(ctx, &g.ShowIssueRequestOptions{PathParams: &g.ShowIssuePath{ProjectID: projectID, Ref: shortID}})
 	if err != nil {
-		return issueTarget{}, daemonError(err)
+		return issueTarget{}, issueReadError(err)
 	}
 	if response.JSON200 == nil {
 		return issueTarget{}, errors.New("kata daemon returned no Issue")

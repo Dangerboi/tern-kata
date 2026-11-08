@@ -15,8 +15,8 @@ expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 picker_projects_entry="[data-id='layer.collections.list.projects']"
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-expect_tree "$picker_items" '.ok and .count == 8 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Views" and .nodes[2].text == "Projects" and .nodes[-1].text == "New Project"'
-expect_tree "$picker_items" '.nodes[-2].text == "Restore a deleted Issue" and .nodes[-3].text == "Daemons" and .nodes[-4].text == "Federation" and .nodes[-5].text == "Credentials"'
+expect_tree "$picker_items" '.ok and .count == 9 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Views" and .nodes[2].text == "Projects" and .nodes[-1].text == "New Project"'
+expect_tree "$picker_items" '.nodes[-2].text == "Restore a deleted Issue" and .nodes[-3].text == "Config" and .nodes[-4].text == "Daemons" and .nodes[-5].text == "Federation" and .nodes[-6].text == "Credentials"'
 expect_tree "[data-id^='layer.collections.list.project.']" '.ok and .count == 1'
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("open Collection") and contains("esc close"))'
 ctl key End

@@ -101,6 +101,8 @@ type StartAgent struct {
 	// team's coordinator (see AgentMessaging).
 	Coordinator  string
 	Coordinating bool
+	// Role carries what the prompt says of the team: the parent's ref for a child, the children and the limit for the coordinator.
+	Role TeamRole
 }
 
 func (StartAgent) cmd() {}
