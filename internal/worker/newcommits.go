@@ -24,7 +24,8 @@ import (
 // reported succeeded, whoever asked for it. A failed, cancelled or held run leaves it, and so does a skip.
 
 const (
-	// gitTimeout bounds each git command, so a stuck checkout blocks the job instead of the worker.
+	// gitTimeout bounds one git command and, as the deadline of a whole gate check, all the commands of that check, so a
+	// stuck checkout holds up its Project's admission for at most this long.
 	gitTimeout = 30 * time.Second
 	// maxPromptCommits, maxCommitSubject and maxCommitListBytes bound the commit list handed to the agent.
 	maxPromptCommits   = 30
@@ -85,7 +86,7 @@ func (w *Worker) noteCommit(j *Journal) {
 	saved, ok, err := w.loadCommit(j.ProjectUID, j.JobUID)
 	if err != nil {
 		w.opt.Log("%v; it is replaced by the commit of run %s", err, j.RunUID)
-	} else if ok && saved.StartedAt.After(j.StartedAt) {
+	} else if ok && saved.RunUID != "" && saved.StartedAt.After(j.StartedAt) {
 		return
 	}
 	if err := w.saveCommit(j.ProjectUID, j.JobUID, savedCommit{Commit: j.StartCommit, RunUID: j.RunUID, StartedAt: j.StartedAt}); err != nil {
@@ -123,8 +124,10 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 		if msg, _, _ := strings.Cut(strings.TrimSpace(stderr.String()), "\n"); msg != "" {
 			e.Msg = fmt.Sprintf("git %s: %s", args[0], msg)
 		}
-		if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			e.Msg = fmt.Sprintf("git %s did not finish within %s", args[0], gitTimeout)
+		} else if ctx.Err() != nil {
+			e.Msg = fmt.Sprintf("git %s was cancelled", args[0])
 		}
 		return "", e
 	}
@@ -133,8 +136,18 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 
 // headCommit is the commit the checkout's branch is at.
 func headCommit(ctx context.Context, dir string) (string, error) {
-	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-		return "", fmt.Errorf("the checkout %s is not a directory", dir)
+	statted := make(chan bool, 1)
+	go func() {
+		info, err := os.Stat(dir)
+		statted <- err == nil && info.IsDir()
+	}()
+	select {
+	case ok := <-statted:
+		if !ok {
+			return "", fmt.Errorf("the checkout %s is not a directory", dir)
+		}
+	case <-ctx.Done():
+		return "", fmt.Errorf("the checkout %s could not be read: %w", dir, ctx.Err())
 	}
 	tip, err := git(ctx, dir, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
 	if err != nil {
@@ -221,7 +234,7 @@ func folderWords(folders []string) string {
 
 // commitGate is the New commits check admission makes for a scheduled occurrence: skip is why nothing new is there to
 // work on, blocked why the commits cannot be counted. The first occurrence records the branch tip and skips.
-func (w *Worker) commitGate(ps *projectState, jobUID, checkoutKey string, folders []string) (skip, blocked string) {
+func (w *Worker) commitGate(ctx context.Context, ps *projectState, jobUID, checkoutKey string, folders []string) (skip, blocked string) {
 	if checkoutKey == "" {
 		return "", "it asks for new commits but names no checkout (checkout_key)"
 	}
@@ -229,7 +242,8 @@ func (w *Worker) commitGate(ps *projectState, jobUID, checkoutKey string, folder
 	if !ok {
 		return "", fmt.Sprintf("it asks for new commits in checkout %q, which is not available to Project %s in worker.toml", checkoutKey, ps.cfg.Name)
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, gitTimeout) // one deadline for the whole check
+	defer cancel()
 	tip, err := headCommit(ctx, dir)
 	if err != nil {
 		return "", err.Error()

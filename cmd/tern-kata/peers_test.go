@@ -183,7 +183,7 @@ func TestMessageFromAnAgentWithoutATeammateNameWritesNothing(t *testing.T) {
 
 func TestMessageToAnAddressHoldingAnUnreadOneWritesNothingAndExitsNonZero(t *testing.T) {
 	s := &sender{answer: func(c model.SendAgentMessage) model.AgentMessageSent {
-		return model.AgentMessageSent{UID: c.UID, Held: `{"from":"dana"}`, Unread: "rebase first\nthen test"}
+		return model.AgentMessageSent{UID: c.UID, Held: `{"from":"dana"}`, Unread: "rebase first\nthen test", UnreadFrom: "dana-phone"}
 	}}
 	var out bytes.Buffer
 	err := runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-1", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
@@ -191,7 +191,7 @@ func TestMessageToAnAddressHoldingAnUnreadOneWritesNothingAndExitsNonZero(t *tes
 	if !errors.As(err, &failed) {
 		t.Fatalf("err %v, want a subcommandError (exit 1)", err)
 	}
-	if !strings.Contains(out.String(), "dana/omp-1 on demo#aa11 holds a message it has not cleared (rebase first); nothing was written there.") {
+	if !strings.Contains(out.String(), "dana/omp-1 on demo#aa11 holds a message from dana-phone it has not cleared (rebase first); nothing was written there. To clear it: kata notify demo#aa11 --to dana/omp-1 --clear") {
 		t.Errorf("output %q", out.String())
 	}
 	if len(s.sent) != 1 || s.sent[0].Replacing != "" {
@@ -511,7 +511,12 @@ func TestMessageToAnUnknownTargetNamesWhyTheOtherHostsCouldNotBeRead(t *testing.
 	}
 	s = &sender{issueErr: errors.New("daemon unreachable")}
 	err = runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "demo#aa11", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
+	if err != nil || len(s.sent) != 1 || !strings.Contains(out.String(), "daemon unreachable") {
+		t.Errorf("lookup failing: err %v, sent %+v, output %q, want the local agent messaged and the failure said", err, s.sent, out.String())
+	}
+	s = &sender{issueErr: errors.New("daemon unreachable")}
+	err = runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "demo#zz99", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
 	if err == nil || !strings.Contains(err.Error(), "daemon unreachable") || len(s.sent) != 0 {
-		t.Errorf("lookup failing: err %v, sent %+v, want nothing written", err, s.sent)
+		t.Errorf("lookup failing with no local target: err %v, sent %+v, want the read error", err, s.sent)
 	}
 }

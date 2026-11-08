@@ -50,7 +50,9 @@ type AgentMessageState struct {
 	Text           string
 	Caret          Caret
 	Held, Unread   string
-	Err            error
+	// HeldFrom is the actor that wrote the held message ("" when it does not read as one).
+	HeldFrom string
+	Err      error
 	// Re is the UID of the comment the message asks the agent to answer, "" for a plain message.
 	Re string
 
@@ -96,18 +98,22 @@ type AgentMessageSent struct {
 	Address string
 	Held    string
 	Unread  string
-	Err     error
+	// UnreadFrom is the actor that wrote the held message ("" when it does not read as a request).
+	UnreadFrom string
+	Err        error
 }
 
 func (AgentMessageSent) msg() {}
 
 // ClearAgentAddress clears whatever is left at an exited agent's Address on its Issue, guarded on the value read, so a write that
-// lands in between is not lost unseen.
+// lands in between is not lost unseen, and removes the agent's Agent record (found by Block). An agent with no Address has only
+// its record removed.
 type ClearAgentAddress struct {
 	Workspace string
 	ProjectID int64
 	UID       string
 	Actor     string
+	Block     string
 	Address   string
 }
 
@@ -115,8 +121,9 @@ func (ClearAgentAddress) cmd() {}
 
 // AgentAddressCleared answers ClearAgentAddress for the Issue with UID.
 type AgentAddressCleared struct {
-	UID string
-	Err error
+	UID   string
+	Block string
+	Err   error
 }
 
 func (AgentAddressCleared) msg() {}
@@ -311,7 +318,7 @@ func agentMessageKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == AgentMessageReplace:
 		return sendAgentMessage(m, f.Held)
 	case bound && binding.Action == AgentMessageKeep:
-		f.Held, f.Unread = "", ""
+		f.Held, f.Unread, f.HeldFrom = "", "", ""
 	case bound && binding.Action == AgentMessageCancel:
 		m.AgentMessage = AgentMessageState{}
 	case mode == ModeAgentQuickReply:
@@ -370,7 +377,7 @@ func agentMessageSent(m Model, msg AgentMessageSent) (Model, []Cmd) {
 	case msg.Err != nil:
 		f.Err = msg.Err
 	case msg.Held != "":
-		f.Held, f.Unread = msg.Held, msg.Unread
+		f.Held, f.Unread, f.HeldFrom = msg.Held, msg.Unread, msg.UnreadFrom
 	default:
 		m.Notice = fmt.Sprintf("Sent the message to %s on %s.", f.Agent, f.IssueRef)
 		m.AgentMessage = AgentMessageState{}
@@ -378,17 +385,18 @@ func agentMessageSent(m Model, msg AgentMessageSent) (Model, []Cmd) {
 	return m, nil
 }
 
-// clearGoneAddresses clears what is left at the address of each agent this Pane started that has exited or whose block went, once
-// per agent: nobody reads that address again. The record of the agents cleared keeps only those still mapped or gone.
+// clearGoneAddresses clears what is left at the address of each agent this Pane started that has exited or whose block went, and
+// removes its Agent record (an agent with no address has one too), once per agent: nobody reads that address again. A clear that
+// failed is asked again at the next sweep. The record of the agents cleared keeps only those still mapped or gone.
 func clearGoneAddresses(m Model) (Model, []Cmd) {
 	var cmds []Cmd
 	clearOnce := func(e AgentEntry) {
 		project := m.projectOf(e)
-		if e.Address == "" || project == 0 || slices.Contains(m.addressesCleared, e.Block) {
+		if project == 0 || slices.Contains(m.addressesCleared, e.Block) || slices.Contains(m.addressesClearing, e.Block) {
 			return
 		}
-		m.addressesCleared = append(slices.Clip(m.addressesCleared), e.Block)
-		cmds = append(cmds, ClearAgentAddress{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Address: e.Address})
+		m.addressesClearing = append(slices.Clip(m.addressesClearing), e.Block)
+		cmds = append(cmds, ClearAgentAddress{Workspace: m.Workspace, ProjectID: project, UID: e.IssueUID, Actor: m.Actor, Block: e.Block, Address: e.Address})
 	}
 	for _, e := range m.AgentGone {
 		clearOnce(e)
@@ -410,6 +418,10 @@ func (m Model) addressForgotten(block string) bool {
 }
 
 func agentAddressCleared(m Model, msg AgentAddressCleared) Model {
+	m.addressesClearing = slices.DeleteFunc(slices.Clone(m.addressesClearing), func(b string) bool { return b == msg.Block })
+	if msg.Err == nil && msg.Block != "" {
+		m.addressesCleared = append(slices.Clip(m.addressesCleared), msg.Block)
+	}
 	if msg.Err != nil {
 		m.Notice = fmt.Sprintf("Cannot clear the message left for an agent that exited: %s", msg.Err)
 	}

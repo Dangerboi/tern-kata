@@ -343,6 +343,14 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 	if i := teamIndex(settled, t.ParentUID); i >= 0 {
 		t = settled[i]
 	}
+	state, err := g.stateDir()
+	if err != nil {
+		return err
+	}
+	hostID, err := ReadHostID(state)
+	if err != nil {
+		return err
+	}
 	var parent *gen.ShowIssueResponseBody
 	var ready []gen.IssueOut
 	if _, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
@@ -370,7 +378,8 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 	}
 	var candidates []gen.IssueOut
 	for _, c := range ready {
-		if childOf[c.UID] && c.ProjectID == t.ProjectID && !t.Started(c.UID) && !issueHasAgent(entries, cmd.Exited, c.UID) {
+		if childOf[c.UID] && c.ProjectID == t.ProjectID && !t.Started(c.UID) && !issueHasAgent(entries, cmd.Exited, c.UID) &&
+			model.RemoteHostOn(c.Metadata, hostID) == "" {
 			candidates = append(candidates, c)
 		}
 	}
@@ -572,7 +581,7 @@ func (g *Gateway) ReadTeamFiles() ([]model.Team, []model.AgentEntry, []model.Age
 }
 
 // ReadTeamKids reads the children of the team's parent and which of them are ready, as the queue reads them.
-func (c *Client) ReadTeamKids(ctx context.Context, cmd model.LoadTeamKids) (model.TeamKidsLoaded, error) {
+func (c *Client) ReadTeamKids(ctx context.Context, hostID string, cmd model.LoadTeamKids) (model.TeamKidsLoaded, error) {
 	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.ParentUID)
 	if err != nil {
 		return model.TeamKidsLoaded{}, daemonError(err)
@@ -592,7 +601,8 @@ func (c *Client) ReadTeamKids(ctx context.Context, cmd model.LoadTeamKids) (mode
 	}
 	kids := make([]model.TeamKid, 0, len(shown.Children))
 	for _, i := range shown.Children {
-		kids = append(kids, model.TeamKid{UID: i.UID, Ref: i.QualifiedID, ProjectID: i.ProjectID, Closed: i.Status == "closed", Ready: ready[i.UID]})
+		kids = append(kids, model.TeamKid{UID: i.UID, Ref: i.QualifiedID, ProjectID: i.ProjectID, Closed: i.Status == "closed", Ready: ready[i.UID],
+			RemoteHost: model.RemoteHostOn(i.Metadata, hostID)})
 	}
 	return model.TeamKidsLoaded{Kids: kids}, nil
 }

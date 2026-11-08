@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	g "go.kenn.io/kata/pkg/client/generated"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
@@ -587,5 +589,43 @@ func TestAPaneOfAnotherActorDoesNotDriveATeam(t *testing.T) {
 	h.close(h.children[0])
 	if legacy := as[model.TeamsDriven](t, run(t, h.gateway, model.DriveTeams{Workspace: h.workspace, PaneBlock: "7", Actor: "erin", BoundProjectID: h.project.ID})); legacy.Err != nil {
 		t.Fatal(legacy.Err)
+	}
+}
+
+func TestAChildWithAnAgentOnAnotherHostIsNotStarted(t *testing.T) {
+	h := newTeamHost(t, 2)
+	h.startTeam(2)
+	hostID, err := ReadHostID(h.dirs.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := model.AgentRecord{Address: "dana/omp-9", Host: "desk", HostID: "feed0001", Block: "9", Name: "omp", Actor: "dana", MessageFrom: []string{}}
+	own := model.AgentRecord{Address: "dana/omp-3", Host: "laptop", HostID: hostID, Block: "3", Name: "omp", Actor: "dana", MessageFrom: []string{}}
+	for uid, r := range map[string]model.AgentRecord{h.children[0]: record, h.children[1]: own} {
+		_, err = h.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+			PathParams: &g.PatchIssueMetadataPath{ProjectID: h.project.ID, Ref: uid},
+			Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{model.AgentRecordKey(r.HostID, r.Block): r}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := h.drive(h.gateway)
+	if len(got.Started) != 1 || got.Started[0].IssueUID != h.children[1] {
+		t.Fatalf("started %+v, want only the child whose agent is not on another host (a record of this host id does not hold a child)", got.Started)
+	}
+	kids := as[model.TeamKidsLoaded](t, run(t, h.gateway, model.LoadTeamKids{Workspace: h.workspace, ProjectID: h.project.ID, ParentUID: h.parent}))
+	if kids.Err != nil {
+		t.Fatal(kids.Err)
+	}
+	rows := model.TeamRows(h.team(), nil, nil, kids.Kids, time.Now())
+	found := false
+	for _, r := range rows {
+		if r.UID == h.children[0] {
+			found = r.State == model.TeamChildOnHost("desk")
+		}
+	}
+	if !found {
+		t.Fatalf("rows %+v, want the first child as having an agent on desk", rows)
 	}
 }

@@ -379,7 +379,7 @@ func TestAMessageToAnAgentIsWrittenOnlyOverWhatThePersonAgreedToReplace(t *testi
 	}
 	// The agent has not cleared it: a second message writes nothing and says what is held.
 	held := send("no, the third", "")
-	if held.Err != nil || held.Held != first.Slot.Raw || held.Unread != "use the second table" {
+	if held.Err != nil || held.Held != first.Slot.Raw || held.Unread != "use the second table" || held.UnreadFrom != "dana" {
 		t.Fatalf("second message over an unread one: %+v", held)
 	}
 	if got := slot(); got.Slot.Message != "use the second table" {

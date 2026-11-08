@@ -123,6 +123,8 @@ func (AgentStarted) msg() {}
 // PaneBlock is this Pane's block: an entry whose starting Pane is no longer a live block is adopted by it ("" adopts nothing).
 // Seq numbers the request in the order the Pane asked; the answer echoes it.
 type PruneAgents struct {
+	// Workspace is the Pane's: the records of this host id on the open Issues of its Project are reconciled with agents.json.
+	Workspace string
 	PaneBlock string
 	Seq       int64
 }

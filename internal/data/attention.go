@@ -154,7 +154,7 @@ func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessag
 		if held && (expect == nil || raw != *expect) {
 			sent := model.AgentMessageSent{UID: cmd.UID, Address: cmd.Address, Held: raw}
 			if slot, err := model.ReadNotificationSlot(key, raw); err == nil {
-				sent.Unread = slot.Message
+				sent.Unread, sent.UnreadFrom = slot.Message, slot.From
 			}
 			return sent, nil
 		}

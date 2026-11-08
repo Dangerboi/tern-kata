@@ -199,7 +199,7 @@ func TestTheGateSkipsOrBlocksOnTheNewCommitsCheckAndAdmitsWhenThereAreCommits(t 
 	verdict := func() (string, string) { return "", "" }
 	r := newConditionRig(created)
 	s := r.schedule()
-	s.checkCommits = func(jobUID, key string, folders []string) (string, string) {
+	s.checkCommits = func(_ context.Context, jobUID, key string, folders []string) (string, string) {
 		gotKey, gotFolders = key, folders
 		return verdict()
 	}
@@ -249,5 +249,75 @@ func TestThePromptListsTheNewCommitsBeforeTheTaskAndOnlyWhenThereAreSome(t *test
 	section := strings.Index(got, "# New commits")
 	if section < 0 || section > strings.Index(got, "# Task") || !strings.Contains(got, "- abc1234 Fix the parser\n- def5678 Add docs\n") {
 		t.Fatalf("prompt:\n%s", got)
+	}
+}
+
+func TestASucceededRunReplacesTheTipAFirstOccurrenceSavedEvenWhenItStartedBeforeIt(t *testing.T) {
+	w := &Worker{opt: Options{Dirs: Dirs{State: t.TempDir()}, Log: func(string, ...any) {}}}
+	at := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	tip, runStart := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	if err := w.saveCommit("P", "J", savedCommit{Commit: tip, StartedAt: at}); err != nil { // the first occurrence's note: no run
+		t.Fatal(err)
+	}
+	w.noteCommit(&Journal{RunUID: "manual", ProjectUID: "P", JobUID: "J", StartCommit: runStart, StartedAt: at.Add(-time.Second), Outcome: &Outcome{Status: cronjob.RunSucceeded}})
+	if c, ok, err := w.loadCommit("P", "J"); err != nil || !ok || c.Commit != runStart || c.RunUID != "manual" {
+		t.Fatalf("saved %+v, %v; want the run's start commit", c, err)
+	}
+}
+
+func TestCatchupAllGivesTheNewCommitsToOneOccurrenceAndSkipsTheRest(t *testing.T) {
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	job := limitedJob(created, "all", map[string]any{"new_commits": true})
+	job.Definition.CheckoutKey = "repo"
+	r := newConditionRig(created)
+	s := r.schedule()
+	s.checkCommits = func(context.Context, string, string, []string) (string, string) { return "", "" }
+	r.plannedAt(s, []cronjob.Job{job}, created, created.Add(3*time.Hour))
+	s.admitDue(context.Background())
+	if r.journals.created != 1 || len(r.skips.records) != 2 || s.anyPending() {
+		t.Fatalf("%d runs, %d skips, pending %v; want one run and two skips", r.journals.created, len(r.skips.records), s.anyPending())
+	}
+	want := "the new commits went to the run of " + OccurrenceKey(created.Add(time.Hour))
+	for _, rec := range r.skips.records {
+		if rec.Condition != cronjob.ConditionNewCommits || rec.Reason != want {
+			t.Fatalf("skip %+v, want reason %q", rec, want)
+		}
+	}
+}
+
+func TestAGateReasonIsLoggedAgainWhenItRecursAfterTheGatePassed(t *testing.T) {
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	job := limitedJob(created, "skip", map[string]any{"new_commits": true})
+	job.Definition.CheckoutKey = "repo"
+	r := newConditionRig(created)
+	s := r.schedule()
+	why := "git is broken"
+	s.checkCommits = func(context.Context, string, string, []string) (string, string) { return "", why }
+	r.plannedAt(s, []cronjob.Job{job}, created, created.Add(time.Hour))
+	logged := len(r.logs)
+	s.admitDue(context.Background())
+	s.admitDue(context.Background())
+	if len(r.logs) != logged+1 {
+		t.Fatalf("logs %q, want the block once", r.logs[logged:])
+	}
+	why = ""
+	s.admit = func(context.Context, string, time.Time) (string, bool, error) {
+		return "", false, &busyError{msg: "full"}
+	}
+	s.admitDue(context.Background())
+	why = "git is broken"
+	s.admitDue(context.Background())
+	if len(r.logs) != logged+2 {
+		t.Fatalf("logs %q, want the same block logged again after the gate passed", r.logs[logged:])
+	}
+}
+
+func TestACancelledContextMakesTheCommitCheckFailAtOnce(t *testing.T) {
+	dir, _ := newRepo(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	if _, err := headCommit(ctx, dir); err == nil || time.Since(start) > 5*time.Second {
+		t.Fatalf("err %v after %s; want a prompt failure", err, time.Since(start))
 	}
 }

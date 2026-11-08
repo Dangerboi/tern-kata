@@ -329,7 +329,7 @@ func TestStoppingAnAgentOfThisPaneGivesItsIssueTheExitHandOff(t *testing.T) {
 	m.Issues[0].Labels = []string{"ready-for-agent"}
 	rest := slices.Delete(slices.Clone(m.AgentMapping), 0, 1)
 	m, cmds := model.Update(m, model.AgentStopped{Block: "11", Agents: rest})
-	if want := []model.Cmd{raise("u1", 3, "agent exited without closing kata-u1"), handOff(true)}; !reflect.DeepEqual(cmds, want) {
+	if want := []model.Cmd{clearAddress("u1", 3, "11", ""), raise("u1", 3, "agent exited without closing kata-u1"), handOff(true)}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %#v, want %v", cmds, want)
 	}
 	if slices.ContainsFunc(m.AgentMapping, func(e model.AgentEntry) bool { return e.Block == "11" }) || !strings.HasPrefix(m.Notice, "Stopped ") {
@@ -349,7 +349,7 @@ func TestStoppingAnAgentOfAnIssueWithoutReadyForAgentSwapsNoLabels(t *testing.T)
 func TestStoppingAgentOfAClosedIssueRaisesNothing(t *testing.T) {
 	m := openCard("closed", st("11", model.AgentWorking, ""))
 	rest := slices.Delete(slices.Clone(m.AgentMapping), 0, 1)
-	if _, cmds := model.Update(m, model.AgentStopped{Block: "11", Agents: rest}); len(cmds) != 0 {
+	if _, cmds := model.Update(m, model.AgentStopped{Block: "11", Agents: rest}); len(attentionWrites(cmds)) != 0 {
 		t.Errorf("cmds %#v", cmds)
 	}
 }

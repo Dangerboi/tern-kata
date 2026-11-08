@@ -194,6 +194,9 @@ type jobSchedule struct {
 	blockedBy         string
 	// lastSkip is the condition and reason of the job's previous skip, so a repeated skip is logged once.
 	lastSkip string
+	// gateErr is the reason the gate last blocked the job and has not passed since; lastErr holds it while it is the
+	// last thing logged.
+	gateErr string
 }
 
 // checkpoint is projects/<uid>/schedule/<job uid>.json (ADR-0006): everything decided through a time and the
@@ -279,7 +282,7 @@ type projectSchedule struct {
 	now         func() time.Time
 	// checkCommits is the New commits check (skip: why nothing is new, blocked: why it cannot be told); nil for a
 	// schedule built without it.
-	checkCommits func(jobUID, checkoutKey string, folders []string) (skip, blocked string)
+	checkCommits func(ctx context.Context, jobUID, checkoutKey string, folders []string) (skip, blocked string)
 }
 
 // save writes the job's state as its checkpoint, which never carries the pause mark: a saved job is scheduled.
@@ -310,8 +313,8 @@ func (w *Worker) newProjectSchedule(ps *projectState) *projectSchedule {
 		runSpend:      ledger.runSpend,
 		runsChanged:   ledger.reset,
 		now:           w.clock.Now,
-		checkCommits: func(jobUID, checkoutKey string, folders []string) (string, string) {
-			return w.commitGate(ps, jobUID, checkoutKey, folders)
+		checkCommits: func(ctx context.Context, jobUID, checkoutKey string, folders []string) (string, string) {
+			return w.commitGate(ctx, ps, jobUID, checkoutKey, folders)
 		},
 	}
 }
@@ -740,6 +743,7 @@ func (s *projectSchedule) admitDue(ctx context.Context) {
 		return strings.Compare(a.job, b.job)
 	})
 	blocked := map[string]bool{}
+	claimed := map[string]time.Time{} // New commits jobs: the occurrence admitted this pass, which took the commits
 	for _, st := range s.jobs {
 		st.blockedBy = ""
 	}
@@ -748,8 +752,14 @@ func (s *projectSchedule) admitDue(ctx context.Context) {
 		if blocked[d.job] || ctx.Err() != nil || s.stopped() {
 			continue
 		}
+		if at, ok := claimed[d.job]; ok {
+			if !s.skipForClaimedCommits(d.job, st, d.at, at) {
+				blocked[d.job] = true
+			}
+			continue
+		}
 		if st.gated() {
-			if !s.applyGate(d.job, st, d.at) {
+			if !s.applyGate(ctx, d.job, st, d.at) {
 				blocked[d.job] = st.blockedBy != ""
 				continue
 			}
@@ -759,6 +769,9 @@ func (s *projectSchedule) admitDue(ctx context.Context) {
 			st.pending = slices.DeleteFunc(st.pending, func(t time.Time) bool { return t.Equal(d.at) })
 			st.lastErr, st.waiting, st.wakeAt, st.parked = "", "", time.Time{}, nil
 			s.save(d.job, st)
+			if st.conditions.NewCommits {
+				claimed[d.job] = d.at
+			}
 			continue
 		}
 		var parked *parkedError

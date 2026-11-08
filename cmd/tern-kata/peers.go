@@ -200,9 +200,14 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 	if err != nil {
 		return subcommandError{err}
 	}
-	targets, err := messageTargets(plan, workspace, running, send)
+	targets, warning, err := messageTargets(plan, workspace, running, send)
 	if err != nil {
 		return subcommandError{err}
+	}
+	if warning != "" {
+		if _, err := fmt.Fprintln(out, warning); err != nil {
+			return err
+		}
 	}
 	verified := daemonVerified(workspace, send)
 	missed := 0
@@ -223,25 +228,31 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 
 // messageTargets finds who plan.TargetRef reaches. An address one of this host's agents holds needs no daemon read. Otherwise the
 // target is read as an Issue first (its records join the local agents on it), and when it names none, as an address among the
-// agents on other hosts in the Project agents lists. A read that fails is the error unless nothing else found the target, so a
-// local agent stays reachable by ref while the daemon cannot list the rest.
-func messageTargets(plan LaunchPlan, workspace string, running []model.IssueAgent, send func(model.Cmd) model.Msg) ([]model.IssueAgent, error) {
+// agents on other hosts in the Project agents lists. A read that fails is the error unless the local agents already reach the
+// target: then they get the message and warning says the agents on other hosts could not be read.
+func messageTargets(plan LaunchPlan, workspace string, running []model.IssueAgent, send func(model.Cmd) model.Msg) (targets []model.IssueAgent, warning string, err error) {
 	if slices.ContainsFunc(running, func(a model.IssueAgent) bool { return a.Address != "" && a.Address == plan.TargetRef }) {
-		return model.MessageTargets(running, plan.TargetRef, plan.InboxUser)
+		targets, err = model.MessageTargets(running, plan.TargetRef, plan.InboxUser)
+		return targets, "", err
 	}
 	onIssue := send(model.LoadRemoteAgents{Workspace: workspace, Issue: plan.TargetRef}).(model.RemoteAgentsLoaded)
 	if onIssue.Err != nil {
-		return nil, fmt.Errorf("cannot read the agents on other hosts: %w", onIssue.Err)
+		readErr := fmt.Errorf("cannot read the agents on other hosts: %w", onIssue.Err)
+		if local, localErr := model.MessageTargets(running, plan.TargetRef, plan.InboxUser); localErr == nil {
+			return local, readErr.Error() + "; messaging only the agents on this host.", nil
+		}
+		return nil, "", readErr
 	}
 	if !onIssue.NotFound {
-		return model.MessageTargets(append(slices.Clone(running), onIssue.Agents...), plan.TargetRef, plan.InboxUser)
+		targets, err = model.MessageTargets(append(slices.Clone(running), onIssue.Agents...), plan.TargetRef, plan.InboxUser)
+		return targets, "", err
 	}
 	scanned := send(model.LoadRemoteAgents{Workspace: workspace, ScopeRef: plan.ScopeRef}).(model.RemoteAgentsLoaded)
-	targets, err := model.MessageTargets(append(slices.Clone(running), scanned.Agents...), plan.TargetRef, plan.InboxUser)
+	targets, err = model.MessageTargets(append(slices.Clone(running), scanned.Agents...), plan.TargetRef, plan.InboxUser)
 	if err != nil && scanned.Err != nil && !errors.Is(scanned.Err, model.ErrNoRemoteScope) {
-		return nil, fmt.Errorf("%w; the agents on other hosts could not be read: %w", err, scanned.Err)
+		return nil, "", fmt.Errorf("%w; the agents on other hosts could not be read: %w", err, scanned.Err)
 	}
-	return targets, err
+	return targets, "", err
 }
 
 // daemonVerified reads, once and only when a target needs it, whether the daemon verifies the actor of every write: the Pane's own
@@ -288,7 +299,11 @@ func writeSlot(plan LaunchPlan, workspace string, a model.IssueAgent, text strin
 		return fmt.Sprintf("Cannot message %s on %s: %s", a.Address, place, sent.Err), false
 	case sent.Held != "":
 		unread, _, _ := strings.Cut(strings.TrimSpace(sent.Unread), "\n")
-		return fmt.Sprintf("%s on %s holds a message it has not cleared (%s); nothing was written there.", a.Address, place, unread), false
+		by := ""
+		if sent.UnreadFrom != "" {
+			by = " from " + sent.UnreadFrom
+		}
+		return fmt.Sprintf("%s on %s holds a message%s it has not cleared (%s); nothing was written there. To clear it: kata notify %s --to %s --clear", a.Address, place, by, unread, a.IssueRef, a.Address), false
 	}
 	return fmt.Sprintf("Sent the message to %s on %s.", a.Address, place), true
 }

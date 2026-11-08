@@ -23,6 +23,8 @@ type TeamKid struct {
 	ProjectID int64
 	Closed    bool
 	Ready     bool
+	// RemoteHost is the host of an agent another host started on the child (its Agent record); "" when there is none.
+	RemoteHost string
 }
 
 // LoadTeamKids reads the children of a team's parent, with which of them are ready.
@@ -84,6 +86,9 @@ const (
 	TeamChildNotReady     = "not ready"
 )
 
+// TeamChildOnHost is the state of an open child that has an agent on another host: the queue does not start a second one.
+func TeamChildOnHost(host string) string { return "has an agent on " + host }
+
 // TeamOnRef is the team whose parent ref names: its qualified ref (<project>#<short id>, also <project>/<short id>), its uid or
 // its short id, the forms AgentEntry.OnIssue takes.
 func TeamOnRef(teams []Team, ref string) (Team, bool) {
@@ -141,7 +146,7 @@ func TeamRows(t Team, entries []AgentEntry, states []AgentState, kids []TeamKid,
 		if alive {
 			agent = &a
 		}
-		rows = append(rows, otherChildRow(k.UID, k.Ref, k.ProjectID == t.ProjectID, agent, k.Ready))
+		rows = append(rows, otherChildRow(k.UID, k.Ref, k.ProjectID == t.ProjectID, agent, k.RemoteHost, k.Ready))
 	}
 	return rows
 }
@@ -171,14 +176,17 @@ func startedChildRow(c TeamChild, agent *IssueAgent, known, closed bool) TeamRow
 	return row
 }
 
-// otherChildRow is an open child the team did not start. agent is its live agent (nil when none runs).
-func otherChildRow(uid, ref string, sameProject bool, agent *IssueAgent, ready bool) TeamRow {
+// otherChildRow is an open child the team did not start. agent is its live agent (nil when none runs); remoteHost the host of an
+// agent on another host ("" when none).
+func otherChildRow(uid, ref string, sameProject bool, agent *IssueAgent, remoteHost string, ready bool) TeamRow {
 	row := TeamRow{UID: uid, Ref: ref}
 	switch {
 	case !sameProject:
 		row.State = TeamChildOtherProject
 	case agent != nil:
 		row.State, row.Address = teamAgentWords(*agent), agent.Address
+	case remoteHost != "":
+		row.State = TeamChildOnHost(remoteHost)
 	case ready:
 		row.State = TeamChildQueued
 	default:

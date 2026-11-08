@@ -37,6 +37,15 @@ func remoteAgentsIn(metadata map[string]any, hostID string) []RemoteAgent {
 	return agents
 }
 
+// RemoteHostOn is the label of the host of an agent another host id published on an Issue with this metadata, "" when there is none
+// (or hostID is not known).
+func RemoteHostOn(metadata map[string]any, hostID string) string {
+	if agents := remoteAgentsIn(metadata, hostID); len(agents) > 0 {
+		return agents[0].HostLabel()
+	}
+	return ""
+}
+
 // RemoteAgents lists the agents other hosts started on the Issue, oldest start first.
 func (m Model) RemoteAgents(issueUID string) []RemoteAgent {
 	issue := m.issueByUID(issueUID)

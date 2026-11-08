@@ -23,8 +23,8 @@ const (
 )
 
 // Conditions are what a due occurrence of an Adapter execute job must meet, read from options.conditions. The zero value
-// has no condition. Every field is one condition and is off at its zero value, so a later condition is one more field
-// and one more key in conditionKeys.
+// has no condition. Every field is one condition and is off at its zero value, so a later condition is one more field,
+// one more key in conditionKeys, one more test in Any, and one more row in the worker's condition table.
 type Conditions struct {
 	// RunsPerDay and RunsPerWeek are the most runs the job may start in a calendar day or week of its trigger's zone.
 	RunsPerDay  int
@@ -87,7 +87,7 @@ func (j Job) Conditions() (Conditions, error) {
 		if !present {
 			continue
 		}
-		d, err := dollars(v)
+		d, err := readDollars(v)
 		if err != nil {
 			return Conditions{}, fmt.Errorf("options.%s.%s must be an amount in dollars above 0, not %v", ConditionsKey, f.key, v)
 		}
@@ -102,8 +102,8 @@ func (j Job) Conditions() (Conditions, error) {
 	return c, nil
 }
 
-// dollars reads a JSON number that is a finite amount above 0, whatever Go type the decoder gave it.
-func dollars(v any) (float64, error) {
+// readDollars reads a JSON number that is a finite amount above 0, whatever Go type the decoder gave it.
+func readDollars(v any) (float64, error) {
 	var f float64
 	switch n := v.(type) {
 	case int:

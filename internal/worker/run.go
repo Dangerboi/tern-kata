@@ -148,7 +148,13 @@ func (w *Worker) recoverRun(ctx context.Context, ps *projectState, uid string) {
 // hold records an uncertain outcome: kata will get `unknown` with the reason first (ADR-0005).
 func (w *Worker) hold(j *Journal, reason, detail string) error {
 	_, err := w.store.Update(j.RunUID, "held", func(j *Journal) error {
-		return j.hold(reason, detail, w.clock.Now().UTC())
+		if err := j.hold(reason, detail, w.clock.Now().UTC()); err != nil {
+			return err
+		}
+		// What the run has cost so far, so a spend limit counts a held run: resumed attempts, concluded steps and the
+		// held attempt. A resume moves the held attempt into CarriedCost, so the sum stays the same.
+		j.Outcome.CostUSD = addCost(sumStepCost(j.Steps), addCost(j.CarriedCost, w.heldCost(j)))
+		return nil
 	})
 	return err
 }

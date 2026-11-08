@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"testing"
@@ -21,8 +22,8 @@ func addressClears(cmds []model.Cmd) []model.Cmd {
 	return slices.DeleteFunc(slices.Clone(cmds), func(c model.Cmd) bool { _, ok := c.(model.ClearAgentAddress); return !ok })
 }
 
-func clearAddress(uid string, project int64, address string) model.ClearAgentAddress {
-	return model.ClearAgentAddress{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", Address: address}
+func clearAddress(uid string, project int64, block, address string) model.ClearAgentAddress {
+	return model.ClearAgentAddress{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", Block: block, Address: address}
 }
 
 func TestAnAgentThatExitsHasWhatIsLeftAtItsAddressClearedOnce(t *testing.T) {
@@ -31,7 +32,7 @@ func TestAnAgentThatExitsHasWhatIsLeftAtItsAddressClearedOnce(t *testing.T) {
 		t.Fatalf("working agents cleared %v", got)
 	}
 	m, cmds = relay(t, m, st("11", "exited", ""), st("21", "exited", ""))
-	if got, want := addressClears(cmds), []model.Cmd{clearAddress("u1", 3, "dana/omp-11")}; !reflect.DeepEqual(got, want) {
+	if got, want := addressClears(cmds), []model.Cmd{clearAddress("u1", 3, "11", "dana/omp-11")}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("clears %v, want this Pane's exited agent only", got)
 	}
 	// The exit request is raised as before.
@@ -50,12 +51,32 @@ func TestAnAgentThatExitsHasWhatIsLeftAtItsAddressClearedOnce(t *testing.T) {
 
 func TestAnAgentWhoseBlockIsGoneHasItsAddressCleared(t *testing.T) {
 	m, _ := relay(t, addressPane(), st("11", "working", ""), st("13", "working", ""))
-	m.AgentMapping[3].Address = "" // an agent that is not omp has no address to clear
+	m.AgentMapping[3].Address = "" // an agent that is not omp has no address to clear, only a record to remove
 	m, cmds := pruned(m, "11", "13")
-	if got, want := addressClears(cmds), []model.Cmd{clearAddress("u1", 3, "dana/omp-11")}; !reflect.DeepEqual(got, want) {
+	if got, want := addressClears(cmds), []model.Cmd{clearAddress("u1", 3, "11", "dana/omp-11"), clearAddress("u2", 4, "13", "")}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("clears %v, want %v", got, want)
 	}
 	if _, cmds = model.Update(m, model.StreamEvent{}); len(addressClears(cmds)) != 0 {
 		t.Fatalf("the next pass cleared again: %v", cmds)
+	}
+}
+
+func TestAFailedClearIsAskedAgainAndASuccessfulOneIsNot(t *testing.T) {
+	m, _ := relay(t, addressPane(), st("11", "working", ""))
+	m, cmds := relay(t, m, st("11", "exited", ""))
+	if len(addressClears(cmds)) != 1 {
+		t.Fatalf("clears %v, want one", cmds)
+	}
+	if _, cmds = model.Update(m, model.StreamEvent{}); len(addressClears(cmds)) != 0 {
+		t.Fatalf("asked again while the first is unanswered: %v", cmds)
+	}
+	m, _ = model.Update(m, model.AgentAddressCleared{UID: "u1", Block: "11", Err: errors.New("daemon down")})
+	m, cmds = model.Update(m, model.StreamEvent{})
+	if got, want := addressClears(cmds), []model.Cmd{clearAddress("u1", 3, "11", "dana/omp-11")}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("after a failure clears %v, want %v", got, want)
+	}
+	m, _ = model.Update(m, model.AgentAddressCleared{UID: "u1", Block: "11"})
+	if _, cmds = model.Update(m, model.StreamEvent{}); len(addressClears(cmds)) != 0 {
+		t.Fatalf("asked again after a success: %v", cmds)
 	}
 }

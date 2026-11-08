@@ -136,6 +136,8 @@ type Model struct {
 	AgentMessage AgentMessageState
 	// addressesCleared are the blocks of this Pane's exited agents whose Agent address the Pane has cleared, while they are mapped or gone.
 	addressesCleared []string
+	// addressesClearing are the blocks whose clear is asked and not answered; a failed one is dropped here, not recorded as cleared.
+	addressesClearing []string
 	// agentFresh are the agents started since a request was asked, by block, with the number of the last request asked before the
 	// start: an answer that read the file before the start wrote the entry does not hold it, and that is no sign the agent is gone.
 	// Only an answer to a later request settles it.
@@ -379,7 +381,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = nil
 		m.agentAsks++
 		account := askAccount(&m)
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace}, LoadViews{}, PruneAgents{PaneBlock: m.PaneBlock, Seq: m.agentAsks}, account}
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace}, LoadViews{}, PruneAgents{Workspace: msg.Workspace, PaneBlock: m.PaneBlock, Seq: m.agentAsks}, account}
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case AgentStarted:

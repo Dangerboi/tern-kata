@@ -244,7 +244,11 @@ func (m Model) TeamRows(t Team) []TeamRow {
 			}
 		}
 		project, _, _ := strings.Cut(ref[uid], "#")
-		row := otherChildRow(uid, ref[uid], project == t.Project, agent, !slices.Contains(blockers[uid], "open"))
+		remoteHost := ""
+		if issue := m.issueByUID(uid); issue != nil {
+			remoteHost = RemoteHostOn(issue.Metadata, m.HostID)
+		}
+		row := otherChildRow(uid, ref[uid], project == t.Project, agent, remoteHost, !slices.Contains(blockers[uid], "open"))
 		if row.State == TeamChildQueued {
 			queued = append(queued, row)
 		} else {

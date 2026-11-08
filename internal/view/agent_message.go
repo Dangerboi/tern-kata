@@ -38,7 +38,7 @@ func agentMessageLayer(m model.Model) tern.Element {
 			unread = "(a value that does not read as a message)"
 		}
 		children = []tern.Element{
-			ui.Text{Common: ui.Common{Key: "held"}, Text: "The agent has not cleared its last message, and kata keeps one per Issue. Replace it?"},
+			ui.Text{Common: ui.Common{Key: "held"}, Text: heldText(f.HeldFrom)},
 			toneText("unread", ui.ToneMuted, unread),
 		}
 		buttons = []tern.Element{cardButton("replace", model.ModeAgentMessageReplace, model.AgentMessageReplace, "Replace it", true), cardButton("keep", model.ModeAgentMessageReplace, model.AgentMessageKeep, "Keep editing", false)}
@@ -130,4 +130,13 @@ func skippedAndClose(m model.Model, children []tern.Element, withClose bool) []t
 		children = append(children, buttonRow(cardButton("close", model.ModeAgentBroadcastOutcome, model.AgentMessageCancel, "Close", true)))
 	}
 	return children
+}
+
+// heldText is what the Message card says of the message the agent has not cleared; from is the actor that wrote it, "" when unknown.
+func heldText(from string) string {
+	by := ""
+	if from != "" {
+		by = ", written by " + from + ","
+	}
+	return "The agent has not cleared its last message" + by + " and kata keeps one per Issue. Replace it?"
 }

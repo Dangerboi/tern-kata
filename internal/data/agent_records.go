@@ -24,7 +24,7 @@ import (
 // HostIDFile holds the Host id in tern-kata's state folder.
 const HostIDFile = "host-id"
 
-// ReadHostID is the Host id kept in the state folder, made on the first call: random, written once, never changed (ADR-0018).
+// ReadHostID is the Host id kept in the state folder, made on the first call: random, written once, never changed (ADR-0018). An empty file is made again.
 // Two Panes asking at once both get the id the first one linked into place.
 func ReadHostID(state string) (string, error) {
 	path := filepath.Join(state, HostIDFile)
@@ -51,8 +51,17 @@ func ReadHostID(state string) (string, error) {
 		return "", err
 	}
 	// A hard link fails when the file exists, so the id another Pane just made is never replaced.
-	if err := os.Link(tmp.Name(), path); err != nil && !errors.Is(err, fs.ErrExist) {
-		return "", err
+	if err := os.Link(tmp.Name(), path); err != nil {
+		if !errors.Is(err, fs.ErrExist) {
+			return "", err
+		}
+		// The file exists. One another Pane has just filled is kept; an empty one (a crash, a truncated copy) is replaced.
+		if id, err := readHostIDFile(path); err != nil || id != "" {
+			return id, err
+		}
+		if err := os.Rename(tmp.Name(), path); err != nil {
+			return "", err
+		}
 	}
 	id, err := readHostIDFile(path)
 	if err == nil && id == "" {
@@ -265,8 +274,8 @@ func (g *Gateway) removeAgentRecordsOf(ctx context.Context, entries []model.Agen
 	return errors.Join(errs...)
 }
 
-// removeAgentRecordAt removes the record this host id published for the agent at address on an Issue: the exit of an agent.
-func (g *Gateway) removeAgentRecordAt(ctx context.Context, c *Client, projectID int64, uid, address string) error {
+// removeAgentRecordOf removes the record this host id published for the agent in block on an Issue: the exit of an agent.
+func (g *Gateway) removeAgentRecordOf(ctx context.Context, c *Client, projectID int64, uid, block string) error {
 	state, err := g.stateDir()
 	if err != nil {
 		return err
@@ -275,7 +284,8 @@ func (g *Gateway) removeAgentRecordAt(ctx context.Context, c *Client, projectID 
 	if err != nil {
 		return err
 	}
-	return c.removeAgentRecords(ctx, projectID, uid, hostID, func(_ string, r *model.AgentRecord) bool { return r != nil && r.Address == address })
+	key := model.AgentRecordKey(hostID, block)
+	return c.removeAgentRecords(ctx, projectID, uid, hostID, func(k string, _ *model.AgentRecord) bool { return k == key })
 }
 
 func (g *Gateway) stateDir() (string, error) {
@@ -321,40 +331,66 @@ func (g *Gateway) noteAddressHolder(file string, e model.AgentEntry, usedBy stri
 	return e, err
 }
 
-// issueRecordsListed is what a read of every Issue found of Agent records: per Issue its Project and the record keys it holds.
+// issueRecordsListed is what a read of Issues found of Agent records: per Issue its Project and the record keys it holds.
 type issueRecordsListed struct {
 	projectID int64
 	records   map[string]json.RawMessage
 }
 
-// listIssueRecords reads every Issue of the daemon, closed ones too, with the records each holds, as ListAttention reads the
-// requests: one read of all Projects.
-func (c *Client) listIssueRecords(ctx context.Context) (map[string]issueRecordsListed, error) {
-	unlimited := int64(0)
-	listed, err := c.ListAllIssuesWithResponse(ctx, &g.ListAllIssuesRequestOptions{Query: &g.ListAllIssuesQuery{Limit: &unlimited}})
+// listIssueRecords reads the Issues the Pane shows, as its Project's open Issues page by page (none when the workspace is bound
+// to no Project), and the Issues of entries, with the records each holds. Nothing else of the daemon is read.
+func (c *Client) listIssueRecords(ctx context.Context, workspace string, entries []model.AgentEntry) (map[string]issueRecordsListed, error) {
+	issues := map[string]issueRecordsListed{}
+	loaded, err := c.ReadProject(ctx, workspace)
 	if err != nil {
-		return nil, daemonError(err)
-	}
-	var body struct {
-		Issues []struct {
-			UID       string                     `json:"uid"`
-			ProjectID int64                      `json:"project_id"`
-			Metadata  map[string]json.RawMessage `json:"metadata"`
-		} `json:"issues"`
-	}
-	if err := json.Unmarshal(listed.Body, &body); err != nil {
 		return nil, err
 	}
-	issues := map[string]issueRecordsListed{}
-	for _, issue := range body.Issues {
-		issues[issue.UID] = issueRecordsListed{projectID: issue.ProjectID, records: recordsOf(issue.Metadata)}
+	if loaded.Project.UID != "" {
+		open, limit := g.ListIssuesQueryStatusOpen, int64(remoteAgentsPage)
+		var cursor *string
+		for {
+			page, err := c.ListIssuesWithResponse(ctx, &g.ListIssuesRequestOptions{
+				PathParams: &g.ListIssuesPath{ProjectID: loaded.Project.ID}, Query: &g.ListIssuesQuery{Status: &open, Limit: &limit, Cursor: cursor}})
+			if err != nil {
+				return nil, daemonError(err)
+			}
+			if page.JSON200 == nil {
+				return nil, errors.New("kata daemon returned no Issues")
+			}
+			var body struct {
+				Issues []struct {
+					UID       string                     `json:"uid"`
+					ProjectID int64                      `json:"project_id"`
+					Metadata  map[string]json.RawMessage `json:"metadata"`
+				} `json:"issues"`
+			}
+			if err := json.Unmarshal(page.Body, &body); err != nil {
+				return nil, err
+			}
+			for _, issue := range body.Issues {
+				issues[issue.UID] = issueRecordsListed{projectID: issue.ProjectID, records: recordsOf(issue.Metadata)}
+			}
+			if cursor = page.JSON200.NextCursor; cursor == nil || *cursor == "" {
+				break
+			}
+		}
+	}
+	for _, e := range entries {
+		if _, seen := issues[e.IssueUID]; seen || e.ProjectID == 0 || e.IssueUID == "" {
+			continue
+		}
+		records, err := c.issueRecords(ctx, e.ProjectID, e.IssueUID)
+		if err != nil {
+			continue // an Issue that cannot be read now keeps its records until the next reconcile
+		}
+		issues[e.IssueUID] = issueRecordsListed{projectID: e.ProjectID, records: records}
 	}
 	return issues, nil
 }
 
 // syncAgentRecords is the Pane's reconcile of its records with agents.json (read again after the slow listing of records, so an
 // agent started meanwhile keeps its record): a mapped agent whose record is missing or differs gets one (written, unless another host id's record holds its Address, which is kept on the entry), and a record carrying
-// this host id with no entry goes. An agent whose state says it exited is not published again: its record went with its address.
+// this host id with no entry, or whose agent exited, goes. An agent whose state says it exited is not published again: its record went with its address.
 // Records of other host ids are never touched.
 func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs agentDirs, file string) error {
 	host, err := g.hostOf(dirs)
@@ -368,7 +404,11 @@ func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs a
 	}
 	var errs []error
 	err = g.withDaemon(ctx, workspace, func(c *Client) error {
-		issues, err := c.listIssueRecords(ctx)
+		listed, err := ReadAgents(file)
+		if err != nil {
+			return err
+		}
+		issues, err := c.listIssueRecords(ctx, workspace, listed)
 		if err != nil {
 			return err
 		}
@@ -385,7 +425,7 @@ func (g *Gateway) syncAgentRecords(ctx context.Context, workspace string, dirs a
 			errs = append(errs, c.dropAgentRecords(ctx, issue.projectID, uid, host.ID, issue.records, func(key string, _ *model.AgentRecord) bool {
 				_, block, _ := model.ParseAgentRecordKey(key)
 				_, held := mapped[block]
-				return !held
+				return !held || exited[block]
 			}))
 		}
 		for _, e := range fresh {

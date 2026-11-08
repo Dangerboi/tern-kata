@@ -2,6 +2,7 @@ package worker
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -211,7 +212,7 @@ func (st *jobSchedule) gated() bool { return st.conditions.Any() || st.condition
 // no; blocked is the reason when they cannot be checked; both empty admit the occurrence. An occurrence that already has
 // a run journal is always admitted: a crash left it pending after its journal was saved, and a skip never contradicts a
 // run that is journalled.
-func (s *projectSchedule) gate(st *jobSchedule, jobUID string, at time.Time) (skip *Skip, blocked string) {
+func (s *projectSchedule) gate(ctx context.Context, st *jobSchedule, jobUID string, at time.Time) (skip *Skip, blocked string) {
 	journalled, err := s.journalExists(RunUID(jobUID, OccurrenceKey(at), at))
 	if err != nil {
 		return nil, fmt.Sprintf("cannot tell whether %s already has a run: %v", OccurrenceKey(at), err)
@@ -260,7 +261,7 @@ func (s *projectSchedule) gate(st *jobSchedule, jobUID string, at time.Time) (sk
 		return skip, blocked
 	}
 	if st.conditions.NewCommits {
-		reason, why := s.checkCommits(jobUID, st.checkoutKey, st.conditions.Folders)
+		reason, why := s.checkCommits(ctx, jobUID, st.checkoutKey, st.conditions.Folders)
 		if why != "" {
 			return nil, fmt.Sprintf("its new commits cannot be checked: %s", why)
 		}
@@ -322,8 +323,8 @@ func spendWindows(c cronjob.Conditions, loc *time.Location, now time.Time, runs 
 	return out
 }
 
-// dollars writes an amount as cents, or to the significant digits of a smaller one.
-func dollars(x float64) string {
+// formatDollars writes an amount as cents, or to the significant digits of a smaller one.
+func formatDollars(x float64) string {
 	if x != 0 && x < 0.01 {
 		return fmt.Sprintf("$%.4f", x)
 	}
@@ -355,7 +356,7 @@ func (s *projectSchedule) gateSpend(st *jobSchedule, jobUID string, at, now time
 		if w.Per == "week" {
 			condition = cronjob.ConditionSpendPerWeek
 		}
-		reason := fmt.Sprintf("limit of %s per %s reached: %s spent since %s", dollars(w.Limit), w.Per, dollars(w.Spent), w.Since.Format("2006-01-02 15:04 MST"))
+		reason := fmt.Sprintf("limit of %s per %s reached: %s spent since %s", formatDollars(w.Limit), w.Per, formatDollars(w.Spent), w.Since.Format("2006-01-02 15:04 MST"))
 		if note := partialNote(w.Unreported); note != "" {
 			reason += " (" + note + ")"
 		}
@@ -449,10 +450,10 @@ func (l *runLedger) runSpend(jobUID string) ([]RunSpend, error) {
 			continue
 		}
 		r := RunSpend{Start: j.StartedAt}
-		if j.Outcome != nil {
+		if j.Outcome != nil { // an outcome already holds the carried cost (withCarried)
 			r.CostUSD = j.Outcome.CostUSD
 		} else {
-			r.CostUSD = sumStepCost(j.Steps) // a workflow still going has the cost of its finished steps
+			r.CostUSD = addCost(j.CarriedCost, sumStepCost(j.Steps)) // a run still going: its resumed attempts' cost and its finished steps'
 		}
 		runs = append(runs, r)
 	}
@@ -487,11 +488,11 @@ func (w *Worker) journalExists(runUID string) (bool, error) {
 // settles the occurrence like an admitted one, so a crash between the two skips it once. A condition that cannot be
 // checked, or a skip that cannot be recorded, leaves the occurrence pending and marks the job blocked; the message is
 // logged once until it changes, as a refusal is.
-func (s *projectSchedule) applyGate(jobUID string, st *jobSchedule, at time.Time) bool {
+func (s *projectSchedule) applyGate(ctx context.Context, jobUID string, st *jobSchedule, at time.Time) bool {
 	if s.runsChanged != nil {
 		s.runsChanged() // the previous occurrence may have created a run journal
 	}
-	skip, why := s.gate(st, jobUID, at)
+	skip, why := s.gate(ctx, st, jobUID, at)
 	if skip != nil {
 		if err := s.skips.Add(*skip); err != nil {
 			why = fmt.Sprintf("the skip of %s cannot be recorded: %v", OccurrenceKey(at), err)
@@ -499,16 +500,30 @@ func (s *projectSchedule) applyGate(jobUID string, st *jobSchedule, at time.Time
 	}
 	if why != "" {
 		st.blockedBy = why
+		st.gateErr = why
 		if why != st.lastErr {
 			st.lastErr = why
 			s.log("job %q: %s", st.name, why)
 		}
 		return false
 	}
+	if st.gateErr != "" { // the gate passes again: its reason is logged afresh if the cause comes back
+		if st.lastErr == st.gateErr {
+			st.lastErr = ""
+		}
+		st.gateErr = ""
+	}
 	if skip == nil {
 		st.lastSkip = ""
 		return true
 	}
+	s.settleSkip(jobUID, st, at, skip)
+	return false
+}
+
+// settleSkip settles an occurrence whose skip record is saved: it leaves the pending list like an admitted one, and the
+// skip is logged unless it repeats the job's previous one.
+func (s *projectSchedule) settleSkip(jobUID string, st *jobSchedule, at time.Time, skip *Skip) {
 	st.pending = slices.DeleteFunc(st.pending, func(t time.Time) bool { return t.Equal(at) })
 	st.lastErr, st.waiting, st.wakeAt, st.parked = "", "", time.Time{}, nil
 	s.save(jobUID, st)
@@ -516,5 +531,18 @@ func (s *projectSchedule) applyGate(jobUID string, st *jobSchedule, at time.Time
 		st.lastSkip = key
 		s.log("job %q: occurrence %s skipped: %s", st.name, OccurrenceKey(at), skip.Reason)
 	}
-	return false
+}
+
+// skipForClaimedCommits skips an occurrence of a New commits job whose commits an earlier occurrence of the same pass
+// took, so catch-up does not send several runs over one range. false means the skip could not be recorded and the
+// occurrence stays pending.
+func (s *projectSchedule) skipForClaimedCommits(jobUID string, st *jobSchedule, at, claimedBy time.Time) bool {
+	skip := &Skip{JobUID: jobUID, JobName: st.name, Occurrence: at, Condition: cronjob.ConditionNewCommits,
+		Reason: fmt.Sprintf("the new commits went to the run of %s", OccurrenceKey(claimedBy)), At: s.now().UTC()}
+	if err := s.skips.Add(*skip); err != nil {
+		st.blockedBy = fmt.Sprintf("the skip of %s cannot be recorded: %v", OccurrenceKey(at), err)
+		return false
+	}
+	s.settleSkip(jobUID, st, at, skip)
+	return true
 }

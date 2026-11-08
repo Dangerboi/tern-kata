@@ -230,7 +230,7 @@ func (s Status) String() string {
 		}
 		for _, k := range p.Spent {
 			for _, w := range k.Windows {
-				fmt.Fprintf(&b, "  Job %q spent %s of %s this %s (since %s)", k.Name, dollars(w.Spent), dollars(w.Limit), w.Per, w.Since.Format("2006-01-02 15:04 MST"))
+				fmt.Fprintf(&b, "  Job %q spent %s of %s this %s (since %s)", k.Name, formatDollars(w.Spent), formatDollars(w.Limit), w.Per, w.Since.Format("2006-01-02 15:04 MST"))
 				if note := partialNote(w.Unreported); note != "" {
 					fmt.Fprintf(&b, ", %s", note)
 				}

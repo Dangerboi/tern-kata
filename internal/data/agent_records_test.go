@@ -88,7 +88,7 @@ func (f *recordFixture) put(t *testing.T, r model.AgentRecord) {
 
 func (f *recordFixture) prune(t *testing.T) []model.AgentEntry {
 	t.Helper()
-	got := as[model.AgentsPruned](t, run(t, f.gateway, model.PruneAgents{PaneBlock: "7"}))
+	got := as[model.AgentsPruned](t, run(t, f.gateway, model.PruneAgents{Workspace: f.work, PaneBlock: "7"}))
 	if got.Err != nil {
 		t.Fatal(got.Err)
 	}
@@ -165,7 +165,7 @@ func TestAnAgentsRecordGoesWhereItsEntryGoes(t *testing.T) {
 		end       func(t *testing.T, f *recordFixture)
 	}{
 		"its exit": {model.AgentSplit, func(t *testing.T, f *recordFixture) {
-			cleared := as[model.AgentAddressCleared](t, run(t, f.gateway, model.ClearAgentAddress{Workspace: f.work, ProjectID: f.project.ID, UID: f.uid, Actor: "dana", Address: "dana/omp-31"}))
+			cleared := as[model.AgentAddressCleared](t, run(t, f.gateway, model.ClearAgentAddress{Workspace: f.work, ProjectID: f.project.ID, UID: f.uid, Actor: "dana", Block: "31", Address: "dana/omp-31"}))
 			if cleared.Err != nil {
 				t.Fatal(cleared.Err)
 			}
@@ -374,7 +374,7 @@ func TestAReconcileKeepsTheRecordOfAnAgentAddedToTheMappingMeanwhile(t *testing.
 	// The entry is in agents.json when the reconcile looks, though a Pane read the file before it was written.
 	seedAgent(t, worker.Dirs{Config: f.state, State: f.state}, model.AgentEntry{IssueUID: f.uid, IssueRef: "demo#ab12", ProjectID: f.project.ID, Block: "55", PaneBlock: "7", Teammate: "omp",
 		Address: "dana/omp-55", Actor: "dana", StartedAt: time.Date(2026, 11, 8, 9, 0, 0, 0, time.UTC)})
-	if err := f.gateway.syncAgentRecords(context.Background(), "", agentDirs{config: f.state, state: f.state}, filepath.Join(f.state, AgentsFile)); err != nil {
+	if err := f.gateway.syncAgentRecords(context.Background(), f.work, agentDirs{config: f.state, state: f.state}, filepath.Join(f.state, AgentsFile)); err != nil {
 		t.Fatal(err)
 	}
 	if got := blocksOf(f.records(t)); !slices.Equal(got, []string{hostID + "/55"}) {
@@ -393,5 +393,72 @@ func TestAReconcileReplacesAStaleRecordWithTheSameKey(t *testing.T) {
 	got := f.records(t)
 	if len(got) != 1 || got[0].Address != "dana/fresh-40" || got[0].Name != "fresh" {
 		t.Fatalf("records %+v, want the stale one replaced", got)
+	}
+}
+
+func TestAReconcileReadsOnlyTheShownProjectAndTheIssuesOfItsEntries(t *testing.T) {
+	f := newRecordFixture(t, "")
+	hostID := f.hostID(t)
+	otherWork, otherProject := project(t, f.gateway, "elsewhere")
+	elsewhere := createIssue(t, f.gateway, otherWork, otherProject, "Not shown")
+	stray := model.AgentRecord{Address: "dana/omp-99", Host: "gone", HostID: hostID, Block: "99", Name: "omp", Actor: "dana", MessageFrom: []string{}}
+	f.put(t, stray)
+	unseen := stray
+	unseen.Block, unseen.Address = "98", "dana/omp-98"
+	_, err := f.kata.target().Client.PatchIssueMetadataWithResponse(context.Background(), &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: otherProject.ID, Ref: elsewhere},
+		Body:       &g.PatchIssueMetadataBody{Actor: new("tester"), Patch: map[string]any{model.AgentRecordKey(hostID, "98"): unseen}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.prune(t)
+	if left := f.records(t); len(left) != 0 {
+		t.Fatalf("records %+v on the shown Project's Issue, want the stray gone", left)
+	}
+	if got := model.AgentRecords(issueFixture{kata: f.kata}.issue(t, elsewhere).Metadata); len(got) != 1 {
+		t.Fatalf("records %+v on an Issue the Pane does not show, want it left alone", got)
+	}
+}
+
+func TestAReconcileRemovesTheRecordOfAMappedAgentThatExited(t *testing.T) {
+	f := newRecordFixture(t, "host = \"laptop\"\n")
+	hostID := f.hostID(t)
+	f.put(t, model.AgentRecord{Address: "", Host: "laptop", HostID: hostID, Block: "40", Name: "claude", Actor: "dana", NoAddress: model.AgentNotOmp, MessageFrom: []string{}})
+	seedAgent(t, worker.Dirs{Config: f.state, State: f.state}, model.AgentEntry{IssueUID: f.uid, IssueRef: "demo#ab12", ProjectID: f.project.ID, Block: "40", PaneBlock: "7", Teammate: "claude",
+		NoAddress: model.AgentNotOmp, StartedAt: time.Date(2026, 11, 8, 9, 0, 0, 0, time.UTC)})
+	f.live = []string{"7", "40"}
+	if saved := as[model.AgentStatesSaved](t, run(t, f.gateway, model.SaveAgentStates{States: []model.AgentState{{Block: "40", State: model.AgentExited}}})); saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	f.prune(t)
+	if left := f.records(t); len(left) != 0 {
+		t.Fatalf("records %+v, want the exited agent's gone", left)
+	}
+}
+
+func TestAnAgentWithNoAddressHasItsRecordRemovedWhenItExits(t *testing.T) {
+	f := newRecordFixture(t, "")
+	f.put(t, model.AgentRecord{Host: "laptop", HostID: f.hostID(t), Block: "40", Name: "claude", Actor: "dana", NoAddress: model.AgentNotOmp, MessageFrom: []string{}})
+	cleared := as[model.AgentAddressCleared](t, run(t, f.gateway, model.ClearAgentAddress{Workspace: f.work, ProjectID: f.project.ID, UID: f.uid, Actor: "dana", Block: "40"}))
+	if cleared.Err != nil || cleared.Block != "40" {
+		t.Fatalf("cleared %+v", cleared)
+	}
+	if left := f.records(t); len(left) != 0 {
+		t.Fatalf("records %+v, want it gone", left)
+	}
+}
+
+func TestAnEmptyHostIdFileIsMadeAgain(t *testing.T) {
+	state := t.TempDir()
+	if err := os.WriteFile(filepath.Join(state, HostIDFile), []byte(" \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	id, err := ReadHostID(state)
+	if err != nil || len(id) < 16 {
+		t.Fatalf("host id %q, %v; want a new one", id, err)
+	}
+	if again, err := ReadHostID(state); err != nil || again != id {
+		t.Fatalf("second read %q, %v; want %q kept", again, err, id)
 	}
 }

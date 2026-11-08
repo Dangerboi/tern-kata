@@ -401,19 +401,19 @@ func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.
 	}
 	agents, askErr, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, true, func(string) bool { return true })
 	if askErr == nil && err == nil {
-		g.syncAgentRecordsAtStart(ctx, file)
+		g.syncAgentRecordsAtStart(ctx, cmd.Workspace, file)
 	}
 	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
 }
 
 // syncAgentRecordsAtStart reconciles the Pane's records with the agents that remain (syncAgentRecords). Only a read of the blocks
 // that succeeded gets here: an entry whose block is gone for good must not be published. A failure waits for the next start.
-func (g *Gateway) syncAgentRecordsAtStart(ctx context.Context, file string) {
+func (g *Gateway) syncAgentRecordsAtStart(ctx context.Context, workspace, file string) {
 	dirs, err := g.workerDirs()
 	if err != nil || dirs.State == "" {
 		return
 	}
-	_ = g.syncAgentRecords(ctx, "", agentDirs{config: dirs.Config, state: dirs.State}, file)
+	_ = g.syncAgentRecords(ctx, workspace, agentDirs{config: dirs.Config, state: dirs.State}, file)
 }
 
 // removePrompt removes a prompt file and the token, DSN, env and session path files beside it, if the agent was started with them.

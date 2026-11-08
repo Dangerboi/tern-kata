@@ -743,13 +743,24 @@ func init() {
 		},
 		nil, nil)
 
-	daemonCall(
-		func(cmd model.LoadTeamKids) string { return cmd.Workspace },
-		func(ctx context.Context, c *Client, cmd model.LoadTeamKids) (model.Msg, error) {
-			return ok(c.ReadTeamKids(ctx, cmd))
-		},
-		func(cmd model.LoadTeamKids, err error) model.Msg { return model.TeamKidsLoaded{Err: err} },
-		nil, nil)
+	// An agent on another host is told by its record, so the Host id is read where the state folder is.
+	local(func(g *Gateway, ctx context.Context, cmd model.LoadTeamKids) model.Msg {
+		state, err := g.stateDir()
+		if err != nil {
+			return model.TeamKidsLoaded{Err: err}
+		}
+		hostID, err := ReadHostID(state)
+		if err != nil {
+			return model.TeamKidsLoaded{Err: err}
+		}
+		msg, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+			return ok(c.ReadTeamKids(ctx, hostID, cmd))
+		})
+		if err != nil {
+			return model.TeamKidsLoaded{Err: err}
+		}
+		return msg
+	}, nil, nil)
 
 	daemonCall(
 		func(cmd model.ResolveComment) string { return cmd.Workspace },
@@ -781,11 +792,15 @@ func init() {
 	// An exited agent's record goes beside its address: nobody reads either again.
 	local(func(g *Gateway, ctx context.Context, cmd model.ClearAgentAddress) model.Msg {
 		msg, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
-			err := errors.Join(c.ClearAgentAddress(ctx, cmd), g.removeAgentRecordAt(ctx, c, cmd.ProjectID, cmd.UID, cmd.Address))
-			return ok(model.AgentAddressCleared{UID: cmd.UID}, err)
+			var clearErr error
+			if cmd.Address != "" {
+				clearErr = c.ClearAgentAddress(ctx, cmd)
+			}
+			err := errors.Join(clearErr, g.removeAgentRecordOf(ctx, c, cmd.ProjectID, cmd.UID, cmd.Block))
+			return ok(model.AgentAddressCleared{UID: cmd.UID, Block: cmd.Block}, err)
 		})
 		if err != nil {
-			return model.AgentAddressCleared{UID: cmd.UID, Err: err}
+			return model.AgentAddressCleared{UID: cmd.UID, Block: cmd.Block, Err: err}
 		}
 		return msg
 	}, nil, nil)

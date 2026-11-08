@@ -23,5 +23,6 @@ This builds on [ADR-0011](0011-scheduling-triggers-and-catch-up.md) (the checkpo
 ## Consequences
 
 - A skipped occurrence is gone: the job runs again only at its next occurrence, or on Run now.
+- A job whose agent commits to the branch it watches sees its own commits as new at the next occurrence, because the saved commit is the run's start commit. Keep that; limit it with `folders`, or have the job commit elsewhere.
 - Skip records are local to the machine that held the lease; another machine's Runs Page does not show them.
 - Spend limits need per-job cost totals across runs, which the worker does not keep today (its Outcome holds tokens only): new worker state.

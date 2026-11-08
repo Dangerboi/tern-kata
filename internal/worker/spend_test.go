@@ -270,3 +270,80 @@ func TestSpendIsCountedFromRunJournalsSurvivesARestartAndDropsWithTheirRetention
 		t.Fatalf("spent %v with %d unreported after the retained journals went, want $0 from the runs left", spent, unreported)
 	}
 }
+
+func TestASpendCountIncludesTheCostCarriedByAResumedRunStillGoingAndNotTwiceOnceSettled(t *testing.T) {
+	dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
+	store := NewStore(dirs, Hooks{})
+	day := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	for uid, j := range map[string]*Journal{
+		"01M5JESXAK1NBYS6N2ZD9RTM0A": {Phase: PhaseStarted, CarriedCost: usd(1.9)},
+		"01M5JESXAK1NBYS6N2ZD9RTM0C": {Phase: PhaseStarted, CarriedCost: usd(1.9), Steps: []StepRecord{{CostUSD: usd(0.5)}}}, // a resumed workflow step: finished steps plus the held attempt
+		"01M5JESXAK1NBYS6N2ZD9RTM0B": {Phase: PhaseSettled, CarriedCost: usd(1.9), Outcome: &Outcome{Status: cronjob.RunSucceeded, CostUSD: usd(2.1)}},
+	} {
+		j.Version, j.RunUID, j.ProjectUID, j.JobUID, j.StartedAt = 1, uid, "P", "J", day.Add(time.Hour)
+		if err := store.Create(j, "prepared"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	led := &runLedger{w: &Worker{store: store}, projectUID: "P"}
+	runs, err := led.runSpend("J")
+	if err != nil || len(runs) != 3 {
+		t.Fatalf("runs %+v, %v", runs, err)
+	}
+	if spent, _ := spentSince(runs, day); spent != 6.4 {
+		t.Fatalf("spent %v, want 1.9 + 2.1 + (1.9 carried + 0.5 finished step)", spent)
+	}
+}
+
+type fixedClock struct{ at time.Time }
+
+func (c fixedClock) Now() time.Time                       { return c.at }
+func (c fixedClock) After(time.Duration) <-chan time.Time { return nil }
+
+func TestAHeldRunCountsItsCostAndAResumeDoesNotCountItTwice(t *testing.T) {
+	day := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	store := NewStore(Dirs{Config: t.TempDir(), State: t.TempDir()}, Hooks{})
+	w := &Worker{store: store, clock: fixedClock{day.Add(2 * time.Hour)}}
+	j := &Journal{Version: 1, RunUID: "01M5JESXAK1NBYS6N2ZD9RTM0A", ProjectUID: "P", JobUID: "J", StartedAt: day.Add(time.Hour), Phase: PhaseStarted,
+		Result: &AgentResult{CostUSD: usd(1.9)}}
+	if err := store.Create(j, "prepared"); err != nil {
+		t.Fatal(err)
+	}
+	spent := func() float64 {
+		runs, err := (&runLedger{w: w, projectUID: "P"}).runSpend("J")
+		if err != nil || len(runs) != 1 {
+			t.Fatalf("runs %+v, %v", runs, err)
+		}
+		s, _ := spentSince(runs, day)
+		return s
+	}
+	if err := w.hold(j, HoldInterrupted, "why"); err != nil {
+		t.Fatal(err)
+	}
+	if got := spent(); got != 1.9 {
+		t.Fatalf("held run counts %v, want 1.9", got)
+	}
+	cost := 1.9
+	terms := resumeTerms{By: "ann", Generation: 2, At: day.Add(3 * time.Hour),
+		Tokens:    func(*Journal) (*int64, *int64) { return nil, nil },
+		Cost:      func(*Journal) *float64 { return &cost },
+		SessionID: func(*Journal) string { return "sess" }}
+	if _, err := store.Update(j.RunUID, "settled", func(j *Journal) error { j.Phase = PhaseSettled; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Update(j.RunUID, "resume-accepted", func(j *Journal) error { return lifeWith(GroupGone, true, false).acceptResume(j, terms) }); err != nil {
+		t.Fatal(err)
+	}
+	if got := spent(); got != 1.9 {
+		t.Fatalf("resumed run counts %v, want 1.9", got)
+	}
+	if _, err := store.Update(j.RunUID, "finished", func(j *Journal) error {
+		j.Outcome, j.Phase = j.withCarried(&Outcome{Status: cronjob.RunSucceeded, CostUSD: usd(0.3)}), PhaseSettled
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := spent(); got < 2.19 || got > 2.21 {
+		t.Fatalf("settled run counts %v, want 2.2", got)
+	}
+}
