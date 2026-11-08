@@ -287,6 +287,28 @@ func TestDocbankSetupStoresAKeyFromStandardInputPrivately(t *testing.T) {
 	}
 }
 
+func TestDocbankSetupRerunWritesAgainAStoredKeyFileKataWouldRefuse(t *testing.T) {
+	f := newDocbankSetupFixture(t)
+	args := []string{"--url", f.fake.URL, "--key-file", "-", "--yes"}
+	if _, err := f.run(t, docbanktest.Key+"\n", args...); err != nil {
+		t.Fatal(err)
+	}
+	keyPath := filepath.Join(f.home, "docbank.key")
+	if err := os.Chmod(keyPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := f.run(t, docbanktest.Key+"\n", args...)
+	if err != nil || !strings.Contains(out, "kata would have refused the API key file "+keyPath+" (group/world-readable") {
+		t.Fatalf("rerun: %q, %v", out, err)
+	}
+	if info, err := os.Stat(keyPath); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("key file mode = %v, %v; want 0600", info, err)
+	}
+	if raw, err := os.ReadFile(keyPath); err != nil || strings.TrimSpace(string(raw)) != docbanktest.Key {
+		t.Errorf("key file = %q, %v; want the key it held", raw, err)
+	}
+}
+
 func TestDocbankSetupRestartsOnlyWhenAskedOrConfirmed(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

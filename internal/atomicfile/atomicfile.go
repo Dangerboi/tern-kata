@@ -13,7 +13,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
+
+	"go.kenn.io/kit/safefileio"
 )
 
 // renameAttempts and renameDelay bound the Windows rename retry to about one second.
@@ -34,6 +37,9 @@ func retryRename(rename func() error, retryable func(error) bool) error {
 type Options struct {
 	// Mode is the file's mode. It is not applied on Windows, which has no such modes.
 	Mode fs.FileMode
+	// Private, on Windows, creates the file with a protected access list that admits only the current user (and the system
+	// and administrators) from the moment it exists, which is what kata asks of a secret file there; Mode 0600 is the Unix half.
+	Private bool
 	// DirMode, when non-zero, creates the target's folder (and parents) with this mode when it is missing.
 	DirMode fs.FileMode
 	// Check, when set, runs on the finished temporary file before the rename; an error from it stops the write and is
@@ -54,7 +60,11 @@ func Write(path string, data []byte, opts Options) error {
 			return err
 		}
 	}
-	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	createTemp := os.CreateTemp
+	if opts.Private && runtime.GOOS == "windows" {
+		createTemp = safefileio.CreatePrivateTemp // a rename on the same volume keeps the file's access list
+	}
+	tmp, err := createTemp(dir, ".tmp-*")
 	if err != nil {
 		return err
 	}

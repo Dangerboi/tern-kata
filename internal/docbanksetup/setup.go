@@ -6,6 +6,7 @@ package docbanksetup
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -167,6 +168,13 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 	} else if found {
 		if !have.matches(want) {
 			return fmt.Errorf("%s already has a [docbank] section that differs from what was asked, so nothing was changed:\n%s", configPath, have.describe())
+		}
+		if r.KeyFile == "-" { // the key file an earlier setup stored is written again when kata would refuse it
+			if key, err := readKeyFile(want.APIKeyFile); err == nil && key != "" {
+				if err := e.writeKeyFile(want.APIKeyFile, key); err != nil {
+					return err
+				}
+			}
 		}
 		return e.alreadySetUp(ctx, r, base, configPath)
 	}
@@ -383,32 +391,32 @@ func (e Env) probe(ctx context.Context, base, key string) error {
 	return nil
 }
 
-// writeKeyFile stores key at path, mode 0600, written atomically; a file that already holds it is left alone, except that group and
-// other permission bits on it are removed (on Unix) and said so.
+// writeKeyFile stores key at path, readable only by the current user (privateWords), written atomically, then runs kata's own check
+// on it, so a key file kata cannot read fails setup here rather than the first attachment. A file that already holds the key is kept
+// unless kata would refuse it; then it is written again and said so.
 func (e Env) writeKeyFile(path, key string) error {
 	shown := path
 	path, err := resolveLink(path)
 	if err != nil {
 		return err
 	}
+	refused := ""
 	if have, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(have)) == key {
-		if runtime.GOOS == "windows" {
-			return nil
-		}
-		info, err := os.Stat(path)
-		if err != nil || info.Mode().Perm()&0o077 == 0 {
+		if refused, err = kataRefusal(path); err != nil || refused == "" {
 			return err
 		}
-		if err := os.Chmod(path, 0o600); err != nil {
-			return fmt.Errorf("tighten the key file: %w", err)
-		}
-		_, err = fmt.Fprintf(e.Out, "The API key in %s was readable by others (mode %04o); now mode 0600.\n", shown, info.Mode().Perm())
-		return err
 	}
-	if err := atomicfile.Write(path, []byte(key+"\n"), atomicfile.Options{Mode: 0o600, DirMode: 0o700}); err != nil {
+	if err := atomicfile.Write(path, []byte(key+"\n"), atomicfile.Options{Mode: 0o600, Private: true, DirMode: 0o700}); err != nil {
 		return fmt.Errorf("write the key file: %w", err)
 	}
-	_, err = fmt.Fprintf(e.Out, "Wrote the API key to %s (mode 0600).\n", shown)
+	if reason, err := kataRefusal(path); err != nil || reason != "" {
+		return cmp.Or(err, fmt.Errorf("kata would refuse the key file %s that setup wrote (%s)", shown, reason))
+	}
+	if refused != "" {
+		_, err = fmt.Fprintf(e.Out, "kata would have refused the API key file %s (%s); setup wrote it again, %s.\n", shown, refused, privateWords)
+	} else {
+		_, err = fmt.Fprintf(e.Out, "Wrote the API key to %s (%s).\n", shown, privateWords)
+	}
 	return err
 }
 

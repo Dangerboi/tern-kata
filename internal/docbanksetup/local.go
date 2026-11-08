@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -213,31 +214,38 @@ func readKeyFile(path string) (string, error) {
 const maxKeyFileSize = 64 << 10
 
 // checkKeyFile refuses a key file that kata's own secret reader would refuse, with kata's reason, so that setup does not report
-// success for a config in which every upload fails "docbank unauthorized". The checks are kata's: a regular file, owned by the
-// current user, no group or other permission bits, at most 64 KiB.
+// success for a config in which every upload fails "docbank unauthorized".
 func checkKeyFile(path string) error {
-	refuse := func(reason string) error {
-		return fmt.Errorf("--key-file %s: kata would refuse it (%s), so nothing was changed", path, reason)
+	reason, err := kataRefusal(path)
+	if err != nil || reason == "" {
+		return err
 	}
+	err = fmt.Errorf("--key-file %s: kata would refuse it (%s), so nothing was changed", path, reason)
+	if runtime.GOOS == "windows" {
+		err = fmt.Errorf("%w; --key-file - reads the key from standard input and stores a copy kata accepts", err)
+	}
+	return err
+}
+
+// kataRefusal is why kata's secret reader would refuse the key file at path, empty when it would read it. The checks are kata's:
+// a regular file, private to the current user (see privateProblem), at most 64 KiB.
+func kataRefusal(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("read the key file: %w", err)
+		return "", fmt.Errorf("read the key file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 	info, err := f.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		return refuse("not a readable regular file")
+		return "not a readable regular file", nil
 	}
-	if !ownedByCurrentUser(info) {
-		return refuse("must be owned by the daemon user")
-	}
-	if groupOrWorldAccessible(info) {
-		return refuse("group/world-readable; use chmod 600")
+	if reason := privateProblem(f, info); reason != "" {
+		return reason, nil
 	}
 	if info.Size() > maxKeyFileSize {
-		return refuse("exceeds 64 KiB")
+		return "exceeds 64 KiB", nil
 	}
-	return nil
+	return "", nil
 }
 
 // docbankStatus is what `docbank daemon status` prints; a Docbank that is not running exits non-zero, which is an answer too. A

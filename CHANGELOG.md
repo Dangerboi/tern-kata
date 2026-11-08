@@ -155,8 +155,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The restart command `tern-kata docbank setup` prints for you to run shell-quotes its `KATA_HOME`, `KATA_DB` and `KATA_POSTGRES_SCHEMA` values, so a path with a space or a quote pastes as it is.
 - The restart command `tern-kata docbank setup` prints works in PowerShell on Windows (`$env:KATA_HOME='…'; kata daemon restart`).
 - `tern-kata docbank setup` makes Docbank's `config.toml` owner-only when it adds the API key to it, and says so.
+- On Windows, `tern-kata docbank setup` (local, and `--key-file -`) stores `docbank.key` readable only by you, with no inherited access, as kata requires; kata used to refuse the file, so every attachment failed with "Docbank refused the API key" while setup reported success.
+  - Running setup again rewrites a stored key file kata would refuse, on any system, and says so.
 - Opening an attachment whose name is long (up to kata's 255-byte limit) no longer fails with "file name too long".
-- `tern-kata docbank setup --key-file` refuses, with kata's reason, a key file kata would reject (readable by group or others, over 64 KiB, not yours, not a regular file); it used to report success while every upload failed.
+- `tern-kata docbank setup --key-file` refuses, with kata's reason, a key file kata would reject (readable by group or others, on Windows an access list that admits others or inherits access, over 64 KiB, not yours, not a regular file); it used to report success while every upload failed.
 - Running `tern-kata docbank setup` again while Docbank is stopped starts it, instead of saying it is already set up.
 - The Attachments tab, its count, the `U` picker and the Close card no longer list a reference kata rejects (an extra member, or a `docbank_version` that is not a UUID); opening one used to fail with a wrong reason about its name.
 
