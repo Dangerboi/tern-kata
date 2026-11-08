@@ -4,6 +4,10 @@ Browse and edit [kata](https://katatracker.com/) Issues in a native [Tern](https
 
 kata ([source](https://github.com/kenn-io/kata)) is an issue tracker built for coding agents and the people steering them. Agents create, claim, relate and close Issues from its CLI, and people follow the same work in its terminal UI, `kata tui`. By default Issues live in a local SQLite database rather than in your repo, and no hosted service is needed. tern-kata shows that work in a Tern Pane drawn with Tern's own widgets instead of terminal text.
 
+
+https://github.com/user-attachments/assets/7ce133c8-eaf6-4786-9ee9-a7dd0c9e0599
+
+
 The same example Project in tern-kata (top) and in `kata tui` (bottom), both running in Tern:
 
 ![tern-kata showing the acme-shop Project with "Add Apple Pay to checkout" selected](docs/images/tern-kata.png)
