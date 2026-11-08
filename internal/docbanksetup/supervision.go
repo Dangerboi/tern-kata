@@ -3,17 +3,45 @@ package docbanksetup
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 
+	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // ManualFileName is the supervision marker's name in tern-kata's config folder, the one place it is spelled. The Luau host half
 // (host.luau) holds no copy of the rule: it asks `tern-kata docbank supervised`, which answers from Env.Supervised.
 const ManualFileName = "docbank.manual"
+
+// NewSupervisionEnv is the environment of the supervision rule: tern-kata's config folder, the default kata daemon's home and
+// Docbank's home. `docbank supervised`, `docbank supervise` and the Pane's gateway all build it here. A part that cannot be found
+// is left empty and the rule says so; the default daemon's home is empty with KATA_SERVER set, which no daemon then matches.
+func NewSupervisionEnv(out io.Writer) Env {
+	e := Env{Out: out}
+	e.ConfigDir, _ = worker.ConfigDir()
+	if def, err := data.ResolveLocalDaemon(data.AgentRoute{}); err == nil {
+		e.DefaultKataHome = def.Home
+	}
+	e.DocbankHome, _ = docbankHome()
+	return e
+}
+
+// docbankHome is Docbank's home: DOCBANK_HOME, else ~/.docbank.
+func docbankHome() (string, error) {
+	home := os.Getenv("DOCBANK_HOME")
+	if home == "" {
+		user, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		home = filepath.Join(user, ".docbank")
+	}
+	return filepath.Abs(home)
+}
 
 // ManualPath is the supervision marker.
 func (e Env) ManualPath() string { return filepath.Join(e.ConfigDir, ManualFileName) }

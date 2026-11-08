@@ -74,6 +74,8 @@ tern-kata docbank supervise off   # creates docbank.manual; a running Docbank ke
 tern-kata docbank supervise on    # removes it
 ```
 
+The Config Page (`K`) has a row for `docbank.manual` after `agent.toml`: it shows the marker's path and `on: the plugin keeps Docbank running`, or `off:` and the reason above that applies. `s` on the row does what `supervise off` or `supervise on` does, then reads the rows again; turning it off says a running Docbank keeps running. The row describes the default kata daemon's Docbank, whichever daemon the Pane is switched to.
+
 The same by hand, for reference:
 
 1. Install [Docbank](https://github.com/kenn-io/docbank). Its vault is `~/.docbank` unless `DOCBANK_HOME` names another folder; the first `docbank` command creates it.

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
@@ -20,7 +19,6 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/docbanksetup"
-	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // docbankUsage is what `tern-kata docbank` refuses a command line with.
@@ -118,19 +116,6 @@ func parsePort(v string) (int, error) {
 	return n, nil
 }
 
-// docbankHome is Docbank's home: DOCBANK_HOME, else ~/.docbank.
-func docbankHome() (string, error) {
-	home := os.Getenv("DOCBANK_HOME")
-	if home == "" {
-		user, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		home = filepath.Join(user, ".docbank")
-	}
-	return filepath.Abs(home)
-}
-
 // newDocbankEnv is the production environment for plan: the kata daemon its route chooses, kata's own discovery, the real programs.
 // The route's KATA_HOME, KATA_DB and KATA_POSTGRES_SCHEMA are set in this process, which only runs the one command.
 func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetup.Env, error) {
@@ -138,12 +123,8 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 	if err != nil {
 		return docbanksetup.Env{}, err
 	}
-	// The default daemon is the one `docbank supervised` asks about; resolved before the route's KATA_HOME is set below. Left empty
-	// when it cannot be resolved (KATA_SERVER set), which no daemon then matches.
-	var defaultHome string
-	if def, err := data.ResolveLocalDaemon(data.AgentRoute{}); err == nil {
-		defaultHome = def.Home
-	}
+	// Resolved before the route's KATA_HOME is set below, which the default daemon's home is read from.
+	supervision := docbanksetup.NewSupervisionEnv(out)
 	// prefix is the part of the route a person must retype to run the restart command themselves.
 	var prefix strings.Builder
 	for _, v := range []struct{ name, value string }{{"KATA_HOME", daemon.Base}, {"KATA_DB", daemon.DB}, {"KATA_POSTGRES_SCHEMA", daemon.Schema}} {
@@ -157,30 +138,23 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 			fmt.Fprintf(&prefix, "%s=%s ", v.name, v.value)
 		}
 	}
-	configDir, _ := worker.ConfigDir() // only the supervision forms and local setup's last line need it; they say so when it is empty
-	dbHome, _ := docbankHome()         // only the local form needs it, and it says so when it is empty
 	locate := data.Locator(data.LocateWithKata)
 	if daemon.Name != "" {
 		locate = data.LocateNamed(daemon.Name, "")
 	}
-	env := docbanksetup.Env{
-		KataHome:        daemon.Home,
-		DefaultKataHome: defaultHome,
-		DocbankHome:     dbHome,
-		ConfigDir:       configDir,
-		Daemon:          daemon.Name,
-		CommandPrefix:   prefix.String(),
-		Runner:          docbanksetup.ExecRunner{},
+	env := supervision
+	env.KataHome = daemon.Home
+	env.Daemon = daemon.Name
+	env.CommandPrefix = prefix.String()
+	env.Runner = docbanksetup.ExecRunner{}
+	env.HTTP = &http.Client{
 		// X-Api-Key must never follow a redirect: Go would copy it to the new host.
-		HTTP: &http.Client{
-			Timeout:       30 * time.Second,
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		},
-		Locate:    locate,
-		LookupEnv: os.LookupEnv,
-		Stdin:     stdin,
-		Out:       out,
+		Timeout:       30 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
+	env.Locate = locate
+	env.LookupEnv = os.LookupEnv
+	env.Stdin = stdin
 	// A terminal on standard input can be asked; with --key-file - the input is the key, which leaves nothing to ask on.
 	if f, ok := stdin.(*os.File); ok && stdinIsTerminal(stdin) {
 		reader := bufio.NewReader(f)
@@ -231,11 +205,7 @@ func docbankEnvFor(plan LaunchPlan, out io.Writer) (docbanksetup.Env, error) {
 	if plan.Operands[0] != "supervise" {
 		return newDocbankEnv(plan, os.Stdin, out)
 	}
-	dir, err := worker.ConfigDir()
-	if err != nil {
-		return docbanksetup.Env{}, err
-	}
-	return docbanksetup.Env{ConfigDir: dir, Out: out}, nil
+	return docbanksetup.NewSupervisionEnv(out), nil
 }
 
 // printDocbankSupervised is `docbank supervised`, the plugin host half's one question about Docbank: the rule is
@@ -263,3 +233,6 @@ func runDocbankSupervise(plan LaunchPlan, env docbanksetup.Env) error {
 	_, err := fmt.Fprintf(env.Out, "Created %s: the plugin no longer starts Docbank. A Docbank that is running keeps running.\n", env.ManualPath())
 	return err
 }
+
+// supervisionEnv is the Pane gateway's Docbank supervision environment, built the same way as the `docbank supervised` one.
+func supervisionEnv() data.DocbankSupervision { return docbanksetup.NewSupervisionEnv(io.Discard) }

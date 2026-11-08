@@ -64,6 +64,14 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 	return Binding{}, false
 }
 
+// Described is the binding's words for m: the entry's own label when it has one, else Help.
+func (b Binding) Described(m Model) string {
+	if b.entry != nil && b.entry.label != nil {
+		return b.entry.label(m)
+	}
+	return b.Help
+}
+
 // Offered says whether the binding is on offer for m: an entry with a condition is offered only while it holds.
 func (b Binding) Offered(m Model) bool {
 	return b.entry == nil || b.entry.when == nil || b.entry.when(m)
@@ -159,6 +167,7 @@ type helpListing struct {
 	keys  []string
 	modes []Mode
 	when  func(Model) bool
+	label func(Model) string
 }
 
 func helpListings() []helpListing {
@@ -177,7 +186,7 @@ func helpListings() []helpListing {
 			}
 		}
 		for _, line := range entry.sheet {
-			listings = append(listings, helpListing{line, keys, entry.modes, entry.when})
+			listings = append(listings, helpListing{line, keys, entry.modes, entry.when, entry.label})
 		}
 	}
 	return listings
@@ -197,6 +206,11 @@ func HelpSheetOn(page Page, m Model) []SheetGroup {
 		}
 		return len(l.modes) > 0 && !slices.ContainsFunc(l.modes, func(mode Mode) bool { return slices.Contains(modes, mode) })
 	})
+	for i, l := range listings {
+		if l.label != nil {
+			listings[i].text = l.label(m)
+		}
+	}
 	return sheetOf(listings)
 }
 

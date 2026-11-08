@@ -304,6 +304,7 @@ func openLane(m Model) Model {
 // clearBoard puts the Board back to its columns when the Page is left.
 func clearBoard(m Model) Model {
 	m.Board.Mode = BoardColumns
+	m.lanesWanted = false
 	return m
 }
 

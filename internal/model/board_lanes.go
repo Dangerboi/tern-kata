@@ -163,7 +163,11 @@ func lanesLoaded(m Model, msg LanesLoaded) (Model, []Cmd) {
 	if !current || msg.ProjectUID != m.Collection.ProjectUID {
 		return m, nil
 	}
-	return applyLanesLoaded(m, msg), nil
+	m = applyLanesLoaded(m, msg)
+	if m.lanesWanted && m.OnBoard() {
+		m = openLanesForm(m)
+	}
+	return m, nil
 }
 
 func applyLanesLoaded(m Model, msg LanesLoaded) Model {

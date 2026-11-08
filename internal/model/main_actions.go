@@ -27,6 +27,8 @@ type actionEntry struct {
 	// when, if set, says whether the entry is on offer for a model: an entry that is not on offer is left out of the footer and the
 	// help sheet, and key dispatch does not call its handler (no Cmd, no Notice), so a handler needs no guard of its own.
 	when func(Model) bool
+	// label, if set, is the entry's words for a model, in place of help: the footer and the help sheet opened over a Page say them.
+	label func(Model) string
 }
 
 func keys(chordAndLabel ...string) []Key {

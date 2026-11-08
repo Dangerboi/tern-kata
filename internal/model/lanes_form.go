@@ -68,6 +68,7 @@ func (f LanesFormState) Value(name Field) string { return lanesTable.value(f, na
 // openLanesForm is `B`. It waits for the saved Lane list to load: a card prefilled with the default would overwrite it on save.
 // An unreadable Lane list file keeps it closed unless the Project shares its list, which the card then edits.
 func openLanesForm(m Model) Model {
+	m.lanesWanted = false
 	if !m.Board.loaded {
 		m.Notice = "The Lane list is still loading."
 		return m

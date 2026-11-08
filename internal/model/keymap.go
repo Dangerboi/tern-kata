@@ -106,6 +106,8 @@ const (
 	ShowFederationPage      Action = "show-federation-page"
 	ShowDaemonsPage         Action = "show-daemons-page"
 	ShowConfigPage          Action = "show-config-page"
+	OpenConfigFile          Action = "open-config-file"
+	SwitchDocbank           Action = "switch-docbank-supervision"
 	SwitchDaemonAction      Action = "switch-daemon"
 	RefreshFederation       Action = "refresh-federation"
 	OpenFederationDetail    Action = "open-federation-detail"

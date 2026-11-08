@@ -145,6 +145,9 @@ func init() {
 	}, nil, nil)
 	local(func(g *Gateway, _ context.Context, cmd model.SaveWorkerEdit) model.Msg { return g.saveWorkerEdit(cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.StopWorker) model.Msg { return g.stopWorker(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.SetDocbankSupervision) model.Msg {
+		return g.setDocbankSupervision(ctx, cmd)
+	}, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.SetWorkerSupervision) model.Msg {
 		return g.setWorkerSupervision(ctx, cmd)
 	}, nil, nil)

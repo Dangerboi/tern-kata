@@ -445,7 +445,7 @@ func footerHints(m model.Model) (hints []footerHint, position string) {
 		if binding.Action == model.MenuBack && m.SidebarLevel == model.MenuTop {
 			continue
 		}
-		help := binding.Help
+		help := binding.Described(m)
 		if binding.Action == model.ClosePicker && m.Picker.Level != model.MenuTop && m.Picker.Filter == "" {
 			help = "back"
 		}

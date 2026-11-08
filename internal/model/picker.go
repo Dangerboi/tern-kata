@@ -222,13 +222,16 @@ func openPicker(m Model) Model {
 }
 
 // openProjects is kata's P: the Menu's Projects level, in the sidebar while it shows, else in the popup.
-func openProjects(m Model) (Model, []Cmd) {
+func openProjects(m Model) (Model, []Cmd) { return openMenuLevel(m, MenuProjects) }
+
+// openMenuLevel opens the Menu at level (Views or Projects), in the sidebar while it shows, else in the popup.
+func openMenuLevel(m Model, level MenuLevel) (Model, []Cmd) {
 	if m.SidebarShown() {
 		m.Picker, m.Focus = PickerState{}, ColumnCollections
-		return setMenuLevel(m, false, MenuProjects), reloadViews()
+		return setMenuLevel(m, false, level), reloadViews()
 	}
 	if m = openPicker(m); m.Picker.Open {
-		return setMenuLevel(m, true, MenuProjects), reloadViews()
+		return setMenuLevel(m, true, level), reloadViews()
 	}
 	return m, nil
 }

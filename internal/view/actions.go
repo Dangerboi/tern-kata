@@ -34,6 +34,7 @@ const (
 	attentionOpenAct   = "attention-open"
 	workflowOpenAct    = "workflow-open"
 	agentAct           = "agent"
+	configAct          = "config"
 	contextMenuPickAct = "pick"
 )
 
@@ -92,6 +93,11 @@ func JobOpenClick(uid string) string       { return click(jobOpenAct, uid) }
 func RunOpenClick(uid string) string       { return click(runOpenAct, uid) }
 func AttentionOpenClick(uid string) string { return click(attentionOpenAct, uid) }
 func WorkflowOpenClick(uid string) string  { return click(workflowOpenAct, uid) }
+
+// ConfigActClick runs the action of the Config Page's row with key: what the action's key does with the cursor on that row.
+func ConfigActClick(key model.ConfigFileKey, action model.ConfigAction) string {
+	return click(configAct, string(key)+":"+string(action))
+}
 
 // RefClick selects the Board card of a related Issue, revealing it in its Lane, or opens its detail when the Board does not draw it.
 func RefClick(uid string) string { return click(refAct, uid) }
@@ -182,6 +188,10 @@ func DecodeAction(id, act, value string) model.Msg {
 		return model.AttentionOpenMsg{UID: value}
 	case workflowOpenAct:
 		return model.WorkflowOpenMsg{UID: value}
+	case configAct:
+		if key, action, found := strings.Cut(value, ":"); found {
+			return model.ConfigActMsg{Key: model.ConfigFileKey(key), Action: model.ConfigAction(action)}
+		}
 	}
 	return nil
 }

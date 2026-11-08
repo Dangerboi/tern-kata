@@ -114,6 +114,7 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{SetAgentOpen{}, false},
 		{SetDatesCmd{}, false},
 		{SetFederationSpokeName{}, true},
+		{SetDocbankSupervision{}, false},
 		{SetWorkerSupervision{}, false},
 		{ShareLanes{}, false},
 		{ShowRun{}, false},

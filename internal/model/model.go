@@ -204,6 +204,9 @@ type Model struct {
 	Daemons      DaemonsState
 	ConfigPage   ConfigPageState
 	letteredFrom Page
+	// lanesWanted is the Lanes card a Config Page jump waits for: it opens once the Lane list read for the Board answers, so the
+	// card starts on the source in use, and the wish ends when it opens or the Board is left.
+	lanesWanted bool
 	// Worker is what the Pane knows of this machine's worker: whether it runs, what it serves and the local state of its runs.
 	Worker    WorkerState
 	Workflows WorkflowsState

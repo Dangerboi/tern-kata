@@ -49,7 +49,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - More than eight new runs fold into one row per job; failed runs are never folded.
   - The mark and the mode are kept per Project in `seen.toml` beside `filters.toml`, so they survive a Pane restart.
 - `K` opens the Config Page, a Lettered Page (also in the Menu) that lists tern-kata's config files with their paths, whether each exists and loads, and a one-line summary.
-  - The rows are `lanes.toml`, `filters.toml`, `views.toml`, `worker.toml` (with its supervision), `agent.toml` and kata's own `config.toml`, read-only; each is read by the reader its feature uses, so a file that does not load shows that reader's error on its own row.
+  - The rows are `lanes.toml`, `filters.toml`, `views.toml`, `worker.toml` (with its supervision), `agent.toml`, Docbank supervision and kata's own `config.toml`, read-only; each is read by the reader its feature uses, so a file that does not load shows that reader's error on its own row.
+  - `enter` on a row opens the card or Page that edits the file: the Lanes card on the Board Page, the Filter card, the Menu's Views level, the Worker card on the Jobs Page, and the Daemons Page for kata's `config.toml`.
+  - The Docbank supervision row says whether the plugin keeps a local Docbank running, else why not, and `s` turns supervision off or on as `tern-kata docbank supervise off|on` does.
 
 #### Jobs and worker
 
