@@ -95,9 +95,11 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		if msg.Generation != m.StreamGeneration {
 			return m, nil
 		}
-		var asked []Cmd
+		m, asked := driveTeams(m, true)
 		if msg.Type == "issue.commented" {
-			m, asked = readSweepComments(m)
+			var read []Cmd
+			m, read = readSweepComments(m)
+			asked = append(asked, read...)
 		}
 		if attentionChangesTheCount(msg.Type) {
 			var counted []Cmd

@@ -92,6 +92,10 @@ type StartAgent struct {
 	ProjectID                         int64
 	ProjectName, Workspace, PaneBlock string
 	Actor                             string
+	// Coordinator is the Agent address of the coordinator of the team the agent is a child of; Coordinating marks the agent as a
+	// team's coordinator (see AgentMessaging).
+	Coordinator  string
+	Coordinating bool
 }
 
 func (StartAgent) cmd() {}
@@ -140,7 +144,7 @@ func IssueRefusal(issue Issue, action Action) string {
 		return ""
 	}
 	switch action {
-	case OpenAgentCardAction, AgentCardSplit, AgentCardTab, AgentCardNewBackground:
+	case OpenAgentCardAction, AgentCardSplit, AgentCardTab, AgentCardNewBackground, AgentCardTeam:
 		return ClosedIssueRefusal
 	case OpenClose:
 		return ClosedAlreadyRefusal
@@ -161,6 +165,8 @@ func openAgent(m Model) (Model, []Cmd) {
 	}
 	m = openAgentCard(m, *issue)
 	m, sessions := askAgentSessions(m)
+	m, driven := driveTeams(m, true)
+	sessions = append(sessions, driven...)
 	if m.Agents.inFlight {
 		m.Agents.again = true
 		return m, sessions
@@ -216,5 +222,6 @@ func agentsPruned(m Model, msg AgentsPruned) (Model, []Cmd) {
 	m.Agents = m.Agents.trimmed(m.agentMapped)
 	m, raised := raiseAgentAttention(m, false)
 	m, swept := runPendingSweep(m)
-	return m, append(raised, swept...)
+	m, driven := driveTeams(m, false)
+	return m, append(append(raised, swept...), driven...)
 }

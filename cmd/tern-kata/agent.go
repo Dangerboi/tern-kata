@@ -7,7 +7,7 @@ import (
 )
 
 // agentUsage is what `tern-kata agent` refuses a command line with.
-const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]...] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
+const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
 
 // tableFlag is one flag of a subcommand with a flag table (`agent`, `docbank`): its parser and the completion scripts read the
 // table, so a flag is one row there; the usage constant and the help text are prose and name it by hand.
@@ -38,6 +38,8 @@ var agentFlags = slices.Concat([]tableFlag{
 	{"ref", true, "a qualified Issue ref", func(p *LaunchPlan, v string) { p.AgentRef = v }},
 	{"forward-comments", false, "tell the agent of a person's comment on its Issue", func(p *LaunchPlan, _ string) { p.AgentForwardComments = true }},
 	{"message-from", true, "an actor whose messages the agent acts on, besides its own (repeatable)", func(p *LaunchPlan, v string) { p.AgentMessageFrom = append(p.AgentMessageFrom, v) }},
+	{"coordinator", true, "the Agent address of this child's coordinator", func(p *LaunchPlan, v string) { p.AgentCoordinator = v }},
+	{"coordinating", false, "mark this agent as the coordinator of a team", func(p *LaunchPlan, _ string) { p.AgentCoordinating = true }},
 	{"address-prefix", true, "an Agent address up to its block id", func(p *LaunchPlan, v string) { p.AgentAddressPrefix = v }},
 }, routeFlags)
 

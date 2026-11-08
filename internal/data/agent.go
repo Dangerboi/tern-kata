@@ -29,7 +29,7 @@ const (
 const AgentWrapperProgram = "tern-kata"
 
 // AgentCommandLine is the command an agent block runs: command with @promptFile appended (omp reads it as the first message),
-// run through `tern-kata agent [--as actor] [--address-prefix prefix [--forward-comments] [--message-from actor]...] [route flags] --ref ref --`. ref is the Issue's qualified
+// run through `tern-kata agent [--as actor] [--address-prefix prefix [--forward-comments] [--message-from actor]... [--coordinator address | --coordinating]] [route flags] --ref ref --`. ref is the Issue's qualified
 // ref, which the wrapper sets as the agent's KATA_REF; --as is left out when no actor is set, so KATA_AUTHOR stays as inherited.
 // Messaging adds --address-prefix and the flag that loads the extension (ompext.Argv) before the prompt, so omp loads it even under
 // --no-extensions.
@@ -46,6 +46,12 @@ func AgentCommandLine(actor, ref string, messaging AgentMessaging, route AgentRo
 		}
 		for _, actor := range messaging.MessageFrom {
 			line = append(line, "--message-from", actor)
+		}
+		if messaging.Coordinator != "" {
+			line = append(line, "--coordinator", messaging.Coordinator)
+		}
+		if messaging.Coordinating {
+			line = append(line, "--coordinating")
 		}
 	}
 	line = append(line, route.Args()...)
@@ -457,7 +463,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 			return failed(fmt.Errorf("write the agent's omp extension: %w", err))
 		}
 		messaging = AgentMessaging{AddressPrefix: cmd.Actor + "/" + settings.Name, ExtensionArgs: ompext.Argv(extension, settings.Command[1:], false), ForwardComments: settings.ForwardComments,
-			MessageFrom: settings.MessageFrom}
+			MessageFrom: settings.MessageFrom, Coordinator: cmd.Coordinator, Coordinating: cmd.Coordinating}
 		sender = cmd.Actor
 	}
 	promptFile, err := writeAgentPrompt(filepath.Join(dirs.State, AgentPromptsFolder), starter, AgentPrompt(cmd.IssueRef, cmd.IssueTitle, sender, messaging.MessageFrom))

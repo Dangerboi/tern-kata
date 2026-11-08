@@ -43,6 +43,8 @@ type AgentCardState struct {
 	Cursor   int
 	// Stopping is the block the card asks about stopping; "" while it shows the list.
 	Stopping string
+	// Team is the team start dialog, which `c` opens.
+	Team TeamDialog
 }
 
 // AgentCardRows are the agents the card lists: the Issue's mapped agents, in the mapping's order.
@@ -80,6 +82,9 @@ func openAgentCard(m Model, issue Issue) Model {
 
 // AgentCardMode is the keymap mode of the Agent card: asking before a stop, or showing the list.
 func (m Model) AgentCardMode() Mode {
+	if m.AgentCard.Team.Open {
+		return ModeAgentCardTeam
+	}
 	if m.AgentCard.Stopping != "" {
 		return ModeAgentCardStop
 	}
@@ -105,6 +110,9 @@ func AgentLabel(e AgentEntry) string {
 }
 
 func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
+	if m.AgentCard.Team.Open {
+		return updateTeamDialogKey(m, msg)
+	}
 	binding, bound := LookupBindingForMode(msg.Chord, m.AgentCardMode())
 	if !bound {
 		return m, nil
@@ -156,6 +164,8 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		}
 		m.AgentCard.Stopping = rows[cursor].Block
 		return m, nil
+	case AgentCardTeam:
+		return openTeamDialog(m)
 	case AgentCardSplit:
 		return startAgent(m, AgentCardSplit, AgentSplit)
 	case AgentCardTab:
@@ -252,6 +262,12 @@ func (m Model) AgentCardUnavailable(action Action) string {
 			return "That Issue is not loaded."
 		}
 		return IssueRefusal(*issue, action)
+	case AgentCardTeam:
+		issue := m.issueByUID(m.AgentCard.IssueUID)
+		if issue == nil {
+			return "That Issue is not loaded."
+		}
+		return m.teamRefusal(*issue)
 	}
 	return ""
 }

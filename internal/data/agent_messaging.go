@@ -17,6 +17,10 @@ type AgentMessaging struct {
 	ExtensionArgs   []string
 	ForwardComments bool
 	MessageFrom     []string
+	// Coordinator is the Agent address of the coordinator of the team this agent is a child of; Coordinating marks the coordinator
+	// itself. The wrapper turns them into TERN_KATA_COORDINATOR and TERN_KATA_COORDINATING=1, which the extension reads.
+	Coordinator  string
+	Coordinating bool
 }
 
 // AgentAddress is the Agent address of the agent in block whose address prefix is prefix: the one spelling the Pane records and

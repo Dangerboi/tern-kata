@@ -240,3 +240,38 @@ func TestAgentCardAsksBeforeStoppingNamingTheAgentAndWhatIsDropped(t *testing.T)
 		t.Errorf("the question says %q", got)
 	}
 }
+
+func teamCardModel() model.Model {
+	return model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a",
+		Snapshot: model.Snapshot{Links: []model.Link{{Type: "parent", FromIssueUID: "c", FromStatus: "open", ToIssueUID: "a"}}}}
+}
+
+func TestAgentCardOffersATeamAndDisablesItWithTheReason(t *testing.T) {
+	nodes := pickerNodes(t, press(teamCardModel(), "w"))
+	if node := nodes["layer.agent.foot.team"]; node.K != "button" || text(node) != "Start a team" || node.P["disabled"] != nil {
+		t.Errorf("team button: %s %q disabled %v", node.K, text(node), node.P["disabled"])
+	}
+	bare := teamCardModel()
+	bare.Snapshot = model.Snapshot{}
+	if got := pickerNodes(t, press(bare, "w"))["layer.agent.foot.team"].P["disabled"]; got != model.TeamNoChildReason {
+		t.Errorf("a team with no child: disabled %v, want %q", got, model.TeamNoChildReason)
+	}
+}
+
+func TestTeamDialogShowsWhereTheCoordinatorGoesAndHowManyChildrenRun(t *testing.T) {
+	m := press(teamCardModel(), "w", "c")
+	cardButtons(t, m, "layer.agent.foot", []button{{"team-split", "Split"}, {"team-tab", "Tab"}, {"team-background", "Background"}, {"team-less", "Fewer"}, {"team-more", "More"},
+		{"team-start", "Start the team"}, {"team-cancel", "Cancel"}}, "team-start")
+	nodes := pickerNodes(t, m)
+	if got := text(nodes["layer.agent.team-where"]); got != "Coordinator: split" {
+		t.Errorf("where says %q", got)
+	}
+	if got := text(nodes["layer.agent.team-limit"]); got != "Children at once: 2 (1 to 8)" {
+		t.Errorf("limit says %q", got)
+	}
+	m = press(m, "g", "up")
+	nodes = pickerNodes(t, m)
+	if text(nodes["layer.agent.team-where"]) != "Coordinator: background" || text(nodes["layer.agent.team-limit"]) != "Children at once: 3 (1 to 8)" {
+		t.Errorf("after g and up: %q, %q", text(nodes["layer.agent.team-where"]), text(nodes["layer.agent.team-limit"]))
+	}
+}

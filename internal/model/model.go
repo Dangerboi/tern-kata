@@ -122,6 +122,9 @@ type Model struct {
 	PaneBlock string
 	// AgentMapping is agents.json as this Pane last read or changed it: the agents Panes on this host started.
 	AgentMapping []AgentEntry
+	// Teams is teams.json as the last DriveTeams answered; teamDrive keeps one of them in flight.
+	Teams     []Team
+	teamDrive teamDriveState
 	// AgentAttention are the Attention requests this Pane raised for waiting agents and has not cleared.
 	AgentAttention []RaisedAttention
 	// AgentGone are the entries of agents this Pane started whose block went (pruned from agents.json) without a relay showing them
@@ -456,7 +459,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m, raised := raiseAgentAttention(m, true)
 		m, ended := closeFinishedAgents(m, closeOnRelay)
 		m, swept := runPendingSweep(m)
-		return m, append(append(append(append(append(append(cmds, tracked...), back...), flagged...), raised...), ended...), swept...)
+		m, driven := driveTeams(m, false)
+		return m, append(append(append(append(append(append(append(cmds, tracked...), back...), flagged...), raised...), ended...), swept...), driven...)
 	case SweepCommentsRead:
 		m = sweepCommentsRead(m, msg)
 	case AgentSessionsRead:
@@ -467,6 +471,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m = agentHandedOff(m, msg)
 	case AgentIssueRead:
 		return agentIssueRead(m, msg)
+	case TeamStarted:
+		return teamStarted(m, msg)
+	case TeamsDriven:
+		return teamsDriven(m, msg)
 	case AgentClosed:
 		m = agentClosed(m, msg)
 	case AgentStopped:

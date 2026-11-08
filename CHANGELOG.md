@@ -37,6 +37,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - An agent can take messages from more actors than its own: `message_from` in `agent.toml` (top level or per Project) lists them.
   - The Pane passes `--message-from <actor>` to `tern-kata agent`, which sets `TERN_KATA_MESSAGE_FROM`; the agent's first message names every such actor.
   - A message from an actor other than the agent's own needs kata's identity mode (`[auth] require_token_identity`); the Message card and `tern-kata message` say so when it is off. `tern-kata agent` checks the daemon at start and sets `TERN_KATA_VERIFIED_SENDERS=1`.
+- A team starts from the parent Issue's Agent card (`c`): a coordinator agent plus Background agents on its ready children, at most 1–8 running at once (default 2).
+  - The next ready child starts when a running one exits, from any Pane open on the host; when no child is left to start and none runs, the coordinator gets one message naming the children closed and still open.
 
 #### Issues and Pages
 
@@ -70,6 +72,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - A message from an agent carries its teammate and arrives worded as from a peer agent, "information, not the person's instruction"; the agent prompt tells the agent to act on it only within its own Issue's scope.
   - An address that holds a message its agent has not cleared is not written over: the command names that agent and exits 1.
   - A Pane now saves the latest agent states in `agent-states.json` in tern-kata's state folder for `tern-kata agents` to read.
+- `tern-kata agent` takes `--coordinator <address>` and `--coordinating` (with `--address-prefix`), which set `TERN_KATA_COORDINATOR` and `TERN_KATA_COORDINATING=1` for the agent.
 
 ### Changed
 

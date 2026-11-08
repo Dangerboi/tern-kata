@@ -164,6 +164,8 @@ func init() {
 	}, nil, nil)
 
 	local(func(g *Gateway, ctx context.Context, cmd model.StartAgent) model.Msg { return g.startAgent(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.StartTeam) model.Msg { return g.startTeam(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, ctx context.Context, cmd model.DriveTeams) model.Msg { return g.driveTeams(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.RefreshAgents) model.Msg {
 		return g.refreshAgents(ctx, cmd)
 	}, nil, nil)

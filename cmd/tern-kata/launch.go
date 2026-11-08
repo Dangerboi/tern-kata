@@ -74,6 +74,11 @@ type LaunchPlan struct {
 	// AgentVerifiedSenders is what the wrapper found on the agent's route at start: the daemon verifies the actor of every write
 	// (data.VerifiedAuthKind). It sets TERN_KATA_VERIFIED_SENDERS=1; it is read only with an address prefix.
 	AgentVerifiedSenders bool
+	// AgentCoordinator is `agent --coordinator`: the Agent address of the coordinator of this child's team, which the wrapper sets as
+	// TERN_KATA_COORDINATOR; AgentCoordinating is `agent --coordinating`, which sets TERN_KATA_COORDINATING=1 for the coordinator itself.
+	// Both are read only with an address prefix, and an inherited value of either variable is dropped then.
+	AgentCoordinator  string
+	AgentCoordinating bool
 	// AgentRoute is `agent`'s --home, --db, --schema, --dsn-file, --env-file, --daemon, --server, --token-file, --auth-file, --allow-insecure and --trust-private-network: the Pane's daemon, which the wrapper turns into
 	// the agent's kata environment; zero leaves it as inherited.
 	AgentRoute data.AgentRoute
@@ -552,7 +557,7 @@ Usage:
   tern-kata docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
   tern-kata docbank supervise on|off
   tern-kata docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
-  tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]...] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
+  tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
@@ -717,7 +722,7 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
   docbank supervise on|off      off creates docbank.manual in tern-kata's config folder (mode 0600), so
                                 the plugin stops starting Docbank (a running one keeps running); on
                                 removes it. Says what it did
-  agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]...] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
+  agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
                                 any value; without --as it is left as inherited) and KATA_REF
                                 to the qualified Issue ref, with no KATA_INBOX_USER unless
@@ -729,7 +734,11 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 comment on its Issue; each --message-from (with --address-prefix) adds
                                 an actor whose messages the agent acts on, joined with commas into
                                 TERN_KATA_MESSAGE_FROM, and TERN_KATA_VERIFIED_SENDERS=1 is set when
-                                the daemon on the agent's route verifies actors (identity mode); its
+                                the daemon on the agent's route verifies actors (identity mode);
+                                --coordinator <address> (with --address-prefix) sets
+                                TERN_KATA_COORDINATOR to the address of the coordinator of this
+                                child's team, --coordinating TERN_KATA_COORDINATING=1 for the
+                                coordinator itself; its
                                 arguments passed on as typed and its exit status as ours;
                                 -- is required. --home sets KATA_HOME; --daemon names a catalog entry
                                 (its url and allow_insecure become KATA_SERVER and KATA_ALLOW_INSECURE,

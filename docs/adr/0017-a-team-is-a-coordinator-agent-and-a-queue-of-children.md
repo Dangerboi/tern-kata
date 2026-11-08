@@ -1,0 +1,28 @@
+# A team is a coordinator agent on a parent Issue and a queue of agents on its children
+
+A spec Issue with five ready children means five agents to start by hand and a person who relays every question between them. A **Team** puts one agent, the **Coordinator**, in charge of the agents on the parent's children, and keeps the next ready child starting as the running ones finish.
+
+This builds on [ADR-0014](0014-messages-to-agents-through-tern-katas-omp-extension.md) (a message is a slot the sender writes and the receiving agent's extension delivers) and [ADR-0015](0015-event-messages-come-from-the-agents-extension-without-a-slot.md) (what happens in kata reaches an agent from its extension, with no slot).
+
+## Decisions
+
+- **The coordinator's authority reaches its own children only.** Its messages to a child carry the person's authority over that child's Issue: it may change the child's scope, order its work, tell it to close or hand off. It never directs work on another Issue, and a message from another child stays a peer's note (ADR-0014's trust rule).
+- **A child recognises its coordinator by `TERN_KATA_COORDINATOR`.** The Pane starts a child through `tern-kata agent --coordinator <address>`, which sets `TERN_KATA_COORDINATOR=<coordinator's Agent address>`; the coordinator itself starts with `--coordinating`, which sets `TERN_KATA_COORDINATING=1`. Both need `--address-prefix`, so an agent without an address (its command is not omp) is never part of a team, and the wrapper drops an inherited value of either variable. The child keeps the coordinator it started with; a new coordinator does not take over running children. A team is refused when the agent command is not omp, and when `<agent name>-<block id>` cannot be a teammate (over 64 bytes), for a child without a teammate part to compare could not tell its coordinator from the person.
+- **The queue lives in `teams.json` and any Pane drives it.** `teams.json` in the state folder, beside `agents.json`, holds per team the parent's uid and qualified ref, its Project, the coordinator's block and address, the limit (1 to 8, default 2), the state and the children the team started (uid, ref, block). Every change rereads the file and writes only when it has not changed since, as `UpdateAgents` does. On each agent relay and each event on the daemon, every Pane on the host starts children for every team while fewer than the limit run; with no Pane open nothing new starts. The next child is the first of `kata ready --unowned`, in its order, that is a child of the parent (`kata show --json` `.children`), in the parent's Project, not started by this team before and with no running agent. The start is recorded with the guarded write before the block starts, so two Panes never start the same child; a start recorded with no block for more than two minutes (a Pane that died between the two) stops counting.
+- **Children are Background agents** in the Issue's checkout, shared with the coordinator and the other children. A child frees its place when its agent exits or its block closes. A child the team has run is never started again, so a child whose agent gave up comes back to the person.
+- **States.** `running` starts children. `paused` starts nothing and never ends by itself (the key that sets it is on the parent's Agent card). `stopping` follows the coordinator's exit: nothing new starts, running children keep working, and the record goes once none of them runs; until then the Issue counts as having a team. `ending` is a team whose end message waits for the coordinator's unread message to clear.
+- **The end of a team is one message.** A `running` team with no child left to start and none running writes one slot to the coordinator's address, from the person (the Pane's actor, no teammate), naming the children closed and those still open, and its record goes. The state first becomes `ending` through the guarded write, which only one Pane wins; the write of the slot is guarded on the address holding nothing. When the coordinator holds an unread message the slot is not replaced, the record stays `ending`, and a later drive writes the message once the address is clear.
+- **Comments in, slots out.** Children report and ask by comment on their own Issue; the coordinator's extension forwards what happens on its children as ADR-0015's reactions do, with no slot. Slots run only from the coordinator (and the person) to the child and to the coordinator for the end message.
+
+## Considered and rejected
+
+- **A queue held in one Pane's memory:** quitting that Pane would stop the team. The record is a file every Pane reads.
+- **Starting every ready child at once:** agents sharing one checkout trip over each other; a limit with a first-in-first-out queue in `kata ready` order keeps the number small and lets the coordinator steer the order through priority and blocked-by.
+- **A worktree per child:** out of scope; the children share the checkout and the prompts tell them to commit only their own files.
+- **A new coordinator taking over running children:** a child keeps the coordinator it started with.
+
+## Consequences
+
+- Delivery of a team's messages needs the coordinator's and children's omp extension; the daemon's identity tokens, where on, make the sender trustworthy, and on a daemon without them the teammate on a slot is advisory, as ADR-0014 documents for any message.
+- The queue moves only while some Pane is open on the host and a relay or event arrives.
+- A Pane connected to another daemon than the team's parent cannot show the parent and leaves that team as it is.

@@ -70,7 +70,8 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 // TERN_KATA_FORWARD_COMMENTS=1, which the extension reads, only when KATA_TEAMMATE is set (without it the agent's own comments
 // would be forwarded back to it); an inherited value is dropped. plan.AgentMessageFrom sets TERN_KATA_MESSAGE_FROM (comma-separated)
 // and plan.AgentVerifiedSenders TERN_KATA_VERIFIED_SENDERS=1, which the extension reads for whose messages it acts on; inherited values
-// of both are dropped, so a person's shell cannot widen what the agent trusts.
+// of both are dropped, so a person's shell cannot widen what the agent trusts. plan.AgentCoordinator sets TERN_KATA_COORDINATOR and
+// plan.AgentCoordinating TERN_KATA_COORDINATING=1, with an address prefix only, which also drops inherited values of both.
 func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string {
 	dropped := []string{"KATA_REF", "KATA_INBOX_USER", "KATA_TEAMMATE", "TERN_KATA_MESSAGE_FROM", "TERN_KATA_VERIFIED_SENDERS"}
 	if plan.Actor != "" {
@@ -78,7 +79,7 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 	}
 	block := ""
 	if plan.AgentAddressPrefix != "" {
-		dropped = append(dropped, "KATA_OMP_LIVE_INBOX", "TERN_KATA_FORWARD_COMMENTS")
+		dropped = append(dropped, "KATA_OMP_LIVE_INBOX", "TERN_KATA_FORWARD_COMMENTS", "TERN_KATA_COORDINATOR", "TERN_KATA_COORDINATING")
 		block = strings.TrimSpace(envValue(environ, "TERN_PANE", caseInsensitive))
 	}
 	env := envWithout(environ, caseInsensitive, dropped...)
@@ -95,6 +96,12 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 		}
 		if plan.AgentVerifiedSenders {
 			env = append(env, "TERN_KATA_VERIFIED_SENDERS=1")
+		}
+		if plan.AgentCoordinator != "" {
+			env = append(env, "TERN_KATA_COORDINATOR="+plan.AgentCoordinator)
+		}
+		if plan.AgentCoordinating {
+			env = append(env, "TERN_KATA_COORDINATING=1")
 		}
 		if block != "" {
 			env = append(env, "KATA_INBOX_USER="+data.AgentAddress(plan.AgentAddressPrefix, block))

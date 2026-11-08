@@ -1,0 +1,508 @@
+package data
+
+import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
+	"github.com/Dangerboi/tern-kata/internal/model"
+	gen "go.kenn.io/kata/pkg/client/generated"
+)
+
+// TeamsFile is the Team record in tern-kata's state folder, beside agents.json: one record per team (model.Team).
+const TeamsFile = "teams.json"
+
+// teamPendingMaxAge is how long a child recorded without a block counts as being started. A Pane that died between the record and
+// the start leaves such a child; after this it counts as neither running nor started, so the team is not held by it forever.
+const teamPendingMaxAge = 2 * time.Minute
+
+// teamsDoc is teams.json.
+type teamsDoc struct {
+	Teams []model.Team `json:"teams"`
+}
+
+// ReadTeams reads teams.json at path; a missing file is no teams.
+func ReadTeams(path string) ([]model.Team, error) {
+	token, err := guardedfile.Read(path)
+	if err != nil {
+		return nil, err
+	}
+	return parseTeams(path, token)
+}
+
+func parseTeams(path string, token guardedfile.Token) ([]model.Team, error) {
+	if token.Text() == "" {
+		return nil, nil
+	}
+	var doc teamsDoc
+	if err := json.Unmarshal([]byte(token.Text()), &doc); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return doc.Teams, nil
+}
+
+// UpdateTeams reads teams.json again, lets change return the new list, and writes it only while the file is still what was read,
+// as UpdateAgents does for agents.json: when another Pane changed the file in between, the whole change runs again on the new
+// list, so change must tolerate being called more than once and must start its own results afresh. A file that keeps changing is
+// an error wrapping guardedfile.ErrChanged.
+func UpdateTeams(path string, change func([]model.Team) []model.Team) ([]model.Team, error) {
+	var next []model.Team
+	err := guardedfile.Update(path, 0o700, func(token guardedfile.Token) ([]byte, error) {
+		current, err := parseTeams(path, token)
+		if err != nil {
+			return nil, err
+		}
+		next = change(cloneTeams(current))
+		raw, err := json.MarshalIndent(teamsDoc{Teams: next}, "", "  ")
+		return append(raw, '\n'), err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return next, nil
+}
+
+func cloneTeams(list []model.Team) []model.Team {
+	out := slices.Clone(list)
+	for i := range out {
+		out[i].Children = slices.Clone(out[i].Children)
+	}
+	return out
+}
+
+// teamPaths are teams.json and agents.json, with the state folder's error when there is none.
+func (g *Gateway) teamPaths() (teams, agents string, err error) {
+	dirs, err := g.workerDirs()
+	if dirs.State == "" {
+		return "", "", cmp.Or(err, errors.New("tern-kata's state folder is not known"))
+	}
+	return filepath.Join(dirs.State, TeamsFile), filepath.Join(dirs.State, AgentsFile), nil
+}
+
+// teamRefusal is why the agent settings cannot make a team, "" when they can: a coordinator directs children by message, so it
+// needs an omp agent with an Agent address, and a child needs a name for which <name>-<block id> is a teammate: without one it
+// cannot tell its coordinator from the person.
+func teamRefusal(settings AgentSettings, actor string) string {
+	if reason := agentNoAddress(settings.Command); reason != "" {
+		return "A team needs an omp agent: the agent command is not omp, so no extension loads."
+	}
+	if actor == "" {
+		return "A team needs an actor: agents have no address without one."
+	}
+	// A block id has up to 20 digits.
+	if settings.Name == "" || !model.ValidTeammate(settings.Name+"-"+strings.Repeat("9", 20)) {
+		return fmt.Sprintf("The agent name %q cannot be a teammate: <name>-<block id> must be at most 64 bytes.", settings.Name)
+	}
+	return ""
+}
+
+// startTeam starts the coordinator on the Issue, then records the team. The coordinator runs with TERN_KATA_COORDINATING=1; the
+// children start from DriveTeams.
+func (g *Gateway) startTeam(ctx context.Context, cmd model.StartTeam) model.TeamStarted {
+	failed := func(err error) model.TeamStarted {
+		return model.TeamStarted{Placement: cmd.Placement, IssueRef: cmd.IssueRef, Err: err}
+	}
+	if cmd.Limit < model.TeamMinLimit || cmd.Limit > model.TeamMaxLimit {
+		return failed(fmt.Errorf("children at once must be %d to %d", model.TeamMinLimit, model.TeamMaxLimit))
+	}
+	dirs, err := g.workerDirs()
+	if dirs.Config == "" || dirs.State == "" {
+		return failed(cmp.Or(err, errors.New("tern-kata's folders are not known")))
+	}
+	cfg, err := ReadAgentConfig(filepath.Join(dirs.Config, AgentConfigFile))
+	if err != nil {
+		return failed(err)
+	}
+	if reason := teamRefusal(cfg.For(cmd.ProjectName), cmd.Actor); reason != "" {
+		return failed(errors.New(reason))
+	}
+	teamsFile, agentsFile := filepath.Join(dirs.State, TeamsFile), filepath.Join(dirs.State, AgentsFile)
+	teams, err := ReadTeams(teamsFile)
+	if err != nil {
+		return failed(err)
+	}
+	if slices.ContainsFunc(teams, func(t model.Team) bool { return t.ParentUID == cmd.IssueUID }) {
+		return failed(errors.New(model.TeamExistsReason))
+	}
+	open := false
+	if _, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+		shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.IssueUID)
+		if err != nil {
+			return nil, daemonError(err)
+		}
+		open = slices.ContainsFunc(shown.Children, func(child gen.IssueOut) bool { return child.ProjectID == cmd.ProjectID && child.Status == "open" })
+		return nil, nil
+	}); err != nil {
+		return failed(err)
+	}
+	if !open {
+		return failed(fmt.Errorf("%s has no open child in the Project %s", cmd.IssueRef, cmd.ProjectName))
+	}
+	started := g.startAgent(ctx, model.StartAgent{Placement: cmd.Placement, IssueUID: cmd.IssueUID, IssueRef: cmd.IssueRef, IssueTitle: cmd.IssueTitle,
+		ProjectID: cmd.ProjectID, ProjectName: cmd.ProjectName, Workspace: cmd.Workspace, PaneBlock: cmd.PaneBlock, Actor: cmd.Actor, Coordinating: true})
+	if started.Err != nil {
+		return failed(started.Err)
+	}
+	entry := started.Entry
+	team := model.Team{ParentUID: cmd.IssueUID, ParentRef: cmd.IssueRef, ProjectID: cmd.ProjectID, Project: cmd.ProjectName,
+		CoordinatorBlock: entry.Block, CoordinatorAddress: entry.Address, Limit: cmd.Limit, State: model.TeamRunning, Children: []model.TeamChild{}}
+	recorded := false
+	_, err = UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
+		recorded = !slices.ContainsFunc(list, func(t model.Team) bool { return t.ParentUID == cmd.IssueUID })
+		if recorded {
+			list = append(list, team)
+		}
+		return list
+	})
+	if err == nil && !recorded {
+		err = errors.New(model.TeamExistsReason)
+	}
+	if err != nil {
+		if _, closeErr := g.closeAndForget(ctx, agentsFile, entry.Block); closeErr != nil {
+			return failed(fmt.Errorf("the coordinator started in block %s but the team could not be recorded (%w), and the block could not be closed (%w): close block %s by hand",
+				entry.Block, err, closeErr, entry.Block))
+		}
+		return failed(fmt.Errorf("the coordinator was stopped because the team could not be recorded: %w", err))
+	}
+	return model.TeamStarted{Placement: cmd.Placement, IssueRef: cmd.IssueRef, Entry: entry, Note: started.Note}
+}
+
+// agentAlive says an agent is mapped in block and has not exited, as far as exited (the blocks a relay listed as exited) says.
+func agentAlive(entries []model.AgentEntry, exited []string, block string) bool {
+	return block != "" && slices.ContainsFunc(entries, func(e model.AgentEntry) bool { return e.Block == block }) && !slices.Contains(exited, block)
+}
+
+// issueHasAgent says an agent that has not exited is mapped on the Issue.
+func issueHasAgent(entries []model.AgentEntry, exited []string, uid string) bool {
+	return slices.ContainsFunc(entries, func(e model.AgentEntry) bool { return e.IssueUID == uid && !slices.Contains(exited, e.Block) })
+}
+
+// childRunning says the child holds a place of the team now: its agent is mapped and has not exited, or its start is recorded and
+// recent. A child whose agent exited or whose block closed has freed its place.
+func childRunning(c model.TeamChild, entries []model.AgentEntry, exited []string, now time.Time) bool {
+	if c.Block == "" {
+		return now.Sub(c.StartedAt) < teamPendingMaxAge
+	}
+	return agentAlive(entries, exited, c.Block)
+}
+
+// runningChildren counts the team's children that hold a place, reading agents.json as it stands.
+func runningChildren(agentsFile string, exited []string, t model.Team, now time.Time) (int, error) {
+	entries, err := ReadAgents(agentsFile)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, c := range t.Children {
+		if childRunning(c, entries, exited, now) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func teamIndex(list []model.Team, uid string) int {
+	return slices.IndexFunc(list, func(t model.Team) bool { return t.ParentUID == uid })
+}
+
+// driveTeams moves every team of teams.json forward (see model.DriveTeams). Pane-wide failures are Err; a team whose parent the
+// daemon cannot show (another daemon's, or kata unreachable) is left as it is.
+func (g *Gateway) driveTeams(ctx context.Context, cmd model.DriveTeams) model.TeamsDriven {
+	teamsFile, agentsFile, err := g.teamPaths()
+	if err != nil {
+		return model.TeamsDriven{Err: err}
+	}
+	teams, err := ReadTeams(teamsFile)
+	if err != nil {
+		return model.TeamsDriven{Err: err}
+	}
+	var out model.TeamsDriven
+	for _, t := range teams {
+		if err := g.driveTeam(ctx, cmd, teamsFile, agentsFile, t.ParentUID, &out); err != nil {
+			out.Err = err
+			return out
+		}
+	}
+	teams, err = ReadTeams(teamsFile)
+	out.Teams, out.Err = teams, cmp.Or(out.Err, err)
+	return out
+}
+
+// driveTeam is one team's step: a coordinator that exited makes it stopping; paused does nothing; stopping goes once no child
+// runs; ending writes the end message; running starts children and, with none to start and none running, ends.
+func (g *Gateway) driveTeam(ctx context.Context, cmd model.DriveTeams, teamsFile, agentsFile, uid string, out *model.TeamsDriven) error {
+	teams, err := ReadTeams(teamsFile)
+	if err != nil {
+		return err
+	}
+	i := teamIndex(teams, uid)
+	if i < 0 {
+		return nil
+	}
+	t := teams[i]
+	entries, err := ReadAgents(agentsFile)
+	if err != nil {
+		return err
+	}
+	now := g.now()
+	if t.State != model.TeamStopping && !agentAlive(entries, cmd.Exited, t.CoordinatorBlock) {
+		after, err := UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
+			if i := teamIndex(list, uid); i >= 0 {
+				list[i].State = model.TeamStopping
+			}
+			return list
+		})
+		if err != nil {
+			return err
+		}
+		if i := teamIndex(after, uid); i >= 0 {
+			t = after[i]
+		}
+	}
+	switch t.State {
+	case model.TeamStopping:
+		_, err := UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
+			i := teamIndex(list, uid)
+			if i < 0 || list[i].State != model.TeamStopping {
+				return list
+			}
+			if n, err := runningChildren(agentsFile, cmd.Exited, list[i], now); err != nil || n > 0 {
+				return list
+			}
+			return slices.Delete(list, i, i+1)
+		})
+		return err
+	case model.TeamEnding:
+		return g.writeEndMessage(ctx, cmd, teamsFile, uid)
+	case model.TeamRunning:
+		return g.queueTeam(ctx, cmd, teamsFile, agentsFile, t, entries, out)
+	}
+	return nil
+}
+
+// queueTeam starts the next ready children while fewer than the limit run, and ends the team when none is left and none runs.
+func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile, agentsFile string, t model.Team, entries []model.AgentEntry, out *model.TeamsDriven) error {
+	var parent *gen.ShowIssueResponseBody
+	var ready []gen.IssueOut
+	if _, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+		shown, err := c.showIssue(ctx, t.ProjectID, t.ParentUID)
+		if err != nil {
+			return nil, daemonError(err)
+		}
+		unowned := true
+		r, err := c.ReadyIssuesWithResponse(ctx, &gen.ReadyIssuesRequestOptions{
+			PathParams: &gen.ReadyIssuesPath{ProjectID: t.ProjectID}, Query: &gen.ReadyIssuesQuery{Unowned: &unowned}})
+		if err != nil {
+			return nil, daemonError(err)
+		}
+		if r.JSON200 == nil {
+			return nil, errors.New("kata returned no ready Issues")
+		}
+		parent, ready = shown, r.JSON200.Issues
+		return nil, nil
+	}); err != nil {
+		return nil //nolint:nilerr // the parent is another daemon's, or kata is not reachable now: the team waits for the next trigger
+	}
+	childOf := make(map[string]bool, len(parent.Children))
+	for _, c := range parent.Children {
+		childOf[c.UID] = true
+	}
+	var candidates []gen.IssueOut
+	for _, c := range ready {
+		if childOf[c.UID] && c.ProjectID == t.ProjectID && !t.Started(c.UID) && !issueHasAgent(entries, cmd.Exited, c.UID) {
+			candidates = append(candidates, c)
+		}
+	}
+	held := false // the limit is reached, or the team is no longer running
+	failed := false
+	for _, c := range candidates {
+		claimed, full, err := claimChild(teamsFile, agentsFile, cmd.Exited, t.ParentUID, c, g.now())
+		if err != nil {
+			return err
+		}
+		if full {
+			held = true
+			break
+		}
+		if !claimed {
+			continue
+		}
+		start := model.StartAgent{Placement: model.AgentBackground, IssueUID: c.UID, IssueRef: c.QualifiedID, IssueTitle: c.Title,
+			ProjectID: c.ProjectID, ProjectName: t.Project, PaneBlock: cmd.PaneBlock, Actor: cmd.Actor, Coordinator: t.CoordinatorAddress}
+		if cmd.BoundProjectID == t.ProjectID {
+			start.Workspace = cmd.Workspace
+		}
+		started := g.startAgent(ctx, start)
+		if started.Err != nil {
+			failed = true
+			out.Failures = append(out.Failures, fmt.Sprintf("Cannot start an agent on %s for the team on %s: %s", c.QualifiedID, t.ParentRef, started.Err))
+			if err := forgetChild(teamsFile, t.ParentUID, c.UID, ""); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := forgetChild(teamsFile, t.ParentUID, c.UID, started.Entry.Block); err != nil {
+			return err
+		}
+		out.Started = append(out.Started, started.Entry)
+	}
+	if held || failed {
+		return nil
+	}
+	// Read the record again: children another Pane started are in it now.
+	after, err := ReadTeams(teamsFile)
+	if err != nil {
+		return err
+	}
+	i := teamIndex(after, t.ParentUID)
+	if i < 0 {
+		return nil
+	}
+	if n, err := runningChildren(agentsFile, cmd.Exited, after[i], g.now()); err != nil || n > 0 {
+		return err
+	}
+	return g.endTeam(ctx, cmd, teamsFile, t.ParentUID)
+}
+
+// claimChild records c as started by the team, before its agent starts, so two Panes never start the same child. claimed is false
+// when the team already has the child or the record is gone; full says the limit is reached or the team no longer runs, so no
+// other candidate can start either. A recorded start with no block is completed by forgetChild.
+func claimChild(teamsFile, agentsFile string, exited []string, uid string, c gen.IssueOut, now time.Time) (claimed, full bool, err error) {
+	_, err = UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
+		claimed, full = false, false
+		i := teamIndex(list, uid)
+		if i < 0 || list[i].State != model.TeamRunning {
+			full = true
+			return list
+		}
+		t := &list[i]
+		entries, readErr := ReadAgents(agentsFile)
+		if readErr != nil {
+			full = true
+			return list
+		}
+		t.Children = slices.DeleteFunc(t.Children, func(child model.TeamChild) bool {
+			return child.Block == "" && now.Sub(child.StartedAt) >= teamPendingMaxAge
+		})
+		if t.Started(c.UID) {
+			return list
+		}
+		running := 0
+		for _, child := range t.Children {
+			if childRunning(child, entries, exited, now) {
+				running++
+			}
+		}
+		if running >= t.Limit {
+			full = true
+			return list
+		}
+		t.Children = append(t.Children, model.TeamChild{UID: c.UID, Ref: c.QualifiedID, StartedAt: now.UTC().Truncate(time.Second)})
+		claimed = true
+		return list
+	})
+	return claimed && err == nil, full && err == nil, err
+}
+
+// forgetChild finishes a recorded start: with block set, the child's agent runs in that block; with "", the start failed and the
+// record of it goes, so the child can be started again.
+func forgetChild(teamsFile, parentUID, childUID, block string) error {
+	_, err := UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
+		i := teamIndex(list, parentUID)
+		if i < 0 {
+			return list
+		}
+		t := &list[i]
+		if block == "" {
+			t.Children = slices.DeleteFunc(t.Children, func(c model.TeamChild) bool { return c.UID == childUID && c.Block == "" })
+			return list
+		}
+		for j := range t.Children {
+			if t.Children[j].UID == childUID {
+				t.Children[j].Block = block
+			}
+		}
+		return list
+	})
+	return err
+}
+
+// endTeam turns a running team into an ending one, claiming the end message so two Panes never write it, then writes it.
+func (g *Gateway) endTeam(ctx context.Context, cmd model.DriveTeams, teamsFile, uid string) error {
+	claimed := false
+	if _, err := UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
+		claimed = false
+		if i := teamIndex(list, uid); i >= 0 && list[i].State == model.TeamRunning {
+			list[i].State = model.TeamEnding
+			claimed = true
+		}
+		return list
+	}); err != nil || !claimed {
+		return err
+	}
+	return g.writeEndMessage(ctx, cmd, teamsFile, uid)
+}
+
+// writeEndMessage writes the end message of an ending team to its coordinator's address, from the Pane's actor with no teammate, and
+// removes the record once it is written. A message the coordinator has not cleared is never replaced: the record stays ending
+// and a later drive writes the message once the address is clear.
+func (g *Gateway) writeEndMessage(ctx context.Context, cmd model.DriveTeams, teamsFile, uid string) error {
+	teams, err := ReadTeams(teamsFile)
+	if err != nil {
+		return err
+	}
+	i := teamIndex(teams, uid)
+	if i < 0 || teams[i].State != model.TeamEnding {
+		return nil
+	}
+	t := teams[i]
+	var sent model.AgentMessageSent
+	_, err = g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+		shown, err := c.showIssue(ctx, t.ProjectID, t.ParentUID)
+		if err != nil {
+			return nil, daemonError(err)
+		}
+		sent, err = c.SendAgentMessage(ctx, model.SendAgentMessage{ProjectID: t.ProjectID, UID: t.ParentUID, Actor: cmd.Actor,
+			Address: t.CoordinatorAddress, Message: TeamEndMessage(t, shown.Children)})
+		return nil, err
+	})
+	if err != nil || sent.Held != "" {
+		return nil //nolint:nilerr // the next drive tries again
+	}
+	_, err = UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
+		if i := teamIndex(list, uid); i >= 0 && list[i].State == model.TeamEnding {
+			return slices.Delete(list, i, i+1)
+		}
+		return list
+	})
+	return err
+}
+
+// TeamEndMessage is the one message the coordinator gets when its team has no child left to start and none running: the children
+// closed and those still open, as the parent's children read now.
+func TeamEndMessage(t model.Team, children []gen.IssueOut) string {
+	var closed, open []string
+	for _, c := range children {
+		label := c.QualifiedID + " " + c.Title
+		if c.Status == "closed" {
+			closed = append(closed, label)
+		} else {
+			open = append(open, label)
+		}
+	}
+	list := func(items []string) string {
+		if len(items) == 0 {
+			return "none"
+		}
+		return strings.Join(items, "; ")
+	}
+	return fmt.Sprintf("The team on %s has no child left to start and none is running. Children closed (%d): %s. Children still open (%d): %s.",
+		t.ParentRef, len(closed), list(closed), len(open), list(open))
+}

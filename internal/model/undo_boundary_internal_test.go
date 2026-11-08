@@ -119,6 +119,8 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{ShowRun{}, false},
 		{StartAgent{}, false},
 		{StopRecurrenceCmd{}, true},
+		{StartTeam{}, false},
+		{DriveTeams{}, false},
 		{StopWorker{}, false},
 		{Subscribe{}, false},
 		{SwitchDaemon{}, false},
