@@ -390,7 +390,8 @@ func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 		next, cmds := attentionCleared(m, msg)
 		return next, cmds, true
 	case AgentMessageSent:
-		return agentMessageSent(m, msg), nil, true
+		next, cmds := agentMessageSent(m, msg)
+		return next, cmds, true
 	case AttentionSelectMsg:
 		m.Attention.Selected, m.Focus = msg.UID, ColumnList
 		return m, nil, true

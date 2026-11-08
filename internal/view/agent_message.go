@@ -108,6 +108,9 @@ func sweepLayer(m model.Model) tern.Element {
 		}
 		standing, last := m.SweepStatus(t)
 		text := fmt.Sprintf("%s on %s: %s", t.Agent, t.IssueRef, standing.Text)
+		if t.Remote() { // standing.Text already reads "on <host>: ..."
+			text = fmt.Sprintf("%s on %s, %s", t.Agent, t.IssueRef, standing.Text)
+		}
 		if last != "" {
 			text += " (" + last + ")"
 		}

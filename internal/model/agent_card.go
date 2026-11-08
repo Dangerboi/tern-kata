@@ -342,7 +342,7 @@ func (m Model) AgentCardUnavailable(action Action) string {
 		}
 	case AgentCardMessage, AgentCardQuickReply:
 		if isRemote {
-			return RemoteMessageRefusal
+			return m.remoteMessageRefusal(remote)
 		}
 		return m.agentMessageRefusal(local.AgentEntry)
 	case AgentCardForget:

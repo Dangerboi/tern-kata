@@ -32,20 +32,50 @@ type BroadcastTarget struct {
 	Worked bool
 	// Commented says a sweep found a comment by the agent on its Issue since the sweep was sent; Reading says that read is in flight.
 	Commented, Reading bool
+	// Host and HostID name the host of an agent another host started (an Agent record); both are "" for an agent of this host.
+	Host, HostID string
 }
 
+// Remote says the target runs on another host.
+func (t BroadcastTarget) Remote() bool { return t.HostID != "" }
+
 // BroadcastTargets are the agents a broadcast on the Issue uid (qualified id ref) goes through: those this Pane knows on it and
-// on its open children that have not exited, each with the reason its message cannot be written, "" when it can. An agent that
-// exited, or runs on a closed child, is not one of them.
+// on its open children that have not exited, then the agents other hosts published on them, each with the reason its message cannot
+// be written, "" when it can. An agent that exited, or runs on a closed child, is not one of them.
 func (m Model) BroadcastTargets(uid, ref string) []BroadcastTarget {
 	refs := map[string]string{uid: ref}
+	order := []string{uid}
 	for _, child := range m.Relationships.Of(uid).OpenChildren() {
 		refs[child.UID] = child.QualifiedID
+		order = append(order, child.UID)
 	}
-	return m.runningTargets(func(e AgentEntry) (string, bool) {
+	targets := m.runningTargets(func(e AgentEntry) (string, bool) {
 		issueRef, ok := refs[e.IssueUID]
 		return issueRef, ok
 	})
+	for _, issueUID := range order {
+		targets = append(targets, m.remoteTargets(issueUID, refs[issueUID])...)
+	}
+	return targets
+}
+
+// remoteTargets are the agents other hosts published on the Issue uid (qualified id ref), each with the reason the sender rule
+// gives, "" when it can take the message.
+func (m Model) remoteTargets(uid, ref string) []BroadcastTarget {
+	var targets []BroadcastTarget
+	for _, r := range m.RemoteAgents(uid) {
+		targets = append(targets, m.remoteBroadcastTarget(r, uid, ref))
+	}
+	return targets
+}
+
+func (m Model) remoteBroadcastTarget(r RemoteAgent, uid, ref string) BroadcastTarget {
+	t := BroadcastTarget{Agent: r.Name, Address: r.Address, Block: r.Block, IssueUID: uid, IssueRef: ref, Skipped: m.remoteMessageRefusal(r),
+		Host: r.HostLabel(), HostID: r.HostID}
+	if issue := m.issueByUID(uid); issue != nil {
+		t.ProjectID = issue.ProjectID
+	}
+	return t
 }
 
 // runningTargets are the agents of the mapping that have not exited and for which issueRef names an Issue, each with that ref.
@@ -126,7 +156,7 @@ func broadcastSent(m Model, msg AgentMessageSent) Model {
 	case msg.Held != "":
 		targets[i].Skipped = AgentHoldsMessageRefusal
 	default:
-		targets[i].Worked = m.agentState(targets[i].Block) == AgentWorking
+		targets[i].Worked = !targets[i].Remote() && m.agentState(targets[i].Block) == AgentWorking
 	}
 	f.Targets = targets
 	if !slices.ContainsFunc(targets, func(t BroadcastTarget) bool { return t.Skipped == "" && !t.Answered }) {

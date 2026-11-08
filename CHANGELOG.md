@@ -49,6 +49,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - An agent whose address another machine already holds publishes no record and stays local; its Agent card row says which host uses the address.
 - The Agent card lists agents running on other machines after this host's own, as "on <host> · started <time>", read from their Agent records; `f` forgets one, after a question, and clears any message left at its address.
   - The Agent badge counts them too; an Issue with only remote agents reads "agent on <host>" or "agents on N hosts".
+  - `m` and `r` reach them from their Agent card row and, for a request no local agent raised, from the Attention Page (the newest agent on that Issue with the request's name); `S` and the wrap-up include them, the wrap-up listing each as "on <host>: finished" or "on <host>: not yet". A daemon without identity mode, or an actor the agent does not list, is refused with the reason.
 
 #### Issues and Pages
 

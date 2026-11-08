@@ -52,8 +52,29 @@ func RemoteAgentRefusal(host string) string {
 	return fmt.Sprintf("That agent runs on %s; this Pane can only message it or forget it.", host)
 }
 
-// RemoteMessageRefusal is why `m` and `r` are off on a remote row.
-const RemoteMessageRefusal = "Messages to an agent on another host are not offered yet."
+// remoteMessageRefusal is why a message reaches no remote agent r, "" when it can: it is not omp, it has no address, or the sender
+// rule refuses (the agent is on another host, so the daemon must verify actors).
+func (m Model) remoteMessageRefusal(r RemoteAgent) string {
+	switch {
+	case r.NoAddress == AgentNotOmp:
+		return AgentNotOmpRefusal
+	case r.Address == "":
+		return AgentWithoutAddressRefusal
+	}
+	return MessageSenderRefusal(m.Actor, cmp.Or(r.Actor, AgentAddressActor(r.Address)), r.MessageFrom, true, m.VerifiedSenders)
+}
+
+// newestRemoteAgentOn is the agent other hosts published on an Issue, among those match accepts, that started last.
+func (m Model) newestRemoteAgentOn(issueUID string, match func(RemoteAgent) bool) (RemoteAgent, bool) {
+	var target RemoteAgent
+	found := false
+	for _, r := range m.RemoteAgents(issueUID) {
+		if match(r) && (!found || r.StartedAt.After(target.StartedAt)) {
+			target, found = r, true
+		}
+	}
+	return target, found
+}
 
 // AgentForgetLocalReason is why Forget is off on a row of this host's own agent.
 const AgentForgetLocalReason = "Forget removes the record of an agent on another host; stop this agent with x."

@@ -59,6 +59,9 @@ func runPendingSweep(m Model) (Model, []Cmd) {
 
 func sweepKnownAgents(m Model) (Model, []Cmd) {
 	targets := m.runningTargets(func(e AgentEntry) (string, bool) { return e.IssueRef, true })
+	for _, issue := range m.Issues {
+		targets = append(targets, m.remoteTargets(issue.UID, issue.QualifiedID)...)
+	}
 	if len(targets) == 0 {
 		m.Notice = NoAgentsToSweepRefusal
 		return m, nil
@@ -86,7 +89,7 @@ func trackSweep(m Model) (Model, []Cmd) {
 	}
 	targets := append([]BroadcastTarget(nil), f.Targets...)
 	for i, t := range targets {
-		if t.Skipped == "" && t.Answered && !t.Worked && m.Agents.entered(t.Block, AgentWorking) {
+		if t.Skipped == "" && t.Answered && !t.Worked && !t.Remote() && m.Agents.entered(t.Block, AgentWorking) {
 			targets[i].Worked = true
 		}
 	}
@@ -104,7 +107,11 @@ func readSweepComments(m Model) (Model, []Cmd) {
 	targets := append([]BroadcastTarget(nil), f.Targets...)
 	var cmds []Cmd
 	for i, t := range targets {
-		if t.Skipped != "" || !t.Answered || !t.Worked || t.Commented || t.Reading || m.agentState(t.Block) != AgentIdle || !m.agentMapped(t.Block) {
+		if t.Skipped != "" || !t.Answered || t.Commented || t.Reading {
+			continue
+		}
+		// An agent on another host has no relayed state: its comment since the sweep is the only sign, so it is read until it comes.
+		if t.Remote() && m.remoteRecordGone(t) || !t.Remote() && (!t.Worked || m.agentState(t.Block) != AgentIdle || !m.agentMapped(t.Block)) {
 			continue
 		}
 		targets[i].Reading = true
@@ -159,6 +166,9 @@ func sweepCommentsRead(m Model, msg SweepCommentsRead) Model {
 // idle after it worked on the wrap-up and has commented on its Issue since; not yet otherwise. Last is the agent's last message,
 // first line only (capped as the Agent card's is), "" when none.
 func (m Model) SweepStatus(t BroadcastTarget) (standing SweepStanding, last string) {
+	if t.Remote() {
+		return m.remoteSweepStatus(t), ""
+	}
 	switch state := m.agentState(t.Block); {
 	case state == AgentExited || !m.agentMapped(t.Block):
 		standing = SweepStanding{true, SweepFinishedExited}
@@ -172,6 +182,23 @@ func (m Model) SweepStatus(t BroadcastTarget) (standing SweepStanding, last stri
 		standing = SweepStanding{false, SweepNotYet}
 	}
 	return standing, m.AgentLastLine(t.Block)
+}
+
+// remoteSweepStatus is where the sweep stands with an agent on another host: "on <host>: finished" once it has commented on its
+// Issue since the sweep or its record is gone, else "on <host>: not yet".
+func (m Model) remoteSweepStatus(t BroadcastTarget) SweepStanding {
+	if t.Commented || m.remoteRecordGone(t) {
+		return SweepStanding{true, "on " + t.Host + ": finished"}
+	}
+	return SweepStanding{false, "on " + t.Host + ": not yet"}
+}
+
+// remoteRecordGone says the Issue of the remote target is loaded and no longer holds the agent's record.
+func (m Model) remoteRecordGone(t BroadcastTarget) bool {
+	if m.issueByUID(t.IssueUID) == nil {
+		return false
+	}
+	return !slices.ContainsFunc(m.RemoteAgents(t.IssueUID), func(r RemoteAgent) bool { return r.HostID == t.HostID && r.Block == t.Block })
 }
 
 // SweepFinished counts the agents the sweep wrote to that have finished.

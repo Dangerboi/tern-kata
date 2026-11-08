@@ -123,7 +123,8 @@ func (AgentAddressCleared) msg() {}
 
 // messageTarget is the agent a message on request goes to, and why `m` is off ("" when it is on). The agent is one this host's
 // Panes started on the request's Issue whose name the request carries, in a request this Pane's actor wrote, as an agent's
-// Attention request is: the newest that waits, else the newest. A request that reads as the one this Pane writes for an agent that
+// Attention request is: the newest that waits, else the newest. For a request no such agent raised, it is the newest agent another
+// host published on that Issue whose name the request carries. A request that reads as the one this Pane writes for an agent that
 // exited, whose entry went with its block, is the exited agent's.
 func (m Model) messageTarget(request AttentionRequest) (AgentEntry, string) {
 	var target AgentEntry
@@ -131,6 +132,12 @@ func (m Model) messageTarget(request AttentionRequest) (AgentEntry, string) {
 	ours := request.Slot.Kind == "" && !request.Slot.Broadcast && request.Slot.From == m.Actor
 	if ours {
 		target, found = m.newestAgentOn(request.IssueUID, func(e AgentEntry) bool { return e.Teammate == request.Slot.Teammate })
+	}
+	if !found && request.Slot.Kind == "" && !request.Slot.Broadcast && request.Slot.Teammate != "" {
+		remote, ok := m.newestRemoteAgentOn(request.IssueUID, func(r RemoteAgent) bool { return r.Name == request.Slot.Teammate })
+		if ok {
+			return AgentEntry{Teammate: remote.Name, Address: remote.Address}, m.remoteMessageRefusal(remote)
+		}
 	}
 	switch {
 	case !found && ours && request.Slot.Message == agentExitedMessage(request.QualifiedID()):
@@ -211,8 +218,17 @@ func openAgentCardMessage(m Model, picking bool) (Model, []Cmd) {
 		m.Notice = reason
 		return m, nil
 	}
-	e := m.AgentCardRows()[m.AgentCardCursor()].AgentEntry
 	card := m.AgentCard
+	if r, ok := m.AgentCardSelectedRemote(); ok {
+		var projectID int64
+		if issue := m.issueByUID(card.IssueUID); issue != nil {
+			projectID = issue.ProjectID
+		}
+		m.AgentCard = AgentCardState{}
+		m.AgentMessage = AgentMessageState{Open: true, Picking: picking, IssueUID: card.IssueUID, IssueRef: card.IssueRef, ProjectID: projectID, Agent: r.Name, Address: r.Address}
+		return m, nil
+	}
+	e := m.AgentCardRows()[m.AgentCardCursor()].AgentEntry
 	m.AgentCard = AgentCardState{}
 	m.AgentMessage = AgentMessageState{Open: true, Picking: picking, IssueUID: card.IssueUID, IssueRef: card.IssueRef, ProjectID: m.projectOf(e), Agent: e.Teammate, Address: e.Address}
 	return m, nil
@@ -340,13 +356,14 @@ func sendAgentMessage(m Model, replacing string) (Model, []Cmd) {
 
 // agentMessageSent applies kata's answer: a failure stays on the card, an unread message held at the address asks before replacing
 // it, and a written message closes the card with a Notice.
-func agentMessageSent(m Model, msg AgentMessageSent) Model {
+func agentMessageSent(m Model, msg AgentMessageSent) (Model, []Cmd) {
 	f := &m.AgentMessage
 	if f.Open && f.Sending && f.Broadcast {
-		return broadcastSent(m, msg)
+		m = broadcastSent(m, msg)
+		return readSweepComments(m)
 	}
 	if !f.Open || !f.Sending || f.IssueUID != msg.UID {
-		return m
+		return m, nil
 	}
 	f.Sending = false
 	switch {
@@ -358,7 +375,7 @@ func agentMessageSent(m Model, msg AgentMessageSent) Model {
 		m.Notice = fmt.Sprintf("Sent the message to %s on %s.", f.Agent, f.IssueRef)
 		m.AgentMessage = AgentMessageState{}
 	}
-	return m
+	return m, nil
 }
 
 // clearGoneAddresses clears what is left at the address of each agent this Pane started that has exited or whose block went, once
