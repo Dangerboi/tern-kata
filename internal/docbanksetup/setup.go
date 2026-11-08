@@ -145,6 +145,9 @@ func (e Env) SetupRemote(ctx context.Context, r Remote) error {
 		if want.APIKeyFile, err = filepath.Abs(r.KeyFile); err != nil {
 			return err
 		}
+		if err := checkKeyFile(want.APIKeyFile); err != nil {
+			return err
+		}
 	}
 	configPath := filepath.Join(e.KataHome, "config.toml")
 	for _, p := range []string{configPath, want.APIKeyFile} {

@@ -140,15 +140,14 @@ func (e Env) setupLocal(ctx context.Context, l Local) error {
 			return err
 		}
 	}
-	if found && keyOnDisk && haveKata {
-		return e.SetupRemote(ctx, remote) // finished: says so
-	}
-
 	status, err := e.docbankStatus(ctx)
 	if err != nil {
 		return err
 	}
 	running := statusNames(status, addr)
+	if found && keyOnDisk && haveKata && running {
+		return e.SetupRemote(ctx, remote) // finished: says so
+	}
 	if !running {
 		ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
 		if err != nil {
@@ -208,6 +207,37 @@ func readKeyFile(path string) (string, error) {
 		return "", fmt.Errorf("read the key file: %w", err)
 	}
 	return strings.TrimSpace(string(raw)), nil
+}
+
+// maxKeyFileSize is the largest key file kata's secret reader accepts.
+const maxKeyFileSize = 64 << 10
+
+// checkKeyFile refuses a key file that kata's own secret reader would refuse, with kata's reason, so that setup does not report
+// success for a config in which every upload fails "docbank unauthorized". The checks are kata's: a regular file, owned by the
+// current user, no group or other permission bits, at most 64 KiB, not blank.
+func checkKeyFile(path string) error {
+	refuse := func(reason string) error {
+		return fmt.Errorf("--key-file %s: kata would refuse it (%s), so nothing was changed", path, reason)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("read the key file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return refuse("not a readable regular file")
+	}
+	if !ownedByCurrentUser(info) {
+		return refuse("must be owned by the daemon user")
+	}
+	if groupOrWorldAccessible(info) {
+		return refuse("group/world-readable; use chmod 600")
+	}
+	if info.Size() > maxKeyFileSize {
+		return refuse("exceeds 64 KiB")
+	}
+	return nil
 }
 
 // docbankStatus is what `docbank daemon status` prints; a Docbank that is not running exits non-zero, which is an answer too. A

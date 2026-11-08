@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -244,6 +245,19 @@ func TestChangingOnlyEveryKeepsTheStoredWeekdaysDayAndMonth(t *testing.T) {
 		out, err := f.recur(t, tc.change...)
 		if err != nil || !strings.Contains(out, tc.want) || strings.Contains(out, "Sun") {
 			t.Fatalf("recur %v after %v: stdout %q, err %v; want %q", tc.change, tc.first, out, err, tc.want)
+		}
+	}
+}
+
+func TestRecurRefusesAMalformedRefBeforeAskingKata(t *testing.T) {
+	f := newSubcommandFixture(t)
+	for _, ref := range []string{"", " ", "demo#", "#7"} {
+		plan, err := PlanLaunch([]string{"recur", ref, "--as", "tester"}, func(string) (string, bool) { return "", false }, "test")
+		if err == nil {
+			err = runSubcommand(context.Background(), plan, data.NewGateway(f.locate).WithHost(testHost), &bytes.Buffer{})
+		}
+		if want := fmt.Sprintf("%q is not a valid issue ref", ref); err == nil || err.Error() != want {
+			t.Errorf("recur %q = %v; want %q", ref, err, want)
 		}
 	}
 }

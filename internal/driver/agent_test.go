@@ -128,3 +128,14 @@ func hasPrune(cmds []model.Cmd) bool {
 	}
 	return false
 }
+
+// The Agent address of an agent begins with the actor its Pane starts it as, which its extension takes as the agent's own: on a daemon
+// that verifies actors that is the account every write is recorded as.
+func TestAnAgentOnADaemonThatVerifiesActorsStartsAsItsAccount(t *testing.T) {
+	s := agentPanes(t, agentIssue("t1"))["list"]
+	s.Model.Actor, s.Model.VerifiedSenders, s.Model.Daemon = "dangerboi", true, model.Daemon{Account: "dana"}
+	start, ok := startedAgent(feed(t, s, key("w"), key("s")).Cmds)
+	if !ok || start.Actor != "dana" {
+		t.Fatalf("start %+v, want the actor to be the account dana", start)
+	}
+}

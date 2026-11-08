@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -80,6 +81,8 @@ func CheckViewName(name string, others []SavedView, self string) (string, error)
 	switch {
 	case name == "":
 		return "", ViewFieldError{ViewName, errors.New("Name is required")}
+	case strings.ContainsFunc(name, unicode.IsControl):
+		return "", ViewFieldError{ViewName, errors.New("Name cannot contain control characters such as a newline or tab")}
 	case utf8.RuneCountInString(name) > MaxViewNameLen:
 		return "", ViewFieldError{ViewName, fmt.Errorf("Name is longer than %d characters", MaxViewNameLen)}
 	}

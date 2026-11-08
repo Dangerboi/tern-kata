@@ -191,7 +191,7 @@ func startAgent(m Model, action Action, placement AgentPlacement) (Model, []Cmd)
 		return m, nil
 	}
 	cmd := StartAgent{Placement: placement, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,
-		ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock, Actor: m.Actor}
+		ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock, Actor: m.MessageActor()}
 	if m.Bound && issue.ProjectID == m.Project.ID {
 		cmd.Workspace = m.Workspace
 	}

@@ -390,3 +390,25 @@ func TestPlanAgentRefusesRoutingFlagsWithoutAnAddressPrefix(t *testing.T) {
 		}
 	}
 }
+
+func TestMessageReRefValueDoesNotHideTheNextArgumentFromTheHelpScan(t *testing.T) {
+	plan, err := PlanLaunch([]string{"message", "g7bg", "--re", "c:x", "--help"}, lookupFrom(nil), "v")
+	if err != nil || !plan.Help {
+		t.Errorf("--help after --re's value = %+v, %v; want help", plan, err)
+	}
+	plan, err = PlanLaunch([]string{"message", "g7bg", "--re", "c:x", "-m", "--help"}, lookupFrom(nil), "v")
+	if err != nil || plan.Help {
+		t.Errorf("--help as the -m text after --re = %+v, %v; want the text, not help", plan, err)
+	}
+}
+
+func TestAgentHelpAndVersionNeedNoCommandAfterTheDoubleDash(t *testing.T) {
+	for _, args := range [][]string{{"agent", "--ref", "x", "--help"}, {"agent", "--ref", "x", "-h"}, {"agent", "--help"}} {
+		if plan, err := PlanLaunch(args, lookupFrom(nil), "v"); err != nil || !plan.Help {
+			t.Errorf("PlanLaunch(%q) = %+v, %v; want help", args, plan, err)
+		}
+	}
+	if plan, err := PlanLaunch([]string{"agent", "--ref", "x", "--version"}, lookupFrom(nil), "1.2.3"); err != nil || plan.Version != "1.2.3" {
+		t.Errorf("agent --version = %+v, %v; want the version", plan, err)
+	}
+}

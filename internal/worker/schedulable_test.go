@@ -10,13 +10,19 @@ func notifyJob(trigger cronjob.Trigger, issue *cronjob.IssuePolicy, recipient st
 	return cronjob.Job{Name: "n", Definition: cronjob.Definition{
 		Enabled: true,
 		Trigger: trigger,
-		Action:  cronjob.Action{Kind: cronjob.ActionNotify, Recipient: recipient, Message: "m"},
+		Action:  cronjob.Action{Kind: cronjob.ActionNotify, Recipient: recipient},
 		Issue:   issue,
 	}}
 }
 
+func withMessage(job cronjob.Job, message string) cronjob.Job {
+	job.Definition.Action.Message = message
+	return job
+}
+
 // Kata's date sweeper notifies the trigger Issue's owner or author for the zero-lead alias, so the worker plans that job
-// only when it notifies some other Issue, a later moment or a named recipient.
+// only when it notifies some other Issue, a later moment, a named recipient or with a message of its own (the sweeper
+// sends only its generic text).
 func TestSchedulableSkipsOnlyTheNotifyJobTheSweeperAlreadyDelivers(t *testing.T) {
 	const trigger, other = "01TRIGGERISSUE", "01OTHERISSUE"
 	for _, kind := range []cronjob.TriggerKind{cronjob.TriggerIssueScheduled, cronjob.TriggerIssueDeadline} {
@@ -32,6 +38,8 @@ func TestSchedulableSkipsOnlyTheNotifyJobTheSweeperAlreadyDelivers(t *testing.T)
 			{"same Issue, issue named", notifyJob(date(0), &cronjob.IssuePolicy{Kind: cronjob.IssueExisting, UID: trigger}, currentOwnerOrAuthor), false},
 			{"another Issue", notifyJob(date(0), &cronjob.IssuePolicy{Kind: cronjob.IssueExisting, UID: other}, currentOwnerOrAuthor), true},
 			{"a lead", notifyJob(date(600), nil, currentOwnerOrAuthor), true},
+			{"a message of its own", withMessage(notifyJob(date(0), nil, currentOwnerOrAuthor), "Ship it today"), true},
+			{"a blank message", withMessage(notifyJob(date(0), nil, currentOwnerOrAuthor), "  "), false},
 			{"a named recipient", notifyJob(date(0), nil, "bob"), true},
 		}
 		for _, c := range cases {

@@ -38,12 +38,16 @@ type issueTarget struct {
 
 // readIssueTarget reads the Issue ref names, as kata show takes it, and the Project the workspace is bound to.
 func (c *Client) readIssueTarget(ctx context.Context, workspace, ref string) (issueTarget, error) {
+	given := ref
+	ref = strings.TrimSpace(ref)
+	if projectName, shortID, qualified := strings.Cut(ref, "#"); ref == "" || qualified && (projectName == "" || shortID == "") {
+		return issueTarget{}, errNoSuchIssue{fmt.Errorf("%q is not a valid issue ref", given)}
+	}
 	loaded, err := c.ReadProject(ctx, workspace)
 	if err != nil {
 		return issueTarget{}, err
 	}
 	target := issueTarget{binding: loaded.Project}
-	ref = strings.TrimSpace(ref)
 	if ulid.MatchString(ref) {
 		response, err := c.ShowIssueByUIDWithResponse(ctx, &g.ShowIssueByUIDRequestOptions{PathParams: &g.ShowIssueByUIDPath{UID: ref}})
 		if err != nil {

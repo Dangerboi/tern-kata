@@ -153,7 +153,7 @@ func driveTeams(m Model, probe bool) (Model, []Cmd) {
 		return m, nil
 	}
 	m.teamDrive.inFlight = true
-	cmd := DriveTeams{Workspace: m.Workspace, PaneBlock: m.PaneBlock, Actor: m.Actor}
+	cmd := DriveTeams{Workspace: m.Workspace, PaneBlock: m.PaneBlock, Actor: m.MessageActor()}
 	if m.Bound {
 		cmd.BoundProjectID = m.Project.ID
 	}

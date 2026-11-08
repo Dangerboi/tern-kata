@@ -34,13 +34,15 @@ type LoadAuthCapabilities struct {
 func (LoadAuthCapabilities) cmd() {}
 
 // AuthCapabilitiesLoaded answers LoadAuthCapabilities and echoes its Account. TokenAuditRead says the account may list tokens;
-// IssueScoped that its credential is limited to one Issue; VerifiedSenders that the daemon verifies the actor of every write.
+// IssueScoped that its credential is limited to one Issue; VerifiedSenders that the daemon verifies the actor of every write, and
+// then Actor is the account it records as that actor ("" when it names none).
 type AuthCapabilitiesLoaded struct {
 	Request         int64
 	Account         bool
 	TokenAuditRead  bool
 	IssueScoped     bool
 	VerifiedSenders bool
+	Actor           string
 	Err             error
 }
 

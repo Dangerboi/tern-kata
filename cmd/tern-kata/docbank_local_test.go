@@ -229,12 +229,12 @@ func TestDocbankSetupLocalRerunSaysAlreadySetUpAndRestartsNothing(t *testing.T) 
 	if _, err := f.run(t, "", args...); err != nil {
 		t.Fatal(err)
 	}
-	dbBefore, kataBefore, docbankRuns := f.docbankConfig(t), f.config(t), len(f.docbankRuns(t))
+	dbBefore, kataBefore, docbankRuns := f.docbankConfig(t), f.config(t), f.docbankRuns(t)
 	out, err := f.run(t, "", args...)
 	if err != nil || !strings.Contains(out, "already set up") {
 		t.Fatalf("rerun: %q, %v", out, err)
 	}
-	if f.docbankConfig(t) != dbBefore || f.config(t) != kataBefore || len(f.docbankRuns(t)) != docbankRuns || len(f.restarts(t)) != 1 {
+	if f.docbankConfig(t) != dbBefore || f.config(t) != kataBefore || strings.Join(f.docbankRuns(t), "|") != strings.Join(append(docbankRuns, "daemon status"), "|") || len(f.restarts(t)) != 1 { // a rerun only asks Docbank for its status
 		t.Errorf("a rerun changed something: docbank ran %q, kata ran %q", f.docbankRuns(t), f.restarts(t))
 	}
 	// without --port too: the port is the one in Docbank's config

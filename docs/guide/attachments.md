@@ -37,7 +37,7 @@ kata docbank attachments rm <ref> <id>         # unlink; the bytes stay in Docba
 
 `<id>` may be a unique suffix of the id. See `kata docbank attachments --help` for the rest. Agents read the same commands from the `kata` skill.
 
-An Attachment is one meta key on the Issue, `attachment.<id>`, holding `{"name", "media_type", "size", "docbank_version"}`, visible in `kata show --json`.
+An Attachment is one meta key on the Issue, `attachment.<id>`, holding exactly `{"name", "media_type", "size", "docbank_version"}` (the version a non-nil UUID), visible in `kata show --json`. A key whose value kata would not accept, such as one with another member or a version that is not a UUID, is not listed.
 
 ## Setting Docbank up
 
@@ -57,7 +57,7 @@ tern-kata docbank setup
 - It appends the section as text, keeping every other byte of the file, and creates the file and `DOCBANK_HOME` when they are missing. An existing `[server]` with `api_port` and `api_key` is reused (the key is copied to the key file when that is missing) and a different `--port` is refused; a `[server]` missing one of them is refused, naming what to add.
 - It refuses before writing anything when `docbank` is not on `PATH`, when another process listens on the port, or when kata's `config.toml` already has a different `[docbank]` section.
 - It runs `docbank daemon restart` and requires `docbank daemon status` to name `127.0.0.1:<port>`; otherwise it stops, shows Docbank's output and leaves kata's config alone.
-- Then it does what the remote form does with `url = "http://127.0.0.1:<port>"` and `api_key_file = <KATA_HOME>/docbank.key`: check Docbank with the key, append the `[docbank]` section, ask before restarting the kata daemon (`--yes`, `--no-restart`), and finish by checking that the kata daemon has attachments on. Running it again when everything is set up says "already set up" and changes nothing; if the kata daemon still has attachments off, because the earlier restart was skipped, it offers the restart again.
+- Then it does what the remote form does with `url = "http://127.0.0.1:<port>"` and `api_key_file = <KATA_HOME>/docbank.key`: check Docbank with the key, append the `[docbank]` section, ask before restarting the kata daemon (`--yes`, `--no-restart`), and finish by checking that the kata daemon has attachments on. Running it again when everything is set up and Docbank is running says "already set up" and changes nothing; if Docbank is not running it starts it (`docbank daemon restart`) first; if the kata daemon still has attachments off, because the earlier restart was skipped, it offers the restart again.
 - `--folder` and the route flags work as in the remote form below. `--key-file` and `--key-env` are for the remote form only, and `--port` for this one.
 - It ends by saying that the plugin keeps Docbank running, when that holds for this kata daemon. For a profile or `--home` daemon it says instead that the plugin keeps only the default kata daemon's Docbank running, and how to keep this one running (`docbank daemon start`, or run it as a service).
 
@@ -122,6 +122,7 @@ Whoever runs that Docbank gives you its URL and an API key; keeping it running i
 tern-kata docbank setup --url https://docbank.example --key-file ~/docbank.key
 ```
 
+- A `--key-file` that kata's own secret reader would refuse is refused up front, with kata's reason, before anything is checked or written: it must be a regular file you own (on Unix), with no group or other permissions (`chmod 600`), at most 64 KiB.
 - `--key-file -` reads the key from standard input and stores it in `<KATA_HOME>/docbank.key` (mode 0600); `--key-env <NAME>` names a variable the kata daemon's own environment holds instead; setup also reads it in your shell to check the URL, so it fails with "the variable is unset or empty" when the variable is not set where you run it. No flag takes the key itself, so it never lands in your shell history or a process list.
 - It first checks that the URL answers with the key and writes nothing otherwise: a refused key and an unreachable Docbank are reported in the words the Pane uses. The `url` must be HTTPS: kata accepts plain HTTP only for Docbank on this machine, and the command refuses it before writing anything.
 - It then appends a `[docbank]` section (`url`, the key's source, `folder`) to `<KATA_HOME>/config.toml`, leaving every other byte of the file as it is, and creates the file when it is missing. Running it again says "already set up"; a different `[docbank]` section is refused and shown, never overwritten.

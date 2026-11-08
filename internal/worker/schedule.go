@@ -88,7 +88,8 @@ func disabledAdapterJob(job cronjob.Job) bool { return adapterJob(job) && !job.D
 
 // schedulable reports whether the worker plans occurrences for the job. Native jobs belong to kata's daemon, disabled
 // and archived jobs schedule nothing, and so does the one notify job kata's own date sweeper already delivers: a
-// zero-lead `current-owner-or-author` notification of the trigger's own Issue on its date (ADR-0011). A job that notifies
+// zero-lead `current-owner-or-author` notification of the trigger's own Issue on its date with no message of its own
+// (ADR-0011): the sweeper sends only its generic "Scheduled date reached" text, so a custom message is the worker's. A job that notifies
 // another Issue is the worker's: the sweeper notifies only the Issue whose date was reached. A job whose options.adapter
 // names another adapter is that adapter's.
 func schedulable(job cronjob.Job) bool {
@@ -104,7 +105,7 @@ func schedulable(job cronjob.Job) bool {
 		return true
 	case cronjob.ActionNotify:
 		sameIssue := d.Issue == nil || d.Issue.UID == d.Trigger.IssueUID
-		return !(isIssueDate(d.Trigger) && sameIssue && d.Trigger.LeadSeconds == 0 && d.Action.Recipient == currentOwnerOrAuthor)
+		return !(isIssueDate(d.Trigger) && sameIssue && d.Trigger.LeadSeconds == 0 && d.Action.Recipient == currentOwnerOrAuthor && strings.TrimSpace(d.Action.Message) == "")
 	}
 	return false
 }

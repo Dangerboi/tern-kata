@@ -227,3 +227,15 @@ func TestAskingAboutACommentWithoutAnAgentThatCanBeMessagedOnlySaysWhy(t *testin
 		})
 	}
 }
+
+// A daemon that verifies actors records the credential's account as the actor of every write, and the agent's extension delivers a
+// live slot only when that actor is the slot's from: the message is written as the account, whatever name the Pane resolved.
+func TestAMessageOnADaemonThatVerifiesActorsIsWrittenAsItsAccount(t *testing.T) {
+	s := messagePane(t, agentRaised(t), nil, ompAgent)
+	s.Model.Actor, s.Model.VerifiedSenders, s.Model.Daemon = "dangerboi", true, model.Daemon{Account: "dana"}
+	typed := step(t, step(t, s, key("m")).State, tern.Key{Text: "use the second table"}).State
+	want := model.SendAgentMessage{Workspace: "/repo", ProjectID: 7, UID: "work-aa11", Actor: "dana", Address: "dana/omp-31", Message: "use the second table"}
+	if got := sentMessage(t, step(t, typed, key("enter")).Cmds); got != want {
+		t.Fatalf("sent %+v, want %+v", got, want)
+	}
+}

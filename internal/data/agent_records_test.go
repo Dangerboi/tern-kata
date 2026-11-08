@@ -582,3 +582,24 @@ func TestAReconcileSkipsAnIssueKataNoLongerHas(t *testing.T) {
 		t.Fatalf("reconcile: %v, want no error for a gone Issue", err)
 	}
 }
+
+func TestPruningAnAgentWhoseBlockClosedClearsWhatIsLeftAtItsAddress(t *testing.T) {
+	f := newRecordFixture(t, "")
+	f.start(t, model.AgentSplit)
+	issue := issueFixture{kata: f.kata}
+	key := model.NotificationKey("dana/omp-31")
+	sent := as[model.AgentMessageSent](t, run(t, f.gateway, model.SendAgentMessage{Workspace: f.work, ProjectID: f.project.ID, UID: f.uid, Actor: "dana", Address: "dana/omp-31", Message: "hello"}))
+	if sent.Err != nil || sent.Held != "" {
+		t.Fatalf("sent %+v", sent)
+	}
+	if _, held := issue.issue(t, f.uid).Metadata[key]; !held {
+		t.Fatal("the message was not written")
+	}
+	f.live = []string{"7"}
+	if kept := f.prune(t); len(kept) != 0 {
+		t.Fatalf("prune kept %+v", kept)
+	}
+	if _, held := issue.issue(t, f.uid).Metadata[key]; held {
+		t.Fatal("the message is still at the address of an agent that is gone")
+	}
+}

@@ -55,7 +55,7 @@ Priority, owner and the three dates are `null` when unset; labels is `[]` when t
 A value that starts with `--` (a search for `--wip`, say) must be written `--search=--wip`; written apart, it reads as the next flag and the command says the flag requires a value.
 
 - Projects are looked up by name (ignoring case) in the daemon and saved by their uid with the name they had.
-- A name that is empty, longer than 64 characters, a fixed Collection's key or title, or already taken is refused with the card's message; a taken name is only replaced with `--replace`.
+- A name that is empty, contains a control character (such as a newline or tab), is longer than 64 characters, a fixed Collection's key or title, or already taken is refused with the card's message; a taken name is only replaced with `--replace`.
 - The write is guarded like the card's: a `views.toml` changed since it was read is refused and nothing is written.
 - `rm` refuses a fixed Collection and an unknown name.
 

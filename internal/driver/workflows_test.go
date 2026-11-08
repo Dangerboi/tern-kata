@@ -432,3 +432,19 @@ func TestWorkflowsPageDropsAnAnswerToAnOlderRead(t *testing.T) {
 		t.Errorf("the newest runs answer gave %+v, want only RN", runs)
 	}
 }
+
+func TestSavingAWorkflowHiddenBySearchSelectsAVisibleRow(t *testing.T) {
+	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
+	s = step(t, s, key("e")).State
+	edited := strings.Replace(reviewFlow().Text(), "make test", "make check", 1)
+	old := len(s.Model.Workflows.Card.Editor.Text)
+	s = step(t, s, &tern.Edit{ID: cardInput(t, s.Model), From: 0, To: old, Text: edited, Cursor: len(edited), Len: old}).State
+	saved := step(t, s, key("ctrl+o")).State
+	saved.Model.PageSearch.Text = "nightly"
+	flow := reviewFlow()
+	flow.EventUID, flow.Revision = "E2", 4
+	after := step(t, saved, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, UID: "W1", Workflow: &flow}).State
+	if got := after.Model.Workflows.Selected; got != "W2" {
+		t.Errorf("selected %q after saving a workflow the search hides, want the visible W2", got)
+	}
+}

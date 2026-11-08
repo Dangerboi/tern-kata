@@ -31,6 +31,7 @@ type sender struct {
 	comments map[string]string // handle -> comment ULID this fake Issue holds
 	answer   func(model.SendAgentMessage) model.AgentMessageSent
 	verified bool
+	account  string // the actor a verified daemon reports for the credential
 	reads    int
 	// remote is what the daemon's Agent records hold for other hosts (the agents of every Issue a scan reads, the ones on the
 	// Issue a lookup names); issues are Issues that exist without such an agent. remoteErr fails a scan, issueErr a lookup.
@@ -57,7 +58,7 @@ func (s *sender) send(cmd model.Cmd) model.Msg {
 	}
 	if _, ok := cmd.(model.LoadAuthCapabilities); ok {
 		s.reads++
-		return model.AuthCapabilitiesLoaded{Account: true, VerifiedSenders: s.verified}
+		return model.AuthCapabilitiesLoaded{Account: true, VerifiedSenders: s.verified, Actor: s.account}
 	}
 	if r, ok := cmd.(model.ResolveComment); ok {
 		s.resolved = append(s.resolved, r)
@@ -263,11 +264,11 @@ func TestMessageFromAnotherActorFollowsTheSenderRule(t *testing.T) {
 		wantReads int
 		wantText  string
 	}{
-		"the agent's own actor, unverified daemon":  {"dana", false, true, 0, "Sent the message"},
+		"the agent's own actor, unverified daemon":  {"dana", false, true, 1, "Sent the message"},
 		"a listed actor on a verified daemon":       {"dana-laptop", true, true, 1, "Sent the message"},
 		"a listed actor on an unverified daemon":    {"dana-laptop", false, false, 1, "[auth] require_token_identity"},
-		"an unlisted actor on a verified daemon":    {"bob", true, false, 0, "message_from"},
-		"an unlisted actor on an unverified daemon": {"bob", false, false, 0, "message_from"},
+		"an unlisted actor on a verified daemon":    {"bob", true, false, 1, "message_from"},
+		"an unlisted actor on an unverified daemon": {"bob", false, false, 1, "message_from"},
 	} {
 		s := &sender{verified: tc.verified}
 		var out bytes.Buffer
@@ -429,8 +430,36 @@ func TestMessageToALocalAddressReadsNothingFromOtherHosts(t *testing.T) {
 	if err := runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-1", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	if len(s.loads) != 0 || s.reads != 0 {
-		t.Errorf("loads %+v, auth reads %d: a local message from the agent's own actor needs neither", s.loads, s.reads)
+	if len(s.loads) != 0 || s.reads != 1 {
+		t.Errorf("loads %+v, auth reads %d: a local message reads nothing from other hosts, and the daemon once for the sender", s.loads, s.reads)
+	}
+}
+
+func TestMessageIsWrittenAsTheAccountOfADaemonThatVerifiesActors(t *testing.T) {
+	// kata records the token's account as the event actor of the write, and the agent's extension delivers a live slot only when that
+	// actor is the slot's from: a slot from the person's own name would be dropped.
+	s := &sender{verified: true, account: "dana"}
+	var out bytes.Buffer
+	plan := message(t, map[string]string{"KATA_AUTHOR": "dangerboi"}, "dana/omp-1", "-m", "hi")
+	if err := runMessage(plan, "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if len(s.sent) != 1 || s.sent[0].Actor != "dana" {
+		t.Errorf("sent %+v, want one message written as the account dana", s.sent)
+	}
+}
+
+func TestMessageKeepsTheActorWhenTheDaemonDoesNotVerifyActors(t *testing.T) {
+	s := &sender{account: "dana"}
+	var out bytes.Buffer
+	plan := message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-1", "-m", "hi")
+	if err := runMessage(plan, "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out); err != nil || len(s.sent) != 1 || s.sent[0].Actor != "dana" {
+		t.Fatalf("err %v, sent %+v", err, s.sent)
+	}
+	s = &sender{account: "ops"}
+	out.Reset()
+	if err := runMessage(plan, "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out); err != nil || len(s.sent) != 1 || s.sent[0].Actor != "dana" {
+		t.Fatalf("err %v, sent %+v: an unverified daemon's account is not the sender", err, s.sent)
 	}
 }
 

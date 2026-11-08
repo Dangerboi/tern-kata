@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -270,5 +271,35 @@ func TestLeavingTheLaneViewForTheBoardHidesTheDetailAgain(t *testing.T) {
 	}
 	if !slices.Contains(out.State.Model.VisibleColumns(), model.ColumnList) || slices.Contains(out.State.Model.VisibleColumns(), model.ColumnDetail) {
 		t.Errorf("columns = %v", out.State.Model.VisibleColumns())
+	}
+}
+
+func TestEmptyLaneViewSaysTheLaneIsEmptyNotTheCollection(t *testing.T) {
+	s := projectPane(t, 160, boardCard("solo", "needs-info"))
+	s = feed(t, s, key("b"), key("enter")).State
+	s = step(t, s, key(">")).State
+	wantEmpty(t, "empty lane", s, view.IssueListID+"-empty", "", "No cards", "This Lane is empty.")
+}
+
+func TestEmptyLaneViewIgnoresTheStatusFilterWhenJudgingFilters(t *testing.T) {
+	s := projectPane(t, 160, boardCard("solo", "needs-info"))
+	s = feed(t, s, key("b"), key("enter")).State
+	s = step(t, s, key(">")).State
+	s.Model.Filters = model.Filters{Status: "open"}
+	wantEmpty(t, "empty lane under status", s, view.IssueListID+"-empty", "", "No cards", "This Lane is empty.")
+	s.Model.Filters = model.Filters{Status: "open", Label: "x"}
+	wantEmpty(t, "empty lane under label", s, view.IssueListID+"-empty", "", "No Issues match")
+}
+
+func TestBoardVisitKeepsTheIssuesPageSelection(t *testing.T) {
+	s := projectPane(t, 160, boardCard("t1", "needs-triage"), closedAt("old", time.September, 1))
+	s.Model.SelectedUID = "old"
+	s = feed(t, s, key("b")).State
+	if got := s.Model.SelectedUID; got != "t1" {
+		t.Fatalf("on the Board selected %q, want its first card t1", got)
+	}
+	s = feed(t, s, key("b")).State
+	if got := s.Model.SelectedUID; got != "old" {
+		t.Errorf("back on the Issues Page selected %q, want old", got)
 	}
 }

@@ -10,16 +10,16 @@ The file is decoded strictly (an unknown key is an error) and read once at start
 |---|---|
 | `executor` | Required. A unique, stable name for this machine's worker. |
 | `actor` | Optional. Author of runs and Issues; default `$KATA_AUTHOR`, `$USER`, then git `user.name`. |
-| `[limits]` `max_active_runs` | Optional. Runs at once across all Projects; unset means each Project's capacity only. |
-| `[limits]` `default_timeout` | Optional. Timeout when a job sets none; a job's `timeout_seconds` overrides it, up to `max_timeout`. |
-| `[limits]` `max_run_prompts` | Optional. The most prompts one run may send, 1 to 100; default 12. It is frozen into a run when the run is prepared. A workflow that could send more (prompt steps plus their retries) is refused. The cap is global: a profile has none of its own. |
+| `[limits]` `max_active_runs` | Optional. Runs at once across all Projects, 1 or more; unset means each Project's capacity only. An explicit `0` is refused. |
+| `[limits]` `default_timeout` | Optional. Timeout when a job sets none; a job's `timeout_seconds` overrides it, up to `max_timeout`. Unset, it is 2h, or `max_timeout` when that is shorter. |
+| `[limits]` `max_run_prompts` | Optional. The most prompts one run may send, 1 to 100; default 12 (an explicit `0` is refused). It is frozen into a run when the run is prepared. A workflow that could send more (prompt steps plus their retries) is refused. The cap is global: a profile has none of its own. |
 | `[limits]` `pause_after_failures` | Optional. How many runs of one job recorded `failed` in a row pause it; default 3, `0` turns pausing off. See [Paused jobs](#paused-jobs). |
 | `[limits]` `max_timeout` | Optional. The longest timeout a job may ask for; a job over it is set aside. |
 | `[[projects]]` `name` | A kata Project; listing it trusts it. |
-| `[[projects]]` `capacity` | Runs at once for the Project; default 3. |
+| `[[projects]]` `capacity` | Runs at once for the Project; default 3 when unset, an explicit `0` is refused. |
 | `[[projects]]` `actor` | Optional. Overrides the worker's `actor` for this Project; the order is Project `actor`, then top-level `actor`, then the default. |
-| `[[projects]]` `checkouts` | Optional allowlist of checkout keys; default all. |
-| `[[projects]]` `profiles` | Optional allowlist of profile names; default all. |
+| `[[projects]]` `checkouts` | Optional allowlist of checkout keys; default all. The Job card's checkout picker offers only these. |
+| `[[projects]]` `profiles` | Optional allowlist of profile names; default all. The Job card's profile picker offers only these. |
 | `[[projects]]` `secrets` | The `[secrets]` names this Project's jobs may use. Unlike `checkouts` and `profiles`, an empty or missing list allows none; a job naming an unlisted secret is set aside, and a name `[secrets]` does not define is refused at load. `tern-kata worker upgrade` adds the names the Project's jobs use (see [Upgrading](#upgrading-an-existing-worker-config)). |
 | `[[projects]]` `commands` | `true` lets the Project's workflows run command steps (`sh -c`); default `false`. A job whose workflow has a command step is set aside without it. `tern-kata worker upgrade` adds it when a workflow has one. |
 | `[checkouts]` | A job's `checkout_key` mapped to an absolute directory. |
@@ -116,6 +116,7 @@ The worker checks its route to each Project when its event stream (re)connects, 
 - A daemon that stops advertising `cron_v1`, answers for another Project or is another instance admits nothing and delivers nothing for that Project until a check passes. The check is retried after 30 seconds, doubling to 5 minutes.
 - The worker makes at most four kata calls at once, each with a 60-second deadline, and resolves two Projects at a time at start.
 - A Project you remove from `worker.toml` has its saved reports delivered and its lease released at the next start.
+- A checkout key that is not a portable name (1 to 256 letters, digits, `-`, `_`, `.`, not `.` or `..`) still loads, but the Job card cannot save it and does not offer it; `worker doctor` warns of it.
 - `worker status` and `worker doctor` list each job the worker sets aside, with its reason (an unmapped profile, checkout or secret, a timeout over `max_timeout`, a workflow it does not run, a trigger it cannot schedule), and warn of a per-run Issue job that creates more than 24 Issues a day. Neither stops any other job.
 - A cron trigger whose expression starts with a `CRON_TZ=` or `TZ=` directive runs in the trigger's `timezone`, or in the directive's zone when `timezone` is empty. A directive naming another zone than a non-empty `timezone` sets the job aside with "its cron expression names zone X but the trigger's timezone is Y"; it runs in neither zone until the two agree or one is removed.
 - A job may name its adapter in `options.adapter`; tern-kata answers to `tern-kata`. A job without the key, or keyed `tern-kata`, runs as before. A job keyed to any other name belongs to that adapter: the worker neither schedules it nor runs it on request, and `worker status` and `worker doctor` list it with `its options.adapter names "<name>", not tern-kata`. The Job card sets the key and gives new adapter jobs `tern-kata`.

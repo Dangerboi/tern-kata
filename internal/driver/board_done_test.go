@@ -81,7 +81,7 @@ func TestLanesCardTabsToDoneFieldsAndSavesThem(t *testing.T) {
 		t.Errorf("shift+tab went to %q", got)
 	}
 	out := step(t, s, key("enter"))
-	want := []model.Cmd{model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: model.DefaultLanes(), DoneDays: 7, DoneCards: 5}}
+	want := []model.Cmd{model.SaveLanes{ProjectUID: "p", ProjectName: "work", DoneDays: 7, DoneCards: 5}}
 	if !reflect.DeepEqual(out.Cmds, want) {
 		t.Fatalf("enter sent %#v, want %#v", out.Cmds, want)
 	}
@@ -106,8 +106,8 @@ func TestLanesCardRefusesBadDoneLimitsNamingTheField(t *testing.T) {
 		tabs       int
 		text, want string
 	}{
-		{1, "0", "Done days"}, {1, "-3", "Done days"}, {1, "x", "Done days"}, {1, "1.5", "Done days"},
-		{1, "3651", "Done days"}, {2, "0", "Done cards"}, {2, "ten", "Done cards"}, {2, "501", "Done cards"},
+		{1, "0", "Days back"}, {1, "-3", "Days back"}, {1, "x", "Days back"}, {1, "1.5", "Days back"},
+		{1, "3651", "Days back"}, {2, "0", "Most cards"}, {2, "ten", "Most cards"}, {2, "501", "Most cards"},
 	} {
 		t.Run(fmt.Sprintf("%d %s", tt.tabs, tt.text), func(t *testing.T) {
 			s := lanesCard(t)
@@ -120,5 +120,16 @@ func TestLanesCardRefusesBadDoneLimitsNamingTheField(t *testing.T) {
 				t.Errorf("cmds %v card %v error %q (drawn %v), want a refusal naming %q", out.Cmds, out.State.Model.TopCard(), msg, ok, tt.want)
 			}
 		})
+	}
+}
+
+func TestLanesCardKeepsTheLaneListUnsetWhenOnlyADoneLimitChanges(t *testing.T) {
+	s := step(t, boardPane(t), key("shift+b")).State
+	s = step(t, s, key("tab")).State
+	s = typed(t, s, "9")
+	out := step(t, s, key("enter"))
+	want := []model.Cmd{model.SaveLanes{ProjectUID: "p", ProjectName: "work", Lanes: nil, DoneDays: 9}}
+	if !reflect.DeepEqual(out.Cmds, want) {
+		t.Fatalf("enter sent %#v, want %#v", out.Cmds, want)
 	}
 }

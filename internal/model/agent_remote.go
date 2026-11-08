@@ -67,7 +67,7 @@ func (m Model) remoteMessageRefusal(r RemoteAgent) string {
 	case r.Address == "":
 		return AgentWithoutAddressRefusal
 	}
-	return MessageSenderRefusal(m.Actor, cmp.Or(r.Actor, AgentAddressActor(r.Address)), r.MessageFrom, true, m.VerifiedSenders)
+	return MessageSenderRefusal(m.MessageActor(), cmp.Or(r.Actor, AgentAddressActor(r.Address)), r.MessageFrom, true, m.VerifiedSenders)
 }
 
 func (m Model) newestRemoteAgentOn(issueUID string, match func(RemoteAgent) bool) (RemoteAgent, bool) {

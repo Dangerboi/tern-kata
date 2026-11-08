@@ -78,3 +78,38 @@ func TestAFailedClearIsAskedAgainAndASuccessfulOneIsNot(t *testing.T) {
 		t.Fatalf("asked again after a success: %v", cmds)
 	}
 }
+
+func TestAFinishedBackgroundAgentThatIsEndedHasItsAddressCleared(t *testing.T) {
+	entry := finishedEntry("5", "a")
+	entry.Address = "dana/omp-5"
+	m := closePane([]model.Issue{closed("a")}, entry)
+	m.Actor = "dana"
+	m, cmds := relayed(m, model.AgentState{Block: "5", State: "idle"})
+	if len(closes(cmds)) != 1 {
+		t.Fatalf("cmds %#v, want the close", cmds)
+	}
+	_, cmds = model.Update(m, model.AgentClosed{Block: "5"})
+	if got, want := addressClears(cmds), []model.Cmd{clearAddress("a", 3, "5", "dana/omp-5")}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("clears %v, want %v", got, want)
+	}
+}
+
+// A daemon that verifies actors records the credential's account as the actor of every write, and the agent's extension delivers a
+// live slot only when that actor is its from.
+func TestAMessageIsSentAsTheAccountOfADaemonThatVerifiesActors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		verified bool
+		account  string
+		want     string
+	}{
+		"verified, with an account":       {true, "dana", "dana"},
+		"verified, without an account":    {true, "", "dangerboi"},
+		"an account that is not verified": {false, "dana", "dangerboi"},
+	} {
+		m := addressPane()
+		m.Actor, m.VerifiedSenders, m.Daemon = "dangerboi", tc.verified, model.Daemon{Account: tc.account}
+		if got := m.MessageActor(); got != tc.want {
+			t.Errorf("%s: sender %q, want %q", name, got, tc.want)
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/data/ompext"
 )
 
@@ -287,8 +289,39 @@ func (c *Config) checkDecoded(meta toml.MetaData, err error, name string) error 
 		}
 		return fmt.Errorf("%s: unknown key %s", name, strings.Join(keys, ", "))
 	}
+	if err := c.refuseExplicitZeros(meta); err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
 	if err := c.validate(); err != nil {
 		return fmt.Errorf("%s: %w", name, err)
+	}
+	return nil
+}
+
+// refuseExplicitZeros fails a zero that was written out: an unset max_active_runs, max_run_prompts or capacity takes its
+// default, but a written 0 is not a positive number and would otherwise turn into the default unseen. A project's capacity
+// is in an array of tables, where the decoder keeps no per-project key, so a written capacity that left a project at 0 is
+// counted instead.
+func (c *Config) refuseExplicitZeros(meta toml.MetaData) error {
+	if meta.IsDefined("limits", "max_active_runs") && c.Limits.MaxActiveRuns == 0 {
+		return errors.New("limits: max_active_runs must be positive; remove the line for no limit")
+	}
+	if meta.IsDefined("limits", "max_run_prompts") && c.Limits.MaxRunPrompts == 0 {
+		return errors.New("limits: max_run_prompts must be 1 to 100; remove the line for the default")
+	}
+	written := 0
+	for _, k := range meta.Keys() {
+		if len(k) == 2 && k[0] == "projects" && k[1] == "capacity" {
+			written++
+		}
+	}
+	for _, p := range c.Projects {
+		if p.Capacity != 0 {
+			written--
+		}
+	}
+	if written > 0 {
+		return errors.New("projects: capacity must be positive; remove the line for the default")
 	}
 	return nil
 }
@@ -321,15 +354,13 @@ func (c *Config) validate() error {
 	if n := c.Limits.PauseAfterFailures; n != nil && *n < 0 {
 		return errors.New("limits: pause_after_failures must be 0 (never pause) or more")
 	}
-	def, err := c.Limits.parse(c.Limits.DefaultTimeout, DefaultTimeout, "default_timeout")
-	if err != nil {
+	if _, err := c.Limits.parse(c.Limits.DefaultTimeout, DefaultTimeout, "default_timeout"); err != nil {
 		return err
 	}
-	max, err := c.Limits.parse(c.Limits.MaxTimeout, MaxTimeout, "max_timeout")
-	if err != nil {
+	if _, err := c.Limits.parse(c.Limits.MaxTimeout, MaxTimeout, "max_timeout"); err != nil {
 		return err
 	}
-	if max < def {
+	if c.maxTimeout() < c.defaultTimeout() {
 		return errors.New("limits: max_timeout must be at least default_timeout")
 	}
 	if _, ok := c.Profiles["default"]; !ok {
@@ -358,7 +389,7 @@ func (c *Config) validate() error {
 		if (s.Env == "") == (s.File == "") {
 			return fmt.Errorf("secrets.%s: give exactly one of env and file", name)
 		}
-		if s.File != "" && !strings.HasPrefix(s.File, "~/") && !filepath.IsAbs(s.File) {
+		if _, home := homeRest(s.File); s.File != "" && !home && !filepath.IsAbs(s.File) {
 			return fmt.Errorf("secrets.%s: file %q must be absolute or start with ~/", name, s.File)
 		}
 		if why := credentialAlias(s); why != "" {
@@ -407,8 +438,13 @@ func (Limits) parse(text string, fallback time.Duration, name string) (time.Dura
 	return d, nil
 }
 
+// defaultTimeout is default_timeout; unset, it is DefaultTimeout or max_timeout when that is shorter, so a lone
+// max_timeout under 2h is valid.
 func (c Config) defaultTimeout() time.Duration {
 	d, _ := c.Limits.parse(c.Limits.DefaultTimeout, DefaultTimeout, "")
+	if c.Limits.DefaultTimeout == "" {
+		d = min(d, c.maxTimeout())
+	}
 	return d
 }
 
@@ -450,6 +486,24 @@ func (c Config) project(name string) (ProjectConfig, bool) {
 // allowsCheckout and allowsProfile apply a Project's optional allowlists; an empty list allows all.
 func (p ProjectConfig) allowsCheckout(key string) bool {
 	return len(p.Checkouts) == 0 || slices.Contains(p.Checkouts, key)
+}
+
+// PickerChoices are the profile names and checkout keys the Job card offers for the named Project, sorted: the ones its
+// allowlists let through (all, when it lists none or worker.toml does not serve it). A checkout key that is not a
+// portable name is left out: the card could not save it.
+func (c Config) PickerChoices(project string) (profiles, checkouts []string) {
+	pc, _ := c.project(project)
+	for _, name := range slices.Sorted(maps.Keys(c.Profiles)) {
+		if pc.allowsProfile(name) {
+			profiles = append(profiles, name)
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(c.Checkouts)) {
+		if cronjob.PortableName(key) && pc.allowsCheckout(key) {
+			checkouts = append(checkouts, key)
+		}
+	}
+	return profiles, checkouts
 }
 
 func (p ProjectConfig) allowsProfile(name string) bool {
@@ -551,12 +605,18 @@ func credentialAlias(s SecretSource) string {
 	return ""
 }
 
-// expandHome resolves a leading ~/ (and ~\ where that is the separator, as Windows users write it) to the home folder.
-func expandHome(path string) (string, error) {
-	rest, ok := strings.CutPrefix(path, "~/")
+// homeRest is path without its leading ~/ (or ~\ where that is the separator); ok is false when it has neither.
+func homeRest(path string) (rest string, ok bool) {
+	rest, ok = strings.CutPrefix(path, "~/")
 	if !ok {
 		rest, ok = strings.CutPrefix(path, "~"+string(filepath.Separator))
 	}
+	return rest, ok
+}
+
+// expandHome resolves a leading ~/ (and ~\ where that is the separator, as Windows users write it) to the home folder.
+func expandHome(path string) (string, error) {
+	rest, ok := homeRest(path)
 	if !ok {
 		return path, nil
 	}

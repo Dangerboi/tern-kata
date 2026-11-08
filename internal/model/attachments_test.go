@@ -155,3 +155,19 @@ func TestTheAttachmentsTabSaysWhyWhenTheDaemonHasNoDocbank(t *testing.T) {
 		t.Fatalf("Links empty text %q", got)
 	}
 }
+
+func TestAttachmentsOmitsReferencesKataTreatsAsInvalid(t *testing.T) {
+	withMember := reference("extra.txt", "text/plain", 1)
+	withMember["note"] = "kata rejects unknown members"
+	notUUID := reference("not-uuid.txt", "text/plain", 1)
+	notUUID["docbank_version"] = "v1"
+	nilUUID := reference("nil.txt", "text/plain", 1)
+	nilUUID["docbank_version"] = "00000000-0000-0000-0000-000000000000"
+	good := reference("good.txt", "text/plain", 1)
+	list := model.Attachments(map[string]any{
+		"attachment.a": withMember, "attachment.b": notUUID, "attachment.c": nilUUID, "attachment.d": good,
+	})
+	if len(list) != 1 || list[0].Name != "good.txt" {
+		t.Fatalf("listed %+v", list)
+	}
+}

@@ -25,7 +25,8 @@ type WorkerPickers struct {
 	Note                string
 }
 
-type LoadWorkerPickers struct{}
+// LoadWorkerPickers asks what worker.toml offers the Project named Project; blank offers all of it.
+type LoadWorkerPickers struct{ Project string }
 
 func (LoadWorkerPickers) cmd() {}
 
@@ -51,7 +52,7 @@ type JobWorkflowsLoaded struct {
 func (JobWorkflowsLoaded) msg() {}
 
 func jobChoiceCmds(m Model, projectID int64) []Cmd {
-	return []Cmd{LoadWorkerPickers{}, LoadJobWorkflows{Workspace: m.Workspace, ProjectID: projectID}}
+	return []Cmd{LoadWorkerPickers{Project: m.projectName(projectID)}, LoadJobWorkflows{Workspace: m.Workspace, ProjectID: projectID}}
 }
 
 func workerPickersLoaded(m Model, msg WorkerPickersLoaded) Model {

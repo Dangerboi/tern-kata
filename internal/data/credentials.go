@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -18,8 +19,12 @@ func (c *Client) ReadAuthCapabilities(ctx context.Context, cmd model.LoadAuthCap
 	if err != nil {
 		return model.AuthCapabilitiesLoaded{}, err
 	}
-	return model.AuthCapabilitiesLoaded{Request: cmd.Request, Account: cmd.Account, TokenAuditRead: auth.TokenAuditRead != nil && *auth.TokenAuditRead, IssueScoped: auth.Scope != nil,
-		VerifiedSenders: VerifiedAuthKind(auth.Kind)}, nil
+	loaded := model.AuthCapabilitiesLoaded{Request: cmd.Request, Account: cmd.Account, TokenAuditRead: auth.TokenAuditRead != nil && *auth.TokenAuditRead, IssueScoped: auth.Scope != nil,
+		VerifiedSenders: VerifiedAuthKind(auth.Kind)}
+	if auth.Actor != nil {
+		loaded.Actor = strings.TrimSpace(*auth.Actor)
+	}
+	return loaded, nil
 }
 
 func (c *Client) readInstanceAuth(ctx context.Context) (g.AuthInfoOut, error) {

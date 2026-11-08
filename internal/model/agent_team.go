@@ -170,7 +170,7 @@ func startTeam(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	cmd := StartTeam{Placement: d.Where, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,
-		ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock, Actor: m.Actor, Limit: d.Limit}
+		ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock, Actor: m.MessageActor(), Limit: d.Limit}
 	if m.Bound && issue.ProjectID == m.Project.ID {
 		cmd.Workspace = m.Workspace
 	}

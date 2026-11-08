@@ -201,3 +201,26 @@ name = "demo"
 		t.Fatalf("a config the worker would refuse: %+v, want free text and the reason", got)
 	}
 }
+
+func TestGatewayOffersOnlyWhatTheJobsProjectAllows(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
+	t.Setenv("AppData", dir)
+	base, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Join(base, "tern-kata")
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := "executor = \"laptop\"\n[profiles.default]\n[profiles.fast]\n[checkouts]\nsite = '" + filepath.Join(dir, "site") + "'\nrepo = '" + filepath.Join(dir, "repo") + "'\n[[projects]]\nname = \"demo\"\nprofiles = [\"fast\"]\ncheckouts = [\"site\"]\n"
+	if err := os.WriteFile(filepath.Join(folder, "worker.toml"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := as[model.WorkerPickersLoaded](t, run(t, &Gateway{workerDirs: worker.DefaultDirs}, model.LoadWorkerPickers{Project: "demo"})).Pickers
+	if !reflect.DeepEqual(got.Profiles, []string{"fast"}) || !reflect.DeepEqual(got.Checkouts, []string{"site"}) {
+		t.Fatalf("pickers for demo: %+v", got)
+	}
+}

@@ -124,3 +124,12 @@ func TestSavedViewRefusalsCarryTheirField(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckViewNameRefusesControlCharacters(t *testing.T) {
+	for _, in := range []string{"a\nb", "a\tb", "a\x00b", "a\rb"} {
+		_, err := CheckViewName(in, nil, "")
+		if err == nil || !strings.HasPrefix(err.Error(), "Name") || !strings.Contains(err.Error(), "control characters") {
+			t.Errorf("CheckViewName(%q) = %v; want a Name error about control characters", in, err)
+		}
+	}
+}

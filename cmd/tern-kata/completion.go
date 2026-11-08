@@ -139,9 +139,9 @@ func fishCompletion() string {
 	}
 	line("-n '__fish_seen_subcommand_from views; and not __fish_seen_subcommand_from %[1]s' -a '%[1]s'", strings.Join(viewsForms, " "))
 	for _, name := range viewFlagNames {
-		line("-n '__fish_seen_subcommand_from views' -l %s -r", name)
+		line("-n '__fish_seen_subcommand_from views; and __fish_seen_subcommand_from add' -l %s -r", name)
 	}
-	line("-n '__fish_seen_subcommand_from views' -l replace -d 'save over a view of that name'")
+	line("-n '__fish_seen_subcommand_from views; and __fish_seen_subcommand_from add' -l replace -d 'save over a view of that name'")
 	line("-n '__fish_seen_subcommand_from status show' -l json -d 'the status or the Issues as JSON'")
 	line("-n '__fish_seen_subcommand_from stop' -l now -d 'end the worker at once'")
 	return b.String()

@@ -100,6 +100,9 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 		} else {
 			add("ok", "checkout "+name, cfg.Checkouts[name], "")
 		}
+		if !cronjob.PortableName(name) {
+			add("warn", "checkout "+name, fmt.Sprintf("the key is not a portable name (1 to %d letters, digits, - _ . and not . or ..), so the Job card cannot save it and does not offer it", cronjob.MaxPortableNameBytes), "Rename the key under [checkouts] in worker.toml, and in any Project list that names it.")
+		}
 	}
 	omp := o.Omp
 	omp.Checkouts = slices.Concat(omp.Checkouts, slices.Sorted(maps.Values(cfg.Checkouts)))

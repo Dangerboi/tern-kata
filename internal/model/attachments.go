@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+	"uuid"
 )
 
 // attachmentKeyPrefix starts the kata meta key of every Attachment: "attachment." + its id. The value is kata's reference to the
@@ -42,7 +43,7 @@ func validAttachmentName(name string) bool {
 
 // attachmentRef reads one reference object, a meta value or the copy a close froze into its evidence: the Attachment it names
 // as id. ok is false for a value kata would not accept as a reference (no valid name, media type, size
-// or Docbank version). A size is a float64 or, in a decoded event payload, a json.Number.
+// or Docbank version UUID, or any member besides those four). A size is a float64 or, in a decoded event payload, a json.Number.
 func attachmentRef(id string, value any) (Attachment, bool) {
 	ref, isObject := value.(map[string]any)
 	if !isObject {
@@ -51,6 +52,9 @@ func attachmentRef(id string, value any) (Attachment, bool) {
 	name, nameOK := ref["name"].(string)
 	mediaType, typeOK := ref["media_type"].(string)
 	version, versionOK := ref["docbank_version"].(string)
+	if len(ref) != 4 {
+		return Attachment{}, false
+	}
 	var size float64
 	var sizeOK bool
 	switch n := ref["size"].(type) {
@@ -61,10 +65,16 @@ func attachmentRef(id string, value any) (Attachment, bool) {
 		size, err = n.Float64()
 		sizeOK = err == nil
 	}
-	if nameOK && typeOK && sizeOK && versionOK && validAttachmentName(name) && mediaType != "" && version != "" && size >= 0 && size == float64(int64(size)) {
+	if nameOK && typeOK && sizeOK && versionOK && validAttachmentName(name) && mediaType != "" && validDocbankVersion(version) && size >= 0 && size == float64(int64(size)) {
 		return Attachment{ID: id, Name: name, MediaType: mediaType, Version: version, Size: int64(size)}, true
 	}
 	return Attachment{}, false
+}
+
+// validDocbankVersion is kata's check on docbank_version: a UUID, and not the nil one.
+func validDocbankVersion(version string) bool {
+	u, err := uuid.Parse(version)
+	return err == nil && u != uuid.Nil()
 }
 
 // Attachments are the Issue's Attachments read from its attachment.* meta keys, sorted by name, then id. A key whose value kata

@@ -140,9 +140,16 @@ func issues(m model.Model, now time.Time) tern.Element {
 		children = append(children, searchInput(m))
 	}
 	empty := emptyState("No Issues", "This Collection has none. Select another Collection or create one with kata create.")
+	// The Board ignores the status filter, so the Lane view judges the filters without it and names an empty Lane, not the Collection.
+	filters := m.Filters
+	if m.LaneViewShown() {
+		filters.Status = ""
+	}
 	switch {
-	case m.Filters != (model.Filters{}):
+	case filters != (model.Filters{}):
 		empty = emptyState("No Issues match", "These filters leave none.", emptyButton(m, "clear-filters", model.ClearFilters, "Clear filters", false)...)
+	case m.LaneViewShown():
+		empty = emptyState("No cards", "This Lane is empty.")
 	case m.Collection.IsProject():
 		empty = emptyState("No Issues", "This Collection has none.", emptyButton(m, "new", model.NewIssue, "New Issue", true)...)
 	}

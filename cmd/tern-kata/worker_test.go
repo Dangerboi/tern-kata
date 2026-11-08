@@ -725,3 +725,46 @@ func TestWorkerResumeByNameRefusesWhenTwoProjectsPauseTheSameName(t *testing.T) 
 		t.Fatalf("resume with nothing paused answered %v", err)
 	}
 }
+
+func TestWorkerResumeNamesNoPausedJobOnlyWhenTheWorkerAnsweredThatNothingMatched(t *testing.T) {
+	f := newWorkerFixture(t, "")
+	resume := func(ref string) error {
+		_, err := f.run(t, LaunchPlan{Subcommand: "worker", Operands: []string{"resume", ref}})
+		return err
+	}
+	if err := resume("01JABCDEFGHJKMNPQRSTVWXYZ0"); err == nil || strings.Contains(err.Error(), "no job this worker paused") || !strings.Contains(err.Error(), "no tern-kata worker is running") {
+		t.Fatalf("resume with no worker answered %v; want the no-worker error alone", err)
+	}
+	f.serve(t)
+	for _, ref := range []string{"01JABCDEFGHJKMNPQRSTVWXYZ0", "flaky"} {
+		if err := resume(ref); err == nil || !strings.HasSuffix(err.Error(), fmt.Sprintf("; no job this worker paused is %q", ref)) {
+			t.Errorf("resume of %q answered %v; want the worker's answer then the paused-job hint", ref, err)
+		}
+	}
+}
+
+func TestSecondForegroundWorkerPrintsNoBannerAndTheFirstPrintsOne(t *testing.T) {
+	f := newWorkerFixture(t, "")
+	ctx, cancel := context.WithCancel(context.Background())
+	var first bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		done <- runWorkerCommand(ctx, LaunchPlan{Subcommand: "worker", Actor: "fallback"}, f.env, &first)
+	}()
+	eventually(t, "the worker to admit for demo", func() bool {
+		var out bytes.Buffer
+		return runWorkerCommand(ctx, LaunchPlan{Subcommand: "worker", Operands: []string{"status"}}, f.env, &out) == nil && strings.Contains(out.String(), "Project demo: admitting")
+	})
+	var second bytes.Buffer
+	err := runWorkerCommand(context.Background(), LaunchPlan{Subcommand: "worker", Actor: "fallback"}, f.env, &second)
+	if err == nil || !strings.Contains(err.Error(), "already running") || second.Len() != 0 {
+		t.Errorf("second worker printed %q, err %v; want no output and the already-running refusal", second.String(), err)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(first.String(), "Worker ") || !strings.Contains(first.String(), "serving 1 Project") {
+		t.Errorf("first worker printed %q; want the serving banner", first.String())
+	}
+}

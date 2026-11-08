@@ -124,7 +124,7 @@ func writeBroadcast(m Model, targets []BroadcastTarget, text string) (Model, []C
 	var cmds []Cmd
 	for _, t := range f.Targets {
 		if t.Skipped == "" {
-			cmds = append(cmds, SendAgentMessage{Workspace: m.Workspace, ProjectID: t.ProjectID, UID: t.IssueUID, Actor: m.Actor, Address: t.Address, Message: text})
+			cmds = append(cmds, SendAgentMessage{Workspace: m.Workspace, ProjectID: t.ProjectID, UID: t.IssueUID, Actor: m.MessageActor(), Address: t.Address, Message: text})
 		}
 	}
 	f.Sending = len(cmds) > 0

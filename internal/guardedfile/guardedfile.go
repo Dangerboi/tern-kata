@@ -39,7 +39,7 @@ const lockWait = 10 * time.Second
 // exclusive lock on path+".lock", so another process writing through this package cannot slip between them; a lock held
 // longer than lockWait is an error. A writer that bypasses this package is not excluded.
 func Write(path string, dirMode fs.FileMode, token Token, next []byte) error {
-	path, err := resolveLink(path)
+	path, err := atomicfile.ResolveLink(path)
 	if err != nil {
 		return err
 	}
@@ -68,30 +68,6 @@ func Write(path string, dirMode fs.FileMode, token Token, next []byte) error {
 		}
 		return nil
 	}})
-}
-
-// resolveLink is the file a write to path must replace: the end of the chain of symlinks (a dotfiles repo) path starts, so
-// the rename keeps every link; where a dangling chain points, so the target is created there; path itself otherwise.
-func resolveLink(path string) (string, error) {
-	start := path
-	for range 40 {
-		info, err := os.Lstat(path)
-		if errors.Is(err, fs.ErrNotExist) || err == nil && info.Mode()&fs.ModeSymlink == 0 {
-			return path, nil
-		}
-		if err != nil {
-			return "", err
-		}
-		dest, err := os.Readlink(path)
-		if err != nil {
-			return "", err
-		}
-		if !filepath.IsAbs(dest) {
-			dest = filepath.Join(filepath.Dir(path), dest)
-		}
-		path = dest
-	}
-	return "", fmt.Errorf("%s: too many levels of symbolic links", start)
 }
 
 const updateTries = 20

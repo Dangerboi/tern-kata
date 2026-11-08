@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/Dangerboi/tern-kata/internal/data"
 )
 
 func TestWriteSectionRefusesAConfigThatChangedSinceItWasRead(t *testing.T) {
@@ -139,5 +143,91 @@ func TestShellWordQuotesOnlyWhatAShellWouldSplitOrExpand(t *testing.T) {
 		if got := ShellWord(in); got != want {
 			t.Errorf("ShellWord(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// scriptRunner finds every program; `docbank daemon status` names addr once `docbank daemon restart` has run.
+type scriptRunner struct {
+	addr      string
+	restarted *bool
+}
+
+func (scriptRunner) LookPath(name string) (string, error) { return "/bin/" + name, nil }
+
+func (r scriptRunner) Run(_ context.Context, _ []string, name string, args ...string) ([]byte, error) {
+	switch strings.Join(args, " ") {
+	case "daemon restart":
+		*r.restarted = true
+		return nil, nil
+	case "daemon status":
+		if *r.restarted {
+			return []byte("running at " + r.addr + "\n"), nil
+		}
+		return []byte("not running\n"), errors.New("exit status 1")
+	}
+	return nil, errors.New("unexpected " + name + " " + strings.Join(args, " "))
+}
+
+func TestSetupLocalRerunStartsDocbankThatIsNotRunning(t *testing.T) {
+	const key = "k"
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	_ = ln.Close()
+	addr := "127.0.0.1:" + strconv.Itoa(port)
+	e := supervisionEnv(t, "", "[server]\nbind_addr = \"127.0.0.1\"\napi_port = "+strconv.Itoa(port)+"\napi_key = \""+key+"\"\n")
+	keyPath := filepath.Join(e.KataHome, KeyFileName)
+	if err := os.WriteFile(keyPath, []byte(key+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	section := kataSection{URL: "http://" + addr, Folder: DefaultFolder, APIKeyFile: keyPath}
+	if err := os.WriteFile(filepath.Join(e.KataHome, "config.toml"), []byte(section.text()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	restarted := false
+	e.Runner = scriptRunner{addr: addr, restarted: &restarted}
+	e.Locate = func(context.Context, string) (data.Target, error) { return data.Target{}, errors.New("no daemon") }
+	var out strings.Builder
+	e.Out = &out
+	if err := e.setupLocal(context.Background(), Local{Common: Common{NoRestart: true}}); err != nil {
+		t.Fatalf("setupLocal = %v\n%s", err, out.String())
+	}
+	if !restarted {
+		t.Errorf("Docbank was not running and was not started; output:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "nothing changed") {
+		t.Errorf("a rerun with Docbank down said nothing changed:\n%s", out.String())
+	}
+}
+
+func TestSetupRemoteRefusesAKeyFileKataWouldRefuse(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no permission bits")
+	}
+	dir := t.TempDir()
+	loose := filepath.Join(dir, "loose.key")
+	big := filepath.Join(dir, "big.key")
+	for path, content := range map[string]string{loose: "k\n", big: strings.Repeat("k", 64<<10+1)} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chmod(loose, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct{ path, want string }{
+		"group/world readable": {loose, "chmod 600"},
+		"over 64 KiB":          {big, "exceeds 64 KiB"},
+		"not a regular file":   {dir, "not a readable regular file"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := Env{KataHome: t.TempDir(), Out: io.Discard, Runner: noRunRunner{t}}
+			err := e.SetupRemote(context.Background(), Remote{URL: "https://docbank.example", KeyFile: tc.path})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("SetupRemote = %v; want an error saying %q", err, tc.want)
+			}
+		})
 	}
 }

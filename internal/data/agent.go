@@ -528,8 +528,9 @@ func closeStartError(who, block, failure string, cause, closeErr error) error {
 	return fmt.Errorf("the %s was stopped because %s: %w", who, failure, cause)
 }
 
-// retireAgents removes the prompt files and the records of entries that left agents.json. A record that stays (daemon unreachable)
-// is removed by the next reconcile, which removes every record of this host with no entry, so a failure there is not the caller's.
+// retireAgents removes the prompt files of entries that left agents.json, clears what is left at their Agent address (nobody reads
+// it again) and removes their records. A failure is not the caller's: a record that stays (daemon unreachable)
+// is removed by the next reconcile, which removes every record of this host with no entry.
 func (g *Gateway) retireAgents(ctx context.Context, gone []model.AgentEntry) {
 	for _, e := range gone {
 		removePrompt(e.PromptFile)

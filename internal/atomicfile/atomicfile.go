@@ -9,6 +9,7 @@ package atomicfile
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -40,16 +41,20 @@ type Options struct {
 	Check func(tmp string) error
 }
 
-// Write puts data at path. On any failure the temporary file is removed and the old file is untouched; after a failed rename the
+// Write puts data at path, or at the end of the symlink chain path starts, so a link is kept (see ResolveLink). On any failure the temporary file is removed and the old file is untouched; after a failed rename the
 // old file may still be there, or another writer may have put its own file there first.
 func Write(path string, data []byte, opts Options) error {
+	path, err := ResolveLink(path)
+	if err != nil {
+		return err
+	}
 	dir := filepath.Dir(path)
 	if opts.DirMode != 0 {
 		if err := os.MkdirAll(dir, opts.DirMode); err != nil {
 			return err
 		}
 	}
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*.tmp")
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
 		return err
 	}
@@ -69,6 +74,30 @@ func Write(path string, data []byte, opts Options) error {
 		return err
 	}
 	return nil
+}
+
+// ResolveLink is the file a write to path must replace: the end of the chain of symlinks (a dotfiles repo) path starts, so
+// the rename keeps every link; where a dangling chain points, so the target is created there; path itself otherwise.
+func ResolveLink(path string) (string, error) {
+	start := path
+	for range 40 {
+		info, err := os.Lstat(path)
+		if errors.Is(err, fs.ErrNotExist) || err == nil && info.Mode()&fs.ModeSymlink == 0 {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		dest, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(dest) {
+			dest = filepath.Join(filepath.Dir(path), dest)
+		}
+		path = dest
+	}
+	return "", fmt.Errorf("%s: too many levels of symbolic links", start)
 }
 
 func fill(tmp *os.File, data []byte, mode fs.FileMode) error {

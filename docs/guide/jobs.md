@@ -113,7 +113,7 @@ The fields are reached with `tab` and `shift+tab`; a field that doesn't apply is
 - An Issue-date trigger names its **Target Issue** by short id.
 - A worker's interval has no 60-second floor.
 
-Under the trigger a live preview reads the schedule in words and lists the next runs: three for a cron or a recurring child's interval; the instant of a once trigger; none for manual and Issue dates, and none for a worker's interval, which counts from a start only the worker knows. An interval counts from the job's creation, so a new job's runs are "about" those times. A trigger that can't be read says why instead.
+Under the trigger a live preview reads the schedule in words and lists the next runs: three for a cron or a recurring child's interval; the instant of a once trigger; none for manual and Issue dates. An interval counts from the job's creation, so a new job's runs are "about" those times. A trigger that can't be read says why instead.
 
 ### Recurring child fields
 
@@ -141,7 +141,7 @@ An Agent prompt or Workflow job being edited shows its **conditions** (`options.
 
 A **Notify** job notifies an existing Issue: the **Target Issue**, or the trigger's Issue for an Issue-date trigger. For an Issue-date trigger an optional **Other Issue to notify about** names a second Issue to notify instead of the trigger's. It also has an **Inbox recipient** (blank is the Issue's current owner or author; a named recipient needs a **message**) and an **Inbox message**.
 
-kata's own date sweeper already notifies the owner or author of the trigger's Issue when a zero-lead job with a blank **Inbox recipient** watches an Issue date and notifies that same Issue, so the worker does not send it a second time. A job that notifies another Issue, has a lead, or names a recipient is the worker's.
+kata's own date sweeper already notifies the owner or author of the trigger's Issue when a zero-lead job with a blank **Inbox recipient** watches an Issue date and notifies that same Issue, so the worker does not send it a second time. A job that notifies another Issue, has a lead, names a recipient or has a **Message** of its own is the worker's: the sweeper sends only its generic "Scheduled date reached" text, so the worker sends your message, and kata's own reminder still arrives too.
 
 ### Catch up and Enabled
 
@@ -188,7 +188,7 @@ Invalid input is refused naming the field and nothing is sent:
 - an Issue-date trigger or existing-Issue policy with no Issue;
 - a once instant without its offset;
 - a secret that isn't `ENV=source`;
-- a checkout key with a space;
+- a checkout key that is not a portable name: 1 to 256 letters, digits, `-`, `_` or `.`, and not `.` or `..` (a space, a slash or any other character fails it);
 - a span out of kata's range;
 - a named recipient without a message.
 

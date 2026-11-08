@@ -138,6 +138,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A team no longer ends while an agent you started by hand works on one of its ready children; it waits for that agent.
 - The Agent card shows a team child whose start claim is over 2 minutes old with no agent as `queued`, as `tern-kata team` does, instead of `starting` for good.
 - Closing, stopping or refreshing away a team child's agent drives the team at once, so the next child starts or the end message is written without waiting for another event.
+- An unread message left at an agent's address is cleared when a finished Background agent is ended, and when the next Pane to start drops the entry of an agent whose block closed while no Pane was open; it used to stay on the Issue.
+- On a daemon that verifies actors (`require_token_identity`), messages from the Pane and from `tern-kata message` are written as the token's account, and agents the Pane starts take that account in their Agent address; the agent used to drop such messages while the Pane said Sent.
 
 #### Attachments
 
@@ -145,6 +147,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The restart command `tern-kata docbank setup` prints for you to run shell-quotes its `KATA_HOME`, `KATA_DB` and `KATA_POSTGRES_SCHEMA` values, so a path with a space or a quote pastes as it is.
 - The restart command `tern-kata docbank setup` prints works in PowerShell on Windows (`$env:KATA_HOME='…'; kata daemon restart`).
 - `tern-kata docbank setup` makes Docbank's `config.toml` owner-only when it adds the API key to it, and says so.
+- Opening an attachment whose name is long (up to kata's 255-byte limit) no longer fails with "file name too long".
+- `tern-kata docbank setup --key-file` refuses, with kata's reason, a key file kata would reject (readable by group or others, over 64 KiB, not yours, not a regular file); it used to report success while every upload failed.
+- Running `tern-kata docbank setup` again while Docbank is stopped starts it, instead of saying it is already set up.
+- The Attachments tab, its count, the `U` picker and the Close card no longer list a reference kata rejects (an extra member, or a `docbank_version` that is not a UUID); opening one used to fail with a wrong reason about its name.
 
 #### Issues and Pages
 
@@ -166,6 +172,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Recurrence card starts a new recurrence on the Issue's scheduled date, as documented, instead of today, so kata no longer moves that date.
 - Where daylight-saving time skips midnight (Havana, Santiago), the Pane's day rolls over at the first moment of the next date; Today and the date badges used to stay on the old day.
 - Every Collection reads planning dates in your local day: an Issue due tomorrow on the Board no longer shows under Today in Deadlines.
+- An empty Lane in the Lane view says "This Lane is empty" instead of describing the Collection, and the status filter, which the Board ignores, no longer makes it say filters leave nothing.
+- The Lanes card's refusals name its fields, "Days back" and "Most cards".
+- Changing only a Done limit on the Lanes card no longer writes the default Lane names to `lanes.toml` or the shared list, so a later change of the default still reaches the Project.
+- The Issues Page keeps its selected Issue after a visit to the Board, even when that Issue is not on the Board.
+- Saving a Workflow that the Workflows search hides selects a visible row instead of leaving nothing highlighted.
 
 #### Jobs and worker
 
@@ -184,6 +195,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Issue events arriving less than 2 s apart no longer make the worker re-read a Project's cron job list on every event; the 2 s debounce applies again.
 - A worker whose wall clock ran ahead and was then corrected back (a VM restore, a bad clock step) schedules again at once; it used to run nothing until the old time came back.
 - Saving, archiving or restoring a job that kata stored reports success even when the read of its parent Issue that follows fails; a retry used to meet "changed meanwhile".
+- `worker add`, `worker edit`, `worker upgrade` and the Worker card keep a symlinked `worker.toml` a link and write the file it points to; they used to replace the link with a plain file.
+- The Job card offers only the profiles and checkouts the Project's `profiles` and `checkouts` lists allow, and no checkout key it cannot save; `worker doctor` warns of such a key.
+- A notify job on an Issue date with a message of its own is sent by the worker; it used to be skipped as kata's reminder, so the message never arrived. kata's own reminder still arrives too.
+- A `[limits] max_timeout` under 2 hours with no `default_timeout` loads: the default follows it down instead of refusing the file.
+- An explicit `capacity = 0`, `max_run_prompts = 0` or `max_active_runs = 0` in `worker.toml` is refused instead of silently meaning the default.
+- On Windows a secret's `file = '~\…'` loads; the check at load refused it although the worker could read it.
 
 #### Daemons and Federation
 
@@ -212,6 +229,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `tern-kata docbank supervise on|off` says supervision was already on or off when nothing changed, instead of reporting a marker it did not remove or create.
 - `tern-kata recur` starts a new recurrence on the Issue's scheduled date instead of today, and on an existing schedule keeps its weekdays, month day and month when you change only `--every` or `--frequency`.
 - The help names `VISUAL` beside `EDITOR` for Draft editing and `worker edit`, as tern-kata already reads it first.
+- `tern-kata message <ref> --re <comment> -m --help` sends `--help` as the message, and `message <ref> --re <comment> --help` prints the help; they used to do the reverse.
+- `tern-kata agent --ref <ref> --help` and `--version` print the help or version instead of asking for a command after `--`.
+- `tern-kata worker resume` mentions paused jobs only when the worker answered that it has no such run, not when no worker is running.
+- A second `tern-kata worker` no longer prints a "serving" line before it is refused because one already runs.
+- fish completes the `views add` flags only after `views add`; `views show` and `views rm` refuse them.
+- A saved view's name can no longer hold a control character such as a newline or a tab, which broke the one-line-per-view list.
+- `tern-kata recur` with an empty or half-formed ref (`""`, `demo#`, `#7`) says `"<ref>" is not a valid issue ref`, as kata does, instead of a 404.
 
 ## [0.9.0] - 2026-11-06
 

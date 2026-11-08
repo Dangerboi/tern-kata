@@ -132,7 +132,7 @@ func (AgentAddressCleared) msg() {}
 func (m Model) messageTarget(request AttentionRequest) (AgentEntry, string) {
 	var target AgentEntry
 	found := false
-	ours := request.Slot.Kind == "" && !request.Slot.Broadcast && request.Slot.From == m.Actor
+	ours := request.Slot.Kind == "" && !request.Slot.Broadcast && (request.Slot.From == m.Actor || request.Slot.From == m.MessageActor())
 	if ours {
 		target, found = m.newestAgentOn(request.IssueUID, func(e AgentEntry) bool { return e.Teammate == request.Slot.Teammate })
 	}
@@ -160,7 +160,7 @@ func (m Model) newestAgentOn(issueUID string, match func(AgentEntry) bool) (Agen
 		if e.IssueUID != issueUID || !match(e) {
 			continue
 		}
-		if e.Address != "" && !MayMessage(m.Actor, AgentAddressActor(e.Address), e.MessageFromActors()) {
+		if e.Address != "" && !MayMessage(m.MessageActor(), AgentAddressActor(e.Address), e.MessageFromActors()) {
 			continue
 		}
 		waits := agentWaiting(m.Agents.States, e.Block)
@@ -182,7 +182,18 @@ func (m Model) agentMessageRefusal(e AgentEntry) string {
 	case e.Address == "":
 		return AgentWithoutAddressRefusal
 	}
-	return MessageSenderRefusal(m.Actor, AgentAddressActor(e.Address), e.MessageFromActors(), false, m.VerifiedSenders)
+	return MessageSenderRefusal(m.MessageActor(), AgentAddressActor(e.Address), e.MessageFromActors(), false, m.VerifiedSenders)
+}
+
+// MessageActor is the actor a message from this Pane is written as, and the actor of the agents it starts (their Agent address begins
+// with it). On a daemon that verifies the actor of every write kata records the credential's account as the event actor of each
+// write, whatever actor the Pane claims, and an agent's extension delivers a live slot only when that event actor is the slot's
+// `from`: so the account is the sender, as `kata notify` writes it. Anywhere else it is the Pane's own actor.
+func (m Model) MessageActor() string {
+	if m.VerifiedSenders && m.Daemon.Account != "" {
+		return m.Daemon.Account
+	}
+	return m.Actor
 }
 
 // MayMessage is whether sender's actor is one the agent acts on: its own actor (owner, the actor in its Agent address) or one of
@@ -349,7 +360,7 @@ func sendAgentMessage(m Model, replacing string) (Model, []Cmd) {
 	}
 	f := &m.AgentMessage
 	f.Sending, f.Err = true, nil
-	return m, []Cmd{SendAgentMessage{Workspace: m.Workspace, ProjectID: f.ProjectID, UID: f.IssueUID, Actor: m.Actor, Address: f.Address, Message: text, Replacing: replacing, Re: f.Re}}
+	return m, []Cmd{SendAgentMessage{Workspace: m.Workspace, ProjectID: f.ProjectID, UID: f.IssueUID, Actor: m.MessageActor(), Address: f.Address, Message: text, Replacing: replacing, Re: f.Re}}
 }
 
 // agentMessageSent applies kata's answer: a failure stays on the card, an unread message held at the address asks before replacing

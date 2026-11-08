@@ -202,7 +202,7 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id on the Relat
 
 ### The Lanes card
 
-`B` (on the Board or in the Lane view) opens the **Lanes card**: a field holding the Lane list as comma-separated names, in order (`needs-triage, in review, ready-for-agent`), then **Done days**, **Done cards** and **Save to** (`tab`/`shift+tab` move between the fields). Its first line names the list in use: shared with the Project, this machine or default.
+`B` (on the Board or in the Lane view) opens the **Lanes card**: a field holding the Lane list as comma-separated names, in order (`needs-triage, in review, ready-for-agent`), then **Days back**, **Most cards** and **Save to** (`tab`/`shift+tab` move between the fields). Its first line names the list in use: shared with the Project, this machine or default.
 
 - A blank Done field restores its default (14 days, 20 cards); anything but a positive whole number is refused with a message naming the field.
 - **Save to** is **This machine** (the [Lane list file](#the-lane-list-file)) or **The Project** (its shared list, for everyone on the daemon); `←`/`→` or `space` change it. It starts on the source in use.

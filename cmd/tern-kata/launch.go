@@ -153,6 +153,8 @@ func subcommandFlag(sub string, args []string, i *int, plan *LaunchPlan) (matche
 		matched, err = parseRecurFlag(args, i, plan)
 	case "views":
 		matched, err = parseViewFlag(args, i, plan)
+	case "agent":
+		matched, err = parseTableFlag(agentFlags, "agent", agentUsage, args, i, plan)
 	case "agents":
 		matched, err = parseTableFlag(agentsFlags, "agents", agentsUsage, args, i, plan)
 	case "docbank":
@@ -185,7 +187,7 @@ func scanFlags(flags []string, flag string) bool {
 			continue
 		}
 		if subcommand == "message" && arg == "--re" && i+1 < len(flags) && !strings.HasPrefix(flags[i+1], "--") {
-			i += 2
+			i++ // the value; the loop step moves past it
 			continue
 		}
 		if arg == flag {

@@ -47,6 +47,9 @@ type BoardState struct {
 	asked string
 	// reads numbers the Lane list reads, so an answer sent before a save took effect is dropped.
 	reads Latest
+	// kept is the Issues Page selection the Board's own selection replaced on entry, and replaced is what it was replaced by;
+	// leaving the Board puts kept back unless the selection moved on.
+	kept, replaced string
 }
 
 func (m Model) LanesRequest() int64 { return m.Board.reads.Newest() }
@@ -185,7 +188,12 @@ func toggleBoard(m Model) (Model, []Cmd) {
 // Lane view of the selected Issue's Lane.
 func enterBoard(m Model) (Model, []Cmd) {
 	m.Board.Mode = BoardColumns
+	before := m.SelectedUID
 	m = m.WithVisibleSelection()
+	m.Board.kept, m.Board.replaced = "", ""
+	if before != "" && m.SelectedUID != before {
+		m.Board.kept, m.Board.replaced = before, m.SelectedUID
+	}
 	if m.Cols < SideBySideCols {
 		m = m.laneView()
 	}
@@ -275,6 +283,10 @@ func openLane(m Model) Model {
 
 func clearBoard(m Model) Model {
 	m.Board.Mode = BoardColumns
+	if m.Board.kept != "" && m.SelectedUID == m.Board.replaced {
+		m.SelectedUID = m.Board.kept
+	}
+	m.Board.kept, m.Board.replaced = "", ""
 	m.lanesWanted = false
 	return m
 }

@@ -152,11 +152,15 @@ func agentClosed(m Model, msg AgentClosed) (Model, []Cmd) {
 		}
 	}
 	freed := m.freesTeamPlace(msg.Agents)
+	m = m.noteGoneAgents(msg.Agents)
 	m.AgentMapping = msg.Agents
+	m, raised := raiseAgentAttention(m, false)
 	if freed {
-		return driveTeams(m, false)
+		var driven []Cmd
+		m, driven = driveTeams(m, false)
+		raised = append(raised, driven...)
 	}
-	return m, nil
+	return m, raised
 }
 
 // StopAgent is the Agent card's Stop: it closes the agent's block with `tern close` and removes its entry and prompt file, whatever

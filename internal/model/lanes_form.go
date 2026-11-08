@@ -154,14 +154,17 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		lanes, err := parseLanes(form.Text)
 		var days, cards int
 		if err == nil {
-			days, err = parseDone(form.Days, "Done days", maxDoneDays)
+			days, err = parseDone(form.Days, "Days back", maxDoneDays)
 		}
 		if err == nil {
-			cards, err = parseDone(form.Cards, "Done cards", maxDoneCards)
+			cards, err = parseDone(form.Cards, "Most cards", maxDoneCards)
 		}
 		if err != nil {
 			form.Err = err
 			return m, nil
+		}
+		if slices.Equal(lanes, DefaultLanes()) {
+			lanes = nil // the default stays unset, so a later change of the default reaches the Project
 		}
 		if form.Share {
 			return m.shareLaneList(lanes, days, cards, false)

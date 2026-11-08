@@ -97,7 +97,7 @@ func TestUnlinkSendsTheAttachmentPickedWhenTheFormOpenedEvenIfTheListChangesMean
 
 func TestShiftUTellsTwoAttachmentsOfOneNameApart(t *testing.T) {
 	meta := refs("a.png")
-	meta[model.AttachmentKey("OTHER-ID-123456")] = map[string]any{"name": "a.png", "media_type": "image/png", "size": float64(1), "docbank_version": "v"}
+	meta[model.AttachmentKey("OTHER-ID-123456")] = map[string]any{"name": "a.png", "media_type": "image/png", "size": float64(1), "docbank_version": "6f1c2e8a-2222-4222-8222-000000000002"}
 	m, _ := model.Update(attachPane(model.ColumnList, meta), model.KeyMsg{Chord: "shift+u"})
 	got := m.FieldSuggestions()
 	if len(got) != 2 || got[0] == got[1] || !strings.HasPrefix(got[0], "a.png [") || !strings.HasSuffix(got[1], "]") {
