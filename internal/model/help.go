@@ -150,6 +150,7 @@ var pageHelpModes = map[Page][]Mode{
 	PageFederation: {ModeFederation, ModeFederationLeave, ModeFederationResult, ModeFederationPick, ModeFederationBrowse,
 		ModeFederationPreview, ModeFederationAdopt, ModeFederationName, ModeFederationRecovery},
 	PageDaemons: {ModeDaemons},
+	PageConfig:  {ModeConfig},
 }
 
 // helpListing is one entry's key placed on one sheet line, with the modes the entry is bound in.

@@ -105,6 +105,7 @@ const (
 	LetteredBack            Action = "lettered-back"
 	ShowFederationPage      Action = "show-federation-page"
 	ShowDaemonsPage         Action = "show-daemons-page"
+	ShowConfigPage          Action = "show-config-page"
 	SwitchDaemonAction      Action = "switch-daemon"
 	RefreshFederation       Action = "refresh-federation"
 	OpenFederationDetail    Action = "open-federation-detail"
@@ -186,6 +187,7 @@ const (
 	ModeQuit       Mode = "quit"
 	ModeFederation Mode = "federation"
 	ModeDaemons    Mode = "daemons"
+	ModeConfig     Mode = "config"
 	// ModeFederationLeave is the Federation Page's leave preview and ModeFederationResult the result of a leave or an enrollment.
 	ModeFederationLeave  Mode = "federation-leave"
 	ModeFederationResult Mode = "federation-result"

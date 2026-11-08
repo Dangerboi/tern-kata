@@ -53,7 +53,7 @@ func cursorTitle(s driver.State) string {
 }
 
 func TestMenuTopLevelListsTheProjectViewsProjectsPagesRestoreAndNewProject(t *testing.T) {
-	want := []string{"work", "Views", "Projects", "Credentials", "Federation", "Daemons", "Restore a deleted Issue", "New Project"}
+	want := []string{"work", "Views", "Projects", "Credentials", "Federation", "Daemons", "Config", "Restore a deleted Issue", "New Project"}
 	if got := menuTitles(boundMenu(t)); !slices.Equal(got, want) {
 		t.Fatalf("top level = %q, want %q", got, want)
 	}

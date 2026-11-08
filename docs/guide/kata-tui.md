@@ -35,6 +35,10 @@ The Comments tab shows a discussion as a reply tree, as kata's TUI does: a reply
 
 `D` opens kata tui's daemons view as a Lettered Page, and the Menu lists it: the daemons kata's `config.toml` names, with kata tui's columns and `Enter` to switch this Pane to one. The switch lives in this Pane only and writes nothing to disk, as in kata tui; the top bar names the daemon by its catalog name and, when the daemon says who you are, the account ("Daemon: work · remote · kata v0.21.0 · as alice"). See [Pages and the Board](pages-and-board.md#lettered-pages).
 
+## Config
+
+`K` opens the Config Page as a Lettered Page, and the Menu lists it. kata tui has no such view: the Page lists tern-kata's own config files (`lanes.toml`, `filters.toml`, `views.toml`, `worker.toml`, `agent.toml`) with their paths and whether each exists and loads, and shows kata's `config.toml` read-only with its number of daemons and its `[tui] confirm_quit` setting. See [Pages and the Board](pages-and-board.md#lettered-pages).
+
 ## Jobs, Runs and Workflows
 
 kata tui switches tabs with `1` to `4`: kata (the Issues), Jobs, Runs and Workflows. tern-kata numbers its Pages the same way for those four: `1` Issues, `2` Jobs, `3` Runs, `4` Workflows. The Board and Attention Pages come after them, as `5` and `6`.

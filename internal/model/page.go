@@ -30,6 +30,8 @@ const (
 	PageFederation
 	// PageDaemons is the Lettered Page of the daemons kata's configuration names; its state is Model.Daemons.
 	PageDaemons
+	// PageConfig is the Lettered Page of tern-kata's config files; its state is Model.ConfigPage.
+	PageConfig
 )
 
 // SecondColumn says what a Page's second column is. A Page declares it in pageDefs, and the one leave rule reads it.
@@ -67,6 +69,8 @@ const (
 	ListNodeFederation
 	// ListNodeDaemons is the Daemons Page's list node.
 	ListNodeDaemons
+	// ListNodeConfig is the Config Page's list node.
+	ListNodeConfig
 )
 
 // ListNode is the current Page's list node.
@@ -204,6 +208,10 @@ func init() {
 			mode: daemonsMode, update: updateDaemons, list: ListNodeDaemons,
 			moves:  pageMoves{mode: ModeDaemons, noun: "daemon", move: moveDaemon, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
 			keymap: []keySegment{movementKeys, rowsOf(daemonsRows)}},
+		{page: PageConfig, id: "config", label: "Config", chord: "K", press: "shift+k", lettered: true, action: ShowConfigPage, second: SecondInspector, enter: enterConfig, clear: clearConfig,
+			mode: configMode, update: updateConfig, list: ListNodeConfig,
+			moves:  pageMoves{mode: ModeConfig, noun: "file", move: moveConfig, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
+			keymap: []keySegment{movementKeys, rowsOf(configRows)}},
 	}
 	buildKeymap()
 }
@@ -311,7 +319,7 @@ func pageScrollActions(def pageDef) []actionEntry {
 // Federation Page's leave, enrollment, browse and result screens included (the typed adoption confirmation is a card, not a mode
 // of the surface). showPage holds the key back while one of their writes is out.
 var pageModes = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail, ModeCollections, ModeJobs, ModeJobInspector, ModeRuns, ModeRunInspector, ModeWorkflows, ModeAttention, ModeCredentials,
-	ModeFederation, ModeFederationLeave, ModeFederationResult, ModeFederationPick, ModeFederationBrowse, ModeFederationPreview, ModeFederationRecovery, ModeDaemons}
+	ModeFederation, ModeFederationLeave, ModeFederationResult, ModeFederationPick, ModeFederationBrowse, ModeFederationPreview, ModeFederationRecovery, ModeDaemons, ModeConfig}
 
 // PageBarEntry is one entry of the Page bar. Press is the chord a click on it sends.
 type PageBarEntry struct {

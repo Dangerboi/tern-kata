@@ -60,7 +60,7 @@ func TestHelpIsAFullPaneSheetOfTheIssuesPage(t *testing.T) {
 		at += i + 1
 	}
 	joined := strings.Join(lines, "\n")
-	for _, want := range []string{"?  help", "q/ctrl+c  quit (q asks y/n first, ctrl+c quits at once)", "j/↓/C-n  down", "pgup/M-v  page up", "I  inbox", "1/2/3/4/5/6/T/C/F/D  switch Page", "g/home/C-M-<  first", "G/end/C-M->  last", "↹/C-j", "shift+tab/C-k", "set priority (! then 0-4 or - sets or clears it at once)", "⌫", "expand/collapse all", "toggle flat/nested view", "jump to referenced issue", "new child", "reset filter form", "reply to comment", "cycle reply kind", "make or change recurrence", "set parent", "projects", "menu"} {
+	for _, want := range []string{"?  help", "q/ctrl+c  quit (q asks y/n first, ctrl+c quits at once)", "j/↓/C-n  down", "pgup/M-v  page up", "I  inbox", "1/2/3/4/5/6/T/C/F/D/K  switch Page", "g/home/C-M-<  first", "G/end/C-M->  last", "↹/C-j", "shift+tab/C-k", "set priority (! then 0-4 or - sets or clears it at once)", "⌫", "expand/collapse all", "toggle flat/nested view", "jump to referenced issue", "new child", "reset filter form", "reply to comment", "cycle reply kind", "make or change recurrence", "set parent", "projects", "menu"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("row %q missing in %q", want, lines)
 		}
@@ -103,7 +103,7 @@ func TestHelpClosesWithQuestionMarkAndEscape(t *testing.T) {
 func helpOn(t *testing.T, pageKey string) string {
 	t.Helper()
 	m := pickerLoaded(true)
-	if page, ok := map[string]model.Page{"5": model.PageBoard, "2": model.PageJobs, "3": model.PageRuns, "4": model.PageWorkflows, "6": model.PageAttention, "C": model.PageCredentials, "D": model.PageDaemons}[pageKey]; ok {
+	if page, ok := map[string]model.Page{"5": model.PageBoard, "2": model.PageJobs, "3": model.PageRuns, "4": model.PageWorkflows, "6": model.PageAttention, "C": model.PageCredentials, "D": model.PageDaemons, "K": model.PageConfig}[pageKey]; ok {
 		m.Page = page
 	}
 	m = apply(m, model.KeyMsg{Chord: "?"})
@@ -123,6 +123,7 @@ func TestHelpSheetListsTheGlobalKeysAndTheCurrentPagesKeys(t *testing.T) {
 		{"Attention", "6", "next request", []string{"toggle flat/nested view", "next job", "next run", "toggle Issues and Board Pages"}},
 		{"Credentials", "C", "read the credentials again", []string{"toggle flat/nested view", "next job", "next run", "show the spoke's detail"}},
 		{"Daemons", "D", "switch this Pane to the selected daemon", []string{"toggle flat/nested view", "next job", "read the credentials again"}},
+		{"Config", "K", "back to the Page shown before", []string{"toggle flat/nested view", "next job", "read the credentials again", "switch this Pane to the selected daemon"}},
 	}
 	for _, page := range pages {
 		sheet := helpOn(t, page.key)

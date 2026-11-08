@@ -41,6 +41,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `n` on the Runs Page switches to the since-you-last-looked mode: the runs that ended since you last marked them seen with `s` on this machine, newest first above a Now line, then the Project's next runs (native jobs with their next time, adapter jobs listed with no time).
   - More than eight new runs fold into one row per job; failed runs are never folded.
   - The mark and the mode are kept per Project in `seen.toml` beside `filters.toml`, so they survive a Pane restart.
+- `K` opens the Config Page, a Lettered Page (also in the Menu) that lists tern-kata's config files with their paths, whether each exists and loads, and a one-line summary.
+  - The rows are `lanes.toml`, `filters.toml`, `views.toml`, `worker.toml` (with its supervision), `agent.toml` and kata's own `config.toml`, read-only; each is read by the reader its feature uses, so a file that does not load shows that reader's error on its own row.
 
 #### Jobs and worker
 

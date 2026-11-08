@@ -94,7 +94,7 @@ func TestRenderPickerListsPinnedProjectFirstAndMarksCurrent(t *testing.T) {
 		t.Fatal("picker list not rendered")
 	}
 	prefix := "layer.collections.list."
-	want := []string{"project.smoke-uid", "views", "projects", "page.credentials", "page.federation", "page.daemons", "restore", "new-project"}
+	want := []string{"project.smoke-uid", "views", "projects", "page.credentials", "page.federation", "page.daemons", "page.config", "restore", "new-project"}
 	var got []string
 	for _, id := range pickerChildIDs(list) {
 		got = append(got, strings.TrimPrefix(id, prefix))
@@ -192,7 +192,7 @@ func TestRenderSidebarListsProjectsOnlyAtItsProjectsLevel(t *testing.T) {
 		t.Fatalf("sidebar Views level = %s", got)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
-	if got := ids(m); got != "views,projects,page.credentials,page.federation,page.daemons,restore,new-project" {
+	if got := ids(m); got != "views,projects,page.credentials,page.federation,page.daemons,page.config,restore,new-project" {
 		t.Fatalf("sidebar top level = %s", got)
 	}
 	m, _ = model.Update(m, model.CollectionPointerSelected{Key: "projects"})

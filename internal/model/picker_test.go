@@ -155,8 +155,8 @@ func TestPickerEntries(t *testing.T) {
 		filter string
 		want   []string
 	}{
-		{"bound Project is pinned first", true, "", []string{"smoke", "Views", "Projects", "Credentials", "Federation", "Daemons", "Restore a deleted Issue", "New Project"}},
-		{"unbound lists no Project inline", false, "", []string{"Views", "Projects", "Credentials", "Federation", "Daemons", "Restore a deleted Issue", "New Project"}},
+		{"bound Project is pinned first", true, "", []string{"smoke", "Views", "Projects", "Credentials", "Federation", "Daemons", "Config", "Restore a deleted Issue", "New Project"}},
+		{"unbound lists no Project inline", false, "", []string{"Views", "Projects", "Credentials", "Federation", "Daemons", "Config", "Restore a deleted Issue", "New Project"}},
 		{"filter finds a fixed Collection from the top", true, "tod", []string{"Today"}},
 		{"filter finds the Views entry and New view by title", true, "view", []string{"Views", "New view"}},
 		{"filter finds the restore entry by title", true, "restore", []string{"Restore a deleted Issue"}},
@@ -188,9 +188,9 @@ func TestPickerCursorMoves(t *testing.T) {
 		{"up from the top stays", []string{"up"}, 0},
 		{"k from the top stays", []string{"k"}, 0},
 		{"down then up", []string{"down", "down", "up"}, 1},
-		{"end", []string{"end"}, 7},
+		{"end", []string{"end"}, 8},
 		{"home", []string{"end", "home"}, 0},
-		{"down stops at the last entry", []string{"end", "down", "j"}, 7},
+		{"down stops at the last entry", []string{"end", "down", "j"}, 8},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, cmds := menuKeys(pickerStart(120, true), tt.keys...)
@@ -253,7 +253,7 @@ func TestPickerEscapeChangesNothing(t *testing.T) {
 }
 
 func TestPickerTypingFiltersEntries(t *testing.T) {
-	all := []string{"smoke", "Views", "Projects", "Credentials", "Federation", "Daemons", "Restore a deleted Issue", "New Project"}
+	all := []string{"smoke", "Views", "Projects", "Credentials", "Federation", "Daemons", "Config", "Restore a deleted Issue", "New Project"}
 	for _, tt := range []struct {
 		name   string
 		keys   []string
@@ -483,7 +483,7 @@ func TestSidebarProjectsLevel(t *testing.T) {
 		return out
 	}
 	top, _ := pickerKeys(pickerStart(120, false), "escape", "escape")
-	if got, want := titles(top), []string{"Views", "Projects", "Credentials", "Federation", "Daemons", "Restore a deleted Issue", "New Project"}; top.SidebarLevel != model.MenuTop || !reflect.DeepEqual(got, want) {
+	if got, want := titles(top), []string{"Views", "Projects", "Credentials", "Federation", "Daemons", "Config", "Restore a deleted Issue", "New Project"}; top.SidebarLevel != model.MenuTop || !reflect.DeepEqual(got, want) {
 		t.Fatalf("top level = %q, want %q", got, want)
 	}
 	if top.CollectionCursor != 0 || titles(top)[top.CollectionCursor] != "Views" {

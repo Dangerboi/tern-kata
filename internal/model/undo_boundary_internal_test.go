@@ -50,6 +50,7 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{LoadAuthCapabilities{}, false},
 		{LoadCredentials{}, false},
 		{LoadDaemons{}, false},
+		{LoadConfigFiles{}, false},
 		{LoadDetail{}, false},
 		{LoadFederation{}, false},
 		{LoadFederationHubProjects{}, false},

@@ -36,7 +36,7 @@ func (g *Gateway) loadFilters(projectUID string) (model.Filters, error) {
 	if err != nil {
 		return model.Filters{}, err
 	}
-	path := filepath.Join(folder, "filters.toml")
+	path := filepath.Join(folder, filtersFileName)
 	file, err := readTables[filtersFile](path)
 	if err != nil {
 		return model.Filters{}, err
@@ -67,7 +67,7 @@ func (g *Gateway) writeFilters(cmd model.SaveFilters) error {
 	if err != nil {
 		return err
 	}
-	return updateTables(filepath.Join(folder, "filters.toml"), func(file map[string]any) {
+	return updateTables(filepath.Join(folder, filtersFileName), func(file map[string]any) {
 		table, _ := file[cmd.ProjectUID].(map[string]any)
 		if table == nil {
 			table = map[string]any{}

@@ -87,7 +87,7 @@ func (g *Gateway) loadLanes(ctx context.Context, cmd model.LoadLanes) model.Lane
 	folder, err := g.configFolder()
 	var file lanesFile
 	if err == nil {
-		file, err = readLanes(filepath.Join(folder, "lanes.toml"))
+		file, err = readLanes(filepath.Join(folder, lanesFileName))
 	}
 	loaded.Err = err
 	if p := file[cmd.ProjectUID]; err == nil && !loaded.Shared {
@@ -179,7 +179,7 @@ func (g *Gateway) writeLanes(cmd model.SaveLanes) error {
 	if err != nil {
 		return err
 	}
-	return updateTables(filepath.Join(folder, "lanes.toml"), func(file map[string]any) {
+	return updateTables(filepath.Join(folder, lanesFileName), func(file map[string]any) {
 		table, _ := file[cmd.ProjectUID].(map[string]any)
 		if table == nil {
 			table = map[string]any{}

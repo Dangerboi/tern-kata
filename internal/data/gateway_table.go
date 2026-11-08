@@ -461,6 +461,7 @@ func init() {
 
 	local((*Gateway).loadDaemons, nil, nil)
 	local((*Gateway).switchDaemon, nil, nil)
+	local((*Gateway).loadConfigFiles, nil, nil)
 
 	daemonCall(
 		func(cmd model.LoadDetail) string { return cmd.Workspace },

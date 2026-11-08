@@ -196,6 +196,7 @@ type Model struct {
 	Credentials  CredentialsState
 	Federation   FederationState
 	Daemons      DaemonsState
+	ConfigPage   ConfigPageState
 	letteredFrom Page
 	// Worker is what the Pane knows of this machine's worker: whether it runs, what it serves and the local state of its runs.
 	Worker    WorkerState

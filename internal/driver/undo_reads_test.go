@@ -12,6 +12,7 @@ func TestOpeningAndReloadingPagesLeavesTheUndoHistoryAlone(t *testing.T) {
 		{"credentials", "shift+c", ""},
 		{"federation", "shift+f", ""},
 		{"daemons", "shift+d", ""},
+		{"config", "shift+k", ""},
 		{"attention", "6", "ctrl+r"},
 	} {
 		s := undoable(t, 2)

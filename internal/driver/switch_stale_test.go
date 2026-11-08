@@ -8,13 +8,14 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
-func TestAnAnswerListingCredentialsOrDaemonsRevealsNoRow(t *testing.T) {
+func TestAnAnswerListingCredentialsDaemonsOrConfigFilesRevealsNoRow(t *testing.T) {
 	for name, tc := range map[string]struct {
 		s   model.Model
 		msg model.Msg
 	}{
 		"Credentials": {tokenList(t).Model, model.CredentialsLoaded{}},
 		"Daemons":     {daemonsListed(t).Model, model.DaemonsLoaded{}},
+		"Config":      {configListed(t).Model, model.ConfigFilesLoaded{}},
 	} {
 		if id := view.SelectionRevealID(tc.s, tc.msg, "other"); id != "" {
 			t.Errorf("%s: the list answer revealed %q, a row Tern does not know yet", name, id)

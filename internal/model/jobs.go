@@ -230,6 +230,12 @@ func (m Model) SelectedJob() *CronJob {
 
 // CurrentSelection is the uid of the selected row of the current Page's list: a job on the Jobs Page, else an Issue.
 func (m Model) CurrentSelection() string {
+	if m.OnConfig() {
+		if f := m.SelectedConfigFile(); f != nil {
+			return string(f.Key)
+		}
+		return ""
+	}
 	if m.OnDaemons() {
 		if e := m.SelectedDaemon(); e != nil {
 			return e.Name

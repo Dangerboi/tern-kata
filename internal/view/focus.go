@@ -37,6 +37,12 @@ var listNodes = map[model.ListNode]struct {
 		}
 		return ""
 	}},
+	model.ListNodeConfig: {ConfigListID, func(m model.Model) string {
+		if f := m.SelectedConfigFile(); f != nil {
+			return ConfigFileID(f.Key)
+		}
+		return ""
+	}},
 	model.ListNodeDaemons: {DaemonListID, func(m model.Model) string {
 		if e := m.SelectedDaemon(); e != nil {
 			return DaemonID(e.Name)
@@ -117,7 +123,7 @@ func SelectionRevealID(m model.Model, msg model.Msg, previous string) string {
 
 func listRead(msg model.Msg) bool {
 	switch msg.(type) {
-	case model.JobsLoaded, model.RunsLoaded, model.AttentionLoaded, model.CredentialsLoaded, model.DaemonsLoaded, model.FederationLoaded, model.FederationHubsLoaded, model.FederationHubProjectsLoaded,
+	case model.JobsLoaded, model.RunsLoaded, model.AttentionLoaded, model.CredentialsLoaded, model.DaemonsLoaded, model.ConfigFilesLoaded, model.FederationLoaded, model.FederationHubsLoaded, model.FederationHubProjectsLoaded,
 		model.FederationBrowsed:
 		return true
 	}
