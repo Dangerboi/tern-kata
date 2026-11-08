@@ -54,6 +54,26 @@ The records of other hosts' agents, read from the Issue's metadata as the Pane l
 
 The Agent badge counts remote agents in " · N", takes its state word from this host's agents and appends " · message unread" for a message at a remote address too. An Issue with only remote agents reads "agent on <host>" (with " · N" for several on that host) or "agents on N hosts", in the muted tone, and a click on it focuses nothing.
 
+### Agents on other machines
+
+With Panes on two machines against one kata daemon, an agent started on either machine can be found and messaged from the other. This section ties the pieces together; each is described where it lives.
+
+**Setup**
+
+1. **One identity-mode daemon.** Both machines' Panes talk to the same kata daemon, and that daemon runs with `[auth] require_token_identity = true` in its `config.toml`, so it derives each write's actor from the credential (see [Who may message an agent](#who-may-message-an-agent)). Each machine's Pane and agents use a token for their own actor (`kata tokens create`). Without identity mode, every message across machines is refused with a reason naming `[auth] require_token_identity`.
+2. **A name for the machine** (optional): `host = "laptop"` at the top level of `agent.toml` (see [agent.toml](#agenttoml)). It is only what the other machine shows; a random host id kept in `host-id` in the state folder tells the machines apart.
+3. **The actors you write as** (only if they differ): when you are `dana` on one machine and `dana-laptop` on the other, list `message_from = ["dana-laptop"]` in the `agent.toml` of the machine whose agents should act on the other's messages. An agent acts on its own actor and on those only. Agents already running keep the list they started with.
+
+**What shows on the other machine.** Each Pane publishes an Agent record for every agent it starts (see [agent.toml](#agenttoml)); the other Pane reads it with the Issue. The Agent card lists the agent after its own, as "on <host> · started <time>", the badge counts it, and `tern-kata agents` lists it with the host in its `HOST` column (see [Agents on other hosts](#agents-on-other-hosts)). A record has no state, so a remote row shows none. An agent whose address another host already uses stays local-only, with the reason on its card.
+
+**What works across machines.** `m` and `r` on the Agent card, `m` on an Attention request the remote agent raised, `S`, the wrap-up and `tern-kata message` write to the agent's address on its own Issue, under the sender rule: the daemon verifies actors, and your actor is the agent's own or in the `message_from` its record carries. `S` and the wrap-up list an agent the rule refuses as skipped, with the reason. The wrap-up reports a remote agent as `finished` once it has commented on its Issue since the sweep, or its record is gone, and otherwise `not yet` (see [Wrap up every running agent](#wrap-up-every-running-agent)).
+
+**What is local only.** Focus (`enter`, `b`), interrupt (`i`), stop (`x`), send back and the session details (model, calls, cost, last message) need the agent's block, which is on the other machine. They are off on a remote row, with the reason. Teams start and drive only agents of their own host.
+
+**Forget.** `f` on a remote row removes its record and clears any message left at its address, from any Pane; it never touches the other machine. A machine that is killed or never comes back leaves its records behind, so Forget them there. A machine that is still up writes a record back at its next reconcile only for an agent that still runs.
+
+**The start-read window.** The receiving agent's extension delivers a message it hears live only when the event's actor is the message's sender, so a `kata meta set <ref> notify.<key>` forgery is not delivered. The read of the agent's open requests at its start, and after a gap its event stream cannot resume, has no event actor, so it delivers only the agent's own actor's requests: a message a `message_from` actor wrote while the agent was starting or its stream was down is not delivered, and a forged request under the agent's own actor in that window is. Send the message again once the agent is back.
+
 ### How the agent runs
 
 The agent always runs through `tern-kata agent [--as <actor>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]...] --ref <qualified ref> --`. For a daemon other than the default one, the Pane also passes the route flags it needs to reach that daemon: `--home`, `--db`, `--schema`, `--dsn-file`, `--env-file`, `--daemon`, `--server`, `--token-file`, `--auth-file`, `--allow-insecure` and `--trust-private-network`, each only when it has a value. No flag holds a secret: a token or DSN goes through a private file the wrapper reads and deletes. The wrapper:
