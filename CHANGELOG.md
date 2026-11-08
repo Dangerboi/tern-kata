@@ -140,7 +140,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Command line
 
-- `tern-kata run` no longer takes `--as`: the worker never recorded who asked for a run, so the flag did nothing.
+- **Breaking:** `tern-kata run` no longer takes `--as`, and a call that passes it fails with an unknown-flag error: drop `--as` from scripts that run jobs.
+  - The flag never did anything: the worker never recorded who asked for a run.
 
 ### Fixed
 
