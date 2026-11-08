@@ -128,6 +128,10 @@ Under the trigger a live preview reads the schedule in words and lists the next 
 - A **Workflow** job has a **Workflow** picker of the Project's live workflows (archived ones are not offered; with none, the card says to make one on the [Workflows Page](workflows.md)).
 - Both have an **Agent profile** (stored in `options.profile`; the options the card doesn't edit are kept), a **Checkout** (stored as `checkout_key`), **Secrets** (`ENV=source` pairs, stored as `secret_refs`: the environment variable the run sees and the name of the source the worker's config defines; never a value), the **Run Issue** policy, **Overlap** and a **Timeout**.
 - **Adapter** (stored in `options.adapter`): the adapter that runs the job. A new adapter job gets `tern-kata`. Another name leaves the job to that adapter: the worker neither schedules nor runs it, and the Jobs Page says "Set aside on this machine" with the reason. Blank takes the key out, and the job runs as before. Notify jobs have the field too.
+
+### Conditions
+
+An Agent prompt or Workflow job being edited shows its **conditions** (`options.conditions`, see [Conditions and skips](worker-reference.md#conditions-and-skips)) read-only under the fields: at most so many runs per day or week, at most so many dollars spent per day or week, and "only with new commits since the last succeeded run", with "in folders …" when it names folders. The card reads them with the same reader the worker admits runs with. A job without conditions shows nothing, and so does a new job. Conditions that do not parse show the reader's error instead; the worker skips that job until it is fixed. A worker that does not know conditions ignores them, and the card says so. The card does not edit conditions; write them into `options` with kata.
 - **Run Issue** policy: **a new Issue per run**, with a title, a one-line body and optional **scheduled** and **deadline offsets** from the run such as `1d` or `-2h`, or **an existing Issue**, named by short id, which every run belongs to.
 - **Overlap**: wait for the running one (the default) or run alongside it.
 - **Timeout**: seconds or `30m`, `2h`; blank is the worker's default.

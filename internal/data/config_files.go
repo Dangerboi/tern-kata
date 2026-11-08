@@ -137,8 +137,10 @@ func (g *Gateway) kataConfigRow() model.ConfigFile {
 func agentSummary(c AgentConfig) string {
 	fields := []struct{ label, value string }{
 		{"actor", c.Actor},
+		{"host", c.Host},
 		{"name", c.Name},
 		{"command", strings.Join(c.Command, " ")},
+		{"message from", strings.Join(c.MessageFrom, ", ")},
 	}
 	var parts []string
 	for _, f := range fields {

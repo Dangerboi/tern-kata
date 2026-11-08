@@ -74,6 +74,9 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 	if !previewed {
 		children = append(children, jobPreview(f, m.Calendar, now))
 	}
+	if conditions := jobConditions(f); conditions != nil {
+		children = append(children, conditions)
+	}
 	if f.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}
@@ -99,6 +102,23 @@ func jobPreview(f model.JobFormState, cal model.PaneCalendar, now time.Time) ter
 		lines = append(lines, toneText("note", ui.ToneMuted, preview.Note))
 	}
 	return ui.Col{Common: ui.Common{Key: "preview"}, Children: ui.Nodes(lines...)}
+}
+
+// jobConditions is the adapter job's conditions, read-only, or why they cannot be read; nil when it has none.
+func jobConditions(f model.JobFormState) tern.Element {
+	lines, shown, err := f.ConditionLines()
+	if !shown {
+		return nil
+	}
+	if err != nil {
+		return toneText("conditions", ui.ToneError, "Conditions: not readable; "+err.Error()+". The worker skips every occurrence of this job until options.conditions is fixed.")
+	}
+	rows := []tern.Element{toneText("conditions-head", ui.ToneInfo, "Only when (set in options.conditions with kata):")}
+	for i, line := range lines {
+		rows = append(rows, toneText("condition"+string(rune('a'+i)), ui.ToneNeutral, line))
+	}
+	rows = append(rows, toneText("conditions-note", ui.ToneMuted, "A worker that does not know conditions ignores them."))
+	return ui.Col{Common: ui.Common{Key: "conditions"}, Children: ui.Nodes(rows...)}
 }
 
 // jobConflict is the card after a save found the job changed: the newer job, the draft kept, and the three ways out.

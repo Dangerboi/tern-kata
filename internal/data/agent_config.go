@@ -17,6 +17,7 @@ import (
 // AgentConfigFile is agent.toml, beside lanes.toml in tern-kata's config folder. The user writes it by hand; the Pane never does.
 //
 //	actor = "me-agent"
+//	host = "laptop"
 //	name = "builder"
 //	command = ["omp"]
 //	forward_comments = true
@@ -38,6 +39,8 @@ type AgentConfig struct {
 	Command []string `toml:"command"`
 	// ForwardComments turns on telling the agent about a person's comment on its Issue; unset is off.
 	ForwardComments *bool `toml:"forward_comments"`
+	// Host is this machine's name on the Agent records it publishes (top level only); unset is the machine's host name.
+	Host string `toml:"host"`
 	// MessageFrom lists the actors, besides the agent's own, whose messages the agent acts on; unset and empty are none.
 	MessageFrom []string                `toml:"message_from"`
 	Projects    map[string]AgentProject `toml:"projects"`
@@ -71,6 +74,9 @@ func ReadAgentConfig(path string) (AgentConfig, error) {
 			keys[i] = k.String()
 		}
 		return AgentConfig{}, fmt.Errorf("%s: unknown key %s", path, strings.Join(keys, ", "))
+	}
+	if meta.IsDefined("host") && strings.TrimSpace(c.Host) == "" {
+		return AgentConfig{}, fmt.Errorf("%s: host: must not be empty", path)
 	}
 	if meta.IsDefined("name") {
 		if err := checkTeammate(c.Name); err != nil {

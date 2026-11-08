@@ -388,6 +388,7 @@ func (g *Gateway) reconcileAgents(ctx context.Context, file, paneBlock string, f
 	for _, e := range gone {
 		removePrompt(e.PromptFile)
 	}
+	g.forgetAgentRecords(ctx, gone)
 	return kept, nil, nil
 }
 
@@ -399,7 +400,20 @@ func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.
 		return model.AgentsPruned{Seq: cmd.Seq, Err: err}
 	}
 	agents, askErr, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, true, func(string) bool { return true })
+	if askErr == nil && err == nil {
+		g.syncAgentRecordsAtStart(ctx, file, agents)
+	}
 	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
+}
+
+// syncAgentRecordsAtStart reconciles the Pane's records with the agents that remain (syncAgentRecords). Only a read of the blocks
+// that succeeded gets here: an entry whose block is gone for good must not be published. A failure waits for the next start.
+func (g *Gateway) syncAgentRecordsAtStart(ctx context.Context, file string, agents []model.AgentEntry) {
+	dirs, err := g.workerDirs()
+	if err != nil || dirs.State == "" {
+		return
+	}
+	_ = g.syncAgentRecords(ctx, "", agentDirs{config: dirs.Config, state: dirs.State}, file, agents)
 }
 
 // removePrompt removes a prompt file and the token, DSN, env and session path files beside it, if the agent was started with them.
@@ -497,7 +511,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 	}
 	entry := model.AgentEntry{IssueUID: cmd.IssueUID, IssueRef: cmd.IssueRef, ProjectID: cmd.ProjectID, Block: block, StartedAt: g.now().UTC().Truncate(time.Second),
 		Teammate: settings.Name, PromptFile: promptFile, PaneBlock: cmd.PaneBlock, Placement: cmd.Placement, Background: cmd.Placement == model.AgentBackground,
-		NoAddress: noAddress}
+		NoAddress: noAddress, Actor: cmd.Actor}
 	if messaging.AddressPrefix != "" {
 		entry.Address = AgentAddress(messaging.AddressPrefix, block)
 		entry.MessageFrom = strings.Join(messaging.MessageFrom, ",")
@@ -514,12 +528,23 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		return failed(fmt.Errorf("the agent was stopped because agents.json could not be written: %w", err))
 	}
 	started := model.AgentStarted{Placement: cmd.Placement, IssueRef: cmd.IssueRef, Entry: entry}
+	if published, err := g.publishAgent(ctx, cmd.Workspace, agentDirs{config: dirs.Config, state: dirs.State}, filepath.Join(dirs.State, AgentsFile), entry); err != nil {
+		started.Note = "cannot publish its agent record: " + err.Error()
+	} else {
+		started.Entry = published
+	}
 	if entry.Background {
 		if out, err := g.runTern(ctx, RenameAgentArgs(block, cmd.IssueRef)); err != nil {
-			started.Note = "cannot name its tab: " + ternFailure(err, out).Error()
+			started.Note = strings.TrimSpace(started.Note + " cannot name its tab: " + ternFailure(err, out).Error())
 		}
 	}
 	return started
+}
+
+// forgetAgentRecords removes the records of entries that left agents.json. A record that stays (daemon unreachable) is removed by the
+// next reconcile, which removes every record of this host with no entry, so a failure here is not the caller's.
+func (g *Gateway) forgetAgentRecords(ctx context.Context, gone []model.AgentEntry) {
+	_ = g.removeAgentRecordsOf(ctx, gone)
 }
 
 // startBackground starts the agent in the hidden session: a new tab when `tern ls --json` lists the session, a new session when
@@ -691,6 +716,7 @@ func (g *Gateway) closeAndForget(ctx context.Context, file, block string) ([]mod
 	for _, e := range gone {
 		removePrompt(e.PromptFile)
 	}
+	g.forgetAgentRecords(ctx, gone)
 	return kept, nil
 }
 

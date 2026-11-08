@@ -230,3 +230,81 @@ func TestMOnTheAgentCardFollowsTheSenderRuleForAListedActor(t *testing.T) {
 		}
 	}
 }
+
+func teamCardPane(t *testing.T, state model.TeamState) driver.State {
+	t.Helper()
+	s := agentPanes(t, agentIssue("t1"))["list"]
+	s.Model.Snapshot.Links = []model.Link{
+		{ID: 1, Type: "parent", FromIssueUID: "c1", FromQualifiedID: "work#c1", FromStatus: "open", ToIssueUID: "t1"},
+		{ID: 2, Type: "parent", FromIssueUID: "c2", FromQualifiedID: "work#c2", FromStatus: "closed", ToIssueUID: "t1"},
+		{ID: 3, Type: "parent", FromIssueUID: "c3", FromQualifiedID: "work#c3", FromStatus: "open", ToIssueUID: "t1"},
+		{ID: 4, Type: "parent", FromIssueUID: "c4", FromQualifiedID: "other#c4", FromStatus: "open", ToIssueUID: "t1"},
+		{ID: 5, Type: "parent", FromIssueUID: "c5", FromQualifiedID: "work#c5", FromStatus: "open", ToIssueUID: "t1"},
+		{ID: 6, Type: "blocks", FromIssueUID: "c3", FromQualifiedID: "work#c3", FromStatus: "open", ToIssueUID: "c5", ToQualifiedID: "work#c5", ToStatus: "open"},
+	}
+	s.Model.AgentMapping = []model.AgentEntry{
+		{IssueUID: "t1", IssueRef: "work#t1", ProjectID: 7, Block: "30", Teammate: "omp", Address: "dana/omp-30", Placement: model.AgentSplit},
+		{IssueUID: "c1", IssueRef: "work#c1", ProjectID: 7, Block: "31", Teammate: "omp", Address: "dana/omp-31", Background: true},
+	}
+	s.Model.Agents = model.AgentStatesRelay{Received: true, States: []model.AgentState{{Block: "30", State: model.AgentIdle}, {Block: "31", State: model.AgentWorking}}}
+	s.Model.Teams = []model.Team{{ParentUID: "t1", ParentRef: "work#t1", Project: "work", ProjectID: 7, CoordinatorBlock: "30", CoordinatorAddress: "dana/omp-30", Limit: 3, State: state,
+		Children: []model.TeamChild{{UID: "c1", Ref: "work#c1", Block: "31"}, {UID: "c2", Ref: "work#c2", Block: "32"}}}}
+	return step(t, s, key("w")).State
+}
+
+func TestTheParentsCardShowsTheTeamUnderItsAgents(t *testing.T) {
+	s := teamCardPane(t, model.TeamRunning)
+	text := wireTextOf(t, s)
+	wantText(t, "the team section", text, "Team: running · 3 at once")
+	for uid, want := range map[string]string{
+		"c1": "work#c1 · agent working",
+		"c2": "work#c2 · ran: closed",
+		"c3": "work#c3 · queued",
+		"c4": "other#c4 · skipped: other Project",
+		"c5": "work#c5 · not ready",
+	} {
+		if rows := rowsNamed(t, s.Model, view.TeamListID, want); len(rows) != 1 || rows[0] != view.TeamItemID(uid) {
+			t.Errorf("rows reading %q: %v, want only %s", want, rows, view.TeamItemID(uid))
+		}
+	}
+}
+
+func TestTheTeamSectionSaysPausedCoordinatorExitedAndEnding(t *testing.T) {
+	for state, want := range map[model.TeamState]string{model.TeamPaused: "Team: paused · 3 at once", model.TeamStopping: "Team: coordinator exited · 3 at once", model.TeamEnding: "Team: ending · 3 at once"} {
+		wantText(t, string(state), wireTextOf(t, teamCardPane(t, state)), want)
+	}
+	if text := wireTextOf(t, step(t, agentPanes(t, agentIssue("t1"))["list"], key("w")).State); strings.Contains(text, "Team:") {
+		t.Errorf("an Issue without a team shows a team section: %q", text)
+	}
+}
+
+func TestAChildsCardNamesItsTeamsParentAndCoordinator(t *testing.T) {
+	s := teamCardPane(t, model.TeamRunning)
+	s.Model.AgentCard.IssueUID, s.Model.AgentCard.IssueRef = "c1", "work#c1"
+	text := wireTextOf(t, s)
+	wantText(t, "the child's card", text, "a child of the team on work#t1", "coordinator dana/omp-30")
+	if strings.Contains(text, "at once") {
+		t.Errorf("a child's card shows the parent's team section: %q", text)
+	}
+}
+
+func TestPOnTheParentsCardPausesAndResumesAndIsOffWithoutATeam(t *testing.T) {
+	got := step(t, teamCardPane(t, model.TeamRunning), key("p"))
+	if len(got.Cmds) != 1 || got.Cmds[0] != (model.SetTeamPaused{ParentUID: "t1", ParentRef: "work#t1", Paused: true}) || got.State.Model.TopCard() != model.CardAgent {
+		t.Errorf("p on a running team: cmds %#v", got.Cmds)
+	}
+	got = step(t, teamCardPane(t, model.TeamPaused), key("p"))
+	if len(got.Cmds) != 1 || got.Cmds[0] != (model.SetTeamPaused{ParentUID: "t1", ParentRef: "work#t1"}) {
+		t.Errorf("p on a paused team: cmds %#v", got.Cmds)
+	}
+	wantText(t, "the paused team's card", wireTextOf(t, teamCardPane(t, model.TeamPaused)), "Resume the team")
+	for _, state := range []model.TeamState{model.TeamStopping, model.TeamEnding} {
+		if off := step(t, teamCardPane(t, state), key("p")); len(off.Cmds) != 0 || off.State.Model.TopCard() == model.CardAgent || off.State.Model.Notice == "" {
+			t.Errorf("%s: cmds %#v, notice %q", state, off.Cmds, off.State.Model.Notice)
+		}
+	}
+	open := step(t, agentPanes(t, agentIssue("t1"))["list"], key("w")).State
+	if off := step(t, open, key("p")); len(off.Cmds) != 0 || off.State.Model.Notice != model.TeamNoneReason {
+		t.Errorf("without a team: cmds %#v, notice %q", off.Cmds, off.State.Model.Notice)
+	}
+}

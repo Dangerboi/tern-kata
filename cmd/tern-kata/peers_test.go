@@ -27,6 +27,8 @@ func omp(ref, block, address string) model.AgentEntry {
 // says and counts the reads.
 type sender struct {
 	sent     []model.SendAgentMessage
+	resolved []model.ResolveComment
+	comments map[string]string // handle -> comment ULID this fake Issue holds
 	answer   func(model.SendAgentMessage) model.AgentMessageSent
 	verified bool
 	reads    int
@@ -36,6 +38,13 @@ func (s *sender) send(cmd model.Cmd) model.Msg {
 	if _, ok := cmd.(model.LoadAuthCapabilities); ok {
 		s.reads++
 		return model.AuthCapabilitiesLoaded{Account: true, VerifiedSenders: s.verified}
+	}
+	if r, ok := cmd.(model.ResolveComment); ok {
+		s.resolved = append(s.resolved, r)
+		if uid, found := s.comments[model.CommentHandle(r.Handle)]; found {
+			return model.CommentResolved{CommentUID: uid}
+		}
+		return model.CommentResolved{Err: model.ErrNoSuchComment}
 	}
 	c := cmd.(model.SendAgentMessage)
 	s.sent = append(s.sent, c)
@@ -247,5 +256,47 @@ func TestMessageFromAnotherActorFollowsTheSenderRule(t *testing.T) {
 		if (err == nil) != tc.wantSent || (len(s.sent) == 1) != tc.wantSent || s.reads != tc.wantReads || !strings.Contains(out.String(), tc.wantText) {
 			t.Errorf("%s: err %v, output %q, sent %+v, reads %d", name, err, out.String(), s.sent, s.reads)
 		}
+	}
+}
+
+func TestMessageReWritesTheCommentTheSlotAsksToAnswer(t *testing.T) {
+	const uid = "01JABCDEFGHJKMNPQRSTVWXYZ0"
+	s := &sender{comments: map[string]string{"c:vwxyz0": uid}}
+	plan := message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-1", "-m", "why?", "--re", "c:VWXYZ0")
+	if plan.MessageRe != "c:VWXYZ0" {
+		t.Fatalf("plan %+v", plan)
+	}
+	var out bytes.Buffer
+	if err := runMessage(plan, "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if len(s.sent) != 1 || s.sent[0].Re != uid || s.sent[0].Message != "why?" || len(s.resolved) != 1 || s.resolved[0].UID != "uid-aa11" || s.resolved[0].ProjectID != 3 {
+		t.Errorf("sent %+v, resolved %+v", s.sent, s.resolved)
+	}
+
+	s = &sender{}
+	out.Reset()
+	err := runMessage(plan, "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out)
+	if err == nil || len(s.sent) != 0 || !strings.Contains(out.String(), "--re c:VWXYZ0") {
+		t.Errorf("a handle that names no comment: err %v, sent %+v, output %q", err, s.sent, out.String())
+	}
+
+	s = &sender{}
+	if err := runMessage(message(t, map[string]string{"KATA_AUTHOR": "dana"}, "dana/omp-1", "-m", "hi"), "/w", running(omp("demo#aa11", "1", "dana/omp-1")), s.send, &out); err != nil || len(s.resolved) != 0 || s.sent[0].Re != "" {
+		t.Errorf("without --re: err %v, resolved %+v, sent %+v", err, s.resolved, s.sent)
+	}
+}
+
+func TestMessageReTakesAValueAndOnlyOnce(t *testing.T) {
+	if plan := message(t, nil, "dana/omp-1", "--re=c:abc123", "-m", "hi"); plan.MessageRe != "c:abc123" || plan.TargetRef != "dana/omp-1" {
+		t.Errorf("plan %+v", plan)
+	}
+	for _, args := range [][]string{{"a", "-m", "x", "--re"}, {"a", "-m", "x", "--re", "--as"}, {"a", "-m", "x", "--re", "c:1", "--re", "c:2"}, {"a", "-m", "x", "--re="}} {
+		if _, err := PlanLaunch(append([]string{"message"}, args...), peerEnv(nil), "test"); err == nil {
+			t.Errorf("message %v was accepted", args)
+		}
+	}
+	if plan, err := PlanLaunch([]string{"message", "a", "-m", "x", "--re", "-h"}, peerEnv(nil), "test"); err != nil || plan.Help || plan.MessageRe != "-h" {
+		t.Errorf("--re -h: %+v, %v", plan, err)
 	}
 }

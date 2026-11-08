@@ -30,7 +30,7 @@ type LaunchPlan struct {
 	// TUIArgs are the arguments only `kata tui` takes (FallbackArgs without the --issue translation); inside Tern nothing reads
 	// them, so main refuses them there instead of dropping them unseen.
 	TUIArgs []string
-	// Subcommand is "migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "agents", "message" or "completion" when it was the first argument; main runs it
+	// Subcommand is "migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "agents", "team", "message" or "completion" when it was the first argument; main runs it
 	// without Tern.
 	Subcommand string
 	// TargetRef is the Issue as recur and run take it (what `kata show` takes: a short id, <project>#<short id> or a ULID),
@@ -60,6 +60,8 @@ type LaunchPlan struct {
 	// agent knows a peer wrote it; empty when a person sends. `agents --issue` and `message`'s address or ref are TargetRef.
 	MessageText string
 	Teammate    string
+	// MessageRe is `message --re`: the handle of the comment the message asks the agent to answer; empty for none.
+	MessageRe string
 	// AgentRef is `agent --ref`: the qualified Issue ref the agent's KATA_REF is set to; empty leaves the agent without one.
 	AgentRef string
 	// AgentAddressPrefix is `agent --address-prefix`: the agent's Agent address up to its block id, <actor>/<name>. The wrapper sets
@@ -116,7 +118,7 @@ type usageError struct{ error }
 func (e usageError) Unwrap() error { return e.error }
 
 // subcommands are the first arguments that name a command run without Tern.
-var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "agents", "message", "completion"}
+var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "agents", "team", "message", "completion"}
 
 // completionShells are the shells `tern-kata completion` writes a script for.
 var completionShells = []string{"bash", "zsh", "fish"}
@@ -146,6 +148,10 @@ func scanFlags(flags []string, flag string) bool {
 		arg := flags[i]
 		if subcommand == "message" && arg == "-m" { // the text after it is no flag, whatever it starts with
 			i++
+			continue
+		}
+		if subcommand == "message" && arg == "--re" && i+1 < len(flags) && !strings.HasPrefix(flags[i+1], "--") {
+			i += 2
 			continue
 		}
 		if arg == flag {
@@ -195,7 +201,7 @@ func scanFlags(flags []string, flag string) bool {
 				continue
 			}
 		}
-		if subcommand != "completion" && subcommand != "update" && subcommand != "docbank" {
+		if subcommand != "completion" && subcommand != "update" && subcommand != "docbank" && subcommand != "team" {
 			if _, matched, _ := parseAs(flags, &i); matched {
 				continue
 			}
@@ -333,6 +339,9 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 	}
 	if args[0] == "agents" {
 		return planAgents(args, lookup)
+	}
+	if args[0] == "team" {
+		return planTeam(args)
 	}
 	if args[0] == "message" {
 		return planMessage(args, lookup)
@@ -553,7 +562,8 @@ Usage:
   tern-kata worker abandon <run-uid> [--as <actor>]
   tern-kata update [--force] [--pause]
   tern-kata agents [--issue <ref>]
-  tern-kata message <address|ref> -m <text> [--as <actor>]
+  tern-kata team <ref>
+  tern-kata message <address|ref> -m <text> [--re <comment>] [--as <actor>]
   tern-kata docbank supervised [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
   tern-kata docbank supervise on|off
   tern-kata docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
@@ -673,13 +683,21 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 exited: Issue, agent name, state (from the Pane's latest relay)
                                 and Agent address (- when no message reaches it); --issue cuts
                                 the list to one Issue
-  message <address|ref> -m <text>
+  team <ref>                    print the team on that parent Issue: its state, limit and
+                                coordinator's Agent address, then each child with its ref,
+                                state (the agent's own, starting, queued, ran: closed, ran:
+                                exited with the Issue open, skipped: other Project, not ready)
+                                and Agent address. <ref> takes the forms agents --issue does.
+                                No team on the Issue: says so, exit status 1
+  message <address|ref> -m <text> [--re <comment>]
                                 write a message to the agent at that Agent address, or to every
                                 agent that can receive one on that Issue, as the --as actor
                                 (else, inside an agent, the actor of its own address; else
                                 KATA_AUTHOR) and, inside an agent, with its KATA_TEAMMATE
                                 on it: the receiving agent is told it is from a peer, not the
-                                person's instruction. An address that holds a message its agent
+                                person's instruction. --re names the comment (c:<handle>) the message
+                                asks the agent to answer: its reply to that comment with
+                                kata comment --reply settles the request. An address that holds a message its agent
                                 has not cleared is not written over: that agent is named and
                                 exit status 1 says so. Unknown address or ref, or no agent that
                                 can receive it, is refused

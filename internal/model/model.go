@@ -478,6 +478,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return teamStarted(m, msg)
 	case TeamsDriven:
 		return teamsDriven(m, msg)
+	case TeamPausedSet:
+		return teamPausedSet(m, msg)
 	case AgentClosed:
 		m = agentClosed(m, msg)
 	case AgentStopped:

@@ -311,6 +311,7 @@ var cardBindings = []Binding{
 	{Chord: "t", Key: "t", Action: AgentCardTab, Help: "new agent in a tab", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "g", Key: "g", Action: AgentCardNewBackground, Help: "new agent in the background", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "c", Key: "c", Action: AgentCardTeam, Help: "start a team", Mode: ModeAgentCard, ShowInFooter: true},
+	{Chord: "p", Key: "p", Action: AgentCardPause, Help: "pause or resume the team", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "b", Key: "b", Action: AgentCardBackground, Help: "send to background", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "m", Key: "m", Action: AgentCardMessage, Help: "message agent", Mode: ModeAgentCard, ShowInFooter: true},
 	{Chord: "i", Key: "i", Action: AgentCardInterrupt, Help: "interrupt", Mode: ModeAgentCard, ShowInFooter: true},

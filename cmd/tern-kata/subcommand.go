@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -26,6 +27,9 @@ func runSubcommand(ctx context.Context, plan LaunchPlan, gateway *data.Gateway, 
 	send := func(cmd model.Cmd) model.Msg {
 		gateway.Run(ctx, cmd, results)
 		return <-results
+	}
+	if plan.Subcommand == "team" {
+		return runTeam(plan, workspace, gateway.ReadTeamFiles, time.Now(), send, out)
 	}
 	if plan.Subcommand == "agents" || plan.Subcommand == "message" {
 		running, err := gateway.ReadRunningAgents()

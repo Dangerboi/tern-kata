@@ -132,3 +132,60 @@ func TestATeamThatStartedIsMappedAndDrivenAtOnce(t *testing.T) {
 		t.Errorf("notice %q", m.Notice)
 	}
 }
+
+func pausableModel(state model.TeamState) model.Model {
+	m := teamModel()
+	m.Actor = "dana"
+	m.Teams = []model.Team{{ParentUID: "a", ParentRef: "work#a", State: state}}
+	return m
+}
+
+func TestPPausesARunningTeamAndResumesAPausedOneAndKeepsTheCardOpen(t *testing.T) {
+	for state, paused := range map[model.TeamState]bool{model.TeamRunning: true, model.TeamPaused: false} {
+		m, cmds := press(pausableModel(state), "w", "p")
+		if len(cmds) == 0 || m.TopCard() != model.CardAgent {
+			t.Fatalf("%s: card %v, cmds %#v", state, m.TopCard(), cmds)
+		}
+		want := model.SetTeamPaused{ParentUID: "a", ParentRef: "work#a", Paused: paused}
+		if got, ok := agentCmd[model.SetTeamPaused](cmds); !ok || got != want {
+			t.Errorf("%s: cmds %#v, want %+v", state, cmds, want)
+		}
+	}
+}
+
+func TestPIsRefusedWithItsReasonOnAnIssueWithoutATeamAndOnAStoppingOrEndingTeam(t *testing.T) {
+	for name, c := range map[string]struct {
+		m      model.Model
+		reason string
+	}{
+		"no team":  {teamModel(), model.TeamNoneReason},
+		"stopping": {pausableModel(model.TeamStopping), model.TeamStoppingReason},
+		"ending":   {pausableModel(model.TeamEnding), model.TeamEndingReason},
+	} {
+		opened, _ := press(c.m, "w")
+		if reason := opened.AgentCardUnavailable(model.AgentCardPause); reason != c.reason {
+			t.Errorf("%s: the button says %q, want %q", name, reason, c.reason)
+		}
+		after, cmds := press(opened, "p")
+		if _, sent := agentCmd[model.SetTeamPaused](cmds); sent || after.TopCard() == model.CardAgent || after.Notice != c.reason {
+			t.Errorf("%s: cmds %#v, card %v, notice %q; want the reason and nothing written", name, cmds, after.TopCard(), after.Notice)
+		}
+	}
+}
+
+func TestThePauseAnswerKeepsTheTeamsAndResumingDrivesTheQueue(t *testing.T) {
+	m := drivingModel(t)
+	m, _ = model.Update(m, model.TeamsDriven{})
+	m, cmds := model.Update(m, model.TeamPausedSet{ParentRef: "work#a", Paused: true, Teams: []model.Team{{ParentUID: "a", State: model.TeamPaused}}})
+	if t2, _ := m.TeamOn("a"); t2.State != model.TeamPaused || !strings.Contains(m.Notice, "Paused") || len(cmds) != 0 {
+		t.Errorf("paused: %+v, notice %q, cmds %#v", m.Teams, m.Notice, cmds)
+	}
+	m, cmds = model.Update(m, model.TeamPausedSet{ParentRef: "work#a", Teams: []model.Team{{ParentUID: "a", State: model.TeamRunning}}})
+	if _, driven := agentCmd[model.DriveTeams](cmds); !driven || !strings.Contains(m.Notice, "Resumed") {
+		t.Errorf("resumed: notice %q, cmds %#v", m.Notice, cmds)
+	}
+	m, _ = model.Update(m, model.TeamPausedSet{ParentRef: "work#a", Paused: true, Err: errors.New(model.TeamEndingReason)})
+	if !strings.Contains(m.Notice, "Cannot pause the team on work#a") {
+		t.Errorf("notice %q", m.Notice)
+	}
+}

@@ -21,7 +21,7 @@ const TeamsFile = "teams.json"
 
 // teamPendingMaxAge is how long a child recorded without a block counts as being started. A Pane that died between the record and
 // the start leaves such a child; after this it counts as neither running nor started, so the team is not held by it forever.
-const teamPendingMaxAge = 2 * time.Minute
+const teamPendingMaxAge = model.TeamPendingMaxAge
 
 // teamsDoc is teams.json.
 type teamsDoc struct {
@@ -172,6 +172,40 @@ func (g *Gateway) startTeam(ctx context.Context, cmd model.StartTeam) model.Team
 		return failed(fmt.Errorf("the coordinator was stopped because the team could not be recorded: %w", err))
 	}
 	return model.TeamStarted{Placement: cmd.Placement, IssueRef: cmd.IssueRef, Entry: entry, Note: started.Note}
+}
+
+// setTeamPaused writes paused or running for the team through UpdateTeams. A team that is gone, stopping or ending is refused
+// and left as it is; a team already in the asked state is not an error.
+func (g *Gateway) setTeamPaused(cmd model.SetTeamPaused) model.TeamPausedSet {
+	out := model.TeamPausedSet{ParentRef: cmd.ParentRef, Paused: cmd.Paused}
+	teamsFile, _, err := g.teamPaths()
+	if err != nil {
+		out.Err = err
+		return out
+	}
+	var refusal string
+	out.Teams, err = UpdateTeams(teamsFile, func(list []model.Team) []model.Team {
+		refusal = ""
+		i := teamIndex(list, cmd.ParentUID)
+		switch {
+		case i < 0:
+			refusal = model.TeamNoneReason
+		case list[i].State == model.TeamStopping:
+			refusal = model.TeamStoppingReason
+		case list[i].State == model.TeamEnding:
+			refusal = model.TeamEndingReason
+		case cmd.Paused:
+			list[i].State = model.TeamPaused
+		default:
+			list[i].State = model.TeamRunning
+		}
+		return list
+	})
+	if err == nil && refusal != "" {
+		err = errors.New(refusal)
+	}
+	out.Err = err
+	return out
 }
 
 // agentAlive says an agent is mapped in block and has not exited, as far as exited (the blocks a relay listed as exited) says.
@@ -505,4 +539,63 @@ func TeamEndMessage(t model.Team, children []gen.IssueOut) string {
 	}
 	return fmt.Sprintf("The team on %s has no child left to start and none is running. Children closed (%d): %s. Children still open (%d): %s.",
 		t.ParentRef, len(closed), list(closed), len(open), list(open))
+}
+
+// ReadTeamFiles reads what `tern-kata team` prints besides the parent's children: teams.json, agents.json and the latest relay.
+func (g *Gateway) ReadTeamFiles() ([]model.Team, []model.AgentEntry, []model.AgentState, error) {
+	teamsFile, agentsFile, err := g.teamPaths()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	teams, err := ReadTeams(teamsFile)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	entries, err := ReadAgents(agentsFile)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	states, err := readAgentStates(filepath.Join(filepath.Dir(agentsFile), AgentStatesFile))
+	return teams, entries, states, err
+}
+
+// ReadTeamKids reads the children of the team's parent and which of them are ready, as the queue reads them.
+func (c *Client) ReadTeamKids(ctx context.Context, cmd model.LoadTeamKids) (model.TeamKidsLoaded, error) {
+	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.ParentUID)
+	if err != nil {
+		return model.TeamKidsLoaded{}, daemonError(err)
+	}
+	unowned := true
+	r, err := c.ReadyIssuesWithResponse(ctx, &gen.ReadyIssuesRequestOptions{
+		PathParams: &gen.ReadyIssuesPath{ProjectID: cmd.ProjectID}, Query: &gen.ReadyIssuesQuery{Unowned: &unowned}})
+	if err != nil {
+		return model.TeamKidsLoaded{}, daemonError(err)
+	}
+	if r.JSON200 == nil {
+		return model.TeamKidsLoaded{}, errors.New("kata returned no ready Issues")
+	}
+	ready := make(map[string]bool, len(r.JSON200.Issues))
+	for _, i := range r.JSON200.Issues {
+		ready[i.UID] = true
+	}
+	kids := make([]model.TeamKid, 0, len(shown.Children))
+	for _, i := range shown.Children {
+		kids = append(kids, model.TeamKid{UID: i.UID, Ref: i.QualifiedID, ProjectID: i.ProjectID, Closed: i.Status == "closed", Ready: ready[i.UID]})
+	}
+	return model.TeamKidsLoaded{Kids: kids}, nil
+}
+
+// ResolveComment finds the comment on the Issue whose handle is cmd.Handle.
+func (c *Client) ResolveComment(ctx context.Context, cmd model.ResolveComment) (model.CommentResolved, error) {
+	shown, err := c.showIssue(ctx, cmd.ProjectID, cmd.UID)
+	if err != nil {
+		return model.CommentResolved{}, daemonError(err)
+	}
+	want := model.CommentHandle(cmd.Handle)
+	for _, comment := range shown.Comments {
+		if model.CommentHandle(comment.UID) == want {
+			return model.CommentResolved{CommentUID: comment.UID}, nil
+		}
+	}
+	return model.CommentResolved{}, model.ErrNoSuchComment
 }

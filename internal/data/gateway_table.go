@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -169,6 +170,7 @@ func init() {
 	local(func(g *Gateway, ctx context.Context, cmd model.StartAgent) model.Msg { return g.startAgent(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.StartTeam) model.Msg { return g.startTeam(ctx, cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.DriveTeams) model.Msg { return g.driveTeams(ctx, cmd) }, nil, nil)
+	local(func(g *Gateway, _ context.Context, cmd model.SetTeamPaused) model.Msg { return g.setTeamPaused(cmd) }, nil, nil)
 	local(func(g *Gateway, ctx context.Context, cmd model.RefreshAgents) model.Msg {
 		return g.refreshAgents(ctx, cmd)
 	}, nil, nil)
@@ -739,14 +741,32 @@ func init() {
 		nil, nil)
 
 	daemonCall(
-		func(cmd model.ClearAgentAddress) string { return cmd.Workspace },
-		func(ctx context.Context, c *Client, cmd model.ClearAgentAddress) (model.Msg, error) {
-			return ok(model.AgentAddressCleared{UID: cmd.UID}, c.ClearAgentAddress(ctx, cmd))
+		func(cmd model.LoadTeamKids) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.LoadTeamKids) (model.Msg, error) {
+			return ok(c.ReadTeamKids(ctx, cmd))
 		},
-		func(cmd model.ClearAgentAddress, err error) model.Msg {
-			return model.AgentAddressCleared{UID: cmd.UID, Err: err}
-		},
+		func(cmd model.LoadTeamKids, err error) model.Msg { return model.TeamKidsLoaded{Err: err} },
 		nil, nil)
+
+	daemonCall(
+		func(cmd model.ResolveComment) string { return cmd.Workspace },
+		func(ctx context.Context, c *Client, cmd model.ResolveComment) (model.Msg, error) {
+			return ok(c.ResolveComment(ctx, cmd))
+		},
+		func(cmd model.ResolveComment, err error) model.Msg { return model.CommentResolved{Err: err} },
+		nil, nil)
+
+	// An exited agent's record goes beside its address: nobody reads either again.
+	local(func(g *Gateway, ctx context.Context, cmd model.ClearAgentAddress) model.Msg {
+		msg, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+			err := errors.Join(c.ClearAgentAddress(ctx, cmd), g.removeAgentRecordAt(ctx, c, cmd.ProjectID, cmd.UID, cmd.Address))
+			return ok(model.AgentAddressCleared{UID: cmd.UID}, err)
+		})
+		if err != nil {
+			return model.AgentAddressCleared{UID: cmd.UID, Err: err}
+		}
+		return msg
+	}, nil, nil)
 
 	daemonCall(
 		func(cmd model.SaveWorkflow) string { return cmd.Workspace },

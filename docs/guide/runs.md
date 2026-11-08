@@ -17,6 +17,12 @@ Each card has:
 - the first line of its summary;
 - the reason code, `reason: <code>`, when the summary leads with kata's `reason: <code>` line (or is a hold an earlier tern-kata wrote as `<code>: <detail>`); the summary shown is then the line after it.
 
+## Skipped occurrences
+
+A job with [conditions](jobs.md#conditions) that skipped due occurrences shows them as **one row** at the top of the list, in both views: the job's name, how many occurrences were skipped (`3 skips`, however many there are), the latest skip's condition (`runs_per_day`, `new_commits` and so on) and its reason, and when that skip happened. The row comes from this machine's worker status (`tern-kata worker status` lists the same skips), not from kata: a skipped occurrence makes no Run, so the count is the skips the worker still holds, bounded by how long it keeps its run journals.
+
+The row is not a Run. It cannot be selected or opened, and `Enter`, `i`, `o`, `u` and `A` leave it alone; `j` and `k` move through the runs below it. The job filter (`f`, or `r` from the Jobs Page) narrows it to its job like the runs, and `/` matches it by job, condition and reason. With no worker running on this machine, or one that does not serve the Project, the Page shows runs only.
+
 ## Keys
 
 | Key | Action |

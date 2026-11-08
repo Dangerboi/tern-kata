@@ -94,14 +94,14 @@ func TestConfigFilesSummarisesEveryFileThatLoads(t *testing.T) {
 		"filters.toml": "[\"01A\"]\nstatus = \"open\"\n\n[\"01B\"]\nname = \"none\"\n",
 		"views.toml":   "[[view]]\nname = \"Mine\"\nbase = \"today\"\n\n[[view]]\nname = \"Bad\"\nbase = \"nowhere\"\n",
 		"worker.toml":  servingWork(repo),
-		"agent.toml":   "actor = \"me-agent\"\nname = \"builder\"\ncommand = [\"omp\", \"--fast\"]\n\n[projects.zeta]\nname = \"z\"\n\n[projects.alpha]\nname = \"a\"\n",
+		"agent.toml":   "actor = \"me-agent\"\nhost = \"laptop\"\nname = \"builder\"\ncommand = [\"omp\", \"--fast\"]\nmessage_from = [\"dana\", \"dana-laptop\"]\n\n[projects.zeta]\nname = \"z\"\n\n[projects.alpha]\nname = \"a\"\n",
 	}, "[[daemon]]\nname = \"home\"\nlocal = true\n\n[tui]\nconfirm_quit = false\n")
 	for key, want := range map[model.ConfigFileKey]string{
 		model.ConfigLanes:   "1 Project with a Lane list",
 		model.ConfigFilters: "1 Project with a default filter",
 		model.ConfigViews:   "1 saved view, 1 skipped as invalid",
 		model.ConfigWorker:  "1 Project served · Supervision on",
-		model.ConfigAgent:   "actor me-agent · name builder · command omp --fast · own table for alpha, zeta",
+		model.ConfigAgent:   "actor me-agent · host laptop · name builder · command omp --fast · message from dana, dana-laptop · own table for alpha, zeta",
 		model.ConfigKata:    "1 daemon · q quits without asking",
 	} {
 		if row := rows[key]; row.Status != model.ConfigLoads || row.Err != "" || row.Summary != want {

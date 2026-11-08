@@ -39,6 +39,39 @@ type WorkerProject struct {
 	Unsupported map[string]string
 	// Paused is how many failed runs in a row made the worker stop admitting each job, by job uid, until it is resumed.
 	Paused map[string]int
+	// Skipped is each job's recent skips, one entry per job, as the worker lists them (Only when conditions).
+	Skipped []JobSkips
+}
+
+// JobSkips is one job's recent skips as the worker reports them: how many occurrences it skipped and the latest, by the condition
+// that said no and its reason. Skips are not kata Runs; only the worker knows them.
+type JobSkips struct {
+	UID, Name string
+	Count     int
+	// LatestCondition is the condition's name (runs_per_day, new_commits and so on) and LatestReason its words; LatestAt is when
+	// the worker skipped the newest occurrence.
+	LatestCondition, LatestReason string
+	LatestAt                      time.Time
+}
+
+// SkipRows are the Runs Page's skip rows: the jobs this machine's worker skipped occurrences of, by job name. Empty when no worker
+// status is readable for the Project, narrowed by the job filter and the page search like the Runs.
+func (m Model) SkipRows() []JobSkips {
+	p := m.workerProject()
+	if p == nil {
+		return nil
+	}
+	var rows []JobSkips
+	for _, s := range p.Skipped {
+		if m.Runs.JobUID != "" && s.UID != m.Runs.JobUID {
+			continue
+		}
+		if m.searchingPage(PageRuns) && !m.matchesSearch(s.Name, s.LatestCondition, s.LatestReason) {
+			continue
+		}
+		rows = append(rows, s)
+	}
+	return rows
 }
 
 // LocalRun is a run of this machine's worker as the worker reports it.

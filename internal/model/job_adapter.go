@@ -461,3 +461,37 @@ func notification(f JobFormState, def *cronjob.Definition, needsMessage bool) er
 	}
 	return nil
 }
+
+// ConditionLines are the conditions of the adapter job the card edits, one line each, read through the job's one reader
+// (Job.Conditions). It is read-only: they are written to options with kata. shown is false for a new job and for a kind
+// that has none; a job whose conditions do not parse returns the reader's error.
+func (f JobFormState) ConditionLines() (lines []string, shown bool, err error) {
+	if !f.Change || (f.Kind != promptJobKind.id && f.Kind != workflowJobKind.id) {
+		return nil, false, nil
+	}
+	c, err := f.Opened.Job.Conditions()
+	if err != nil {
+		return nil, true, err
+	}
+	money := func(v float64) string { return "$" + strconv.FormatFloat(v, 'f', -1, 64) }
+	if c.RunsPerDay != 0 {
+		lines = append(lines, "At most "+strconv.Itoa(c.RunsPerDay)+" runs per day")
+	}
+	if c.RunsPerWeek != 0 {
+		lines = append(lines, "At most "+strconv.Itoa(c.RunsPerWeek)+" runs per week")
+	}
+	if c.SpendPerDay != 0 {
+		lines = append(lines, "At most "+money(c.SpendPerDay)+" spent per day")
+	}
+	if c.SpendPerWeek != 0 {
+		lines = append(lines, "At most "+money(c.SpendPerWeek)+" spent per week")
+	}
+	if c.NewCommits {
+		line := "Only with new commits since the last succeeded run"
+		if len(c.Folders) > 0 {
+			line += " in folders " + strings.Join(c.Folders, ", ")
+		}
+		lines = append(lines, line)
+	}
+	return lines, c.Any(), nil
+}

@@ -166,6 +166,8 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return m, nil
 	case AgentCardTeam:
 		return openTeamDialog(m)
+	case AgentCardPause:
+		return pauseTeam(m)
 	case AgentCardSplit:
 		return startAgent(m, AgentCardSplit, AgentSplit)
 	case AgentCardTab:
@@ -268,6 +270,8 @@ func (m Model) AgentCardUnavailable(action Action) string {
 			return "That Issue is not loaded."
 		}
 		return m.teamRefusal(*issue)
+	case AgentCardPause:
+		return m.teamPauseRefusal(m.AgentCard.IssueUID)
 	}
 	return ""
 }

@@ -483,3 +483,42 @@ func TestAgentCommandLinePassesTheTeamFlagsOnlyWithAnAddress(t *testing.T) {
 		t.Errorf("without an address: %q", bare)
 	}
 }
+
+func (h *teamHost) pause(paused bool) model.TeamPausedSet {
+	h.t.Helper()
+	return as[model.TeamPausedSet](h.t, run(h.t, h.gateway, model.SetTeamPaused{ParentUID: h.parent, ParentRef: "demo#parent", Paused: paused}))
+}
+
+func TestPausingWritesPausedAndResumingLetsTheQueueGoOn(t *testing.T) {
+	h := newTeamHost(t, 2)
+	h.startTeam(2)
+	if got := h.pause(true); got.Err != nil || len(got.Teams) != 1 || got.Teams[0].State != model.TeamPaused || h.team().State != model.TeamPaused {
+		t.Fatalf("pause: %+v, file %+v", got, h.team())
+	}
+	if got := h.drive(h.gateway); len(got.Started) != 0 || h.runCount() != 1 {
+		t.Fatalf("a paused team started %+v", got.Started)
+	}
+	if got := h.pause(true); got.Err != nil || h.team().State != model.TeamPaused {
+		t.Fatalf("pausing twice: %+v", got)
+	}
+	if got := h.pause(false); got.Err != nil || h.team().State != model.TeamRunning {
+		t.Fatalf("resume: %+v, file %+v", got, h.team())
+	}
+	if got := h.drive(h.gateway); len(got.Started) != 2 {
+		t.Fatalf("a resumed team started %d children, want 2", len(got.Started))
+	}
+}
+
+func TestPausingRefusesAStoppingEndingOrMissingTeamAndLeavesTheFileAsItIs(t *testing.T) {
+	h := newTeamHost(t, 1)
+	h.startTeam(1)
+	for state, reason := range map[model.TeamState]string{model.TeamStopping: model.TeamStoppingReason, model.TeamEnding: model.TeamEndingReason} {
+		h.setState(state)
+		if got := h.pause(true); got.Err == nil || got.Err.Error() != reason || h.team().State != state {
+			t.Errorf("%s: %+v, file %+v", state, got, h.team())
+		}
+	}
+	if got := as[model.TeamPausedSet](t, run(t, h.gateway, model.SetTeamPaused{ParentUID: "nobody", ParentRef: "demo#x", Paused: true})); got.Err == nil || got.Err.Error() != model.TeamNoneReason {
+		t.Errorf("a missing team: %+v", got)
+	}
+}

@@ -128,6 +128,10 @@ func translateWorkerStatus(s worker.Status) model.WorkerStatus {
 				project.Unsupported[n.UID] = n.Text
 			}
 		}
+		for _, k := range p.Skipped {
+			project.Skipped = append(project.Skipped, model.JobSkips{UID: k.UID, Name: k.Name, Count: k.Count,
+				LatestCondition: k.LatestCondition, LatestReason: k.LatestReason, LatestAt: k.LatestAt})
+		}
 		for _, j := range s.Paused {
 			if j.Project == p.Name {
 				if project.Paused == nil {

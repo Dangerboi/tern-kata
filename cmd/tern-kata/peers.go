@@ -5,13 +5,15 @@ import (
 	"io"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
 const (
 	agentsUsage  = "usage: tern-kata agents [--issue <ref>]"
-	messageUsage = "usage: tern-kata message <address|ref> -m <text> [--as <actor>]"
+	messageUsage = "usage: tern-kata message <address|ref> -m <text> [--re <comment>] [--as <actor>]"
+	teamUsage    = "usage: tern-kata team <ref>"
 )
 
 // planAgents parses `tern-kata agents [--issue <ref>]`: TargetRef is the Issue the list is cut to, empty for every Issue.
@@ -35,6 +37,25 @@ func planAgents(args []string, lookup func(string) (string, bool)) (LaunchPlan, 
 	return plan, nil
 }
 
+// planTeam parses `tern-kata team <ref>`: TargetRef is the parent Issue, in the forms `agents --issue` takes.
+func planTeam(args []string) (LaunchPlan, error) {
+	plan := LaunchPlan{Subcommand: "team"}
+	for _, arg := range args[1:] {
+		switch {
+		case strings.HasPrefix(arg, "--"):
+			return LaunchPlan{}, fmt.Errorf("team: unknown flag %s", arg)
+		case plan.TargetRef != "":
+			return LaunchPlan{}, fmt.Errorf("team: unexpected argument %s; %s", arg, teamUsage)
+		default:
+			plan.TargetRef = arg
+		}
+	}
+	if plan.TargetRef == "" {
+		return LaunchPlan{}, fmt.Errorf("%s", teamUsage)
+	}
+	return plan, nil
+}
+
 // planMessage parses `tern-kata message <address|ref> -m <text>`: TargetRef is the address or Issue ref, MessageText the text,
 // which may start with dashes. The sender is an agent only when the environment `tern-kata agent` set is present, KATA_INBOX_USER
 // in address form (<actor>/<name>) next to KATA_REF: KATA_TEAMMATE then names the sending agent and KATA_INBOX_USER is its own
@@ -50,6 +71,15 @@ func planMessage(args []string, lookup func(string) (string, bool)) (LaunchPlan,
 			operands = append(operands, arg)
 		case arg == "--":
 			flagsEnded = true
+		case arg == "--re" || strings.HasPrefix(arg, "--re="):
+			value, err := parseFlagValue(args, &i, "--re", "a comment handle", false)
+			if err != nil {
+				return LaunchPlan{}, fmt.Errorf("message: %w; %s", err, messageUsage)
+			}
+			if plan.MessageRe != "" {
+				return LaunchPlan{}, fmt.Errorf("message: --re given twice; %s", messageUsage)
+			}
+			plan.MessageRe = value
 		case arg == "-m":
 			if i+1 >= len(args) {
 				return LaunchPlan{}, fmt.Errorf("message: -m needs the text; %s", messageUsage)
@@ -104,6 +134,25 @@ func runAgents(plan LaunchPlan, running []model.IssueAgent, out io.Writer) error
 		fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", a.IssueRef, dash(a.Teammate), dash(string(a.State)), dash(a.Address))
 	}
 	return table.Flush()
+}
+
+// runTeam is `team`: the team whose parent plan.TargetRef names, from teams.json, agents.json and the latest relay, with the
+// parent's children as kata holds them now. No team on the Issue is an error, so a script can tell.
+func runTeam(plan LaunchPlan, workspace string, files func() ([]model.Team, []model.AgentEntry, []model.AgentState, error), now time.Time, send func(model.Cmd) model.Msg, out io.Writer) error {
+	teams, entries, states, err := files()
+	if err != nil {
+		return subcommandError{err}
+	}
+	t, found := model.TeamOnRef(teams, plan.TargetRef)
+	if !found {
+		return subcommandError{fmt.Errorf("no team on %s; `tern-kata agents` lists the running agents", plan.TargetRef)}
+	}
+	loaded := send(model.LoadTeamKids{Workspace: workspace, ProjectID: t.ProjectID, ParentUID: t.ParentUID}).(model.TeamKidsLoaded)
+	if loaded.Err != nil {
+		return subcommandError{fmt.Errorf("cannot read the children of %s: %w", t.ParentRef, loaded.Err)}
+	}
+	_, err = io.WriteString(out, model.TeamReport(t, model.TeamRows(t, entries, states, loaded.Kids, now)))
+	return err
 }
 
 func dash(s string) string {
@@ -172,7 +221,15 @@ func writeSlot(plan LaunchPlan, workspace string, a model.IssueAgent, text strin
 	if a.ProjectID == 0 {
 		return fmt.Sprintf("Cannot message %s on %s: its entry does not name the Issue's Project (it started with an older tern-kata).", a.Address, a.IssueRef), false
 	}
-	sent := send(model.SendAgentMessage{Workspace: workspace, ProjectID: a.ProjectID, UID: a.IssueUID, Actor: plan.Actor, Teammate: plan.Teammate, Address: a.Address, Message: text}).(model.AgentMessageSent)
+	re := ""
+	if plan.MessageRe != "" {
+		resolved := send(model.ResolveComment{Workspace: workspace, ProjectID: a.ProjectID, UID: a.IssueUID, Handle: plan.MessageRe}).(model.CommentResolved)
+		if resolved.Err != nil {
+			return fmt.Sprintf("Cannot message %s on %s: --re %s: %s", a.Address, a.IssueRef, plan.MessageRe, resolved.Err), false
+		}
+		re = resolved.CommentUID
+	}
+	sent := send(model.SendAgentMessage{Workspace: workspace, ProjectID: a.ProjectID, UID: a.IssueUID, Actor: plan.Actor, Teammate: plan.Teammate, Address: a.Address, Message: text, Re: re}).(model.AgentMessageSent)
 	switch {
 	case sent.Err != nil:
 		return fmt.Sprintf("Cannot message %s on %s: %s", a.Address, a.IssueRef, sent.Err), false

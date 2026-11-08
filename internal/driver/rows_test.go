@@ -209,6 +209,7 @@ func runRow(t *testing.T, m model.Model, uid string) string {
 	}
 	for _, n := range wireNodes(t, view.Render(m, now)) {
 		if n.ID == view.RunListID {
+			at += len(m.SkipRows())
 			if at >= len(n.C) {
 				t.Fatalf("the Runs Page draws %d cards, none for Run %s", len(n.C), uid)
 			}

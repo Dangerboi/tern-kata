@@ -65,6 +65,11 @@ type AgentEntry struct {
 	// comma-separated as the wrapper passes them to its extension, so an entry stays comparable; MessageFromActors lists them. The
 	// sender rule checks a message's sender against them.
 	MessageFrom string `json:"message_from,omitempty"`
+	// Actor is the Pane's actor when it started the agent, the one its Agent address and its record carry; "" in an entry written before it was kept.
+	Actor string `json:"actor,omitempty"`
+	// AddressUsedBy is the host name of another host whose Agent record already held this agent's Address when it started, so the agent
+	// published no record of its own and stays local; "" when it published one.
+	AddressUsedBy string `json:"address_used_by,omitempty"`
 }
 
 // MessageFromActors is the actors in MessageFrom, none for ""; a zero or legacy entry takes messages from its own actor only.

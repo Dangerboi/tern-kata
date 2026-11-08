@@ -1,6 +1,6 @@
 ---
 name: tern-kata
-description: Recurring Issues, saved views and the tern-kata worker, through tern-kata. Use to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to list or show the views (Today, All Open, a saved view) or save one (`tern-kata views`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), to set Docbank up on this machine or point kata at one someone else runs when the user asks (`tern-kata docbank setup`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
+description: Recurring Issues, saved views and the tern-kata worker, through tern-kata. Use to make an Issue recur, change or stop its schedule, or print it (`tern-kata recur`), to list or show the views (Today, All Open, a saved view) or save one (`tern-kata views`), to run a scheduled agent job now (`tern-kata run`), to check what the worker serves and runs (`tern-kata worker status`, `worker doctor`), to set the worker up when the user asks (`tern-kata worker init`, `worker add`, `worker edit`), to set Docbank up on this machine or point kata at one someone else runs when the user asks (`tern-kata docbank setup`), to list agents, message one (with `--re` to ask for an answer to a comment) or print a team (`tern-kata agents`, `message`, `team`), or to resume or abandon a held worker run (`tern-kata worker resume`, `worker abandon`). Never stop, edit or reconfigure the user's worker unasked.
 ---
 
 Attachments are kata's own now: bytes in Docbank, referenced by `attachment.<id>` meta keys. Read, add and unlink them with `kata docbank attachments` (see the `kata` skill), not with `tern-kata`. `tern-kata attach` and `detach` no longer exist.
@@ -27,6 +27,21 @@ tern-kata recur <ref> --stop                            # stops the Recurrence; 
 - `<ref>` is a short id in this checkout's Project, `<project>#<short id>` or a ULID. `--as` defaults to `$KATA_AUTHOR`, `$USER`, then `git config user.name`; an empty `--as` (`--as=` or `--as ""`) is refused with "--as must be non-empty", so never pass `--as "$VAR"` with a variable that may be unset. Run from a checkout of the Issue's own Project; one result line on success, the reason on stderr and exit 1 on failure. Invalid input is refused and nothing is sent.
 - Changing a schedule someone else changed meanwhile writes nothing: it prints the current schedule and exits 1. Changing or stopping an Issue that never recurred or whose Recurrence was stopped is refused; kata won't make a stopped Issue recur again.
 - Leave the `O` card and `kata ui` to people.
+
+## Agents and teams
+
+Agents tern-kata started on this host can find and message each other. `tern-kata agents` lists the running ones; `tern-kata message` writes to one; `tern-kata team` prints a team.
+
+```bash
+tern-kata agents [--issue <ref>]                 # Issue, agent name, state and Agent address of each running agent
+tern-kata message <address|ref> -m <text>        # write to that address, or to every agent that can receive one on that Issue
+tern-kata message <address|ref> -m <text> --re c:abc123   # ask the agent to answer that comment
+tern-kata team <ref>                             # the team on that parent Issue: state, limit, coordinator, each child's ref, state and address
+```
+
+- `--re <comment>` takes the comment's handle (`c:abc123`). The receiver clears the request by answering that comment with `kata comment <ref> --reply` (or `--confirm`, `--refute`, `--supersede`); a plain `kata notify --clear` also clears it. It needs no team.
+- `team` states for a child: its agent's own state, `starting`, `queued`, `ran: closed`, `ran: exited with the Issue open`, `skipped: other Project` or `not ready`. No team on `<ref>` prints that and exits 1. `<ref>` is `<project>#<short id>`, `<project>/<short id>`, a short id or a uid.
+- `message` is never written over an unread message: that agent is named and the exit status is 1.
 
 ## Views
 

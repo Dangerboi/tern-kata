@@ -38,9 +38,13 @@ func runs(m model.Model, now time.Time) tern.Element {
 		return runsTimeline(m, now)
 	}
 	rows := m.RunRows(now)
-	cards := make([]tern.Element, len(rows))
-	for i, row := range rows {
-		cards[i] = runCard(row, row.Run.UID == m.Runs.Selected, false)
+	skips := m.SkipRows()
+	cards := make([]tern.Element, 0, len(skips)+len(rows))
+	for _, s := range skips {
+		cards = append(cards, skippedJob(m, s, now))
+	}
+	for _, row := range rows {
+		cards = append(cards, runCard(row, row.Run.UID == m.Runs.Selected, false))
 	}
 	scope := "all jobs and workflows"
 	if m.Runs.JobUID != "" {
@@ -186,6 +190,9 @@ func runsTimeline(m model.Model, now time.Time) tern.Element {
 		children = append(children, pageSearchInput(m))
 	}
 	var items []tern.Element
+	for _, s := range m.SkipRows() {
+		items = append(items, skippedJob(m, s, now))
+	}
 	for _, entry := range t.Rows {
 		if entry.Group.Folded() {
 			items = append(items, foldedRuns(m, entry.Group, now))
@@ -231,6 +238,23 @@ func foldedRuns(m model.Model, group model.RunGroup, now time.Time) tern.Element
 	)}
 	when := []ui.Span{{T: group.Counts(), S: "muted"}, {T: " · last ended ", S: "muted"}, {T: m.Calendar.Read(ended, now), S: mono("muted")}}
 	return ui.Card{Common: ui.Common{Key: "fold-" + latest.UID, Tone: ui.ToneInfo}, Children: ui.Nodes(head, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})}
+}
+
+// skippedJob is one job's recent skips as a single row: the job, how many occurrences the worker skipped, the condition and reason
+// of the latest and when it was skipped. The worker's status holds it, not kata, so it is no Run: it can't be selected or opened.
+func skippedJob(m model.Model, s model.JobSkips, now time.Time) tern.Element {
+	noun := " skips"
+	if s.Count == 1 {
+		noun = " skip"
+	}
+	head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Wrap: true, Children: ui.Nodes(
+		ui.Badge{Common: ui.Common{Key: "count", Tone: ui.ToneWarning}, Text: strconv.Itoa(s.Count) + noun},
+		ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: s.Name, S: "strong"}}},
+	)}
+	latest := []ui.Span{{T: "latest ", S: "muted"}, {T: s.LatestCondition, S: mono("muted")}, {T: ": " + s.LatestReason, S: "muted"}}
+	when := []ui.Span{{T: "not run · skipped ", S: "muted"}, {T: m.Calendar.Read(s.LatestAt, now), S: mono("muted")}}
+	return ui.Card{Common: ui.Common{Key: "skips-" + s.UID, Tone: ui.ToneWarning}, Children: ui.Nodes(head,
+		ui.Text{Common: ui.Common{Key: "latest"}, Spans: latest}, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})}
 }
 
 // upcomingRun is one of the Project's next runs: a native job with its next time, an adapter job as started by the worker.
