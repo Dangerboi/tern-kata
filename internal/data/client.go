@@ -26,7 +26,7 @@ type Client struct {
 	// catalog's active_daemon, which a switch leaves where it was.
 	name  string
 	entry CatalogEntry
-	// deadline bounds the instance read that names the daemon's account; the data client has no HTTP timeout of its own. Zero reads
+	// deadline bounds the instance read that names the daemon's account; the data client has no HTTP timeout of its own: each one-shot call is bounded by the Gateway's callBudget. Zero reads
 	// as connectDeadline.
 	deadline time.Duration
 }

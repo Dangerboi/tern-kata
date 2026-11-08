@@ -154,6 +154,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - A chain of links keeps every link, and a link loop is refused naming the file.
 - All Open orders its Project groups by Project name, as kata's web UI does, so `app` comes before `app 2` and `tern` before `tern-kata`.
 - The Events tab words timed-assignment events as kata tui does, naming the owner and the expiry time.
+- A daemon that accepts a request and never answers no longer leaves a card in Saving for good: each daemon call gives up after 30 seconds and reports that the outcome is unknown.
+- A delete whose reason comment fails no longer clears the Undo history: nothing was deleted.
+- A close whose answer was lost and resent no longer lets `u` undo an older, unrelated change; the Undo history is cleared instead.
 
 #### Jobs and worker
 
@@ -171,11 +174,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A secret's `file` may start with `~\` on Windows, as `~/` already worked.
 - Issue events arriving less than 2 s apart no longer make the worker re-read a Project's cron job list on every event; the 2 s debounce applies again.
 - A worker whose wall clock ran ahead and was then corrected back (a VM restore, a bad clock step) schedules again at once; it used to run nothing until the old time came back.
+- Saving, archiving or restoring a job that kata stored reports success even when the read of its parent Issue that follows fails; a retry used to meet "changed meanwhile".
 
 #### Daemons and Federation
 
 - The hub picker and the hub browser say a catalog daemon with an inline `token` has a token, as the active daemon's line already did.
 - A late Lane list from the daemon you just switched away from no longer replaces the new daemon's Lanes on the Board.
+- When creating a token ends in an unclear answer (a 5xx, a timeout), the Pane says the token may exist and to check the Credentials Page.
 
 #### Tern window
 

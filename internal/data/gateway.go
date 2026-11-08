@@ -47,6 +47,9 @@ type Gateway struct {
 	now            func() time.Time
 	wakePoll       time.Duration
 
+	// callBudget bounds one one-shot daemon call, counted from when it is sent.
+	callBudget time.Duration
+
 	workerDirs func() (worker.Dirs, error)
 	runTern    func(context.Context, []string) ([]byte, error)
 	// docbank builds the Docbank supervision environment; nil until the program sets it.
@@ -63,7 +66,7 @@ type Gateway struct {
 }
 
 func NewGateway(locate Locator) *Gateway {
-	return &Gateway{locate: locate, deadline: connectDeadline, clients: map[string]*Client{}, connecting: map[string]chan struct{}{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
+	return &Gateway{locate: locate, deadline: connectDeadline, callBudget: callBudget, clients: map[string]*Client{}, connecting: map[string]chan struct{}{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
 		openFile: openFile, cacheDir: attachmentCacheDir}
 }
 
@@ -123,7 +126,12 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 // callAs is g.call for a client call that returns its own result type. A failed call has no result to show, so it returns
 // the zero result and the error.
 func callAs[R model.Msg](g *Gateway, ctx context.Context, workspace string, fn func(context.Context, *Client) (R, error)) (R, error) {
-	msg, err := g.call(ctx, workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+	return callAsWithin(g, ctx, workspace, g.callBudget, fn)
+}
+
+// callAsWithin is callAs with its own budget for the call; zero leaves it to ctx alone.
+func callAsWithin[R model.Msg](g *Gateway, ctx context.Context, workspace string, budget time.Duration, fn func(context.Context, *Client) (R, error)) (R, error) {
+	msg, err := g.callWithin(ctx, workspace, budget, func(ctx context.Context, c *Client) (model.Msg, error) {
 		result, err := fn(ctx, c)
 		if err != nil {
 			return nil, err
@@ -134,15 +142,30 @@ func callAs[R model.Msg](g *Gateway, ctx context.Context, workspace string, fn f
 	return result, err
 }
 
-// call runs fn against the daemon for workspace. When the daemon cannot be
+// callBudget is how long one one-shot daemon call may take once connected, when the daemon accepts the request and never
+// answers. It is the repo's other one-shot daemon budget (workerAskTimeout, liveBlocksTimeout), above the 15 s the federation
+// calls hold themselves to. A timeout leaves a write's outcome unknown, which ambiguousWrite already reports.
+const callBudget = 30 * time.Second
+
+// call runs fn against the daemon for workspace within the one-shot budget. When the daemon cannot be
 // reached it locates the daemon again and tries once more before giving up.
 func (g *Gateway) call(ctx context.Context, workspace string, fn func(context.Context, *Client) (model.Msg, error)) (model.Msg, error) {
+	return g.callWithin(ctx, workspace, g.callBudget, fn)
+}
+
+// callWithin is call with its own budget for fn; zero (a stream, a transfer of a large file) leaves it to ctx alone.
+func (g *Gateway) callWithin(ctx context.Context, workspace string, budget time.Duration, fn func(context.Context, *Client) (model.Msg, error)) (model.Msg, error) {
 	for attempt := 0; ; attempt++ {
 		c, err := g.client(ctx, workspace)
 		if err != nil {
 			return nil, err
 		}
-		msg, err := fn(ctx, c)
+		callCtx, cancel := ctx, context.CancelFunc(func() {})
+		if budget > 0 {
+			callCtx, cancel = context.WithTimeout(ctx, budget)
+		}
+		msg, err := fn(callCtx, c)
+		cancel()
 		if err == nil || attempt > 0 || ctx.Err() != nil || !unreachable(err) {
 			return msg, err
 		}
@@ -445,7 +468,7 @@ func (g *Gateway) stream(ctx context.Context, cmd model.Subscribe, messages chan
 			return
 		}
 	}
-	_, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+	_, err := g.callWithin(ctx, cmd.Workspace, 0, func(ctx context.Context, c *Client) (model.Msg, error) {
 		return nil, c.ReadEvents(ctx, cmd, send)
 	})
 	if err != nil && ctx.Err() == nil {

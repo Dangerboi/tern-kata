@@ -52,6 +52,9 @@ func (c *Client) CreateToken(ctx context.Context, cmd model.CreateTokenCmd) (don
 	}
 	response, err := c.CreateTokenWithResponse(ctx, &g.CreateTokenRequestOptions{Body: body})
 	if err != nil {
+		if ambiguousWrite(err) {
+			return model.TokenCreated{}, fmt.Errorf("the outcome of creating the token is unknown; it may exist without its secret held: check the Credentials Page: %w", daemonError(err))
+		}
 		return model.TokenCreated{}, daemonError(err)
 	}
 	id, secret := response.JSON200.Token.ID, response.JSON200.Plaintext

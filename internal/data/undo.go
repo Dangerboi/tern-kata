@@ -85,6 +85,9 @@ func (c *Client) recorder(ctx context.Context, kind model.UndoKind, projectID in
 		case unknown:
 			return model.WriteRecord{Unknown: true}
 		case !res.Changed:
+			if landedUnanswered(kind, before, beforeErr, res) {
+				return model.WriteRecord{Boundary: "the outcome of the change is unknown: the daemon answered it as already made"}
+			}
 			return model.WriteRecord{}
 		case accountErr != nil || beforeErr != nil || account.instanceUID == "":
 			return model.WriteRecord{Boundary: "the Issue could not be read before the change"}
@@ -112,6 +115,24 @@ func (c *Client) recorder(ctx context.Context, kind model.UndoKind, projectID in
 		}
 		return model.WriteRecord{Entry: &entry}
 	}
+}
+
+// landedUnanswered reports a keyed close whose answer was lost and replayed by the transport: kata answers the replay from the key
+// as no change, yet the Issue is no longer as it was read before the write. The write did change it, by an answer the Pane never
+// saw, so no entry takes it back and the history must not offer an older one.
+func landedUnanswered(kind model.UndoKind, before *g.ShowIssueResponseBody, beforeErr error, res issueWrite) bool {
+	if beforeErr != nil || before == nil || res.Issue == nil || res.Issue.UID != before.Issue.UID {
+		return false
+	}
+	switch kind {
+	case model.UndoClose, model.UndoReopen:
+		return res.Issue.Status != before.Issue.Status || !equalStrings(res.Issue.ClosedReason, before.Issue.ClosedReason)
+	}
+	return false
+}
+
+func equalStrings(a, b *string) bool {
+	return derefString(a) == derefString(b) && (a == nil) == (b == nil)
 }
 
 func undoBoundary(kind model.UndoKind, before *g.ShowIssueResponseBody, res issueWrite) string {

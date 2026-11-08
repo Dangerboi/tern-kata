@@ -56,7 +56,7 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 	if err != nil {
 		return failed(err)
 	}
-	opened, err := callAs(g, ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.AttachmentOpened, error) {
+	opened, err := callAsWithin(g, ctx, cmd.Workspace, 0, func(ctx context.Context, c *Client) (model.AttachmentOpened, error) {
 		path, err := c.DownloadAttachment(ctx, dir, cmd)
 		return model.AttachmentOpened{UID: cmd.UID, Name: cmd.Attachment.Name, Path: path}, err
 	})

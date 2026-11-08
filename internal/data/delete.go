@@ -55,7 +55,8 @@ func (c *Client) deleteRaw(ctx context.Context, cmd model.DeleteIssueCmd) (issue
 	body := g.DeleteIssueBody{Actor: cmd.Actor}
 	if reason := strings.TrimSpace(cmd.Reason); reason != "" {
 		if err := c.commentDeleteReason(ctx, cmd, reason); err != nil {
-			return issueWrite{}, err
+			// The DELETE is never sent: whatever the comment's outcome, the Issue is not deleted.
+			return issueWrite{}, localFailure{err}
 		}
 	}
 	r, err := c.DeleteIssueWithResponse(ctx, &g.DeleteIssueRequestOptions{

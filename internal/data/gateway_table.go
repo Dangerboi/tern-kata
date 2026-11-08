@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -66,7 +67,12 @@ func longLivedCommand[C model.Cmd](stream func(g *Gateway, ctx context.Context, 
 // its error. When no daemon is found the command still gets its declared failure. A failed call has no result to show,
 // so fn may return its result and its error together.
 func answer[R model.Msg](g *Gateway, ctx context.Context, workspace string, fail func(error) model.Msg, fn func(context.Context, *Client) (R, error)) model.Msg {
-	result, err := callAs(g, ctx, workspace, fn)
+	return answerWithin(g, ctx, workspace, g.callBudget, fail, fn)
+}
+
+// answerWithin is answer with its own budget for the call; zero leaves it to ctx alone.
+func answerWithin[R model.Msg](g *Gateway, ctx context.Context, workspace string, budget time.Duration, fail func(error) model.Msg, fn func(context.Context, *Client) (R, error)) model.Msg {
+	result, err := callAsWithin(g, ctx, workspace, budget, fn)
 	if err != nil {
 		return fail(err)
 	}
@@ -325,9 +331,11 @@ func init() {
 			return model.IssueRestored{UID: cmd.UID, Err: err}
 		})
 
-	daemonCall(
-		(*Client).AttachFile,
-		func(cmd model.AttachFile, err error) model.Msg { return model.FileAttached{UID: cmd.UID, Err: err} })
+	// An upload takes as long as the file: ctx alone ends it.
+	local(func(g *Gateway, ctx context.Context, cmd model.AttachFile) model.Msg {
+		return answerWithin(g, ctx, cmd.Workspace, 0, func(err error) model.Msg { return model.FileAttached{UID: cmd.UID, Err: err} },
+			func(ctx context.Context, c *Client) (model.FileAttached, error) { return c.AttachFile(ctx, cmd) })
+	})
 
 	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.UnlinkAttachment) (model.AttachmentUnlinked, error) {
@@ -340,7 +348,7 @@ func init() {
 	local((*Gateway).openAttachment)
 
 	local(func(g *Gateway, ctx context.Context, cmd model.MigrateAttachments) model.Msg {
-		return answer(g, ctx, cmd.Workspace, func(err error) model.Msg { return model.AttachmentsMigrated{Err: err} },
+		return answerWithin(g, ctx, cmd.Workspace, 0, func(err error) model.Msg { return model.AttachmentsMigrated{Err: err} },
 			func(ctx context.Context, c *Client) (model.Msg, error) {
 				return c.MigrateAttachments(ctx, g.host, cmd), nil
 			})
