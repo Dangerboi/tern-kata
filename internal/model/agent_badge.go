@@ -48,23 +48,24 @@ func pressing(state AgentStateWord) int {
 // IssueAgents lists the agents mapped to the Issue, in the mapping's order, each with its relayed state.
 func (m Model) IssueAgents(issueUID string) []IssueAgent {
 	var agents []IssueAgent
-	var issue *Issue
 	for _, entry := range m.AgentMapping {
-		if entry.IssueUID != issueUID {
-			continue
+		if entry.IssueUID == issueUID {
+			agents = append(agents, agentWithState(entry, m.Agents.States))
 		}
-		agent := agentWithState(entry, m.Agents.States)
-		if agent.State != AgentExited {
-			if issue == nil {
-				issue = m.issueByUID(issueUID)
-			}
-			if issue != nil {
-				agent.Unread = unreadMessage(issue.Metadata, entry.Address)
-			}
-		}
-		agents = append(agents, agent)
+	}
+	if issue := m.issueByUID(issueUID); issue != nil {
+		markUnread(agents, issue)
 	}
 	return agents
+}
+
+// markUnread sets Unread on each agent of the Issue that has not exited, from the Issue's metadata.
+func markUnread(agents []IssueAgent, issue *Issue) {
+	for i := range agents {
+		if agents[i].State != AgentExited {
+			agents[i].Unread = unreadMessage(issue.Metadata, agents[i].Address)
+		}
+	}
 }
 
 // agentWithState is the IssueAgent of entry with the state the relay gave its block ("" when no relay listed it).
@@ -83,7 +84,7 @@ func agentWithState(entry AgentEntry, states []AgentState) IssueAgent {
 func AgentStateWords(state AgentStateWord) (string, AgentTone) {
 	switch state {
 	case AgentWaitingInput:
-		return "agent waiting for you", AgentToneWarning
+		return AgentWaitingMessage, AgentToneWarning
 	case AgentWorking:
 		return "agent working", AgentToneAccent
 	case AgentIdle:
@@ -187,25 +188,18 @@ func (m Model) AgentBadges() AgentBadgeIndex {
 	for _, entry := range m.AgentMapping {
 		agents[entry.IssueUID] = append(agents[entry.IssueUID], IssueAgent{AgentEntry: entry, State: states[entry.Block]})
 	}
-	unread := func(issue *Issue) {
-		for i := range agents[issue.UID] {
-			if a := &agents[issue.UID][i]; a.State != AgentExited {
-				a.Unread = unreadMessage(issue.Metadata, a.Address)
-			}
+	remote := make(map[string][]RemoteAgent)
+	index := func(issue *Issue) {
+		markUnread(agents[issue.UID], issue)
+		if r := remoteAgentsIn(issue.Metadata, m.HostID); len(r) > 0 {
+			remote[issue.UID] = r
 		}
 	}
-	remote := make(map[string][]RemoteAgent)
 	for i := range m.Issues {
-		unread(&m.Issues[i])
-		if r := remoteAgentsIn(m.Issues[i].Metadata, m.HostID); len(r) > 0 {
-			remote[m.Issues[i].UID] = r
-		}
+		index(&m.Issues[i])
 	}
 	if shown := m.shownIssue(); shown != nil {
-		unread(shown)
-		if r := remoteAgentsIn(shown.Metadata, m.HostID); len(r) > 0 {
-			remote[shown.UID] = r
-		}
+		index(shown)
 	}
 	return AgentBadgeIndex{agents: agents, remote: remote}
 }

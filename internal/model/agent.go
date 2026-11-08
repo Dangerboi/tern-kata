@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"maps"
 	"strings"
 	"time"
 )
@@ -211,12 +210,7 @@ func agentStarted(m Model, msg AgentStarted) Model {
 		m.Notice = fmt.Sprintf("Cannot start an agent on %s: %s", msg.IssueRef, msg.Err)
 		return m
 	}
-	m.AgentMapping = append(m.AgentMapping, msg.Entry)
-	m.agentFresh = maps.Clone(m.agentFresh)
-	if m.agentFresh == nil {
-		m.agentFresh = map[string]int64{}
-	}
-	m.agentFresh[msg.Entry.Block] = m.agentAsks
+	m = m.mapStarted(msg.Entry)
 	_, where := msg.Placement.words()
 	m.Notice = fmt.Sprintf("Started an agent on %s in %s.", msg.IssueRef, where)
 	if msg.Note != "" {

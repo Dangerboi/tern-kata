@@ -18,18 +18,15 @@ var ErrViewsChanged = errors.New("views.toml changed since it was read")
 // ErrViewNotFound is a write naming a view the file does not have (any more).
 var ErrViewNotFound = errors.New("no such saved view")
 
-// ViewsToken is what a read of views.toml saw: the file's text, empty for a missing file. A write takes it back and refuses
-// with ErrViewsChanged when the file on disk is no longer that text. Callers treat it as opaque.
-type ViewsToken struct{ read guardedfile.Token }
-
 // ViewsRead is one read of views.toml.
 type ViewsRead struct {
 	// Views are the saved views the file holds that pass model.CheckSavedView, in file order.
 	Views []model.SavedView
 	// Problems are the entries left out of Views, each saying which [[view]] and why. They stay in the file.
 	Problems []error
-	// Token is for the writes that follow this read.
-	Token ViewsToken
+	// Token is for the writes that follow this read: a write takes it back and refuses with ErrViewsChanged when the file on
+	// disk is no longer the text the read saw.
+	Token guardedfile.Token
 }
 
 // ViewsStore is the views.toml beside filters.toml. It needs no Gateway, Daemon or Tern, so the CLI and the Pane use the same
@@ -100,7 +97,7 @@ func (s ViewsStore) Read() (ViewsRead, error) {
 	if err != nil {
 		return ViewsRead{}, fmt.Errorf("%s: %w", s.Path, err)
 	}
-	out := ViewsRead{Token: ViewsToken{tok}}
+	out := ViewsRead{Token: tok}
 	// Each name is checked against every earlier entry, left-out ones included, as the writes do, so find and the list agree
 	// on the first entry of a name.
 	var earlier []model.SavedView
@@ -117,7 +114,7 @@ func (s ViewsStore) Read() (ViewsRead, error) {
 }
 
 // Add appends v to the file. It refuses a name another view has, with the model's message.
-func (s ViewsStore) Add(token ViewsToken, v model.SavedView) error {
+func (s ViewsStore) Add(token guardedfile.Token, v model.SavedView) error {
 	return s.edit(token, func(p *viewsText) (string, error) {
 		v, err := model.CheckSavedView(v, p.others(-1), "")
 		if err != nil {
@@ -129,7 +126,7 @@ func (s ViewsStore) Add(token ViewsToken, v model.SavedView) error {
 
 // Replace puts v in place of the view called self (ignoring case), so v may be a rename or an edit. The view keeps its place in
 // the file, its comments and the keys this module does not know. A name v takes from another view is refused.
-func (s ViewsStore) Replace(token ViewsToken, self string, v model.SavedView) error {
+func (s ViewsStore) Replace(token guardedfile.Token, self string, v model.SavedView) error {
 	return s.edit(token, func(p *viewsText) (string, error) {
 		i := p.find(self)
 		if i < 0 {
@@ -144,7 +141,7 @@ func (s ViewsStore) Replace(token ViewsToken, self string, v model.SavedView) er
 }
 
 // Delete removes the view called name (ignoring case).
-func (s ViewsStore) Delete(token ViewsToken, name string) error {
+func (s ViewsStore) Delete(token guardedfile.Token, name string) error {
 	return s.edit(token, func(p *viewsText) (string, error) {
 		i := p.find(name)
 		if i < 0 {
@@ -156,8 +153,8 @@ func (s ViewsStore) Delete(token ViewsToken, name string) error {
 
 // edit applies change to the text the token holds and writes the result, refusing if the file is not that text any more.
 // The guard is guardedfile's.
-func (s ViewsStore) edit(token ViewsToken, change func(*viewsText) (string, error)) error {
-	p, err := parseViewsText(token.read.Text())
+func (s ViewsStore) edit(token guardedfile.Token, change func(*viewsText) (string, error)) error {
+	p, err := parseViewsText(token.Text())
 	if err != nil {
 		return fmt.Errorf("%s: %w", s.Path, err)
 	}
@@ -168,7 +165,7 @@ func (s ViewsStore) edit(token ViewsToken, change func(*viewsText) (string, erro
 	if _, err := parseViewsText(next); err != nil {
 		return fmt.Errorf("%s: the new file would not read back, so nothing was written: %w", s.Path, err)
 	}
-	err = guardedfile.Write(s.Path, 0o755, token.read, []byte(next))
+	err = guardedfile.Write(s.Path, 0o755, token, []byte(next))
 	if errors.Is(err, guardedfile.ErrChanged) {
 		return ErrViewsChanged
 	}

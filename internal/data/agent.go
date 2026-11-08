@@ -189,25 +189,46 @@ type agentsDoc struct {
 	Agents []model.AgentEntry `json:"agents"`
 }
 
-// ReadAgents reads agents.json at path; a missing file is no agents.
-func ReadAgents(path string) ([]model.AgentEntry, error) {
-	token, err := guardedfile.Read(path)
-	if err != nil {
-		return nil, err
+// jsonDoc decodes what a read of the JSON file at path saw as a D; an empty file is the zero D.
+func jsonDoc[D any](path string, token guardedfile.Token) (D, error) {
+	var doc D
+	if token.Text() == "" {
+		return doc, nil
 	}
-	return parseAgents(path, token)
+	if err := json.Unmarshal([]byte(token.Text()), &doc); err != nil {
+		var zero D
+		return zero, fmt.Errorf("%s: %w", path, err)
+	}
+	return doc, nil
 }
 
-// parseAgents decodes what a read of agents.json saw; an empty file is no agents.
-func parseAgents(path string, token guardedfile.Token) ([]model.AgentEntry, error) {
-	if token.Text() == "" {
-		return nil, nil
+// readJSONDoc reads the JSON file at path as a D; a missing file is the zero D.
+func readJSONDoc[D any](path string) (D, error) {
+	token, err := guardedfile.Read(path)
+	if err != nil {
+		var zero D
+		return zero, err
 	}
-	var doc agentsDoc
-	if err := json.Unmarshal([]byte(token.Text()), &doc); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	return doc.Agents, nil
+	return jsonDoc[D](path, token)
+}
+
+// updateJSONDoc reads the JSON file at path again, lets change return the next document from what the read saw, and writes it
+// indented under guardedfile.Update: only while the file is still what was read, change running again when it is not.
+func updateJSONDoc[D any](path string, change func(guardedfile.Token) (D, error)) error {
+	return guardedfile.Update(path, 0o700, func(token guardedfile.Token) ([]byte, error) {
+		doc, err := change(token)
+		if err != nil {
+			return nil, err
+		}
+		raw, err := json.MarshalIndent(doc, "", "  ")
+		return append(raw, '\n'), err
+	})
+}
+
+// ReadAgents reads agents.json at path; a missing file is no agents.
+func ReadAgents(path string) ([]model.AgentEntry, error) {
+	doc, err := readJSONDoc[agentsDoc](path)
+	return doc.Agents, err
 }
 
 // UpdateAgents reads agents.json again, lets change return the new list, and writes it only while the file is still what was
@@ -216,14 +237,13 @@ func parseAgents(path string, token guardedfile.Token) ([]model.AgentEntry, erro
 // guardedfile.ErrChanged, with the other writer's file left as it is.
 func UpdateAgents(path string, change func([]model.AgentEntry) []model.AgentEntry) ([]model.AgentEntry, error) {
 	var next []model.AgentEntry
-	err := guardedfile.Update(path, 0o700, func(token guardedfile.Token) ([]byte, error) {
-		current, err := parseAgents(path, token)
+	err := updateJSONDoc(path, func(token guardedfile.Token) (agentsDoc, error) {
+		current, err := jsonDoc[agentsDoc](path, token)
 		if err != nil {
-			return nil, err
+			return agentsDoc{}, err
 		}
-		next = change(slices.Clone(current))
-		raw, err := json.MarshalIndent(agentsDoc{Agents: next}, "", "  ")
-		return append(raw, '\n'), err
+		next = change(slices.Clone(current.Agents))
+		return agentsDoc{Agents: next}, nil
 	})
 	if err != nil {
 		return nil, err

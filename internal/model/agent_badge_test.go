@@ -13,8 +13,19 @@ func entry(uid, block string, minute int) model.AgentEntry {
 	return model.AgentEntry{IssueUID: uid, Block: block, StartedAt: time.Date(2026, 10, 30, 9, minute, 0, 0, time.UTC)}
 }
 
+// relayed feeds one relayed list and returns the commands but the save of the relay for `tern-kata agents`, which every relay
+// ends with and these tests are not about.
 func relayed(m model.Model, states ...model.AgentState) (model.Model, []model.Cmd) {
-	return model.Update(m, model.AgentStatesMsg{States: states})
+	m, cmds := model.Update(m, model.AgentStatesMsg{States: states})
+	if n := len(cmds) - 1; n >= 0 {
+		if _, saved := cmds[n].(model.SaveAgentStates); saved {
+			cmds = cmds[:n]
+		}
+	}
+	if len(cmds) == 0 {
+		cmds = nil
+	}
+	return m, cmds
 }
 
 func TestTheBadgeNamesTheMostPressingAgentWithTheCount(t *testing.T) {

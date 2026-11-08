@@ -9,9 +9,6 @@ import (
 // DaemonListID is the Daemons Page's list of daemon cards; a card is the daemon's name under it.
 const DaemonListID = "main.columns.list.daemons"
 
-// DaemonID is the id of the card of the daemon called name.
-func DaemonID(name string) string { return itemID(DaemonListID, name) }
-
 // daemons is the Daemons Page's list column: the title with its count, the header in kata tui's columns, then what stands in place of
 // the list or one card per daemon with the selected one's name and endpoint under the list.
 func daemons(m model.Model) tern.Element {

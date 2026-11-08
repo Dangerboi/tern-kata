@@ -57,7 +57,7 @@ func FieldID(card model.Card, name model.Field) string {
 	if name == "" {
 		name = inputLeaf
 	}
-	return LayerID(card) + "." + string(name)
+	return itemID(LayerID(card), string(name))
 }
 
 // FieldFromID is the card and field whose node has id, found by walking the model's card table; the field is "" for the one

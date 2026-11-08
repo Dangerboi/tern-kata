@@ -91,9 +91,7 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 			_ = conn.Close()
 			continue
 		}
-		w.runs.Add(1)
-		go func() {
-			defer w.runs.Done()
+		w.runs.Go(func() {
 			defer conn.Close()
 			unhook := context.AfterFunc(ctx, func() { _ = conn.Close() }) // a client that says nothing must not outlive the worker
 			defer unhook()
@@ -110,7 +108,7 @@ func (w *Worker) serveControl(ctx context.Context, ln interface {
 			if req.Op == cmdStop {
 				w.finishDrain()
 			}
-		}()
+		})
 	}
 }
 

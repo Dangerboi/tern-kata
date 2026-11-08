@@ -53,14 +53,9 @@ func NewCalendarDay(day string) CalendarDay {
 	return CalendarDay{day: day, date: date, ok: err == nil}
 }
 
-// ChooseDateBadge is the Date badge of an open Issue against the Pane calendar's date today, and false when it has none.
-// Days are compared as calendar strings without time-zone conversion, as the date Collections do. Without today the earlier
-// date shows plainly (the deadline on a tie).
-func ChooseDateBadge(issue Issue, today string) (DateBadge, bool) {
-	return NewCalendarDay(today).ChooseDateBadge(issue)
-}
-
-// ChooseDateBadge is the Date badge of an open Issue against t, as the package's ChooseDateBadge.
+// ChooseDateBadge is the Date badge of an open Issue against t, and false when it has none. Days are compared as calendar
+// strings without time-zone conversion, as the date Collections do. Without today the earlier date shows plainly (the deadline
+// on a tie).
 func (t CalendarDay) ChooseDateBadge(issue Issue) (DateBadge, bool) {
 	scheduled, deadline := readableDates(issue)
 	if scheduled == "" && deadline == "" {

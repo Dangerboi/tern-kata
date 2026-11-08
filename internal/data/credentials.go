@@ -92,14 +92,6 @@ func timeOrZero(t *time.Time) time.Time {
 	return *t
 }
 
-// pauseBeforeRefresh holds a LoadCredentials until its pause has passed on the wall clock. It checks the clock at least every
-// wakePoll, so a machine that slept through the pause refreshes soon after resuming.
-var pauseBeforeRefresh = beforeStep{"wait out the refresh pause", func(g *Gateway, ctx context.Context, cmd model.Cmd) {
-	if load, ok := cmd.(model.LoadCredentials); ok && load.After > 0 {
-		g.pause(ctx, load.After)
-	}
-}}
-
 // pause returns once d has passed on the gateway's clock or ctx ends.
 func (g *Gateway) pause(ctx context.Context, d time.Duration) {
 	// Round(0) drops the monotonic reading, which does not advance while the machine sleeps.

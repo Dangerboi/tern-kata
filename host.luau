@@ -176,6 +176,12 @@ local function last_line(text: string): string
     return line
 end
 
+-- Logs that `<command> supervised` failed in a way that means the binary doesn't know the command: it is older than
+-- this plugin. `subject` is what is not started.
+local function warn_not_started(command: string, subject: string, result: ProcessResult)
+    tern.log.warn("tern-kata: `" .. command .. " supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so " .. subject .. " is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
+end
+
 -- Starts the worker if the backoff allows. config is worker.toml's text, which `worker supervised` printed.
 local function launch(binary: string, config: string)
     local wait = worker_backoff.next - tern.now()
@@ -239,7 +245,7 @@ local function answered(binary: string, result: ProcessResult)
             forget_held()
         elseif not result.timed_out and result.status ~= -1 and not warned_status then
             warned_status = true
-            tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
+            warn_not_started("worker", "the worker", result)
         end
         return arm(POLL_MS)
     end
@@ -346,7 +352,7 @@ local function docbank_answered(result: ProcessResult)
             docbank_reset()
         elseif not result.timed_out and result.status ~= -1 and not docbank_warned_status then
             docbank_warned_status = true
-            tern.log.warn("tern-kata: `docbank supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so Docbank is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
+            warn_not_started("docbank", "Docbank", result)
         end
         return docbank_arm(POLL_MS)
     end

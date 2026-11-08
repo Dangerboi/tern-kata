@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 )
 
-// AgentWaitingMessage is the request's text when the waiting agent said nothing.
+// AgentWaitingMessage is the request's text when the waiting agent said nothing, and the words the badge gives a waiting agent.
 const AgentWaitingMessage = "agent waiting for you"
 
 // agentAttentionMaxBytes is the longest message kata notify takes.

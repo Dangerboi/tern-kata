@@ -200,6 +200,14 @@ func DecodeAction(id, act, value string) model.Msg {
 func itemID(list, key string) string   { return list + "." + key }
 func itemKey(list, item string) string { return strings.TrimPrefix(item, list+".") }
 
+// selectedItem is the list's Selected for the row with key: none while key is empty.
+func selectedItem(list, key string) string {
+	if key == "" {
+		return ""
+	}
+	return itemID(list, key)
+}
+
 // IssueID is the id of the Issue list's row for uid.
 func IssueID(uid string) string { return itemID(IssueListID, uid) }
 
@@ -209,9 +217,8 @@ func IsIssueID(id string) bool { return strings.HasPrefix(id, itemID(IssueListID
 // IsBoardCardID reports whether id is under the Board's node: a Lane column, its card list or a card.
 func IsBoardCardID(id string) bool { return strings.HasPrefix(id, BoardID+".") }
 
-// CollectionItemID and PickerItemID are the ids of the Menu sidebar's and the Menu popup's entry key.
-func CollectionItemID(key string) string { return itemID(CollectionsID, key) }
-func PickerItemID(key string) string     { return itemID(PickerListID, key) }
+// PickerItemID is the id of the Menu popup's entry key.
+func PickerItemID(key string) string { return itemID(PickerListID, key) }
 
 // DecodeSelect is the message for a Select input on list id choosing item, nil for a list the Pane does not use.
 func DecodeSelect(id, item string) model.Msg {

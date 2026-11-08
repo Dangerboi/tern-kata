@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -57,8 +58,7 @@ type Worker struct {
 	stopping string
 	halted   atomic.Bool            // set when a test hook killed the worker: no run work happens after it
 	scanErr  atomic.Pointer[string] // the last journal scan error retryPending logged, so an unchanged one is logged once
-	mu       sync.Mutex             // guards every projectState field and pendingTotal
-	// pendingTotal counts slots reserved across Projects (worker-wide max_active_runs).
+	mu       sync.Mutex             // guards every projectState field
 	projects []*projectState
 	runs     sync.WaitGroup
 	// starting limits how many Projects resolve and recover at the same time (ADR-0004).
@@ -189,21 +189,15 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 	}
 	defer os.Remove(w.opt.Dirs.Socket())
-	w.runs.Add(1)
-	go func() {
-		defer w.runs.Done()
+	w.runs.Go(func() {
 		<-ctx.Done()
 		_ = ln.Close()
-	}()
-	w.runs.Add(1)
-	go func() { defer w.runs.Done(); w.serveControl(ctx, ln) }()
-	w.runs.Add(1)
-	go func() { defer w.runs.Done(); w.retireUnserved(ctx) }()
-	w.runs.Add(1)
-	go func() { defer w.runs.Done(); w.retain(ctx) }()
+	})
+	w.runs.Go(func() { w.serveControl(ctx, ln) })
+	w.runs.Go(func() { w.retireUnserved(ctx) })
+	w.runs.Go(func() { w.retain(ctx) })
 	for _, ps := range w.projects {
-		w.runs.Add(1)
-		go func() { defer w.runs.Done(); w.serveProject(ctx, ps) }()
+		w.runs.Go(func() { w.serveProject(ctx, ps) })
 	}
 	close(w.ready)
 	<-ctx.Done()
@@ -344,7 +338,7 @@ func (w *Worker) checkPin(p Project, actor string, instance Instance) string {
 		return w.savePin(path, want)
 	}
 	if diff := pinDifferences(prev, want); len(diff) > 0 {
-		return fmt.Sprintf("the pinned route of Project %q differs: %s; an intentional move needs a new state folder and executor", p.Name, joinWords(diff))
+		return fmt.Sprintf("the pinned route of Project %q differs: %s; an intentional move needs a new state folder and executor", p.Name, strings.Join(diff, "; "))
 	}
 	if prev.InstanceUID == "" && want.InstanceUID != "" { // a pin saved before instances were pinned learns its daemon now
 		return w.savePin(path, want)
@@ -388,17 +382,6 @@ func readPin(path string) (pin, bool) {
 	}
 	var p pin
 	return p, json.Unmarshal(raw, &p) == nil
-}
-
-func joinWords(parts []string) string {
-	out := ""
-	for i, p := range parts {
-		if i > 0 {
-			out += "; "
-		}
-		out += p
-	}
-	return out
 }
 
 // readCursor and writeCursor keep the event stream's position as a hint, never as evidence (ADR-0004).

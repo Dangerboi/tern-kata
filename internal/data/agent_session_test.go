@@ -35,7 +35,7 @@ const userLine = `{"type":"message","id":"u","message":{"role":"user","content":
 
 func parse(t *testing.T, text string, limit int64) model.AgentSessionFacts {
 	t.Helper()
-	s, err := ParseSessionTail(bytes.NewReader([]byte(text)), int64(len(text)), limit)
+	s, err := parseSessionTail(bytes.NewReader([]byte(text)), int64(len(text)), limit)
 	if err != nil {
 		t.Fatal(err)
 	}

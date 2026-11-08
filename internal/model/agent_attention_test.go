@@ -22,11 +22,11 @@ func attentionPane() model.Model {
 	}
 }
 
-// relay feeds one relayed list and returns the commands but the re-reads of agents.json and Issue statuses, which these tests are
-// not about.
+// relay feeds one relayed list and returns the commands but the re-reads of agents.json and Issue statuses and the save of the
+// relay, which these tests are not about.
 func relay(t *testing.T, m model.Model, states ...model.AgentState) (model.Model, []model.Cmd) {
 	t.Helper()
-	m, cmds := model.Update(m, model.AgentStatesMsg{States: states})
+	m, cmds := relayed(m, states...)
 	return m, slices.DeleteFunc(cmds, func(c model.Cmd) bool {
 		switch c.(type) {
 		case model.RefreshAgents, model.ReadAgentIssue:

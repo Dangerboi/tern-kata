@@ -227,14 +227,17 @@ func paneCredentialEnv(home string, all bool) string {
 	return out.String()
 }
 
+// routeNames are the variables that choose which daemon a kata command reaches, and how it signs in: the route replaces them, so the
+// agent starts without the Pane's.
+var routeNames = []string{"KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "KATA_DSN", "KATA_DB", "KATA_POSTGRES_SCHEMA"}
+
 // ownedNames are the variables the route, the wrapper or kata's own routing and identity settings own (kata v0.20.0 refuses them as a
 // local profile's credential references too); an env file may not set them. Other KATA_ names are legitimate token_env names.
-var ownedNames = []string{
-	"KATA_HOME", "KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK",
-	"KATA_DSN", "KATA_DB", "KATA_POSTGRES_SCHEMA", "KATA_POSTGRES_SCHEMA_MODE", "KATA_POSTGRES_SCHEMA_OWNER", "KATA_POSTGRES_ALLOW_INSECURE",
+var ownedNames = slices.Concat(routeNames, []string{
+	"KATA_HOME", "KATA_POSTGRES_SCHEMA_MODE", "KATA_POSTGRES_SCHEMA_OWNER", "KATA_POSTGRES_ALLOW_INSECURE",
 	"KATA_AUTOSTART", "KATA_AUTOSTART_IDLE_TIMEOUT", "KATA_SKIP_DAEMON_VERSION_CHECK", "KATA_HTTP_TIMEOUT", "KATA_LISTEN",
 	"KATA_AUTHOR", "KATA_TEAMMATE", "KATA_INBOX_USER", "KATA_REF", "KATA_SESSION_ID", "KATA_TRUSTED_ACTOR_HEADER", "KATA_TRUSTED_PROXY_LISTENERS",
-}
+})
 
 // credentialName reports whether name is an environment variable name the wrapper may set from an env file: a plain identifier that is
 // not one of ownedNames (compared case-insensitively).
@@ -348,7 +351,7 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 	if r.IsZero() {
 		return nil, nil, nil
 	}
-	unset = []string{"KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "KATA_DSN", "KATA_DB", "KATA_POSTGRES_SCHEMA"}
+	unset = slices.Clone(routeNames)
 	if r.Home != "" {
 		set = append(set, "KATA_HOME="+r.Home)
 	}

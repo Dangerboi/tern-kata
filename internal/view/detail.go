@@ -29,15 +29,15 @@ const DetailActivityID = DetailContentID + ".activity"
 // ActivityRevealIDs are the nodes to reveal, in this order, to bring the active Activity tab into view:
 // the last node of its rows (or its empty line), then the tab names.
 func ActivityRevealIDs(m model.Model) []string {
-	last := DetailActivityID + ".empty"
+	last := itemID(DetailActivityID, "empty")
 	if rows := m.DetailRows(); len(rows) > 0 && rows[len(rows)-1].Kind.InActivity() {
 		row := rows[len(rows)-1]
-		last = DetailActivityID + "." + row.Key
+		last = itemID(DetailActivityID, row.Key)
 		if len(row.Leaves) > 0 { // the comment's replies from other Issues are drawn after it
-			last = DetailActivityID + "." + leafKey(row.Key, len(row.Leaves)-1)
+			last = itemID(DetailActivityID, leafKey(row.Key, len(row.Leaves)-1))
 		}
 	}
-	return []string{last, DetailActivityID + ".tabs"}
+	return []string{last, itemID(DetailActivityID, "tabs")}
 }
 
 func detail(m model.Model, now time.Time) tern.Element {

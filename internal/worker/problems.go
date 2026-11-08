@@ -124,26 +124,8 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 	case wf.Deleted:
 		return fmt.Sprintf("it runs workflow %q, which is archived", wf.Name), false
 	}
-	if why := workflowRefusal(*wf, cfg.MaxRunPrompts()); why != "" {
-		return fmt.Sprintf("it runs workflow %q, which the worker does not run: %s", wf.Name, why), false
-	}
-	if p, ok := optionMap(wf.Options)["profile"].(string); ok && p != "" && p != profile {
-		return fmt.Sprintf("it runs workflow %q, which names profile %q where the job runs with %q", wf.Name, p, profile), false
-	}
-	for _, s := range wf.Steps {
-		if s.Kind == cronjob.StepCommand && !pc.Commands {
-			return fmt.Sprintf("it runs workflow %q, whose step %q is a command, and Project %s does not allow command steps in worker.toml (commands = true)", wf.Name, s.Key, pc.Name), true
-		}
-		if s.Kind != cronjob.StepPrompt {
-			continue
-		}
-		name := profile
-		if p, ok := optionMap(s.Options)["profile"].(string); ok && p != "" {
-			name = p
-		}
-		if _, ok := cfg.Profiles[name]; !ok || !pc.allowsProfile(name) {
-			return fmt.Sprintf("it runs workflow %q, whose step %q names profile %q, which is not available to Project %s in worker.toml", wf.Name, s.Key, name, pc.Name), false
-		}
+	if why, upgrade := workflowFit(cfg, pc, *wf, profile); why != "" {
+		return fmt.Sprintf("it runs workflow %q, which the worker does not run: %s", wf.Name, why), upgrade
 	}
 	return "", false
 }

@@ -263,8 +263,8 @@ func TestTheParentsCardShowsTheTeamUnderItsAgents(t *testing.T) {
 		"c4": "other#c4 · skipped: other Project",
 		"c5": "work#c5 · not ready",
 	} {
-		if rows := rowsNamed(t, s.Model, view.TeamListID, want); len(rows) != 1 || rows[0] != view.TeamItemID(uid) {
-			t.Errorf("rows reading %q: %v, want only %s", want, rows, view.TeamItemID(uid))
+		if rows := rowsNamed(t, s.Model, view.TeamListID, want); len(rows) != 1 || rows[0] != view.TeamListID+"."+uid {
+			t.Errorf("rows reading %q: %v, want only %s", want, rows, view.TeamListID+"."+uid)
 		}
 	}
 }

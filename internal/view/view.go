@@ -133,10 +133,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 		}
 		items = append(items, issueRow(row, owners[i], lookups, row.UID == m.SelectedUID, stripeRole(i), cols, menu, now))
 	}
-	selected := ""
-	if m.SelectedUID != "" {
-		selected = IssueID(m.SelectedUID)
-	}
+	selected := selectedItem(IssueListID, m.SelectedUID)
 	children := ui.Nodes()
 	if m.LaneViewShown() {
 		children = append(children, laneHeader(m))

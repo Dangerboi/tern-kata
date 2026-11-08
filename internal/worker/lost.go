@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
@@ -37,7 +38,7 @@ func (w *Worker) abandonLost(ctx context.Context, lost *noRunError, by string) (
 	}
 	if ps == nil {
 		if len(unreadable) > 0 {
-			return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: it is not known which Project holds it (%s)", lost.uid, joinWords(unreadable))
+			return RunTransition{}, fmt.Errorf("run %s cannot be abandoned: it is not known which Project holds it (%s)", lost.uid, strings.Join(unreadable, "; "))
 		}
 		if !lost.quarantined {
 			return RunTransition{}, lost

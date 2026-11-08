@@ -466,7 +466,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m, ended := closeFinishedAgents(m, closeOnRelay)
 		m, swept := runPendingSweep(m)
 		m, driven := driveTeams(m, false)
-		return m, append(append(append(append(append(append(append(cmds, tracked...), back...), flagged...), raised...), ended...), swept...), driven...)
+		cmds = append(append(append(append(append(append(cmds, tracked...), back...), flagged...), raised...), ended...), swept...)
+		// `tern-kata agents` runs without a Pane, so the Pane that heard the relay leaves it where the command line reads it.
+		return m, append(append(cmds, driven...), SaveAgentStates{States: m.Agents.States})
 	case SweepCommentsRead:
 		m = sweepCommentsRead(m, msg)
 	case AgentSessionsRead:
@@ -527,11 +529,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			m.Err = msg.Err
 		}
 	case KeyMsg:
-		mode := m.CurrentMode()
-		if binding, ok := LookupBindingForMode(msg.Chord, mode); ok && binding.entry != nil {
-			return binding.run(m)
+		if next, cmds, ran := runChord(m, msg.Chord, m.CurrentMode()); ran {
+			return next, cmds
 		}
-		if inputMode(mode) {
+		if inputMode(m.CurrentMode()) {
 			return updateFilterText(m, msg)
 		}
 	case SelectMsg:
@@ -542,10 +543,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 			return m, nil
 		}
 		selected.Notice, selected.NoticeLink = "", nil
-		if binding, ok := LookupBindingForMode(msg.Chord, msg.Mode); ok && binding.entry != nil {
-			return binding.run(selected)
-		}
-		return selected, nil
+		next, cmds, _ := runChord(selected, msg.Chord, msg.Mode)
+		return next, cmds
 	case ResizeMsg:
 		m.Cols, m.Rows = msg.Cols, msg.Rows
 	case PaneRowsMsg:
@@ -554,6 +553,16 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return updateLive(m, msg)
 	}
 	return m, nil
+}
+
+// runChord runs the binding of chord in mode, if there is one; ran is false when none is bound and m comes back unchanged.
+func runChord(m Model, chord string, mode Mode) (next Model, cmds []Cmd, ran bool) {
+	binding, ok := LookupBindingForMode(chord, mode)
+	if !ok || binding.entry == nil {
+		return m, nil, false
+	}
+	next, cmds = binding.run(m)
+	return next, cmds, true
 }
 
 func workerEditorClosedMsg(m Model, msg Msg) (Model, []Cmd, bool) {

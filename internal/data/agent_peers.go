@@ -1,8 +1,6 @@
 package data
 
 import (
-	"encoding/json"
-	"fmt"
 	"path/filepath"
 
 	"github.com/Dangerboi/tern-kata/internal/guardedfile"
@@ -41,23 +39,21 @@ func (g *Gateway) saveAgentStates(cmd model.SaveAgentStates) model.AgentStatesSa
 		mapped[e.Block] = true
 	}
 	path := filepath.Join(filepath.Dir(file), AgentStatesFile)
-	err = guardedfile.Update(path, 0o700, func(token guardedfile.Token) ([]byte, error) {
+	err = updateJSONDoc(path, func(token guardedfile.Token) (agentStatesDoc, error) {
 		doc := agentStatesDoc{States: make([]agentStateRecord, 0, len(cmd.States))}
 		listed := make(map[string]bool, len(cmd.States))
 		for _, s := range cmd.States {
 			listed[s.Block] = true
 			doc.States = append(doc.States, agentStateRecord{Block: s.Block, State: s.State})
 		}
-		var old agentStatesDoc
-		if token.Text() != "" && json.Unmarshal([]byte(token.Text()), &old) == nil {
-			for _, r := range old.States {
-				if !listed[r.Block] && mapped[r.Block] {
-					doc.States = append(doc.States, r)
-				}
+		// A file that does not read is replaced, not kept.
+		old, _ := jsonDoc[agentStatesDoc](path, token)
+		for _, r := range old.States {
+			if !listed[r.Block] && mapped[r.Block] {
+				doc.States = append(doc.States, r)
 			}
 		}
-		raw, err := json.MarshalIndent(doc, "", "  ")
-		return append(raw, '\n'), err
+		return doc, nil
 	})
 	return model.AgentStatesSaved{Err: err}
 }
@@ -82,13 +78,9 @@ func (g *Gateway) ReadRunningAgents() ([]model.IssueAgent, error) {
 
 // readAgentStates reads agent-states.json; a missing file is no states.
 func readAgentStates(path string) ([]model.AgentState, error) {
-	token, err := guardedfile.Read(path)
-	if err != nil || token.Text() == "" {
+	doc, err := readJSONDoc[agentStatesDoc](path)
+	if err != nil {
 		return nil, err
-	}
-	var doc agentStatesDoc
-	if err := json.Unmarshal([]byte(token.Text()), &doc); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	states := make([]model.AgentState, len(doc.States))
 	for i, r := range doc.States {

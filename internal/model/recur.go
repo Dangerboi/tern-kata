@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // LoadRecurTarget reads the Issue Ref names, as `tern-kata recur` takes it: a short id in the workspace's Binding,
@@ -107,20 +106,18 @@ func (t RecurTarget) Terms(flags map[string]string) (RecurrenceTerms, error) {
 	switch {
 	case t.Recurring() != nil:
 		issue.ScheduledOnDate = &t.Recurring().Start
-		if t.Recurring().TimeZone != "Local" { // "Local" is not a zone the card accepts; keep the Pane's
-			zone = t.Recurring().TimeZone
-		}
+		zone = realZone(t.Recurring().TimeZone, zone)
 	case t.ScheduledOnDate != "":
 		issue.ScheduledOnDate = &t.ScheduledOnDate
 	}
 	if v, ok := flags["start"]; ok {
 		v = strings.TrimSpace(v)
-		if _, err := time.Parse(time.DateOnly, v); err != nil {
-			return RecurrenceTerms{}, errStartDate
+		if _, err := parseDate(v, errStartDate); err != nil {
+			return RecurrenceTerms{}, err
 		}
 		issue.ScheduledOnDate = &v
 	}
-	f := newRecurrenceForm(Model{Calendar: NewPaneCalendar(t.Today, zone, "")}, issue)
+	f := newRecurrenceForm(NewPaneCalendar(t.Today, zone, ""), issue)
 	if v, ok := flags["zone"]; ok {
 		f.Zone = v
 	}
@@ -157,11 +154,11 @@ func (f RecurrenceFormState) rawTerms(rule string) (RecurrenceTerms, error) {
 		return RecurrenceTerms{}, errors.New("--rule needs a rule such as FREQ=WEEKLY;BYDAY=MO.")
 	}
 	start, zone := strings.TrimSpace(f.Start), strings.TrimSpace(f.Zone)
-	if _, err := time.Parse(time.DateOnly, start); err != nil {
-		return RecurrenceTerms{}, errStartDate
+	if _, err := parseDate(start, errStartDate); err != nil {
+		return RecurrenceTerms{}, err
 	}
-	if _, err := time.LoadLocation(zone); err != nil || zone == "" || zone == "Local" {
-		return RecurrenceTerms{}, fmt.Errorf("Unknown time zone %q.", zone)
+	if err := checkZone(zone); err != nil {
+		return RecurrenceTerms{}, err
 	}
 	return RecurrenceTerms{Rule: rule, Start: start, TimeZone: zone}, nil
 }

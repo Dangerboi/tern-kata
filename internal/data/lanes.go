@@ -76,10 +76,9 @@ func updateTables(path string, change func(file map[string]any)) error {
 // the file's, else none, the default. File labels are normalised and repeated or empty ones dropped. The file is read whichever
 // list is used, so its error refuses a save to it. A daemon that cannot be read leaves the file's list with SharedErr saying why.
 func (g *Gateway) loadLanes(ctx context.Context, cmd model.LoadLanes) model.LanesLoaded {
-	msg, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
-		return ok(c.SharedLanes(ctx, cmd.ProjectUID))
+	loaded, err := callAs(g, ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.LanesLoaded, error) {
+		return c.SharedLanes(ctx, cmd.ProjectUID)
 	})
-	loaded, _ := msg.(model.LanesLoaded)
 	loaded.ProjectUID, loaded.Request = cmd.ProjectUID, cmd.Request
 	if err != nil {
 		loaded.SharedErr = fmt.Errorf("the Project could not be read: %w", err)

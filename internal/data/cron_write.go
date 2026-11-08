@@ -45,21 +45,15 @@ func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWr
 		if model.DateTrigger(def.Trigger.Kind) {
 			def.Trigger.IssueUID = issue
 		}
-		if def.Issue != nil && def.Issue.Kind == cronjob.IssueExisting {
-			// Kata makes a job that executes report to the Issue its trigger fires on.
-			policy := *def.Issue
-			policy.UID = issue
-			def.Issue = &policy
-		}
+		// Kata makes a job that executes report to the Issue its trigger fires on.
+		reportTo(&def, issue)
 	}
 	if cmd.ReportRef != "" && def.Issue != nil && def.Issue.Kind == cronjob.IssueExisting {
 		issue, err := c.resolveIssue(ctx, cmd.ProjectID, cmd.ReportRef, "Notified Issue")
 		if err != nil {
 			return model.JobWritten{}, err
 		}
-		policy := *def.Issue
-		policy.UID = issue
-		def.Issue = &policy
+		reportTo(&def, issue)
 	}
 	body := g.PutCronJobBody{Actor: &cmd.Actor, Name: cmd.Name, Definition: wireDefinition(def)}
 	op := model.JobCreated
@@ -69,9 +63,9 @@ func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWr
 	response, err := c.ReplaceCronJobWithResponse(ctx, &g.ReplaceCronJobRequestOptions{
 		PathParams: &g.ReplaceCronJobPath{ProjectID: cmd.ProjectID, CronUID: cmd.UID}, Body: &body,
 	})
-	parents := parentReader{c: c, projectID: cmd.ProjectID, read: map[string]readParent{}}
+	parents := newParentReader(c, cmd.ProjectID)
 	if err != nil {
-		current, found, readErr := c.conflictingJob(ctx, cmd.ProjectID, cmd.UID, err, &parents)
+		current, found, readErr := c.conflictingJob(ctx, cmd.ProjectID, cmd.UID, err, parents)
 		switch {
 		case readErr != nil:
 			return model.JobWritten{}, readErr
@@ -83,7 +77,18 @@ func (c *Client) SaveJob(ctx context.Context, cmd model.SaveJobCmd) (model.JobWr
 		}
 		return model.JobWritten{ProjectID: cmd.ProjectID, UID: cmd.UID, Changed: &current}, nil
 	}
-	return c.writtenJob(ctx, cmd.ProjectID, op, response.JSON200, &parents)
+	return c.writtenJob(ctx, cmd.ProjectID, op, response.JSON200, parents)
+}
+
+// reportTo points an IssueExisting policy of def at the Issue uid, on a copy so the card's definition is untouched. Any other
+// policy is left as it is.
+func reportTo(def *cronjob.Definition, uid string) {
+	if def.Issue == nil || def.Issue.Kind != cronjob.IssueExisting {
+		return
+	}
+	policy := *def.Issue
+	policy.UID = uid
+	def.Issue = &policy
 }
 
 // ArchiveJob archives the job guarded on the definition_event_uid the Pane read, which kata sends as a DELETE with a body.
@@ -92,11 +97,11 @@ func (c *Client) ArchiveJob(ctx context.Context, cmd model.ArchiveJobCmd) (model
 		PathParams: &g.ArchiveCronJobPath{ProjectID: cmd.ProjectID, CronUID: cmd.UID},
 		Body:       &g.ArchiveCronJobBody{Actor: &cmd.Actor, ExpectedEventUID: cmd.ExpectedEventUID},
 	})
-	parents := parentReader{c: c, projectID: cmd.ProjectID, read: map[string]readParent{}}
+	parents := newParentReader(c, cmd.ProjectID)
 	if err != nil {
-		return c.guardedFailure(ctx, cmd.ProjectID, cmd.UID, err, &parents)
+		return c.guardedFailure(ctx, cmd.ProjectID, cmd.UID, err, parents)
 	}
-	return c.writtenJob(ctx, cmd.ProjectID, model.JobArchived, response.JSON200, &parents)
+	return c.writtenJob(ctx, cmd.ProjectID, model.JobArchived, response.JSON200, parents)
 }
 
 // RestoreJob restores an archived job, guarded like ArchiveJob.
@@ -105,11 +110,11 @@ func (c *Client) RestoreJob(ctx context.Context, cmd model.RestoreJobCmd) (model
 		PathParams: &g.RestoreCronJobPath{ProjectID: cmd.ProjectID, CronUID: cmd.UID},
 		Body:       &g.RestoreCronJobBody{Actor: &cmd.Actor, ExpectedEventUID: cmd.ExpectedEventUID},
 	})
-	parents := parentReader{c: c, projectID: cmd.ProjectID, read: map[string]readParent{}}
+	parents := newParentReader(c, cmd.ProjectID)
 	if err != nil {
-		return c.guardedFailure(ctx, cmd.ProjectID, cmd.UID, err, &parents)
+		return c.guardedFailure(ctx, cmd.ProjectID, cmd.UID, err, parents)
 	}
-	return c.writtenJob(ctx, cmd.ProjectID, model.JobRestored, response.JSON200, &parents)
+	return c.writtenJob(ctx, cmd.ProjectID, model.JobRestored, response.JSON200, parents)
 }
 
 // guardedFailure is a failed guarded write: the current job when kata refused for a moved guard, else kata's error.

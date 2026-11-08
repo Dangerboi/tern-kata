@@ -160,14 +160,12 @@ func (j *Journal) concludeCancel(at time.Time) error {
 			case r.State == StepRunning:
 				r.State, r.Summary, r.EndedAt = StepFailed, "cancelled by "+j.Cancel.By, at
 				r.Launch, r.Exit = j.Launch, j.Exit
-				r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, o.InputTokens), addTokens(r.OutputTokens, o.OutputTokens)
-				r.CostUSD = addCost(r.CostUSD, o.CostUSD)
+				r.addUsage(o)
 			case !terminalStep(r.State):
 				r.State, r.Summary = StepSkipped, "skipped: the run was cancelled"
 			}
 		}
-		o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
-		o.CostUSD = sumStepCost(j.Steps)
+		o.sumSteps(j.Steps)
 	}
 	j.CarriedInput, j.CarriedOutput, j.CarriedCost = nil, nil, nil
 	j.Outcome, j.Phase = o, PhaseFinished
@@ -190,8 +188,7 @@ func (j *Journal) concludeStep(outcome *Outcome, at time.Time) error {
 		r.StderrTail = j.Result.StderrTail
 	}
 	// A retried step keeps what its earlier attempts used; outcome already carries what a resume continued.
-	r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, outcome.InputTokens), addTokens(r.OutputTokens, outcome.OutputTokens)
-	r.CostUSD = addCost(r.CostUSD, outcome.CostUSD)
+	r.addUsage(outcome)
 	timedOut := j.Exit != nil && j.Exit.TimedOut
 	switch {
 	case outcome.Status == cronjob.RunSucceeded:
@@ -199,11 +196,7 @@ func (j *Journal) concludeStep(outcome *Outcome, at time.Time) error {
 	case timedOut:
 		// The expiry is the run's, shared by all steps and retries: nothing else would get time to run.
 		r.State = StepFailed
-		for k := i + 1; k < len(j.Steps); k++ {
-			if !terminalStep(j.Steps[k].State) {
-				j.Steps[k].State, j.Steps[k].Summary = StepSkipped, "skipped: the run timed out"
-			}
-		}
+		j.skipUnfinished(i + 1)
 	case r.Tries <= plan.Retries:
 		r.State, r.LastFailure = StepPending, outcome.Summary
 	default:
@@ -213,6 +206,27 @@ func (j *Journal) concludeStep(outcome *Outcome, at time.Time) error {
 	j.CarriedInput, j.CarriedOutput, j.CarriedCost = nil, nil, nil
 	j.Phase = PhaseAdmitted
 	return nil
+}
+
+// skipUnfinished skips every step from index from on that never reached a final state, because the run timed out.
+func (j *Journal) skipUnfinished(from int) {
+	for i := from; i < len(j.Steps); i++ {
+		if !terminalStep(j.Steps[i].State) {
+			j.Steps[i].State, j.Steps[i].Summary = StepSkipped, "skipped: the run timed out"
+		}
+	}
+}
+
+// addUsage adds the tokens and cost of an attempt's outcome to the step's own.
+func (r *StepRecord) addUsage(o *Outcome) {
+	r.InputTokens, r.OutputTokens = addTokens(r.InputTokens, o.InputTokens), addTokens(r.OutputTokens, o.OutputTokens)
+	r.CostUSD = addCost(r.CostUSD, o.CostUSD)
+}
+
+// sumSteps sets the outcome's tokens and cost to what every attempt of every step used.
+func (o *Outcome) sumSteps(steps []StepRecord) {
+	o.InputTokens, o.OutputTokens = sumStepTokens(steps)
+	o.CostUSD = sumStepCost(steps)
 }
 
 // finishWorkflow decides the Run's outcome once every step is succeeded, failed or skipped: failed when any step failed.
@@ -227,8 +241,7 @@ func (j *Journal) finishWorkflow(at time.Time) error {
 		}
 	}
 	o := &Outcome{Status: status, Summary: truncate(workflowSummary(j, status), maxSummaryBytes), At: at}
-	o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
-	o.CostUSD = sumStepCost(j.Steps)
+	o.sumSteps(j.Steps)
 	j.Outcome, j.Phase = o, PhaseFinished
 	return nil
 }
@@ -239,16 +252,11 @@ func (j *Journal) timeOutWorkflow(at time.Time) error {
 	if err := j.needs("time out a workflow", PhaseAdmitted); err != nil {
 		return err
 	}
-	for i := range j.Steps {
-		if !terminalStep(j.Steps[i].State) {
-			j.Steps[i].State, j.Steps[i].Summary = StepSkipped, "skipped: the run timed out"
-		}
-	}
+	j.skipUnfinished(0)
 	reason := fmt.Sprintf("timed out after %s", time.Duration(j.TimeoutSeconds)*time.Second)
 	o := &Outcome{Status: cronjob.RunFailed, At: at}
 	o.Summary = truncate(reason+"\n\n"+workflowSummary(j, cronjob.RunFailed), maxSummaryBytes)
-	o.InputTokens, o.OutputTokens = sumStepTokens(j.Steps)
-	o.CostUSD = sumStepCost(j.Steps)
+	o.sumSteps(j.Steps)
 	j.Outcome, j.Phase = o, PhaseFinished
 	return nil
 }

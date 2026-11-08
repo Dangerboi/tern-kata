@@ -3,6 +3,7 @@ package data
 import (
 	"errors"
 
+	"github.com/Dangerboi/tern-kata/internal/guardedfile"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -29,7 +30,7 @@ func (g *Gateway) writeView(cmd model.SaveView) model.ViewSaved {
 	if err != nil {
 		return model.ViewSaved{Sent: cmd, Err: err}
 	}
-	token, ok := cmd.Token.(ViewsToken)
+	token, ok := cmd.Token.(guardedfile.Token)
 	if !ok {
 		return model.ViewSaved{Sent: cmd, Err: errors.New("views.toml was not read")}
 	}
@@ -46,7 +47,7 @@ func (g *Gateway) removeView(cmd model.DeleteView) model.ViewDeleted {
 	if err != nil {
 		return model.ViewDeleted{Sent: cmd, Err: err}
 	}
-	token, ok := cmd.Token.(ViewsToken)
+	token, ok := cmd.Token.(guardedfile.Token)
 	if !ok {
 		return model.ViewDeleted{Sent: cmd, Err: errors.New("views.toml was not read")}
 	}

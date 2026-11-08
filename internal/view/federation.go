@@ -12,9 +12,6 @@ import (
 // FederationListID is the Federation Page's list of spoke cards; a card is the Project's name under it.
 const FederationListID = "main.columns.list.federation"
 
-// FederationSpokeID is the id of the card of the spoke Project called name.
-func FederationSpokeID(name string) string { return itemID(FederationListID, name) }
-
 // federation is the Federation Page's list column: the title with its summary, the active daemon's header, then the screen shown:
 // what stands in place of the list, one card per spoke Project with the selected one's hub, actor and credential under it, or one
 // Project's detail.

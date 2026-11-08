@@ -339,7 +339,7 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 	}
 	switch t.Kind {
 	case cronjob.TriggerCron:
-		zone, expression := zoneAndExpression(t)
+		zone, expression := cronjob.Zone(t.Cron, t.Timezone)
 		add("Cron", expression)
 		add("Time zone", zone)
 	case cronjob.TriggerInterval:

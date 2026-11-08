@@ -12,6 +12,16 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
+// readWorkerConfig loads the worker.toml at path with the worker's own parser. missing is true, with no error, when the file is
+// not there; any other failure is the parser's or the file system's error as it came.
+func readWorkerConfig(path string) (cfg worker.Config, missing bool, err error) {
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return worker.Config{}, true, nil
+	}
+	cfg, err = worker.LoadConfig(path)
+	return cfg, false, err
+}
+
 // loadWorkerSetup is the one read the Worker card and the Jobs Page banner stand on: the Project the Pane's folder is bound to and
 // its checkout, whether this machine's worker.toml exists, loads (the worker's own parser) and lists that Project with which
 // checkouts, and whether the supervision marker is present.
@@ -25,17 +35,13 @@ func (g *Gateway) loadWorkerSetup(cmd model.LoadWorkerSetup) model.WorkerSetupLo
 		return model.WorkerSetupLoaded{Err: err}
 	}
 	setup.Manual = dirs.ManualPresent()
-	if _, err := os.Stat(setup.Path); errors.Is(err, fs.ErrNotExist) {
+	raw, err := os.ReadFile(setup.Path)
+	if errors.Is(err, fs.ErrNotExist) {
 		return model.WorkerSetupLoaded{Setup: setup}
 	} else if err != nil {
 		return model.WorkerSetupLoaded{Err: err}
 	}
-	setup.Exists = true
-	raw, err := os.ReadFile(setup.Path)
-	if err != nil {
-		return model.WorkerSetupLoaded{Err: err}
-	}
-	setup.Text = string(raw)
+	setup.Exists, setup.Text = true, string(raw)
 	cfg, err := worker.LoadConfig(setup.Path)
 	if err != nil {
 		setup.LoadErr = err.Error()

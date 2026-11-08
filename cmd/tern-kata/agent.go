@@ -9,7 +9,7 @@ import (
 // agentUsage is what `tern-kata agent` refuses a command line with.
 const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
 
-// tableFlag is one flag of a subcommand with a flag table (`agent`, `docbank`): its parser and the completion scripts read the
+// tableFlag is one flag of a subcommand with a flag table (`agent`, `agents`, `docbank`): its parser and the completion scripts read the
 // table, so a flag is one row there; the usage constant and the help text are prose and name it by hand.
 type tableFlag struct {
 	name       string // without its dashes

@@ -110,9 +110,6 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 		d.stream(g, ctx, cmd, messages)
 		return
 	}
-	for _, step := range d.before {
-		step.run(g, ctx, cmd)
-	}
 	result := d.handle(g, ctx, cmd)
 	for _, step := range d.after {
 		result = step.run(g, ctx, cmd, result)
@@ -130,12 +127,18 @@ func (g *Gateway) Run(ctx context.Context, cmd model.Cmd, messages chan<- model.
 	}
 }
 
-// ok passes a result through, or the error alone: a failed read has no result to show.
-func ok[T model.Msg](result T, err error) (model.Msg, error) {
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+// callAs is g.call for a client call that returns its own result type. A failed call has no result to show, so it returns
+// the zero result and the error.
+func callAs[R model.Msg](g *Gateway, ctx context.Context, workspace string, fn func(context.Context, *Client) (R, error)) (R, error) {
+	msg, err := g.call(ctx, workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+		result, err := fn(ctx, c)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
+	result, _ := msg.(R)
+	return result, err
 }
 
 // call runs fn against the daemon for workspace. When the daemon cannot be

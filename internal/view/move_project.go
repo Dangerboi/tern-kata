@@ -9,9 +9,6 @@ import (
 // MoveListID is the id of the Move card's list of Projects.
 var MoveListID = LayerID(model.CardMove) + ".list"
 
-// MoveItemID is the id of the Move card's row for the Project with uid.
-func MoveItemID(uid string) string { return itemID(MoveListID, uid) }
-
 // MoveSingleID is the id of the Move card's "Only this Issue" switch.
 var MoveSingleID = LayerID(model.CardMove) + ".single." + choiceControlKey
 
@@ -39,7 +36,7 @@ func moveChoosing(m model.Model) []tern.Element {
 	}
 	selected := ""
 	if len(targets) > 0 {
-		selected = MoveItemID(targets[min(f.Cursor, len(targets)-1)].UID)
+		selected = itemID(MoveListID, targets[min(f.Cursor, len(targets)-1)].UID)
 	}
 	children := []tern.Element{
 		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Filter Projects"}, Field: ui.Field{Text: f.Filter, Cursor: caretAt(f.Caret, "", f.Filter), Mode: "insert", Placeholder: ui.T("Filter Projects")}},

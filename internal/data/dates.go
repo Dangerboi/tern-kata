@@ -55,13 +55,8 @@ func (c *Client) setDates(ctx context.Context, cmd model.SetDatesCmd) (applied, 
 	return applied, changed, last, false, nil
 }
 
-// SetDates writes the Dates card's changes. It returns the changes written, also when a later one failed.
-func (c *Client) SetDates(ctx context.Context, cmd model.SetDatesCmd) ([]model.DateChange, error) {
-	applied, _, _, _, err := c.setDates(ctx, cmd)
-	return applied, err
-}
-
-// SetDatesRecorded is SetDates that also says what the save did to the Undo history.
+// SetDatesRecorded writes the Dates card's changes and says what the save did to the Undo history. It returns the changes
+// written, also when a later one failed.
 func (c *Client) SetDatesRecorded(ctx context.Context, cmd model.SetDatesCmd) ([]model.DateChange, model.WriteRecord, error) {
 	done := c.recorder(ctx, model.UndoDates, cmd.ProjectID, cmd.UID, cmd.Actor)
 	applied, changed, last, ambiguous, err := c.setDates(ctx, cmd)

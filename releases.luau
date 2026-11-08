@@ -118,7 +118,14 @@ function M.pendingOutcome(pending: any, own: string, now: number): "updated" | "
 end
 
 local RAW = "https://raw.githubusercontent.com/Dangerboi/tern-kata/v"
-local DOWNLOADS = "https://github.com/Dangerboi/tern-kata/releases/download/v"
+local RELEASES = "https://github.com/Dangerboi/tern-kata/releases"
+
+-- Where the release files are: the user's TERN_KATA_BASE_URL when set and not empty, else the download folder of
+-- `version`, or of the latest release when `version` is nil.
+function M.releaseBase(configured: string?, version: string?): string
+    if configured ~= nil and configured ~= "" then return configured end
+    return if version then RELEASES .. "/download/v" .. version else RELEASES .. "/latest/download"
+end
 
 -- The plugin-only install of `version`, run without a terminal: the command, its added environment and the text for its
 -- stdin (nil when it needs none). The script comes from the version's tag; the files it installs come from that version's
@@ -129,7 +136,7 @@ local DOWNLOADS = "https://github.com/Dangerboi/tern-kata/releases/download/v"
 function M.pluginStep(version: string, os: string, configuredBase: string?): ({ string }, { [string]: string }, string?)
     local env = {
         TERN_KATA_PLUGIN_ONLY = "1",
-        TERN_KATA_BASE_URL = if configuredBase ~= nil and configuredBase ~= "" then configuredBase else DOWNLOADS .. version,
+        TERN_KATA_BASE_URL = M.releaseBase(configuredBase, version),
     }
     if os == "windows" then
         return {"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "-"}, env,

@@ -9,6 +9,9 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
+// DocbankManualFileName is the Docbank supervision marker's name in tern-kata's config folder, the one place it is spelled.
+const DocbankManualFileName = "docbank.manual"
+
 // DocbankSupervision is the plugin's supervision rule for Docbank, as docbanksetup.Env answers it. The Gateway cannot import that
 // package (it imports this one), so the program hands it in with WithDocbankSupervision.
 type DocbankSupervision interface {
@@ -34,7 +37,7 @@ func (g *Gateway) docbankRow() (model.ConfigFile, bool) {
 		return model.ConfigFile{}, false
 	}
 	env := g.docbank()
-	row := model.ConfigFile{Key: model.ConfigDocbank, Title: "docbank.manual (Docbank of the default kata daemon)", Path: env.ManualPath(), Actions: []model.ConfigAction{model.ConfigSwitch}}
+	row := model.ConfigFile{Key: model.ConfigDocbank, Title: DocbankManualFileName + " (Docbank of the default kata daemon)", Path: env.ManualPath(), Actions: []model.ConfigAction{model.ConfigSwitch}}
 	if _, err := os.Stat(row.Path); err == nil {
 		row.Status = model.ConfigLoads
 	} else if !errors.Is(err, fs.ErrNotExist) {

@@ -232,13 +232,15 @@ func agentStopped(m Model, msg AgentStopped) (Model, []Cmd) {
 		m.Notice = fmt.Sprintf("Cannot stop the agent: %s", msg.Err)
 		return m, nil
 	}
-	stopped := AgentLabel(AgentEntry{Block: msg.Block})
 	var entry *AgentEntry
 	for i, e := range m.AgentMapping {
 		if e.Block == msg.Block {
-			stopped = AgentLabel(e)
 			entry = &m.AgentMapping[i]
 		}
+	}
+	stopped := AgentLabel(AgentEntry{Block: msg.Block})
+	if entry != nil {
+		stopped = AgentLabel(*entry)
 	}
 	var handOff []Cmd
 	if entry != nil && !msg.Gone {

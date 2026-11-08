@@ -69,19 +69,19 @@ func readAgentSession(a model.AgentSessionAsk) model.AgentSessionFacts {
 	if err != nil {
 		return model.AgentSessionFacts{Reason: agentSessionUnread}
 	}
-	s, err := ParseSessionTail(f, info.Size(), agentSessionTail)
+	s, err := parseSessionTail(f, info.Size(), agentSessionTail)
 	if err != nil {
 		return model.AgentSessionFacts{Reason: agentSessionUnread}
 	}
 	return s
 }
 
-// ParseSessionTail reads at most the last limit bytes of the omp session JSONL in r, size bytes long, and derives what the Agent
+// parseSessionTail reads at most the last limit bytes of the omp session JSONL in r, size bytes long, and derives what the Agent
 // card shows. omp writes one JSON entry per line; an assistant `message` entry carries the model, `usage.cost.total` (summed over
 // the assistant messages, as the worker sums usage, ADR-0009) and its `toolCall` content parts, and a `toolResult` message
 // answers one by `toolCallId`. The current tool is the last toolCall with no toolResult after it. When the file is longer than
 // limit the cut first line is dropped and the session is Partial: ToolCalls and Cost then count only the tail.
-func ParseSessionTail(r io.ReaderAt, size, limit int64) (model.AgentSessionFacts, error) {
+func parseSessionTail(r io.ReaderAt, size, limit int64) (model.AgentSessionFacts, error) {
 	start := max(size-limit, 0)
 	buf := make([]byte, size-start)
 	if _, err := r.ReadAt(buf, start); err != nil && !errors.Is(err, io.EOF) {

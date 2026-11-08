@@ -13,9 +13,9 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
-// ManualFileName is the supervision marker's name in tern-kata's config folder, the one place it is spelled. The Luau host half
+// ManualFileName is the supervision marker's name in tern-kata's config folder, spelled once in data. The Luau host half
 // (host.luau) holds no copy of the rule: it asks `tern-kata docbank supervised`, which answers from Env.Supervised.
-const ManualFileName = "docbank.manual"
+const ManualFileName = data.DocbankManualFileName
 
 // NewSupervisionEnv is the environment of the supervision rule: tern-kata's config folder, the default kata daemon's home and
 // Docbank's home. `docbank supervised`, `docbank supervise` and the Pane's gateway all build it here. A part that cannot be found

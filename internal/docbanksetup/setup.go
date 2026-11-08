@@ -116,21 +116,21 @@ type kataSection struct {
 	Folder     string `toml:"folder"`
 }
 
-// probeDeadline bounds the authenticated read of Docbank; checkDeadline bounds the restart and kata's check.
+// defaultProbeTimeout bounds the authenticated read of Docbank; checkDeadline bounds the restart and kata's check.
 const (
-	probeDeadline = 15 * time.Second
-	checkDeadline = 60 * time.Second
+	defaultProbeTimeout = 15 * time.Second
+	checkDeadline       = 60 * time.Second
 	// probeMaxBody bounds the vault-root answer read; a node is a few hundred bytes.
 	probeMaxBody = 1 << 20
 	kataMissing  = "kata is not on PATH; install kata first (https://github.com/kenn-io/kata), nothing was written"
 )
 
-// probeDeadline is Env.ProbeTimeout, or the default.
-func (e Env) probeDeadline() time.Duration {
+// probeTimeout is Env.ProbeTimeout, or the default.
+func (e Env) probeTimeout() time.Duration {
 	if e.ProbeTimeout > 0 {
 		return e.ProbeTimeout
 	}
-	return probeDeadline
+	return defaultProbeTimeout
 }
 
 // SetupRemote points the kata daemon at the Docbank r names. Nothing is written until the URL passes kata's scheme rule, kata is on
@@ -332,11 +332,11 @@ func (e Env) readKey(r Remote) (string, error) {
 		}
 		key = string(raw)
 	case r.KeyFile != "":
-		raw, err := os.ReadFile(r.KeyFile)
+		raw, err := readKeyFile(r.KeyFile)
 		if err != nil {
-			return "", fmt.Errorf("read the key file: %w", err)
+			return "", err
 		}
-		key = string(raw)
+		key = raw
 	default:
 		value, _ := e.LookupEnv(r.KeyEnv)
 		if strings.TrimSpace(value) == "" {
@@ -358,7 +358,7 @@ func (e Env) readKey(r Remote) (string, error) {
 // Docbank answers with a folder node. A refused key, an unanswered request and a redirect are reported as the Pane reports them;
 // an answer that is not Docbank's is reported as such. Redirects are never followed, so the key goes only to the url asked.
 func (e Env) probe(ctx context.Context, base, key string) error {
-	probeCtx, cancel := context.WithTimeout(ctx, e.probeDeadline())
+	probeCtx, cancel := context.WithTimeout(ctx, e.probeTimeout())
 	defer cancel()
 	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, base+"/api/v1/path?path=%2F", nil)
 	if err != nil {

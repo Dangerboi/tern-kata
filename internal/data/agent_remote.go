@@ -12,6 +12,28 @@ import (
 // remoteAgentsPage is how many Issues one read of a Project's open Issues asks for.
 const remoteAgentsPage = 200
 
+// eachOpenIssuePage calls fn with each page of the open Issues of a Project, in order, until the daemon names no next page or fn fails.
+func (c *Client) eachOpenIssuePage(ctx context.Context, projectID int64, fn func(page *g.ListIssuesResp) error) error {
+	open, limit := g.ListIssuesQueryStatusOpen, int64(remoteAgentsPage)
+	var cursor *string
+	for {
+		page, err := c.ListIssuesWithResponse(ctx, &g.ListIssuesRequestOptions{
+			PathParams: &g.ListIssuesPath{ProjectID: projectID}, Query: &g.ListIssuesQuery{Status: &open, Limit: &limit, Cursor: cursor}})
+		if err != nil {
+			return daemonError(err)
+		}
+		if page.JSON200 == nil {
+			return errors.New("kata daemon returned no Issues")
+		}
+		if err := fn(page); err != nil {
+			return err
+		}
+		if cursor = page.JSON200.NextCursor; cursor == nil || *cursor == "" {
+			return nil
+		}
+	}
+}
+
 // ReadRemoteAgents reads the agents other hosts published, as `tern-kata agents` and `tern-kata message` list them: the Agent
 // records, left out when they carry hostID (this host's own agents come from agents.json). cmd.Issue names one Issue; without it
 // the open Issues of the Project of cmd.ScopeRef, else of the workspace's bound Project, are read page by page.
@@ -38,25 +60,17 @@ func (c *Client) ReadRemoteAgents(ctx context.Context, hostID string, cmd model.
 	if err != nil {
 		return model.RemoteAgentsLoaded{}, err
 	}
-	open, limit := g.ListIssuesQueryStatusOpen, int64(remoteAgentsPage)
 	var agents []model.IssueAgent
-	var cursor *string
-	for {
-		page, err := c.ListIssuesWithResponse(ctx, &g.ListIssuesRequestOptions{
-			PathParams: &g.ListIssuesPath{ProjectID: projectID}, Query: &g.ListIssuesQuery{Status: &open, Limit: &limit, Cursor: cursor}})
-		if err != nil {
-			return model.RemoteAgentsLoaded{}, daemonError(err)
-		}
-		if page.JSON200 == nil {
-			return model.RemoteAgentsLoaded{}, errors.New("kata daemon returned no Issues")
-		}
+	err = c.eachOpenIssuePage(ctx, projectID, func(page *g.ListIssuesResp) error {
 		for _, i := range page.JSON200.Issues {
 			agents = append(agents, remoteAgentsOn(i.QualifiedID, i.UID, i.ProjectID, i.Metadata, hostID)...)
 		}
-		if cursor = page.JSON200.NextCursor; cursor == nil || *cursor == "" {
-			return model.RemoteAgentsLoaded{Agents: agents}, nil
-		}
+		return nil
+	})
+	if err != nil {
+		return model.RemoteAgentsLoaded{}, err
 	}
+	return model.RemoteAgentsLoaded{Agents: agents}, nil
 }
 
 // remoteScope is the id of the Project a scan reads: the one cmd.ScopeRef names, else the workspace's bound one.

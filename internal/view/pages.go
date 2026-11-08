@@ -12,9 +12,6 @@ import (
 // PageBarID is the Page bar's row; a Page's entry is its id under it.
 const PageBarID = "main.topbar.left.pages"
 
-// PageBarEntryID is the id of the Page bar's entry for the Page called id.
-func PageBarEntryID(id string) string { return PageBarID + "." + id }
-
 // barFit is how the Page bar is drawn: whole, compact, or compact on a line of its own under the top bar.
 type barFit uint8
 
@@ -83,7 +80,7 @@ func pageBarFit(m model.Model, headingCols int) barFit {
 
 // pageBar is the Page bar: one entry per Page, a keycap and the label, "[1] Issues  [2] Jobs", the current label accented, each its
 // own click target that presses its key. An entry is a row of its label text and, while the Page has a count, a count badge.
-func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, compact bool) tern.Element {
+func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, compact bool) ui.Row {
 	entries := m.PageBar()
 	cells := make([]tern.Element, 0, len(entries))
 	for _, entry := range entries {
@@ -131,7 +128,7 @@ func pageLine(m model.Model) []tern.Element {
 	flexCell := func(key string, tone ui.Tone, shrink float64) ui.Common {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
-	line := pageBar(m, flexCell, true).(ui.Row)
+	line := pageBar(m, flexCell, true)
 	line.Common.Key, line.Common.Hidden = "pagebar", m.HelpOpen
 	return ui.Nodes(line)
 }

@@ -75,16 +75,7 @@ func (WorkflowTextRead) msg() {}
 
 // Definition is the workflow in the shared shape the Worker's check and kata's validator read.
 func (w Workflow) Definition() cronjob.WorkflowDefinition {
-	out := cronjob.WorkflowDefinition{Version: 1, About: w.About, Input: w.Input, Options: decodeOptions(w.Options), Steps: make([]cronjob.WorkflowStep, len(w.Steps))}
-	for i, s := range w.Steps {
-		step := cronjob.WorkflowStep{Key: s.Key, Kind: s.Kind, Command: s.Command, Prompt: s.Prompt, After: s.After, Options: decodeOptions(s.Options)}
-		if s.Retries != 0 {
-			retries := int64(s.Retries)
-			step.Retries = &retries
-		}
-		out.Steps[i] = step
-	}
-	return out
+	return w.wire().shape()
 }
 
 // settleWorkflowReading asks for the Worker's reading when the open card's text is one it has not asked about: at once when the

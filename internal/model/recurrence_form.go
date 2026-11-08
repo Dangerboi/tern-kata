@@ -70,7 +70,7 @@ type RecurrenceFormState struct {
 
 // localZoneNote says a stored Local zone, which the card cannot save, is replaced by zone on saving; "" for any other zone.
 func localZoneNote(stored, zone string) string {
-	if stored != "Local" || zone == "" {
+	if stored != localZone || zone == "" {
 		return ""
 	}
 	return "The stored time zone is Local (the daemon's own zone); saving sets " + zone + "."
@@ -109,12 +109,9 @@ func (f RecurrenceFormState) EndText() string {
 
 // newRecurrenceForm is the card for an Issue that does not recur: weekly on the start date's weekday, every 1, never ending.
 // The start date is the Issue's scheduled date, else today; the zone is the Pane's.
-func newRecurrenceForm(m Model, issue *Issue) RecurrenceFormState {
+func newRecurrenceForm(cal PaneCalendar, issue *Issue) RecurrenceFormState {
 	f := RecurrenceFormState{Open: true, Field: RecurrenceFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Frequency: Weekly, Every: "1", Month: 1,
-		Start: m.Calendar.Date, Zone: m.Calendar.Zone()}
-	if f.Zone == "Local" { // kata would read "Local" in the daemon's zone, not the Pane's
-		f.Zone = "UTC"
-	}
+		Start: cal.Date, Zone: realZone(cal.Zone(), "UTC")}
 	if issue.ScheduledOnDate != nil && *issue.ScheduledOnDate != "" {
 		f.Start = *issue.ScheduledOnDate
 	}
@@ -137,14 +134,12 @@ func (f RecurrenceFormState) startDay() string {
 
 // changeRecurrenceForm is the card for an Issue whose recurrence is rec, prefilled from its Schedule. A rule the form cannot
 // express shows as text above the form, which then holds the defaults; saving the form replaces the rule.
-func changeRecurrenceForm(m Model, issue *Issue, rec Recurrence) RecurrenceFormState {
+func changeRecurrenceForm(cal PaneCalendar, issue *Issue, rec Recurrence) RecurrenceFormState {
 	started := *issue
 	started.ScheduledOnDate = &rec.Start
-	f := newRecurrenceForm(m, &started)
+	f := newRecurrenceForm(cal, &started)
 	f.Change, f.Opened = true, rec
-	if rec.TimeZone != "Local" { // kata read "Local" in the daemon's zone; keep the Pane's (a real zone) as the editable one
-		f.Zone = rec.TimeZone
-	}
+	f.Zone = realZone(rec.TimeZone, f.Zone)
 	s := rec.Schedule()
 	if s.IsRaw() {
 		f.Raw = s.Raw
@@ -188,7 +183,7 @@ func openRecurrence(m Model) Model {
 		return m
 	}
 	if issue.RecurrenceID == nil {
-		m.RecurrenceForm = newRecurrenceForm(m, issue)
+		m.RecurrenceForm = newRecurrenceForm(m.Calendar, issue)
 		return m
 	}
 	return m.wantRecurrence(issue.UID)
@@ -210,7 +205,7 @@ func openWantedRecurrence(m Model) Model {
 	case rec.Stopped:
 		m.RecurrenceForm = RecurrenceFormState{Open: true, Refused: true, UID: issue.UID, Err: errRecurrenceStoppedHere}
 	default:
-		m.RecurrenceForm = changeRecurrenceForm(m, issue, *rec)
+		m.RecurrenceForm = changeRecurrenceForm(m.Calendar, issue, *rec)
 	}
 	return m
 }
@@ -229,6 +224,34 @@ var (
 
 	errRecurrenceChanged = errors.New("The schedule changed meanwhile; nothing was written. The card shows the current schedule.")
 )
+
+// localZone is the zone name kata stores for "the daemon's own zone"; the card cannot save it.
+const localZone = "Local"
+
+// realZone is zone, or fallback when zone is Local: kata reads Local in the daemon's zone, not the Pane's.
+func realZone(zone, fallback string) string {
+	if zone == localZone {
+		return fallback
+	}
+	return zone
+}
+
+// checkZone refuses a zone kata cannot take: empty, Local or unknown.
+func checkZone(zone string) error {
+	if _, err := time.LoadLocation(zone); err != nil || zone == "" || zone == localZone {
+		return fmt.Errorf("Unknown time zone %q.", zone)
+	}
+	return nil
+}
+
+// parseDate reads a YYYY-MM-DD date, trimmed, or says bad.
+func parseDate(text string, bad error) (time.Time, error) {
+	day, err := time.Parse(time.DateOnly, strings.TrimSpace(text))
+	if err != nil {
+		return time.Time{}, bad
+	}
+	return day, nil
+}
 
 // terms reads the card into the terms it would send, or says what is wrong with it. Nothing leaves the card until it does.
 func (f RecurrenceFormState) terms() (RecurrenceTerms, error) {
@@ -256,9 +279,9 @@ func (f RecurrenceFormState) terms() (RecurrenceTerms, error) {
 			s.Month = f.Month
 		}
 	}
-	startDate, err := time.Parse(time.DateOnly, start)
+	startDate, err := parseDate(start, errStartDate)
 	if err != nil {
-		return RecurrenceTerms{}, errStartDate
+		return RecurrenceTerms{}, err
 	}
 	switch f.Ends {
 	case EndCount:
@@ -266,17 +289,17 @@ func (f RecurrenceFormState) terms() (RecurrenceTerms, error) {
 			return RecurrenceTerms{}, errCountTooSmall
 		}
 	case EndUntil:
-		until, err := time.Parse(time.DateOnly, strings.TrimSpace(f.Until))
+		until, err := parseDate(f.Until, errEndDate)
 		if err != nil {
-			return RecurrenceTerms{}, errEndDate
+			return RecurrenceTerms{}, err
 		}
 		if until.Before(startDate) {
 			return RecurrenceTerms{}, errEndBeforeStart
 		}
 		s.Until = until.Format(time.DateOnly)
 	}
-	if _, err := time.LoadLocation(zone); err != nil || zone == "" || zone == "Local" {
-		return RecurrenceTerms{}, fmt.Errorf("Unknown time zone %q.", zone)
+	if err := checkZone(zone); err != nil {
+		return RecurrenceTerms{}, err
 	}
 	return RecurrenceTerms{Rule: s.RRULE(), Start: start, TimeZone: zone}, nil
 }
@@ -364,7 +387,7 @@ func updateRecurrence(m Model, msg Msg) (Model, []Cmd) {
 	if result.Changed != nil {
 		// Someone else changed the schedule: nothing was written, and the card shows what is there now.
 		if issue := closeIssue(m); issue != nil {
-			m.RecurrenceForm = changeRecurrenceForm(m, issue, *result.Changed)
+			m.RecurrenceForm = changeRecurrenceForm(m.Calendar, issue, *result.Changed)
 			m.RecurrenceForm.Err = errRecurrenceChanged
 		}
 		m = m.issueWritten(result.UID)

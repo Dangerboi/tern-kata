@@ -1,9 +1,6 @@
 package data
 
 import (
-	"errors"
-	"io/fs"
-	"os"
 	"slices"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -18,12 +15,11 @@ func loadWorkerPickers() model.WorkerPickersLoaded {
 	if err != nil {
 		return model.WorkerPickersLoaded{Pickers: model.WorkerPickers{Note: err.Error()}}
 	}
-	path := dirs.ConfigPath()
-	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+	cfg, missing, err := readWorkerConfig(dirs.ConfigPath())
+	switch {
+	case missing:
 		return model.WorkerPickersLoaded{}
-	}
-	cfg, err := worker.LoadConfig(path)
-	if err != nil {
+	case err != nil:
 		return model.WorkerPickersLoaded{Pickers: model.WorkerPickers{Note: err.Error()}}
 	}
 	profiles, checkouts := make([]string, 0, len(cfg.Profiles)), make([]string, 0, len(cfg.Checkouts))

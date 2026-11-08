@@ -301,19 +301,14 @@ func (g *Gateway) removeAgentRecordsOf(ctx context.Context, entries []model.Agen
 	if len(entries) == 0 {
 		return nil
 	}
-	state, err := g.stateDir()
-	if err != nil {
-		return err
-	}
-	hostID, err := ReadHostID(state)
+	hostID, err := g.thisHostID()
 	if err != nil {
 		return err
 	}
 	var errs []error
 	for _, e := range entries {
-		key := model.AgentRecordKey(hostID, e.Block)
 		errs = append(errs, g.withDaemon(ctx, "", func(c *Client) error {
-			return c.removeAgentRecords(ctx, e.ProjectID, e.IssueUID, hostID, func(k string, _ *model.AgentRecord) bool { return k == key })
+			return c.removeHostRecord(ctx, e.ProjectID, e.IssueUID, hostID, e.Block)
 		}))
 	}
 	return errors.Join(errs...)
@@ -321,16 +316,26 @@ func (g *Gateway) removeAgentRecordsOf(ctx context.Context, entries []model.Agen
 
 // removeAgentRecordOf removes the record this host id published for the agent in block on an Issue: the exit of an agent.
 func (g *Gateway) removeAgentRecordOf(ctx context.Context, c *Client, projectID int64, uid, block string) error {
-	state, err := g.stateDir()
+	hostID, err := g.thisHostID()
 	if err != nil {
 		return err
 	}
-	hostID, err := ReadHostID(state)
-	if err != nil {
-		return err
-	}
+	return c.removeHostRecord(ctx, projectID, uid, hostID, block)
+}
+
+// removeHostRecord removes the record hostID published for the agent in block on an Issue.
+func (c *Client) removeHostRecord(ctx context.Context, projectID int64, uid, hostID, block string) error {
 	key := model.AgentRecordKey(hostID, block)
 	return c.removeAgentRecords(ctx, projectID, uid, hostID, func(k string, _ *model.AgentRecord) bool { return k == key })
+}
+
+// thisHostID is the Host id kept in the state folder of the Gateway's worker directories.
+func (g *Gateway) thisHostID() (string, error) {
+	state, err := g.stateDir()
+	if err != nil {
+		return "", err
+	}
+	return ReadHostID(state)
 }
 
 func (g *Gateway) stateDir() (string, error) {
@@ -394,17 +399,7 @@ func (c *Client) listIssueRecords(ctx context.Context, workspace string, entries
 		return nil, err
 	}
 	if loaded.Project.UID != "" {
-		open, limit := g.ListIssuesQueryStatusOpen, int64(remoteAgentsPage)
-		var cursor *string
-		for {
-			page, err := c.ListIssuesWithResponse(ctx, &g.ListIssuesRequestOptions{
-				PathParams: &g.ListIssuesPath{ProjectID: loaded.Project.ID}, Query: &g.ListIssuesQuery{Status: &open, Limit: &limit, Cursor: cursor}})
-			if err != nil {
-				return nil, daemonError(err)
-			}
-			if page.JSON200 == nil {
-				return nil, errors.New("kata daemon returned no Issues")
-			}
+		err := c.eachOpenIssuePage(ctx, loaded.Project.ID, func(page *g.ListIssuesResp) error {
 			var body struct {
 				Issues []struct {
 					UID       string                     `json:"uid"`
@@ -413,14 +408,15 @@ func (c *Client) listIssueRecords(ctx context.Context, workspace string, entries
 				} `json:"issues"`
 			}
 			if err := json.Unmarshal(page.Body, &body); err != nil {
-				return nil, err
+				return err
 			}
 			for _, issue := range body.Issues {
 				issues[issue.UID] = issueRecordsListed{projectID: issue.ProjectID, records: recordsOf(issue.Metadata)}
 			}
-			if cursor = page.JSON200.NextCursor; cursor == nil || *cursor == "" {
-				break
-			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 	}
 	for _, e := range entries {

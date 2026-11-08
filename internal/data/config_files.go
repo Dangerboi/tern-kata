@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"maps"
 	"os"
@@ -30,8 +31,9 @@ func (g *Gateway) loadConfigFiles(_ context.Context, cmd model.LoadConfigFiles) 
 	if err != nil {
 		return model.ConfigFilesLoaded{Request: cmd.Request, Err: err}
 	}
-	dirs := worker.Dirs{Config: folder}
+	dirs, _ := g.workerDirs() // configFolder found the config folder; only the state folder may be unknown.
 	enter := []model.ConfigAction{model.ConfigOpen}
+	views := NewViewsStore(folder)
 	files := []model.ConfigFile{
 		configRow(model.ConfigLanes, lanesFileName, filepath.Join(folder, lanesFileName), "not created: every Project uses the default Lanes", enter, func(path string) (string, error) {
 			file, err := readLanes(path)
@@ -59,8 +61,8 @@ func (g *Gateway) loadConfigFiles(_ context.Context, cmd model.LoadConfigFiles) 
 			}
 			return countOf(n, "Project", "Projects") + " with a default filter", nil
 		}),
-		configRow(model.ConfigViews, "views.toml", NewViewsStore(folder).Path, "not created: no saved views", enter, func(string) (string, error) {
-			read, err := NewViewsStore(folder).Read()
+		configRow(model.ConfigViews, "views.toml", views.Path, "not created: no saved views", enter, func(string) (string, error) {
+			read, err := views.Read()
 			if err != nil {
 				return "", err
 			}
@@ -126,17 +128,20 @@ func configRow(key model.ConfigFileKey, title, path, missing string, actions []m
 // agentRow is the agent.toml row: read by the agent start's own reader, carrying the text the Page's edit starts from and the base
 // it must still find on disk.
 func agentRow(path string) model.ConfigFile {
+	var text string
 	row := configRow(model.ConfigAgent, AgentConfigFile, path, "agents start with the defaults", []model.ConfigAction{model.ConfigEdit}, func(path string) (string, error) {
-		cfg, err := ReadAgentConfig(path)
+		token, err := guardedfile.Read(path)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", path, err)
+		}
+		text = token.Text()
+		cfg, err := parseAgentConfig(path, text)
 		if err != nil {
 			return "", err
 		}
 		return agentSummary(cfg), nil
 	})
-	row.Starter = AgentConfigStarter
-	if token, err := guardedfile.Read(path); err == nil {
-		row.Text = token.Text()
-	}
+	row.Starter, row.Text = AgentConfigStarter, text
 	return row
 }
 

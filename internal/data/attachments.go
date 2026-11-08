@@ -24,6 +24,9 @@ const (
 	DocbankUnreachableMessage  = "kata could not reach Docbank, or Docbank refused the request. Check that Docbank is running and that url in the [docbank] section of kata's config.toml is right."
 )
 
+// attachmentLimit is model.MaxAttachmentBytes as the refusal texts word it.
+var attachmentLimit = fmt.Sprintf("%d MiB", model.MaxAttachmentBytes>>20)
+
 // attachmentError is the plain-words text of a failed attachment call: what kata's attachment error codes mean for the person at the
 // Pane. Any other failure reads as every daemon failure does.
 func attachmentError(err error) error {
@@ -35,7 +38,7 @@ func attachmentError(err error) error {
 	case "docbank_unreachable":
 		return errors.New(DocbankUnreachableMessage)
 	case "attachment_too_large":
-		return errors.New("That file is over the 256 MiB limit for an attachment.")
+		return fmt.Errorf("That file is over the %s limit for an attachment.", attachmentLimit)
 	case "attachment_content_missing":
 		return errors.New("Docbank no longer has this attachment's content.")
 	case "attachment_invalid":
@@ -105,7 +108,7 @@ func attachableFile(path string) error {
 	case !info.Mode().IsRegular():
 		return fmt.Errorf("%s is not a regular file.", path)
 	case info.Size() > model.MaxAttachmentBytes:
-		return fmt.Errorf("%s is over the 256 MiB limit for an attachment.", path)
+		return fmt.Errorf("%s is over the %s limit for an attachment.", path, attachmentLimit)
 	}
 	return nil
 }
@@ -146,30 +149,35 @@ func (c *Client) AttachFile(ctx context.Context, cmd model.AttachFile) (model.Fi
 	return model.FileAttached{UID: cmd.UID, ID: added.AttachmentID, Name: added.Attachment.Name}, nil
 }
 
+// metadataPatch is the request that sets one metadata key of an Issue, a nil value clearing it, with no guard.
+func metadataPatch(projectID int64, uid, actor, key string, value any) (*g.PatchIssueMetadataRequestOptions, *g.PatchIssueMetadataBody) {
+	body := &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}}
+	return &g.PatchIssueMetadataRequestOptions{PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid}, Body: body}, body
+}
+
 // patchMetadataKey writes one metadata key of an Issue, a null value clearing it, guarded on the key still holding the JSON
 // text ifValue, or on its being absent when ifValue is nil.
 func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any, ifValue *string) (issueWrite, error) {
-	body := g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}}
+	options, body := metadataPatch(projectID, uid, actor, key, value)
 	either := runtime.NewEitherFromB[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_1{Key: key, IfAbsent: g.True})
 	if ifValue != nil {
 		either = runtime.NewEitherFromA[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_0{Key: key, IfValue: *ifValue})
 	}
 	body.Guard = &g.MetadataPatchGuard{MetadataPatchGuard_OneOf: &g.MetadataPatchGuard_OneOf{Either: either}}
-	r, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid}, Body: &body,
-	})
+	r, err := c.PatchIssueMetadataWithResponse(ctx, options)
 	if err != nil {
 		return issueWrite{}, err
+	}
+	if r.JSON200 == nil {
+		return issueWrite{}, errors.New("kata daemon returned no metadata write")
 	}
 	return written(r.JSON200.Changed, r.JSON200.Issue, nil), nil
 }
 
 // writeMetadataKey patches one metadata key of an Issue with no guard, a nil value clearing it, and returns the client's raw error.
 func (c *Client) writeMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any) error {
-	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid},
-		Body:       &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}},
-	})
+	options, _ := metadataPatch(projectID, uid, actor, key, value)
+	_, err := c.PatchIssueMetadataWithResponse(ctx, options)
 	return err
 }
 

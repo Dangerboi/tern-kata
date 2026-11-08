@@ -17,9 +17,6 @@ func AgentItemID(block string) string { return itemID(AgentListID, block) }
 // TeamListID is the id of the team section's list on the parent's Agent card.
 var TeamListID = LayerID(model.CardAgent) + ".team"
 
-// TeamItemID is the id of the team section's row for the child Issue uid.
-func TeamItemID(uid string) string { return itemID(TeamListID, uid) }
-
 // TeamRowText is one child of the team: its ref and where it stands.
 func TeamRowText(r model.TeamRow) string { return r.Ref + " · " + r.State }
 

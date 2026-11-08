@@ -115,6 +115,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The Delete card also takes kata tui's confirmation, `DELETE <project>#<id>`, besides `<project>#<id>`; anything else is refused with both forms named.
 - An account whose credential is limited to one Issue is no longer offered `X` (the Delete card) or the Menu's "Restore a deleted Issue", both of which kata refuses to it; the Pane asks the daemon's auth capabilities when it connects and after a daemon switch, and offers both until the answer is in.
 
+#### Jobs and worker
+
+- A job whose workflow the worker cannot run is reported in `worker status` and the Pane with the run's own reason, `it runs workflow "<name>", which the worker does not run: <reason>`, also for a profile the job does not run with, a command step in a Project without `commands = true` and a step profile the Project cannot use.
+
 ### Fixed
 
 #### Agents
@@ -125,6 +129,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - The Delete card's reason is no longer lost: kata's delete records none, so the Pane adds it to the Issue as a `Deleted: <reason>` comment just before the delete, and deletes nothing when that comment fails.
+- An Issue metadata write the daemon answers without its result (an Attention clear, a date change, an attachment link) reports an error instead of stopping the Pane.
 
 #### Jobs and worker
 

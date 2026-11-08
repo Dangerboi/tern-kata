@@ -18,6 +18,11 @@ const (
 	teamUsage    = "usage: tern-kata team <ref>"
 )
 
+// agentsFlags is the flag table of `agents`; only its parser reads it (completion names --issue by hand).
+var agentsFlags = []tableFlag{
+	{"issue", true, "an Issue ref", func(p *LaunchPlan, v string) { p.TargetRef = v }},
+}
+
 // planAgents parses `tern-kata agents [--issue <ref>]`: TargetRef is the Issue the list is cut to, empty for every Issue.
 func planAgents(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
 	plan := LaunchPlan{Subcommand: "agents"}
@@ -26,15 +31,11 @@ func planAgents(args []string, lookup func(string) (string, bool)) (LaunchPlan, 
 		if arg == "--" || !strings.HasPrefix(arg, "--") {
 			return LaunchPlan{}, fmt.Errorf("agents: unexpected argument %s; %s", arg, agentsUsage)
 		}
-		if arg == "--issue" || strings.HasPrefix(arg, "--issue=") {
-			value, err := parseFlagValue(args, &i, "--issue", "an Issue ref", false)
-			if err != nil {
-				return LaunchPlan{}, fmt.Errorf("agents: %w; %s", err, agentsUsage)
-			}
-			plan.TargetRef = value
-			continue
+		if matched, err := parseTableFlag(agentsFlags, "agents", agentsUsage, args, &i, &plan); err != nil {
+			return LaunchPlan{}, err
+		} else if !matched {
+			return LaunchPlan{}, fmt.Errorf("agents: unknown flag %s", arg)
 		}
-		return LaunchPlan{}, fmt.Errorf("agents: unknown flag %s", arg)
 	}
 	ref, _ := lookup("KATA_REF")
 	plan.ScopeRef = strings.TrimSpace(ref)
@@ -200,12 +201,12 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 	if err != nil {
 		return subcommandError{err}
 	}
-	targets, warning, err := messageTargets(plan, workspace, running, send)
+	targets, unread, err := messageTargets(plan, workspace, running, send)
 	if err != nil {
 		return subcommandError{err}
 	}
-	if warning != "" {
-		if _, err := fmt.Fprintln(out, warning); err != nil {
+	if unread != nil {
+		if _, err := fmt.Fprintf(out, "cannot read the agents on other hosts: %v; messaging only the agents on this host.\n", unread); err != nil {
 			return err
 		}
 	}
@@ -223,7 +224,7 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 	if missed > 0 {
 		return subcommandError{fmt.Errorf("the message was not written to %d of %d agents", missed, len(targets))}
 	}
-	if warning != "" {
+	if unread != nil {
 		return subcommandError{errors.New("agents on other hosts may have been missed")}
 	}
 	return nil
@@ -232,34 +233,33 @@ func runMessage(plan LaunchPlan, workspace string, running []model.IssueAgent, s
 // messageTargets finds who plan.TargetRef reaches. An address one of this host's agents holds needs no daemon read. Otherwise the
 // target is read as an Issue first (its records join the local agents on it), and when it names none, as an address among the
 // agents on other hosts in the Project agents lists. A read that fails is the error unless the local agents already reach the
-// target: then they get the message, and warning says the agents on other hosts could not be read, which runMessage turns into a
-// failed exit, for an agent on another host may have been missed.
-func messageTargets(plan LaunchPlan, workspace string, running []model.IssueAgent, send func(model.Cmd) model.Msg) (targets []model.IssueAgent, warning string, err error) {
+// target: then they get the message, and unread is the failed read, which runMessage reports and turns into a failed exit, for
+// an agent on another host may have been missed.
+func messageTargets(plan LaunchPlan, workspace string, running []model.IssueAgent, send func(model.Cmd) model.Msg) (targets []model.IssueAgent, unread, err error) {
 	if slices.ContainsFunc(running, func(a model.IssueAgent) bool { return a.Address != "" && a.Address == plan.TargetRef }) {
 		targets, err = model.MessageTargets(running, plan.TargetRef, plan.InboxUser)
-		return targets, "", err
+		return targets, nil, err
 	}
 	onIssue := send(model.LoadRemoteAgents{Workspace: workspace, Issue: plan.TargetRef}).(model.RemoteAgentsLoaded)
 	if onIssue.Err != nil {
-		readErr := fmt.Errorf("cannot read the agents on other hosts: %w", onIssue.Err)
 		if local, localErr := model.MessageTargets(running, plan.TargetRef, plan.InboxUser); localErr == nil {
-			return local, readErr.Error() + "; messaging only the agents on this host.", nil
+			return local, onIssue.Err, nil
 		}
-		return nil, "", readErr
+		return nil, nil, fmt.Errorf("cannot read the agents on other hosts: %w", onIssue.Err)
 	}
 	if !onIssue.NotFound {
 		targets, err = model.MessageTargets(append(slices.Clone(running), onIssue.Agents...), plan.TargetRef, plan.InboxUser)
-		return targets, "", err
+		return targets, nil, err
 	}
 	scanned := send(model.LoadRemoteAgents{Workspace: workspace, ScopeRef: plan.ScopeRef}).(model.RemoteAgentsLoaded)
 	targets, err = model.MessageTargets(append(slices.Clone(running), scanned.Agents...), plan.TargetRef, plan.InboxUser)
-	if err != nil && scanned.Err != nil && !errors.Is(scanned.Err, model.ErrNoRemoteScope) {
-		return nil, "", fmt.Errorf("%w; the agents on other hosts could not be read: %w", err, scanned.Err)
+	if scanned.Err != nil && !errors.Is(scanned.Err, model.ErrNoRemoteScope) {
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w; the agents on other hosts could not be read: %w", err, scanned.Err)
+		}
+		unread = scanned.Err
 	}
-	if err == nil && scanned.Err != nil && !errors.Is(scanned.Err, model.ErrNoRemoteScope) {
-		warning = fmt.Sprintf("cannot read the agents on other hosts: %v; messaging only the agents on this host.", scanned.Err)
-	}
-	return targets, warning, err
+	return targets, unread, err
 }
 
 // daemonVerified reads, once and only when a target needs it, whether the daemon verifies the actor of every write: the Pane's own

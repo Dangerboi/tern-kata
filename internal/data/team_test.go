@@ -388,7 +388,8 @@ func TestTheEndMessageIsWrittenOnceAndTheRecordGoes(t *testing.T) {
 	// The coordinator clears the message; nothing writes it again.
 	other := h.another()
 	if _, err := other.call(context.Background(), h.workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
-		return nil, c.clearSlot(ctx, h.project.ID, h.parent, "dana", model.NotificationKey(coordinator.Address), raw)
+		_, err := c.clearSlot(ctx, h.project.ID, h.parent, "dana", model.NotificationKey(coordinator.Address), raw)
+		return nil, err
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -428,7 +429,8 @@ func TestAnUnreadCoordinatorMessageIsNeverReplacedAndTheEndMessageFollowsOnceItC
 	}
 	// The coordinator clears it: the end message follows and the record goes.
 	if _, err := h.gateway.call(ctx, h.workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
-		return nil, c.clearSlot(ctx, h.project.ID, h.parent, "dana", model.NotificationKey(coordinator.Address), held)
+		_, err := c.clearSlot(ctx, h.project.ID, h.parent, "dana", model.NotificationKey(coordinator.Address), held)
+		return nil, err
 	}); err != nil {
 		t.Fatal(err)
 	}

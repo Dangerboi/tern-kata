@@ -55,13 +55,17 @@ func agentPlaced(m Model, msg AgentPlaced) Model {
 // answer. A second window reporting the same state is no move. An agent that is idle or has
 // exited stays where it is, and so does every other Pane's agent (that Pane sends its own back).
 func sendAgentsBack(m Model) (Model, []Cmd) {
+	return m.sendBack(func(block string) bool { return m.Agents.answered(block) })
+}
+
+// sendBack sends back every open background agent of this Pane whose block pick accepts, and marks it as being moved.
+func (m Model) sendBack(pick func(block string) bool) (Model, []Cmd) {
 	if m.PaneBlock == "" {
 		return m, nil
 	}
 	var cmds []Cmd
 	for _, e := range m.AgentMapping {
-		if e.Background && (e.Open || m.Agents.seenShown(e.Block)) && e.PaneBlock == m.PaneBlock &&
-			m.Agents.answered(e.Block) {
+		if e.Background && (e.Open || m.Agents.seenShown(e.Block)) && e.PaneBlock == m.PaneBlock && pick(e.Block) {
 			cmds = append(cmds, SendAgentBack{Block: e.Block, IssueRef: e.IssueRef})
 			m = placeAgent(m, e.Block)
 		}
@@ -73,14 +77,8 @@ func sendAgentsBack(m Model) (Model, []Cmd) {
 // no relay shows: one whose user answered it (agentStatesRelay.recheck) goes back when it is now a background agent that is open
 // or shown, and ending a finished background agent is decided again.
 func followBackground(m Model) (Model, []Cmd) {
-	var cmds []Cmd
-	for _, e := range m.AgentMapping {
-		if e.Background && (e.Open || m.Agents.seenShown(e.Block)) && e.PaneBlock == m.PaneBlock && m.PaneBlock != "" &&
-			slices.Contains(m.Agents.recheck, e.Block) {
-			cmds = append(cmds, SendAgentBack{Block: e.Block, IssueRef: e.IssueRef})
-			m = placeAgent(m, e.Block)
-		}
-	}
+	recheck := m.Agents.recheck
+	m, cmds := m.sendBack(func(block string) bool { return slices.Contains(recheck, block) })
 	m.Agents.recheck = nil
 	m, ended := closeFinishedAgents(m, closeOnRelay)
 	return m, append(cmds, ended...)

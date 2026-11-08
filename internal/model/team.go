@@ -186,7 +186,7 @@ func teamsDriven(m Model, msg TeamsDriven) (Model, []Cmd) {
 	return restartAgentSessions(m, cmds)
 }
 
-// mapStarted files a freshly started agent in the mapping as agentStarted does, so a refresh asked before it started keeps it.
+// mapStarted files a freshly started agent in the mapping, so a refresh asked before it started keeps it.
 func (m Model) mapStarted(e AgentEntry) Model {
 	if m.agentMapped(e.Block) {
 		return m

@@ -31,7 +31,7 @@ func (c *Client) ListJobs(ctx context.Context, cmd model.LoadJobs) (model.JobsLo
 	if response.JSON200 == nil {
 		return model.JobsLoaded{}, errors.New("kata daemon returned no Cron jobs")
 	}
-	parents := parentReader{c: c, projectID: cmd.ProjectID, read: map[string]readParent{}}
+	parents := newParentReader(c, cmd.ProjectID)
 	jobs := make([]model.CronJob, len(response.JSON200.Jobs))
 	for i, wire := range response.JSON200.Jobs {
 		if jobs[i], err = parents.translate(ctx, wire); err != nil {
@@ -40,7 +40,7 @@ func (c *Client) ListJobs(ctx context.Context, cmd model.LoadJobs) (model.JobsLo
 	}
 	loaded := model.JobsLoaded{Request: cmd.Request, Jobs: jobs}
 	if cmd.Activity {
-		if loaded.Activity, err = c.jobActivity(ctx, cmd.ProjectID, jobs, &parents); err != nil {
+		if loaded.Activity, err = c.jobActivity(ctx, cmd.ProjectID, jobs, parents); err != nil {
 			return model.JobsLoaded{}, err
 		}
 	}
@@ -59,7 +59,7 @@ func (c *Client) jobActivity(ctx context.Context, projectID int64, jobs []model.
 	for _, job := range jobs {
 		switch {
 		case job.Native():
-			if children := parents.read[job.Definition.Issue.ParentUID].children[job.UID]; len(children) > 0 {
+			if children := parents.children(job.Definition.Issue.ParentUID, job.UID); len(children) > 0 {
 				activity[job.UID] = model.JobActivity{Children: children[:min(len(children), model.JobActivityShown)]}
 			}
 		case !job.Archived():
@@ -140,6 +140,15 @@ type parentReader struct {
 	c         *Client
 	projectID int64
 	read      map[string]readParent
+}
+
+func newParentReader(c *Client, projectID int64) *parentReader {
+	return &parentReader{c: c, projectID: projectID, read: map[string]readParent{}}
+}
+
+// children are the children of the parent uid, already read, that the job made, newest first.
+func (p *parentReader) children(parentUID, jobUID string) []model.CronChild {
+	return p.read[parentUID].children[jobUID]
 }
 
 // translate is kata's Cron job as the model holds it. A native job comes with its parent: its status and the job's own

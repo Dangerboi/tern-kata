@@ -87,15 +87,7 @@ const NewWorkflowText = `{
 
 // Text is the workflow as the JSON document the editor shows: its name and its definition, in the shape kata takes.
 func (w Workflow) Text() string {
-	file := workflowFile{Name: w.Name, Definition: workflowDefinition{Version: 1, About: w.About, Input: w.Input, Options: w.Options, Steps: make([]workflowStep, len(w.Steps))}}
-	for i, step := range w.Steps {
-		out := workflowStep{Key: step.Key, Kind: step.Kind, Command: step.Command, Prompt: step.Prompt, After: step.After, Options: step.Options}
-		if step.Retries != 0 {
-			retries := int64(step.Retries)
-			out.Retries = &retries
-		}
-		file.Definition.Steps[i] = out
-	}
+	file := workflowFile{Name: w.Name, Definition: w.wire()}
 	var text bytes.Buffer
 	encoder := json.NewEncoder(&text)
 	encoder.SetEscapeHTML(false)
@@ -103,6 +95,19 @@ func (w Workflow) Text() string {
 	// A document of strings, numbers and options kata already accepted always encodes.
 	_ = encoder.Encode(file)
 	return text.String()
+}
+
+// wire is the workflow as the definition kata takes; a zero Retries is left out.
+func (w Workflow) wire() workflowDefinition {
+	out := workflowDefinition{Version: 1, About: w.About, Input: w.Input, Options: w.Options, Steps: make([]workflowStep, len(w.Steps))}
+	for i, s := range w.Steps {
+		out.Steps[i] = workflowStep{Key: s.Key, Kind: s.Kind, Command: s.Command, Prompt: s.Prompt, After: s.After, Options: s.Options}
+		if s.Retries != 0 {
+			retries := int64(s.Retries)
+			out.Steps[i].Retries = &retries
+		}
+	}
+	return out
 }
 
 // WorkflowDocument is a workflow text that passed the local check: the name and the definition to send, compact.
@@ -133,7 +138,7 @@ func ParseWorkflow(text string) (WorkflowDocument, error) {
 		return WorkflowDocument{}, fmt.Errorf("Not valid JSON: %w", err)
 	}
 	if len(definition) > maxWorkflowDefinition {
-		return WorkflowDocument{}, errors.New("The workflow definition is over kata's 256 KiB limit.")
+		return WorkflowDocument{}, fmt.Errorf("The workflow definition is over kata's %d KiB limit.", maxWorkflowDefinition>>10)
 	}
 	return WorkflowDocument{Name: strings.TrimSpace(file.Name), Definition: string(definition), Shape: file.Definition.shape()}, nil
 }
@@ -141,7 +146,7 @@ func ParseWorkflow(text string) (WorkflowDocument, error) {
 // check is the document rules in kata's order: the name first, then the definition against the shared validator.
 func (f workflowFile) check() error {
 	if name := strings.TrimSpace(f.Name); name == "" || len(name) > maxWorkflowNameBytes {
-		return errors.New(`"name" must be 1 to 256 characters.`)
+		return fmt.Errorf(`"name" must be 1 to %d characters.`, maxWorkflowNameBytes)
 	}
 	if problem := cronjob.ValidateWorkflow(f.Definition.shape()); problem != nil {
 		return problem

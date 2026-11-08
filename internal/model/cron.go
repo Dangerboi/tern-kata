@@ -146,17 +146,6 @@ func (j CronJob) deliveryAnchor() time.Time {
 	return j.Parent.Progress.Anchor
 }
 
-// zoneAndExpression splits a cron trigger into its zone and bare expression.
-func zoneAndExpression(t cronjob.Trigger) (zone, expression string) {
-	return cronjob.Zone(t.Cron, t.Timezone)
-}
-
-// validCron reports whether the cron trigger parses.
-func validCron(t cronjob.Trigger) bool {
-	_, err := cronjob.Cron(t.Cron, t.Timezone, time.Time{})
-	return err == nil
-}
-
 // Words reads the trigger as a phrase: "every day at 09:00 Europe/Berlin", "every 15 minutes", "once at 2026-11-01 09:00 UTC",
 // "manual", "at the Issue's scheduled date", "2 days before the Issue's deadline". It is empty where the trigger can't be read:
 // an expression that does not parse, a once trigger without a valid instant.
@@ -165,10 +154,10 @@ func triggerWords(t cronjob.Trigger) string {
 	case cronjob.TriggerManual:
 		return "manual"
 	case cronjob.TriggerCron:
-		if !validCron(t) {
+		if _, err := cronjob.Cron(t.Cron, t.Timezone, time.Time{}); err != nil {
 			return ""
 		}
-		zone, expression := zoneAndExpression(t)
+		zone, expression := cronjob.Zone(t.Cron, t.Timezone)
 		return cronWords(expression) + " " + zone
 	case cronjob.TriggerInterval:
 		if t.IntervalSeconds <= 0 {

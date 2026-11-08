@@ -12,9 +12,6 @@ import (
 // JobListID is the Jobs Page's list of job cards; a card is the job's uid under it.
 const JobListID = "main.columns.list.jobs"
 
-// JobID is the id of the card of the job with uid.
-func JobID(uid string) string { return itemID(JobListID, uid) }
-
 // jobTone is the tone of a job's state: active green, a pause amber, a disabled or archived job muted.
 func jobTone(pause model.PauseReason) ui.Tone {
 	switch pause {

@@ -58,14 +58,13 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 	if err != nil {
 		return failed(err)
 	}
-	msg, err := g.call(ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.Msg, error) {
+	opened, err := callAs(g, ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.AttachmentOpened, error) {
 		path, err := c.DownloadAttachment(ctx, dir, cmd)
-		return ok(model.AttachmentOpened{UID: cmd.UID, Name: cmd.Attachment.Name, Path: path}, err)
+		return model.AttachmentOpened{UID: cmd.UID, Name: cmd.Attachment.Name, Path: path}, err
 	})
 	if err != nil {
 		return failed(err)
 	}
-	opened := msg.(model.AttachmentOpened)
 	if !isOpenable(cmd.Attachment.Name) {
 		opened.Err = fmt.Errorf("saved at %s and not opened: tern-kata opens only images, video, audio, PDFs and text", opened.Path)
 		return opened

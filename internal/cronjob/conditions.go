@@ -104,26 +104,29 @@ func (j Job) Conditions() (Conditions, error) {
 
 // readDollars reads a JSON number that is a finite amount above 0, whatever Go type the decoder gave it.
 func readDollars(v any) (float64, error) {
-	var f float64
-	switch n := v.(type) {
-	case int:
-		f = float64(n)
-	case int64:
-		f = float64(n)
-	case float64:
-		f = n
-	case json.Number:
-		var err error
-		if f, err = n.Float64(); err != nil {
-			return 0, err
-		}
-	default:
-		return 0, fmt.Errorf("not a number")
+	f, err := numberValue(v)
+	if err != nil {
+		return 0, err
 	}
 	if !(f > 0) || math.IsInf(f, 0) {
 		return 0, fmt.Errorf("not above 0")
 	}
 	return f, nil
+}
+
+// numberValue is a JSON number as a float64, whatever Go type the decoder gave it.
+func numberValue(v any) (float64, error) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), nil
+	case int64:
+		return float64(n), nil
+	case float64:
+		return n, nil
+	case json.Number:
+		return n.Float64()
+	}
+	return 0, fmt.Errorf("not a number")
 }
 
 // readNewCommits reads options.conditions.new_commits: true (or false, which is off), or an object whose only key is
@@ -184,21 +187,15 @@ func cleanFolder(name string) (string, error) {
 
 // wholeNumber reads a JSON number that holds an integer, whatever Go type the decoder gave it.
 func wholeNumber(v any) (int, error) {
-	var f float64
 	switch n := v.(type) {
 	case int:
 		return n, nil
 	case int64:
 		return int(n), nil
-	case float64:
-		f = n
-	case json.Number:
-		var err error
-		if f, err = n.Float64(); err != nil {
-			return 0, err
-		}
-	default:
-		return 0, fmt.Errorf("not a number")
+	}
+	f, err := numberValue(v)
+	if err != nil {
+		return 0, err
 	}
 	if f != math.Trunc(f) || math.Abs(f) > 1e9 {
 		return 0, fmt.Errorf("not a whole number")

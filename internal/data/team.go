@@ -3,7 +3,6 @@ package data
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -19,10 +18,6 @@ import (
 // TeamsFile is the Team record in tern-kata's state folder, beside agents.json: one record per team (model.Team).
 const TeamsFile = "teams.json"
 
-// teamPendingMaxAge is how long a child recorded without a block counts as being started. A Pane that died between the record and
-// the start leaves such a child; after this it counts as neither running nor started, so the team is not held by it forever.
-const teamPendingMaxAge = model.TeamPendingMaxAge
-
 // teamsDoc is teams.json.
 type teamsDoc struct {
 	Teams []model.Team `json:"teams"`
@@ -30,22 +25,8 @@ type teamsDoc struct {
 
 // ReadTeams reads teams.json at path; a missing file is no teams.
 func ReadTeams(path string) ([]model.Team, error) {
-	token, err := guardedfile.Read(path)
-	if err != nil {
-		return nil, err
-	}
-	return parseTeams(path, token)
-}
-
-func parseTeams(path string, token guardedfile.Token) ([]model.Team, error) {
-	if token.Text() == "" {
-		return nil, nil
-	}
-	var doc teamsDoc
-	if err := json.Unmarshal([]byte(token.Text()), &doc); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	return doc.Teams, nil
+	doc, err := readJSONDoc[teamsDoc](path)
+	return doc.Teams, err
 }
 
 // UpdateTeams reads teams.json again, lets change return the new list, and writes it only while the file is still what was read,
@@ -54,14 +35,13 @@ func parseTeams(path string, token guardedfile.Token) ([]model.Team, error) {
 // an error wrapping guardedfile.ErrChanged.
 func UpdateTeams(path string, change func([]model.Team) []model.Team) ([]model.Team, error) {
 	var next []model.Team
-	err := guardedfile.Update(path, 0o700, func(token guardedfile.Token) ([]byte, error) {
-		current, err := parseTeams(path, token)
+	err := updateJSONDoc(path, func(token guardedfile.Token) (teamsDoc, error) {
+		current, err := jsonDoc[teamsDoc](path, token)
 		if err != nil {
-			return nil, err
+			return teamsDoc{}, err
 		}
-		next = change(cloneTeams(current))
-		raw, err := json.MarshalIndent(teamsDoc{Teams: next}, "", "  ")
-		return append(raw, '\n'), err
+		next = change(cloneTeams(current.Teams))
+		return teamsDoc{Teams: next}, nil
 	})
 	if err != nil {
 		return nil, err
@@ -123,7 +103,10 @@ func (g *Gateway) startTeam(ctx context.Context, cmd model.StartTeam) model.Team
 	if reason := teamRefusal(cfg.For(cmd.ProjectName), cmd.Actor); reason != "" {
 		return failed(errors.New(reason))
 	}
-	teamsFile, agentsFile := filepath.Join(dirs.State, TeamsFile), filepath.Join(dirs.State, AgentsFile)
+	teamsFile, agentsFile, err := g.teamPaths()
+	if err != nil {
+		return failed(err)
+	}
 	teams, err := ReadTeams(teamsFile)
 	if err != nil {
 		return failed(err)
@@ -223,28 +206,22 @@ func issueHasAgent(entries []model.AgentEntry, exited []string, uid string) bool
 	return slices.ContainsFunc(entries, func(e model.AgentEntry) bool { return e.IssueUID == uid && !slices.Contains(exited, e.Block) })
 }
 
-// childRunning says the child holds a place of the team now: its agent is mapped and has not exited, or its start is recorded and
-// recent. A child whose agent exited or whose block closed has freed its place.
-func childRunning(c model.TeamChild, entries []model.AgentEntry, exited []string, now time.Time) bool {
-	if c.Block == "" {
-		return now.Sub(c.StartedAt) < teamPendingMaxAge
+// countRunning counts the children of t that hold a place of the team now: the agent is mapped and has not exited, or the start is
+// recorded without a block and recent. A child whose agent exited or whose block closed has freed its place.
+func countRunning(t model.Team, entries []model.AgentEntry, exited []string, now time.Time) int {
+	n := 0
+	for _, c := range t.Children {
+		if c.Block == "" && now.Sub(c.StartedAt) < model.TeamPendingMaxAge || c.Block != "" && agentAlive(entries, exited, c.Block) {
+			n++
+		}
 	}
-	return agentAlive(entries, exited, c.Block)
+	return n
 }
 
 // runningChildren counts the team's children that hold a place, reading agents.json as it stands.
 func runningChildren(agentsFile string, exited []string, t model.Team, now time.Time) (int, error) {
 	entries, err := ReadAgents(agentsFile)
-	if err != nil {
-		return 0, err
-	}
-	n := 0
-	for _, c := range t.Children {
-		if childRunning(c, entries, exited, now) {
-			n++
-		}
-	}
-	return n, nil
+	return countRunning(t, entries, exited, now), err
 }
 
 func teamIndex(list []model.Team, uid string) int {
@@ -418,7 +395,7 @@ func (g *Gateway) queueTeam(ctx context.Context, cmd model.DriveTeams, teamsFile
 		if started.Err != nil {
 			failed = true
 			out.Failures = append(out.Failures, fmt.Sprintf("Cannot start an agent on %s for the team on %s: %s", c.QualifiedID, t.ParentRef, started.Err))
-			// The claim stays: it expires after teamPendingMaxAge, so a failing start is not retried on every event.
+			// The claim stays: it expires after model.TeamPendingMaxAge, so a failing start is not retried on every event.
 			continue
 		}
 		if err := setChildBlock(teamsFile, t.ParentUID, c.UID, started.Entry.Block); err != nil {
@@ -465,12 +442,7 @@ func claimChild(teamsFile, agentsFile string, exited []string, uid string, c gen
 		if t.Started(c.UID) {
 			return list
 		}
-		running := 0
-		for _, child := range t.Children {
-			if childRunning(child, entries, exited, now) {
-				running++
-			}
-		}
+		running := countRunning(*t, entries, exited, now)
 		if running >= t.Limit {
 			full = true
 			return list
@@ -633,14 +605,14 @@ func (c *Client) ResolveComment(ctx context.Context, cmd model.ResolveComment) (
 	return model.CommentResolved{}, model.ErrNoSuchComment
 }
 
-// settleClaims resolves the children recorded without a block for longer than teamPendingMaxAge: a Pane that died after starting
+// settleClaims resolves the children recorded without a block for longer than model.TeamPendingMaxAge: a Pane that died after starting
 // the agent but before recording its block left one whose agent runs, which takes that agent's block (an entry on the child's Issue
 // that this team's coordinator started after the claim; an agent a person started by hand is not the team's); a claim with no such
 // agent goes, so the child can be started.
 func settleClaims(t *model.Team, entries []model.AgentEntry, now time.Time) {
 	for j := range t.Children {
 		child := &t.Children[j]
-		if child.Block != "" || now.Sub(child.StartedAt) < teamPendingMaxAge {
+		if child.Block != "" || now.Sub(child.StartedAt) < model.TeamPendingMaxAge {
 			continue
 		}
 		if k := slices.IndexFunc(entries, func(e model.AgentEntry) bool {
@@ -650,6 +622,6 @@ func settleClaims(t *model.Team, entries []model.AgentEntry, now time.Time) {
 		}
 	}
 	t.Children = slices.DeleteFunc(t.Children, func(child model.TeamChild) bool {
-		return child.Block == "" && now.Sub(child.StartedAt) >= teamPendingMaxAge
+		return child.Block == "" && now.Sub(child.StartedAt) >= model.TeamPendingMaxAge
 	})
 }

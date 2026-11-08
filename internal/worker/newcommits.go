@@ -254,8 +254,6 @@ func newCommits(ctx context.Context, dir, since string, folders []string) (count
 	return count, b.String(), nil
 }
 
-func shortCommit(c string) string { return truncate(c, 8) }
-
 // folderWords names the folders a reason is about: "" for the whole checkout, else " under docs, src".
 func folderWords(folders []string) string {
 	if len(folders) == 0 {
@@ -291,21 +289,21 @@ func (w *Worker) commitGate(ctx context.Context, ps *projectState, jobUID, check
 		if err := w.saveCommit(ps.project.UID, jobUID, savedCommit{Commit: tip, StartedAt: w.clock.Now().UTC()}); err != nil {
 			return "", fmt.Sprintf("cannot save the branch tip: %v", err)
 		}
-		return fmt.Sprintf("first run: waiting for new commits (the branch is at %s)", shortCommit(tip)), ""
+		return fmt.Sprintf("first run: waiting for new commits (the branch is at %s)", truncate(tip, 8)), ""
 	}
 	in, err := inBranch(ctx, dir, saved.Commit)
 	if err != nil {
-		return "", fmt.Sprintf("cannot tell whether %s is still in the branch: %v", shortCommit(saved.Commit), err)
+		return "", fmt.Sprintf("cannot tell whether %s is still in the branch: %v", truncate(saved.Commit, 8), err)
 	}
 	if !in {
-		return "", fmt.Sprintf("commit %s, where its last succeeded run started, is no longer in the branch of checkout %s (history was rewritten, or another branch is checked out); run the job once with Run now to start again from the branch tip", shortCommit(saved.Commit), dir)
+		return "", fmt.Sprintf("commit %s, where its last succeeded run started, is no longer in the branch of checkout %s (history was rewritten, or another branch is checked out); run the job once with Run now to start again from the branch tip", truncate(saved.Commit, 8), dir)
 	}
 	count, _, err := newCommits(ctx, dir, saved.Commit, folders)
 	if err != nil {
 		return "", fmt.Sprintf("cannot count the new commits: %v", err)
 	}
 	if count == 0 {
-		return fmt.Sprintf("no new commits%s since %s", folderWords(folders), shortCommit(saved.Commit)), ""
+		return fmt.Sprintf("no new commits%s since %s", folderWords(folders), truncate(saved.Commit, 8)), ""
 	}
 	return "", ""
 }

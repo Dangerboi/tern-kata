@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -267,7 +268,7 @@ func exactRecipient(s string) bool {
 
 var cronJobTrigger = jobTrigger{
 	id: cronjob.TriggerCron, label: "Cron expression", fields: []Field{JobFieldCron, JobFieldZone},
-	load: func(f *JobFormState, t cronjob.Trigger) { f.Zone, f.Cron = zoneAndExpression(t) },
+	load: func(f *JobFormState, t cronjob.Trigger) { f.Zone, f.Cron = cronjob.Zone(t.Cron, t.Timezone) },
 	build: func(f JobFormState) (cronjob.Trigger, error) {
 		expression, zone := strings.TrimSpace(f.Cron), strings.TrimSpace(f.Zone)
 		switch {
@@ -285,7 +286,7 @@ var cronJobTrigger = jobTrigger{
 			return cronjob.Trigger{}, fieldError(JobFieldZone, "unknown time zone %q; use an IANA name like Europe/Berlin or UTC.", zone)
 		}
 		t := cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: expression, Timezone: zone}
-		if !validCron(t) {
+		if _, err := cronjob.Cron(t.Cron, t.Timezone, time.Time{}); err != nil {
 			return cronjob.Trigger{}, fieldError(JobFieldCron, "%q is not a valid expression; use 5 fields like 0 9 * * 1-5, or a descriptor like @daily.", expression)
 		}
 		return t, nil
@@ -591,6 +592,13 @@ func jobChoiceField(name Field) formField[JobFormState] {
 	return field
 }
 
+// blankJobForm is an open card on the first field with every field at its default: a cron trigger of every day at nine in UTC,
+// an hourly interval, catching up with the latest missed run.
+func blankJobForm(projectID int64, uid string, kind string, trigger cronjob.TriggerKind) JobFormState {
+	return JobFormState{Open: true, Field: JobFieldName, ProjectID: projectID, UID: uid, Kind: kind, Trigger: trigger,
+		Cron: "0 9 * * *", Zone: "UTC", Interval: "3600", Catchup: CatchupLatest, Policy: string(cronjob.IssuePerRun), Overlap: "forbid"}
+}
+
 // newJobForm is the card for a job that does not exist yet: a native job running every day at nine in the Pane's zone,
 // catching up with the latest missed run. parent is the reference of its parent Issue, blank when the user names it. Its
 // pickers are asked for: this machine's worker config and the Project's workflows.
@@ -601,20 +609,20 @@ func newJobForm(m Model, projectID int64, parent string) (Model, []Cmd) {
 		zone = "UTC"
 	}
 	k := jobKinds[0]
-	m.JobForm = JobFormState{Open: true, Field: JobFieldName, ProjectID: projectID, UID: uid, Kind: k.id, Trigger: k.triggers[0],
-		Cron: "0 9 * * *", Zone: zone, Interval: "3600", Parent: parent, Catchup: CatchupLatest, Policy: string(cronjob.IssuePerRun), Overlap: "forbid", Enabled: true, Adapter: cronjob.AdapterName}
+	f := blankJobForm(projectID, uid, k.id, k.triggers[0])
+	f.Zone, f.Parent, f.Enabled, f.Adapter = zone, parent, true, cronjob.AdapterName
+	m.JobForm = f
 	return m, jobChoiceCmds(m, projectID)
 }
 
 // changeJobForm is the card for job, prefilled from it; false when no kind of the card can edit it.
-func changeJobForm(m Model, projectID int64, job CronJob) (JobFormState, bool) {
+func changeJobForm(projectID int64, job CronJob) (JobFormState, bool) {
 	for _, k := range jobKinds {
 		if !k.owns(job) {
 			continue
 		}
-		f := JobFormState{Open: true, Field: JobFieldName, ProjectID: projectID, UID: job.UID, Change: true, Opened: job, Kind: k.id,
-			Trigger: job.Definition.Trigger.Kind, Name: job.Name, Cron: "0 9 * * *", Zone: "UTC", Interval: "3600",
-			Catchup: CatchupLatest, Policy: string(cronjob.IssuePerRun), Overlap: "forbid", Enabled: job.Definition.Enabled}
+		f := blankJobForm(projectID, job.UID, k.id, job.Definition.Trigger.Kind)
+		f.Change, f.Opened, f.Name, f.Enabled = true, job, job.Name, job.Definition.Enabled
 		if !slices.Contains(k.triggers, f.Trigger) {
 			return JobFormState{}, false
 		}
@@ -647,15 +655,7 @@ func openIssueJob(m Model) (Model, []Cmd) {
 	case issue == nil:
 		return m, nil
 	}
-	ref := cmpOr(issue.ShortID, issue.UID)
-	return newJobForm(m, issue.ProjectID, ref)
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
+	return newJobForm(m, issue.ProjectID, cmp.Or(issue.ShortID, issue.UID))
 }
 
 // openEditJob is `e` on the Jobs Page: the card on the selected job, prefilled.
@@ -667,7 +667,7 @@ func openEditJob(m Model) (Model, []Cmd) {
 	if job.Archived() {
 		return refuse(m, "The job is archived; restore it before editing.")
 	}
-	f, editable := changeJobForm(m, m.Jobs.ProjectID, job)
+	f, editable := changeJobForm(m.Jobs.ProjectID, job)
 	if !editable {
 		return refuse(m, fmt.Sprintf("The Job card can't edit this %s job: it has a %s trigger.", job.Kind(), job.Definition.Trigger.Kind))
 	}
@@ -945,7 +945,7 @@ func answerJobConflict(m Model, msg KeyMsg) (Model, []Cmd) {
 		f.Opened, f.Change, f.Conflict = *f.Conflict, true, nil
 		return submitJob(m)
 	case JobTakeNewer:
-		if taken, ok := changeJobForm(m, f.ProjectID, *f.Conflict); ok {
+		if taken, ok := changeJobForm(f.ProjectID, *f.Conflict); ok {
 			taken.Worker, taken.Workflows, taken.WorkflowsRead, taken.WorkflowsErr = f.Worker, f.Workflows, f.WorkflowsRead, f.WorkflowsErr
 			*f = taken
 		} else {

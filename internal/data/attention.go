@@ -69,23 +69,14 @@ func (c *Client) ListAttention(ctx context.Context, cmd model.LoadAttention) (mo
 // ClearAttention clears the request at cmd.Key through the guarded metadata patch the Dates card uses, guarded on the value the
 // Page showed, as the Pane's actor. A slot that no longer holds that value is left alone and reported as changed.
 func (c *Client) ClearAttention(ctx context.Context, cmd model.ClearAttention) (model.AttentionCleared, error) {
-	seen := cmd.Seen
-	if _, err := c.patchMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, cmd.Key, nil, &seen); err != nil {
-		if daemonCode(err) == "metadata_guard_failed" {
-			return model.AttentionCleared{UID: cmd.UID, Changed: true}, nil
-		}
-		return model.AttentionCleared{UID: cmd.UID}, daemonError(err)
-	}
-	return model.AttentionCleared{UID: cmd.UID}, nil
+	changed, err := c.clearSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, cmd.Key, cmd.Seen)
+	return model.AttentionCleared{UID: cmd.UID, Changed: changed}, err
 }
 
 // RaiseAgentAttention writes the request for cmd.Address on an Issue as `kata notify` does, as the Pane's actor, naming the waiting agent as teammate when it has a name, and without a
 // guard: it replaces an earlier request, which is how a newly waiting agent's message lands.
 func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAttention) error {
-	value := map[string]any{"from": cmd.Actor, "message": cmd.Message}
-	if cmd.Teammate != "" {
-		value["teammate"] = cmd.Teammate
-	}
+	value := notifyValue(cmd.Actor, cmd.Message, "", cmd.Teammate)
 	return c.writeAttentionSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), value)
 }
 
@@ -123,7 +114,8 @@ func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAt
 	}
 	// A slot that does not read as a request, or reads as someone else's, is not this Pane's to clear.
 	if slot, err := model.ReadNotificationSlot(key, raw); err == nil && slot.From == cmd.Actor && slices.Contains(cmd.Messages, slot.Message) {
-		return c.clearSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, raw)
+		_, err := c.clearSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, raw)
+		return err
 	}
 	return nil
 }
@@ -134,13 +126,7 @@ func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAt
 // since is written as an empty one.
 func (c *Client) SendAgentMessage(ctx context.Context, cmd model.SendAgentMessage) (model.AgentMessageSent, error) {
 	key := model.NotificationKey(cmd.Address)
-	value := map[string]any{"from": cmd.Actor, "message": cmd.Message}
-	if cmd.Re != "" {
-		value["re"] = cmd.Re
-	}
-	if cmd.Teammate != "" {
-		value["teammate"] = cmd.Teammate
-	}
+	value := notifyValue(cmd.Actor, cmd.Message, cmd.Re, cmd.Teammate)
 	var expect *string
 	if cmd.Replacing != "" {
 		expect = &cmd.Replacing
@@ -179,7 +165,8 @@ func (c *Client) ClearAgentAddress(ctx context.Context, cmd model.ClearAgentAddr
 	if err != nil || !held {
 		return err
 	}
-	return c.clearSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, raw)
+	_, err = c.clearSlot(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, raw)
+	return err
 }
 
 // readSlot reads the raw value under key on an Issue from the body as sent, so a guard holds the value kata stores, not a
@@ -204,12 +191,27 @@ func (c *Client) readSlot(ctx context.Context, projectID int64, uid, key string)
 	return string(value), held, nil
 }
 
-// clearSlot removes the slot under key while it still holds seen; a slot rewritten since is left and counts as cleared.
-func (c *Client) clearSlot(ctx context.Context, projectID int64, uid, actor, key, seen string) error {
-	if _, err := c.patchMetadataKey(ctx, projectID, uid, actor, key, nil, &seen); err != nil && daemonCode(err) != "metadata_guard_failed" {
-		return daemonError(err)
+// clearSlot removes the slot under key while it still holds seen. A slot rewritten since is left alone and reported as changed.
+func (c *Client) clearSlot(ctx context.Context, projectID int64, uid, actor, key, seen string) (changed bool, err error) {
+	if _, err := c.patchMetadataKey(ctx, projectID, uid, actor, key, nil, &seen); err != nil {
+		if daemonCode(err) == "metadata_guard_failed" {
+			return true, nil
+		}
+		return false, daemonError(err)
 	}
-	return nil
+	return false, nil
+}
+
+// notifyValue is the value of a notify slot: who wrote it and what, with re and teammate when set.
+func notifyValue(from, message, re, teammate string) map[string]any {
+	value := map[string]any{"from": from, "message": message}
+	if re != "" {
+		value["re"] = re
+	}
+	if teammate != "" {
+		value["teammate"] = teammate
+	}
+	return value
 }
 
 // writeAttentionSlot patches one notify slot, a nil value clearing it, with no guard.

@@ -121,8 +121,9 @@ func main() {
 	if failWhen != "" && strings.Contains(prompt, failWhen) || failOnce != "" && strings.Contains(prompt, failOnce) && !strings.Contains(prompt, "# Retry") {
 		exit = 1
 	}
-	if hangWhen != "" && strings.Contains(prompt, hangWhen) && resume == "" {
-		hang = true
+	if resume == "" { // the "-first" and "-when" flags act only on a fresh start, so a resumed attempt finishes
+		hang = hang || hangFirst || hangWhen != "" && strings.Contains(prompt, hangWhen)
+		linger = linger || lingerFirst
 	}
 	if logPath != "" {
 		cwd, _ := os.Getwd()
@@ -163,7 +164,7 @@ func main() {
 	fmt.Println(`{"type":"agent_start"}`)
 	fmt.Println(`{"type":"surprise","unknown":true}`)
 	fmt.Println("not json at all")
-	if hang || (hangFirst && resume == "") {
+	if hang {
 		time.Sleep(time.Hour)
 	}
 	msg := map[string]any{
@@ -186,7 +187,7 @@ func main() {
 	if !noEnd {
 		fmt.Printf(`{"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"p"}]},%s],"isTerminal":true,"yielded":true}`+"\n", message)
 	}
-	if linger || (lingerFirst && resume == "") {
+	if linger {
 		time.Sleep(time.Hour)
 	}
 	if leaveChild != "" {

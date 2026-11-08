@@ -289,16 +289,6 @@ type RunSpend struct {
 	CostUSD *float64
 }
 
-// spendWindow is the spend of one job in one window: the sum of the costs omp reported, and how many runs of the
-// window reported none, which makes the sum a partial total.
-type spendWindow struct {
-	Per        string
-	Limit      float64
-	Spent      float64
-	Since      time.Time
-	Unreported int
-}
-
 // spentSince sums the runs that started at or after from. A run with no reported cost adds nothing and is counted in
 // Unreported.
 func spentSince(runs []RunSpend, from time.Time) (spent float64, unreported int) {
@@ -316,8 +306,8 @@ func spentSince(runs []RunSpend, from time.Time) (spent float64, unreported int)
 }
 
 // spendWindows are the job's spend limits with what each window has spent so far: day first, then week.
-func spendWindows(c cronjob.Conditions, loc *time.Location, now time.Time, runs []RunSpend) []spendWindow {
-	var out []spendWindow
+func spendWindows(c cronjob.Conditions, loc *time.Location, now time.Time, runs []RunSpend) []SpendWindow {
+	var out []SpendWindow
 	for _, l := range []struct {
 		limit float64
 		week  bool
@@ -328,7 +318,7 @@ func spendWindows(c cronjob.Conditions, loc *time.Location, now time.Time, runs 
 		}
 		from := windowStart(now, loc, l.week)
 		spent, unreported := spentSince(runs, from)
-		out = append(out, spendWindow{Per: l.per, Limit: l.limit, Spent: spent, Since: from, Unreported: unreported})
+		out = append(out, SpendWindow{Per: l.per, Limit: l.limit, Spent: spent, Since: from, Unreported: unreported})
 	}
 	return out
 }
@@ -409,9 +399,7 @@ func (s *projectSchedule) jobSpends(now time.Time) []JobSpend {
 			continue
 		}
 		j := JobSpend{UID: uid, Name: st.name}
-		for _, w := range spendWindows(st.conditions, st.zone, now, runs) {
-			j.Windows = append(j.Windows, SpendWindow(w))
-		}
+		j.Windows = spendWindows(st.conditions, st.zone, now, runs)
 		out = append(out, j)
 	}
 	slices.SortFunc(out, func(a, b JobSpend) int { return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.UID, b.UID)) })

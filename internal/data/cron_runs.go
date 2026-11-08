@@ -69,7 +69,7 @@ func (c *Client) ShowRun(ctx context.Context, cmd model.ShowRun) (model.RunShown
 // readOneRunNames reads only the names one Run holds: its Issue (deleted or not), its job and its workflow, one request each.
 // What kata no longer answers for stays unnamed.
 func (c *Client) readOneRunNames(ctx context.Context, projectID int64, wire g.CronRun) (runNames, error) {
-	names := runNames{jobs: map[string]string{}, workflows: map[string]string{}, issues: map[string]model.Run{}}
+	names := newRunNames()
 	run := cronjobclient.Run(wire)
 	if run.JobUID != "" {
 		response, err := c.ShowCronJobWithResponse(ctx, &g.ShowCronJobRequestOptions{PathParams: &g.ShowCronJobPath{ProjectID: projectID, CronUID: run.JobUID}})
@@ -127,9 +127,13 @@ type runNames struct {
 	issues map[string]model.Run
 }
 
+func newRunNames() runNames {
+	return runNames{jobs: map[string]string{}, workflows: map[string]string{}, issues: map[string]model.Run{}}
+}
+
 // readRunNames reads the Project's Issues of every status, jobs and workflows (the archived ones too), one request of each kind.
 func (c *Client) readRunNames(ctx context.Context, projectID int64) (runNames, error) {
-	names := runNames{jobs: map[string]string{}, workflows: map[string]string{}, issues: map[string]model.Run{}}
+	names := newRunNames()
 	archived := true
 	jobs, err := c.ListCronJobsWithResponse(ctx, &g.ListCronJobsRequestOptions{PathParams: &g.ListCronJobsPath{ProjectID: projectID}, Query: &g.ListCronJobsQuery{IncludeDeleted: &archived}})
 	if err != nil {

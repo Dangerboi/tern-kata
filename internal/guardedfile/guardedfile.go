@@ -36,7 +36,7 @@ func Read(path string) (Token, error) {
 // lockWait bounds how long a write waits for another writer's lock before giving up with an error.
 const lockWait = 10 * time.Second
 
-// Write replaces path with next, creating the file and its folder (with dirMode) when missing, unless the file is no longer
+// Write replaces path with next, creating the file (always mode 0600; dirMode is for the folder only) and its folder (with dirMode) when missing, unless the file is no longer
 // the text the token holds: then it writes nothing and returns ErrChanged. The compare and the rename happen under an
 // exclusive lock on path+".lock", so another process writing through this package cannot slip between them; a lock held
 // longer than lockWait is an error. A writer that bypasses this package is not excluded.

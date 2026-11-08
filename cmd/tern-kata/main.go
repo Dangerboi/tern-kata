@@ -15,6 +15,7 @@ import (
 	_ "time/tzdata" // zone database for hosts without one, such as Windows
 
 	"github.com/Dangerboi/tern-kata/internal/data"
+	"github.com/Dangerboi/tern-kata/internal/docbanksetup"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -141,7 +142,7 @@ func run() error {
 	size := paneSize(term.Caps().Cols)
 	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, HostID: data.ThisHostID(), PaneBlock: os.Getenv("TERN_PANE"), QuitAtOnce: quitAtOnce}}
 	results := make(chan model.Msg)
-	gateway := data.NewGateway(data.LocateWithKata).WithHost(host).WithDocbankSupervision(supervisionEnv)
+	gateway := data.NewGateway(data.LocateWithKata).WithHost(host).WithDocbankSupervision(func() data.DocbankSupervision { return docbanksetup.NewSupervisionEnv(io.Discard) })
 	defer gateway.Close()
 	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef, Nonce: rand.Text()})
 	loopErr := func() error {

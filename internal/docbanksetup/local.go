@@ -10,7 +10,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -107,6 +106,9 @@ func (e Env) setupLocal(ctx context.Context, l Local) error {
 
 	keyPath := filepath.Join(e.KataHome, KeyFileName)
 	diskKey, err := readKeyFile(keyPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		diskKey, err = "", nil // no key stored yet
+	}
 	if err != nil {
 		return err
 	}
@@ -197,12 +199,10 @@ func (e Env) setupLocal(ctx context.Context, l Local) error {
 	return e.SetupRemote(ctx, remote)
 }
 
-// readKeyFile is the key the file at path holds, empty when the file is missing or blank.
+// readKeyFile is the key the file at path holds, trimmed, empty when the file is blank. A missing file is an error wrapping
+// fs.ErrNotExist: setup's local path treats it as no key yet, a remote one as a failure.
 func readKeyFile(path string) (string, error) {
 	raw, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
-	}
 	if err != nil {
 		return "", fmt.Errorf("read the key file: %w", err)
 	}
@@ -241,7 +241,21 @@ func (e Env) restartDocbank(ctx context.Context, addr string) error {
 
 // statusNames reports whether Docbank's status output names addr as a whole address (8080 is not 80801).
 func statusNames(status, addr string) bool {
-	return regexp.MustCompile(regexp.QuoteMeta(addr) + `\b`).MatchString(status)
+	for rest := status; ; {
+		i := strings.Index(rest, addr)
+		if i < 0 {
+			return false
+		}
+		rest = rest[i+len(addr):]
+		if rest == "" || !isWordByte(rest[0]) {
+			return true
+		}
+	}
+}
+
+// isWordByte is whether b is a letter, digit or underscore.
+func isWordByte(b byte) bool {
+	return b == '_' || '0' <= b && b <= '9' || 'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z'
 }
 
 // newKey is 32 random bytes from the operating system's secure source, as hex.

@@ -83,10 +83,6 @@ func Step(s State, in any, now time.Time) Output {
 		out.Ops = append(out.Ops, tern.OpReveal(reveal, "nearest"))
 	}
 	out.route(m, cmds)
-	if _, relayed := msg.(model.AgentStatesMsg); relayed {
-		// `tern-kata agents` runs without a Pane, so the Pane that heard the relay leaves it where the command line reads it.
-		out.Cmds = append(out.Cmds, model.SaveAgentStates{States: m.Agents.States})
-	}
 	return out
 }
 

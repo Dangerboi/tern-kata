@@ -55,29 +55,37 @@ func (c *Client) currentRecurrence(ctx context.Context, projectID int64, uid str
 	return translateLiveRecurrence(shown.JSON200.Recurrence), nil
 }
 
+// guardedRecurrence is the skeleton of a Guarded write to a recurrence: it reads the recurrence as it stands, and when its terms
+// differ from what the card opened with writes nothing and returns it; otherwise it calls write with the revision it read. A
+// stale revision is retried by recurrenceWrite.
+func (c *Client) guardedRecurrence(ctx context.Context, projectID int64, uid string, opened model.RecurrenceTerms, exhausted string, write func(revision string) error) (*model.Recurrence, error) {
+	var changed *model.Recurrence
+	err := recurrenceWrite(exhausted, func() error {
+		current, err := c.currentRecurrence(ctx, projectID, uid)
+		if err != nil {
+			return err
+		}
+		if current.RecurrenceTerms != opened {
+			changed = &current
+			return nil
+		}
+		return write(etag(current.Revision))
+	})
+	return changed, err
+}
+
 // ChangeRecurrence is a Guarded write: it sends the terms, never the template, at the revision the recurrence has now, so a
 // revision that moved only because an Occurrence was created does not matter. When the recurrence's terms differ from what the
 // card opened with, nothing is written and the current recurrence comes back.
 func (c *Client) ChangeRecurrence(ctx context.Context, cmd model.ChangeRecurrenceCmd) (*model.Recurrence, error) {
-	var changed *model.Recurrence
-	err := recurrenceWrite(changeExhausted, func() error {
-		current, err := c.currentRecurrence(ctx, cmd.ProjectID, cmd.RecurrenceUID)
-		if err != nil {
-			return err
-		}
-		if current.RecurrenceTerms != cmd.Opened {
-			changed = &current
-			return nil
-		}
-		tag := etag(current.Revision)
-		_, err = c.PatchRecurrenceWithResponse(ctx, &g.PatchRecurrenceRequestOptions{
+	return c.guardedRecurrence(ctx, cmd.ProjectID, cmd.RecurrenceUID, cmd.Opened, changeExhausted, func(tag string) error {
+		_, err := c.PatchRecurrenceWithResponse(ctx, &g.PatchRecurrenceRequestOptions{
 			PathParams: &g.PatchRecurrencePath{ProjectID: cmd.ProjectID, RecurrenceUID: cmd.RecurrenceUID},
 			Header:     &g.PatchRecurrenceHeaders{IfMatch: &tag},
 			Body:       &g.PatchRecurrenceBody{Actor: &cmd.Actor, Rrule: &cmd.Rule, Dtstart: &cmd.Start, Timezone: &cmd.TimeZone},
 		})
 		return err
 	})
-	return changed, err
 }
 
 // StopRecurrence is a Guarded write: it deletes the recurrence at the revision it has now, so a revision that moved only because
@@ -85,27 +93,17 @@ func (c *Client) ChangeRecurrence(ctx context.Context, cmd model.ChangeRecurrenc
 // written and the current recurrence comes back. One already stopped is an error and nothing is written. A delete whose outcome
 // is unknown, such as a timeout, says the stop may have happened.
 func (c *Client) StopRecurrence(ctx context.Context, cmd model.StopRecurrenceCmd) (*model.Recurrence, error) {
-	var changed *model.Recurrence
-	err := recurrenceWrite(stopExhausted, func() error {
-		current, err := c.currentRecurrence(ctx, cmd.ProjectID, cmd.RecurrenceUID)
-		if err != nil {
-			return err
-		}
-		if current.RecurrenceTerms != cmd.Opened {
-			changed = &current
-			return nil
-		}
-		_, err = c.DeleteRecurrenceWithResponse(ctx, &g.DeleteRecurrenceRequestOptions{
+	return c.guardedRecurrence(ctx, cmd.ProjectID, cmd.RecurrenceUID, cmd.Opened, stopExhausted, func(tag string) error {
+		_, err := c.DeleteRecurrenceWithResponse(ctx, &g.DeleteRecurrenceRequestOptions{
 			PathParams: &g.DeleteRecurrencePath{ProjectID: cmd.ProjectID, RecurrenceUID: cmd.RecurrenceUID},
 			Query:      &g.DeleteRecurrenceQuery{Actor: &cmd.Actor},
-			Header:     &g.DeleteRecurrenceHeaders{IfMatch: etag(current.Revision)},
+			Header:     &g.DeleteRecurrenceHeaders{IfMatch: tag},
 		})
 		if ambiguousWrite(err) {
 			return errStopUnknown
 		}
 		return err
 	})
-	return changed, err
 }
 
 // ReadRecurTarget reads the Issue a ref names, refused outside the workspace's Binding, with its Recurrence as it stands now.

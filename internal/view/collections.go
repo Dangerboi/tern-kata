@@ -16,7 +16,7 @@ func Collections(m model.Model) tern.Element {
 	}
 	selected := ""
 	if len(entries) > 0 {
-		selected = CollectionItemID(entries[min(m.CollectionCursor, len(entries)-1)].Key())
+		selected = itemID(CollectionsID, entries[min(m.CollectionCursor, len(entries)-1)].Key())
 	}
 	return ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "collections"}, Selected: selected, Empty: ui.T("Loading Menu…"), Children: items}
 }

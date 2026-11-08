@@ -623,7 +623,6 @@ end)
 local KV_LAST_CHECK = "release_check.last"
 local KV_TOASTED = "release_check.toasted"
 local KV_OFF = "release_check.off"
-local DEFAULT_RELEASE_BASE = "https://github.com/Dangerboi/tern-kata/releases/latest/download"
 
 local function envOff(): boolean
     local value = tern.getenv("TERN_KATA_NO_UPDATE_CHECK")
@@ -663,8 +662,7 @@ end
 
 -- Where `version.txt` is: the user's TERN_KATA_BASE_URL, else the latest GitHub release.
 local function versionTextUrl(): string
-    local configured = tern.getenv("TERN_KATA_BASE_URL")
-    local base: string = (configured ~= nil and configured ~= "") and configured or DEFAULT_RELEASE_BASE
+    local base = releases.releaseBase(tern.getenv("TERN_KATA_BASE_URL"), nil)
     return (base:gsub("/+$", "")) .. "/version.txt"
 end
 

@@ -16,9 +16,6 @@ import (
 // WorkflowListID is the Workflows Page's list of workflows; a row is the workflow's uid under it.
 const WorkflowListID = "main.columns.list.page.names.rows"
 
-// WorkflowID is the id of the Workflows Page's row for uid.
-func WorkflowID(uid string) string { return itemID(WorkflowListID, uid) }
-
 // Tones the Workflows Page gives what it names: a workflow's steps by kind, its retries and its waits.
 const (
 	commandTone  = ui.ToneInfo
@@ -87,10 +84,7 @@ func workflowList(m model.Model, paired bool) tern.Element {
 	if m.PageSearching() {
 		empty = searchEmpty(m)
 	}
-	selected := ""
-	if m.Workflows.Selected != "" {
-		selected = WorkflowID(m.Workflows.Selected)
-	}
+	selected := selectedItem(WorkflowListID, m.Workflows.Selected)
 	list := listAndEmpty(ui.List{CommonWithoutMax: scrollerCommon("rows"), Max: fillMax, Selected: selected, Empty: ui.T("Loading workflows…"), Children: items}, m.Workflows.Loading, empty)
 	common := ui.Common{Key: "names", Grow: 1, Basis: ui.BasisFrac(0.4), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
 	children := list

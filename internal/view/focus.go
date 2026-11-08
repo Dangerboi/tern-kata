@@ -1,6 +1,7 @@
 package view
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -12,16 +13,11 @@ var listNodes = map[model.ListNode]struct {
 	id  string
 	row func(model.Model) string
 }{
-	model.ListNodeJobs: {JobListID, func(m model.Model) string {
-		if m.Jobs.Selected == "" {
-			return ""
-		}
-		return JobID(m.Jobs.Selected)
-	}},
+	model.ListNodeJobs:      {JobListID, func(m model.Model) string { return selectedItem(JobListID, m.Jobs.Selected) }},
 	model.ListNodeWorkflows: {WorkflowListID, func(m model.Model) string { return "" }},
 	model.ListNodeCredentials: {CredentialListID, func(m model.Model) string {
 		if c := m.SelectedCredential(); c != nil {
-			return CredentialID(c.ID)
+			return itemID(CredentialListID, strconv.FormatInt(c.ID, 10))
 		}
 		return ""
 	}},
@@ -33,7 +29,7 @@ var listNodes = map[model.ListNode]struct {
 			return ""
 		}
 		if s := m.SelectedSpoke(); s != nil {
-			return FederationSpokeID(s.ProjectName)
+			return itemID(FederationListID, s.ProjectName)
 		}
 		return ""
 	}},
@@ -45,22 +41,12 @@ var listNodes = map[model.ListNode]struct {
 	}},
 	model.ListNodeDaemons: {DaemonListID, func(m model.Model) string {
 		if e := m.SelectedDaemon(); e != nil {
-			return DaemonID(e.Name)
+			return itemID(DaemonListID, e.Name)
 		}
 		return ""
 	}},
-	model.ListNodeRuns: {RunListID, func(m model.Model) string {
-		if m.Runs.Selected == "" {
-			return ""
-		}
-		return RunID(m.Runs.Selected)
-	}},
-	model.ListNodeAttention: {AttentionListID, func(m model.Model) string {
-		if m.Attention.Selected == "" {
-			return ""
-		}
-		return AttentionID(m.Attention.Selected)
-	}},
+	model.ListNodeRuns:      {RunListID, func(m model.Model) string { return selectedItem(RunListID, m.Runs.Selected) }},
+	model.ListNodeAttention: {AttentionListID, func(m model.Model) string { return selectedItem(AttentionListID, m.Attention.Selected) }},
 }
 
 // TextFocusID is the node that should hold Tern's caret, "" for none.

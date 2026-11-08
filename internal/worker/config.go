@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -257,20 +258,29 @@ func LoadConfig(path string) (Config, error) {
 	if errors.Is(err, fs.ErrNotExist) {
 		return Config{}, fmt.Errorf("no worker config at %s; see the README's worker setup", path)
 	}
+	if err := c.checkDecoded(meta, err, path); err != nil {
+		return Config{}, err
+	}
+	return c, nil
+}
+
+// checkDecoded is what both loaders do after decoding: the decode error, keys the schema does not know, and validation,
+// each named with the given file name.
+func (c *Config) checkDecoded(meta toml.MetaData, err error, name string) error {
 	if err != nil {
-		return Config{}, fmt.Errorf("%s: %w", path, err)
+		return fmt.Errorf("%s: %w", name, err)
 	}
 	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
 		keys := make([]string, len(undecoded))
 		for i, k := range undecoded {
 			keys[i] = k.String()
 		}
-		return Config{}, fmt.Errorf("%s: unknown key %s", path, strings.Join(keys, ", "))
+		return fmt.Errorf("%s: unknown key %s", name, strings.Join(keys, ", "))
 	}
 	if err := c.validate(); err != nil {
-		return Config{}, fmt.Errorf("%s: %w", path, err)
+		return fmt.Errorf("%s: %w", name, err)
 	}
-	return c, nil
+	return nil
 }
 
 // Config fields a FieldError names.
@@ -447,6 +457,43 @@ func (p ProjectConfig) allowsProfile(name string) bool {
 // allowsSecret is true only for a secret the Project lists; an empty list allows none.
 func (p ProjectConfig) allowsSecret(name string) bool {
 	return slices.Contains(p.Secrets, name)
+}
+
+// readSecret resolves one secret by its worker.toml name.
+func (c Config) readSecret(name string) (string, error) {
+	src, ok := c.Secrets[name]
+	if !ok {
+		return "", fmt.Errorf("secret %q is not defined in worker.toml", name)
+	}
+	if src.Env != "" {
+		value, ok := os.LookupEnv(src.Env)
+		if !ok {
+			return "", fmt.Errorf("secret %q: environment variable %s is not set", name, src.Env)
+		}
+		return value, nil
+	}
+	path, err := expandHome(src.File)
+	if err != nil {
+		return "", fmt.Errorf("secret %q: %w", name, err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", fmt.Errorf("secret %q: %w", name, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("secret %q: %s is not a regular file (links are refused)", name, path)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+		return "", fmt.Errorf("secret %q: %s must be private (mode 0600), it is %o", name, path, info.Mode().Perm())
+	}
+	if foreignOwned(info) {
+		return "", fmt.Errorf("secret %q: %s must be owned by the user the worker runs as", name, path)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("secret %q: %w", name, err)
+	}
+	return strings.TrimRight(string(raw), "\r\n"), nil
 }
 
 // command is the profile's program, DefaultCommand when unset.

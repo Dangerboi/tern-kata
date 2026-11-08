@@ -35,7 +35,7 @@ const (
 	PhaseSettled Phase = "settled"
 )
 
-// Hold reasons the tracer can reach (ADR-0005). Later tickets add the rest.
+// Hold reasons a Run can end with (ADR-0005).
 const (
 	HoldAdmissionRejected = "admission_rejected"
 	HoldCreateRejected    = "create_rejected"

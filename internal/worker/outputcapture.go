@@ -128,7 +128,8 @@ func (s *lineSink) skippedLine() {
 	s.line([]byte(agentEndMarker))
 }
 
-// endsRetry is whether the last isTerminal in tail is false.
+// endsRetry is whether the last isTerminal in tail is false, the case finishesTurn rejects, read from the raw bytes of
+// a line the parser never saw.
 func endsRetry(tail []byte) bool {
 	i := bytes.LastIndex(tail, []byte(`"isTerminal"`))
 	if i < 0 {

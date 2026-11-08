@@ -110,13 +110,21 @@ func newFederationEnrollDraft(actor string) FederationEnrollDraft {
 	return FederationEnrollDraft{RequestedActor: actor, APICapabilities: "claim,pull,push", DisplayCapabilities: "pull,push,lease", PushEnabled: true, AdoptExisting: true}
 }
 
+// sameNameHubProjectWords says what happens to the hub Project of the local Project's name: used when it exists, else created.
+func sameNameHubProjectWords(name string, exists bool) string {
+	if exists {
+		return fmt.Sprintf("use existing hub project %q; enable federation if needed", oneLine(name))
+	}
+	return fmt.Sprintf("create hub project %q and enable federation", oneLine(name))
+}
+
 // HubProjectBehavior is what the preview says happens to the hub Project.
 func (d FederationEnrollDraft) HubProjectBehavior() string {
 	if d.Operation == FederationAdoptSameName {
 		if d.HubProjectID != 0 {
-			return fmt.Sprintf("use existing hub project %q; enable federation if needed", oneLine(d.HubProjectName))
+			return sameNameHubProjectWords(d.HubProjectName, true)
 		}
-		return fmt.Sprintf("create hub project %q and enable federation", oneLine(d.SpokeProjectName))
+		return sameNameHubProjectWords(d.SpokeProjectName, false)
 	}
 	if d.HubProjectName != "" {
 		return oneLine(d.HubProjectName)
@@ -132,19 +140,19 @@ func (d FederationEnrollDraft) PreviewLines() []string {
 	}
 	lines := []string{
 		"Operation: " + d.Operation.Label(),
-		"local spoke project: " + federationDash(oneLine(d.SpokeProjectName)),
+		"local spoke project: " + dashLine(d.SpokeProjectName),
 		"hub daemon: " + oneLine(d.Hub.Name) + " " + oneLine(d.Hub.Endpoint),
 		"hub auth: " + oneLine(auth),
 		"hub project: " + d.HubProjectBehavior(),
-		"requested actor: " + federationDash(oneLine(d.RequestedActor)),
+		"requested actor: " + dashLine(d.RequestedActor),
 		"capabilities: " + oneLine(d.DisplayCapabilities),
 		"push enabled: " + strconv.FormatBool(d.PushEnabled),
 		"allow_insecure: " + strconv.FormatBool(d.AllowInsecure),
-		"spoke name: " + federationDash(oneLine(d.SpokeName)),
+		"spoke name: " + dashLine(d.SpokeName),
 	}
 	if d.AdoptExisting {
 		lines = append(lines, "",
-			fmt.Sprintf("this federates local project %q INTO hub project %q", federationDash(oneLine(d.SpokeProjectName)), federationDash(oneLine(d.HubProjectName))),
+			fmt.Sprintf("this federates local project %q INTO hub project %q", dashLine(d.SpokeProjectName), dashLine(d.HubProjectName)),
 			"adoption warning: pre-adoption event history is replaced by snapshot events for federation")
 	}
 	if d.Operation == FederationRejoin {
@@ -178,12 +186,12 @@ func (o FederationEnrollOutcome) ResultLines() []string {
 	}
 	return []string{
 		"status: " + status,
-		"actor: " + federationDash(oneLine(o.Actor)),
-		"spoke name: " + federationDash(oneLine(o.Draft.SpokeName)),
+		"actor: " + dashLine(o.Actor),
+		"spoke name: " + dashLine(o.Draft.SpokeName),
 		"snapshot count: " + strconv.FormatInt(o.SnapshotCount, 10),
 		"hub URL: " + oneLine(o.HubURL),
 		"hub project ID: " + strconv.FormatInt(o.HubProjectID, 10),
-		"hub project UID: " + federationDash(oneLine(o.HubProjectUID)),
+		"hub project UID: " + dashLine(o.HubProjectUID),
 	}
 }
 
@@ -390,7 +398,7 @@ type FederationLocalChoice struct {
 // Label is the row's text.
 func (c FederationLocalChoice) Label() string {
 	if c.CreateReplica {
-		return "create new local replica from hub project"
+		return FederationCreateReplica.Label()
 	}
 	return oneLine(c.Project.Name)
 }
@@ -440,11 +448,8 @@ func (m Model) FederationHubProjectChoices() []FederationHubProjectChoice {
 		}
 		return rows
 	}
-	label := fmt.Sprintf("create hub project %q and enable federation", oneLine(f.Draft.SpokeProjectName))
-	if _, ok := hubProjectByName(f.HubProjects, f.Draft.SpokeProjectName); ok {
-		label = fmt.Sprintf("use existing hub project %q; enable federation if needed", oneLine(f.Draft.SpokeProjectName))
-	}
-	rows := []FederationHubProjectChoice{{Sentinel: true, Label: label}}
+	_, exists := hubProjectByName(f.HubProjects, f.Draft.SpokeProjectName)
+	rows := []FederationHubProjectChoice{{Sentinel: true, Label: sameNameHubProjectWords(f.Draft.SpokeProjectName, exists)}}
 	for _, p := range f.HubProjects {
 		if p.Name != f.Draft.SpokeProjectName {
 			rows = append(rows, FederationHubProjectChoice{Project: p, Label: oneLine(p.Name)})
@@ -529,7 +534,7 @@ func (m Model) FederationSelectedProject() string {
 	case d.CreateReplica && d.SpokeProjectName != "":
 		return oneLine(d.SpokeProjectName) + " (new local replica)"
 	case d.CreateReplica:
-		return "create new local replica from hub project"
+		return FederationCreateReplica.Label()
 	case d.SpokeProjectName != "":
 		return oneLine(d.SpokeProjectName)
 	case m.Bound && m.Project.Name != "":
@@ -688,7 +693,7 @@ func chooseFederationHub(m Model) (Model, []Cmd) {
 		f.EnrollErr = errors.New("local hub targets cannot be used for federation enrollment; select a hub daemon with a spoke-reachable URL")
 		return m, nil
 	}
-	f.Draft.Hub, f.Draft.HubAuth, f.Draft.AllowInsecure = hub, "", hub.AllowInsecure
+	f.Draft.Hub, f.Draft.HubAuth = hub, ""
 	f.Draft.RequestedActor = newFederationEnrollDraft(m.Actor).RequestedActor
 	f.Screen = FederationPickHubProject
 	f.HubProjects, f.HubProjectsLoading, f.HubProjectCursor = nil, true, 0

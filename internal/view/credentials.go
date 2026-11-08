@@ -11,9 +11,6 @@ import (
 // CredentialListID is the Credentials Page's list of token cards; a card is the token's id under it.
 const CredentialListID = "main.columns.list.credentials"
 
-// CredentialID is the id of the card of the token with id.
-func CredentialID(id int64) string { return itemID(CredentialListID, strconv.FormatInt(id, 10)) }
-
 // credentialTone is the tone of a token's state: live green, expired amber, revoked muted.
 func credentialTone(state string) ui.Tone {
 	switch state {

@@ -135,7 +135,7 @@ func TestViewsUnreadableFileIsLeftAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tok := ViewsToken{read: raw}
+	tok := raw
 	for name, write := range map[string]error{
 		"add":     s.Add(tok, model.SavedView{Name: "A", Base: model.Collection{View: "today"}}),
 		"replace": s.Replace(tok, "x", model.SavedView{Name: "A", Base: model.Collection{View: "today"}}),

@@ -22,3 +22,11 @@ func TestRelayedAgentStatesReplaceTheLatestList(t *testing.T) {
 		t.Fatalf("an empty relay is no agents, not no relay: %+v", m.Agents)
 	}
 }
+
+func TestEveryRelayEndsWithTheSaveOfTheMergedStates(t *testing.T) {
+	states := []model.AgentState{{Block: "7", State: "working", LastMessage: "a"}}
+	_, cmds := model.Update(model.Model{}, model.AgentStatesMsg{States: states})
+	if want := (model.SaveAgentStates{States: states}); len(cmds) == 0 || !reflect.DeepEqual(cmds[len(cmds)-1], want) {
+		t.Fatalf("cmds %#v, want a last %#v", cmds, want)
+	}
+}

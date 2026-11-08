@@ -38,13 +38,18 @@ func (g *Gateway) ask(ctx context.Context, req worker.Request) (worker.Response,
 	return resp, nil
 }
 
-func (g *Gateway) loadWorker(ctx context.Context, cmd model.LoadWorker) model.WorkerLoaded {
-	if cmd.After > 0 {
+// pause waits d, or until ctx ends; a d of zero does not wait.
+func pause(ctx context.Context, d time.Duration) {
+	if d > 0 {
 		select {
-		case <-time.After(cmd.After):
+		case <-time.After(d):
 		case <-ctx.Done():
 		}
 	}
+}
+
+func (g *Gateway) loadWorker(ctx context.Context, cmd model.LoadWorker) model.WorkerLoaded {
+	pause(ctx, cmd.After)
 	resp, err := g.ask(ctx, worker.Request{Op: "status"})
 	switch {
 	case errors.Is(err, worker.ErrNoWorker):

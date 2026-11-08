@@ -152,8 +152,8 @@ func (d FederationLeaveDraft) PreviewLines() (lines []string, warning int) {
 		teardown = "archive the local replica"
 	}
 	lines = []string{
-		"local spoke project: " + federationDash(oneLine(d.ProjectName)),
-		"hub: " + federationHub(d.HubURL),
+		"local spoke project: " + dashLine(d.ProjectName),
+		"hub: " + FederationSpoke{HubURL: d.HubURL}.HubHost(),
 		"hub project ID: " + hubProject,
 		"local project: " + local,
 		"local-only: " + strconv.FormatBool(d.LocalOnly),
@@ -177,7 +177,7 @@ func (o FederationLeaveOutcome) ResultLines() (lines []string, warning int) {
 	} else if o.ProviderReleased {
 		revoke = "credential provider confirmed release"
 	}
-	lines = []string{"status: " + status, "local spoke project: " + federationDash(oneLine(o.Draft.ProjectName)), "hub: " + federationHub(o.Draft.HubURL), revoke}
+	lines = []string{"status: " + status, "local spoke project: " + dashLine(o.Draft.ProjectName), "hub: " + FederationSpoke{HubURL: o.Draft.HubURL}.HubHost(), revoke}
 	warning = -1
 	if len(o.GlobalEnrollmentIDs) > 0 {
 		ids := make([]string, len(o.GlobalEnrollmentIDs))
@@ -189,9 +189,6 @@ func (o FederationLeaveOutcome) ResultLines() (lines []string, warning int) {
 	}
 	return lines, warning
 }
-
-// federationHub is a hub as the leave screens show it: the host of its URL, else the URL, "-" when there is none.
-func federationHub(raw string) string { return FederationSpoke{HubURL: raw}.HubHost() }
 
 // federationLeaveRows are the leave preview's keys and the keys of the result screens, which a leave and an enrollment share.
 var federationLeaveRows = []actionEntry{

@@ -211,7 +211,7 @@ func (o DoctorOptions) checkProject(ctx context.Context, cfg Config, pc ProjectC
 	now := pin{ProjectUID: p.UID, InstanceUID: instance.UID, Name: p.Name, Actor: actor, AuthActor: instance.Actor, Executor: cfg.Executor}
 	if prev, ok := readPin(filepath.Join(dir, "pin.json")); ok {
 		if diff := pinDifferences(prev, now); len(diff) > 0 {
-			add("FAIL", subject, "its pinned route differs: "+joinWords(diff), "There is no repin command: restore the old values, or use a new state folder and executor.")
+			add("FAIL", subject, "its pinned route differs: "+strings.Join(diff, "; "), "There is no repin command: restore the old values, or use a new state folder and executor.")
 			return
 		}
 	}

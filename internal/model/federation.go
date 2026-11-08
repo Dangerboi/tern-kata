@@ -188,9 +188,6 @@ func askFederation(m Model) (Model, []Cmd) {
 	return m, []Cmd{LoadFederation{Workspace: m.Workspace, Request: f.reads.Ask()}}
 }
 
-// refreshFederation is r on either screen.
-func refreshFederation(m Model) (Model, []Cmd) { return askFederation(m) }
-
 // openFederationDetail is Enter on a spoke.
 func openFederationDetail(m Model) (Model, []Cmd) {
 	if m.Federation.Screen == FederationList && m.SelectedSpoke() != nil {
@@ -264,7 +261,7 @@ func (m Model) SelectedSpoke() *FederationSpoke {
 
 // Header is the line naming the active daemon, as kata tui words it.
 func (f FederationState) Header() string {
-	return "Federation for active daemon: " + oneLine(f.Daemon) + " " + oneLine(f.Endpoint) + " instance " + federationDash(oneLine(f.InstanceUID)) +
+	return "Federation for active daemon: " + oneLine(f.Daemon) + " " + oneLine(f.Endpoint) + " instance " + dashLine(f.InstanceUID) +
 		" auth " + oneLine(f.Auth)
 }
 
@@ -291,6 +288,9 @@ func (f FederationState) Notice() (FederationNotice, bool) {
 	return FederationNotice{}, false
 }
 
+// dashLine is s on one line, "-" when nothing is left.
+func dashLine(s string) string { return federationDash(oneLine(s)) }
+
 func federationDash(s string) string {
 	if s == "" {
 		return "-"
@@ -310,7 +310,7 @@ func (s FederationSpoke) HubHost() string {
 	if u, err := url.Parse(s.HubURL); err == nil && u.Host != "" {
 		return oneLine(u.Host)
 	}
-	return federationDash(oneLine(s.HubURL))
+	return dashLine(s.HubURL)
 }
 
 // Push is "push" when the Project pushes to the hub, else "off".
@@ -356,7 +356,7 @@ func (s FederationSpoke) Badges() string {
 // Lines are a spoke's two lines in the list: the Project and its hub and actor, then push, pending, sync and badges.
 func (s FederationSpoke) Lines(now time.Time) [2]string {
 	return [2]string{
-		oneLine(s.ProjectName) + s.nameWord() + "  Hub " + s.HubHost() + "  Actor " + federationDash(oneLine(s.BoundActor)),
+		oneLine(s.ProjectName) + s.nameWord() + "  Hub " + s.HubHost() + "  Actor " + dashLine(s.BoundActor),
 		"Push " + s.Push() + "  Pending " + strconv.FormatInt(s.PendingPushCount, 10) + "  Sync " + s.Sync(now) + "  Badges " + s.Badges(),
 	}
 }
@@ -371,8 +371,8 @@ func (s FederationSpoke) nameWord() string {
 
 // Footer is the line under the list about the selected spoke: its hub URL and Project id, actor and credential.
 func (s FederationSpoke) Footer() string {
-	return "hub " + oneLine(s.HubURL) + "/project " + strconv.FormatInt(s.HubProjectID, 10) + " · actor " + federationDash(oneLine(s.BoundActor)) +
-		" · credential " + federationDash(oneLine(s.CredentialStatus))
+	return "hub " + oneLine(s.HubURL) + "/project " + strconv.FormatInt(s.HubProjectID, 10) + " · actor " + dashLine(s.BoundActor) +
+		" · credential " + dashLine(s.CredentialStatus)
 }
 
 // DetailLines are a spoke's detail as kata tui words it, one line each; "" is a blank line.
@@ -382,11 +382,11 @@ func (s FederationSpoke) DetailLines() []string {
 		"spoke name: " + s.SpokeLabel(),
 		"hub URL: " + oneLine(s.HubURL),
 		"hub project ID: " + strconv.FormatInt(s.HubProjectID, 10),
-		"hub project UID: " + federationDash(oneLine(s.HubProjectUID)),
-		"actor: " + federationDash(oneLine(s.BoundActor)),
+		"hub project UID: " + dashLine(s.HubProjectUID),
+		"actor: " + dashLine(s.BoundActor),
 		"capabilities: " + oneLine(s.Capabilities),
 		"push enabled: " + strconv.FormatBool(s.PushEnabled),
-		"credential: " + federationDash(oneLine(s.CredentialStatus)),
+		"credential: " + dashLine(s.CredentialStatus),
 		"allow_insecure: " + strconv.FormatBool(s.AllowInsecure),
 		"",
 		"pull cursor: " + strconv.FormatInt(s.PullCursorEventID, 10),
@@ -409,7 +409,7 @@ func (s FederationSpoke) DetailLines() []string {
 		}
 	}
 	return append(lines,
-		"reset blocker: "+federationDash(oneLine(s.ResetBlocker)),
+		"reset blocker: "+dashLine(s.ResetBlocker),
 		fmt.Sprintf("claim violations: %d unresolved, %d recent", s.UnresolvedViolationCount, s.RecentViolationCount),
 		"last pull success: "+federationTime(s.LastPullSuccessAt),
 		"last push success: "+federationTime(s.LastPushSuccessAt),
@@ -422,7 +422,7 @@ func (s FederationSpoke) DetailLines() []string {
 var federationRows = []actionEntry{
 	{action: OpenFederationDetail, modes: []Mode{ModeFederation}, keys: keys("enter", "↵"), help: "detail", footer: []Mode{ModeFederation}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 4, "show the spoke's detail"}}, handle: openFederationDetail},
 	{action: StartFederationLeave, modes: []Mode{ModeFederation}, keys: keys("x", "x"), help: "leave", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 6, "leave the selected spoke's federation (preview first)"}}, handle: startFederationLeave},
-	{action: RefreshFederation, modes: []Mode{ModeFederation}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 5, "read the federation status again"}}, handle: refreshFederation},
+	{action: RefreshFederation, modes: []Mode{ModeFederation}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 5, "read the federation status again"}}, handle: askFederation},
 	{action: NameFederationSpoke, modes: []Mode{ModeFederation}, keys: keys("shift+n", "N"), help: "name spoke", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 32, "name the selected spoke, or clear its name with an empty one (kept by the hub)"}}, handle: openFederationNameForSpoke},
 	{action: StartFederationEnroll, modes: []Mode{ModeFederation}, keys: keys("n", "n"), help: "enroll", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 30, "enroll a Project in a hub's federation (choose, preview, confirm)"}}, handle: startFederationEnroll},
 	{action: StartFederationBrowse, modes: []Mode{ModeFederation}, keys: keys("b", "b"), help: "browse hubs", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 31, "browse the Projects of the catalog's hubs (read only)"}}, handle: startFederationBrowse},

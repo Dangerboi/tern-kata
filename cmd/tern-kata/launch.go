@@ -88,8 +88,6 @@ type LaunchPlan struct {
 	AgentRoute data.AgentRoute
 	// Docbank is `docbank setup`'s own flags. The route flags it takes record into AgentRoute.
 	Docbank DocbankSetup
-	// docbankErr is the first refusal a `docbank setup` flag setter met (a setter cannot return one); planDocbank reports it.
-	docbankErr error
 	// fallbackAuthor is the --as actor exported to `kata tui`; empty leaves the environment untouched.
 	fallbackAuthor string
 }
@@ -136,6 +134,66 @@ func PlanLaunch(args []string, lookup func(string) (string, bool), version strin
 	return plan, nil
 }
 
+// flagReader is the flag reader scanOperands calls for subcommand sub: subcommandFlag, with an unknown flag refused.
+func flagReader(sub string, args []string, plan *LaunchPlan) func(i *int) error {
+	return func(i *int) error {
+		matched, err := subcommandFlag(sub, args, i, plan)
+		if err == nil && !matched {
+			err = fmt.Errorf("%s: unknown flag %s", sub, args[*i])
+		}
+		return err
+	}
+}
+
+// subcommandFlag reads the flag at args[*i] that subcommand sub takes, as the planners and scanFlags both read it: it records
+// into plan and moves *i past a separate value; matched is false for any other argument. --as is the flag of every subcommand
+// that writes as an actor and has no flag table of its own.
+func subcommandFlag(sub string, args []string, i *int, plan *LaunchPlan) (matched bool, err error) {
+	switch arg := args[*i]; {
+	case sub == "update" && arg == "--force":
+		plan.Force = true
+		return true, nil
+	case sub == "update" && arg == "--pause":
+		plan.Pause = true
+		return true, nil
+	case sub == "update" && arg == "--preflight":
+		plan.Preflight = true
+		return true, nil
+	case sub == "worker" && arg == "--takeover":
+		plan.Takeover = true
+		return true, nil
+	case sub == "worker" && arg == "--now":
+		plan.Now = true
+		return true, nil
+	case (sub == "worker" || sub == "views") && arg == "--json":
+		plan.JSON = true
+		return true, nil
+	case sub == "views" && arg == "--replace":
+		plan.Replace = true
+		return true, nil
+	}
+	switch sub {
+	case "worker":
+		matched, err = parseInitFlag(args, i, plan)
+	case "recur":
+		matched, err = parseRecurFlag(args, i, plan)
+	case "views":
+		matched, err = parseViewFlag(args, i, plan)
+	case "agents":
+		matched, err = parseTableFlag(agentsFlags, "agents", agentsUsage, args, i, plan)
+	case "docbank":
+		matched, err = parseTableFlag(docbankFlags, "docbank", docbankUsage, args, i, plan)
+	}
+	if matched || err != nil || sub == "completion" || sub == "update" || sub == "docbank" || sub == "team" {
+		return matched, err // these write as no actor, or read their own --as
+	}
+	actor, matched, err := parseAs(args, i)
+	if matched {
+		plan.fallbackAuthor = actor
+	}
+	return matched, err
+}
+
 // scanFlags reports whether flag appears in flags at a flag position, not as the value of a flag. Inside a subcommand it runs the
 // subcommand's own flag parsers to find those values (so `worker init --command -h` is judged by --command), and stops at the
 // first flag the subcommand does not know (--issue there), so the unknown-flag error wins over a later -h. At the top level it
@@ -168,47 +226,9 @@ func scanFlags(flags []string, flag string) bool {
 		if i == 0 || !strings.HasPrefix(arg, "--") || arg == "--help" || arg == "--version" {
 			continue
 		}
-		if subcommand == "update" && (arg == "--force" || arg == "--pause" || arg == "--preflight") {
-			continue
+		if matched, _ := subcommandFlag(subcommand, flags, &i, &scratch); !matched {
+			return false // unknown flag: planSubcommand refuses it
 		}
-		if subcommand == "worker" {
-			if arg == "--takeover" || arg == "--now" || arg == "--json" {
-				continue
-			}
-			if matched, _ := parseInitFlag(flags, &i, &scratch); matched {
-				continue
-			}
-		}
-		if subcommand == "recur" {
-			if matched, _ := parseRecurFlag(flags, &i, &scratch); matched {
-				continue
-			}
-		}
-		if subcommand == "agents" && (arg == "--issue" || strings.HasPrefix(arg, "--issue=")) {
-			if arg == "--issue" && i+1 < len(flags) && !strings.HasPrefix(flags[i+1], "--") {
-				i++
-			}
-			continue
-		}
-		if subcommand == "docbank" {
-			if matched, _ := parseTableFlag(docbankFlags, "docbank", docbankUsage, flags, &i, &scratch); matched {
-				continue
-			}
-		}
-		if subcommand == "views" {
-			if arg == "--json" || arg == "--replace" {
-				continue
-			}
-			if matched, _ := parseViewFlag(flags, &i, &scratch); matched {
-				continue
-			}
-		}
-		if subcommand != "completion" && subcommand != "update" && subcommand != "docbank" && subcommand != "team" {
-			if _, matched, _ := parseAs(flags, &i); matched {
-				continue
-			}
-		}
-		return false // unknown flag: planSubcommand refuses it
 	}
 	return false
 }
@@ -333,80 +353,20 @@ func resolveActor(flag string, lookup func(string) (string, bool)) string {
 // planSubcommand parses the subcommands (args[0] is the subcommand). --as may stand anywhere; a lone -- ends the flags, so a
 // ref may be named like one, even --help.
 func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPlan, error) {
-	if args[0] == "agent" {
+	switch args[0] {
+	case "agent":
 		return planAgent(args)
-	}
-	if args[0] == "docbank" {
+	case "docbank":
 		return planDocbank(args)
-	}
-	if args[0] == "agents" {
+	case "agents":
 		return planAgents(args, lookup)
-	}
-	if args[0] == "team" {
+	case "team":
 		return planTeam(args)
-	}
-	if args[0] == "message" {
+	case "message":
 		return planMessage(args, lookup)
 	}
 	plan := LaunchPlan{Subcommand: args[0]}
-	operands, err := scanOperands(args, func(i *int) error {
-		arg := args[*i]
-		switch {
-		case plan.Subcommand == "update" && arg == "--force":
-			plan.Force = true
-			return nil
-		case plan.Subcommand == "update" && arg == "--pause":
-			plan.Pause = true
-			return nil
-		case plan.Subcommand == "update" && arg == "--preflight":
-			plan.Preflight = true
-			return nil
-		case plan.Subcommand == "worker" && arg == "--takeover":
-			plan.Takeover = true
-			return nil
-		case plan.Subcommand == "worker" && arg == "--now":
-			plan.Now = true
-			return nil
-		case plan.Subcommand == "worker" && arg == "--json":
-			plan.JSON = true
-			return nil
-		}
-		if plan.Subcommand == "worker" {
-			if matched, err := parseInitFlag(args, i, &plan); err != nil || matched {
-				return err
-			}
-		}
-		if plan.Subcommand == "recur" {
-			if matched, err := parseRecurFlag(args, i, &plan); err != nil || matched {
-				return err
-			}
-		}
-		if plan.Subcommand == "views" {
-			if arg == "--json" {
-				plan.JSON = true
-				return nil
-			}
-			if arg == "--replace" {
-				plan.Replace = true
-				return nil
-			}
-			if matched, err := parseViewFlag(args, i, &plan); err != nil || matched {
-				return err
-			}
-		}
-		if plan.Subcommand == "completion" || plan.Subcommand == "update" {
-			return fmt.Errorf("%s: unknown flag %s", plan.Subcommand, arg) // neither writes as an actor
-		}
-		actor, matched, err := parseAs(args, i)
-		if err != nil {
-			return err
-		}
-		if !matched {
-			return fmt.Errorf("%s: unknown flag %s", plan.Subcommand, arg)
-		}
-		plan.fallbackAuthor = actor
-		return nil
-	})
+	operands, err := scanOperands(args, flagReader(plan.Subcommand, args, &plan))
 	if err != nil {
 		return LaunchPlan{}, err
 	}

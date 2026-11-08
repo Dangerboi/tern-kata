@@ -41,9 +41,7 @@ func (w *Worker) spawn(ps *projectState, uid string) {
 	}
 	w.flight[uid] = f
 	w.mu.Unlock()
-	w.runs.Add(1)
-	go func() {
-		defer w.runs.Done()
+	w.runs.Go(func() {
 		err := w.advance(w.ctx, ps, uid)
 		j, lerr := w.store.Load(uid)
 		owes := lerr == nil && j.owes() // a transient kata failure stopped it: retryPending will drive it on
@@ -51,7 +49,7 @@ func (w *Worker) spawn(ps *projectState, uid string) {
 		if err != nil && w.ctx.Err() == nil && !w.halted.Load() {
 			w.opt.Log("run %s: %v", uid, err)
 		}
-	}()
+	})
 }
 
 // retryPending resumes runs a transient kata failure left half-reported or half-admitted; the Project loop calls it at least every minute.
@@ -281,47 +279,6 @@ func (w *Worker) secrets(j *Journal) (map[string]string, error) {
 		out[env] = value
 	}
 	return out, nil
-}
-
-// readSecret resolves one secret by its worker.toml name.
-func (c Config) readSecret(name string) (string, error) {
-	src, ok := c.Secrets[name]
-	if !ok {
-		return "", fmt.Errorf("secret %q is not defined in worker.toml", name)
-	}
-	if src.Env != "" {
-		value, ok := os.LookupEnv(src.Env)
-		if !ok {
-			return "", fmt.Errorf("secret %q: environment variable %s is not set", name, src.Env)
-		}
-		return value, nil
-	}
-	path := src.File
-	if rest, ok := strings.CutPrefix(path, "~/"); ok {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("secret %q: %w", name, err)
-		}
-		path = filepath.Join(home, rest)
-	}
-	info, err := os.Lstat(path)
-	if err != nil {
-		return "", fmt.Errorf("secret %q: %w", name, err)
-	}
-	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("secret %q: %s is not a regular file (links are refused)", name, path)
-	}
-	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
-		return "", fmt.Errorf("secret %q: %s must be private (mode 0600), it is %o", name, path, info.Mode().Perm())
-	}
-	if foreignOwned(info) {
-		return "", fmt.Errorf("secret %q: %s must be owned by the user the worker runs as", name, path)
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("secret %q: %w", name, err)
-	}
-	return strings.TrimRight(string(raw), "\r\n"), nil
 }
 
 // promptKeptKata are the kata variables a prompt step keeps: the routing and credential names kata's CLI needs to reach

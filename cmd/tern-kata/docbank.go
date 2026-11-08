@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -28,17 +27,8 @@ const docbankUsage = "usage: tern-kata docbank supervised [--home <dir>] [--db <
 type DocbankSetup struct {
 	URL, KeyFile, KeyEnv, Folder string
 	Port                         int
+	portArg                      string // --port as typed; planDocbank turns it into Port once the other checks have passed
 	Yes, NoRestart               bool
-}
-
-// setPort records --port. A setter cannot return the refusal, so it waits in plan.docbankErr for planDocbank; Port stays 0 then.
-func setPort(p *LaunchPlan, v string) {
-	n, err := parsePort(v)
-	if err != nil {
-		p.docbankErr = cmp.Or(p.docbankErr, err)
-		return
-	}
-	p.Docbank.Port = n
 }
 
 // docbankRouteFlags are the route flags that pick which kata daemon's config is written; the others only carry the Pane's credentials
@@ -51,7 +41,7 @@ var docbankRouteFlags = slices.DeleteFunc(slices.Clone(routeFlags), func(f table
 // prose that names each flag by hand (a test holds them to the table).
 var docbankFlags = slices.Concat([]tableFlag{
 	{"url", true, "the address of a Docbank someone else runs; without it Docbank is set up on this machine", func(p *LaunchPlan, v string) { p.Docbank.URL = v }},
-	{"port", true, "the port Docbank on this machine listens on (default 8080); without --url only", setPort},
+	{"port", true, "the port Docbank on this machine listens on (default 8080); without --url only", func(p *LaunchPlan, v string) { p.Docbank.portArg = v }},
 	{"key-file", true, "a file holding the Docbank API key, or - for standard input", func(p *LaunchPlan, v string) { p.Docbank.KeyFile = v }},
 	{"key-env", true, "the name of a variable holding the Docbank API key", func(p *LaunchPlan, v string) { p.Docbank.KeyEnv = v }},
 	{"folder", true, "the vault folder kata uses (default /kata)", func(p *LaunchPlan, v string) { p.Docbank.Folder = v }},
@@ -77,7 +67,7 @@ func planDocbank(args []string) (LaunchPlan, error) {
 	}
 	d := plan.Docbank
 	remote := d.URL != ""
-	portGiven := d.Port != 0 || plan.docbankErr != nil
+	portGiven := d.portArg != ""
 	switch {
 	case slices.Equal(operands, []string{"supervised"}) || (len(operands) == 2 && operands[0] == "supervise" && (operands[1] == "on" || operands[1] == "off")):
 		if d != (DocbankSetup{}) || portGiven {
@@ -100,8 +90,13 @@ func planDocbank(args []string) (LaunchPlan, error) {
 		return LaunchPlan{}, fmt.Errorf("docbank setup: --key-file or --key-env is required with --url; %s", docbankUsage)
 	case remote && d.KeyFile != "" && d.KeyEnv != "":
 		return LaunchPlan{}, fmt.Errorf("docbank setup: --key-file and --key-env exclude each other; %s", docbankUsage)
-	case plan.docbankErr != nil:
-		return LaunchPlan{}, fmt.Errorf("docbank setup: %w; %s", plan.docbankErr, docbankUsage)
+	}
+	if portGiven {
+		n, err := parsePort(d.portArg)
+		if err != nil {
+			return LaunchPlan{}, fmt.Errorf("docbank setup: %w; %s", err, docbankUsage)
+		}
+		plan.Docbank.Port = n
 	}
 	plan.Operands = operands
 	return plan, nil
@@ -122,6 +117,11 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 	daemon, err := data.ResolveLocalDaemon(plan.AgentRoute)
 	if err != nil {
 		return docbanksetup.Env{}, err
+	}
+	// A terminal on standard input can be asked; with --key-file - the input is the key, which leaves nothing to ask on.
+	terminal := stdinIsTerminal(stdin)
+	if plan.Docbank.KeyFile == "-" && terminal {
+		return docbanksetup.Env{}, usageError{fmt.Errorf("docbank setup: --key-file - reads the key from standard input, which is a terminal here; pipe the key in (for instance `... | tern-kata docbank setup --key-file - ...`) or use --key-file <file> or --key-env")}
 	}
 	// Resolved before the route's KATA_HOME is set below, which the default daemon's home is read from.
 	supervision := docbanksetup.NewSupervisionEnv(out)
@@ -155,8 +155,7 @@ func newDocbankEnv(plan LaunchPlan, stdin io.Reader, out io.Writer) (docbanksetu
 	env.Locate = locate
 	env.LookupEnv = os.LookupEnv
 	env.Stdin = stdin
-	// A terminal on standard input can be asked; with --key-file - the input is the key, which leaves nothing to ask on.
-	if f, ok := stdin.(*os.File); ok && stdinIsTerminal(stdin) {
+	if f, ok := stdin.(*os.File); ok && terminal {
 		reader := bufio.NewReader(f)
 		env.Confirm = func(question string) (bool, error) { return docbanksetup.AskYesNo(reader, out, question) }
 	}
@@ -180,12 +179,6 @@ func runDocbank(ctx context.Context, plan LaunchPlan, env docbanksetup.Env) erro
 		return runDocbankSupervise(plan, env)
 	}
 	d := plan.Docbank
-	if d.KeyFile == "-" {
-		if stdinIsTerminal(env.Stdin) {
-			return usageError{fmt.Errorf("docbank setup: --key-file - reads the key from standard input, which is a terminal here; pipe the key in (for instance `... | tern-kata docbank setup --key-file - ...`) or use --key-file <file> or --key-env")}
-		}
-		env.Confirm = nil
-	}
 	common := docbanksetup.Common{Folder: d.Folder, Yes: d.Yes, NoRestart: d.NoRestart}
 	var err error
 	if d.URL == "" {
@@ -233,6 +226,3 @@ func runDocbankSupervise(plan LaunchPlan, env docbanksetup.Env) error {
 	_, err := fmt.Fprintf(env.Out, "Created %s: the plugin no longer starts Docbank. A Docbank that is running keeps running.\n", env.ManualPath())
 	return err
 }
-
-// supervisionEnv is the Pane gateway's Docbank supervision environment, built the same way as the `docbank supervised` one.
-func supervisionEnv() data.DocbankSupervision { return docbanksetup.NewSupervisionEnv(io.Discard) }

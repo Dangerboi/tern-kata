@@ -190,32 +190,55 @@ func (w *Worker) planWorkflow(ctx context.Context, ps *projectState, job cronjob
 	refuse := func(why string) error {
 		return fmt.Errorf("job %q runs workflow %q, which the worker does not run: %s", job.Name, wf.Name, why)
 	}
-	if why := workflowRefusal(wf, w.opt.Config.MaxRunPrompts()); why != "" {
+	if why, _ := workflowFit(w.opt.Config, ps.cfg, wf, jobProfile); why != "" {
 		return nil, refuse(why)
-	}
-	if p, ok := optionMap(wf.Options)["profile"].(string); ok && p != "" && p != jobProfile {
-		return nil, refuse(fmt.Sprintf("it names profile %q but the job runs with %q", p, jobProfile))
 	}
 	plan := &WorkflowPlan{UID: wf.UID, EventUID: wf.DefinitionEventUID, Name: wf.Name, About: wf.About}
 	for _, s := range wf.Steps {
 		step := PlanStep{Key: s.Key, Kind: s.Kind, Command: s.Command, Prompt: s.Prompt, After: s.After, Retries: int(s.RetryCount())}
-		if s.Kind == cronjob.StepCommand && !ps.cfg.Commands {
-			return nil, refuse(fmt.Sprintf("step %q is a command, and Project %s does not allow command steps in worker.toml (commands = true)", s.Key, ps.cfg.Name))
-		}
 		if s.Kind == cronjob.StepPrompt {
-			step.ProfileName = jobProfile
-			if p, ok := optionMap(s.Options)["profile"].(string); ok && p != "" {
-				step.ProfileName = p
-			}
-			profile, ok := w.opt.Config.Profiles[step.ProfileName]
-			if !ok || !ps.cfg.allowsProfile(step.ProfileName) {
-				return nil, refuse(fmt.Sprintf("step %q names profile %q, which is not available to Project %s in worker.toml", s.Key, step.ProfileName, ps.cfg.Name))
-			}
-			step.Profile = profile
+			step.ProfileName = stepProfile(s, jobProfile)
+			step.Profile = w.opt.Config.Profiles[step.ProfileName]
 		}
 		plan.Steps = append(plan.Steps, step)
 	}
 	return plan, nil
+}
+
+// workflowFit is why a workflow cannot run for a job with this profile in this Project, empty when it can: the
+// refusals of workflowRefusal, a workflow profile the job does not run with, a command step in a Project that does not
+// allow commands (upgrade: worker.toml can change that), a prompt step whose profile worker.toml does not map to the
+// Project. The planning of a run and the job problem report both ask this, so they give the same reason.
+func workflowFit(cfg Config, pc ProjectConfig, wf Workflow, jobProfile string) (why string, upgrade bool) {
+	if why := workflowRefusal(wf, cfg.MaxRunPrompts()); why != "" {
+		return why, false
+	}
+	if p := optionProfile(wf.Options); p != "" && p != jobProfile {
+		return fmt.Sprintf("it names profile %q but the job runs with %q", p, jobProfile), false
+	}
+	for _, s := range wf.Steps {
+		switch {
+		case s.Kind == cronjob.StepCommand && !pc.Commands:
+			return fmt.Sprintf("step %q is a command, and Project %s does not allow command steps in worker.toml (commands = true)", s.Key, pc.Name), true
+		case s.Kind == cronjob.StepPrompt:
+			name := stepProfile(s, jobProfile)
+			if _, ok := cfg.Profiles[name]; !ok || !pc.allowsProfile(name) {
+				return fmt.Sprintf("step %q names profile %q, which is not available to Project %s in worker.toml", s.Key, name, pc.Name), false
+			}
+		}
+	}
+	return "", false
+}
+
+// stepProfile is the profile a prompt step runs with: its own option, else the job's.
+func stepProfile(s cronjob.WorkflowStep, jobProfile string) string {
+	return cmp.Or(optionProfile(s.Options), jobProfile)
+}
+
+// optionProfile is the profile an options object names, "" when it names none.
+func optionProfile(options any) string {
+	p, _ := optionMap(options)["profile"].(string)
+	return p
 }
 
 // stepsFor is the empty state of each step of a plan; a prompt job has no plan and no steps.
