@@ -35,25 +35,29 @@ type SearchByMeaningDone struct {
 
 func (SearchByMeaningDone) msg() {}
 
+// rankedFilters is the Status and Label filters a ranked search was asked with: kata applies both, so an answer holds only
+// while the Pane's filters are still these.
+type rankedFilters struct{ Status, Label string }
+
 // RankedSearch is kata's last ranked answer for the Pane: the Issues in its order, and what it said about the answer. It lists
 // under the Results grouping while by meaning is on in the search box, and after the search is committed while the search text is
-// still the query it answers. Err is the last failed run, which leaves the answer in place.
+// still the query it answers and the Status and Label filters are still the ones it was asked with. Err is the last failed run,
+// which leaves the answer in place.
 type RankedSearch struct {
-	Have      bool
-	Query     string
-	UIDs      []string
-	Lexical   bool
-	Reason    string
-	Truncated bool
-	Err       error
+	SearchByMeaningDone
+	Have bool
+	// For is the filters the answer was asked with; asked is the filters of the run in flight.
+	For, asked rankedFilters
 }
+
+func (m Model) rankedFilters() rankedFilters { return rankedFilters{m.Filters.Status, m.Filters.Label} }
 
 const searchMeaningRefusal = "search by meaning works inside one Project"
 
-// rankedShown says the list is kata's ranked answer: not one the short-id search names, and either by meaning is on or the
-// committed search text is the query the answer is for.
+// rankedShown says the list is kata's ranked answer: not one the short-id search names, asked with the filters now set, and
+// either by meaning is on or the committed search text is the query the answer is for.
 func (m Model) rankedShown() bool {
-	if !m.Ranked.Have || m.idMatch() != "" {
+	if !m.Ranked.Have || m.idMatch() != "" || m.Ranked.For != m.rankedFilters() {
 		return false
 	}
 	return m.Search.Meaning || m.Filters.Search != "" && m.Ranked.Query == m.Filters.Search
@@ -96,7 +100,13 @@ func toggleSearchMeaning(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Search.Meaning, m.Search.Refused = true, false
-	return relist(m)
+	m, cmds := relist(m)
+	if m.Search.Results { // in the results the query is already entered: the switch runs it
+		var search []Cmd
+		m, search = runSearchByMeaning(m)
+		cmds = append(cmds, search...)
+	}
+	return m, cmds
 }
 
 // relist lists again from the snapshot on screen and reads the snapshot the new state asks for.
@@ -112,6 +122,7 @@ func runSearchByMeaning(m Model) (Model, []Cmd) {
 	if !m.Search.Meaning || !ok || strings.TrimSpace(m.Filters.Search) == "" || m.idMatch() != "" {
 		return m, nil
 	}
+	m.Ranked.asked = m.rankedFilters()
 	return m, []Cmd{SearchByMeaning{
 		Workspace: m.Workspace, ProjectID: id, Query: m.Filters.Search, Status: m.Filters.Status,
 		Labels: labelList(m.Filters.Label), Request: m.rankedReads.Ask(),
@@ -138,10 +149,10 @@ func searchMeaningDone(m Model, msg SearchByMeaningDone) (Model, []Cmd) {
 		return m, nil
 	}
 	if msg.Err != nil {
-		m.Ranked.Err, m.Ranked.Query = msg.Err, msg.Query
+		m.Ranked.Err = msg.Err
 		return m, nil
 	}
-	m.Ranked = RankedSearch{Have: true, Query: msg.Query, UIDs: msg.UIDs, Lexical: msg.Lexical, Reason: msg.Reason, Truncated: msg.Truncated}
+	m.Ranked = RankedSearch{SearchByMeaningDone: msg, Have: true, For: m.Ranked.asked}
 	m.etag = ""
 	return relist(m)
 }

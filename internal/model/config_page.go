@@ -153,12 +153,17 @@ func (m Model) OnConfig() bool { return m.Page == PageConfig }
 var configMode = sidebarMode(ModeConfig)
 
 func enterConfig(m Model) (Model, []Cmd) {
-	m.ConfigPage = ConfigPageState{reads: m.ConfigPage.reads, Loading: true}
+	c := ConfigPageState{reads: m.ConfigPage.reads, Loading: true, Switching: m.ConfigPage.Switching}
+	if c.Switching {
+		c.Message = "switching Docbank..."
+	}
+	m.ConfigPage = c
 	return m, []Cmd{LoadConfigFiles{Request: m.ConfigPage.reads.Ask()}}
 }
 
+// clearConfig drops the Page's state but keeps Switching: the switch's answer still comes and is reported.
 func clearConfig(m Model) Model {
-	m.ConfigPage = ConfigPageState{reads: m.ConfigPage.reads.Discarded()}
+	m.ConfigPage = ConfigPageState{reads: m.ConfigPage.reads.Discarded(), Switching: m.ConfigPage.Switching}
 	return m
 }
 
@@ -439,21 +444,44 @@ func confirmSwitchDocbank(m Model) (Model, []Cmd) {
 	return m, []Cmd{SwitchDocbank{}}
 }
 
-// docbankSwitched shows what the switch did. A switch reads the rows again; a failed one keeps them, as kata's own error is all
-// there is to show.
+// DocbankSwitchQuitRefusal is why the Pane does not quit while the Docbank switch is out: quitting would leave config.toml
+// without its [docbank] section when kata then fails, as the restore runs after kata's answer.
+const DocbankSwitchQuitRefusal = "The Docbank switch is still running; wait for its answer before quitting."
+
+// refuseQuitDuringSwitch keeps the Pane open and says why, in a Notice and on the Config Page's message line when it is shown.
+func refuseQuitDuringSwitch(m Model) Model {
+	m.AskQuit = false
+	m.Notice = DocbankSwitchQuitRefusal
+	if m.OnConfig() {
+		m.ConfigPage.Message, m.ConfigPage.MessageErr = DocbankSwitchQuitRefusal, true
+	}
+	return m
+}
+
+// docbankSwitched shows what the switch did. Switching outlives leaving the Page, so the answer is always reported: on the Page's
+// message line, or as a Notice when the Page is not shown. A switch reads the rows again; a failed one keeps them, as kata's own
+// error is all there is to show.
 func docbankSwitched(m Model, msg DocbankSwitched) (Model, []Cmd) {
 	c := &m.ConfigPage
-	if !m.OnConfig() || !c.Switching {
+	if !c.Switching {
 		return m, nil
 	}
 	c.Switching = false
+	text, failed := "Switched to kata's local Docbank; kata restarted its daemon. docbank.key (in KATA_HOME) and docbank.manual (in tern-kata's config folder) are no longer used and can be deleted.", false
 	if msg.Err != nil {
-		c.Message, c.MessageErr = "Docbank was not switched: "+oneLine(msg.Err.Error()), true
+		text, failed = "Docbank was not switched: "+oneLine(msg.Err.Error()), true
+	}
+	if !m.OnConfig() {
+		m.Notice = text
 		return m, nil
 	}
-	c.Message, c.MessageErr = "Switched to kata's local Docbank; kata restarted its daemon. docbank.key and docbank.manual in tern-kata's config folder are no longer used and can be deleted.", false
+	c.Message, c.MessageErr = text, failed
+	if failed {
+		return m, nil
+	}
 	return m, []Cmd{LoadConfigFiles{Request: c.reads.Ask()}}
 }
+
 func configEditLabel(m Model) string {
 	if f := m.SelectedConfigFile(); f != nil {
 		return ConfigActionLabel(*f, ConfigEdit)

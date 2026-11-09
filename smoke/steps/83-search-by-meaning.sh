@@ -9,19 +9,15 @@ expect_tree "[data-id\$='.$meaning_zebra']" '.ok and .count == 1'
 expect_tree "[data-id\$='.$meaning_other']" '.ok and .count == 1'
 
 meaning_line="[data-id='main.columns.list.search-line']"
-# meaning_search opens the search, switches it with the chord given and runs a query for the zebra Issue.
+# meaning_search opens the search, switches it to by meaning and runs a query for the zebra Issue. Headless Tern delivers ctrl+t
+# as meta+t, which the key table binds too.
 meaning_search() {
   ctl key /
-  ctl key "$1"
+  ctl key ctrl+t
   for letter in z e b r a; do ctl key "$letter"; done
   ctl key enter
 }
-meaning_search ctrl+t
-if ! expect_tree "$meaning_line" '.ok and .count == 1' 2>/dev/null; then
-  ctl key escape
-  ctl key escape
-  meaning_search meta+t
-fi
+meaning_search
 expect_tree "$meaning_line" '.ok and .count == 1 and (.nodes[0].text | startswith("kata searched by words"))'
 expect_tree "[data-id\$='.$meaning_zebra']" '.ok and .count == 1'
 expect_tree "[data-id\$='.$meaning_other']" '.ok and .count == 0'

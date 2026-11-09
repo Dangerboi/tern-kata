@@ -39,8 +39,10 @@ func TestPlanLaunch(t *testing.T) {
 		{name: "malformed issue ref", args: []string{"--issue", "noslash"}, err: `Issue reference must be <project>/<short_id>: "noslash"`},
 		{name: "empty issue equals value", args: []string{"--issue="}, err: `Issue reference must be <project>/<short_id>: ""`},
 		{name: "unknown arguments pass through", args: []string{"--as", "ann", "--foo", "bar", "--issue=p/1", "-x"}, issueRef: "p/1", fallbackArgs: []string{"--foo", "bar", "-x", "--project", "p", "p#1"}, tuiArgs: []string{"--foo", "bar", "-x"}},
+		{name: "bare docbank is not an issue ref, a usage error", args: []string{"docbank"}, err: `unexpected argument "docbank": kata tui takes an issue ref`},
 		{name: "docbank setup is two positionals, a usage error", args: []string{"docbank", "setup"}, err: "unexpected arguments: setup"},
 		{name: "docbank supervise on names every extra word", args: []string{"docbank", "supervise", "on"}, err: "unexpected arguments: supervise on"},
+		{name: "bare short id falls back to kata tui", args: []string{"ab12"}, fallbackArgs: []string{"ab12"}, tuiArgs: []string{"ab12"}},
 		{name: "one positional ref falls back to kata tui", args: []string{"proj#ab12"}, fallbackArgs: []string{"proj#ab12"}, tuiArgs: []string{"proj#ab12"}},
 		{name: "help after a double dash is kata tui's", args: []string{"--", "--help"}, fallbackArgs: []string{"--", "--help"}, tuiArgs: []string{"--", "--help"}},
 		{name: "flags after a double dash are kata tui's", args: []string{"--", "--issue", "proj/abcd"}, fallbackArgs: []string{"--", "--issue", "proj/abcd"}, tuiArgs: []string{"--", "--issue", "proj/abcd"}},
@@ -334,8 +336,8 @@ func TestPlanLaunchHelpIsJudgedByTheSubcommandParsers(t *testing.T) {
 
 func TestSubcommandsAreOnlyTakenOverAsTheFirstArgument(t *testing.T) {
 	plan, err := PlanLaunch([]string{"--as", "ann", "migrate-attachments"}, lookupFrom(nil), "v")
-	if err != nil || plan.Subcommand != "" || !slices.Equal(plan.FallbackArgs, []string{"migrate-attachments"}) {
-		t.Fatalf("got %+v, %v, want migrate-attachments passed through to kata tui", plan, err)
+	if err == nil || err.Error() != `unexpected argument "migrate-attachments": kata tui takes an issue ref` || plan.Subcommand != "" || exitStatus(err) != 2 {
+		t.Fatalf("got %+v, %v, want a later migrate-attachments refused as a usage error, never taken over", plan, err)
 	}
 	plan, err = PlanLaunch([]string{"migrate-attachments", "--help"}, lookupFrom(nil), "v")
 	if err != nil || !plan.Help {

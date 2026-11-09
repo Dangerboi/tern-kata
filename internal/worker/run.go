@@ -292,10 +292,11 @@ func (w *Worker) secrets(j *Journal) (map[string]string, error) {
 }
 
 // promptKeptKata are the kata variables a prompt step keeps: the routing and credential names kata's CLI needs to reach
-// the worker's daemon. Every other KATA_* name (kata-plugin's steering variables among them) is dropped.
+// the worker's daemon, and KATA_CLOSE_TRANSCRIPT_ENABLED, the user's own choice for close transcripts (closetranscript.Decide
+// leaves it to them). Every other KATA_* name (kata-plugin's steering variables among them) is dropped.
 var promptKeptKata = map[string]bool{
 	"KATA_HOME": true, "KATA_SERVER": true, "KATA_DAEMON": true, "KATA_AUTH_TOKEN": true, "KATA_AUTH_TOKEN_FILE": true,
-	"KATA_TRUST_PRIVATE_NETWORK": true, "KATA_ALLOW_INSECURE": true,
+	"KATA_TRUST_PRIVATE_NETWORK": true, "KATA_ALLOW_INSECURE": true, "KATA_CLOSE_TRANSCRIPT_ENABLED": true,
 }
 
 // childEnv is the worker's environment for a prompt step (ADR-0009): without TERN_KATA_ internals, every KATA_*

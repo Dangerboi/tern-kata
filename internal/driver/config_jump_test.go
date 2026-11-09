@@ -297,7 +297,7 @@ func TestConfigSwitchSuccessReadsTheRowsAgainAndSaysTheKeyFilesCanGo(t *testing.
 		t.Errorf("success sent %#v, want the rows read again", done.Cmds)
 	}
 	c := done.State.Model.ConfigPage
-	if c.Switching || c.MessageErr || !strings.Contains(c.Message, "docbank.key") || !strings.Contains(c.Message, "docbank.manual") {
+	if c.Switching || c.MessageErr || !strings.Contains(c.Message, "docbank.key (in KATA_HOME)") || !strings.Contains(c.Message, "docbank.manual (in tern-kata's config folder)") {
 		t.Errorf("state after success: %+v", c)
 	}
 }
@@ -315,6 +315,41 @@ func TestConfigSwitchFailureShowsKatasLineAndKeepsTheRows(t *testing.T) {
 	}
 	if again := step(t, failed.State, key("s")); !again.State.Model.ConfigPage.AskSwitch {
 		t.Error("s does not ask again after a failure")
+	}
+}
+
+func TestConfigQuitIsRefusedWhileTheSwitchIsOutByEveryPath(t *testing.T) {
+	s := configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), model.ConfigDocbank)
+	out := step(t, step(t, s, key("s")).State, key("y")).State
+	for _, chord := range []string{"q", "ctrl+c"} {
+		got := step(t, out, key(chord))
+		m := got.State.Model
+		if got.Quit || m.Quitting || m.AskQuit || !m.ConfigPage.Switching || m.ConfigPage.Message != model.DocbankSwitchQuitRefusal || m.Notice != model.DocbankSwitchQuitRefusal {
+			t.Errorf("%s: quit=%v asking=%v message %q notice %q", chord, got.Quit, m.AskQuit, m.ConfigPage.Message, m.Notice)
+		}
+	}
+	if done := step(t, out, model.DocbankSwitched{Err: errors.New("kata failed")}); done.Quit || !step(t, done.State, key("ctrl+c")).Quit {
+		t.Error("ctrl+c does not quit once the switch has answered")
+	}
+}
+
+func TestConfigSwitchAnswerIsReportedAfterLeavingThePage(t *testing.T) {
+	s := configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), model.ConfigDocbank)
+	left := step(t, step(t, step(t, s, key("s")).State, key("y")).State, key("escape")).State
+	if left.Model.OnConfig() || !left.Model.ConfigPage.Switching {
+		t.Fatalf("after leaving: on config %v, switching %v", left.Model.OnConfig(), left.Model.ConfigPage.Switching)
+	}
+	if q := step(t, left, key("ctrl+c")); q.Quit {
+		t.Error("ctrl+c quit off the Page while the switch is out")
+	}
+	failed := step(t, left, model.DocbankSwitched{Err: errors.New("kata failed; /x was not restored")})
+	m := failed.State.Model
+	if m.ConfigPage.Switching || !strings.Contains(m.Notice, "Docbank was not switched: kata failed; /x was not restored") {
+		t.Errorf("answer off the Page: switching %v, notice %q", m.ConfigPage.Switching, m.Notice)
+	}
+	back := step(t, left, key("shift+k")).State.Model
+	if !back.OnConfig() || !back.ConfigPage.Switching || back.ConfigPage.Message != "switching Docbank..." {
+		t.Errorf("re-entering: switching %v, message %q", back.ConfigPage.Switching, back.ConfigPage.Message)
 	}
 }
 

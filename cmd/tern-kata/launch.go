@@ -244,9 +244,14 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 			plan.TUIArgs = append(plan.TUIArgs, arg)
 		}
 	}
-	if words := barePositionals(plan.TUIArgs); len(words) > 1 {
+	words := barePositionals(plan.TUIArgs)
+	if len(words) > 1 {
 		// kata tui takes at most one positional, the ref, so these cannot be its arguments.
 		return LaunchPlan{}, fmt.Errorf("unexpected arguments: %s", strings.Join(words[1:], " "))
+	}
+	if len(words) == 1 && !issueSet && !isKataIssueRef(words[0]) {
+		// kata tui reads its one positional as an issue ref and fails late on anything else; refuse it here.
+		return LaunchPlan{}, fmt.Errorf("unexpected argument %q: kata tui takes an issue ref", words[0])
 	}
 	plan.FallbackArgs = append(plan.FallbackArgs, plan.TUIArgs...)
 	if issueSet {
@@ -273,6 +278,17 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 		plan.InboxUser = strings.TrimSpace(inbox)
 	}
 	return plan, nil
+}
+
+// kataIssueRef and kataUID are the shapes kata tui accepts as its positional (kata's own parser is internal to kata): a
+// short id of 4 to 26 lowercase Crockford characters, optionally behind "<project>#", or a 26-character UID.
+var (
+	kataIssueRef = regexp.MustCompile(`^(.+#)?[0-9a-hjkmnp-tv-z]{4,26}$`)
+	kataUID      = regexp.MustCompile(`(?i)^[0-9A-HJKMNP-TV-Z]{26}$`)
+)
+
+func isKataIssueRef(word string) bool {
+	return kataIssueRef.MatchString(word) || kataUID.MatchString(word)
 }
 
 // barePositionals returns the words before a lone -- that kata tui would read as positionals: a bare word is a positional
@@ -700,7 +716,8 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
 <ref> is a short id in this workspace's Project, <project>#<short id>, or a ULID.
 The Issue's Project must be this workspace's Binding (views is the exception: it spans Projects).
 
-Any other argument is passed to ` + "`kata tui`" + ` when Tern is unavailable; inside Tern it is refused.
+Any other flag is passed to ` + "`kata tui`" + ` when Tern is unavailable; inside Tern it is refused. A bare word must be an
+issue reference (` + "`<short_id>`, `<project>#<short_id>` or a UID" + `) and at most one is allowed; any other is refused.
 
 Exit status: 0 on success, 1 when a subcommand fails, 2 for a command line it refuses, 3 when the Pane
 fails, and 128 plus the signal's number when a signal stops a subcommand (130 for ctrl+c).

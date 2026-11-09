@@ -101,7 +101,8 @@ func TestChildEnvCarriesTheCloseTranscriptVariableExactlyWhenKatasConfigLeavesTh
 		{name: "no file", want: true},
 		{name: "enabled = false", config: "[close.transcript]\nenabled = false\n"},
 		{name: "enabled = true", config: "[close.transcript]\nenabled = true\n"},
-		{name: "switch in the environment", switchEnv: "false"},
+		{name: "switch false in the environment", switchEnv: "false"},
+		{name: "switch true in the environment", switchEnv: "true"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			home := t.TempDir()
@@ -118,6 +119,9 @@ func TestChildEnvCarriesTheCloseTranscriptVariableExactlyWhenKatasConfigLeavesTh
 			got := slices.Contains(childEnv("ann", nil, nil), "TERN_KATA_CLOSE_TRANSCRIPT=on")
 			if got != c.want {
 				t.Errorf("variable on = %v, want %v", got, c.want)
+			}
+			if c.switchEnv != "" && !slices.Contains(childEnv("ann", nil, nil), "KATA_CLOSE_TRANSCRIPT_ENABLED="+c.switchEnv) {
+				t.Errorf("the user's KATA_CLOSE_TRANSCRIPT_ENABLED=%s did not reach the prompt step", c.switchEnv)
 			}
 			for _, kv := range childEnv("ann", nil, nil) {
 				if strings.HasPrefix(kv, "TERN_KATA_CLOSE_TRANSCRIPT=") && kv != "TERN_KATA_CLOSE_TRANSCRIPT=on" {

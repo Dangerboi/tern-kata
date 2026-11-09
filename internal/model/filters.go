@@ -12,7 +12,9 @@ type SearchState struct {
 	Open, Results bool
 	// Meaning says the query runs on kata's ranked search (by meaning) at enter, not as a filter of the words (by words).
 	// Refused says ctrl+t was refused because the Collection does not show one Project.
-	Meaning, Refused        bool
+	Meaning, Refused bool
+	// InitialRanked is the committed ranked answer the search opened on, which esc brings back.
+	InitialRanked           RankedSearch
 	InitialText, InitialUID string
 	Caret                   Caret
 }
@@ -60,12 +62,14 @@ func cycleStatus(m Model) (Model, []Cmd) {
 }
 
 func openSearch(m Model) Model {
-	// A search that opens on a ranked answer continues by meaning; any other starts by words.
+	// A search that opens on a ranked answer continues by meaning; any other starts by words, and no answer still in flight
+	// may land on it.
 	meaning := m.rankedShown()
 	if !meaning {
 		m.Ranked = RankedSearch{}
+		m.rankedReads.Discard()
 	}
-	m.Search = SearchState{Open: true, Meaning: meaning, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
+	m.Search = SearchState{Open: true, Meaning: meaning, InitialRanked: m.Ranked, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
 	return m
 }
 
@@ -92,15 +96,13 @@ func searchBack(m Model) (Model, []Cmd) {
 		m.Search.Results = false
 		return m, nil
 	}
-	meaning := m.Search.Meaning
+	meaning, initial := m.Search.Meaning, m.Search.InitialRanked
 	m.Filters.Search = m.Search.InitialText
 	m.SelectedUID = m.Search.InitialUID
 	m.Search = SearchState{}
-	if meaning {
-		if m.Ranked.Query != m.Filters.Search {
-			m.Ranked = RankedSearch{}
-		}
-		m.rankedReads.Discard()
+	m.Ranked = initial
+	m.rankedReads.Discard()
+	if meaning || initial.Have {
 		return relist(m)
 	}
 	return snapshotChanged(m)

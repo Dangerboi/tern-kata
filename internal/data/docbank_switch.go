@@ -76,15 +76,21 @@ func restoreConfig(path, original, switched string) string {
 		return "; " + path + " was not restored: " + err.Error()
 	}
 	if token.Text() != switched {
-		return "; " + path + " was not restored because it changed after the switch wrote it, so it no longer has its [docbank] section"
+		return changedAfterSwitch(path)
 	}
 	if err := guardedfile.Write(path, 0o700, token, []byte(original)); err != nil {
 		if errors.Is(err, guardedfile.ErrChanged) {
-			return "; " + path + " was not restored because it changed after the switch wrote it, so it no longer has its [docbank] section"
+			return changedAfterSwitch(path)
 		}
 		return "; " + path + " was not restored: " + err.Error()
 	}
 	return ""
+}
+
+// changedAfterSwitch is what is added to kata's error line when the file differs from what the switch wrote: it is left as it is,
+// and nothing is claimed about its content.
+func changedAfterSwitch(path string) string {
+	return "; " + path + " was not restored because it changed after the switch wrote it, so it was left as it is"
 }
 
 // runDocbankSetup runs `kata docbank setup --yes --folder <folder>` for the daemon whose home is kataHome. Its error is kata's last
@@ -133,6 +139,10 @@ const (
 // [docbank.x] and a [docbank] given as dotted keys or an inline table are not touched, which tern-kata's old setup never wrote.
 // It reports false when there is no [docbank] header.
 func withoutDocbankTable(text string) (string, bool) {
+	bom := ""
+	if strings.HasPrefix(text, "\uFEFF") {
+		bom, text = "\uFEFF", text[len("\uFEFF"):]
+	}
 	lines := strings.SplitAfter(text, "\n")
 	kinds := make([]tomlLineKind, len(lines))
 	names := make([][]string, len(lines))
@@ -159,7 +169,7 @@ func withoutDocbankTable(text string) (string, bool) {
 		}
 	}
 	if start < 0 {
-		return text, false
+		return bom + text, false
 	}
 	end := start + 1
 	for i := start + 1; i < len(lines) && kinds[i] != tomlHeader; i++ {
@@ -167,7 +177,7 @@ func withoutDocbankTable(text string) (string, bool) {
 			end = i + 1
 		}
 	}
-	return strings.Join(lines[:start], "") + strings.Join(lines[end:], ""), true
+	return bom + strings.Join(lines[:start], "") + strings.Join(lines[end:], ""), true
 }
 
 // tomlHeaderName is the dotted key of a [table] header line, nil for an [[array of tables]] header or one it cannot read.

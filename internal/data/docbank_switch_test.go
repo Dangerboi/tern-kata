@@ -153,7 +153,7 @@ func TestSwitchDocbankKataFailingPutsTheOriginalBytesBackAndReturnsKatasLine(t *
 func TestSwitchDocbankLeavesAFileChangedAfterTheSwitchAndSaysItWasNotRestored(t *testing.T) {
 	f := newDocbankSwitchFixture(t, pinnedKataConfig, "echo 'active_daemon = \"x\"' >> \"$KATA_HOME/config.toml\"\necho 'kata failed' >&2\nexit 1\n")
 	got := as[model.DocbankSwitched](t, run(t, f.g, model.SwitchDocbank{}))
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "kata failed") || !strings.Contains(got.Err.Error(), "was not restored because it changed after the switch wrote it") {
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "kata failed") || !strings.Contains(got.Err.Error(), "was not restored because it changed after the switch wrote it, so it was left as it is") || strings.Contains(got.Err.Error(), "no longer has") {
 		t.Errorf("error %v, want kata's line and that the file was not restored and why", got.Err)
 	}
 	if after, want := f.config(t), pinnedKataConfigWithout+"active_daemon = \"x\"\n"; after != want {
@@ -169,6 +169,16 @@ func TestSwitchDocbankRefusesAnyOtherForm(t *testing.T) {
 	}
 	if _, err := os.Stat(f.log + ".args"); err == nil {
 		t.Error("kata ran")
+	}
+}
+
+func TestWithoutDocbankTableSeesAHeaderBehindAByteOrderMarkAndKeepsTheMark(t *testing.T) {
+	got, ok := withoutDocbankTable("\uFEFF[docbank]\nurl = \"http://127.0.0.1:8080\"\n\n[tui]\nconfirm_quit = false\n")
+	if want := "\uFEFF\n[tui]\nconfirm_quit = false\n"; !ok || got != want {
+		t.Errorf("got %q, %v; want %q", got, ok, want)
+	}
+	if got, ok := withoutDocbankTable("\uFEFF[tui]\n"); ok || got != "\uFEFF[tui]\n" {
+		t.Errorf("no header: got %q, %v", got, ok)
 	}
 }
 

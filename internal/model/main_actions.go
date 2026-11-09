@@ -234,7 +234,7 @@ var mainRows = []actionEntry{
 	{action: AskDeleteView, modes: []Mode{ModeCollections}, keys: keys("ctrl+d", "ctrl+d", "meta+d", ""), help: "delete view", footer: []Mode{ModeCollections}, sheet: []sheetLine{{sheetGlobal, 9, "delete the saved view under the Menu cursor (asks y/n)"}}, handle: pure(func(m Model) Model { return askDeleteView(m, false) })},
 	{action: SearchEnter, modes: []Mode{ModeSearch}, keys: keys("enter", "enter"), help: "results", footer: []Mode{ModeSearch}, handle: searchEnter},
 	{action: SearchBack, modes: []Mode{ModeSearch}, keys: keys("escape", "esc"), help: "cancel search", footer: []Mode{ModeSearch}, handle: searchBack},
-	{action: ToggleSearchMeaning, modes: searching, keys: keys("ctrl+t", "ctrl+t", "meta+t", ""), help: "by meaning", label: searchMeaningLabel, footer: []Mode{ModeSearch}, sheet: []sheetLine{{sheetFilters, 5, "search by meaning or by words (inside one Project)"}}, handle: toggleSearchMeaning},
+	{action: ToggleSearchMeaning, modes: searching, keys: keys("ctrl+t", "ctrl+t", "meta+t", ""), help: "by meaning", label: searchMeaningLabel, footer: searching, sheet: []sheetLine{{sheetFilters, 5, "search by meaning or by words (inside one Project)"}}, handle: toggleSearchMeaning},
 	{action: MoveUp, modes: []Mode{ModeSearch}, keys: slices.Concat(keys("up", "up"), emacsUp), help: "previous result", handle: searchMoving(MoveUp)},
 	{action: MoveDown, modes: []Mode{ModeSearch}, keys: slices.Concat(keys("down", "down"), emacsDown), help: "next result", handle: searchMoving(MoveDown)},
 	{action: DeleteInput, modes: []Mode{ModeSearch}, keys: keys("backspace", "backspace"), help: "delete", handle: searchErasing(DeleteInput)},
@@ -346,11 +346,17 @@ func orGlobal(list []Mode) []Mode {
 }
 
 func quitNow(m Model) Model {
+	if m.ConfigPage.Switching {
+		return refuseQuitDuringSwitch(m)
+	}
 	m.Quitting, m.AskQuit = true, false
 	return m
 }
 
 func askQuit(m Model) Model {
+	if m.ConfigPage.Switching {
+		return refuseQuitDuringSwitch(m)
+	}
 	if m.QuitAtOnce {
 		return quitNow(m)
 	}

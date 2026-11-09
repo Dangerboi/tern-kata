@@ -350,3 +350,127 @@ func TestShortIDByMeaningStillJumps(t *testing.T) {
 		t.Fatalf("enter on a short id ran a search by meaning: %#v", cmds)
 	}
 }
+
+// loaded delivers the snapshot reads in cmds, answered with the three Issues.
+func loaded(m model.Model, cmds []model.Cmd) model.Model {
+	for _, cmd := range cmds {
+		if read, ok := cmd.(model.ReadSnapshot); ok {
+			m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: idSnapshot("a", "b", "c")})
+		}
+	}
+	return m
+}
+
+func TestAFilterChangeEndsTheCommittedRankedAnswer(t *testing.T) {
+	m, search := searched(t, model.Filters{Status: "open"}, "login")
+	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m, cmds := press(m, "enter")
+	m = loaded(m, cmds)
+	if !reflect.DeepEqual(listed(m), []string{"c", "a"}) {
+		t.Fatalf("committed rows %v", listed(m))
+	}
+	m, cmds = press(m, "s")
+	refresh := cmdOf[model.ReadSnapshot](t, cmds)
+	if m.Filters.Status != "closed" || refresh.Query.Text == nil || *refresh.Query.Text != "login" {
+		t.Fatalf("status %q, read %+v: the answer asked under open still stands", m.Filters.Status, refresh.Query)
+	}
+	m = loaded(m, cmds)
+	if !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {
+		t.Fatalf("rows %v, want the words filter's rows", listed(m))
+	}
+}
+
+func TestAFilterChangeByLabelEndsTheCommittedRankedAnswer(t *testing.T) {
+	m, search := searched(t, model.Filters{}, "login")
+	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m, cmds := press(m, "enter")
+	m = loaded(m, cmds)
+	m.Filters.Label = "bug"
+	if m.SnapshotQuery().Text == nil {
+		t.Fatal("a ranked answer asked without the Label filter still stands under it")
+	}
+}
+
+func TestEscapeOutOfAnEditedReopenedSearchKeepsTheCommittedAnswer(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		done model.SearchByMeaningDone
+	}{
+		{"answered", model.SearchByMeaningDone{UIDs: []string{"b"}}},
+		{"failed", model.SearchByMeaningDone{Err: errors.New("search is not available")}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m, search := searched(t, model.Filters{}, "foo")
+			m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+			m, cmds := press(m, "enter")
+			m = loaded(m, cmds)
+			m, _ = press(m, "/")
+			if !m.Search.Meaning {
+				t.Fatal("the reopened search is by words")
+			}
+			m, _ = meaningTyping(m, " bar")
+			m, cmds = press(m, "enter")
+			again := cmdOf[model.SearchByMeaning](t, cmds)
+			tt.done.Request, tt.done.Query = again.Request, again.Query
+			m, cmds = model.Update(m, tt.done)
+			m = loaded(m, cmds)
+			m, cmds = press(m, "escape", "escape")
+			m = loaded(m, cmds)
+			if m.Filters.Search != "foo" || !m.Ranked.Have || m.Ranked.Query != "foo" || !reflect.DeepEqual(listed(m), []string{"c", "a"}) {
+				t.Fatalf("query %q, ranked %q, rows %v; want the committed answer for foo", m.Filters.Search, m.Ranked.Query, listed(m))
+			}
+			if m, _ = press(m, "/"); !m.Search.Meaning {
+				t.Fatal("the committed answer's search no longer reopens by meaning")
+			}
+		})
+	}
+}
+
+func TestAnAnswerAfterReopeningByWordsIsDropped(t *testing.T) {
+	m, search := searched(t, model.Filters{}, "slow login")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "/")
+	if m.Search.Meaning {
+		t.Fatal("a search with no answer reopened by meaning")
+	}
+	m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, Query: search.Query, UIDs: []string{"c"}})
+	if m.Ranked.Have || !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {
+		t.Fatalf("a late answer landed on a words search: %+v, rows %v", m.Ranked.Have, listed(m))
+	}
+}
+
+func TestCtrlTInTheResultsRunsTheSearchByMeaning(t *testing.T) {
+	m := meaningPane(idCollection, model.Filters{}, "zebra")
+	m, _ = press(m, "down")
+	if m.CurrentMode() != model.ModeSearchResults {
+		t.Fatalf("mode %s", m.CurrentMode())
+	}
+	m, cmds := press(m, "ctrl+t")
+	search := cmdOf[model.SearchByMeaning](t, cmds)
+	if !m.Search.Meaning || search.Query != "zebra" {
+		t.Fatalf("meaning %v, search %+v", m.Search.Meaning, search)
+	}
+	var footer bool
+	for binding := range model.BindingsForMode(model.ModeSearchResults, true) {
+		footer = footer || binding.Chord == "ctrl+t"
+	}
+	if !footer {
+		t.Fatal("the results footer does not offer ctrl+t")
+	}
+}
+
+func TestEscapeRestoresTheWordsSearchAfterSwitchingAWordsSearchByMeaning(t *testing.T) {
+	m := meaningPane(idCollection, model.Filters{}, "foo")
+	m, _ = press(m, "enter", "enter", "/", "ctrl+t")
+	m, cmds := press(m, "enter")
+	search := cmdOf[model.SearchByMeaning](t, cmds)
+	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c"}})
+	m, cmds = press(m, "escape", "escape")
+	m = loaded(m, cmds)
+	if m.Ranked.Have || m.Search.Meaning || m.Filters.Search != "foo" {
+		t.Fatalf("after esc: ranked %v, meaning %v, query %q", m.Ranked.Have, m.Search.Meaning, m.Filters.Search)
+	}
+	if m, _ = press(m, "/"); m.Search.Meaning {
+		t.Fatal("the next search started by meaning")
+	}
+}
