@@ -21,16 +21,22 @@ type SearchByMeaning struct {
 
 func (SearchByMeaning) cmd() {}
 
-// SearchByMeaningDone answers SearchByMeaning: the hits' Issue UIDs in kata's order. Lexical says kata answered by words and
-// Reason is the reason it gave; Truncated says more Issues matched than SearchLimit.
-type SearchByMeaningDone struct {
-	Request   int64
+// RankedAnswer is what kata answered to a ranked search: the hits' Issue UIDs in kata's order, for Query. Lexical says kata
+// answered by words and Reason is the reason it gave; Truncated says more Issues matched than SearchLimit. The message that
+// brings it and the state that keeps it both hold it.
+type RankedAnswer struct {
 	Query     string
 	UIDs      []string
 	Lexical   bool
 	Reason    string
 	Truncated bool
-	Err       error
+}
+
+// SearchByMeaningDone answers SearchByMeaning with kata's answer, or with Err when kata gave none.
+type SearchByMeaningDone struct {
+	Request int64
+	RankedAnswer
+	Err error
 }
 
 func (SearchByMeaningDone) msg() {}
@@ -39,35 +45,40 @@ func (SearchByMeaningDone) msg() {}
 // while the Pane's filters are still these.
 type rankedFilters struct{ Status, Label string }
 
+// rankedAsk is one ranked search as it was asked: the query and the filters. The zero value is no ask.
+type rankedAsk struct {
+	Query   string
+	Filters rankedFilters
+}
+
 // RankedSearch is kata's last ranked answer for the Pane: the Issues in its order, and what it said about the answer. It lists
 // under the Results grouping while by meaning is on in the search box, and after the search is committed while the search text is
 // still the query it answers and the Status and Label filters are still the ones it was asked with. Err is the last failed run,
-// which leaves the answer in place. The fields after Err are the fields of SearchByMeaningDone, less its Request.
+// which leaves the answer in place.
 type RankedSearch struct {
-	Have      bool
-	Query     string
-	UIDs      []string
-	Lexical   bool
-	Reason    string
-	Truncated bool
-	Err       error
-	// SearchedWith is the filters the answer was asked with. While inFlight, a run is out for inFlightQuery with inFlightWith.
-	SearchedWith, inFlightWith rankedFilters
-	inFlightQuery              string
-	inFlight                   bool
+	Have bool
+	RankedAnswer
+	Err error
+	// SearchedWith is the filters the answer was asked with.
+	SearchedWith rankedFilters
+}
+
+// currentAsk is the query typed and the filters set now.
+func (m Model) currentAsk() rankedAsk {
+	return rankedAsk{m.Filters.Search, rankedFilters{m.Filters.Status, m.Filters.Label}}
 }
 
 // currentFilters is the Status and Label filters set now.
-func (m Model) currentFilters() rankedFilters {
-	return rankedFilters{m.Filters.Status, m.Filters.Label}
-}
+func (m Model) currentFilters() rankedFilters { return m.currentAsk().Filters }
 
-// searchedOrSearching says kata has answered, or is still answering, the query typed and the filters set now.
-func (m Model) searchedOrSearching() bool {
-	if m.Ranked.inFlight && m.Ranked.inFlightQuery == m.Filters.Search && m.Ranked.inFlightWith == m.currentFilters() {
-		return true
-	}
-	return m.Ranked.Have && m.Ranked.Query == m.Filters.Search && m.Ranked.SearchedWith == m.currentFilters()
+// askedNow says kata was asked, whatever it answered, the query typed and the filters set now.
+func (m Model) askedNow() bool { return m.rankedAsked == m.currentAsk() }
+
+// withoutRanked drops the ranked answer and the ask, and makes any answer still out stale.
+func (m Model) withoutRanked() Model {
+	m.Ranked, m.rankedAsked = RankedSearch{}, rankedAsk{}
+	m.rankedReads.Discard()
+	return m
 }
 
 const searchMeaningRefusal = "search by meaning works inside one Project"
@@ -109,8 +120,7 @@ func searchMeaningLabel(m Model) string {
 func toggleSearchMeaning(m Model) (Model, []Cmd) {
 	if m.Search.Meaning {
 		m.Search.Meaning, m.Search.Refused = false, false
-		m.Ranked = RankedSearch{}
-		m.rankedReads.Discard()
+		m = m.withoutRanked()
 		return relist(m)
 	}
 	if _, ok := m.meaningProject(); !ok {
@@ -140,7 +150,7 @@ func runSearchByMeaning(m Model) (Model, []Cmd) {
 	if !m.Search.Meaning || !ok || strings.TrimSpace(m.Filters.Search) == "" || m.idMatch() != "" {
 		return m, nil
 	}
-	m.Ranked.inFlight, m.Ranked.inFlightQuery, m.Ranked.inFlightWith = true, m.Filters.Search, m.currentFilters()
+	m.rankedAsked = m.currentAsk()
 	return m, []Cmd{SearchByMeaning{
 		Workspace: m.Workspace, ProjectID: id, Query: m.Filters.Search, Status: m.Filters.Status,
 		Labels: labelList(m.Filters.Label), Request: m.rankedReads.Ask(),
@@ -167,13 +177,10 @@ func searchMeaningDone(m Model, msg SearchByMeaningDone) (Model, []Cmd) {
 		return m, nil
 	}
 	if msg.Err != nil {
-		m.Ranked.Err, m.Ranked.inFlight = msg.Err, false
+		m.Ranked.Err = msg.Err
 		return m, nil
 	}
-	m.Ranked = RankedSearch{
-		Have: true, Query: msg.Query, UIDs: msg.UIDs, Lexical: msg.Lexical, Reason: msg.Reason, Truncated: msg.Truncated,
-		SearchedWith: m.Ranked.inFlightWith,
-	}
+	m.Ranked = RankedSearch{Have: true, RankedAnswer: msg.RankedAnswer, SearchedWith: m.rankedAsked.Filters}
 	m.etag = ""
 	return relist(m)
 }

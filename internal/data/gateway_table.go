@@ -222,7 +222,7 @@ func init() {
 	daemonCall(
 		(*Client).SearchIssues,
 		func(cmd model.SearchByMeaning, err error) model.Msg {
-			return model.SearchByMeaningDone{Request: cmd.Request, Query: cmd.Query, Err: err}
+			return model.SearchByMeaningDone{Request: cmd.Request, RankedAnswer: model.RankedAnswer{Query: cmd.Query}, Err: err}
 		})
 
 	daemonCall(

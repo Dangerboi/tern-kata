@@ -31,11 +31,11 @@ func inputMode(mode Mode) bool {
 func clearFilters(m Model) (Model, []Cmd) {
 	m.Filters, m.ActiveView = Filters{}, ActiveView{}
 	m.SelectedUID = ""
-	if m.Ranked.Have {
-		m.Ranked = RankedSearch{}
+	had := m.Ranked.Have
+	m = m.withoutRanked()
+	if had {
 		return relist(m)
 	}
-	m.Ranked = RankedSearch{}
 	return snapshotChanged(m)
 }
 
@@ -66,8 +66,9 @@ func openSearch(m Model) Model {
 	// may land on it.
 	meaning := m.rankedShown()
 	if !meaning {
-		m.Ranked = RankedSearch{}
-		m.rankedReads.Discard()
+		m = m.withoutRanked()
+	} else {
+		m.rankedAsked = rankedAsk{m.Ranked.Query, m.Ranked.SearchedWith}
 	}
 	m.Search = SearchState{Open: true, Meaning: meaning, InitialRanked: m.Ranked, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
 	return m
@@ -83,7 +84,7 @@ func searchEnter(m Model) (Model, []Cmd) {
 		m.Search.Results = true
 		return runSearchByMeaning(m)
 	}
-	if m.Search.Meaning && !m.searchedOrSearching() { // the query was only moved into, never searched
+	if m.Search.Meaning && !m.askedNow() { // the query was only moved into, never searched
 		if next, cmds := runSearchByMeaning(m); len(cmds) > 0 {
 			return next, cmds
 		}
@@ -105,9 +106,8 @@ func searchBack(m Model) (Model, []Cmd) {
 	m.Filters.Search = m.Search.InitialText
 	m.SelectedUID = m.Search.InitialUID
 	m.Search = SearchState{}
+	m = m.withoutRanked()
 	m.Ranked = initial
-	m.Ranked.inFlight = false
-	m.rankedReads.Discard()
 	if meaning || initial.Have {
 		return relist(m)
 	}

@@ -700,7 +700,7 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 		{model.CreateIssueCmd{}, model.IssueCreated{Err: boom}},
 		{model.OpenIssue{Ref: "p/x"}, model.IssueOpenFailed{Ref: "p/x", Err: boom}},
 		{model.LookupSearchID{Request: 3, ShortID: "abcd"}, model.SearchIDLooked{Request: 3, ShortID: "abcd"}},
-		{model.SearchByMeaning{Request: 4, Query: "q"}, model.SearchByMeaningDone{Request: 4, Query: "q", Err: boom}},
+		{model.SearchByMeaning{Request: 4, Query: "q"}, model.SearchByMeaningDone{Request: 4, RankedAnswer: model.RankedAnswer{Query: "q"}, Err: boom}},
 		{model.SaveDraft{UID: "u"}, model.DraftFailed{UID: "u", Err: boom}},
 		{model.CloseIssueCmd{UID: "u", Key: "k-u"}, model.CloseResultMsg{UID: "u", Err: boom}},
 		{model.ReopenIssueCmd{UID: "u"}, model.CloseResultMsg{UID: "u", Err: boom}},

@@ -9,8 +9,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - `ctrl+t` in the search box switches the search between by words and by meaning, inside one Project.
-  - By meaning, `enter` runs kata's own search of the Project with the Status and Label filters and lists the best 50 Issues best first under Results. Typing sends nothing, and a live refresh does not run it again. A short id still jumps to its Issue.
-  - Changing the Status or Label filter afterwards ends those Results, and the list goes back to the words filter on the same text.
+  - By meaning, `enter` runs kata's own search of the Project with the Status and Label filters and lists the best 50 Issues best first under Results.
+  - Typing sends nothing, a live refresh does not run the search again, and a short id still jumps to its Issue.
+  - Changing the Status or Label filter afterwards, or switching Collection, ends those Results, and the list goes back to the words filter on the same text.
   - The search line says "kata searched by words: <reason>" when kata has no search by meaning to offer, or, without a reason, to turn it on with `kata daemon local-embeddings`.
   - It also says "showing the best 50" when more Issues match, and that the Owner and Relationship filters don't apply.
   - Outside a single Project (the Inbox, Today, All Open) it says "search by meaning works inside one Project" and stays by words.
@@ -36,7 +37,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - It shows "not set up: `kata docbank setup` sets Docbank up", "the Docbank on this machine" for `local = true`, "Docbank at <url>", or the reader's error when the file cannot be read.
   - A loopback url whose port is Docbank's `[server]` `api_port` is tern-kata's old setup: the row says "pinned to <url> by tern-kata's old setup: kata does not start it".
   - On that form only, `s` asks "Switch to kata's local Docbank? kata restarts its daemon. y/n". `y` removes the `[docbank]` table from `config.toml`, keeping every other byte, and runs `kata docbank setup --yes --folder <your old folder>` for the default daemon.
-  - When kata fails or does not answer within 2 minutes, the original file is put back and kata's error line is shown; a file that changed after the switch wrote it is left as it is, and the Page says so. The Pane does not quit, and does not close, before the switch has finished.
+  - When kata fails or does not answer within 2 minutes, the original file is put back and kata's error line is shown.
+  - A file that changed after the switch wrote it is left as it is, and the Page says so.
+  - The Pane does not quit, and does not close, before the switch has finished.
 
 #### Command line
 

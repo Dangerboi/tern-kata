@@ -157,7 +157,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.ViewForm, m.ActiveView, m.Views.Deleting = ViewFormState{}, ActiveView{}, "" // views.toml is the machine's, not the daemon's
 	m.Focus, m.HelpOpen, m.EditorUID = ColumnList, false, ""
 	m.Filters, m.DefaultFilters, m.Search, m.IDSearch, m.FilterForm = Filters{}, Filters{}, SearchState{}, IDSearch{}, FilterFormState{}
-	m.Ranked, m.rankedReads = RankedSearch{}, m.rankedReads.Discarded()
+	m.Ranked, m.rankedAsked, m.rankedReads = RankedSearch{}, rankedAsk{}, m.rankedReads.Discarded()
 	m.IssueDetail = m.IssueDetail.cleared()
 	m.Board = BoardState{reads: m.Board.reads.Discarded()}
 	for _, def := range pageDefs {

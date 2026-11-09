@@ -21,7 +21,7 @@ func (c *Client) SearchIssues(ctx context.Context, cmd model.SearchByMeaning) (m
 		return model.SearchByMeaningDone{}, daemonError(err)
 	}
 	body := response.JSON200
-	done := model.SearchByMeaningDone{Request: cmd.Request, Query: cmd.Query, Lexical: body.Mode == string(g.Lexical), Truncated: body.Truncated}
+	done := model.SearchByMeaningDone{Request: cmd.Request, RankedAnswer: model.RankedAnswer{Query: cmd.Query, Lexical: body.Mode == string(g.Lexical), Truncated: body.Truncated}}
 	if body.DegradedReason != nil {
 		done.Reason = *body.DegradedReason
 	}

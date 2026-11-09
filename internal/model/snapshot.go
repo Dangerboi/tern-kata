@@ -177,8 +177,7 @@ func (m Model) RefreshRequest() int64 { return m.snapshotReads.Newest() }
 func collectionSwitched(m Model) (Model, []Cmd) {
 	m.Refreshing = false
 	m.IDSearch = IDSearch{}
-	m.Ranked = RankedSearch{}
-	m.rankedReads.Discard()
+	m = m.withoutRanked()
 	m.Search.Meaning, m.Search.Refused, m.Search.InitialRanked = false, false, RankedSearch{}
 	return snapshotChanged(m)
 }

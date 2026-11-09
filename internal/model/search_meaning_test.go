@@ -65,6 +65,11 @@ func answered(t *testing.T, m model.Model, search model.SearchByMeaning, done mo
 	return m
 }
 
+// ranking is kata's answer holding uids, in its order.
+func ranking(uids ...string) model.SearchByMeaningDone {
+	return model.SearchByMeaningDone{RankedAnswer: model.RankedAnswer{UIDs: uids}}
+}
+
 func TestCtrlTSwitchesBetweenWordsAndMeaning(t *testing.T) {
 	for _, toggle := range []string{"ctrl+t", "meta+t"} {
 		t.Run(toggle, func(t *testing.T) {
@@ -163,7 +168,7 @@ func TestEnterByWordsSendsNoSearch(t *testing.T) {
 
 func TestMeaningResultsListInKatasOrderUnderResults(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "gone", "a"}})
+	m = answered(t, m, search, ranking("c", "gone", "a"))
 	if want := []string{"c", "a"}; !reflect.DeepEqual(listed(m), want) {
 		t.Fatalf("rows %v, want %v", listed(m), want)
 	}
@@ -182,7 +187,7 @@ func TestMeaningResultsListInKatasOrderUnderResults(t *testing.T) {
 func TestMeaningResultsAreFlatWhenIssuesNest(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
 	m.Snapshot.Links = []model.Link{{Type: "parent", FromIssueUID: "b", ToIssueUID: "a"}}
-	if m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, Query: search.Query, UIDs: []string{"b", "a"}}); !m.Ranked.Have {
+	if m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, RankedAnswer: model.RankedAnswer{Query: search.Query, UIDs: []string{"b", "a"}}}); !m.Ranked.Have {
 		t.Fatal("the answer was not taken")
 	}
 	if want := []string{"b", "a"}; !reflect.DeepEqual(listed(m), want) {
@@ -196,10 +201,10 @@ func TestSearchLineNamesWhatKataSaid(t *testing.T) {
 		done model.SearchByMeaningDone
 		want string
 	}{
-		{"words with kata's reason", model.SearchByMeaningDone{UIDs: []string{"a"}, Lexical: true, Reason: "embedding model is loading"}, "kata searched by words: embedding model is loading"},
-		{"words without a reason", model.SearchByMeaningDone{UIDs: []string{"a"}, Lexical: true}, "kata searched by words: turn on search by meaning with `kata daemon local-embeddings`"},
-		{"truncated", model.SearchByMeaningDone{UIDs: []string{"a"}, Truncated: true}, "showing the best 50"},
-		{"hybrid and complete", model.SearchByMeaningDone{UIDs: []string{"a"}}, ""},
+		{"words with kata's reason", model.SearchByMeaningDone{RankedAnswer: model.RankedAnswer{UIDs: []string{"a"}, Lexical: true, Reason: "embedding model is loading"}}, "kata searched by words: embedding model is loading"},
+		{"words without a reason", model.SearchByMeaningDone{RankedAnswer: model.RankedAnswer{UIDs: []string{"a"}, Lexical: true}}, "kata searched by words: turn on search by meaning with `kata daemon local-embeddings`"},
+		{"truncated", model.SearchByMeaningDone{RankedAnswer: model.RankedAnswer{UIDs: []string{"a"}, Truncated: true}}, "showing the best 50"},
+		{"hybrid and complete", ranking("a"), ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, search := searched(t, model.Filters{}, "slow login")
@@ -219,7 +224,7 @@ func TestOwnerAndRelationshipFiltersDoNotApplyByMeaning(t *testing.T) {
 	if got := m.SearchLine(); got != "the Owner filter doesn't apply to search by meaning" {
 		t.Fatalf("search line %q", got)
 	}
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"b"}})
+	m = answered(t, m, search, ranking("b"))
 	if refresh := m.SnapshotQuery(); refresh.Owner != nil || refresh.Text != nil {
 		t.Fatalf("snapshot query %+v still carries the Owner filter or the text", refresh)
 	}
@@ -231,11 +236,11 @@ func TestOwnerAndRelationshipFiltersDoNotApplyByMeaning(t *testing.T) {
 
 func TestFailedSearchByMeaningShowsKatasErrorAndKeepsTheRows(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m = answered(t, m, search, ranking("c", "a"))
 	m, _ = press(m, "escape")
 	m, again := press(m, "enter")
 	search = cmdOf[model.SearchByMeaning](t, again)
-	m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, Query: search.Query, Err: errors.New("search is not available")})
+	m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, RankedAnswer: model.RankedAnswer{Query: search.Query}, Err: errors.New("search is not available")})
 	if got := m.SearchLine(); got != "search is not available" {
 		t.Fatalf("search line %q", got)
 	}
@@ -244,9 +249,23 @@ func TestFailedSearchByMeaningShowsKatasErrorAndKeepsTheRows(t *testing.T) {
 	}
 }
 
+func TestEnterAfterAFailedSearchByMeaningCommitsTheSearch(t *testing.T) {
+	m, search := searched(t, model.Filters{}, "slow login")
+	m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, RankedAnswer: model.RankedAnswer{Query: search.Query}, Err: errors.New("search is not available")})
+	m, cmds := press(m, "enter")
+	for _, cmd := range cmds {
+		if _, ok := cmd.(model.SearchByMeaning); ok {
+			t.Fatalf("enter after a failed answer searched again: %#v", cmds)
+		}
+	}
+	if m.CurrentMode() != model.ModeList || m.Search.Open {
+		t.Fatalf("the search stayed open: mode %s", m.CurrentMode())
+	}
+}
+
 func TestLiveEventsDoNotRerunSearchByMeaning(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m = answered(t, m, search, ranking("c", "a"))
 	m, cmds := model.Update(m, model.StreamEvent{Generation: m.StreamGeneration, ID: m.Cursor + 1, Type: "issue.updated"})
 	if !onlyReads(cmds) {
 		t.Fatalf("a live event ran a search: %#v", cmds)
@@ -291,7 +310,7 @@ func TestAViewScopedToOneProjectSearchesByMeaning(t *testing.T) {
 
 func TestEscapeOutOfTheQueryResetsToWords(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m = answered(t, m, search, ranking("c", "a"))
 	m, _ = press(m, "escape", "escape")
 	if m.CurrentMode() != model.ModeList || m.Filters.Search != "" || m.Search.Meaning || !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {
 		t.Fatalf("after esc: mode %s, query %q, rows %v", m.CurrentMode(), m.Filters.Search, listed(m))
@@ -303,7 +322,7 @@ func TestEscapeOutOfTheQueryResetsToWords(t *testing.T) {
 
 func TestCommittedMeaningResultsStayUntilTheSearchIsCleared(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m = answered(t, m, search, ranking("c", "a"))
 	m, _ = press(m, "enter")
 	if !reflect.DeepEqual(listed(m), []string{"c", "a"}) {
 		t.Fatalf("committed rows %v", listed(m))
@@ -320,7 +339,7 @@ func TestCommittedMeaningResultsStayUntilTheSearchIsCleared(t *testing.T) {
 
 func TestSwitchingBackToWordsDropsTheRankedList(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m = answered(t, m, search, ranking("c", "a"))
 	m, cmds := press(m, "ctrl+t")
 	refresh := cmdOf[model.ReadSnapshot](t, cmds)
 	if refresh.Query.Text == nil || *refresh.Query.Text != "slow login" || m.Ranked.Have {
@@ -330,7 +349,7 @@ func TestSwitchingBackToWordsDropsTheRankedList(t *testing.T) {
 
 func TestCollectionSwitchEndsTheSearchByMeaning(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m = answered(t, m, search, ranking("c", "a"))
 	m, _ = press(m, "enter", "/")
 	m.Collections = []model.Collection{idDeadlines}
 	m, _ = model.Update(m, model.CollectionSelected{Collection: idDeadlines})
@@ -359,7 +378,7 @@ func TestEnterByMeaningAfterMovingIntoTheResultsRunsTheSearch(t *testing.T) {
 	if search.Query != "foo" || m.CurrentMode() != model.ModeSearchResults {
 		t.Fatalf("search %+v, mode %s; want the search for foo and the box still open", search, m.CurrentMode())
 	}
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m = answered(t, m, search, ranking("c", "a"))
 	m, cmds = press(m, "enter")
 	if !onlyReads(cmds) || m.CurrentMode() != model.ModeList || !reflect.DeepEqual(listed(m), []string{"c", "a"}) {
 		t.Fatalf("commit: mode %s, rows %v, %#v", m.CurrentMode(), listed(m), cmds)
@@ -369,7 +388,7 @@ func TestEnterByMeaningAfterMovingIntoTheResultsRunsTheSearch(t *testing.T) {
 func TestAnAnswerAfterEscapeIsDropped(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
 	m, _ = press(m, "escape", "escape")
-	m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, Query: search.Query, UIDs: []string{"c"}})
+	m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, RankedAnswer: model.RankedAnswer{Query: search.Query, UIDs: []string{"c"}}})
 	if m.Ranked.Have || !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {
 		t.Fatalf("a cancelled search answered: %+v, rows %v", m.Ranked, listed(m))
 	}
@@ -401,7 +420,7 @@ func loaded(m model.Model, cmds []model.Cmd) model.Model {
 
 func TestAFilterChangeEndsTheCommittedRankedAnswer(t *testing.T) {
 	m, search := searched(t, model.Filters{Status: "open"}, "login")
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m = answered(t, m, search, ranking("c", "a"))
 	m, cmds := press(m, "enter")
 	m = loaded(m, cmds)
 	if !reflect.DeepEqual(listed(m), []string{"c", "a"}) {
@@ -420,7 +439,7 @@ func TestAFilterChangeEndsTheCommittedRankedAnswer(t *testing.T) {
 
 func TestAFilterChangeByLabelEndsTheCommittedRankedAnswer(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "login")
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m = answered(t, m, search, ranking("c", "a"))
 	m, cmds := press(m, "enter")
 	m = loaded(m, cmds)
 	m.Filters.Label = "bug"
@@ -434,12 +453,12 @@ func TestEscapeOutOfAnEditedReopenedSearchKeepsTheCommittedAnswer(t *testing.T) 
 		name string
 		done model.SearchByMeaningDone
 	}{
-		{"answered", model.SearchByMeaningDone{UIDs: []string{"b"}}},
+		{"answered", ranking("b")},
 		{"failed", model.SearchByMeaningDone{Err: errors.New("search is not available")}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, search := searched(t, model.Filters{}, "foo")
-			m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+			m = answered(t, m, search, ranking("c", "a"))
 			m, cmds := press(m, "enter")
 			m = loaded(m, cmds)
 			m, _ = press(m, "/")
@@ -471,7 +490,7 @@ func TestAnAnswerAfterReopeningByWordsIsDropped(t *testing.T) {
 	if m.Search.Meaning {
 		t.Fatal("a search with no answer reopened by meaning")
 	}
-	m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, Query: search.Query, UIDs: []string{"c"}})
+	m, _ = model.Update(m, model.SearchByMeaningDone{Request: search.Request, RankedAnswer: model.RankedAnswer{Query: search.Query, UIDs: []string{"c"}}})
 	if m.Ranked.Have || !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {
 		t.Fatalf("a late answer landed on a words search: %+v, rows %v", m.Ranked.Have, listed(m))
 	}
@@ -502,7 +521,7 @@ func TestEscapeRestoresTheWordsSearchAfterSwitchingAWordsSearchByMeaning(t *test
 	m, _ = press(m, "enter", "enter", "/", "ctrl+t")
 	m, cmds := press(m, "enter")
 	search := cmdOf[model.SearchByMeaning](t, cmds)
-	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c"}})
+	m = answered(t, m, search, ranking("c"))
 	m, cmds = press(m, "escape", "escape")
 	m = loaded(m, cmds)
 	if m.Ranked.Have || m.Search.Meaning || m.Filters.Search != "foo" {
