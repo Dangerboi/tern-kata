@@ -4,6 +4,46 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Issues and Pages
+
+- `ctrl+t` in the search box switches the search between by words and by meaning, inside one Project.
+  - By meaning, `enter` runs kata's own search of the Project with the Status and Label filters and lists the best 50 Issues best first under Results; typing sends nothing, and a live refresh does not run it again. A short id still jumps to its Issue.
+  - The search line says "kata searched by words: <reason>" when kata has no search by meaning to offer (without a reason it says to turn it on with `kata daemon local-embeddings`), "showing the best 50" when more Issues match, and that the Owner and Relationship filters don't apply.
+  - Outside a single Project (the Inbox, Today, All Open) it says "search by meaning works inside one Project" and stays by words. `esc` out of the query goes back to by words; a saved view and the default filter keep only the text.
+
+### Changed
+
+#### Requirements
+
+- Setting attachments up needs kata v0.23.0 and Docbank 0.16.0 or newer.
+  - `kata docbank setup` is the command; the README's Requirements and the Attachments guide say so.
+
+#### Agents
+
+- An omp agent the Pane starts, and an omp worker run, records its session on `kata close` unless kata's config decides.
+  - When kata's `config.toml` has no `enabled` key under `[close.transcript]` and `KATA_CLOSE_TRANSCRIPT_ENABLED` is not set, the closes name the session as if `enabled = true`; `enabled = false` there turns it off.
+- A folder bound from the New Project form gets kata's header pointing coding agents at kata's contract, as `kata init` writes it; a folder already bound keeps its file.
+- The kata skill is written for kata v0.23.
+  - It points at `kata docbank setup` for Docbank, notes that a multi-word `kata search` matches only issues containing every word and that `--lexical`, `--hybrid` and `--semantic` pick a search mode, and no longer repeats the contract kata injects into every agent session.
+
+#### Issues and Pages
+
+- The Config Page's Docbank row describes the `[docbank]` section of the default kata daemon's `config.toml`, whichever daemon the Pane is switched to, instead of the Docbank supervision marker.
+  - It shows "not set up: `kata docbank setup` sets Docbank up", "the Docbank on this machine" for `local = true`, "Docbank at <url>", or the reader's error when the file cannot be read.
+  - A loopback url whose port is Docbank's `[server]` `api_port` is tern-kata's old setup: the row says "pinned to <url> by tern-kata's old setup: kata does not start it". On that form only, `s` asks "Switch to kata's local Docbank? kata restarts its daemon. y/n"; `y` removes the `[docbank]` table from `config.toml` (every other byte stays) and runs `kata docbank setup --yes --folder <your old folder>` for the default daemon, then reads the rows again. When kata fails, the original file is put back (unless it changed after the switch wrote it, which the row says) and kata's error line is shown.
+  - `docbank.key` and `docbank.manual` are no longer used and can be deleted.
+
+### Removed
+
+#### Attachments
+
+- **Breaking:** `tern-kata docbank setup`, `supervise` and `supervised` and the plugin's Docbank supervision are gone; `kata docbank setup` (kata v0.23) sets attachments up instead.
+  - `tern-kata docbank` is now an unknown argument and a usage error.
+  - An install set up by tern-kata 0.10 has a `[docbank]` `url` that kata never starts, so attachments stop working after the next reboot. Remove the `[docbank]` section from kata's `config.toml` and run `kata docbank setup`; Docbank keeps its port and key. Press `s` on the Config Page's Docbank row to switch it, or follow the steps in the Attachments guide.
+  - `<KATA_HOME>/docbank.key` and `docbank.manual` in tern-kata's config folder can be deleted.
+
 ## [0.10.0] - 2026-11-08
 
 ### Added

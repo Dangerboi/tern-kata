@@ -1,0 +1,211 @@
+package model
+
+import (
+	"strconv"
+	"strings"
+)
+
+// SearchLimit is how many hits kata's ranked search is asked for: the best fifty, however many Issues match.
+const SearchLimit = 50
+
+// SearchByMeaning asks kata's ranked search of one Project: mode auto, so kata ranks by words and meaning together when its
+// embeddings work and by words alone otherwise. Status and Labels are the Pane's filters.
+type SearchByMeaning struct {
+	Workspace string
+	ProjectID int64
+	Query     string
+	Status    string
+	Labels    []string
+	Request   int64
+}
+
+func (SearchByMeaning) cmd() {}
+
+// SearchByMeaningDone answers SearchByMeaning: the hits' Issue UIDs in kata's order. Lexical says kata answered by words and
+// Reason is the reason it gave; Truncated says more Issues matched than SearchLimit.
+type SearchByMeaningDone struct {
+	Request   int64
+	Query     string
+	UIDs      []string
+	Lexical   bool
+	Reason    string
+	Truncated bool
+	Err       error
+}
+
+func (SearchByMeaningDone) msg() {}
+
+// RankedSearch is kata's last ranked answer for the Pane: the Issues in its order, and what it said about the answer. It lists
+// under the Results grouping while by meaning is on in the search box, and after the search is committed while the search text is
+// still the query it answers. Err is the last failed run, which leaves the answer in place.
+type RankedSearch struct {
+	Have      bool
+	Query     string
+	UIDs      []string
+	Lexical   bool
+	Reason    string
+	Truncated bool
+	Err       error
+}
+
+const searchMeaningRefusal = "search by meaning works inside one Project"
+
+// rankedShown says the list is kata's ranked answer: not one the short-id search names, and either by meaning is on or the
+// committed search text is the query the answer is for.
+func (m Model) rankedShown() bool {
+	if !m.Ranked.Have || m.idMatch() != "" {
+		return false
+	}
+	return m.Search.Meaning || m.Filters.Search != "" && m.Ranked.Query == m.Filters.Search
+}
+
+// meaningProject is the one Project the Collection shows, which kata's search covers: a Project Collection, or a Collection
+// whose Project filter names one.
+func (m Model) meaningProject() (int64, bool) {
+	uid := m.Collection.ProjectUID
+	if f := m.Filters.ProjectUID; f != "" {
+		if uid != "" && uid != f {
+			return 0, false
+		}
+		uid = f
+	}
+	if uid == "" {
+		return 0, false
+	}
+	entry, ok := CatalogEntry(m.Snapshot, uid)
+	return entry.Project.ID, ok
+}
+
+func searchMeaningLabel(m Model) string {
+	if m.Search.Meaning {
+		return "by words"
+	}
+	return "by meaning"
+}
+
+// toggleSearchMeaning is ctrl+t in the search box: by words and by meaning, on the same query. By meaning needs one Project.
+func toggleSearchMeaning(m Model) (Model, []Cmd) {
+	if m.Search.Meaning {
+		m.Search.Meaning, m.Search.Refused = false, false
+		m.Ranked = RankedSearch{}
+		m.rankedReads.Discard()
+		return relist(m)
+	}
+	if _, ok := m.meaningProject(); !ok {
+		m.Search.Refused = true
+		return m, nil
+	}
+	m.Search.Meaning, m.Search.Refused = true, false
+	return relist(m)
+}
+
+// relist lists again from the snapshot on screen and reads the snapshot the new state asks for.
+func relist(m Model) (Model, []Cmd) {
+	m = m.applyCollection(m.Snapshot)
+	return snapshotChanged(m)
+}
+
+// runSearchByMeaning is enter by meaning: one ranked search of the query, unless the query is a short id the id search has
+// already resolved. Typing sends nothing, and neither do live events.
+func runSearchByMeaning(m Model) (Model, []Cmd) {
+	id, ok := m.meaningProject()
+	if !m.Search.Meaning || !ok || strings.TrimSpace(m.Filters.Search) == "" || m.idMatch() != "" {
+		return m, nil
+	}
+	return m, []Cmd{SearchByMeaning{
+		Workspace: m.Workspace, ProjectID: id, Query: m.Filters.Search, Status: m.Filters.Status,
+		Labels: labelList(m.Filters.Label), Request: m.rankedReads.Ask(),
+	}}
+}
+
+// meaningTyped is a keystroke in the query by meaning: it edits the text and leaves the list as it is. A query that reads as a
+// short id still goes to the id search, which jumps to that Issue.
+func meaningTyped(m Model, text string) (Model, []Cmd) {
+	m.Filters.Search = text
+	_, isID := searchShortID(text)
+	if !isID {
+		m.IDSearch = IDSearch{}
+	}
+	m = m.applyCollection(m.Snapshot)
+	if isID {
+		return snapshotChanged(m)
+	}
+	return m, nil
+}
+
+func searchMeaningDone(m Model, msg SearchByMeaningDone) (Model, []Cmd) {
+	if !m.rankedReads.IsCurrent(msg.Request) {
+		return m, nil
+	}
+	if msg.Err != nil {
+		m.Ranked.Err, m.Ranked.Query = msg.Err, msg.Query
+		return m, nil
+	}
+	m.Ranked = RankedSearch{Have: true, Query: msg.Query, UIDs: msg.UIDs, Lexical: msg.Lexical, Reason: msg.Reason, Truncated: msg.Truncated}
+	m.etag = ""
+	return relist(m)
+}
+
+// rankedGroup is the ranked answer's Issues, those the snapshot lists, in kata's order as one group under Results.
+func (m Model) rankedGroup(issues []Issue) IssueGroup {
+	byUID := make(map[string]*Issue, len(issues))
+	for i := range issues {
+		byUID[issues[i].UID] = &issues[i]
+	}
+	group := IssueGroup{ID: resultsDef.Key, Title: resultsDef.Title, Heading: m.Collection.Def().Headings}
+	for _, uid := range m.Ranked.UIDs {
+		if issue, ok := byUID[uid]; ok {
+			group.Issues = append(group.Issues, *issue)
+		}
+	}
+	return group
+}
+
+// SearchLine is what the search line says: why by meaning is refused, what kata said about its answer, and which filters the
+// answer ignores. Empty when there is nothing to say.
+func (m Model) SearchLine() string {
+	var parts []string
+	if m.Search.Open && m.Search.Refused {
+		parts = append(parts, searchMeaningRefusal)
+	}
+	if m.Search.Meaning || m.rankedShown() {
+		if m.Ranked.Err != nil {
+			parts = append(parts, strings.ReplaceAll(m.Ranked.Err.Error(), "\n", " "))
+		}
+		if m.Ranked.Have && m.Ranked.Lexical {
+			reason := m.Ranked.Reason
+			if reason == "" {
+				reason = "turn on search by meaning with `kata daemon local-embeddings`"
+			}
+			parts = append(parts, "kata searched by words: "+reason)
+		}
+		if m.Ranked.Have && m.Ranked.Truncated {
+			parts = append(parts, "showing the best "+strconv.Itoa(SearchLimit))
+		}
+		var ignored []string
+		if m.Filters.Owner != "" {
+			ignored = append(ignored, "Owner")
+		}
+		if m.Filters.Relationship != "" {
+			ignored = append(ignored, "Relationship")
+		}
+		switch len(ignored) {
+		case 1:
+			parts = append(parts, "the "+ignored[0]+" filter doesn't apply to search by meaning")
+		case 2:
+			parts = append(parts, "the Owner and Relationship filters don't apply to search by meaning")
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+// labelList is the Label filter's comma-separated labels.
+func labelList(filter string) []string {
+	var labels []string
+	for _, label := range strings.Split(filter, ",") {
+		if label = strings.TrimSpace(label); label != "" {
+			labels = append(labels, label)
+		}
+	}
+	return labels
+}

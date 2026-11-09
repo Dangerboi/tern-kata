@@ -1232,6 +1232,48 @@ describe("extension factory", () => {
       expect(env.KATA_TRANSCRIPT_SESSION_ID).toBeUndefined();
     }
   });
+
+  test("with the close-transcript variable on, session events set kata's switch with the names", () => {
+    const env: Record<string, string | undefined> = { TERN_KATA_CLOSE_TRANSCRIPT: "on" };
+    const w = wire(env);
+    for (const [event, id] of [["session_start", "first"], ["session_switch", "second"], ["session_branch", "third"]]) {
+      w.handlers.get(event)?.({}, session(id));
+      expect(env.KATA_CLOSE_TRANSCRIPT_ENABLED).toBe("true");
+      expect(env.KATA_TRANSCRIPT_AGENT).toBe("omp");
+      expect(env.KATA_TRANSCRIPT_SESSION_ID).toBe(id);
+    }
+  });
+
+  test("with the variable on, an id kata would refuse removes the switch with the names", () => {
+    for (const ctx of [session("has space"), session("-lead"), session("x".repeat(129)), {}]) {
+      const env: Record<string, string | undefined> = { TERN_KATA_CLOSE_TRANSCRIPT: "on" };
+      const w = wire(env);
+      w.handlers.get("session_start")?.({}, session("good"));
+      expect(env.KATA_CLOSE_TRANSCRIPT_ENABLED).toBe("true");
+      w.handlers.get("session_switch")?.({}, ctx);
+      expect(env.KATA_CLOSE_TRANSCRIPT_ENABLED).toBeUndefined();
+      expect(env.KATA_TRANSCRIPT_AGENT).toBeUndefined();
+      expect(env.KATA_TRANSCRIPT_SESSION_ID).toBeUndefined();
+      w.handlers.get("session_switch")?.({}, session("again"));
+      expect(env.KATA_CLOSE_TRANSCRIPT_ENABLED).toBe("true");
+    }
+  });
+
+  test("a KATA_CLOSE_TRANSCRIPT_ENABLED a person set is kept as it is", () => {
+    for (const ctx of [session("good"), session("has space")]) {
+      const env: Record<string, string | undefined> = { TERN_KATA_CLOSE_TRANSCRIPT: "on", KATA_CLOSE_TRANSCRIPT_ENABLED: "false" };
+      wire(env).handlers.get("session_start")?.({}, ctx);
+      expect(env.KATA_CLOSE_TRANSCRIPT_ENABLED).toBe("false");
+    }
+  });
+
+  test("with the variable off, no switch is set", () => {
+    for (const env of [{} as Record<string, string | undefined>, { TERN_KATA_CLOSE_TRANSCRIPT: "off" }]) {
+      wire(env).handlers.get("session_start")?.({}, session("good"));
+      expect(env.KATA_CLOSE_TRANSCRIPT_ENABLED).toBeUndefined();
+      expect(env.KATA_TRANSCRIPT_SESSION_ID).toBe("good");
+    }
+  });
 });
 
 describe("session path file", () => {

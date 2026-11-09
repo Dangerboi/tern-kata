@@ -160,6 +160,36 @@ func createIssue(t *testing.T, gateway *Gateway, workspace string, project model
 	return created.UID
 }
 
+// TestGatewayBindsWithKatasHeader pins the bytes kata v0.23's `kata init
+// --project demo` writes for a new binding, and that a folder already bound to
+// the same Project keeps its file as it is.
+func TestGatewayBindsWithKatasHeader(t *testing.T) {
+	kata := startKata(t, "0.23.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+
+	want := "# This repository tracks its work in kata.\n" +
+		"# Coding agents: read `kata quickstart --format contract` before changing code here.\n" +
+		"version = 1\n\n[project]\nname = \"demo\"\n"
+	workspace, _ := project(t, gateway, "demo")
+	path := filepath.Join(workspace, ".kata.toml")
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != want {
+		t.Fatalf(".kata.toml %q, %v; want %q", got, err, want)
+	}
+
+	const headerless = "version = 1\n\n[project]\nname = \"demo\"\n"
+	if err := os.WriteFile(path, []byte(headerless), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rebound := as[model.ProjectSaved](t, run(t, gateway, model.BindProject{Workspace: workspace, Actor: "tester", Name: "demo"}))
+	if rebound.Err != nil {
+		t.Fatal(rebound.Err)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != headerless {
+		t.Fatalf("rebinding changed .kata.toml to %q, %v", got, err)
+	}
+}
+
 func TestGatewayBindsAndCreatesProjects(t *testing.T) {
 	kata := startKata(t, "0.21.0")
 	gateway := newGateway(t, newLocator(kata.target()))
@@ -670,6 +700,7 @@ func TestGatewayFailureShapePerCommand(t *testing.T) {
 		{model.CreateIssueCmd{}, model.IssueCreated{Err: boom}},
 		{model.OpenIssue{Ref: "p/x"}, model.IssueOpenFailed{Ref: "p/x", Err: boom}},
 		{model.LookupSearchID{Request: 3, ShortID: "abcd"}, model.SearchIDLooked{Request: 3, ShortID: "abcd"}},
+		{model.SearchByMeaning{Request: 4, Query: "q"}, model.SearchByMeaningDone{Request: 4, Query: "q", Err: boom}},
 		{model.SaveDraft{UID: "u"}, model.DraftFailed{UID: "u", Err: boom}},
 		{model.CloseIssueCmd{UID: "u", Key: "k-u"}, model.CloseResultMsg{UID: "u", Err: boom}},
 		{model.ReopenIssueCmd{UID: "u"}, model.CloseResultMsg{UID: "u", Err: boom}},

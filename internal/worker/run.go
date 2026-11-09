@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/Dangerboi/tern-kata/internal/closetranscript"
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/data/ompext"
 )
@@ -301,7 +302,12 @@ var promptKeptKata = map[string]bool{
 // except the routing and credential names and the variables the [secrets] env sources read, plus the actor and the
 // step's secrets.
 func childEnv(actor string, secrets map[string]string, hidden map[string]bool) []string {
-	return promptEnv(os.Environ(), actor, secrets, hidden, envCaseInsensitive)
+	environ := os.Environ()
+	env := promptEnv(environ, actor, secrets, hidden, envCaseInsensitive)
+	if closetranscript.Decide(environ, envCaseInsensitive) {
+		env = append(env, closetranscript.Env+"="+closetranscript.On)
+	}
+	return env
 }
 
 const envCaseInsensitive = runtime.GOOS == "windows"

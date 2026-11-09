@@ -144,7 +144,7 @@ func (m Model) listRows() []IssueRow {
 		row.OpenKids, row.TotalKids = c.Open, c.Total
 		return row
 	}
-	if m.Flat {
+	if m.Flat || m.rankedShown() { // kata's order is flat
 		for _, issue := range m.Issues {
 			rows = append(rows, kids(IssueRow{Issue: issue}))
 		}

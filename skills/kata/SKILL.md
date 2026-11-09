@@ -3,7 +3,7 @@ name: kata
 description: "Kata issue tracker CLI. Use when a repo has `.kata.toml` or names Kata as its tracker: finding, creating, claiming, commenting, replying, labelling or closing issues (tickets), making work recur, scheduling agent jobs, being run by a tern-kata worker, or coordinating subagents through issues."
 ---
 
-Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.22; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for upstream agent policy. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
+Kata is a daemon-backed issue ledger shared by humans and agents. Written against kata v0.23; `kata <cmd> --help` is the source of truth for flags, `kata quickstart --format contract` for the policy kata injects into every agent session. Repo specifics (project name, extra labels, human gates) live in that repo's `AGENTS.md`.
 
 ## Output mode
 
@@ -17,10 +17,8 @@ An issue ref is a short id (`m0h6`), a qualified short id (`myproject#m0h6`), or
 
 ## Guardrails
 
-- `delete` and `purge` run only when the user asks for that exact action on that exact ref. Both demand `--force --confirm "DELETE <qualified-id>"` / `"PURGE <qualified-id>"`; `delete` is reversible with `kata restore`, `purge` is not.
-- Close only work that is done and verified (see Close). Incomplete work gets `needs-review` plus a comment.
+- `delete` and `purge` demand `--force --confirm "DELETE <qualified-id>"` / `"PURGE <qualified-id>"`; `delete` is reversible with `kata restore`, `purge` is not.
 - No practice, example, or scratch issues: the ledger is shared state.
-- Search before creating; reuse an open issue when one fits.
 
 ## Find work
 
@@ -29,7 +27,7 @@ kata next --unowned --agent                      # single highest-priority ready
 kata ready --unowned --label bug --no-label blocked --agent
 kata list --agent                                # open issues, capped at 200 rows
 kata list --status all --label needs-triage --max-priority 1 --agent
-kata search "bracket orphan" --agent             # title/body/comments; --status open|closed
+kata search "orphan" --agent                     # title/body/comments; --status open|closed
 kata show <ref> --agent                          # issue + comments
 kata labels --agent                              # label counts in project
 ```
@@ -38,6 +36,7 @@ kata labels --agent                              # label counts in project
 - Priority is `0..4`, **0 = highest**. `--label` repeats with AND logic; `--no-label` excludes.
 - `--all` on `list`/`ready`/`next` spans every non-archived project.
 - `list` stops at 200 rows (`--include-total` reports the full count; `--all` has no default limit). For every match, add `--sort created --json` and repeat with `--cursor <next_cursor>` until `complete` is true; `search --lexical` pages the same way. `--priority-unset` finds unprioritised issues.
+- A multi-word `kata search` matches only issues containing every word, so start with one or two distinctive words. With embeddings on, the default search also ranks by meaning; `--lexical`, `--hybrid` and `--semantic` pick one.
 
 ## Create
 
@@ -54,6 +53,7 @@ EOF
 - `--meta key=value` (repeatable) stores the value as a JSON string.
 - `--idempotency-key <key>` makes retries and fan-out creates safe; reusing a key returns the original issue. `comment` and `close` take one too.
 - Relationships at creation: `--parent`, `--blocks`, `--blocked-by`, `--related` (see Relationships).
+- `--priority none` leaves the priority unset whatever `[create].default_priority` says.
 
 ## Edit, comment, label
 
@@ -126,15 +126,14 @@ kata close <ref> --done --docbank <node-id|/abs/path> --message "<…>"   # link
 
 - A close is a completion claim. `--message` must be issue-specific prose: what changed, how it was verified. Minimum length: 40 characters for `--done` and `--audit-no-change`, 20 for `--duplicate-of` and `--superseded-by`, 60 for `--wontfix`.
 - Evidence is typed: `--commit <sha>`, `--pr <url>`, `--test <cmd>`, `--reviewed <path>`, `--docbank <node-id|/abs/path>`, or raw `--evidence commit:|pr:|test:|reviewed-paths:|external:|no-change-audit:|duplicate-of:|superseded-by:|attachment:<value>`. `--commit`, `--pr`, `--test`, `--reviewed`, `--docbank` and `--evidence` each repeat and every value is recorded (`--test "<cmd>"` once per test); an empty value is refused. `--docbank` and `--evidence attachment:<full-id>` are done-reason evidence only. `external:<account>` covers done work with no repo artifact. Non-wontfix closes without evidence show up in `kata audit closes --no-evidence`.
-- Close each issue as soon as it is verified, not batched at the end.
 - A parent cannot close while it has open children.
 - Only `--done` makes a recurring issue's next occurrence (see Recurring work).
-- Not finished: `kata label add <ref> needs-review --comment "<attempted / remains>"`. Never self-close a `needs-review` issue.
+- Never self-close a `needs-review` issue.
 - `kata reopen <ref> --comment "<why>"` undoes a close.
 
 ## Attachments
 
-An Issue's files are native attachments: the bytes live in Docbank and the Issue holds one `attachment.<id>` meta key per file with `{name, media_type, size, docbank_version}`. They need the daemon to have a `[docbank]` section; without it every call below fails with `docbank_not_configured`, and you should tell the user that is what is missing (the Attachments guide of tern-kata says how to set it up) rather than work around it.
+An Issue's files are native attachments: the bytes live in Docbank and the Issue holds one `attachment.<id>` meta key per file with `{name, media_type, size, docbank_version}`. They need the daemon to have a `[docbank]` section; without it every call below fails with `docbank_not_configured`, and you should tell the user that is what is missing rather than work around it. The user sets it up with `kata docbank setup` (Docbank on this machine: kata starts it and follows its port and key) or `kata docbank setup --url <url> --key-file <file>` (a Docbank elsewhere); run it only when the user asks.
 
 ```bash
 kata docbank attachments ls <ref> --agent          # id, name, media type and size of each attachment
@@ -309,6 +308,7 @@ kata events --tail --agent                        # stream live; --last-event-id
 
 ## Setup (rare)
 
-- `kata init --project <name>` writes committed `.kata.toml` and gitignores `.kata.local.toml` (per-machine overrides). `--with-agents` injects generic guidance into `AGENTS.md`/`CLAUDE.md`; prefer this skill plus a short repo-specific section instead.
+- `kata init --project <name>` writes committed `.kata.toml` with a header pointing agents at `kata quickstart --format contract`, and gitignores `.kata.local.toml` (per-machine overrides). Rerunning it in a bound directory adds the header to an existing binding. `--with-agents` injects generic guidance into `AGENTS.md`/`CLAUDE.md`; prefer this skill plus a short repo-specific section instead.
+- `kata cli search "<task>"` finds a command by describing the task, offline.
 - `kata agent-hook install [--local]` installs the contract and attention hooks for detected coding agents (the plural `agent-hooks` is gone).
 - `kata doctor` (read-only; never starts or repairs a daemon), then `kata health` / `kata daemon`, when commands fail to reach the daemon.

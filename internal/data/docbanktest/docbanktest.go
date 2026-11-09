@@ -92,7 +92,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/path" && r.URL.Query().Get("path") == "/":
-		send(map[string]any{"id": 0, "kind": "dir"}) // the vault root: the read `docbank setup` checks a key with
+		send(map[string]any{"id": 0, "kind": "dir"}) // the vault root: the read a key check uses
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/path":
 		id, ok := f.dirs[r.URL.Query().Get("path")]
 		if !ok {

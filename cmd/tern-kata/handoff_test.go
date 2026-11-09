@@ -229,6 +229,38 @@ func (stubSurface) Render(tern.View) error { return nil }
 func (stubSurface) Send(...tern.Op) error  { return nil }
 func (stubSurface) Close() error           { return nil }
 
+func TestCloseTranscriptEnvIsOnExactlyWhenKatasConfigAndEnvironmentLeaveTheChoice(t *testing.T) {
+	for _, c := range []struct {
+		name, config string
+		extra        []string
+		want         bool
+	}{
+		{name: "no key", config: "[close.transcript]\nagentsview_url = \"http://x\"\n", want: true},
+		{name: "no file", want: true},
+		{name: "enabled = false", config: "[close.transcript]\nenabled = false\n"},
+		{name: "enabled = true", config: "[close.transcript]\nenabled = true\n"},
+		{name: "switch in the environment", extra: []string{"KATA_CLOSE_TRANSCRIPT_ENABLED=true"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			if c.config != "" {
+				if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(c.config), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			environ := append([]string{"PATH=/bin", "KATA_HOME=" + home, "TERN_KATA_CLOSE_TRANSCRIPT=inherited"}, c.extra...)
+			got := closeTranscriptEnv(environ, false)
+			want := append([]string{"PATH=/bin", "KATA_HOME=" + home}, c.extra...)
+			if c.want {
+				want = append(want, "TERN_KATA_CLOSE_TRANSCRIPT=on")
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("closeTranscriptEnv = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 func TestEditInTerminalKeepsTextWhenResumeFails(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake editors use sh")

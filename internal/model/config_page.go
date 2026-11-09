@@ -11,6 +11,17 @@ import (
 // exists, whether it loads (the loader's own error when it does not) and a one-line summary of what it holds. It is read again on
 // every entry and acts on no Project, so it has no reset rule.
 
+// SwitchDocbank asks to move the default kata daemon's old pinned Docbank setup to kata's local one.
+type SwitchDocbank struct{}
+
+func (SwitchDocbank) cmd() {}
+
+// DocbankSwitched answers SwitchDocbank. Err carries kata's error line, or why the file could not be changed, and says when
+// config.toml was not restored; the rows are not read again then.
+type DocbankSwitched struct{ Err error }
+
+func (DocbankSwitched) msg() {}
+
 type ConfigFileKey string
 
 const (
@@ -21,7 +32,7 @@ const (
 	ConfigWorker  ConfigFileKey = "worker"
 	ConfigAgent   ConfigFileKey = "agent"
 	ConfigKata    ConfigFileKey = "kata"
-	// ConfigDocbank is the Docbank supervision row: its path is the marker docbank.manual, which exists when supervision is off.
+	// ConfigDocbank is the Docbank row: the [docbank] section of the default kata daemon's config.toml, which is its path.
 	ConfigDocbank ConfigFileKey = "docbank"
 )
 
@@ -42,8 +53,8 @@ const (
 	ConfigOpen ConfigAction = "open"
 	// ConfigEdit is e: the file in $EDITOR.
 	ConfigEdit ConfigAction = "edit"
-	// ConfigSwitch is s: the row's switch.
-	ConfigSwitch ConfigAction = "switch"
+	// ConfigSwitchDocbank is s: the old pinned Docbank setup becomes kata's local one. Only the Docbank row in that form has it.
+	ConfigSwitchDocbank ConfigAction = "switch"
 )
 
 type ConfigFile struct {
@@ -59,19 +70,11 @@ type ConfigFile struct {
 	Text string
 	// Starter is the commented text an edit starts from when the file is missing or blank. Only the agent.toml row has it.
 	Starter string
-	// Supervised is the supervision rule's answer, set only on the Docbank row; the marker alone does not decide it.
-	Supervised bool
 }
 
 func (f ConfigFile) Has(action ConfigAction) bool { return slices.Contains(f.Actions, action) }
 
 func (f ConfigFile) StatusWords() string {
-	if f.Key == ConfigDocbank && f.Status != ConfigBroken {
-		if f.Status == ConfigLoads {
-			return "exists"
-		}
-		return "absent"
-	}
 	switch f.Status {
 	case ConfigLoads:
 		return "loads"
@@ -98,21 +101,6 @@ type ConfigFilesLoaded struct {
 }
 
 func (ConfigFilesLoaded) msg() {}
-
-// SetDocbankSupervision turns the plugin's supervision of Docbank on (On: docbank.manual is removed) or off (the marker is created).
-type SetDocbankSupervision struct {
-	On bool
-}
-
-func (SetDocbankSupervision) cmd() {}
-
-// DocbankSupervisionSet answers SetDocbankSupervision. On echoes the ask; Err says the marker could not be changed.
-type DocbankSupervisionSet struct {
-	On  bool
-	Err error
-}
-
-func (DocbankSupervisionSet) msg() {}
 
 const AgentDraftUID = "agent-config-draft"
 
@@ -147,8 +135,8 @@ type ConfigPageState struct {
 	Folder  string
 	Files   []ConfigFile
 	Cursor  int
-	// Switching says a Docbank supervision switch is out; s waits for its answer.
-	Switching bool
+	// AskSwitch says the question of the Docbank switch is shown; Switching says the switch is out, and s waits for its answer.
+	AskSwitch, Switching bool
 	// Saving says an agent.toml save is out; e waits for its answer.
 	Saving bool
 	// EditBase is agent.toml's text when the editor opened; EditText is the text a refused or unsaved edit left, which the next e
@@ -176,14 +164,14 @@ func clearConfig(m Model) Model {
 
 func updateConfig(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
-	case DocbankSupervisionSet:
-		m, cmds := docbankSupervisionSet(m, msg)
-		return m, cmds, true
 	case ConfigActMsg:
 		m, cmds := configClicked(m, msg)
 		return m, cmds, true
 	case DraftEditorClosed:
 		return agentEditorClosed(m, msg)
+	case DocbankSwitched:
+		m, cmds := docbankSwitched(m, msg)
+		return m, cmds, true
 	case AgentConfigSaved:
 		m, cmds := agentConfigSaved(m, msg)
 		return m, cmds, true
@@ -247,14 +235,11 @@ func configOpenLabel(m Model) string {
 
 // ConfigActionLabel is the words of the selected row's action, as the footer and the row's button say them.
 func ConfigActionLabel(f ConfigFile, action ConfigAction) string {
-	if action == ConfigEdit {
+	switch action {
+	case ConfigEdit:
 		return "edit " + f.Title
-	}
-	if action == ConfigSwitch {
-		if f.Status == ConfigLoads {
-			return "turn supervision on"
-		}
-		return "turn supervision off"
+	case ConfigSwitchDocbank:
+		return "switch to kata's local Docbank"
 	}
 	switch f.Key {
 	case ConfigLanes:
@@ -333,47 +318,12 @@ func configClicked(m Model, msg ConfigActMsg) (Model, []Cmd) {
 	}
 	m.ConfigPage.Cursor = i
 	switch msg.Action {
-	case ConfigSwitch:
-		return switchDocbank(m)
 	case ConfigEdit:
 		return editAgentConfig(m)
+	case ConfigSwitchDocbank:
+		return askSwitchDocbank(m)
 	}
 	return openConfigFile(m)
-}
-
-// switchDocbank is s on the Docbank row: supervision goes off when docbank.manual is absent and on when it is there. It is
-// ignored while a switch is out.
-func switchDocbank(m Model) (Model, []Cmd) {
-	f := m.SelectedConfigFile()
-	if f == nil || !f.Has(ConfigSwitch) || m.ConfigPage.Switching {
-		return m, nil
-	}
-	m.ConfigPage.Switching, m.ConfigPage.Message, m.ConfigPage.MessageErr = true, "", false
-	return m, []Cmd{SetDocbankSupervision{On: f.Status == ConfigLoads}}
-}
-
-// docbankSwitchMessage is what a switch that took effect says. Turning supervision on promises nothing beyond the rule: the row,
-// read again, gives the reason when the rule still fails.
-func docbankSwitchMessage(on bool) string {
-	if on {
-		return "Docbank supervision is on: the plugin starts a local Docbank within 10 seconds when the rule holds."
-	}
-	return "Docbank supervision is off: a Docbank that is running keeps running."
-}
-
-// docbankSupervisionSet reads the rows again after a switch took effect; a failed switch shows its error and leaves the rows.
-func docbankSupervisionSet(m Model, msg DocbankSupervisionSet) (Model, []Cmd) {
-	c := &m.ConfigPage
-	if !m.OnConfig() || !c.Switching {
-		return m, nil
-	}
-	c.Switching = false
-	if msg.Err != nil {
-		c.Message, c.MessageErr = "Docbank supervision not changed: "+oneLine(msg.Err.Error()), true
-		return m, nil
-	}
-	c.Message, c.MessageErr = docbankSwitchMessage(msg.On), false
-	return m, []Cmd{LoadConfigFiles{Request: c.reads.Ask()}}
 }
 
 // agentEditStart is the text the editor is given: the refused or unsaved edit when there is one, else the file, else the starter.
@@ -450,18 +400,60 @@ func agentConfigSaved(m Model, msg AgentConfigSaved) (Model, []Cmd) {
 
 var configRows = []actionEntry{
 	{action: OpenConfigFile, modes: []Mode{ModeConfig}, keys: keys("enter", "↵"), help: "open", label: configOpenLabel, footer: []Mode{ModeConfig}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 40, "open the card or Page that edits the selected file"}}, handle: openConfigFile, when: selectedConfigOffers(ConfigOpen)},
-	{action: SwitchDocbank, modes: []Mode{ModeConfig}, keys: keys("s", "s"), help: "supervision", label: configSwitchLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 41, "turn the plugin's supervision of Docbank off or on"}}, handle: switchDocbank, when: selectedConfigOffers(ConfigSwitch)},
 	{action: EditAgentConfig, modes: []Mode{ModeConfig}, keys: keys("e", "e"), help: "edit", label: configEditLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 42, "edit agent.toml in $EDITOR; it is checked before it is written"}}, handle: editAgentConfig, when: selectedConfigOffers(ConfigEdit)},
+	{action: SwitchDocbankAction, modes: []Mode{ModeConfig}, keys: keys("s", "s"), help: "switch Docbank", label: configSwitchLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 43, "switch the old pinned Docbank to kata's local Docbank (asks y/n)"}}, handle: askSwitchDocbank, when: selectedConfigOffers(ConfigSwitchDocbank)},
+	{action: ConfirmSwitchDocbankAction, modes: []Mode{ModeSwitchDocbank}, keys: keys("y", "y"), help: "switch", footer: []Mode{ModeSwitchDocbank}, handle: confirmSwitchDocbank},
+	{action: KeepDocbankAction, modes: []Mode{ModeSwitchDocbank}, keys: keys("n", "n", "escape", "esc"), help: "keep", footer: []Mode{ModeSwitchDocbank}, handle: pure(func(m Model) Model { m.ConfigPage.AskSwitch = false; return m })},
+	{action: QuitNowAction, modes: []Mode{ModeSwitchDocbank}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},
 	letteredBackRow(ModeConfig, letteredBack),
 }
 
 func configSwitchLabel(m Model) string {
 	if f := m.SelectedConfigFile(); f != nil {
-		return ConfigActionLabel(*f, ConfigSwitch)
+		return ConfigActionLabel(*f, ConfigSwitchDocbank)
 	}
-	return "supervision"
+	return "switch"
 }
 
+// SwitchDocbankQuestion is what s on the old pinned Docbank row asks.
+const SwitchDocbankQuestion = "Switch to kata's local Docbank? kata restarts its daemon. y/n"
+
+// askSwitchDocbank is s on the Docbank row in its old pinned form. It is ignored while a switch is out.
+func askSwitchDocbank(m Model) (Model, []Cmd) {
+	f := m.SelectedConfigFile()
+	if f == nil || !f.Has(ConfigSwitchDocbank) || m.ConfigPage.Switching {
+		return m, nil
+	}
+	m.ConfigPage.AskSwitch, m.HelpOpen = true, false
+	return m, nil
+}
+
+// confirmSwitchDocbank is y: the question is dismissed and the switch goes out; its answer follows as DocbankSwitched.
+func confirmSwitchDocbank(m Model) (Model, []Cmd) {
+	c := &m.ConfigPage
+	c.AskSwitch = false
+	if c.Switching {
+		return m, nil
+	}
+	c.Switching, c.Message, c.MessageErr = true, "switching Docbank...", false
+	return m, []Cmd{SwitchDocbank{}}
+}
+
+// docbankSwitched shows what the switch did. A switch reads the rows again; a failed one keeps them, as kata's own error is all
+// there is to show.
+func docbankSwitched(m Model, msg DocbankSwitched) (Model, []Cmd) {
+	c := &m.ConfigPage
+	if !m.OnConfig() || !c.Switching {
+		return m, nil
+	}
+	c.Switching = false
+	if msg.Err != nil {
+		c.Message, c.MessageErr = "Docbank was not switched: "+oneLine(msg.Err.Error()), true
+		return m, nil
+	}
+	c.Message, c.MessageErr = "Switched to kata's local Docbank; kata restarted its daemon. docbank.key and docbank.manual in tern-kata's config folder are no longer used and can be deleted.", false
+	return m, []Cmd{LoadConfigFiles{Request: c.reads.Ask()}}
+}
 func configEditLabel(m Model) string {
 	if f := m.SelectedConfigFile(); f != nil {
 		return ConfigActionLabel(*f, ConfigEdit)

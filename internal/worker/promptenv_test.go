@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -87,6 +89,42 @@ func TestChildEnvDropsInheritedIssueBinding(t *testing.T) {
 	}
 	if !slices.Contains(childEnv("ann", nil, nil), "KATA_HOME=/k") {
 		t.Error("childEnv dropped KATA_HOME")
+	}
+}
+
+func TestChildEnvCarriesTheCloseTranscriptVariableExactlyWhenKatasConfigLeavesTheChoice(t *testing.T) {
+	for _, c := range []struct {
+		name, config, switchEnv string
+		want                    bool
+	}{
+		{name: "no key", config: "[close.transcript]\nagentsview_url = \"http://x\"\n", want: true},
+		{name: "no file", want: true},
+		{name: "enabled = false", config: "[close.transcript]\nenabled = false\n"},
+		{name: "enabled = true", config: "[close.transcript]\nenabled = true\n"},
+		{name: "switch in the environment", switchEnv: "false"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("KATA_HOME", home)
+			t.Setenv("TERN_KATA_CLOSE_TRANSCRIPT", "inherited")
+			if c.switchEnv != "" {
+				t.Setenv("KATA_CLOSE_TRANSCRIPT_ENABLED", c.switchEnv)
+			}
+			if c.config != "" {
+				if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(c.config), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := slices.Contains(childEnv("ann", nil, nil), "TERN_KATA_CLOSE_TRANSCRIPT=on")
+			if got != c.want {
+				t.Errorf("variable on = %v, want %v", got, c.want)
+			}
+			for _, kv := range childEnv("ann", nil, nil) {
+				if strings.HasPrefix(kv, "TERN_KATA_CLOSE_TRANSCRIPT=") && kv != "TERN_KATA_CLOSE_TRANSCRIPT=on" {
+					t.Errorf("kept %q", kv)
+				}
+			}
+		})
 	}
 }
 

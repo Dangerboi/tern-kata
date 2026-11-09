@@ -167,7 +167,6 @@ func init() {
 	local(withoutCtx((*Gateway).saveWorkerEdit))
 	local((*Gateway).stopWorker)
 	local(withoutCtx((*Gateway).saveAgentConfig))
-	local((*Gateway).setDocbankSupervision)
 	local((*Gateway).setWorkerSupervision)
 	local((*Gateway).loadLocalRun)
 	local((*Gateway).runJobNow)
@@ -218,6 +217,12 @@ func init() {
 		},
 		func(cmd model.LookupSearchID, _ error) model.Msg {
 			return model.SearchIDLooked{Request: cmd.Request, ShortID: cmd.ShortID}
+		})
+
+	daemonCall(
+		(*Client).SearchIssues,
+		func(cmd model.SearchByMeaning, err error) model.Msg {
+			return model.SearchByMeaningDone{Request: cmd.Request, Query: cmd.Query, Err: err}
 		})
 
 	daemonCall(
@@ -386,6 +391,7 @@ func init() {
 	local((*Gateway).loadDaemons)
 	local((*Gateway).switchDaemon)
 	local((*Gateway).loadConfigFiles)
+	local((*Gateway).switchDocbank)
 
 	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.LoadDetail) (model.DetailLoaded, error) {

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Dangerboi/tern-kata/internal/closetranscript"
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -53,6 +54,19 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 		return environ, nil
 	}
 	return append(envWithout(environ, caseInsensitive, unset...), set...), nil
+}
+
+// closeTranscriptEnv returns environ with TERN_KATA_CLOSE_TRANSCRIPT=on when kata's config and the environment leave the choice
+// to tern-kata (closetranscript.Decide), which the agent's omp extension reads to set KATA_CLOSE_TRANSCRIPT_ENABLED with the
+// names of its session. An inherited value is dropped first, so only this launch decides. environ is the route's: its
+// KATA_HOME is the home the agent's kata commands use.
+func closeTranscriptEnv(environ []string, caseInsensitive bool) []string {
+	on := closetranscript.Decide(environ, caseInsensitive)
+	env := envWithout(environ, caseInsensitive, closetranscript.Env)
+	if on {
+		env = append(env, closetranscript.Env+"="+closetranscript.On)
+	}
+	return env
 }
 
 // agentEnv returns environ for the agent plan runs: KATA_AUTHOR set to plan.Actor as childEnv does (left as inherited when it is

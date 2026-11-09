@@ -43,7 +43,7 @@ The Comments tab shows a discussion as a reply tree, as kata's TUI does: a reply
 
 kata tui switches tabs with `1` to `4`: kata (the Issues), Jobs, Runs and Workflows. tern-kata numbers its Pages the same way for those four: `1` Issues, `2` Jobs, `3` Runs, `4` Workflows. The Board and Attention Pages come after them, as `5` and `6`.
 
-kata tui's three tabs read the Project's Cron jobs, Runs and workflows, and open a record to follow its links (a run to its job and workflow, a workflow to the jobs that use it). Its only writes are `n` and `e` on a job. tern-kata's Pages show the same records and go further:
+kata tui's three tabs read the Project's Cron jobs, Runs and workflows, and open a record to follow its links (a run to its job and workflow, a workflow to the jobs that use it). Its writes are `n` and `e` on a job or a workflow (a workflow's JSON opens in `$EDITOR` with `ctrl+e`; `ctrl+o` saves). tern-kata's Pages show the same records and go further:
 
 | | kata tui | tern-kata |
 |---|---|---|
@@ -52,7 +52,7 @@ kata tui's three tabs read the Project's Cron jobs, Runs and workflows, and open
 | Run now | None | `R` asks the worker to run the selected adapter job |
 | Worker | None | `W` opens the Worker card for this machine's worker |
 | Runs | The newest 100, read-only | `m` reads older runs, `f` narrows to a job, `i` opens the run's Issue, and `o`, `u` and `A` open the session of, resume or abandon a run of this machine's worker, held runs included |
-| Workflows | Read-only | The Workflow card makes and edits workflows as JSON, `x` archives, `r` restores and `a` shows archived ones |
+| Workflows | `n` and `e` create and edit a workflow as JSON (`ctrl+e` for the editor, `ctrl+o` to save); an archived workflow stops with "use the CLI to restore it before editing" | The Workflow card makes and edits workflows as JSON too, and adds `x` to archive, `r` to restore and `a` to show archived ones |
 
 kata tui's `r` refreshes the tab; tern-kata reads again with `ctrl+r`, and `r` on the Jobs Page opens the Runs Page filtered to the selected job.
 
@@ -66,7 +66,7 @@ In the Issue detail, `b` adds a Blocking link and `l` a related link to the Issu
 
 ## Moving an Issue
 
-kata tui has no key for moving an Issue to another Project; kata web and the CLI do. `M` in tern-kata opens the Move card, which sends kata's move; like the CLI and web it moves the Issue with its descendants unless the card's "Only this Issue" switch is on (see [Moving an Issue](pages-and-board.md#moving-an-issue)).
+kata tui's `M` previews the Issue and the descendants that move to another Project, then asks before it moves them. `M` in tern-kata is the same key and opens the Move card, which sends kata's move; like the CLI and web it moves the Issue with its descendants unless the card's "Only this Issue" switch is on (see [Moving an Issue](pages-and-board.md#moving-an-issue)).
 
 ## Deleting and restoring an Issue
 

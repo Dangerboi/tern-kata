@@ -97,10 +97,7 @@ func (g *Gateway) loadConfigFiles(_ context.Context, cmd model.LoadConfigFiles) 
 		}),
 		agentRow(filepath.Join(folder, AgentConfigFile)),
 	}
-	if row, ok := g.docbankRow(); ok {
-		files = append(files, row)
-	}
-	files = append(files, g.kataConfigRow())
+	files = append(files, g.docbankRow(), g.kataConfigRow())
 	return model.ConfigFilesLoaded{Request: cmd.Request, Folder: folder, Files: files}
 }
 

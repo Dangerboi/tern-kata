@@ -68,7 +68,6 @@ type LaunchPlan struct {
 	AgentCoordinator  string
 	AgentCoordinating bool
 	AgentRoute        data.AgentRoute
-	Docbank           DocbankSetup
 	fallbackAuthor    string
 }
 
@@ -94,7 +93,7 @@ type usageError struct{ error }
 
 func (e usageError) Unwrap() error { return e.error }
 
-var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "docbank", "agent", "agents", "team", "message", "completion"}
+var subcommands = []string{"migrate-attachments", "recur", "run", "views", "worker", "update", "agent", "agents", "team", "message", "completion"}
 
 var completionShells = []string{"bash", "zsh", "fish"}
 
@@ -157,10 +156,8 @@ func subcommandFlag(sub string, args []string, i *int, plan *LaunchPlan) (matche
 		matched, err = parseTableFlag(agentFlags, "agent", agentUsage, args, i, plan)
 	case "agents":
 		matched, err = parseTableFlag(agentsFlags, "agents", agentsUsage, args, i, plan)
-	case "docbank":
-		matched, err = parseTableFlag(docbankFlags, "docbank", docbankUsage, args, i, plan)
 	}
-	if matched || err != nil || sub == "completion" || sub == "update" || sub == "docbank" || sub == "team" || sub == "run" {
+	if matched || err != nil || sub == "completion" || sub == "update" || sub == "team" || sub == "run" {
 		return matched, err // these write as no actor, or read their own --as
 	}
 	actor, matched, err := parseAs(args, i)
@@ -247,6 +244,10 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 			plan.TUIArgs = append(plan.TUIArgs, arg)
 		}
 	}
+	if words := barePositionals(plan.TUIArgs); len(words) > 1 {
+		// kata tui takes at most one positional, the ref, so these cannot be its arguments.
+		return LaunchPlan{}, fmt.Errorf("unexpected arguments: %s", strings.Join(words[1:], " "))
+	}
 	plan.FallbackArgs = append(plan.FallbackArgs, plan.TUIArgs...)
 	if issueSet {
 		project, shortID, err := model.ParseIssueRef(plan.IssueRef)
@@ -258,14 +259,8 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 		if dash >= 0 && dash < len(plan.FallbackArgs)-1 {
 			return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with another argument for kata tui")
 		}
-		// A bare word is a positional unless the flag before it may take it as a value (kata tui's flags are unknown here).
-		for j, arg := range plan.TUIArgs {
-			if arg == "--" {
-				break
-			}
-			if !strings.HasPrefix(arg, "-") && (j == 0 || !strings.HasPrefix(plan.TUIArgs[j-1], "-")) {
-				return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with another argument for kata tui")
-			}
+		if len(barePositionals(plan.TUIArgs)) > 0 {
+			return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with another argument for kata tui")
 		}
 		translated := []string{"--project", project, project + "#" + shortID}
 		if dash < 0 {
@@ -278,6 +273,21 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 		plan.InboxUser = strings.TrimSpace(inbox)
 	}
 	return plan, nil
+}
+
+// barePositionals returns the words before a lone -- that kata tui would read as positionals: a bare word is a positional
+// unless the flag before it may take it as a value (kata tui's flags are unknown here).
+func barePositionals(tuiArgs []string) []string {
+	var words []string
+	for j, arg := range tuiArgs {
+		if arg == "--" {
+			break
+		}
+		if !strings.HasPrefix(arg, "-") && (j == 0 || !strings.HasPrefix(tuiArgs[j-1], "-")) {
+			words = append(words, arg)
+		}
+	}
+	return words
 }
 
 // An explicitly empty actor is refused.
@@ -330,8 +340,6 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 	switch args[0] {
 	case "agent":
 		return planAgent(args)
-	case "docbank":
-		return planDocbank(args)
 	case "agents":
 		return planAgents(args, lookup)
 	case "team":
@@ -506,9 +514,6 @@ Usage:
   tern-kata agents [--issue <ref>]
   tern-kata team <ref>
   tern-kata message <address|ref> -m <text> [--re <comment>] [--as <actor>]
-  tern-kata docbank supervised
-  tern-kata docbank supervise on|off
-  tern-kata docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
   tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
@@ -653,47 +658,6 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 open Issues of KATA_REF's Project or the workspace's Project.
                                 Unknown address or ref, or no agent that can receive it, is
                                 refused
-  docbank setup [--url <url> (--key-file <file>|- | --key-env <NAME>) | --port <port>] [--folder <path>] [--yes | --no-restart] [--home <dir>] [--db <file>] [--schema <name>] [--daemon <name> | --server <url>]
-                                make attachments work. Without --url it sets Docbank up on this
-                                machine: it gives Docbank a fixed port (--port, default 8080) and an
-                                API key (kept in <KATA_HOME>/docbank.key, mode 0600, never printed) in
-                                [server] of <DOCBANK_HOME>/config.toml (default ~/.docbank), restarts
-                                Docbank with docbank daemon restart and checks it listens there; an
-                                existing [server] with api_port and api_key is reused, a port in use
-                                by another process is refused before anything is written, and it
-                                prints that Docbank reports usage unless DOCBANK_TELEMETRY_ENABLED=0
-                                is set in its daemon's environment. With --url it points kata at a
-                                Docbank someone else runs: it checks that the --url answers with the
-                                API key (read-only). Either way it then adds a
-                                [docbank] section (url, the key's source, --folder, default /kata) to the
-                                config.toml of the kata daemon the Pane would use (KATA_HOME or ~/.kata,
-                                or a local profile chosen with --daemon; --home, --db and --schema
-                                work as for agent), and asks before it restarts that daemon, then checks
-                                that it has attachments on. --key-file names a file that holds the
-                                key, or - reads it from standard input and stores it in <KATA_HOME>/docbank.key
-                                (mode 0600); --key-env names a variable the kata daemon's own environment
-                                holds; setup reads it from this shell too, to check the url, and
-                                fails when it is unset or empty here. No flag takes the key itself.
-                                Plain http is for this machine only. The rest of config.toml stays
-                                byte for byte; a [docbank] section that is the same is "already set
-                                up", a different one is refused and shown.
-                                --yes restarts without asking; --no-restart, or no terminal without
-                                --yes, prints the restart command instead (for a --daemon profile it
-                                runs and prints kata daemon restart with KATA_HOME set to the
-                                profile's home). --key-file - needs a pipe, not a terminal. A remote kata daemon is
-                                refused: its config is not on this machine. Never prints the key.
-                                The plugin supervises only the default kata daemon's Docbank: a local
-                                setup for it leaves the plugin keeping Docbank running (docbank
-                                supervise); for a --home or --daemon profile it says how to keep Docbank running
-  docbank supervised
-                                the plugin host half's question: does the plugin keep a local Docbank
-                                running? Exit 0 and the line "on" when kata's [docbank] url is on this
-                                machine, Docbank's [server] api_port in <DOCBANK_HOME>/config.toml is
-                                that url's port and docbank.manual is not in tern-kata's config folder;
-                                otherwise exit 1, nothing on stdout and the reason on stderr
-  docbank supervise on|off      off creates docbank.manual in tern-kata's config folder (mode 0600), so
-                                the plugin stops starting Docbank (a running one keeps running); on
-                                removes it. Says what it did
   agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
                                 any value; without --as it is left as inherited) and KATA_REF

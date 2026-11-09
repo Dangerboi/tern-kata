@@ -15,7 +15,6 @@ import (
 	_ "time/tzdata" // zone database for hosts without one, such as Windows
 
 	"github.com/Dangerboi/tern-kata/internal/data"
-	"github.com/Dangerboi/tern-kata/internal/docbanksetup"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -142,7 +141,7 @@ func run() error {
 	size := paneSize(term.Caps().Cols)
 	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, HostID: data.ThisHostID(), PaneBlock: os.Getenv("TERN_PANE"), QuitAtOnce: quitAtOnce}}
 	results := make(chan model.Msg)
-	gateway := data.NewGateway(data.LocateWithKata).WithHost(host).WithDocbankSupervision(func() data.DocbankSupervision { return docbanksetup.NewSupervisionEnv(io.Discard) })
+	gateway := data.NewGateway(data.LocateWithKata).WithHost(host)
 	defer gateway.Close()
 	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef, Nonce: rand.Text()})
 	loopErr := func() error {
@@ -246,13 +245,6 @@ func runCommand(ctx context.Context, plan LaunchPlan) error {
 			return err
 		}
 		return runUpdate(ctx, plan, env, out)
-	}
-	if plan.Subcommand == "docbank" {
-		env, err := docbankEnvFor(plan, out)
-		if err != nil {
-			return subcommandError{err}
-		}
-		return runDocbank(ctx, plan, env)
 	}
 	if isWorkerCommand(plan) {
 		env, err := newWorkerEnv(plan)

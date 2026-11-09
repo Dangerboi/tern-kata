@@ -9,7 +9,10 @@ type Filters struct {
 }
 
 type SearchState struct {
-	Open, Results           bool
+	Open, Results bool
+	// Meaning says the query runs on kata's ranked search (by meaning) at enter, not as a filter of the words (by words).
+	// Refused says ctrl+t was refused because the Collection does not show one Project.
+	Meaning, Refused        bool
 	InitialText, InitialUID string
 	Caret                   Caret
 }
@@ -26,6 +29,11 @@ func inputMode(mode Mode) bool {
 func clearFilters(m Model) (Model, []Cmd) {
 	m.Filters, m.ActiveView = Filters{}, ActiveView{}
 	m.SelectedUID = ""
+	if m.Ranked.Have {
+		m.Ranked = RankedSearch{}
+		return relist(m)
+	}
+	m.Ranked = RankedSearch{}
 	return snapshotChanged(m)
 }
 
@@ -52,7 +60,12 @@ func cycleStatus(m Model) (Model, []Cmd) {
 }
 
 func openSearch(m Model) Model {
-	m.Search = SearchState{Open: true, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
+	// A search that opens on a ranked answer continues by meaning; any other starts by words.
+	meaning := m.rankedShown()
+	if !meaning {
+		m.Ranked = RankedSearch{}
+	}
+	m.Search = SearchState{Open: true, Meaning: meaning, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
 	return m
 }
 
@@ -61,13 +74,17 @@ func searchMove(m Model, action Action) Model {
 	return moveSelection(m, action)
 }
 
-func searchEnter(m Model) Model {
-	if m.Search.Results {
-		m.Search = SearchState{}
-	} else {
+func searchEnter(m Model) (Model, []Cmd) {
+	if !m.Search.Results {
 		m.Search.Results = true
+		return runSearchByMeaning(m)
 	}
-	return m
+	meaning := m.Search.Meaning
+	m.Search = SearchState{}
+	if meaning {
+		return relist(m)
+	}
+	return m, nil
 }
 
 func searchBack(m Model) (Model, []Cmd) {
@@ -75,9 +92,17 @@ func searchBack(m Model) (Model, []Cmd) {
 		m.Search.Results = false
 		return m, nil
 	}
+	meaning := m.Search.Meaning
 	m.Filters.Search = m.Search.InitialText
 	m.SelectedUID = m.Search.InitialUID
 	m.Search = SearchState{}
+	if meaning {
+		if m.Ranked.Query != m.Filters.Search {
+			m.Ranked = RankedSearch{}
+		}
+		m.rankedReads.Discard()
+		return relist(m)
+	}
 	return snapshotChanged(m)
 }
 
@@ -92,6 +117,10 @@ func searchErasing(action Action) func(Model) (Model, []Cmd) {
 }
 
 func searchEdit(m Model, text string) (Model, []Cmd) {
+	m.Search.Refused = false
+	if m.Search.Meaning {
+		return meaningTyped(m, text)
+	}
 	m.Filters.Search = text
 	m.SelectedUID = ""
 	return snapshotChanged(m)
@@ -114,9 +143,7 @@ func updateFilterText(m Model, msg KeyMsg) (Model, []Cmd) {
 	if !edited { // the caret may still have moved
 		return m, nil
 	}
-	m.Filters.Search = text
-	m.SelectedUID = ""
-	return snapshotChanged(m)
+	return searchEdit(m, text)
 }
 
 type FilterTerm struct {

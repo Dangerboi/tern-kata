@@ -8,8 +8,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-var docbankForms = []string{"setup", "supervised", "supervise"}
-
 var workerForms = []string{"init", "add", "edit", "upgrade", "status", "stop", "supervised", "doctor", "resume", "abandon"}
 
 var viewsForms = []string{"show", "add", "rm"}
@@ -64,15 +62,6 @@ _tern_kata() {
 				done
 			fi
 			;;
-		docbank)
-			if [[ $cur == -* ]]; then
-				[[ ${COMP_WORDS[2]} == setup ]] && words="%[9]s"
-			elif [[ $COMP_CWORD -eq 2 ]]; then
-				words="%[10]s"
-			elif [[ $COMP_CWORD -eq 3 && ${COMP_WORDS[2]} == supervise ]]; then
-				words="on off"
-			fi
-			;;
 		completion) [[ $COMP_CWORD -eq 2 ]] && words="%[3]s" ;;
 		worker)
 			if [[ $COMP_CWORD -eq 2 ]]; then
@@ -94,7 +83,7 @@ _tern_kata() {
 	fi
 }
 complete -o default -F _tern_kata tern-kata
-`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames), strings.Join(viewsForms, " "), dashed(viewFlagNames), dashed(flagNames(agentFlags)), dashed(flagNames(docbankFlags)), strings.Join(docbankForms, " "))
+`, strings.Join(subcommands, " "), dashed(model.RecurFlagNames), strings.Join(completionShells, " "), strings.Join(workerForms, " "), dashed(initFlagNames), strings.Join(viewsForms, " "), dashed(viewFlagNames), dashed(flagNames(agentFlags)))
 }
 
 // zshCompletion is the bash script run through zsh's bash completion layer, so the two shells offer the same words.
@@ -121,9 +110,6 @@ func fishCompletion() string {
 	line("-n '__fish_seen_subcommand_from agents' -l issue -r -d 'only this Issue'")
 	line("-n '__fish_seen_subcommand_from message' -l re -r -d 'comment the message asks the agent to answer'")
 	fishTableFlags(line, agentFlags, "agent; and not contains -- -- (commandline -opc)") // after the lone -- the words are the command's, which bash completion leaves alone too
-	line("-n '__fish_seen_subcommand_from docbank; and not __fish_seen_subcommand_from %[1]s' -f -a '%[1]s'", strings.Join(docbankForms, " "))
-	line("-n '__fish_seen_subcommand_from supervise; and not __fish_seen_subcommand_from on off' -f -a 'on off'")
-	fishTableFlags(line, docbankFlags, "setup")
 	line("-n '__fish_seen_subcommand_from update' -l force -d 'install even when a check refuses'")
 	line("-n '__fish_seen_subcommand_from update' -l pause -d 'wait for Enter after a success'")
 	line("-n '__fish_seen_subcommand_from completion' -a '%s'", strings.Join(completionShells, " "))

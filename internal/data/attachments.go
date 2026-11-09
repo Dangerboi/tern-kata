@@ -18,10 +18,10 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// Docbank's refusals as the Pane words them; `tern-kata docbank setup` reports the same two.
+// Docbank's refusals as the Pane words them.
 const (
-	DocbankUnauthorizedMessage = "Docbank refused the API key kata sends it. Check the API key in the [docbank] section of kata's config.toml."
-	DocbankUnreachableMessage  = "kata could not reach Docbank, or Docbank refused the request. Check that Docbank is running and that url in the [docbank] section of kata's config.toml is right."
+	DocbankUnauthorizedMessage = "Docbank refused the API key kata sends it. Check the API key in the [docbank] section of kata's config.toml, or run `kata docbank setup` again."
+	DocbankUnreachableMessage  = "kata could not reach Docbank, or Docbank refused the request. Check that Docbank is running and that url in the [docbank] section of kata's config.toml is right. `kata docbank setup` without --url lets kata start the Docbank on this machine."
 )
 
 var attachmentLimit = fmt.Sprintf("%d MiB", model.MaxAttachmentBytes>>20)
@@ -201,4 +201,18 @@ func (c *Client) DownloadAttachment(ctx context.Context, dir string, cmd model.O
 		return "", fmt.Errorf("Docbank sent %d bytes for %s, but the attachment is %d bytes long, so nothing was saved.", len(response.Body), a.Name, a.Size)
 	}
 	return path, atomicfile.Write(path, response.Body, atomicfile.Options{Mode: 0o600, DirMode: 0o700})
+}
+
+// AttachmentsConfigured connects to the daemon locate finds and asks whether it has a Docbank to store attachments in, which kata
+// reads from its config.toml only at start. A daemon that cannot be reached or asked is an error, as every other failure is.
+func AttachmentsConfigured(ctx context.Context, locate Locator, workspace string) (bool, error) {
+	target, err := locate(ctx, workspace)
+	if err != nil {
+		return false, err
+	}
+	c, err := connect(ctx, target)
+	if err != nil {
+		return false, err
+	}
+	return c.attachmentsConfigured(ctx)
 }

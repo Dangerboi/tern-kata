@@ -213,8 +213,8 @@ func TestEveryClickTargetEndsWhereItsKeysEnd(t *testing.T) {
 }
 
 func TestEveryFooterHintClicksLikeItsKey(t *testing.T) {
-	for _, focus := range []model.Column{model.ColumnList, model.ColumnCollections, model.ColumnDetail} {
-		s := clickAt(focus)
+	states := []driver.State{clickAt(model.ColumnList), clickAt(model.ColumnCollections), clickAt(model.ColumnDetail), clickAt(model.ColumnList, "/")}
+	for _, s := range states {
 		for binding := range model.BindingsForMode(s.Model.CurrentMode(), true) {
 			t.Run(string(s.Model.CurrentMode())+"/"+binding.Chord, func(t *testing.T) {
 				keyboard, keyCmds := keys(binding.Chord)(s)

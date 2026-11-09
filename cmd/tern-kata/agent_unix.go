@@ -12,7 +12,7 @@ func execAgent(plan LaunchPlan, environ []string) error {
 	if err != nil {
 		return subcommandError{err}
 	}
-	if err := syscall.Exec(path, plan.Operands, agentEnv(environ, plan, false)); err != nil {
+	if err := syscall.Exec(path, plan.Operands, agentEnv(closeTranscriptEnv(environ, false), plan, false)); err != nil {
 		return subcommandError{err}
 	}
 	return nil

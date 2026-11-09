@@ -6,10 +6,6 @@
 -- while the worker runs on, and Tern never calls the old exit callback) or one started by hand. It starts one within a
 -- poll of that worker's end.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
--- It also keeps a local Docbank running, the same way: a second loop asks `tern-kata docbank supervised` and, when it
--- answers on, runs `docbank daemon status` and `docbank daemon start` when no Docbank runs. Docbank's own detached start
--- is used, so the host half never holds its process and a running Docbank, whoever started it, is left alone. Turning it
--- off: `tern-kata docbank supervise off` (see docs/guide/attachments.md).
 -- This file does not decide the rule, find the config folder or see which worker runs: it asks `tern-kata worker
 -- supervised`, whose answer is worker.SupervisionOn and worker.RunningWorker in internal/worker/supervision.go (the one
 -- place each is held; the Go tests pin them).
@@ -110,9 +106,8 @@ local function known_dirs(): { string }
     return dirs
 end
 
-local function find_binary(base: string?): string?
-    local stem = base or "tern-kata"
-    local name = windows and stem .. ".exe" or stem
+local function find_binary(): string?
+    local name = windows and "tern-kata.exe" or "tern-kata"
     for _, list in {split_path(), known_dirs()} do
         for _, dir in list do
             local candidate = join(dir, name)
@@ -279,117 +274,9 @@ function start()
     end
 end
 
--- ---- Docbank ----
--- The rule lives in Go (`tern-kata docbank supervised`: exit 0 and the line "on", or exit 1). The host half holds the
--- schedule only: the worker's poll and backoff, one log line per change (a start, a failed start), never one per poll.
-
-local DOCBANK_START_LIMIT_MS = 30000
-local docbank_backoff = new_backoff()
-local docbank_started_at = 0
-local docbank_failing = false
-local docbank_asking = false
-local docbank_warned_missing = false
-local docbank_warned_status = false
-
-local docbank_check
-local docbank_arm = scheduler(function() docbank_check() end)
-
-local function docbank_reset()
-    reset_backoff(docbank_backoff)
-    docbank_failing = false
-end
-
--- Docbank is not running and the backoff allows: its own detached start, from the home folder with the plugin's PATH.
-local function docbank_start(docbank: string)
-    local wait = docbank_backoff.next - tern.now()
-    if wait > 0 then return docbank_arm(math.min(wait, POLL_MS)) end
-    schedule_restart(docbank_backoff)
-    docbank_started_at = tern.now()
-    local function failed(why: string)
-        -- What is left of the backoff is the real wait before the retry; the timer only looks at least every poll.
-        local left = math.max(docbank_backoff.next - tern.now(), 0)
-        if not docbank_failing then
-            docbank_failing = true
-            tern.log.warn("tern-kata: could not start Docbank (" .. why .. "); trying again in " .. left // 1000 .. " s")
-        end
-        -- Never 0 ms: the smallest delay armed elsewhere in the plugin is 1 ms, and 0 is not documented to fire.
-        docbank_arm(math.max(math.min(left, POLL_MS), 1))
-    end
-    local ok, err = pcall(function()
-        tern.process.run({docbank, "daemon", "start"}, process_options(DOCBANK_START_LIMIT_MS), function(result: ProcessResult)
-            if result.status == 0 and not result.timed_out then
-                docbank_failing = false
-                tern.log.warn("tern-kata: Docbank was not running; started it (" .. docbank .. " daemon start)")
-                docbank_arm(POLL_MS)
-            else
-                failed("status " .. result.status .. ", " .. last_line(result.stderr ~= "" and result.stderr or result.stdout))
-            end
-        end)
-    end)
-    if not ok then failed(tostring(err)) end
-end
-
--- `docbank daemon status` exits 0 when a daemon runs, whoever started it.
-local function docbank_looked(docbank: string, result: ProcessResult)
-    if result.status == 0 and not result.timed_out then
-        -- A Docbank that has stayed up was healthy: its next start begins the backoff over.
-        if tern.now() - docbank_started_at >= HEALTHY_MS then docbank_reset() end
-        return docbank_arm(POLL_MS)
-    end
-    if result.timed_out then return docbank_arm(POLL_MS) end
-    docbank_start(docbank)
-end
-
-local function docbank_answered(result: ProcessResult)
-    docbank_asking = false
-    if result.status ~= 0 or result.timed_out then
-        if result.status == 1 and not result.timed_out then
-            docbank_reset()
-        elseif not result.timed_out and result.status ~= -1 and not docbank_warned_status then
-            docbank_warned_status = true
-            warn_not_started("docbank", "Docbank", result)
-        end
-        return docbank_arm(POLL_MS)
-    end
-    local docbank = find_binary("docbank")
-    if docbank == nil then
-        if not docbank_warned_missing then
-            docbank_warned_missing = true
-            tern.log.warn("tern-kata: Docbank is supervised but `docbank` is not on the daemon's PATH or in a known folder; looking again every " .. POLL_MS // 1000 .. " s")
-        end
-        return docbank_arm(POLL_MS)
-    end
-    docbank_warned_missing = false
-    local ok, err = pcall(function()
-        tern.process.run({docbank, "daemon", "status"}, process_options(ASK_LIMIT_MS), function(status: ProcessResult)
-            docbank_looked(docbank, status)
-        end)
-    end)
-    if not ok then
-        tern.log.warn("tern-kata: could not ask Docbank whether it runs: " .. tostring(err))
-        docbank_arm(POLL_MS)
-    end
-end
-
-function docbank_check()
-    if docbank_asking then return end
-    local binary = find_binary()
-    if binary == nil then return docbank_arm(POLL_MS) end -- the worker loop says so
-    docbank_asking = true
-    local ok, err = pcall(function()
-        tern.process.run({binary, "docbank", "supervised"}, process_options(ASK_LIMIT_MS), docbank_answered)
-    end)
-    if not ok then
-        docbank_asking = false
-        tern.log.warn("tern-kata: could not ask whether Docbank is supervised: " .. tostring(err))
-        docbank_arm(POLL_MS)
-    end
-end
-
 -- The first look waits a moment so loading stays well inside the 2 s budget. A daemon restart or a plugin reload loads this
 -- file again: it starts the worker, or leaves the one still running and starts one when that ends.
 arm(500)
-docbank_arm(700)
 
 -- Windows: Tern runs a Pane's command as `pwsh -c <command>`, which loads the user's PowerShell profile first. The Pane
 -- commands this plugin starts (panecommands.luau) get `-NoProfile`; every other Pane, the user's shells included, starts as

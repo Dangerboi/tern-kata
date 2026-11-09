@@ -33,6 +33,9 @@ func footerTexts(m model.Model) []ui.Text {
 	if m.Views.Deleting != "" {
 		texts = append(texts, plainText("delete-view", ui.ToneAccent, model.DeleteViewQuestion(m.Views.Deleting)))
 	}
+	if m.ConfigPage.AskSwitch {
+		texts = append(texts, plainText("switch-docbank", ui.ToneAccent, model.SwitchDocbankQuestion))
+	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
 		texts = append(texts, plainText("stale", ui.TonePending, staleText(m)))
 	}

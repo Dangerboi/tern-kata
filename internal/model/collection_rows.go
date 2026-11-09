@@ -29,6 +29,7 @@ type collectionInputs struct {
 	firstLink           *Link
 	linkN               int
 	flat, graphOrder    bool
+	ranked              bool
 	onBoard             bool
 	boardMode           BoardMode
 	boardLane           string
@@ -38,7 +39,7 @@ type collectionInputs struct {
 
 func (m Model) collectionInputs() collectionInputs {
 	in := collectionInputs{firstIssue: first(m.Issues), issueN: len(m.Issues), firstLink: first(m.Snapshot.Links), linkN: len(m.Snapshot.Links),
-		flat: m.Flat, graphOrder: m.GraphOrder, onBoard: m.OnBoard(), boardMode: m.Board.Mode, boardLane: m.Board.Lane, calendar: m.Calendar}
+		flat: m.Flat, graphOrder: m.GraphOrder, ranked: m.rankedShown(), onBoard: m.OnBoard(), boardMode: m.Board.Mode, boardLane: m.Board.Lane, calendar: m.Calendar}
 	in.doneDays, in.doneCards = m.DoneLimits()
 	return in
 }

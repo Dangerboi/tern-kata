@@ -20,15 +20,10 @@ func configPage(m model.Model) tern.Element {
 	cards := make([]tern.Element, len(c.Files))
 	for i, f := range c.Files {
 		tone := ui.ToneNeutral
-		switch {
-		case f.Status == model.ConfigBroken:
+		switch f.Status {
+		case model.ConfigBroken:
 			tone = ui.ToneError
-		case f.Key == model.ConfigDocbank:
-			// Green only when the rule says supervised; the marker's absence alone does not.
-			if f.Supervised {
-				tone = ui.ToneSuccess
-			}
-		case f.Status == model.ConfigLoads:
+		case model.ConfigLoads:
 			tone = ui.ToneSuccess
 		}
 		body := ui.Nodes(
@@ -39,7 +34,7 @@ func configPage(m model.Model) tern.Element {
 		for _, a := range []struct {
 			action model.ConfigAction
 			key    string
-		}{{model.ConfigOpen, "↵"}, {model.ConfigEdit, "e"}, {model.ConfigSwitch, "s"}} {
+		}{{model.ConfigOpen, "↵"}, {model.ConfigEdit, "e"}, {model.ConfigSwitchDocbank, "s"}} {
 			if f.Has(a.action) {
 				body = append(body, ui.Button{Common: ui.Common{Key: string(a.action), Actions: &ui.Actions{Click: ConfigActClick(f.Key, a.action)}}, Text: model.ConfigActionLabel(f, a.action), Keys: []string{a.key}})
 			}

@@ -16,7 +16,7 @@ import (
 // file's bytes in Docbank.
 const attachmentKeyPrefix = "attachment."
 
-const DocbankOffMessage = "This kata daemon has no Docbank configured, so it cannot store attachments. Add a [docbank] section to kata's config.toml and restart the daemon; the Attachments guide says how."
+const DocbankOffMessage = "This kata daemon has no Docbank configured, so it cannot store attachments. Run `kata docbank setup` to set one up; the Attachments guide says how."
 
 // MaxAttachmentBytes is the largest file kata accepts as an Attachment.
 const MaxAttachmentBytes = 256 << 20

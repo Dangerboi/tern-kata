@@ -12,7 +12,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
-// configAllRows is every row the Config Page lists, in its order, the Docbank row with its marker absent (supervision on).
+// configAllRows is every row the Config Page lists, in its order, the Docbank row as it reads with no [docbank] section.
 func configAllRows() []model.ConfigFile {
 	enter := []model.ConfigAction{model.ConfigOpen}
 	return []model.ConfigFile{
@@ -22,8 +22,8 @@ func configAllRows() []model.ConfigFile {
 		{Key: model.ConfigSeen, Title: "seen.toml", Path: "/cfg/tern-kata/seen.toml", Actions: enter},
 		{Key: model.ConfigWorker, Title: "worker.toml", Path: "/cfg/tern-kata/worker.toml", Actions: enter},
 		{Key: model.ConfigAgent, Title: "agent.toml", Path: "/cfg/tern-kata/agent.toml", Actions: []model.ConfigAction{model.ConfigEdit}},
-		{Key: model.ConfigDocbank, Title: "docbank.manual (Docbank of the default kata daemon)", Path: "/cfg/tern-kata/docbank.manual",
-			Summary: "on: the plugin keeps Docbank running", Actions: []model.ConfigAction{model.ConfigSwitch}},
+		{Key: model.ConfigDocbank, Title: "Docbank (the [docbank] section of kata's config.toml)", Path: "/kata/config.toml", Status: model.ConfigLoads,
+			Summary: "not set up: `kata docbank setup` sets Docbank up"},
 		{Key: model.ConfigKata, Title: "config.toml (kata's, read-only)", Path: "/kata/config.toml", Status: model.ConfigLoads, Actions: enter},
 	}
 }
@@ -211,53 +211,38 @@ func TestConfigClickOnARowsActionDoesWhatEnterDoes(t *testing.T) {
 	}
 }
 
-func TestConfigDocbankRowShowsItsStateAndSTurnsSupervisionOffThenOn(t *testing.T) {
-	rows := configAllRows()
-	s := configOn(t, projectPane(t, 160, boardCard("a")), rows, model.ConfigDocbank)
-	wantText(t, "supervision on", wireTextOf(t, s), "/cfg/tern-kata/docbank.manual", "absent", "on: the plugin keeps Docbank running", "Docbank of the default kata daemon")
-
-	off := step(t, s, key("s"))
-	if want := []model.Cmd{model.SetDocbankSupervision{On: false}}; !equalCmds(off.Cmds, want) {
-		t.Fatalf("s with the marker absent sent %#v, want %#v", off.Cmds, want)
-	}
-	if ignored := step(t, off.State, key("s")); len(ignored.Cmds) != 0 {
-		t.Errorf("s while a switch is out sent %#v", ignored.Cmds)
-	}
-	done := step(t, off.State, model.DocbankSupervisionSet{On: false})
-	if !hasCmd[model.LoadConfigFiles](done.Cmds) {
-		t.Fatalf("the rows were not read again: %#v", done.Cmds)
-	}
-	wantText(t, "after off", wireTextOf(t, done.State), "a Docbank that is running keeps running")
-	load, _ := askedConfigFiles(done.Cmds)
-	marker := configAllRows()
-	i := slices.IndexFunc(marker, func(f model.ConfigFile) bool { return f.Key == model.ConfigDocbank })
-	marker[i].Status, marker[i].Summary = model.ConfigLoads, "off: docbank.manual exists in /cfg/tern-kata"
-	reread := step(t, done.State, model.ConfigFilesLoaded{Request: load.Request, Folder: "/cfg/tern-kata", Files: marker}).State
-	if f := reread.Model.SelectedConfigFile(); f == nil || f.Key != model.ConfigDocbank {
-		t.Fatalf("the cursor left the Docbank row after the read: %+v", f)
-	}
-	wantText(t, "marker present", wireTextOf(t, reread), "exists", "off: docbank.manual exists in /cfg/tern-kata")
-
-	on := step(t, reread, key("s"))
-	if want := []model.Cmd{model.SetDocbankSupervision{On: true}}; !equalCmds(on.Cmds, want) {
-		t.Fatalf("s with the marker present sent %#v, want %#v", on.Cmds, want)
-	}
-	wantText(t, "after on", wireTextOf(t, step(t, on.State, model.DocbankSupervisionSet{On: true}).State), "within 10 seconds")
-}
-
-func TestConfigDocbankSwitchThatFailsShowsTheErrorAndLeavesTheRow(t *testing.T) {
-	s := configOn(t, projectPane(t, 160, boardCard("a")), configAllRows(), model.ConfigDocbank)
-	sent := step(t, s, key("s"))
-	failed := step(t, sent.State, model.DocbankSupervisionSet{Err: errors.New("mkdir /cfg: permission denied")})
-	if hasCmd[model.LoadConfigFiles](failed.Cmds) {
-		t.Errorf("a failed switch read the rows again: %#v", failed.Cmds)
-	}
-	wantText(t, "failed switch", wireTextOf(t, failed.State), "mkdir /cfg: permission denied", "on: the plugin keeps Docbank running")
-	if f := failed.State.Model.SelectedConfigFile(); f == nil || f.Status != model.ConfigMissing {
-		t.Errorf("the row changed: %+v", f)
-	}
-	if again := step(t, failed.State, key("s")); len(again.Cmds) != 1 {
-		t.Errorf("s after a failed switch sent %#v, want a new switch", again.Cmds)
+func TestConfigDocbankRowShowsEachFormsTextAndOffersNoS(t *testing.T) {
+	for name, tc := range map[string]struct {
+		row  model.ConfigFile
+		want []string
+	}{
+		"not set up": {model.ConfigFile{Status: model.ConfigMissing, Summary: "not set up: `kata docbank setup` sets Docbank up"},
+			[]string{"missing", "not set up: `kata docbank setup` sets Docbank up"}},
+		"local": {model.ConfigFile{Status: model.ConfigLoads, Summary: "the Docbank on this machine: kata starts it when needed and follows its port and key"},
+			[]string{"loads", "the Docbank on this machine: kata starts it when needed and follows its port and key"}},
+		"url": {model.ConfigFile{Status: model.ConfigLoads, Summary: "Docbank at https://docbank.example"},
+			[]string{"loads", "Docbank at https://docbank.example"}},
+		"old pinned form": {model.ConfigFile{Status: model.ConfigLoads, Summary: "pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"},
+			[]string{"loads", "pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"}},
+		"unreadable": {model.ConfigFile{Status: model.ConfigBroken, Err: "read /kata/config.toml: is a directory"},
+			[]string{"does not load", "read /kata/config.toml: is a directory"}},
+	} {
+		rows := configAllRows()
+		i := slices.IndexFunc(rows, func(f model.ConfigFile) bool { return f.Key == model.ConfigDocbank })
+		tc.row.Key, tc.row.Title, tc.row.Path = rows[i].Key, rows[i].Title, rows[i].Path
+		rows[i] = tc.row
+		s := configOn(t, projectPane(t, 160, boardCard("a")), rows, model.ConfigDocbank)
+		text := wireTextOf(t, s)
+		wantText(t, name, text, append(tc.want, "/kata/config.toml", "the [docbank] section of kata's config.toml")...)
+		if out := step(t, s, key("s")); len(out.Cmds) != 0 || out.State.Model.ConfigPage.Message != "" || out.State.Model.ConfigPage.AskSwitch {
+			t.Errorf("%s: s sent %#v and said %q", name, out.Cmds, out.State.Model.ConfigPage.Message)
+		}
+		if strings.Contains(text, "supervision") {
+			t.Errorf("%s: the row still speaks of supervision: %s", name, text)
+		}
+		if out := step(t, s, key("enter")); len(out.Cmds) != 0 || out.State.Model.Page != model.PageConfig {
+			t.Errorf("%s: enter did %#v on page %v", name, out.Cmds, out.State.Model.Page)
+		}
 	}
 }
 
@@ -265,6 +250,102 @@ func TestConfigSDoesNothingOnOtherRows(t *testing.T) {
 	s := configOn(t, projectPane(t, 160, boardCard("a")), configAllRows(), model.ConfigLanes)
 	if out := step(t, s, key("s")); len(out.Cmds) != 0 {
 		t.Errorf("s on lanes.toml sent %#v", out.Cmds)
+	}
+}
+
+// pinnedDocbankRows is every row with the Docbank row in tern-kata's old pinned form, which is the one that offers the switch.
+func pinnedDocbankRows() []model.ConfigFile {
+	rows := configAllRows()
+	i := slices.IndexFunc(rows, func(f model.ConfigFile) bool { return f.Key == model.ConfigDocbank })
+	rows[i].Summary = "pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"
+	rows[i].Actions = []model.ConfigAction{model.ConfigSwitchDocbank}
+	return rows
+}
+
+func TestConfigSOnThePinnedDocbankRowAsksAndNSendsNothing(t *testing.T) {
+	s := configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), model.ConfigDocbank)
+	asked := step(t, s, key("s"))
+	if len(asked.Cmds) != 0 || !asked.State.Model.ConfigPage.AskSwitch || asked.State.Model.CurrentMode() != model.ModeSwitchDocbank {
+		t.Fatalf("s sent %#v, asking %v, mode %v", asked.Cmds, asked.State.Model.ConfigPage.AskSwitch, asked.State.Model.CurrentMode())
+	}
+	wantText(t, "question", wireTextOf(t, asked.State), "Switch to kata's local Docbank? kata restarts its daemon. y/n")
+	kept := step(t, asked.State, key("n"))
+	if len(kept.Cmds) != 0 || kept.State.Model.ConfigPage.AskSwitch || kept.State.Model.ConfigPage.Switching || kept.State.Model.ConfigPage.Message != "" {
+		t.Errorf("n sent %#v, state %+v", kept.Cmds, kept.State.Model.ConfigPage)
+	}
+}
+
+func TestConfigYSendsTheSwitchAndIgnoresSWhileItIsOut(t *testing.T) {
+	s := configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), model.ConfigDocbank)
+	sent := step(t, step(t, s, key("s")).State, key("y"))
+	if want := []model.Cmd{model.SwitchDocbank{}}; !equalCmds(sent.Cmds, want) {
+		t.Fatalf("y sent %#v, want %#v", sent.Cmds, want)
+	}
+	if c := sent.State.Model.ConfigPage; c.AskSwitch || !c.Switching || c.Message == "" {
+		t.Errorf("state after y: %+v", c)
+	}
+	if again := step(t, sent.State, key("s")); len(again.Cmds) != 0 || again.State.Model.ConfigPage.AskSwitch {
+		t.Errorf("s while the switch is out sent %#v, asking %v", again.Cmds, again.State.Model.ConfigPage.AskSwitch)
+	}
+}
+
+func TestConfigSwitchSuccessReadsTheRowsAgainAndSaysTheKeyFilesCanGo(t *testing.T) {
+	s := configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), model.ConfigDocbank)
+	sent := step(t, step(t, s, key("s")).State, key("y"))
+	done := step(t, sent.State, model.DocbankSwitched{})
+	if !hasCmd[model.LoadConfigFiles](done.Cmds) {
+		t.Errorf("success sent %#v, want the rows read again", done.Cmds)
+	}
+	c := done.State.Model.ConfigPage
+	if c.Switching || c.MessageErr || !strings.Contains(c.Message, "docbank.key") || !strings.Contains(c.Message, "docbank.manual") {
+		t.Errorf("state after success: %+v", c)
+	}
+}
+
+func TestConfigSwitchFailureShowsKatasLineAndKeepsTheRows(t *testing.T) {
+	s := configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), model.ConfigDocbank)
+	sent := step(t, step(t, s, key("s")).State, key("y"))
+	failed := step(t, sent.State, model.DocbankSwitched{Err: errors.New("docbank is not installed")})
+	if len(failed.Cmds) != 0 {
+		t.Errorf("failure sent %#v, want no read", failed.Cmds)
+	}
+	c := failed.State.Model.ConfigPage
+	if c.Switching || !c.MessageErr || !strings.Contains(c.Message, "docbank is not installed") || len(c.Files) != len(pinnedDocbankRows()) {
+		t.Errorf("state after failure: %+v", c)
+	}
+	if again := step(t, failed.State, key("s")); !again.State.Model.ConfigPage.AskSwitch {
+		t.Error("s does not ask again after a failure")
+	}
+}
+
+func TestConfigFooterAndHelpSheetListSOnlyOnThePinnedDocbankRow(t *testing.T) {
+	hasS := func(m model.Model) (footer, sheet bool) {
+		for b := range model.BindingsForMode(m.CurrentMode(), true) {
+			if b.Chord == "s" && b.Offered(m) {
+				footer = true
+			}
+		}
+		for _, g := range model.HelpSheetOn(model.PageConfig, m) {
+			for _, l := range g.Lines {
+				if slices.Contains(l.Keys, "s") {
+					sheet = true
+				}
+			}
+		}
+		return
+	}
+	on := configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), model.ConfigDocbank).Model
+	if footer, sheet := hasS(on); !footer || !sheet {
+		t.Errorf("on the pinned row: footer %v, help sheet %v, want both", footer, sheet)
+	}
+	for _, key_ := range []model.ConfigFileKey{model.ConfigLanes, model.ConfigAgent, model.ConfigKata} {
+		if footer, sheet := hasS(configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), key_).Model); footer || sheet {
+			t.Errorf("on %s: footer %v, help sheet %v, want neither", key_, footer, sheet)
+		}
+	}
+	other := configOn(t, projectPane(t, 160, boardCard("a")), configAllRows(), model.ConfigDocbank).Model
+	if footer, sheet := hasS(other); footer || sheet {
+		t.Errorf("on another Docbank form: footer %v, help sheet %v, want neither", footer, sheet)
 	}
 }
 

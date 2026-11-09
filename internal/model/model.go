@@ -170,6 +170,8 @@ type Model struct {
 	Search           SearchState
 	PageSearch       PageSearchState
 	IDSearch         IDSearch
+	Ranked           RankedSearch // kata's last ranked answer to a search by meaning
+	rankedReads      Latest       // numbers those reads
 	FilterForm       FilterFormState
 	Page             Page
 	// pageDetailHidden is the detail column's hidden flag from before the current Page took its place; leavePage restores it.

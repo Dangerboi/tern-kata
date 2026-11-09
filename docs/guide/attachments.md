@@ -4,7 +4,7 @@ Attach a screenshot, log or any other file to an Issue so whoever picks it up se
 
 ![The Attachments tab of "Add Apple Pay to checkout" listing a screenshot and a log, each with its media type and size](../images/attachments.png)
 
-This needs kata v0.21 and a daemon with Docbank configured (see [Setting Docbank up](#setting-docbank-up)). Without it the Pane says so plainly and nothing can be attached.
+This needs a kata daemon with Docbank configured (see [Setting Docbank up](#setting-docbank-up); that needs kata v0.23.0 and Docbank 0.16.0 or newer). Without it the Pane says so plainly and nothing can be attached.
 
 ## In a Pane
 
@@ -41,7 +41,7 @@ An Attachment is one meta key on the Issue, `attachment.<id>`, holding exactly `
 
 ## Setting Docbank up
 
-You do this once, for the kata daemon. `tern-kata docbank setup` does it, for Docbank on this machine and for one on another machine (below). kata only talks to Docbank over HTTP: it never starts Docbank, so Docbank needs a fixed address, a fixed API key and a process that keeps running. For Docbank on this machine the tern-kata plugin keeps it running (below).
+You do this once, for the kata daemon, with kata's own command: `kata docbank setup`. It needs kata v0.23.0 and Docbank 0.16.0 or newer. tern-kata has no setup command of its own.
 
 Choose a vault that every reader of your Issues may open. kata puts files in a folder of that vault; the folder only organises them and is no access control, so whoever can read an Issue can download its attachments.
 
@@ -50,91 +50,45 @@ Choose a vault that every reader of your Issues may open. kata puts files in a f
 Install [Docbank](https://github.com/kenn-io/docbank), then run:
 
 ```sh
-tern-kata docbank setup
+kata docbank setup
 ```
 
-- It gives Docbank a `[server]` section in `<DOCBANK_HOME>/config.toml` (`~/.docbank/config.toml` unless `DOCBANK_HOME` names another folder) with `bind_addr = "127.0.0.1"`, a fixed `api_port` (`--port`, default 8080) and an `api_key` of 32 random bytes as hex, and stores the same key in `<KATA_HOME>/docbank.key`, readable only by you: mode 0600, or on Windows an access list that admits only you (and the system and administrators) with no inherited access, which kata requires there. The key is never printed. A `config.toml` that others could read is made owner-only (`0600`, other mode bits kept) when the section goes in, and the output says so.
-- It appends the section as text, keeping every other byte of the file, and creates the file and `DOCBANK_HOME` when they are missing. An existing `[server]` with `api_port` and `api_key` is reused (the key is copied to the key file when that is missing) and a different `--port` is refused; a `[server]` missing one of them is refused, naming what to add. An existing key file that kata would refuse to read is written again, readable only by you, and the output says so.
-- It refuses before writing anything when `docbank` is not on `PATH`, when another process listens on the port, or when kata's `config.toml` already has a different `[docbank]` section.
-- It runs `docbank daemon restart` and requires `docbank daemon status` to name `127.0.0.1:<port>`; otherwise it stops, shows Docbank's output and leaves kata's config alone.
-- Then it does what the remote form does with `url = "http://127.0.0.1:<port>"` and `api_key_file = <KATA_HOME>/docbank.key`: check Docbank with the key, append the `[docbank]` section, ask before restarting the kata daemon (`--yes`, `--no-restart`), and finish by checking that the kata daemon has attachments on. Running it again when everything is set up and Docbank is running says "already set up" and changes nothing; if Docbank is not running it starts it (`docbank daemon restart`) first; if the kata daemon still has attachments off, because the earlier restart was skipped, it offers the restart again.
-- `--folder` and the route flags work as in the remote form below. `--key-file` and `--key-env` are for the remote form only, and `--port` for this one.
-- It ends by saying that the plugin keeps Docbank running, when that holds for this kata daemon. For a profile or `--home` daemon it says instead that the plugin keeps only the default kata daemon's Docbank running, and how to keep this one running (`docbank daemon start`, or run it as a service).
-
-#### The plugin keeps Docbank running
-
-While Tern runs, the plugin's host half checks every 10 seconds whether Docbank runs and, when none does, runs `docbank daemon start` (Docbank's own detached start, from your home folder). After a failed start the plugin waits 1 s before trying again, then 2 s, doubling to 60 s; the Tern log line says how long it waits. The backoff starts over once Docbank has stayed up for a minute. The Tern log gets one line when it starts Docbank and one when a start fails, not one per check. A Docbank that is already running, however it was started, is left alone.
-
-The plugin does this exactly when kata's `[docbank]` `url` is on this machine (`127.0.0.1`, `localhost` or `::1`), Docbank's `[server]` `api_port` in `<DOCBANK_HOME>/config.toml` is that url's port, and the file `docbank.manual` is not in tern-kata's config folder (`~/.config/tern-kata` on Linux). `tern-kata docbank supervised` prints `on` and exits 0 when that holds, and exits 1 with the reason on standard error when not. A Docbank on another machine is never started. Only the default kata daemon's Docbank (`KATA_HOME`, or `~/.kata`) is kept running: the Docbank of a profile or `--home` daemon is not, so keep it running yourself with `docbank daemon start`, or run it as a service.
-
-To run Docbank your own way, turn this off:
-
-```sh
-tern-kata docbank supervise off   # creates docbank.manual; a running Docbank keeps running
-tern-kata docbank supervise on    # removes it
-```
-
-The Config Page (`K`) has a row for `docbank.manual` after `agent.toml`: it shows the marker's path and `on: the plugin keeps Docbank running`, or `off:` and the reason above that applies. `s` on the row does what `supervise off` or `supervise on` does, then reads the rows again; turning it off says a running Docbank keeps running. The row describes the default kata daemon's Docbank, whichever daemon the Pane is switched to.
-
-The same by hand, for reference:
-
-1. Install [Docbank](https://github.com/kenn-io/docbank). Its vault is `~/.docbank` unless `DOCBANK_HOME` names another folder; the first `docbank` command creates it.
-2. Make an API key and keep it in a file only you can read:
-
-   ```sh
-   openssl rand -hex 32 > ~/.kata/docbank.key && chmod 600 ~/.kata/docbank.key
-   ```
-
-3. Give Docbank a fixed port and that key in `<DOCBANK_HOME>/config.toml` (`~/.docbank/config.toml`). Without this section its daemon picks a new port and a new key each time it starts, and kata loses it after the next restart:
-
-   ```toml
-   [server]
-   bind_addr = "127.0.0.1"
-   api_port = 8080
-   api_key = "<the key from ~/.kata/docbank.key>"
-   ```
-
-   Docbank does not document these keys in its help; they are checked against Docbank 0.17. Pick any free port; it must match the `url` in step 5.
-4. Restart Docbank so it reads them: `docbank daemon restart`. `docbank daemon status` then shows `127.0.0.1:8080`.
-5. Add a `[docbank]` section to `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless you moved it):
-
-   ```toml
-   [docbank]
-   url = "http://127.0.0.1:8080"
-   api_key_file = "/home/me/.kata/docbank.key"
-   folder = "/kata"
-   ```
-
-   - Give the key as one of `api_key_file`, `api_key_env` (the name of an environment variable) or `api_key`; a file is the safest. The key is read again for each request, so you can rotate it without restarting kata (Docbank needs `docbank daemon restart` after its `api_key` changes).
-   - `folder` is an absolute path in the vault and defaults to `/kata`. kata adds one folder per Project below it.
-   - `KATA_DOCBANK_URL`, `KATA_DOCBANK_API_KEY_FILE` and `KATA_DOCBANK_FOLDER` set the same three in the daemon's environment.
-6. Restart the kata daemon: `kata daemon restart`. The Pane, `@` and the Attachments tab work from the next read.
-
-**Keep Docbank running.** A `docbank` command starts Docbank's daemon when it is not running, but kata's requests do not. After a reboot, or once Docbank has stopped, the Pane says kata could not reach Docbank until something starts it again: `docbank daemon start`, or `docbank daemon run` as a service your OS starts at login (a systemd user unit, a launchd agent, a Windows scheduled task).
-
-**Telemetry.** Docbank reports usage unless its daemon's environment sets `DOCBANK_TELEMETRY_ENABLED=0`.
+It checks Docbank's key, adds `[docbank]` with `local = true` to `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless you moved it) and restarts the kata daemon; `--yes` approves the change and the restarts without asking. kata then finds the Docbank on this machine through Docbank's own runtime record on every request, starts it when it is not running, and follows a new port or key after a restart, so a Docbank restart or a reboot never breaks attachments and nothing else needs to keep Docbank running. `--folder <path>` picks the vault folder (default `/kata`; kata adds one folder per Project below it).
 
 ### Docbank on another machine
 
-Whoever runs that Docbank gives you its URL and an API key; keeping it running is theirs. With `--url` the command points kata at it:
+Whoever runs that Docbank gives you its URL and an API key; keeping it running is theirs. Save the key in a file only you can read (`chmod 600`), then:
 
 ```sh
-tern-kata docbank setup --url https://docbank.example --key-file ~/docbank.key
+kata docbank setup --url https://docbank.example --key-file ~/docbank.key
 ```
 
-- A `--key-file` that kata's own secret reader would refuse is refused up front, with kata's reason, before anything is checked or written: it must be a regular file you own (on Unix), with no group or other permissions (`chmod 600`), or on Windows with an access list that admits only you and inherits nothing, at most 64 KiB. On Windows the refusal points to `--key-file -`, which stores a copy kata accepts.
-- `--key-file -` reads the key from standard input and stores it in `<KATA_HOME>/docbank.key`, readable only by you as the local form stores it, and a rerun writes that file again when kata would refuse it; `--key-env <NAME>` names a variable the kata daemon's own environment holds instead; setup also reads it in your shell to check the URL, so it fails with "the variable is unset or empty" when the variable is not set where you run it. No flag takes the key itself, so it never lands in your shell history or a process list.
-- It first checks that the URL answers with the key and writes nothing otherwise: a refused key and an unreachable Docbank are reported in the words the Pane uses. The `url` must be HTTPS: kata accepts plain HTTP only for Docbank on this machine, and the command refuses it before writing anything.
-- It then appends a `[docbank]` section (`url`, the key's source, `folder`) to `<KATA_HOME>/config.toml`, leaving every other byte of the file as it is, and creates the file when it is missing. Running it again says "already set up"; a different `[docbank]` section is refused and shown, never overwritten.
-- `--folder` picks the vault folder (default `/kata`). The route flags `tern-kata agent` takes choose another kata daemon, a local profile for instance (`--daemon <name>`); a remote kata daemon is refused, because its config is not on this machine.
-- It asks before it restarts the kata daemon (`kata daemon restart`, run with `KATA_HOME` set to the profile's home for a profile, since kata's daemon commands take no `--daemon`). `--yes` skips the question; `--no-restart`, or no terminal without `--yes`, prints the command to run instead. On Windows that command is written for PowerShell (`$env:KATA_HOME='C:\...'; kata daemon restart`), elsewhere for a POSIX shell (`KATA_HOME='/...' kata daemon restart`). The command finishes by checking that the kata daemon has attachments on; with `--key-env` it also says the kata daemon reads that variable from its own environment, so the variable must be set where the daemon starts. A rerun restarts kata, under the same rules, if the earlier restart was skipped or failed.
-- It prints the paths it wrote and the URL, never the key.
+The `url` must be HTTPS except for a Docbank on this machine, and `--folder` works as above. kata never starts a Docbank named by a url.
 
-To do the same by hand:
+### Checking it
 
-1. Save the key in a file only you can read (`chmod 600`).
-2. Add the `[docbank]` section from step 5 above with that `url` and `api_key_file`. The `url` must be HTTPS: kata accepts plain HTTP only for Docbank on this machine.
-3. Restart the kata daemon.
+The Config Page (`K`) has a Docbank row after `agent.toml`. It reads the `[docbank]` section of the default kata daemon's `config.toml` (`~/.kata/config.toml`, or `KATA_HOME`'s), whichever daemon the Pane is switched to, and says one of:
+
+- `not set up: kata docbank setup sets Docbank up`;
+- `the Docbank on this machine: kata starts it when needed and follows its port and key` (`local = true`);
+- `Docbank at <url>`;
+- `pinned to <url> by tern-kata's old setup: kata does not start it`: see the next section;
+- the error of the reader, when the file cannot be read.
+
+**Telemetry.** Docbank reports usage unless its daemon's environment sets `DOCBANK_TELEMETRY_ENABLED=0`.
+
+### Installs set up by tern-kata 0.10
+
+tern-kata 0.10 had its own `tern-kata docbank setup`. It pinned Docbank on this machine to a fixed port and key (`[server]` in `<DOCBANK_HOME>/config.toml`, the key in `<KATA_HOME>/docbank.key`) and wrote a `[docbank]` section with a `url` on `127.0.0.1`, and the plugin kept that Docbank running. That is gone. kata never starts a Docbank named by `url`, so after the next reboot an install set up that way cannot reach Docbank until something starts it. The Config Page's Docbank row shows this form as `pinned to <url> by tern-kata's old setup: kata does not start it`; the row offers `s` for it.
+
+To switch from the Config Page, select the Docbank row and press `s`. It asks "Switch to kata's local Docbank? kata restarts its daemon. y/n"; `n` changes nothing. On `y` tern-kata removes the `[docbank]` table from the default kata daemon's `<KATA_HOME>/config.toml` (every other line, comment and table stays; a `[docbank.<name>]` subtable is not part of it and stays) and runs `kata docbank setup --yes --folder <your old folder>` (`/kata` when the section had none) with that `KATA_HOME`, so kata restarts its daemon. When it works, the rows are read again and the row says the switch is done. When kata fails, the row shows kata's error line and the original file is put back; if the file changed after the switch wrote it, it is left as it is and the row says it was not restored and why. Only this form has `s`.
+
+To move over by hand:
+
+1. Remove the whole `[docbank]` section from `<KATA_HOME>/config.toml`.
+2. Run `kata docbank setup` (with `--folder <your old folder>` when it was not `/kata`).
+
+Docbank keeps the port and key tern-kata gave it, and kata's local form reads them from Docbank's runtime record. `<KATA_HOME>/docbank.key` and `docbank.manual` in tern-kata's config folder are no longer used and can be deleted.
 
 ## Moving old attachments
 

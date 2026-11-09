@@ -37,7 +37,6 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   for name in "${slow[@]}"; do "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
   "$repo/smoke/plugin.sh" "$SMOKE_BIN" & jobs+=($!)
   "$repo/smoke/supervision.sh" "$SMOKE_BIN" & jobs+=($!)
-  "$repo/smoke/docbank-supervision.sh" "$SMOKE_BIN" & jobs+=($!)
   "$repo/smoke/release-check.sh" & jobs+=($!)
   failed=0
   for job in "${jobs[@]}"; do wait "$job" || failed=1; done
@@ -206,6 +205,5 @@ quit_app
 [[ -z ${SMOKE_SHARD:-} ]] || exit 0
 "$repo/smoke/plugin.sh" "$tmp/tern-kata"
 "$repo/smoke/supervision.sh" "$tmp/tern-kata"
-"$repo/smoke/docbank-supervision.sh" "$tmp/tern-kata"
 "$repo/smoke/release-check.sh"
 printf '\nSmoke passed\n'

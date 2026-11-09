@@ -115,11 +115,7 @@ func TestBashCompletionOffersSubcommandsWorkerFormsAndFlags(t *testing.T) {
 		{[]string{"agent", "--ref", "demo#ab12", "--as", "bot", "--a"}, "--as --address-prefix --auth-file --allow-insecure"},
 		{[]string{"agent", "--as", "bot", "--ref", "demo#ab12", "--", "omp", "--"}, ""}, // after the lone -- the words are the command's
 		{[]string{"migrate-attachments", "--"}, "--as"},
-		{[]string{"doc"}, "docbank"},
-		{[]string{"docbank", "s"}, "setup supervised supervise"},
-		{[]string{"docbank", "supervise", ""}, "on off"},
-		{[]string{"docbank", "setup", "--"}, dashed(flagNames(docbankFlags))},
-		{[]string{"docbank", "setup", "--url", "https://d.example", "--key-"}, "--key-file --key-env"},
+		{[]string{"doc"}, ""}, // docbank is no subcommand any more
 	} {
 		if got := strings.Join(complete(t, tc.words...), " "); got != tc.want {
 			t.Errorf("tern-kata %s<tab> = %q, want %q", strings.Join(tc.words, " "), got, tc.want)
@@ -187,7 +183,6 @@ func TestTableFlagsAreInUsageHelpAndBothCompletions(t *testing.T) {
 		globalAs     bool     // fish leaves the global --as out
 	}{
 		{"agent", agentFlags, agentUsage, "\n  agent [", "\n  completion <shell>", []string{"agent"}, true},
-		{"docbank", docbankFlags, docbankUsage, "\n  docbank setup", "\n  agent [", []string{"docbank", "setup"}, false},
 	} {
 		t.Run(tc.command, func(t *testing.T) {
 			helpEntry := usage[strings.Index(usage, tc.helpFrom):strings.Index(usage, tc.helpTo)]
@@ -253,7 +248,6 @@ func TestFishCompletionOffersNoAgentFlagsAfterTheLoneDoubleDash(t *testing.T) {
 func TestBashAndFishCompletionOfferTheSameFlagsForEverySubcommand(t *testing.T) {
 	for name, contexts := range map[string][][]string{
 		"agent":               {{"agent"}},
-		"docbank":             {{"docbank"}, {"docbank", "setup"}},
 		"recur":               {{"recur", "ab12"}},
 		"worker":              {{"worker"}, {"worker", "init"}, {"worker", "status"}, {"worker", "stop"}, {"worker", "doctor"}, {"worker", "upgrade"}, {"worker", "resume", "x"}},
 		"views":               {{"views"}, {"views", "show", "x"}, {"views", "add", "x"}, {"views", "rm", "x"}},

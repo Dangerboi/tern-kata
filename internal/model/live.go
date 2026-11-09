@@ -131,6 +131,8 @@ func updateLive(m Model, msg Msg) (Model, []Cmd) {
 		m.PendingCursor = max(m.PendingCursor, msg.ID)
 		m, more := snapshotChanged(m)
 		return m, append(asked, more...)
+	case SearchByMeaningDone:
+		return searchMeaningDone(m, msg)
 	case SearchIDLooked:
 		if !m.snapshotReads.IsCurrent(msg.Request) {
 			return m, nil

@@ -657,10 +657,17 @@ export interface ExtensionApi {
 /** kata's rule for the session id of an agent other than claude and codex (its internal/transcript). */
 const TRANSCRIPT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
+/** The environment variable Go sets (internal/closetranscript) when kata's config leaves the transcript choice open. */
+export const CLOSE_TRANSCRIPT_ENV = "TERN_KATA_CLOSE_TRANSCRIPT";
+
+/** The environments whose KATA_CLOSE_TRANSCRIPT_ENABLED this extension set, so it never removes one a person set. */
+const switchSet = new WeakSet<Record<string, string | undefined>>();
+
 /**
  * Names the main session to `kata close`, which reads KATA_TRANSCRIPT_AGENT and KATA_TRANSCRIPT_SESSION_ID when
- * [close.transcript] is enabled in kata's config. A session id kata would refuse unsets both, so a close never cites
- * the session before a switch.
+ * [close.transcript] is enabled in kata's config. With TERN_KATA_CLOSE_TRANSCRIPT=on it sets KATA_CLOSE_TRANSCRIPT_ENABLED=true
+ * with the names (kata warns on every close when the switch is on and no session is named), unless a value is already there.
+ * A session id kata would refuse unsets the names and the switch it set, so a close never cites the session before a switch.
  */
 export function exportTranscriptSession(env: Record<string, string | undefined>, ctx: ExtensionContext): void {
   let id = "";
@@ -671,9 +678,14 @@ export function exportTranscriptSession(env: Record<string, string | undefined>,
   if (TRANSCRIPT_ID.test(id)) {
     env.KATA_TRANSCRIPT_AGENT = "omp";
     env.KATA_TRANSCRIPT_SESSION_ID = id;
+    if (env[CLOSE_TRANSCRIPT_ENV] === "on" && (env.KATA_CLOSE_TRANSCRIPT_ENABLED === undefined || switchSet.has(env))) {
+      env.KATA_CLOSE_TRANSCRIPT_ENABLED = "true";
+      switchSet.add(env);
+    }
   } else {
     delete env.KATA_TRANSCRIPT_AGENT;
     delete env.KATA_TRANSCRIPT_SESSION_ID;
+    if (switchSet.delete(env)) delete env.KATA_CLOSE_TRANSCRIPT_ENABLED;
   }
 }
 

@@ -3,7 +3,6 @@ package model
 import (
 	"reflect"
 	"slices"
-	"strings"
 )
 
 // SnapshotQuery is what picks a snapshot: the Collection and filters, plus the selected Issue's detail riding along. View is the
@@ -109,11 +108,7 @@ func CollectionQuery(c Collection, f Filters) SnapshotQuery {
 	if f.Owner != "" {
 		q.Owner = []string{f.Owner}
 	}
-	for _, label := range strings.Split(f.Label, ",") {
-		if label = strings.TrimSpace(label); label != "" {
-			q.Label = append(q.Label, label)
-		}
-	}
+	q.Label = labelList(f.Label)
 	if f.Relationship != "" {
 		q.Relationship = []string{f.Relationship}
 	}
@@ -126,8 +121,11 @@ func (m Model) SnapshotQuery() SnapshotQuery {
 	if m.OnBoard() {
 		q.Status = nil // the Board's own rule picks open and recently closed Issues; the status filter belongs to the Issues Page
 	}
-	if m.idMatch() != "" {
-		q.Text = nil
+	if m.idMatch() != "" || m.Search.Meaning || m.rankedShown() {
+		q.Text = nil // an id search and a search by meaning do not filter by the words
+	}
+	if m.rankedShown() {
+		q.Owner, q.Relationship = nil, nil // kata's ranked search does not apply them
 	}
 	return q
 }
@@ -179,6 +177,8 @@ func (m Model) RefreshRequest() int64 { return m.snapshotReads.Newest() }
 func collectionSwitched(m Model) (Model, []Cmd) {
 	m.Refreshing = false
 	m.IDSearch = IDSearch{}
+	m.Ranked = RankedSearch{}
+	m.rankedReads.Discard()
 	return snapshotChanged(m)
 }
 
@@ -315,7 +315,11 @@ func (m Model) applyCollection(snapshot Snapshot) Model {
 	if uid := m.idMatch(); uid != "" {
 		issues = slices.DeleteFunc(slices.Clone(issues), func(issue Issue) bool { return issue.UID != uid })
 	}
-	m.Groups = GroupCollection(m.Collection, m.Filters, issues, m.Calendar)
+	if m.rankedShown() {
+		m.Groups = []IssueGroup{m.rankedGroup(issues)}
+	} else {
+		m.Groups = GroupCollection(m.Collection, m.Filters, issues, m.Calendar)
+	}
 	total := 0
 	for _, group := range m.Groups {
 		total += len(group.Issues)

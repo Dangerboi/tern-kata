@@ -26,6 +26,11 @@ func (c *Client) CreateProject(ctx context.Context, cmd model.CreateProject) (mo
 	return project, err
 }
 
+// projectConfigHeader is the comment kata v0.23's `kata init` starts a new
+// .kata.toml with, pointing coding agents at kata's contract.
+const projectConfigHeader = "# This repository tracks its work in kata.\n" +
+	"# Coding agents: read `kata quickstart --format contract` before changing code here.\n"
+
 // BindProject is `kata init --project`: the daemon creates the Project, or
 // returns the active one of that name, and attaches this workspace's alias; then
 // .kata.toml binds the directory, written here because a remote daemon cannot
@@ -64,7 +69,7 @@ func (c *Client) BindProject(ctx context.Context, cmd model.BindProject) (model.
 	}
 	dest := cmp.Or(workspaceRoot, gitRoot, start)
 	if bound != project.Name {
-		body := fmt.Sprintf("version = 1\n\n[project]\nname = %q\n", project.Name)
+		body := fmt.Sprintf(projectConfigHeader+"version = 1\n\n[project]\nname = %q\n", project.Name)
 		if err := os.WriteFile(filepath.Join(dest, ".kata.toml"), []byte(body), 0o644); err != nil { //nolint:gosec // G306: a checked-in file
 			return model.Project{}, fmt.Errorf("write .kata.toml: %w", err)
 		}

@@ -139,6 +139,9 @@ func issues(m model.Model, now time.Time) tern.Element {
 	if m.Search.Open {
 		children = append(children, searchInput(m))
 	}
+	if line := m.SearchLine(); line != "" {
+		children = append(children, plainText("search-line", ui.ToneMuted, line))
+	}
 	empty := emptyState("No Issues", "This Collection has none. Select another Collection or create one with kata create.")
 	// The Board ignores the status filter, so the Lane view judges the filters without it and names an empty Lane, not the Collection.
 	filters := m.Filters
@@ -169,6 +172,9 @@ func laneHeader(m model.Model) tern.Element {
 
 func searchInput(m model.Model) tern.Element {
 	placeholder := "Search Issues in " + m.Collection.Title
+	if m.Search.Meaning {
+		placeholder = "Search Issues by meaning in " + m.Collection.Title
+	}
 	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Cursor: caretAt(m.Search.Caret, "", m.Filters.Search), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}}
 }
 

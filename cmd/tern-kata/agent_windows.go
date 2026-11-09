@@ -10,7 +10,7 @@ import (
 )
 
 func execAgent(plan LaunchPlan, environ []string) error {
-	return subcommandError{runChild(plan.Operands[0], plan.Operands[1:], agentEnv(environ, plan, true))}
+	return subcommandError{runChild(plan.Operands[0], plan.Operands[1:], agentEnv(closeTranscriptEnv(environ, true), plan, true))}
 }
 
 // runChild runs name with stdio attached and exits with its status; it returns only when the child could not be run.

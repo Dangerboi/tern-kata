@@ -52,8 +52,6 @@ type Gateway struct {
 
 	workerDirs func() (worker.Dirs, error)
 	runTern    func(context.Context, []string) ([]byte, error)
-	// docbank builds the Docbank supervision environment; nil until the program sets it.
-	docbank func() DocbankSupervision
 
 	// lsMu guards lsLive, the blocks the last `tern ls --json` listed, lsAt, when it was asked, and lsFlight, the ask now running.
 	lsMu     sync.Mutex
