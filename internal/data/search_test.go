@@ -47,9 +47,9 @@ func TestGatewaySearchByMeaningOnKataWithoutEmbeddingsAnswersByWordsInKatasOrder
 	}
 }
 
-// cannedSearch is a daemon answering a ranked search with a hybrid answer of the hits' UIDs in the order given, and keeping the
-// query it was asked.
-func cannedSearch(t *testing.T, uids []string, truncated bool) (*kataServer, *atomic.Pointer[url.Values]) {
+// cannedSearch is a daemon answering a ranked search in mode with the hits' UIDs in the order given, degraded for reason when
+// reason is not empty, and keeping the query it was asked.
+func cannedSearch(t *testing.T, mode, reason string, uids []string, truncated bool) (*kataServer, *atomic.Pointer[url.Values]) {
 	t.Helper()
 	asked := new(atomic.Pointer[url.Values])
 	server := startKata(t, "0.23.0")
@@ -71,9 +71,11 @@ func cannedSearch(t *testing.T, uids []string, truncated bool) (*kataServer, *at
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"mode": "hybrid", "query": query.Get("q"), "complete": !truncated, "truncated": truncated, "results": results,
-		})
+		body := map[string]any{"mode": mode, "query": query.Get("q"), "complete": !truncated, "truncated": truncated, "results": results}
+		if reason != "" {
+			body["degraded"], body["degraded_reason"] = true, reason
+		}
+		_ = json.NewEncoder(w).Encode(body)
 		return true
 	}
 	server.intercept.Store(&hook)
@@ -81,7 +83,7 @@ func cannedSearch(t *testing.T, uids []string, truncated bool) (*kataServer, *at
 }
 
 func TestGatewaySearchByMeaningKeepsAHybridAnswersOrderAndItsTruncatedNote(t *testing.T) {
-	server, asked := cannedSearch(t, []string{"third", "first", "second"}, true)
+	server, asked := cannedSearch(t, "hybrid", "", []string{"third", "first", "second"}, true)
 	gateway := newGateway(t, newLocator(server.target()))
 
 	done := as[model.SearchByMeaningDone](t, run(t, gateway, model.SearchByMeaning{
@@ -103,18 +105,7 @@ func TestGatewaySearchByMeaningKeepsAHybridAnswersOrderAndItsTruncatedNote(t *te
 }
 
 func TestGatewaySearchByMeaningCarriesKatasWordsReasonForAWordsAnswer(t *testing.T) {
-	server := startKata(t, "0.23.0")
-	hook := func(w http.ResponseWriter, r *http.Request) bool {
-		if r.URL.Path != "/api/v1/projects/7/search" {
-			return false
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"mode": "lexical", "query": "q", "complete": true, "truncated": false, "degraded": true, "degraded_reason": "embedding model is loading", "results": []any{},
-		})
-		return true
-	}
-	server.intercept.Store(&hook)
+	server, _ := cannedSearch(t, "lexical", "embedding model is loading", nil, false)
 	gateway := newGateway(t, newLocator(server.target()))
 	done := as[model.SearchByMeaningDone](t, run(t, gateway, model.SearchByMeaning{Workspace: t.TempDir(), ProjectID: 7, Query: "q"}))
 	if done.Err != nil || !done.Lexical || done.Reason != "embedding model is loading" || len(done.UIDs) != 0 {

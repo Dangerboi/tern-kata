@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -26,7 +25,6 @@ type Fake struct {
 	URL string
 
 	server  *httptest.Server
-	key     string
 	mu      sync.Mutex
 	dirs    map[string]int64
 	content map[string][]byte
@@ -35,30 +33,8 @@ type Fake struct {
 
 func New(t testing.TB) *Fake {
 	t.Helper()
-	return start(t, "", Key)
-}
-
-// NewOn starts a fake on the loopback address addr ("127.0.0.1:port") that accepts key, as a Docbank configured with that port and
-// key would after a restart. It stops when the test ends.
-func NewOn(t testing.TB, addr, key string) *Fake {
-	t.Helper()
-	return start(t, addr, key)
-}
-
-func start(t testing.TB, addr, key string) *Fake {
-	t.Helper()
-	f := &Fake{dirs: map[string]int64{}, content: map[string][]byte{}, key: key}
-	if addr == "" {
-		f.server = httptest.NewServer(http.HandlerFunc(f.serve))
-	} else {
-		ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		f.server = httptest.NewUnstartedServer(http.HandlerFunc(f.serve))
-		f.server.Listener = ln
-		f.server.Start()
-	}
+	f := &Fake{dirs: map[string]int64{}, content: map[string][]byte{}}
+	f.server = httptest.NewServer(http.HandlerFunc(f.serve))
 	f.URL = f.server.URL
 	t.Cleanup(f.server.Close)
 	return f
@@ -80,7 +56,7 @@ func (f *Fake) Forget() {
 func (f *Fake) Stop() { f.server.Close() }
 
 func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-Api-Key") != f.key {
+	if r.Header.Get("X-Api-Key") != Key {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}

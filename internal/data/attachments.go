@@ -202,17 +202,3 @@ func (c *Client) DownloadAttachment(ctx context.Context, dir string, cmd model.O
 	}
 	return path, atomicfile.Write(path, response.Body, atomicfile.Options{Mode: 0o600, DirMode: 0o700})
 }
-
-// AttachmentsConfigured connects to the daemon locate finds and asks whether it has a Docbank to store attachments in, which kata
-// reads from its config.toml only at start. A daemon that cannot be reached or asked is an error, as every other failure is.
-func AttachmentsConfigured(ctx context.Context, locate Locator, workspace string) (bool, error) {
-	target, err := locate(ctx, workspace)
-	if err != nil {
-		return false, err
-	}
-	c, err := connect(ctx, target)
-	if err != nil {
-		return false, err
-	}
-	return c.attachmentsConfigured(ctx)
-}

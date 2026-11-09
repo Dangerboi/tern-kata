@@ -1,4 +1,4 @@
-package closetranscript
+package ompext
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestDecideIsOnOnlyWhenKatasConfigAndEnvironmentLeaveTheChoiceOpen(t *testing.T) {
+func TestCloseTranscriptOnIsOnOnlyWhenKatasConfigAndEnvironmentLeaveTheChoiceOpen(t *testing.T) {
 	cases := []struct {
 		name    string
 		config  *string // nil: no file
@@ -39,18 +39,18 @@ func TestDecideIsOnOnlyWhenKatasConfigAndEnvironmentLeaveTheChoiceOpen(t *testin
 				}
 			}
 			environ := append([]string{"KATA_HOME=" + home}, c.environ...)
-			if got := Decide(environ, false); got != c.want {
-				t.Errorf("Decide = %v, want %v", got, c.want)
+			if got := CloseTranscriptOn(environ, false); got != c.want {
+				t.Errorf("CloseTranscriptOn = %v, want %v", got, c.want)
 			}
 		})
 	}
 }
 
-func TestDecideReadsTheDefaultHomeWithoutKataHome(t *testing.T) {
+func TestCloseTranscriptOnReadsTheDefaultHomeWithoutKataHome(t *testing.T) {
 	user := t.TempDir()
 	t.Setenv("HOME", user)
 	t.Setenv("USERPROFILE", user)
-	if !Decide(nil, false) {
+	if !CloseTranscriptOn(nil, false) {
 		t.Error("no ~/.kata/config.toml: want on")
 	}
 	if err := os.MkdirAll(filepath.Join(user, ".kata"), 0o700); err != nil {
@@ -59,7 +59,7 @@ func TestDecideReadsTheDefaultHomeWithoutKataHome(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(user, ".kata", "config.toml"), []byte("[close.transcript]\nenabled = false\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if Decide(nil, false) {
+	if CloseTranscriptOn(nil, false) {
 		t.Error("enabled = false in ~/.kata: want off")
 	}
 }

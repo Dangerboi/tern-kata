@@ -8,9 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"go.kenn.io/kit/consolewindow"
 
 	"github.com/Dangerboi/tern-kata/internal/guardedfile"
@@ -151,161 +154,58 @@ func lastLine(text string) string {
 	return ""
 }
 
-type tomlLineKind uint8
-
-const (
-	tomlContent tomlLineKind = iota
-	tomlBlank                // empty, or a comment only
-	tomlHeader
-)
-
-// withoutDocbankTable removes the [docbank] table from the config.toml text: its header line through its last line that holds
-// a key or the rest of a value. The blank and comment lines after that stay, so a comment above the next table stays with it, and
-// every other byte is kept as it is, line endings included. Only the table with exactly that name goes: subtables such as
-// [docbank.x] and a [docbank] given as dotted keys or an inline table are not touched, which tern-kata's old setup never wrote.
-// It reports false when there is no [docbank] header.
+// withoutDocbankTable removes the [docbank] table from the config.toml text: its header line through the lines before the next
+// line that starts a table, less the blank and comment lines just before that one, so a comment above the next table stays with it.
+// Every other byte is kept as it is, line endings included. The cut is a plain line cut, so it is checked by decoding: the
+// result must decode to what the original does less the plain keys under docbank. A [docbank.x] subtable stays; a file
+// whose cut would break that (a value that spans lines and holds a line looking like a header, an inline table, dotted keys) is
+// refused. It reports false when there is no [docbank] header or the cut is refused.
 func withoutDocbankTable(text string) (string, bool) {
 	bom := ""
 	if strings.HasPrefix(text, "\uFEFF") {
 		bom, text = "\uFEFF", text[len("\uFEFF"):]
 	}
 	lines := strings.SplitAfter(text, "\n")
-	kinds := make([]tomlLineKind, len(lines))
-	names := make([][]string, len(lines))
-	var st tomlScan
-	for i, line := range lines {
-		if st.clean() {
-			trimmed := strings.TrimLeft(line, " \t")
-			switch {
-			case strings.HasPrefix(trimmed, "["):
-				kinds[i], names[i] = tomlHeader, tomlHeaderName(trimmed)
-				continue
-			case strings.TrimSpace(trimmed) == "" || strings.HasPrefix(trimmed, "#"):
-				kinds[i] = tomlBlank
-				continue
-			}
-		}
-		st.scan(line)
-	}
-	start := -1
-	for i, kind := range kinds {
-		if kind == tomlHeader && len(names[i]) == 1 && names[i][0] == "docbank" {
-			start = i
-			break
-		}
-	}
+	start := slices.IndexFunc(lines, func(line string) bool {
+		header, _, _ := strings.Cut(line, "#")
+		return strings.TrimSpace(header) == "[docbank]"
+	})
 	if start < 0 {
 		return bom + text, false
 	}
-	end := start + 1
-	for i := start + 1; i < len(lines) && kinds[i] != tomlHeader; i++ {
-		if kinds[i] == tomlContent {
-			end = i + 1
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimLeft(lines[i], " \t"), "[") {
+			end = i
+			break
 		}
 	}
-	return bom + strings.Join(lines[:start], "") + strings.Join(lines[end:], ""), true
-}
-
-// tomlHeaderName is the dotted key of a [table] header line, nil for an [[array of tables]] header or one it cannot read.
-func tomlHeaderName(line string) []string {
-	if strings.HasPrefix(line, "[[") {
-		return nil
-	}
-	rest := line[1:]
-	var parts []string
-	for {
-		rest = strings.TrimLeft(rest, " \t")
-		var part string
-		switch {
-		case rest == "":
-			return nil
-		case rest[0] == '"' || rest[0] == '\'':
-			quote := rest[0]
-			i := 1
-			var b strings.Builder
-			for ; i < len(rest) && rest[i] != quote; i++ {
-				if quote == '"' && rest[i] == '\\' && i+1 < len(rest) {
-					i++
-				}
-				b.WriteByte(rest[i])
-			}
-			if i >= len(rest) {
-				return nil
-			}
-			part, rest = b.String(), rest[i+1:]
-		default:
-			i := strings.IndexAny(rest, " \t.]")
-			if i <= 0 {
-				return nil
-			}
-			part, rest = rest[:i], rest[i:]
+	for end-1 > start {
+		if trimmed := strings.TrimSpace(lines[end-1]); trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			break
 		}
-		parts = append(parts, part)
-		rest = strings.TrimLeft(rest, " \t")
-		switch {
-		case strings.HasPrefix(rest, "."):
-			rest = rest[1:]
-		case strings.HasPrefix(rest, "]"):
-			return parts
-		default:
-			return nil
-		}
+		end--
 	}
-}
-
-// tomlScan follows what a line leaves open, so a line that looks like a header inside a multi-line string or array is not one.
-type tomlScan struct {
-	basic, literal bool // inside a """ or ''' string
-	depth          int  // open [ and { of a value
-}
-
-func (s *tomlScan) clean() bool { return !s.basic && !s.literal && s.depth == 0 }
-
-func (s *tomlScan) scan(line string) {
-	for i := 0; i < len(line); {
-		switch {
-		case s.basic:
-			switch {
-			case line[i] == '\\':
-				i += 2
-			case strings.HasPrefix(line[i:], `"""`):
-				s.basic, i = false, i+3
-			default:
-				i++
-			}
-		case s.literal:
-			if strings.HasPrefix(line[i:], "'''") {
-				s.literal, i = false, i+3
-			} else {
-				i++
-			}
-		default:
-			switch c := line[i]; c {
-			case '#':
-				return
-			case '"', '\'':
-				triple := strings.Repeat(string(c), 3)
-				if strings.HasPrefix(line[i:], triple) {
-					s.basic, s.literal, i = c == '"', c == '\'', i+3
-					continue
-				}
-				i++
-				for i < len(line) && line[i] != c {
-					if c == '"' && line[i] == '\\' {
-						i++
-					}
-					i++
-				}
-				i++
-			case '[', '{':
-				s.depth++
-				i++
-			case ']', '}':
-				s.depth = max(0, s.depth-1)
-				i++
-			default:
-				i++
+	cut := strings.Join(lines[:start], "") + strings.Join(lines[end:], "")
+	var before, after map[string]any
+	if _, err := toml.Decode(text, &before); err != nil {
+		return bom + text, false
+	}
+	if _, err := toml.Decode(cut, &after); err != nil {
+		return bom + text, false
+	}
+	if table, ok := before["docbank"].(map[string]any); ok {
+		for key, value := range table {
+			if _, sub := value.(map[string]any); !sub {
+				delete(table, key)
 			}
 		}
+		if len(table) == 0 {
+			delete(before, "docbank")
+		}
 	}
+	if !reflect.DeepEqual(before, after) {
+		return bom + text, false
+	}
+	return bom + cut, true
 }

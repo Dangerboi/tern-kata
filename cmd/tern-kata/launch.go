@@ -264,7 +264,7 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 		if dash >= 0 && dash < len(plan.FallbackArgs)-1 {
 			return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with another argument for kata tui")
 		}
-		if len(barePositionals(plan.TUIArgs)) > 0 {
+		if len(words) > 0 {
 			return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with another argument for kata tui")
 		}
 		translated := []string{"--project", project, project + "#" + shortID}

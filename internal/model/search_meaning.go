@@ -41,9 +41,9 @@ type SearchByMeaningDone struct {
 
 func (SearchByMeaningDone) msg() {}
 
-// rankedFilters is the Status and Label filters a ranked search was asked with: kata applies both, so an answer holds only
-// while the Pane's filters are still these.
-type rankedFilters struct{ Status, Label string }
+// rankedFilters is the Project, Status and Label filters a ranked search was asked with: kata applies all three, so an answer
+// holds only while the Pane's filters are still these. Status is empty on the Board, which ignores it.
+type rankedFilters struct{ ProjectUID, Status, Label string }
 
 // rankedAsk is one ranked search as it was asked: the query and the filters. The zero value is no ask.
 type rankedAsk struct {
@@ -65,7 +65,11 @@ type RankedSearch struct {
 
 // currentAsk is the query typed and the filters set now.
 func (m Model) currentAsk() rankedAsk {
-	return rankedAsk{m.Filters.Search, rankedFilters{m.Filters.Status, m.Filters.Label}}
+	status := m.Filters.Status
+	if m.OnBoard() {
+		status = ""
+	}
+	return rankedAsk{m.Filters.Search, rankedFilters{m.Filters.ProjectUID, status, m.Filters.Label}}
 }
 
 // askedNow says kata was asked, whatever it answered, the query typed and the filters set now.
@@ -147,9 +151,10 @@ func runSearchByMeaning(m Model) (Model, []Cmd) {
 	if !m.Search.Meaning || !ok || strings.TrimSpace(m.Filters.Search) == "" || m.idMatch() != "" {
 		return m, nil
 	}
-	m.rankedAsked = m.currentAsk()
+	ask := m.currentAsk()
+	m.rankedAsked = ask
 	return m, []Cmd{SearchByMeaning{
-		Workspace: m.Workspace, ProjectID: id, Query: m.Filters.Search, Status: m.Filters.Status,
+		Workspace: m.Workspace, ProjectID: id, Query: m.Filters.Search, Status: ask.Filters.Status,
 		Labels: labelList(m.Filters.Label), Request: m.rankedReads.Ask(),
 	}}
 }
@@ -178,7 +183,6 @@ func searchMeaningDone(m Model, msg SearchByMeaningDone) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Ranked = RankedSearch{Have: true, RankedAnswer: msg.RankedAnswer, SearchedWith: m.rankedAsked.Filters}
-	m.etag = ""
 	return relist(m)
 }
 

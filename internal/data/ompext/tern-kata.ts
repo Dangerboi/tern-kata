@@ -657,7 +657,7 @@ export interface ExtensionApi {
 /** kata's rule for the session id of an agent other than claude and codex (its internal/transcript). */
 const TRANSCRIPT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
-/** The environment variable Go sets (internal/closetranscript) when kata's config leaves the transcript choice open. */
+/** The environment variable Go sets (CloseTranscriptEnv in this folder's ompext.go) when kata's config leaves the transcript choice open. */
 export const CLOSE_TRANSCRIPT_ENV = "TERN_KATA_CLOSE_TRANSCRIPT";
 
 /** The environments whose KATA_CLOSE_TRANSCRIPT_ENABLED this extension set, so it never removes one a person set. */

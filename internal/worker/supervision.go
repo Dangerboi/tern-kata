@@ -85,18 +85,17 @@ func RunningWorker(ctx context.Context, d Dirs) (Identity, bool) {
 	return Identity{PID: pid}, true
 }
 
-func (d Dirs) SetSupervision(on bool) error { return SetMarker(d.Config, d.ManualPath(), on) }
-
-// SetMarker creates the supervision marker file at path (making dir when it is missing) when on is false, and removes it when on
-// is true; either, repeated, is no error. The worker and Docbank each keep such a marker in tern-kata's config folder.
-func SetMarker(dir, path string, on bool) error {
+// SetSupervision creates the supervision marker file (making the config folder when it is missing) when on is false, and removes
+// it when on is true; either, repeated, is no error.
+func (d Dirs) SetSupervision(on bool) error {
+	path := d.ManualPath()
 	if on {
 		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
 		return nil
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(d.Config, 0o700); err != nil {
 		return err
 	}
 	return os.WriteFile(path, nil, 0o600)

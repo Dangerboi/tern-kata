@@ -40,24 +40,20 @@ local HELD = 4
 local KV_HELD = "supervision.held"
 local held_line: string? = nil
 
-type Backoff = { delay: number, next: number }
-
-local function new_backoff(): Backoff
-    return { delay = MIN_DELAY, next = 0 }
-end
-
-local worker_backoff = new_backoff()
+local restart_delay = MIN_DELAY
+-- Tern's clock (ms) before which no start is made.
+local next_start = 0
 
 -- The next start comes at once and at the shortest delay, as after a healthy run.
-local function reset_backoff(backoff: Backoff)
-    backoff.delay = MIN_DELAY
-    backoff.next = 0
+local function reset_backoff()
+    restart_delay = MIN_DELAY
+    next_start = 0
 end
 
-local function schedule_restart(backoff: Backoff): number
-    local waited = backoff.delay
-    backoff.next = tern.now() + waited
-    backoff.delay = math.min(waited * 2, MAX_DELAY)
+local function schedule_restart(): number
+    local waited = restart_delay
+    next_start = tern.now() + waited
+    restart_delay = math.min(waited * 2, MAX_DELAY)
     return waited
 end
 
@@ -148,18 +144,15 @@ end
 
 local start
 
-local function scheduler(fire: () -> ()): (number) -> ()
-    local pending: TimerHandle? = nil
-    return function(ms: number)
-        if pending then pending:cancel() end
-        pending = tern.timer(ms, function()
-            pending = nil
-            fire()
-        end)
-    end
-end
+local pending: TimerHandle? = nil
 
-local arm = scheduler(function() start() end)
+local function arm(ms: number)
+    if pending then pending:cancel() end
+    pending = tern.timer(ms, function()
+        pending = nil
+        start()
+    end)
+end
 
 local function last_line(text: string): string
     local line = ""
@@ -167,25 +160,19 @@ local function last_line(text: string): string
     return line
 end
 
--- Logs that `<command> supervised` failed in a way that means the binary doesn't know the command: it is older than
--- this plugin. `subject` is what is not started.
-local function warn_not_started(command: string, subject: string, result: ProcessResult)
-    tern.log.warn("tern-kata: `" .. command .. " supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so " .. subject .. " is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
-end
-
 -- Starts the worker if the backoff allows. config is worker.toml's text, which `worker supervised` printed.
 local function launch(binary: string, config: string)
-    local wait = worker_backoff.next - tern.now()
+    local wait = next_start - tern.now()
     if wait > 0 then return arm(math.min(wait, POLL_MS)) end
     started_text = config
     local started = tern.now()
     local function exited(result: ProcessResult)
         running = false
         local ran = tern.now() - started
-        if ran >= HEALTHY_MS or result.timed_out then worker_backoff.delay = MIN_DELAY end
-        local waited = schedule_restart(worker_backoff)
+        if ran >= HEALTHY_MS or result.timed_out then restart_delay = MIN_DELAY end
+        local waited = schedule_restart()
         tern.log.warn("tern-kata: the worker exited with status " .. result.status .. " after " .. ran // 1000 .. " s (" .. last_line(result.stderr) .. "); restarting in " .. waited // 1000 .. " s")
-        arm(math.min(worker_backoff.next - tern.now(), POLL_MS))
+        arm(math.min(next_start - tern.now(), POLL_MS))
     end
     local ok, err = pcall(function()
         tern.process.run({binary, "worker"}, process_options(RUN_LIMIT_MS, { TERN_KATA_SUPERVISOR = "tern" }), exited)
@@ -196,8 +183,8 @@ local function launch(binary: string, config: string)
         arm(POLL_MS)
     else
         tern.log.warn("tern-kata: could not start the worker: " .. tostring(err))
-        schedule_restart(worker_backoff)
-        arm(math.min(worker_backoff.next - tern.now(), POLL_MS))
+        schedule_restart()
+        arm(math.min(next_start - tern.now(), POLL_MS))
     end
 end
 
@@ -226,24 +213,24 @@ local function answered(binary: string, result: ProcessResult)
                 tern.log.warn("tern-kata: " .. line)
             end
         end
-        reset_backoff(worker_backoff)
+        reset_backoff()
         return arm(POLL_MS)
     end
     if result.status ~= 0 then
         if result.status == 1 and not result.timed_out then
-            reset_backoff(worker_backoff)
+            reset_backoff()
             started_text = nil
             forget_held()
         elseif not result.timed_out and result.status ~= -1 and not warned_status then
             warned_status = true
-            warn_not_started("worker", "the worker", result)
+            tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
         end
         return arm(POLL_MS)
     end
     forget_held()
     local config = result.stdout
     if started_text ~= nil and config ~= started_text then
-        reset_backoff(worker_backoff)
+        reset_backoff()
         started_text = nil
     end
     launch(binary, config)

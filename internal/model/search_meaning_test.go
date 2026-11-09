@@ -419,32 +419,45 @@ func loaded(m model.Model, cmds []model.Cmd) model.Model {
 }
 
 func TestAFilterChangeEndsTheCommittedRankedAnswer(t *testing.T) {
-	m, search := searched(t, model.Filters{Status: "open"}, "login")
-	m = answered(t, m, search, ranking("c", "a"))
-	m, cmds := press(m, "enter")
-	m = loaded(m, cmds)
-	if !reflect.DeepEqual(listed(m), []string{"c", "a"}) {
-		t.Fatalf("committed rows %v", listed(m))
-	}
-	m, cmds = press(m, "s")
-	refresh := cmdOf[model.ReadSnapshot](t, cmds)
-	if m.Filters.Status != "closed" || refresh.Query.Text == nil || *refresh.Query.Text != "login" {
-		t.Fatalf("status %q, read %+v: the answer asked under open still stands", m.Filters.Status, refresh.Query)
-	}
-	m = loaded(m, cmds)
-	if !reflect.DeepEqual(listed(m), []string{"a", "b", "c"}) {
-		t.Fatalf("rows %v, want the words filter's rows", listed(m))
+	all := model.Collection{View: "all-open", Title: "All Open"}
+	for _, tt := range []struct {
+		name   string
+		start  model.Filters
+		change func(*model.Filters)
+	}{
+		{"status", model.Filters{ProjectUID: "p", Status: "open"}, func(f *model.Filters) { f.Status = "closed" }},
+		{"label", model.Filters{ProjectUID: "p"}, func(f *model.Filters) { f.Label = "bug" }},
+		{"project", model.Filters{ProjectUID: "p"}, func(f *model.Filters) { f.ProjectUID = "q" }},
+		{"project cleared", model.Filters{ProjectUID: "p"}, func(f *model.Filters) { f.ProjectUID = "" }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := meaningPane(all, tt.start, "")
+			m = meaningOn(t, m)
+			m, _ = meaningTyping(m, "login")
+			m, cmds := press(m, "enter")
+			search := cmdOf[model.SearchByMeaning](t, cmds)
+			m = answered(t, m, search, ranking("c", "a"))
+			m, cmds = press(m, "enter")
+			m = loaded(m, cmds)
+			if !reflect.DeepEqual(listed(m), []string{"c", "a"}) {
+				t.Fatalf("committed rows %v", listed(m))
+			}
+			tt.change(&m.Filters)
+			if m.SnapshotQuery().Text == nil {
+				t.Fatal("a ranked answer asked under the old filters still stands")
+			}
+		})
 	}
 }
 
-func TestAFilterChangeByLabelEndsTheCommittedRankedAnswer(t *testing.T) {
-	m, search := searched(t, model.Filters{}, "login")
-	m = answered(t, m, search, ranking("c", "a"))
-	m, cmds := press(m, "enter")
-	m = loaded(m, cmds)
-	m.Filters.Label = "bug"
-	if m.SnapshotQuery().Text == nil {
-		t.Fatal("a ranked answer asked without the Label filter still stands under it")
+func TestEnterByMeaningOnTheBoardSendsNoStatus(t *testing.T) {
+	m := meaningPane(idCollection, model.Filters{Status: "open"}, "")
+	m.Page = model.PageBoard
+	m, _ = press(m, "ctrl+t")
+	m, _ = meaningTyping(m, "login")
+	_, cmds := press(m, "enter")
+	if search := cmdOf[model.SearchByMeaning](t, cmds); search.Status != "" {
+		t.Fatalf("the Board sent status %q, which it ignores", search.Status)
 	}
 }
 

@@ -1,8 +1,6 @@
 package worker
 
 import (
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -92,38 +90,28 @@ func TestChildEnvDropsInheritedIssueBinding(t *testing.T) {
 	}
 }
 
-func TestChildEnvCarriesTheCloseTranscriptVariableExactlyWhenKatasConfigLeavesTheChoice(t *testing.T) {
+func TestChildEnvReplacesAnInheritedCloseTranscriptVariableAndHonoursTheEnvironmentSwitch(t *testing.T) {
 	for _, c := range []struct {
-		name, config, switchEnv string
-		want                    bool
+		name, switchEnv string
+		want            bool
 	}{
-		{name: "no key", config: "[close.transcript]\nagentsview_url = \"http://x\"\n", want: true},
 		{name: "no file", want: true},
-		{name: "enabled = false", config: "[close.transcript]\nenabled = false\n"},
-		{name: "enabled = true", config: "[close.transcript]\nenabled = true\n"},
-		{name: "switch false in the environment", switchEnv: "false"},
-		{name: "switch true in the environment", switchEnv: "true"},
+		{name: "switch in the environment", switchEnv: "true"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("KATA_HOME", home)
+			t.Setenv("KATA_HOME", t.TempDir())
 			t.Setenv("TERN_KATA_CLOSE_TRANSCRIPT", "inherited")
 			if c.switchEnv != "" {
 				t.Setenv("KATA_CLOSE_TRANSCRIPT_ENABLED", c.switchEnv)
 			}
-			if c.config != "" {
-				if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(c.config), 0o600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			got := slices.Contains(childEnv("ann", nil, nil), "TERN_KATA_CLOSE_TRANSCRIPT=on")
-			if got != c.want {
+			env := childEnv("ann", nil, nil)
+			if got := slices.Contains(env, "TERN_KATA_CLOSE_TRANSCRIPT=on"); got != c.want {
 				t.Errorf("variable on = %v, want %v", got, c.want)
 			}
-			if c.switchEnv != "" && !slices.Contains(childEnv("ann", nil, nil), "KATA_CLOSE_TRANSCRIPT_ENABLED="+c.switchEnv) {
+			if c.switchEnv != "" && !slices.Contains(env, "KATA_CLOSE_TRANSCRIPT_ENABLED="+c.switchEnv) {
 				t.Errorf("the user's KATA_CLOSE_TRANSCRIPT_ENABLED=%s did not reach the prompt step", c.switchEnv)
 			}
-			for _, kv := range childEnv("ann", nil, nil) {
+			for _, kv := range env {
 				if strings.HasPrefix(kv, "TERN_KATA_CLOSE_TRANSCRIPT=") && kv != "TERN_KATA_CLOSE_TRANSCRIPT=on" {
 					t.Errorf("kept %q", kv)
 				}

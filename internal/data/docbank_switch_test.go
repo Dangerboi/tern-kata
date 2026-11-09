@@ -20,10 +20,6 @@ confirm_quit = false # asked once
 url = "http://127.0.0.1:8080"
 api_key_file = "/home/me/.kata/docbank.key"
 folder = "/files/kata"
-notes = """
-[tui]
-not a table
-"""
 # belongs to the next table
 
 [docbank.extra]
@@ -242,6 +238,18 @@ func TestWithoutDocbankTableSeesAHeaderBehindAByteOrderMarkAndKeepsTheMark(t *te
 	}
 	if got, ok := withoutDocbankTable("\uFEFF[tui]\n"); ok || got != "\uFEFF[tui]\n" {
 		t.Errorf("no header: got %q, %v", got, ok)
+	}
+}
+
+// A value spanning lines that holds a header-looking line makes the line cut leave a broken file, so the decode check refuses it.
+func TestWithoutDocbankTableRefusesACutThatChangesAnythingElse(t *testing.T) {
+	hidden := "[docbank]\nurl = \"http://127.0.0.1:8080\"\nnotes = \"\"\"\n[tui]\nnot a table\n\"\"\"\n\n[other]\nx = 1\n"
+	if got, ok := withoutDocbankTable(hidden); ok || got != hidden {
+		t.Errorf("got %q, %v; want the text unchanged and a refusal", got, ok)
+	}
+	inline := "[docbank]\nurl = \"u\"\nextra = { a = 1 }\n"
+	if got, ok := withoutDocbankTable(inline); ok || got != inline {
+		t.Errorf("inline table: got %q, %v; want a refusal", got, ok)
 	}
 }
 
