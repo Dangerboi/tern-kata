@@ -11,7 +11,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - `ctrl+t` in the search box switches the search between by words and by meaning, inside one Project.
   - By meaning, `enter` runs kata's own search of the Project with the Status and Label filters and lists the best 50 Issues best first under Results.
   - Typing sends nothing, a live refresh does not run the search again, and a short id still jumps to its Issue.
-  - Changing the Project, Status or Label filter afterwards, or switching Collection, ends those Results, and the list goes back to the words filter on the same text. On the Board, which ignores Status, no Status is sent.
+  - Changing the Project, Status or Label filter afterwards, or switching Collection, ends those Results, and the list goes back to the words filter on the same text. A search with no Status (always so on the Board, which ignores Status) whose Results kata did not cut at 50 keeps them under a Status set later, trimmed to that Status.
   - The search line says "kata searched by words: <reason>" when kata has no search by meaning to offer, or, without a reason, to turn it on with `kata daemon local-embeddings`.
   - It also says "showing the best 50" when more Issues match, and that the Owner and Relationship filters don't apply.
   - Outside a single Project (the Inbox, Today, All Open) it says "search by meaning works inside one Project" and stays by words.

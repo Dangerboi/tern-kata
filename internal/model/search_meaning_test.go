@@ -421,14 +421,16 @@ func loaded(m model.Model, cmds []model.Cmd) model.Model {
 func TestAFilterChangeEndsTheCommittedRankedAnswer(t *testing.T) {
 	all := model.Collection{View: "all-open", Title: "All Open"}
 	for _, tt := range []struct {
-		name   string
-		start  model.Filters
-		change func(*model.Filters)
+		name      string
+		start     model.Filters
+		truncated bool
+		change    func(*model.Filters)
 	}{
-		{"status", model.Filters{ProjectUID: "p", Status: "open"}, func(f *model.Filters) { f.Status = "closed" }},
-		{"label", model.Filters{ProjectUID: "p"}, func(f *model.Filters) { f.Label = "bug" }},
-		{"project", model.Filters{ProjectUID: "p"}, func(f *model.Filters) { f.ProjectUID = "q" }},
-		{"project cleared", model.Filters{ProjectUID: "p"}, func(f *model.Filters) { f.ProjectUID = "" }},
+		{"status", model.Filters{ProjectUID: "p", Status: "open"}, false, func(f *model.Filters) { f.Status = "closed" }},
+		{"status set after a cut answer asked without one", model.Filters{ProjectUID: "p"}, true, func(f *model.Filters) { f.Status = "open" }},
+		{"label", model.Filters{ProjectUID: "p"}, false, func(f *model.Filters) { f.Label = "bug" }},
+		{"project", model.Filters{ProjectUID: "p"}, false, func(f *model.Filters) { f.ProjectUID = "q" }},
+		{"project cleared", model.Filters{ProjectUID: "p"}, false, func(f *model.Filters) { f.ProjectUID = "" }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := meaningPane(all, tt.start, "")
@@ -436,7 +438,9 @@ func TestAFilterChangeEndsTheCommittedRankedAnswer(t *testing.T) {
 			m, _ = meaningTyping(m, "login")
 			m, cmds := press(m, "enter")
 			search := cmdOf[model.SearchByMeaning](t, cmds)
-			m = answered(t, m, search, ranking("c", "a"))
+			answer := ranking("c", "a")
+			answer.Truncated = tt.truncated
+			m = answered(t, m, search, answer)
 			m, cmds = press(m, "enter")
 			m = loaded(m, cmds)
 			if !reflect.DeepEqual(listed(m), []string{"c", "a"}) {
@@ -461,17 +465,32 @@ func TestEnterByMeaningOnTheBoardSendsNoStatus(t *testing.T) {
 	}
 }
 
-func TestACommittedRankedAnswerStaysWhenTheBoardOpens(t *testing.T) {
-	m := meaningPane(idCollection, model.Filters{Status: "open"}, "")
+// committedOn commits a ranked answer for "login" (c, a) asked on page with the filters given.
+func committedOn(t *testing.T, page model.Page, filters model.Filters) model.Model {
+	t.Helper()
+	m := meaningPane(idCollection, filters, "")
+	m.Page = page
 	m = meaningOn(t, m)
 	m, _ = meaningTyping(m, "login")
 	m, cmds := press(m, "enter")
 	m = answered(t, m, cmdOf[model.SearchByMeaning](t, cmds), ranking("c", "a"))
 	m, cmds = press(m, "enter")
-	m = loaded(m, cmds)
-	m.Page = model.PageBoard
+	return loaded(m, cmds)
+}
+
+func TestAnAnswerAskedOnTheBoardStaysOnTheIssuesPage(t *testing.T) {
+	m := committedOn(t, model.PageBoard, model.Filters{Status: "open"})
+	m.Page = model.PageIssues
 	if m.SnapshotQuery().Text != nil {
-		t.Fatal("opening the Board, which ignores the Status filter, ended the ranked answer")
+		t.Fatal("an uncut answer asked without a Status ended when the Issues Page applied its Status")
+	}
+}
+
+func TestAnAnswerAskedWithAStatusEndsWhenTheBoardOpens(t *testing.T) {
+	m := committedOn(t, model.PageIssues, model.Filters{Status: "closed"})
+	m.Page = model.PageBoard
+	if m.SnapshotQuery().Text == nil {
+		t.Fatal("the Board, which ignores Status, kept an answer kata narrowed to closed Issues")
 	}
 }
 

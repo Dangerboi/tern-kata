@@ -85,11 +85,12 @@ func (m Model) withoutRanked() Model {
 const searchMeaningRefusal = "search by meaning works inside one Project"
 
 // rankedShown says the list is kata's ranked answer: not one the short-id search names, asked with the filters now set, and
-// either by meaning is on or the committed search text is the query the answer is for. Status does not end an answer on the
-// Board, which ignores it, nor one asked without a Status (on the Board), since the snapshot's own Status trims those hits.
+// either by meaning is on or the committed search text is the query the answer is for. An answer asked without a Status (as
+// on the Board) that kata did not cut stays under a Status set later: the snapshot's own Status trims its hits to what kata
+// would answer. A cut answer, or one asked with a Status, ends when the Status changes.
 func (m Model) rankedShown() bool {
 	asked, now := m.Ranked.SearchedWith, m.currentAsk().Filters
-	if m.OnBoard() || asked.Status == "" {
+	if asked.Status == "" && !m.Ranked.Truncated {
 		asked.Status = now.Status
 	}
 	if !m.Ranked.Have || m.idMatch() != "" || asked != now {
