@@ -68,9 +68,6 @@ func (m Model) currentAsk() rankedAsk {
 	return rankedAsk{m.Filters.Search, rankedFilters{m.Filters.Status, m.Filters.Label}}
 }
 
-// currentFilters is the Status and Label filters set now.
-func (m Model) currentFilters() rankedFilters { return m.currentAsk().Filters }
-
 // askedNow says kata was asked, whatever it answered, the query typed and the filters set now.
 func (m Model) askedNow() bool { return m.rankedAsked == m.currentAsk() }
 
@@ -86,7 +83,7 @@ const searchMeaningRefusal = "search by meaning works inside one Project"
 // rankedShown says the list is kata's ranked answer: not one the short-id search names, asked with the filters now set, and
 // either by meaning is on or the committed search text is the query the answer is for.
 func (m Model) rankedShown() bool {
-	if !m.Ranked.Have || m.idMatch() != "" || m.Ranked.SearchedWith != m.currentFilters() {
+	if !m.Ranked.Have || m.idMatch() != "" || m.Ranked.SearchedWith != m.currentAsk().Filters {
 		return false
 	}
 	return m.Search.Meaning || m.Filters.Search != "" && m.Ranked.Query == m.Filters.Search

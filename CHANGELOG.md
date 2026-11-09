@@ -15,7 +15,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The search line says "kata searched by words: <reason>" when kata has no search by meaning to offer, or, without a reason, to turn it on with `kata daemon local-embeddings`.
   - It also says "showing the best 50" when more Issues match, and that the Owner and Relationship filters don't apply.
   - Outside a single Project (the Inbox, Today, All Open) it says "search by meaning works inside one Project" and stays by words.
-  - `esc` out of the query goes back to the search you had; a new search starts by words. A saved view and the default filter keep only the text.
+  - `esc` out of the query goes back to the search you had, and `/` on ranked Results continues by meaning; any other new search starts by words. A saved view and the default filter keep only the text.
 
 ### Changed
 
