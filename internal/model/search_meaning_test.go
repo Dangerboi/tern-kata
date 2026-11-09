@@ -461,6 +461,20 @@ func TestEnterByMeaningOnTheBoardSendsNoStatus(t *testing.T) {
 	}
 }
 
+func TestACommittedRankedAnswerStaysWhenTheBoardOpens(t *testing.T) {
+	m := meaningPane(idCollection, model.Filters{Status: "open"}, "")
+	m = meaningOn(t, m)
+	m, _ = meaningTyping(m, "login")
+	m, cmds := press(m, "enter")
+	m = answered(t, m, cmdOf[model.SearchByMeaning](t, cmds), ranking("c", "a"))
+	m, cmds = press(m, "enter")
+	m = loaded(m, cmds)
+	m.Page = model.PageBoard
+	if m.SnapshotQuery().Text != nil {
+		t.Fatal("opening the Board, which ignores the Status filter, ended the ranked answer")
+	}
+}
+
 func TestEscapeOutOfAnEditedReopenedSearchKeepsTheCommittedAnswer(t *testing.T) {
 	for _, tt := range []struct {
 		name string

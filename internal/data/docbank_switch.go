@@ -70,7 +70,7 @@ func switchPinnedDocbank(ctx context.Context) error {
 	}
 	switched, ok := withoutDocbankTable(original)
 	if !ok {
-		return fmt.Errorf("%s has no [docbank] table to remove (edit it by hand), so nothing was changed", path)
+		return fmt.Errorf("the [docbank] section of %s cannot be removed without changing anything else in the file (edit it by hand), so nothing was changed", path)
 	}
 	if err := guardedfile.Write(path, 0o700, token, []byte(switched)); err != nil {
 		if errors.Is(err, guardedfile.ErrChanged) {
