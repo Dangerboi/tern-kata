@@ -83,6 +83,11 @@ func searchEnter(m Model) (Model, []Cmd) {
 		m.Search.Results = true
 		return runSearchByMeaning(m)
 	}
+	if m.Search.Meaning && !m.searchedOrSearching() { // the query was only moved into, never searched
+		if next, cmds := runSearchByMeaning(m); len(cmds) > 0 {
+			return next, cmds
+		}
+	}
 	meaning := m.Search.Meaning
 	m.Search = SearchState{}
 	if meaning {
@@ -101,6 +106,7 @@ func searchBack(m Model) (Model, []Cmd) {
 	m.SelectedUID = m.Search.InitialUID
 	m.Search = SearchState{}
 	m.Ranked = initial
+	m.Ranked.inFlight = false
 	m.rankedReads.Discard()
 	if meaning || initial.Have {
 		return relist(m)

@@ -328,6 +328,44 @@ func TestSwitchingBackToWordsDropsTheRankedList(t *testing.T) {
 	}
 }
 
+func TestCollectionSwitchEndsTheSearchByMeaning(t *testing.T) {
+	m, search := searched(t, model.Filters{}, "slow login")
+	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m, _ = press(m, "enter", "/")
+	m.Collections = []model.Collection{idDeadlines}
+	m, _ = model.Update(m, model.CollectionSelected{Collection: idDeadlines})
+	if m.Search.Meaning || m.Search.InitialRanked.Have || m.Ranked.Have {
+		t.Fatalf("after the switch: search %+v, ranked %+v", m.Search, m.Ranked)
+	}
+	m, _ = press(m, "escape")
+	if m.Ranked.Have || m.Search.Meaning {
+		t.Fatalf("esc brought the old Collection's answer back: ranked %+v", m.Ranked)
+	}
+	if query := m.SnapshotQuery(); query.Text == nil || *query.Text != "slow login" {
+		t.Fatalf("snapshot query %+v lost the search text", query)
+	}
+}
+
+func TestEnterByMeaningAfterMovingIntoTheResultsRunsTheSearch(t *testing.T) {
+	m := meaningPane(idCollection, model.Filters{}, "")
+	m = meaningOn(t, m)
+	m, _ = meaningTyping(m, "foo")
+	m, cmds := press(m, "down")
+	if !onlyReads(cmds) {
+		t.Fatalf("down ran a search: %#v", cmds)
+	}
+	m, cmds = press(m, "enter")
+	search := cmdOf[model.SearchByMeaning](t, cmds)
+	if search.Query != "foo" || m.CurrentMode() != model.ModeSearchResults {
+		t.Fatalf("search %+v, mode %s; want the search for foo and the box still open", search, m.CurrentMode())
+	}
+	m = answered(t, m, search, model.SearchByMeaningDone{UIDs: []string{"c", "a"}})
+	m, cmds = press(m, "enter")
+	if !onlyReads(cmds) || m.CurrentMode() != model.ModeList || !reflect.DeepEqual(listed(m), []string{"c", "a"}) {
+		t.Fatalf("commit: mode %s, rows %v, %#v", m.CurrentMode(), listed(m), cmds)
+	}
+}
+
 func TestAnAnswerAfterEscapeIsDropped(t *testing.T) {
 	m, search := searched(t, model.Filters{}, "slow login")
 	m, _ = press(m, "escape", "escape")

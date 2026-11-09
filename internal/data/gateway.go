@@ -36,6 +36,8 @@ type Gateway struct {
 	current    string
 	// epoch counts daemon switches, so a connect that raced one is dropped rather than cached against the new daemon.
 	epoch uint64
+	// switches counts the Docbank switches running; Add happens under mu while closed is false, so Close's Wait never races it.
+	switches sync.WaitGroup
 
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
@@ -79,6 +81,7 @@ func (g *Gateway) WithHost(host string) *Gateway {
 	return g
 }
 
+// Close stops the streams and drops the clients, then waits for a Docbank switch in flight to finish, restore included.
 func (g *Gateway) Close() {
 	g.streamMu.Lock()
 	if g.streamCancel != nil {
@@ -91,9 +94,10 @@ func (g *Gateway) Close() {
 	}
 	g.wakeMu.Unlock()
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	g.closed = true
 	clear(g.clients)
+	g.mu.Unlock()
+	g.switches.Wait()
 }
 
 // Run executes cmd and sends each result to messages until ctx ends.

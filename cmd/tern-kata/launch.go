@@ -716,8 +716,9 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
 <ref> is a short id in this workspace's Project, <project>#<short id>, or a ULID.
 The Issue's Project must be this workspace's Binding (views is the exception: it spans Projects).
 
-Any other flag is passed to ` + "`kata tui`" + ` when Tern is unavailable; inside Tern it is refused. A bare word must be an
-issue reference (` + "`<short_id>`, `<project>#<short_id>` or a UID" + `) and at most one is allowed; any other is refused.
+Any other flag is passed to ` + "`kata tui`" + ` when Tern is unavailable; inside Tern it is refused. Before ` + "`--`" + `, a bare word
+that does not follow a flag is kata tui's issue ref (` + "`<short_id>`, `<project>#<short_id>` or a ULID" + `): at most one, and any
+other word there is refused.
 
 Exit status: 0 on success, 1 when a subcommand fails, 2 for a command line it refuses, 3 when the Pane
 fails, and 128 plus the signal's number when a signal stops a subcommand (130 for ctrl+c).

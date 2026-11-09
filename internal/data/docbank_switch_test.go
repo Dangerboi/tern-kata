@@ -1,11 +1,13 @@
 package data
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -158,6 +160,67 @@ func TestSwitchDocbankLeavesAFileChangedAfterTheSwitchAndSaysItWasNotRestored(t 
 	}
 	if after, want := f.config(t), pinnedKataConfigWithout+"active_daemon = \"x\"\n"; after != want {
 		t.Errorf("config.toml is\n%q\nwant the other writer's file\n%q", after, want)
+	}
+}
+
+// waitForFile blocks until kata's stand-in has logged path, which is after it read the switched config.toml.
+func waitForFile(t *testing.T, path string) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if raw, err := os.ReadFile(path); err == nil && len(raw) > 0 {
+			return
+		}
+	}
+	t.Fatalf("kata did not start: %s is missing", path)
+}
+
+func TestSwitchDocbankKataNotAnsweringInTimeIsKilledAndTheOriginalBytesComeBack(t *testing.T) {
+	old := docbankSetupTimeout
+	docbankSetupTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { docbankSetupTimeout = old })
+	f := newDocbankSwitchFixture(t, pinnedKataConfig, "exec sleep 30\n")
+	start := time.Now()
+	got := as[model.DocbankSwitched](t, run(t, f.g, model.SwitchDocbank{}))
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "kata did not answer within 200ms") {
+		t.Errorf("error %v, want that kata did not answer in time", got.Err)
+	}
+	if time.Since(start) > 10*time.Second {
+		t.Errorf("the switch took %v; kata was not killed", time.Since(start))
+	}
+	if after := f.config(t); after != pinnedKataConfig {
+		t.Errorf("config.toml is\n%q\nwant the original bytes", after)
+	}
+}
+
+func TestSwitchDocbankReturnsOnlyAfterTheRestoreWhenThePanesContextIsCancelled(t *testing.T) {
+	f := newDocbankSwitchFixture(t, pinnedKataConfig, "sleep 1\necho 'kata failed' >&2\nexit 1\n")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	answer := make(chan model.Msg, 1)
+	go func() { answer <- f.g.switchDocbank(ctx, model.SwitchDocbank{}) }()
+	waitForFile(t, f.log+".seen")
+	cancel()
+	got := as[model.DocbankSwitched](t, <-answer)
+	if got.Err == nil || got.Err.Error() != "kata failed" {
+		t.Errorf("error %v, want kata's own line: the cancelled Pane does not kill it", got.Err)
+	}
+	if after := f.config(t); after != pinnedKataConfig {
+		t.Errorf("config.toml is\n%q\nwant the original bytes", after)
+	}
+}
+
+func TestGatewayCloseWaitsForASwitchInFlightToRestoreTheFile(t *testing.T) {
+	f := newDocbankSwitchFixture(t, pinnedKataConfig, "sleep 1\necho 'kata failed' >&2\nexit 1\n")
+	answer := make(chan model.Msg, 1)
+	go func() { answer <- f.g.switchDocbank(context.Background(), model.SwitchDocbank{}) }()
+	waitForFile(t, f.log+".seen")
+	f.g.Close()
+	if after := f.config(t); after != pinnedKataConfig {
+		t.Errorf("Close returned with config.toml\n%q\nwant the original bytes already back", after)
+	}
+	<-answer
+	if got := as[model.DocbankSwitched](t, f.g.switchDocbank(context.Background(), model.SwitchDocbank{})); got.Err == nil {
+		t.Error("a switch after Close ran; want it refused")
 	}
 }
 

@@ -179,6 +179,7 @@ func collectionSwitched(m Model) (Model, []Cmd) {
 	m.IDSearch = IDSearch{}
 	m.Ranked = RankedSearch{}
 	m.rankedReads.Discard()
+	m.Search.Meaning, m.Search.Refused, m.Search.InitialRanked = false, false, RankedSearch{}
 	return snapshotChanged(m)
 }
 
