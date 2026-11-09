@@ -1267,6 +1267,12 @@ describe("extension factory", () => {
     }
   });
 
+  test("a blank KATA_CLOSE_TRANSCRIPT_ENABLED counts as unset, as kata reads it", () => {
+    const env: Record<string, string | undefined> = { TERN_KATA_CLOSE_TRANSCRIPT: "on", KATA_CLOSE_TRANSCRIPT_ENABLED: " " };
+    wire(env).handlers.get("session_start")?.({}, session("good"));
+    expect(env.KATA_CLOSE_TRANSCRIPT_ENABLED).toBe("true");
+  });
+
   test("with the variable off, no switch is set", () => {
     for (const env of [{} as Record<string, string | undefined>, { TERN_KATA_CLOSE_TRANSCRIPT: "off" }]) {
       wire(env).handlers.get("session_start")?.({}, session("good"));

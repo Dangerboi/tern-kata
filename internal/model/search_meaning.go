@@ -206,7 +206,7 @@ func (m Model) SearchLine() string {
 	}
 	if m.Search.Meaning || m.rankedShown() {
 		if m.Ranked.Err != nil {
-			parts = append(parts, strings.ReplaceAll(m.Ranked.Err.Error(), "\n", " "))
+			parts = append(parts, oneLine(m.Ranked.Err.Error()))
 		}
 		if m.Ranked.Have && m.Ranked.Lexical {
 			reason := m.Ranked.Reason

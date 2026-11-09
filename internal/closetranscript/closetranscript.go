@@ -24,9 +24,9 @@ const On = "on"
 const kataSwitch = "KATA_CLOSE_TRANSCRIPT_ENABLED"
 
 // Decide reports whether the agent whose environment is environ gets Env=on: the choice stays with the user when the
-// environment sets KATA_CLOSE_TRANSCRIPT_ENABLED or the config.toml of its kata home (KATA_HOME, else ~/.kata) has an
-// `enabled` key under [close.transcript]. No such file means on; an unreadable or invalid file means off, so the file
-// stays in charge and kata warns about it on its own.
+// environment sets KATA_CLOSE_TRANSCRIPT_ENABLED to a non-blank value (kata reads a blank one as unset) or the config.toml of
+// its kata home (KATA_HOME, else ~/.kata) has an `enabled` key under [close.transcript]. No such file means on; an unreadable
+// or invalid file means off, so the file stays in charge and kata warns about it on its own.
 func Decide(environ []string, caseInsensitive bool) bool {
 	home := ""
 	for _, kv := range environ {
@@ -36,7 +36,9 @@ func Decide(environ []string, caseInsensitive bool) bool {
 		}
 		switch name {
 		case kataSwitch:
-			return false
+			if strings.TrimSpace(value) != "" {
+				return false
+			}
 		case "KATA_HOME":
 			home = value
 		}

@@ -22,7 +22,7 @@ func TestDecideIsOnOnlyWhenKatasConfigAndEnvironmentLeaveTheChoiceOpen(t *testin
 		{name: "unreadable file", unread: true},
 		{name: "invalid file", config: new("[close.transcript\n")},
 		{name: "variable already in the environment", environ: []string{"KATA_CLOSE_TRANSCRIPT_ENABLED=false"}},
-		{name: "variable already in the environment, no file", environ: []string{"KATA_CLOSE_TRANSCRIPT_ENABLED="}},
+		{name: "a blank variable is unset, as kata reads it", environ: []string{"KATA_CLOSE_TRANSCRIPT_ENABLED= "}, want: true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

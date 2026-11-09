@@ -666,7 +666,8 @@ const switchSet = new WeakSet<Record<string, string | undefined>>();
 /**
  * Names the main session to `kata close`, which reads KATA_TRANSCRIPT_AGENT and KATA_TRANSCRIPT_SESSION_ID when
  * [close.transcript] is enabled in kata's config. With TERN_KATA_CLOSE_TRANSCRIPT=on it sets KATA_CLOSE_TRANSCRIPT_ENABLED=true
- * with the names (kata warns on every close when the switch is on and no session is named), unless a value is already there.
+ * with the names (kata warns on every close when the switch is on and no session is named), unless a non-blank value is already
+ * there (kata reads a blank one as unset).
  * A session id kata would refuse unsets the names and the switch it set, so a close never cites the session before a switch.
  */
 export function exportTranscriptSession(env: Record<string, string | undefined>, ctx: ExtensionContext): void {
@@ -678,7 +679,7 @@ export function exportTranscriptSession(env: Record<string, string | undefined>,
   if (TRANSCRIPT_ID.test(id)) {
     env.KATA_TRANSCRIPT_AGENT = "omp";
     env.KATA_TRANSCRIPT_SESSION_ID = id;
-    if (env[CLOSE_TRANSCRIPT_ENV] === "on" && (env.KATA_CLOSE_TRANSCRIPT_ENABLED === undefined || switchSet.has(env))) {
+    if (env[CLOSE_TRANSCRIPT_ENV] === "on" && ((env.KATA_CLOSE_TRANSCRIPT_ENABLED ?? "").trim() === "" || switchSet.has(env))) {
       env.KATA_CLOSE_TRANSCRIPT_ENABLED = "true";
       switchSet.add(env);
     }
