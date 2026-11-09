@@ -479,14 +479,12 @@ var (
 func BuildStub(t *testing.T) string {
 	t.Helper()
 	stubOnce.Do(func() {
-		_, file, _, _ := runtime.Caller(0)
-		root := filepath.Join(filepath.Dir(file), "..", "..", "..")
+		// By import path from the test's package directory: -trimpath leaves runtime.Caller no real source path.
 		stubPath = filepath.Join(stubDir, "stub")
 		if runtime.GOOS == "windows" {
 			stubPath += ".exe"
 		}
-		cmd := exec.Command("go", "build", "-o", stubPath, "./internal/worker/workertest/stub")
-		cmd.Dir = root
+		cmd := exec.Command("go", "build", "-o", stubPath, "github.com/Dangerboi/tern-kata/internal/worker/workertest/stub")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			stubErr = fmt.Errorf("%w\n%s", err, output)

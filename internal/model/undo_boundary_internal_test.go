@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -174,10 +175,18 @@ func cmdTypeNames(t *testing.T) []string {
 			files = append(files, f)
 		}
 	}
-	// The source importer reads go/build.Default and offers no way to pass a context; without a C compiler cgo files would fail to type-check.
-	cgo := build.Default.CgoEnabled
+	// The source importer reads go/build.Default and offers no way to pass a context; without a C compiler cgo files would fail to type-check,
+	// and a -trimpath test binary has no GOROOT of its own to find the standard library in.
+	cgo, goroot := build.Default.CgoEnabled, build.Default.GOROOT
 	build.Default.CgoEnabled = false
-	t.Cleanup(func() { build.Default.CgoEnabled = cgo })
+	if goroot == "" {
+		out, err := exec.Command("go", "env", "GOROOT").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		build.Default.GOROOT = strings.TrimSpace(string(out))
+	}
+	t.Cleanup(func() { build.Default.CgoEnabled, build.Default.GOROOT = cgo, goroot })
 	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
 	pkg, err := conf.Check("model", fset, files, nil)
 	if err != nil {
