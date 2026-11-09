@@ -484,6 +484,11 @@ func TestAnAnswerAskedOnTheBoardStaysOnTheIssuesPage(t *testing.T) {
 	if m.SnapshotQuery().Text != nil {
 		t.Fatal("an uncut answer asked without a Status ended when the Issues Page applied its Status")
 	}
+	m, _ = press(m, "/")
+	m, _ = press(m, "down")
+	if _, cmds := press(m, "enter"); !onlyReads(cmds) {
+		t.Fatalf("enter on the Results it reopened asked kata again: %#v", cmds)
+	}
 }
 
 func TestAnAnswerAskedWithAStatusEndsWhenTheBoardOpens(t *testing.T) {

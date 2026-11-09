@@ -9,7 +9,7 @@ import (
 const SearchLimit = 50
 
 // SearchByMeaning asks kata's ranked search of one Project: mode auto, so kata ranks by words and meaning together when its
-// embeddings work and by words alone otherwise. Status and Labels are the Pane's filters.
+// embeddings work and by words alone otherwise. Status and Labels are the Pane's filters; the Board sends no Status.
 type SearchByMeaning struct {
 	Workspace string
 	ProjectID int64
@@ -53,8 +53,8 @@ type rankedAsk struct {
 
 // RankedSearch is kata's last ranked answer for the Pane: the Issues in its order, and what it said about the answer. It lists
 // under the Results grouping while by meaning is on in the search box, and after the search is committed while the search text is
-// still the query it answers and the Status and Label filters are still the ones it was asked with. Err is the last failed run,
-// which leaves the answer in place.
+// still the query it answers and the filters still fit it (rankedShown). Err is the last failed run, which leaves the answer in
+// place.
 type RankedSearch struct {
 	Have bool
 	RankedAnswer

@@ -261,10 +261,7 @@ func planLaunch(args []string, lookup func(string) (string, bool), version strin
 		}
 		// kata tui takes one positional: the ref, so a name after -- would be a second.
 		dash := slices.Index(plan.FallbackArgs, "--")
-		if dash >= 0 && dash < len(plan.FallbackArgs)-1 {
-			return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with another argument for kata tui")
-		}
-		if len(words) > 0 {
+		if dash >= 0 && dash < len(plan.FallbackArgs)-1 || len(words) > 0 {
 			return LaunchPlan{}, fmt.Errorf("--issue cannot be combined with another argument for kata tui")
 		}
 		translated := []string{"--project", project, project + "#" + shortID}

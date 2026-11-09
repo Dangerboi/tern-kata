@@ -68,7 +68,8 @@ func openSearch(m Model) Model {
 	if !meaning {
 		m = m.withoutRanked()
 	} else {
-		m.rankedAsked = rankedAsk{m.Ranked.Query, m.Ranked.SearchedWith}
+		// rankedShown has checked the answer fits the filters now set, so enter commits it instead of asking again.
+		m.rankedAsked = m.currentAsk()
 	}
 	m.Search = SearchState{Open: true, Meaning: meaning, InitialRanked: m.Ranked, InitialText: m.Filters.Search, InitialUID: m.SelectedUID}
 	return m
