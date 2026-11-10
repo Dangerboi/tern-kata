@@ -38,6 +38,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Requirements
 
 - Setting attachments up needs kata v0.23.0 and Docbank 0.16.0 or newer.
+- Turning search by meaning on from the Pane needs a kata v0.23.0 daemon; against an older one the Config Page's Search by meaning row says kata cannot report it.
 
 #### Agents
 
