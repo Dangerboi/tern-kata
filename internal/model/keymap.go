@@ -109,7 +109,7 @@ const (
 	ShowConfigPage             Action = "show-config-page"
 	OpenConfigFile             Action = "open-config-file"
 	EditAgentConfig            Action = "edit-agent-config"
-	SwitchDocbankAction        Action = "switch-docbank"
+	ConfigSetUp                Action = "config-set-up"
 	ConfirmSwitchDocbankAction Action = "confirm-switch-docbank"
 	KeepDocbankAction          Action = "keep-docbank"
 	SwitchDaemonAction         Action = "switch-daemon"
@@ -417,4 +417,11 @@ var cardBindings = []Binding{
 	{Chord: "enter", Key: "enter", Action: WorkerOffIdle, Help: "stop when idle", Mode: ModeWorkerOff},
 	{Chord: "n", Key: "n", Action: WorkerOffNow, Help: "stop now", Mode: ModeWorkerOff, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: WorkerOffCancel, Help: "keep supervision", Mode: ModeWorkerOff, ShowInFooter: true},
+	// Search by meaning card: y and n answer the question; s asks it again where kata would take a turn-on; esc closes the card.
+	{Chord: "y", Key: "y", Action: TurnOnEmbeddingsConfirm, Help: "turn on", Mode: ModeEmbeddingsAsk, ShowInFooter: true},
+	{Chord: "n", Key: "n", Action: TurnOnEmbeddingsDecline, Help: "not now", Mode: ModeEmbeddingsAsk, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: TurnOnEmbeddingsDecline, Help: "not now", Mode: ModeEmbeddingsAsk},
+	{Chord: "s", Key: "s", Action: TurnOnEmbeddingsAsk, Help: "turn on…", Mode: ModeEmbeddingsOff, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: EmbeddingsCardClose, Help: "close", Mode: ModeEmbeddingsOff, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: EmbeddingsCardClose, Help: "close", Mode: ModeEmbeddings, ShowInFooter: true},
 }

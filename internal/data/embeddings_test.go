@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -83,5 +84,54 @@ func TestGatewayEmbeddingsStatusReportsKatasErrorForADaemonThatCannotReportIt(t 
 	loaded := as[model.EmbeddingsStatusLoaded](t, run(t, gateway, model.LoadEmbeddingsStatus{Workspace: t.TempDir(), Request: 8}))
 	if loaded.Err == nil || loaded.Err.Error() != "local embeddings setup is unavailable" || loaded.Request != 8 {
 		t.Fatalf("answer %+v, want kata's error line for request 8", loaded)
+	}
+}
+
+// cannedTurnOn is a daemon answering POST /api/v1/embeddings/local with body in the given HTTP status, and counting the POSTs.
+func cannedTurnOn(t *testing.T, code int, body map[string]any) (*Gateway, *atomic.Int32) {
+	t.Helper()
+	posts := new(atomic.Int32)
+	server := startKata(t, "0.23.0")
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.URL.Path != "/api/v1/embeddings/local" || r.Method != http.MethodPost {
+			return false
+		}
+		posts.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(body)
+		return true
+	}
+	server.intercept.Store(&hook)
+	return newGateway(t, newLocator(server.target())), posts
+}
+
+func TestGatewayTurnOnEmbeddingsAnswersWithTheStatusKataStartsWith(t *testing.T) {
+	gateway, posts := cannedTurnOn(t, http.StatusAccepted, map[string]any{
+		"provider": "none", "download_bytes": 290_400_000, "ollama_available": false, "can_change": true,
+		"job": map[string]any{"state": "downloading", "downloaded": 0, "total": 290_400_000},
+	})
+	turned := as[model.EmbeddingsTurnedOn](t, run(t, gateway, model.TurnOnEmbeddings{Workspace: t.TempDir()}))
+	want := model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true,
+		Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading, Total: 290_400_000}}
+	if turned.Err != nil || !reflect.DeepEqual(turned.Status, want) || posts.Load() != 1 {
+		t.Fatalf("answer %+v after %d POSTs, want status %+v after one", turned, posts.Load(), want)
+	}
+}
+
+func TestGatewayTurnOnEmbeddingsReportsKatasReasonForARefusal(t *testing.T) {
+	for name, tc := range map[string]struct {
+		code   int
+		status string
+		reason string
+	}{
+		"no daemon administration": {http.StatusForbidden, "forbidden", "local embeddings setup requires daemon administration"},
+		"busy or configured":       {http.StatusConflict, "conflict", "local embeddings setup is already running"},
+	} {
+		gateway, posts := cannedTurnOn(t, tc.code, map[string]any{"status": tc.code, "error": map[string]any{"code": tc.status, "message": tc.reason}})
+		turned := as[model.EmbeddingsTurnedOn](t, run(t, gateway, model.TurnOnEmbeddings{Workspace: t.TempDir()}))
+		if turned.Err == nil || turned.Err.Error() != tc.reason || posts.Load() != 1 {
+			t.Errorf("%s: answer %+v after %d POSTs, want kata's reason %q after one", name, turned, posts.Load(), tc.reason)
+		}
 	}
 }

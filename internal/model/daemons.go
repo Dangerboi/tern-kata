@@ -147,6 +147,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.CloseForm, m.DatesForm, m.RecurrenceForm, m.JobForm, m.Backfill = CloseFormState{}, DatesFormState{}, RecurrenceFormState{}, JobFormState{}, BackfillState{}
 	m.FieldForm, m.MoveProject, m.afterMove, m.Moving = FieldFormState{}, MoveProjectState{}, nil, ""
 	m.DeleteForm, m.TokenForm, m.RevokeCard, m.AgentCard, m.AgentMessage = DeleteFormState{}, TokenFormState{}, RevokeState{}, AgentCardState{}, AgentMessageState{}
+	m.Embeddings, m.EmbeddingsCard = m.Embeddings.forDaemon(), EmbeddingsCardState{}
 	dropped := len(m.Drafts)
 	m.Drafts = nil
 	m.Project, m.Bound, m.Daemon = Project{}, false, msg.Daemon

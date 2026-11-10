@@ -1,0 +1,277 @@
+package model
+
+import (
+	"errors"
+	"strings"
+)
+
+// The Search by meaning card turns search by meaning on through kata and follows kata's setup job. It is one Popup card with no
+// state of its own about the job: what it shows is the status the Pane last read (Model.Embeddings), so a card closed mid-job and
+// opened again picks the job up. The card only remembers that its question is on screen, the refusal of the last turn-on, and
+// that a status it waits for should open on the question.
+
+const (
+	// ModeEmbeddingsAsk is the question: y turns it on, n or esc closes the card.
+	ModeEmbeddingsAsk Mode = "embeddings-ask"
+	// ModeEmbeddings is the card following the setup, or showing a state with nothing to do: esc closes it. A later step adds the
+	// restart question here, for the state where kata owes a daemon restart (RestartOwed).
+	ModeEmbeddings Mode = "embeddings"
+	// ModeEmbeddingsOff is the card while kata would take a turn-on again (a failed job, or a refusal on a status that was out of
+	// date): s asks the question again.
+	ModeEmbeddingsOff Mode = "embeddings-off"
+)
+
+const (
+	TurnOnEmbeddingsConfirm Action = "turn-on-embeddings-confirm"
+	TurnOnEmbeddingsDecline Action = "turn-on-embeddings-decline"
+	TurnOnEmbeddingsAsk     Action = "turn-on-embeddings-ask"
+	EmbeddingsCardClose     Action = "embeddings-card-close"
+)
+
+// TurnOnEmbeddings asks the daemon the Pane is connected to to start its local search by meaning setup job: the user said yes to
+// the card's question. kata answers 202 with the status, 403 without daemon administration, 409 while a job runs or embeddings are
+// already configured.
+type TurnOnEmbeddings struct {
+	Workspace string
+	// Connection is the Pane's connection number when it asked: an answer from an earlier daemon is dropped.
+	Connection int
+}
+
+func (TurnOnEmbeddings) cmd() {}
+
+// EmbeddingsTurnedOn answers TurnOnEmbeddings with the status kata starts with, or Err: kata's reason for the refusal. Connection
+// is the asking command's.
+type EmbeddingsTurnedOn struct {
+	Status     EmbeddingsStatus
+	Err        error
+	Connection int
+}
+
+func (EmbeddingsTurnedOn) msg() {}
+
+// EmbeddingsCardState is the Search by meaning card. Asking says the question is shown. askOnRead says the card was opened before
+// any status was read and shows the question once one comes, when kata would take a turn-on. Err is kata's refusal of the last
+// turn-on.
+type EmbeddingsCardState struct {
+	Open      bool
+	Asking    bool
+	askOnRead bool
+	Err       error
+}
+
+// EmbeddingsQuestion is what the card asks before anything starts, worded from the status.
+func EmbeddingsQuestion(s EmbeddingsStatus) string {
+	const lead = "Turn on search by meaning? "
+	if s.OllamaAvailable {
+		return lead + "kata will use your Ollama; nothing to download. y/n"
+	}
+	where := "this machine"
+	if s.Remote {
+		where = "another machine"
+	}
+	return lead + "kata downloads about " + megabytes(s.DownloadBytes) + " MB (shared by all Kenn apps) to the kata daemon's machine (" + where +
+		"). Search stays by words until the daemon restarts. y/n"
+}
+
+// cardWords is the card's text for the status: the row's words, except that a finished job says the restart is still to come.
+func (s EmbeddingsStatus) cardWords() string {
+	if s.RestartOwed() {
+		return "set up: restart needed"
+	}
+	return s.Words()
+}
+
+// EmbeddingsProgress is a bar of the card. Fraction is nil when kata gives no total, which draws a bar that sweeps.
+type EmbeddingsProgress struct {
+	Fraction *float64
+}
+
+func progressOf(done, total int64) EmbeddingsProgress {
+	if total <= 0 {
+		return EmbeddingsProgress{}
+	}
+	f := min(1, max(0, float64(done)/float64(total)))
+	return EmbeddingsProgress{Fraction: &f}
+}
+
+// EmbeddingsCardBody is what the card says, in the order it says it. State is the line about the status; Failed and Pending tone
+// it. Download and Indexing are the bars. KeepsGoing says kata continues when the card is closed.
+type EmbeddingsCardBody struct {
+	Question   string
+	State      string
+	Failed     bool
+	Pending    bool
+	Download   *EmbeddingsProgress
+	Indexing   *EmbeddingsProgress
+	KeepsGoing bool
+	// Err is kata's reason for refusing the last turn-on.
+	Err string
+}
+
+// EmbeddingsCardBody is what the open card says for the status last read.
+func (m Model) EmbeddingsCardBody() EmbeddingsCardBody {
+	var b EmbeddingsCardBody
+	if err := m.EmbeddingsCard.Err; err != nil {
+		b.Err = oneLine(err.Error())
+	}
+	s := m.Embeddings
+	switch {
+	case !s.Read:
+		b.State, b.Pending = "Reading search by meaning from the kata daemon…", true
+	case s.Err != nil:
+		b.State, b.Failed = "kata cannot report search by meaning here: "+oneLine(s.Err.Error()), true
+	case s.Turning:
+		b.State, b.Pending = "Turning it on…", true
+	case m.EmbeddingsCard.Asking:
+		b.Question = EmbeddingsQuestion(s.Status)
+	default:
+		st := s.Status
+		b.State = st.cardWords()
+		b.Failed = st.Job != nil && st.Job.State == EmbeddingsFailed || st.Indexing != nil && st.Indexing.Failed && st.Provider != EmbeddingsOff
+		if st.Job != nil && st.Job.State == EmbeddingsDownloading {
+			p := progressOf(st.Job.Downloaded, st.Job.Total)
+			b.Download = &p
+		}
+		if st.Job == nil && st.Provider != EmbeddingsOff && st.Indexing != nil && !st.Indexing.Failed {
+			p := progressOf(st.Indexing.Done, st.Indexing.Total)
+			b.Indexing = &p
+		}
+		b.KeepsGoing = st.Busy()
+	}
+	return b
+}
+
+// EmbeddingsCardMode is the keymap mode of the open card.
+func (m Model) EmbeddingsCardMode() Mode {
+	switch {
+	case m.EmbeddingsCard.Asking:
+		return ModeEmbeddingsAsk
+	case m.embeddingsAskable():
+		return ModeEmbeddingsOff
+	}
+	return ModeEmbeddings
+}
+
+// embeddingsAskable says kata would take a turn-on now, by the status last read, and none is out already.
+func (m Model) embeddingsAskable() bool {
+	s := m.Embeddings
+	return s.Read && s.Err == nil && !s.Turning && s.Status.TurnOnOffered()
+}
+
+// openEmbeddingsCard opens the Search by meaning card, from the Config row or from anywhere else. Its first state asks, when kata
+// would take a turn-on and the setup is not already under way; otherwise it shows the status. A status that is not known yet, that
+// could not be read or that is still busy is read first, which also starts the card's polling.
+func openEmbeddingsCard(m Model) (Model, []Cmd) {
+	m.HelpOpen = false
+	m.EmbeddingsCard = EmbeddingsCardState{Open: true}
+	if !m.Embeddings.Read {
+		m.EmbeddingsCard.askOnRead = true
+		return m, []Cmd{askEmbeddings(&m, 0)}
+	}
+	m.EmbeddingsCard.Asking = m.embeddingsAsksOnOpen()
+	if m.Embeddings.Err != nil || m.Embeddings.Status.Busy() {
+		return m, []Cmd{askEmbeddings(&m, 0)}
+	}
+	return m, nil
+}
+
+// embeddingsAsksOnOpen says a card opened on the status last read starts with the question: kata would take a turn-on and no failed
+// job is waiting to be read first (that shows kata's error, and s asks again).
+func (m Model) embeddingsAsksOnOpen() bool {
+	return m.embeddingsAskable() && m.Embeddings.Status.Job == nil
+}
+
+// turnOnEmbeddings is s on the Config row: the card opens on the question, also after a failed job.
+func turnOnEmbeddings(m Model) (Model, []Cmd) {
+	m, cmds := openEmbeddingsCard(m)
+	if m.embeddingsAskable() {
+		m.EmbeddingsCard.Asking = true
+	}
+	return m, cmds
+}
+
+// embeddingsCardRead settles the card for a status that has just been read: it opens on the question when it waited for one, and
+// drops the question when kata would no longer take a turn-on.
+func (m Model) embeddingsCardRead() Model {
+	c := &m.EmbeddingsCard
+	if !c.Open {
+		return m
+	}
+	if c.askOnRead {
+		c.askOnRead = false
+		c.Asking = m.embeddingsAsksOnOpen()
+	}
+	if c.Asking && !m.embeddingsAskable() {
+		c.Asking = false
+	}
+	return m
+}
+
+// embeddingsCardKey is a key of the open card.
+func embeddingsCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
+	binding, ok := LookupBindingForMode(msg.Chord, m.EmbeddingsCardMode())
+	if !ok {
+		return m, nil
+	}
+	switch binding.Action {
+	case TurnOnEmbeddingsConfirm:
+		return confirmTurnOnEmbeddings(m)
+	case TurnOnEmbeddingsAsk:
+		m.EmbeddingsCard.Asking, m.EmbeddingsCard.Err = true, nil
+	case TurnOnEmbeddingsDecline, EmbeddingsCardClose:
+		m.EmbeddingsCard = EmbeddingsCardState{}
+	}
+	return m, nil
+}
+
+// confirmTurnOnEmbeddings is y: the one POST goes out, and the card then follows what kata reports. A second y while it is out
+// sends nothing.
+func confirmTurnOnEmbeddings(m Model) (Model, []Cmd) {
+	if !m.EmbeddingsCard.Asking || m.Embeddings.Turning {
+		return m, nil
+	}
+	if m.Stale {
+		m.EmbeddingsCard.Err = errors.New("Daemon disconnected; reconnect before turning on search by meaning.")
+		return m, nil
+	}
+	m.EmbeddingsCard.Asking, m.EmbeddingsCard.Err = false, nil
+	m.Embeddings.Turning = true
+	return m, []Cmd{TurnOnEmbeddings{Workspace: m.Workspace, Connection: m.Connection}}
+}
+
+// embeddingsTurnedOn takes kata's answer to the turn-on. A refusal (403, 409) is shown on the card, when it is still open, and the
+// status is read again, as it has changed under the card or never allowed this. kata's 202 carries the status the job starts with,
+// which is read like any other, so polling begins while the card or the Config Page shows it.
+func embeddingsTurnedOn(m Model, msg EmbeddingsTurnedOn) (Model, []Cmd) {
+	m.Embeddings.Turning = false
+	if msg.Err != nil {
+		if m.EmbeddingsCard.Open {
+			m.EmbeddingsCard.Asking, m.EmbeddingsCard.Err = false, msg.Err
+		}
+		return m, []Cmd{askEmbeddings(&m, 0)}
+	}
+	m.Embeddings.reads.Discard()
+	return embeddingsRead(m, msg.Status, nil)
+}
+
+// updateEmbeddings takes the answers about search by meaning, whichever Page is shown.
+func updateEmbeddings(m Model, msg Msg) (Model, []Cmd, bool) {
+	switch msg := msg.(type) {
+	case EmbeddingsStatusLoaded:
+		m, cmds := embeddingsLoaded(m, msg)
+		return m, cmds, true
+	case EmbeddingsTurnedOn:
+		m, cmds := embeddingsTurnedOn(m, msg)
+		return m, cmds, true
+	}
+	return m, nil, false
+}
+
+// EmbeddingsCardTitle names the daemon the card is about, as the Config row does.
+func (m Model) EmbeddingsCardTitle() string {
+	name := strings.TrimSpace(oneLine(m.Daemon.Name))
+	if name == "" {
+		name = "default"
+	}
+	return "kata daemon: " + name
+}

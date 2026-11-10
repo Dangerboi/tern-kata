@@ -57,6 +57,9 @@ const (
 	ConfigEdit ConfigAction = "edit"
 	// ConfigSwitchDocbank is s: the old pinned Docbank setup becomes kata's local one. Only the Docbank row in that form has it.
 	ConfigSwitchDocbank ConfigAction = "switch"
+	// ConfigTurnOn is s: the Search by meaning card asks to turn search by meaning on. Only the Search by meaning row has it, and
+	// only while kata would take a turn-on from this account.
+	ConfigTurnOn ConfigAction = "turn-on"
 )
 
 type ConfigFile struct {
@@ -151,10 +154,6 @@ type ConfigPageState struct {
 	Message    string
 	MessageErr bool
 	reads      Latest
-	// Search is the connected daemon's search by meaning status as last read; its row shows once an answer has come. searchReads
-	// numbers those reads apart from the rows' own.
-	Search      searchSetup
-	searchReads Latest
 }
 
 func (m Model) OnConfig() bool { return m.Page == PageConfig }
@@ -162,7 +161,7 @@ func (m Model) OnConfig() bool { return m.Page == PageConfig }
 var configMode = sidebarMode(ModeConfig)
 
 func enterConfig(m Model) (Model, []Cmd) {
-	c := ConfigPageState{reads: m.ConfigPage.reads, searchReads: m.ConfigPage.searchReads, Loading: true, Switching: m.ConfigPage.Switching}
+	c := ConfigPageState{reads: m.ConfigPage.reads, Loading: true, Switching: m.ConfigPage.Switching}
 	if c.Switching {
 		c.Message = "switching Docbank..."
 	}
@@ -172,9 +171,10 @@ func enterConfig(m Model) (Model, []Cmd) {
 	return m, []Cmd{load, status}
 }
 
-// clearConfig drops the Page's state but keeps Switching: the switch's answer still comes and is reported.
+// clearConfig drops the Page's state but keeps Switching: the switch's answer still comes and is reported. The status read is the
+// Pane's, not the Page's, so it stays; a busy answer that comes after the Page is left is not read again unless the card shows it.
 func clearConfig(m Model) Model {
-	m.ConfigPage = ConfigPageState{reads: m.ConfigPage.reads.Discarded(), searchReads: m.ConfigPage.searchReads.Discarded(), Switching: m.ConfigPage.Switching}
+	m.ConfigPage = ConfigPageState{reads: m.ConfigPage.reads.Discarded(), Switching: m.ConfigPage.Switching}
 	return m
 }
 
@@ -187,9 +187,6 @@ func updateConfig(m Model, msg Msg) (Model, []Cmd, bool) {
 		return agentEditorClosed(m, msg)
 	case DocbankSwitched:
 		m, cmds := docbankSwitched(m, msg)
-		return m, cmds, true
-	case EmbeddingsStatusLoaded:
-		m, cmds := embeddingsLoaded(m, msg)
 		return m, cmds, true
 	case AgentConfigSaved:
 		m, cmds := agentConfigSaved(m, msg)
@@ -208,7 +205,7 @@ func updateConfig(m Model, msg Msg) (Model, []Cmd, bool) {
 		return m, nil, true
 	}
 	c.Folder = loaded.Folder
-	c.setFiles(m.Daemon.Name, loaded.Files)
+	c.setFiles(m.Daemon.Name, m.Embeddings, loaded.Files)
 	return m, nil, true
 }
 
@@ -223,14 +220,14 @@ func (m Model) SelectedConfigFile() *ConfigFile {
 
 // setFiles lists files and, once the status has been read, the Search by meaning row after the Docbank row. The cursor stays on the
 // row it was on.
-func (c *ConfigPageState) setFiles(daemon string, files []ConfigFile) {
+func (c *ConfigPageState) setFiles(daemon string, search EmbeddingsSetup, files []ConfigFile) {
 	var kept ConfigFileKey
 	if f := rowAt(c.Files, c.Cursor); f != nil {
 		kept = f.Key
 	}
 	c.Files = slices.Clone(files)
-	if c.Search.Read {
-		c.Files = withEmbeddingsRow(c.Files, embeddingsRow(daemon, c.Search))
+	if search.Read {
+		c.Files = withEmbeddingsRow(c.Files, embeddingsRow(daemon, search))
 	}
 	c.Cursor = max(0, slices.IndexFunc(c.Files, func(f ConfigFile) bool { return f.Key == kept }))
 }
@@ -273,6 +270,8 @@ func ConfigActionLabel(f ConfigFile, action ConfigAction) string {
 		return "edit " + f.Title
 	case ConfigSwitchDocbank:
 		return "switch to kata's local Docbank"
+	case ConfigTurnOn:
+		return "turn on search by meaning"
 	}
 	switch f.Key {
 	case ConfigLanes:
@@ -287,6 +286,8 @@ func ConfigActionLabel(f ConfigFile, action ConfigAction) string {
 		return "open Worker card"
 	case ConfigKata:
 		return "open Daemons Page"
+	case ConfigEmbeddings:
+		return "open Search by meaning card"
 	}
 	return "open"
 }
@@ -336,6 +337,8 @@ func openConfigFile(m Model) (Model, []Cmd) {
 		return m, cmds
 	case ConfigKata:
 		return showPage(PageDaemons)(m)
+	case ConfigEmbeddings:
+		return openEmbeddingsCard(m)
 	}
 	return m, nil
 }
@@ -355,6 +358,8 @@ func configClicked(m Model, msg ConfigActMsg) (Model, []Cmd) {
 		return editAgentConfig(m)
 	case ConfigSwitchDocbank:
 		return askSwitchDocbank(m)
+	case ConfigTurnOn:
+		return turnOnEmbeddings(m)
 	}
 	return openConfigFile(m)
 }
@@ -434,18 +439,34 @@ func agentConfigSaved(m Model, msg AgentConfigSaved) (Model, []Cmd) {
 var configRows = []actionEntry{
 	{action: OpenConfigFile, modes: []Mode{ModeConfig}, keys: keys("enter", "↵"), help: "open", label: configOpenLabel, footer: []Mode{ModeConfig}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 40, "open the card or Page that edits the selected file"}}, handle: openConfigFile, when: selectedConfigOffers(ConfigOpen)},
 	{action: EditAgentConfig, modes: []Mode{ModeConfig}, keys: keys("e", "e"), help: "edit", label: configEditLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 42, "edit agent.toml in $EDITOR; it is checked before it is written"}}, handle: editAgentConfig, when: selectedConfigOffers(ConfigEdit)},
-	{action: SwitchDocbankAction, modes: []Mode{ModeConfig}, keys: keys("s", "s"), help: "switch Docbank", label: configSwitchLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 43, "switch the old pinned Docbank to kata's local Docbank (asks y/n)"}}, handle: askSwitchDocbank, when: selectedConfigOffers(ConfigSwitchDocbank)},
+	{action: ConfigSetUp, modes: []Mode{ModeConfig}, keys: keys("s", "s"), help: "set up", label: configSetUpLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 43, "set up the selected row: switch the old pinned Docbank to kata's local Docbank, or turn on search by meaning (both ask first)"}}, handle: configSetUp, when: selectedConfigSetsUp},
 	{action: ConfirmSwitchDocbankAction, modes: []Mode{ModeSwitchDocbank}, keys: keys("y", "y"), help: "switch", footer: []Mode{ModeSwitchDocbank}, handle: confirmSwitchDocbank},
 	{action: KeepDocbankAction, modes: []Mode{ModeSwitchDocbank}, keys: keys("n", "n", "escape", "esc"), help: "keep", footer: []Mode{ModeSwitchDocbank}, handle: pure(func(m Model) Model { m.ConfigPage.AskSwitch = false; return m })},
 	{action: QuitNowAction, modes: []Mode{ModeSwitchDocbank}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},
 	letteredBackRow(ModeConfig, letteredBack),
 }
 
-func configSwitchLabel(m Model) string {
+// selectedConfigSetsUp is the condition of s: the selected row offers the Docbank switch or turning search by meaning on.
+func selectedConfigSetsUp(m Model) bool {
+	return selectedConfigOffers(ConfigSwitchDocbank)(m) || selectedConfigOffers(ConfigTurnOn)(m)
+}
+
+func configSetUpLabel(m Model) string {
 	if f := m.SelectedConfigFile(); f != nil {
+		if f.Has(ConfigTurnOn) {
+			return ConfigActionLabel(*f, ConfigTurnOn)
+		}
 		return ConfigActionLabel(*f, ConfigSwitchDocbank)
 	}
-	return "switch"
+	return "set up"
+}
+
+// configSetUp is s: what the selected row sets up asks its question first.
+func configSetUp(m Model) (Model, []Cmd) {
+	if f := m.SelectedConfigFile(); f != nil && f.Has(ConfigTurnOn) {
+		return turnOnEmbeddings(m)
+	}
+	return askSwitchDocbank(m)
 }
 
 // SwitchDocbankQuestion is what s on the old pinned Docbank row asks.

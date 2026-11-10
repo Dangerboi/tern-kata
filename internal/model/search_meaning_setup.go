@@ -153,20 +153,37 @@ type EmbeddingsStatusLoaded struct {
 
 func (EmbeddingsStatusLoaded) msg() {}
 
-// searchSetup is the last status read for the Config Page's row. Read says an answer has come, which is when the row shows.
-type searchSetup struct {
+// EmbeddingsSetup is the last status read from the connected daemon, wherever the Pane asked for it: the Config Page's row and the
+// Search by meaning card show it, and so may a place outside the Config Page. Read says an answer has come, which is when the row
+// shows. It is dropped with the connection, as it describes that daemon.
+type EmbeddingsSetup struct {
 	Read   bool
 	Status EmbeddingsStatus
 	Err    error
+	// Turning says a turn-on is out and has not answered: nothing sends another.
+	Turning bool
+	// reads numbers the asks, so an answer to an older one is dropped.
+	reads Latest
+}
+
+// forDaemon is the setup of a new connection: nothing read, and the answers still out dropped.
+func (s EmbeddingsSetup) forDaemon() EmbeddingsSetup {
+	return EmbeddingsSetup{reads: s.reads.Discarded()}
+}
+
+// TurnOnOffered says kata would take a turn-on from this account now: it may change the setup, nothing is configured, and no job
+// is downloading or waiting for a restart. A failed job is offered again.
+func (s EmbeddingsStatus) TurnOnOffered() bool {
+	return s.CanChange && s.Provider == EmbeddingsOff && (s.Job == nil || s.Job.State == EmbeddingsFailed)
 }
 
 // embeddingsRow is the Config Page's Search by meaning row. It reads the daemon the Pane is connected to, so it is titled with that
-// daemon's name and holds no path; it offers no action yet.
-func embeddingsRow(daemon string, s searchSetup) ConfigFile {
+// daemon's name and holds no path. enter opens the card; s turns it on where kata allows it.
+func embeddingsRow(daemon string, s EmbeddingsSetup) ConfigFile {
 	if daemon == "" {
 		daemon = "default"
 	}
-	row := ConfigFile{Key: ConfigEmbeddings, Title: "Search by meaning (kata daemon: " + oneLine(daemon) + ")"}
+	row := ConfigFile{Key: ConfigEmbeddings, Title: "Search by meaning (kata daemon: " + oneLine(daemon) + ")", Actions: []ConfigAction{ConfigOpen}}
 	switch {
 	case s.Err != nil:
 		row.Status, row.Err = ConfigBroken, s.Err.Error()
@@ -176,14 +193,21 @@ func embeddingsRow(daemon string, s searchSetup) ConfigFile {
 		if s.Status.Provider != EmbeddingsOff && s.Status.Job == nil {
 			row.Status = ConfigLoads
 		}
+		if s.Status.TurnOnOffered() {
+			row.Actions = append(row.Actions, ConfigTurnOn)
+		}
 	}
 	return row
 }
 
 // askEmbeddings reads the status again, After a pause. The ask supersedes any read out.
 func askEmbeddings(m *Model, after time.Duration) Cmd {
-	return LoadEmbeddingsStatus{Workspace: m.Workspace, Request: m.ConfigPage.searchReads.Ask(), After: after}
+	return LoadEmbeddingsStatus{Workspace: m.Workspace, Request: m.Embeddings.reads.Ask(), After: after}
 }
+
+// embeddingsWatched says something is showing the status: the Config Page or the Search by meaning card, wherever it was opened.
+// Only then is a busy status read again.
+func (m Model) embeddingsWatched() bool { return m.OnConfig() || m.EmbeddingsCard.Open }
 
 // withEmbeddingsRow puts row after the Docbank row (at the end when there is none), replacing the one already listed.
 func withEmbeddingsRow(files []ConfigFile, row ConfigFile) []ConfigFile {
@@ -202,18 +226,24 @@ func withEmbeddingsRow(files []ConfigFile, row ConfigFile) []ConfigFile {
 	return append(out[:at], append([]ConfigFile{row}, out[at:]...)...)
 }
 
-// embeddingsLoaded takes the status answer: an older one is dropped. A busy answer asks again after the poll pause while the Page is
-// shown.
+// embeddingsLoaded takes the status answer: an older one is dropped. A busy answer asks again after the poll pause while the Page
+// or the card is shown.
 func embeddingsLoaded(m Model, msg EmbeddingsStatusLoaded) (Model, []Cmd) {
-	c := &m.ConfigPage
-	if !c.searchReads.IsCurrent(msg.Request) {
+	if !m.Embeddings.reads.IsCurrent(msg.Request) {
 		return m, nil
 	}
-	c.Search = searchSetup{Read: true, Status: msg.Status, Err: msg.Err}
-	if len(c.Files) > 0 {
-		c.setFiles(m.Daemon.Name, c.Files)
+	return embeddingsRead(m, msg.Status, msg.Err)
+}
+
+// embeddingsRead keeps a status as the one last read and acts on it: the Config row and the card follow it, and a busy one is
+// read again while something shows it.
+func embeddingsRead(m Model, status EmbeddingsStatus, err error) (Model, []Cmd) {
+	m.Embeddings.Read, m.Embeddings.Status, m.Embeddings.Err = true, status, err
+	if len(m.ConfigPage.Files) > 0 {
+		m.ConfigPage.setFiles(m.Daemon.Name, m.Embeddings, m.ConfigPage.Files)
 	}
-	if msg.Err == nil && msg.Status.Busy() && m.OnConfig() {
+	m = m.embeddingsCardRead()
+	if err == nil && status.Busy() && m.embeddingsWatched() {
 		cmd := askEmbeddings(&m, embeddingsPollEvery)
 		return m, []Cmd{cmd}
 	}

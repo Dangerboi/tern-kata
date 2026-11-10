@@ -56,6 +56,7 @@ const (
 	CardFederationName
 	CardView
 	CardAgentMessage
+	CardEmbeddings
 )
 
 type cardEntry struct {
@@ -441,6 +442,12 @@ func buildCards() []cardEntry {
 			table:   &workerTable,
 			editing: []fieldEditing{{mode: ModeWorkerCard, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase", before: WorkerEdit}},
 			choices: workerChoiceSet,
+		},
+		{
+			card: CardEmbeddings, name: "embeddings", open: func(m Model) bool { return m.EmbeddingsCard.Open },
+			modes: []Mode{ModeEmbeddingsAsk, ModeEmbeddings, ModeEmbeddingsOff}, mode: Model.EmbeddingsCardMode,
+			key:  embeddingsCardKey,
+			busy: func(Model) bool { return false }, fields: []FieldSpec{},
 		},
 		{
 			card: CardFilter, name: "filters",

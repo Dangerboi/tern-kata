@@ -41,7 +41,8 @@ func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 		model.CardBackfill: func(t *testing.T) driver.State {
 			return step(t, jobsPane(t, 160, disabled(owing("J1", "open", "all"))), key("p")).State
 		},
-		model.CardWorker: func(t *testing.T) driver.State { return workerCardOpen(t, nil, noWorkerFile) },
+		model.CardWorker:     func(t *testing.T) driver.State { return workerCardOpen(t, nil, noWorkerFile) },
+		model.CardEmbeddings: func(t *testing.T) driver.State { return embeddingsCardOpen(t) },
 	}
 }
 

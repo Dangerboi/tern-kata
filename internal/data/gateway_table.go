@@ -409,6 +409,12 @@ func init() {
 	})
 
 	daemonCall(
+		(*Client).TurnOnEmbeddings,
+		func(cmd model.TurnOnEmbeddings, err error) model.Msg {
+			return model.EmbeddingsTurnedOn{Err: err, Connection: cmd.Connection}
+		})
+
+	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.LoadDetail) (model.DetailLoaded, error) {
 			return c.ReadDetail(ctx, cmd.UID)
 		},

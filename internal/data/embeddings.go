@@ -25,6 +25,22 @@ func (c *Client) EmbeddingsStatus(ctx context.Context, _ model.LoadEmbeddingsSta
 	return model.EmbeddingsStatusLoaded{Status: status}, nil
 }
 
+// TurnOnEmbeddings starts kata's local setup job on the connected daemon and returns the status kata answers with (202). kata
+// refuses with 403 when this account lacks daemon administration and with 409 while a job runs or embeddings are already
+// configured; either comes back as kata's own reason.
+func (c *Client) TurnOnEmbeddings(ctx context.Context, cmd model.TurnOnEmbeddings) (model.EmbeddingsTurnedOn, error) {
+	response, err := c.TurnOnLocalEmbeddingsWithResponse(ctx)
+	if err != nil {
+		return model.EmbeddingsTurnedOn{}, daemonError(err)
+	}
+	if response.JSON202 == nil {
+		return model.EmbeddingsTurnedOn{}, errors.New("kata answered without a search by meaning status")
+	}
+	status := embeddingsStatus(*response.JSON202)
+	status.Daemon, status.Remote = c.name, c.kind == model.DaemonRemote
+	return model.EmbeddingsTurnedOn{Status: status, Connection: cmd.Connection}, nil
+}
+
 // embeddingsStatus maps kata's status. A job or indexing kata does not report stays nil.
 func embeddingsStatus(s g.LocalEmbeddingsStatus) model.EmbeddingsStatus {
 	status := model.EmbeddingsStatus{

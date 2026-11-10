@@ -155,26 +155,30 @@ type Model struct {
 	ProjectForm      ProjectFormState
 	LanesForm        LanesFormState
 	WorkerCard       WorkerCardState
-	Dropdown         Dropdown
-	Focus            Column
-	Groups           []IssueGroup
-	Calendar         PaneCalendar
-	HelpOpen         bool
-	Flat             bool
-	GraphOrder       bool // nested siblings in blocking order, not creation order; Pane state, never saved
-	ExpandedUIDs     map[string]bool
-	Drafts           map[string]Draft
-	EditorUID        string
-	Filters          Filters
-	DefaultFilters   Filters
-	Search           SearchState
-	PageSearch       PageSearchState
-	IDSearch         IDSearch
-	Ranked           RankedSearch // kata's last ranked answer to a search by meaning
-	rankedReads      Latest       // numbers those reads
-	rankedAsked      rankedAsk    // the last ranked search asked, answered or not
-	FilterForm       FilterFormState
-	Page             Page
+	// Embeddings is the connected daemon's search by meaning status as last read, wherever it was asked for; EmbeddingsCard is the
+	// Search by meaning card that shows it.
+	Embeddings     EmbeddingsSetup
+	EmbeddingsCard EmbeddingsCardState
+	Dropdown       Dropdown
+	Focus          Column
+	Groups         []IssueGroup
+	Calendar       PaneCalendar
+	HelpOpen       bool
+	Flat           bool
+	GraphOrder     bool // nested siblings in blocking order, not creation order; Pane state, never saved
+	ExpandedUIDs   map[string]bool
+	Drafts         map[string]Draft
+	EditorUID      string
+	Filters        Filters
+	DefaultFilters Filters
+	Search         SearchState
+	PageSearch     PageSearchState
+	IDSearch       IDSearch
+	Ranked         RankedSearch // kata's last ranked answer to a search by meaning
+	rankedReads    Latest       // numbers those reads
+	rankedAsked    rankedAsk    // the last ranked search asked, answered or not
+	FilterForm     FilterFormState
+	Page           Page
 	// pageDetailHidden is the detail column's hidden flag from before the current Page took its place; leavePage restores it.
 	pageDetailHidden bool
 	Board            BoardState
@@ -234,6 +238,8 @@ func staleConnection(m Model, msg Msg) bool {
 		return msg.Connection != m.Connection
 	case TokenCreated:
 		return msg.Connection != m.Connection
+	case EmbeddingsTurnedOn:
+		return msg.Connection != m.Connection
 	}
 	return false
 }
@@ -269,6 +275,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		if next, handled := editBody(m, msg.Target, TextEditor.Undo); handled {
 			return next, nil
 		}
+	}
+	if next, cmds, handled := updateEmbeddings(m, msg); handled {
+		return next, cmds
 	}
 	if next, cmds, handled := updateCreate(m, msg); handled {
 		return next, cmds
