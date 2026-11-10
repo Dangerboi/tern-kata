@@ -187,19 +187,8 @@ click_issue_link() {
   show_issue_link "$1"
   ctl click "$x" "$y" cmd
 }
-# A link that opens a new kata Pane hands it the Issue from a plugin timer. Headless Tern runs those only on frames, and
-# since Tern 0.9.14 the new Pane's own frames no longer do, so each attempt runs a command in the original Pane.
-expect_issue_in_new_pane() {
-  for ((attempt=0; attempt<100; attempt++)); do
-    ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/dev/null && return 0
-    ctl --file "$tmp/pump.ctl"
-    sleep 0.1
-  done
-  echo "Issue not shown in the new kata Pane: $1" >&2
-  return 1
-}
 click_issue_link "kata://smoke/$first"
-expect_issue_in_new_pane "Plugin first body"
+ctl plugins expect '"Plugin first body"'
 ctl state >"$tmp/link-open.json"
 kata_pane=$(jq -r '.focused.id' "$tmp/link-open.json")
 jq -e '.tabs[0].panes == 2' "$tmp/link-open.json" >/dev/null
@@ -212,7 +201,7 @@ jq -e --argjson id "$kata_pane" '.tabs[0].panes == 2 and .focused.id == $id' "$t
 ctl tab new
 ctl ready
 click_issue_link "kata://smoke/$first"
-expect_issue_in_new_pane "Plugin first body"
+ctl plugins expect '"Plugin first body"'
 ctl state >"$tmp/link-tab.json"
 tab_kata_pane=$(jq -r '.focused.id' "$tmp/link-tab.json")
 jq -e --argjson id "$kata_pane" '.tabs[1].active and .tabs[0].panes == 2 and .tabs[1].panes == 2 and .focused.id != $id' "$tmp/link-tab.json" >/dev/null
@@ -231,7 +220,7 @@ ctl key q
 expect_panes 1
 # Shell syntax in a reference is passed to kata as data: the odd Project's Issue opens in a new kata Pane.
 click_issue_link "kata://$odd_project/$odd"
-expect_issue_in_new_pane "Plugin odd body"
+ctl plugins expect '"Plugin odd body"'
 expect_panes 2
 ctl key q
 expect_panes 1
@@ -243,7 +232,7 @@ ctl ready
 remote_pane=$(ctl state | jq -r '.focused.id')
 (( remote_pane >= 1 << 44 )) || { echo "remote Pane id $remote_pane carries no host tag" >&2; exit 1; }
 click_issue_link "kata://smoke/$first"
-expect_issue_in_new_pane "Plugin first body"
+ctl plugins expect '"Plugin first body"'
 ctl state >"$tmp/remote-open.json"
 remote_kata=$(jq -r '.focused.id' "$tmp/remote-open.json")
 jq -e '(.tabs | length) == 2 and .tabs[1].active and .tabs[1].panes == 2' "$tmp/remote-open.json" >/dev/null
