@@ -113,6 +113,16 @@ func TestGatewaySearchByMeaningCarriesKatasWordsReasonForAWordsAnswer(t *testing
 	}
 }
 
+func TestGatewaySearchByMeaningCarriesKatasNoteForAnAnswerByMeaningMarkedDegraded(t *testing.T) {
+	const reason = "search filters exhausted the semantic candidate ceiling; semantic results may be incomplete"
+	server, _ := cannedSearch(t, "hybrid", reason, []string{"a"}, false)
+	gateway := newGateway(t, newLocator(server.target()))
+	done := as[model.SearchByMeaningDone](t, run(t, gateway, model.SearchByMeaning{Workspace: t.TempDir(), ProjectID: 7, Query: "q"}))
+	if done.Err != nil || done.Lexical || done.Reason != reason || !reflect.DeepEqual(done.UIDs, []string{"a"}) {
+		t.Fatalf("answer %+v, want a hybrid answer carrying kata's reason", done)
+	}
+}
+
 func TestGatewaySearchByMeaningReportsKatasErrorForAProjectItDoesNotHave(t *testing.T) {
 	server := startKata(t, "0.23.0")
 	gateway := newGateway(t, newLocator(server.target()))

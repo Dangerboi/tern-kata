@@ -34,6 +34,8 @@ const (
 	ConfigKata    ConfigFileKey = "kata"
 	// ConfigDocbank is the Docbank row: the [docbank] section of the default kata daemon's config.toml, which is its path.
 	ConfigDocbank ConfigFileKey = "docbank"
+	// ConfigEmbeddings is the Search by meaning row: the connected daemon's embeddings status, not a file, so it has no path.
+	ConfigEmbeddings ConfigFileKey = "embeddings"
 )
 
 // ConfigFileStatus is whether a config file exists and loads. The zero value is a file that does not exist.
@@ -75,6 +77,9 @@ type ConfigFile struct {
 func (f ConfigFile) Has(action ConfigAction) bool { return slices.Contains(f.Actions, action) }
 
 func (f ConfigFile) StatusWords() string {
+	if f.Key == ConfigEmbeddings {
+		return ""
+	}
 	switch f.Status {
 	case ConfigLoads:
 		return "loads"
@@ -146,6 +151,10 @@ type ConfigPageState struct {
 	Message    string
 	MessageErr bool
 	reads      Latest
+	// Search is the connected daemon's search by meaning status as last read; its row shows once an answer has come. searchReads
+	// numbers those reads apart from the rows' own.
+	Search      searchSetup
+	searchReads Latest
 }
 
 func (m Model) OnConfig() bool { return m.Page == PageConfig }
@@ -153,17 +162,19 @@ func (m Model) OnConfig() bool { return m.Page == PageConfig }
 var configMode = sidebarMode(ModeConfig)
 
 func enterConfig(m Model) (Model, []Cmd) {
-	c := ConfigPageState{reads: m.ConfigPage.reads, Loading: true, Switching: m.ConfigPage.Switching}
+	c := ConfigPageState{reads: m.ConfigPage.reads, searchReads: m.ConfigPage.searchReads, Loading: true, Switching: m.ConfigPage.Switching}
 	if c.Switching {
 		c.Message = "switching Docbank..."
 	}
 	m.ConfigPage = c
-	return m, []Cmd{LoadConfigFiles{Request: m.ConfigPage.reads.Ask()}}
+	load := LoadConfigFiles{Request: m.ConfigPage.reads.Ask()}
+	status := askEmbeddings(&m, 0)
+	return m, []Cmd{load, status}
 }
 
 // clearConfig drops the Page's state but keeps Switching: the switch's answer still comes and is reported.
 func clearConfig(m Model) Model {
-	m.ConfigPage = ConfigPageState{reads: m.ConfigPage.reads.Discarded(), Switching: m.ConfigPage.Switching}
+	m.ConfigPage = ConfigPageState{reads: m.ConfigPage.reads.Discarded(), searchReads: m.ConfigPage.searchReads.Discarded(), Switching: m.ConfigPage.Switching}
 	return m
 }
 
@@ -176,6 +187,9 @@ func updateConfig(m Model, msg Msg) (Model, []Cmd, bool) {
 		return agentEditorClosed(m, msg)
 	case DocbankSwitched:
 		m, cmds := docbankSwitched(m, msg)
+		return m, cmds, true
+	case EmbeddingsStatusLoaded:
+		m, cmds := embeddingsLoaded(m, msg)
 		return m, cmds, true
 	case AgentConfigSaved:
 		m, cmds := agentConfigSaved(m, msg)
@@ -193,12 +207,8 @@ func updateConfig(m Model, msg Msg) (Model, []Cmd, bool) {
 	if loaded.Err != nil {
 		return m, nil, true
 	}
-	var kept ConfigFileKey
-	if f := m.SelectedConfigFile(); f != nil {
-		kept = f.Key
-	}
-	c.Folder, c.Files = loaded.Folder, slices.Clone(loaded.Files)
-	c.Cursor = max(0, slices.IndexFunc(c.Files, func(f ConfigFile) bool { return f.Key == kept }))
+	c.Folder = loaded.Folder
+	c.setFiles(m.Daemon.Name, loaded.Files)
 	return m, nil, true
 }
 
@@ -211,8 +221,26 @@ func (m Model) SelectedConfigFile() *ConfigFile {
 	return rowAt(m.ConfigPage.Files, m.ConfigPage.Cursor)
 }
 
+// setFiles lists files and, once the status has been read, the Search by meaning row after the Docbank row. The cursor stays on the
+// row it was on.
+func (c *ConfigPageState) setFiles(daemon string, files []ConfigFile) {
+	var kept ConfigFileKey
+	if f := rowAt(c.Files, c.Cursor); f != nil {
+		kept = f.Key
+	}
+	c.Files = slices.Clone(files)
+	if c.Search.Read {
+		c.Files = withEmbeddingsRow(c.Files, embeddingsRow(daemon, c.Search))
+	}
+	c.Cursor = max(0, slices.IndexFunc(c.Files, func(f ConfigFile) bool { return f.Key == kept }))
+}
+
 func (c ConfigPageState) Summary() string {
-	return strconv.Itoa(len(c.Files)) + " files in " + oneLine(c.Folder)
+	files := len(c.Files)
+	if slices.ContainsFunc(c.Files, func(f ConfigFile) bool { return f.Key == ConfigEmbeddings }) {
+		files--
+	}
+	return strconv.Itoa(files) + " files in " + oneLine(c.Folder)
 }
 
 type ConfigNotice struct {

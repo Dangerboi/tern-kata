@@ -393,6 +393,21 @@ func init() {
 	local((*Gateway).loadConfigFiles)
 	local((*Gateway).switchDocbank)
 
+	// A LoadEmbeddingsStatus waits out its poll pause first, as a LoadCredentials does.
+	loadEmbeddings := daemonHandler(
+		func(c *Client, ctx context.Context, cmd model.LoadEmbeddingsStatus) (model.EmbeddingsStatusLoaded, error) {
+			loaded, err := c.EmbeddingsStatus(ctx, cmd)
+			loaded.Request = cmd.Request
+			return loaded, err
+		},
+		func(cmd model.LoadEmbeddingsStatus, err error) model.Msg {
+			return model.EmbeddingsStatusLoaded{Request: cmd.Request, Err: err}
+		})
+	local(func(g *Gateway, ctx context.Context, cmd model.LoadEmbeddingsStatus) model.Msg {
+		g.pause(ctx, cmd.After)
+		return loadEmbeddings(g, ctx, cmd)
+	})
+
 	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.LoadDetail) (model.DetailLoaded, error) {
 			return c.ReadDetail(ctx, cmd.UID)

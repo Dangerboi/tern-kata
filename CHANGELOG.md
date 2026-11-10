@@ -8,6 +8,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
+- The Config Page has a Search by meaning row for the kata daemon the Pane is connected to.
+  - It says whether search by meaning is off (with the download size, or that your Ollama will be used), downloading, set up and waiting for a kata daemon restart, failed, indexing with its progress, or on with the built-in model, your Ollama or another provider.
+  - It reads the status again every 2 seconds while a download or the indexing runs, follows a switch on the Daemons Page, and says so when kata cannot report it or when turning it on needs a daemon administrator.
 - `ctrl+t` in the search box switches the search between by words and by meaning, inside one Project.
   - By meaning, `enter` runs kata's own search of the Project with the Status and Label filters and lists the best 50 Issues best first under Results.
   - Typing sends nothing, a live refresh does not run the search again, and a short id still jumps to its Issue.
@@ -61,6 +64,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - Quitting a Pane no longer sometimes leaves the shell without its prompt on a heavily loaded machine.
+- The search line shows kata's note, as "kata: <reason>", when an answer by meaning may be incomplete, for example because the filters left too few candidates.
 
 ## [0.10.0] - 2026-11-08
 

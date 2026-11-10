@@ -22,8 +22,8 @@ type SearchByMeaning struct {
 func (SearchByMeaning) cmd() {}
 
 // RankedAnswer is what kata answered to a ranked search: the hits' Issue UIDs in kata's order, for Query. Lexical says kata
-// answered by words and Reason is the reason it gave; Truncated says more Issues matched than SearchLimit. The message that
-// brings it and the state that keeps it both hold it.
+// answered by words and Reason is the note kata gave when it marked the answer degraded, whatever the mode; Truncated says more
+// Issues matched than SearchLimit. The message that brings it and the state that keeps it both hold it.
 type RankedAnswer struct {
 	Query     string
 	UIDs      []string
@@ -217,6 +217,9 @@ func (m Model) SearchLine() string {
 	if m.Search.Meaning || m.rankedShown() {
 		if m.Ranked.Err != nil {
 			parts = append(parts, oneLine(m.Ranked.Err.Error()))
+		}
+		if m.Ranked.Have && !m.Ranked.Lexical && m.Ranked.Reason != "" {
+			parts = append(parts, "kata: "+m.Ranked.Reason)
 		}
 		if m.Ranked.Have && m.Ranked.Lexical {
 			reason := m.Ranked.Reason

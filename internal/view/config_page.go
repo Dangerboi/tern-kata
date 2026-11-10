@@ -26,11 +26,15 @@ func configPage(m model.Model) tern.Element {
 		case model.ConfigLoads:
 			tone = ui.ToneSuccess
 		}
-		body := ui.Nodes(
-			ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: f.Title, S: "strong"}, {T: " · " + f.StatusWords(), S: "muted"}}, Wrap: ui.WrapNone},
-			ui.Text{Common: ui.Common{Key: "path", Tone: ui.ToneMuted}, Text: f.Path, Wrap: ui.WrapNone},
-			ui.Text{Common: ui.Common{Key: "summary"}, Text: f.Summary},
-		)
+		title := ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: f.Title, S: "strong"}}, Wrap: ui.WrapNone}
+		if words := f.StatusWords(); words != "" {
+			title.Spans = append(title.Spans, ui.Span{T: " · " + words, S: "muted"})
+		}
+		body := ui.Nodes(title)
+		if f.Path != "" {
+			body = append(body, ui.Text{Common: ui.Common{Key: "path", Tone: ui.ToneMuted}, Text: f.Path, Wrap: ui.WrapNone})
+		}
+		body = append(body, ui.Text{Common: ui.Common{Key: "summary"}, Text: f.Summary})
 		for _, a := range []struct {
 			action model.ConfigAction
 			key    string

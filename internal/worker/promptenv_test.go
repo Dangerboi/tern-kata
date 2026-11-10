@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -101,8 +102,9 @@ func TestChildEnvReplacesAnInheritedCloseTranscriptVariableAndHonoursTheEnvironm
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("KATA_HOME", t.TempDir())
 			t.Setenv("TERN_KATA_CLOSE_TRANSCRIPT", "inherited")
-			if c.switchEnv != "" {
-				t.Setenv("KATA_CLOSE_TRANSCRIPT_ENABLED", c.switchEnv)
+			t.Setenv("KATA_CLOSE_TRANSCRIPT_ENABLED", c.switchEnv)
+			if c.switchEnv == "" {
+				os.Unsetenv("KATA_CLOSE_TRANSCRIPT_ENABLED") // a session that sets the switch must not decide the no-file case
 			}
 			env := childEnv("ann", nil, nil)
 			if got := slices.Contains(env, "TERN_KATA_CLOSE_TRANSCRIPT=on"); got != c.want {
