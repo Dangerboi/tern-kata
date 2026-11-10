@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+
+	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 func execKata(kata string, args, environ []string, actor string) error {
@@ -23,3 +25,6 @@ func editorCommand(editor, file string) *exec.Cmd {
 	cmd.Env = append(os.Environ(), editorFileEnv+"="+file)
 	return cmd
 }
+
+// paneInput leaves the SDK's own input: its poll is not a Unix one.
+func paneInput(*tern.Options) {}

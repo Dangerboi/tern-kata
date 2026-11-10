@@ -24,7 +24,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-ctl() { tern ctl --control "$tmp/control.sock" "$@"; }
+source "$(dirname "$0")/ctl.sh"
+ctl() { ctl_call "$@"; }
 
 # A staged plugin/ folder as a release carries it, with a version older than any release.
 mkdir -p "$tmp/plugin" "$tmp/dist" "$tmp/workspace" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"

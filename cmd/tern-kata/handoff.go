@@ -136,7 +136,9 @@ func envValue(environ []string, name string, caseInsensitive bool) string {
 }
 
 func editorOptions() tern.Options {
-	return tern.Options{App: "tern-kata", Version: buildVersion(), Features: []string{tern.FeatureEdit, tern.FeatureUndo}}
+	opts := tern.Options{App: "tern-kata", Version: buildVersion(), Features: []string{tern.FeatureEdit, tern.FeatureUndo}}
+	paneInput(&opts)
+	return opts
 }
 
 // editorSurfaceOptions are the Pane's surface options: Tern's sans face, in which machine strings take the mono span token.

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -399,6 +400,7 @@ func TestSettledRunsOlderThanTwoWeeksAreRemovedAndHeldOnesStay(t *testing.T) {
 	old := h.ask(worker.Request{Op: "run", Job: ok.UID}).Run.RunUID
 	held := h.ask(worker.Request{Op: "run", Job: needs.UID}).Run.RunUID
 	h.eventually("both runs to be reported", func() bool { return reported(old) && reported(held) })
+	h.journalSettled(old) // the sweep removes only what is settled; the clock must not jump before then
 
 	h.clock.Advance(10 * 24 * time.Hour)
 	recent := h.ask(worker.Request{Op: "run", Job: ok.UID}).Run.RunUID
@@ -410,6 +412,50 @@ func TestSettledRunsOlderThanTwoWeeksAreRemovedAndHeldOnesStay(t *testing.T) {
 	if !exists(recent) || !exists(held) {
 		t.Fatalf("the recent run (%v) or the held run (%v) was removed", exists(recent), exists(held))
 	}
+}
+
+// journalSettled waits until the run's journal is settled: reported and closed, which is when the removal sweep may
+// take it. A status with nothing pending is not enough, as it reads the same before the report is planned.
+func (h *harness) journalSettled(uid string) {
+	h.t.Helper()
+	h.eventually("the journal of "+uid+" to be settled", func() bool {
+		j, err := worker.NewStore(h.dirs, worker.Hooks{}).Load(uid)
+		return err == nil && j.Phase == worker.PhaseSettled
+	})
+}
+
+// jumpingClock moves the clock by jump just before it hands out its second daily timer, the way an Advance lands
+// between a sweep reading the clock and the sweep arming its next wake.
+type jumpingClock struct {
+	*workertest.ManualClock
+	jump  time.Duration
+	daily atomic.Int64
+}
+
+func (c *jumpingClock) After(d time.Duration) <-chan time.Time {
+	if d == 24*time.Hour && c.daily.Add(1) == 2 {
+		c.ManualClock.Advance(c.jump)
+	}
+	return c.ManualClock.After(d)
+}
+
+// A clock jump that lands while the sweep is between its look and its next wake must not skip the day: the run that
+// the jump made old enough is still removed.
+func TestAClockJumpDuringTheRemovalSweepDoesNotSkipTheDay(t *testing.T) {
+	h := newHarness(t)
+	jc := &jumpingClock{ManualClock: h.clock, jump: 5 * 24 * time.Hour}
+	ok := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "fine", Prompt: "Do it.", Checkout: "repo"})
+	r := h.start(worker.Hooks{}, func(o *worker.Options) { o.Clock = jc })
+	h.admitting(r)
+	old := h.ask(worker.Request{Op: "run", Job: ok.UID}).Run.RunUID
+	h.journalSettled(old)
+	h.within("the first sweep to arm its timer", func() bool { return jc.daily.Load() >= 1 })
+
+	h.clock.Advance(10 * 24 * time.Hour) // wakes the sweep; it looks at day 10, then the jump takes the clock to day 15
+	h.within("the 15-day-old run to be removed", func() bool {
+		_, err := os.Stat(filepath.Join(h.dirs.Runs(), old))
+		return err != nil
+	})
 }
 
 // A run kata shows as running for this executor but whose folder is gone is never rerun; abandon records it unknown

@@ -33,7 +33,8 @@ cleanup() {
   exit "$status"
 }
 trap cleanup EXIT
-ctl() { tern ctl --control "$tmp/control.sock" "$@"; }
+source "$(dirname "$0")/ctl.sh"
+ctl() { ctl_call "$@"; }
 # Waits (real time) until the active tab has $1 Panes: a quit closes the launch-command Pane.
 expect_panes() {
   for ((attempt=0; attempt<100; attempt++)); do

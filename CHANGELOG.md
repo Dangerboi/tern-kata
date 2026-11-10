@@ -56,6 +56,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - Press `s` on the Config Page's Docbank row to switch it, or remove the `[docbank]` section from kata's `config.toml` and run `kata docbank setup` (see the Attachments guide); Docbank keeps its port and key.
   - `<KATA_HOME>/docbank.key` and `docbank.manual` in tern-kata's config folder can be deleted.
 
+### Fixed
+
+#### Issues and Pages
+
+- Quitting a Pane no longer sometimes leaves the shell without its prompt on a heavily loaded machine.
+
 ## [0.10.0] - 2026-11-08
 
 ### Added

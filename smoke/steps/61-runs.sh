@@ -85,6 +85,8 @@ ctl key s
 expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("Clear the job filter"))'
 expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and .count == 1'
 ctl key f
+# The filter lifting reloads every run; s marks only the runs loaded, so it waits for the one the filter hid.
+expect_tree "[data-id^='main.columns.list.runs.']" '.nodes | map(.text) | any(contains("the provider answered"))'
 # s marks them seen: the mark is the newest end among the loaded runs.
 ctl key s
 expect_tree "[data-id='main.columns.list.runs.nothing-new']" '.ok and .count == 1 and (.nodes[0].text | contains("Nothing new since"))'
