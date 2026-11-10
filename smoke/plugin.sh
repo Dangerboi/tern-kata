@@ -96,12 +96,18 @@ LUAU
 ln -s "$(command -v kata)" "$tmp/bin/kata"
 ln -s "$(command -v tern)" "$tmp/bin/tern"
 
-if command -v zsh >/dev/null 2>&1; then
-  export SHELL="$(command -v zsh)"
-fi
+# zsh is required: headless Tern runs the window plugin's timers only when it draws a frame (stencil-hq/tern-sdk#298),
+# and since Tern 0.9.14 too few frames come for the plugin to hand a new kata Pane its Issue. Each interactive zsh redraws
+# its prompt every 0.1 s while it waits at it, so frames keep coming; nothing is written while a program runs in the Pane.
+command -v zsh >/dev/null 2>&1 || { echo "plugin.sh needs zsh" >&2; exit 1; }
+export SHELL="$(command -v zsh)"
 # Window process PATH lacks tern-kata; Pane shells resolve it via their shell rc.
 export ZDOTDIR="$tmp" BASH_ENV="$tmp/.bashrc" ENV="$tmp/.bashrc"
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.zshenv"
+cat >"$tmp/.zshrc" <<'ZSHRC'
+TRAPALRM() { zle && zle reset-prompt; }
+{ while kill -0 $$ 2>/dev/null; do sleep 0.1; kill -ALRM $$ 2>/dev/null; done } &!
+ZSHRC
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.bashrc"
 export PATH="$tmp/bin:/usr/bin:/bin"
 # Update tern-kata reads version.txt from here.
