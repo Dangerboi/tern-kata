@@ -45,8 +45,8 @@ func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
 		return m, nil
 	}
 	if IsClosed(issue) {
-		m = m.raiseToast(Toast{Text: fmt.Sprintf("%s is closed; press r to reopen it.", issue.ShortID), Label: "Reopen", Chord: "r"})
-		return m, nil
+		m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("%s is closed; press r to reopen it.", issue.ShortID), Label: "Reopen", Chord: "r"})
+		return m, []Cmd{wait}
 	}
 	lanes := m.LaneList()
 	columns := append([]string{LaneNone}, lanes...)
@@ -55,8 +55,8 @@ func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
 	case to < 0:
 		return m, nil
 	case to >= len(columns):
-		m = m.raiseToast(Toast{Text: fmt.Sprintf("%s is in the last Lane; press x to close it.", issue.ShortID), Label: "Close", Chord: "x"})
-		return m, nil
+		m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("%s is in the last Lane; press x to close it.", issue.ShortID), Label: "Close", Chord: "x"})
+		return m, []Cmd{wait}
 	}
 	target := columns[to]
 	cmd := MoveIssueCmd{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Actor: m.Actor}

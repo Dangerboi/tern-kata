@@ -166,8 +166,8 @@ func openAgent(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if reason := IssueRefusal(*issue, OpenAgentCardAction); reason != "" {
-		m = m.raiseToast(Toast{Text: reason, Label: "Reopen", Chord: "r"})
-		return m, nil
+		m, wait := m.raiseToast(Toast{Text: reason, Label: "Reopen", Chord: "r"})
+		return m, []Cmd{wait}
 	}
 	m = openAgentCard(m, *issue)
 	m, sessions := askAgentSessions(m)

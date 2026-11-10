@@ -102,6 +102,7 @@ func updateDelete(m Model, msg IssueDeleted) (Model, []Cmd) {
 	qualified := f.QualifiedID
 	m.DeleteForm = DeleteFormState{}
 	m = issueGone(m, msg.UID)
-	m = m.raiseToast(Toast{Text: fmt.Sprintf("Deleted %s. Press u to restore it.", qualified), Label: "Undo", Chord: "u"})
-	return snapshotChanged(m.issueWritten(msg.UID))
+	m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("Deleted %s. Press u to restore it.", qualified), Label: "Undo", Chord: "u"})
+	m, cmds := snapshotChanged(m.issueWritten(msg.UID))
+	return m, append(cmds, wait)
 }

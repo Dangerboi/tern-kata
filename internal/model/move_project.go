@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -89,13 +90,31 @@ type Toast struct {
 	Ref   string
 }
 
-// raiseToast shows t as the model's toast, under a Seq no earlier toast had.
-func (m Model) raiseToast(t Toast) Model {
-	t.Seq = 1
-	if m.Toast != nil {
-		t.Seq = m.Toast.Seq + 1
-	}
+// ToastLife is how long Tern keeps a toast with a button up; the model drops its toast after as long.
+const ToastLife = 6 * time.Second
+
+// WaitToast is the pause of ToastLife after toast Seq was raised. It reads nothing; its answer ToastExpired takes the toast away.
+type WaitToast struct{ Seq int }
+
+func (WaitToast) cmd() {}
+
+type ToastExpired struct{ Seq int }
+
+func (ToastExpired) msg() {}
+
+// raiseToast shows t as the model's toast, under a Seq no earlier toast had, and returns the Cmd that ends it.
+func (m Model) raiseToast(t Toast) (Model, Cmd) {
+	m.ToastSeq++
+	t.Seq = m.ToastSeq
 	m.Toast = &t
+	return m, WaitToast{Seq: t.Seq}
+}
+
+// toastExpired drops the toast the answer is for; a newer toast stays.
+func toastExpired(m Model, msg ToastExpired) Model {
+	if m.Toast != nil && m.Toast.Seq == msg.Seq {
+		m.Toast = nil
+	}
 	return m
 }
 
@@ -274,9 +293,10 @@ func movedToProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 	if msg.Count > 1 {
 		moved = fmt.Sprintf("#%s and %s", f.ShortID, descendantCount(msg.Count-1))
 	}
-	m = m.raiseToast(Toast{Text: fmt.Sprintf("Moved %s to %s.", moved, f.Target.Name+"#"+msg.NewShortID), Label: "Open", Ref: ref})
+	m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("Moved %s to %s.", moved, f.Target.Name+"#"+msg.NewShortID), Label: "Open", Ref: ref})
 	m = issueGone(m, f.UID)
-	return snapshotChanged(m.issueWritten(f.UID))
+	m, cmds := snapshotChanged(m.issueWritten(f.UID))
+	return m, append(cmds, wait)
 }
 
 // issueGone is an Issue the Collection stops listing, moved away or deleted: the selection goes to the neighbouring row once a

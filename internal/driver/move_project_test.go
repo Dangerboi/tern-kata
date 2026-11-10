@@ -9,7 +9,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
-	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 var moveCatalog = []model.CatalogProject{
@@ -211,19 +210,14 @@ func TestMoveCardNoticeLinksToTheNewProjectAndIssueAndOpensIt(t *testing.T) {
 	if _, ok := snapshotFor(done.Cmds); !ok {
 		t.Errorf("no fresh snapshot asked for after the move: %v", done.Cmds)
 	}
-	if text := toastText(done.State.Model); !strings.Contains(text, "shop#n3w1") || done.State.Model.Notice != "" {
+	if text := toastText(t, done); !strings.Contains(text, "shop#n3w1") || done.State.Model.Notice != "" {
 		t.Fatalf("toast %q notice %q, want the toast to name shop#n3w1 and no Notice", text, done.State.Model.Notice)
 	}
-	var link *tern.WireNode
-	nodes := wireNodes(t, view.Render(done.State.Model, now))
-	for i, n := range nodes {
-		if n.K == "toast" {
-			link = &nodes[i]
-		}
-	}
-	if link == nil || link.P["label"] != "Open" {
+	nodes := toastNodes(t, *done.View)
+	if len(nodes) != 1 || nodes[0].P["label"] != "Open" {
 		t.Fatal("the toast is not drawn with an Open button")
 	}
+	link := nodes[0]
 	opened := step(t, done.State, click(link.ID, link.P["action"].(string)))
 	var open *model.OpenIssue
 	for _, cmd := range opened.Cmds {
@@ -382,8 +376,8 @@ func TestMoveCardKeepsTheProjectWhenTheSubtreeIsRefused(t *testing.T) {
 func TestMoveCardNoticeCountsTheIssuesMoved(t *testing.T) {
 	preview := moving(t, movePane(t, movable("a")), "shop")
 	previewed := step(t, preview.State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", DryRun: true, Revision: 3, Count: 2, Descendants: []model.MovedIssue{{ShortID: "b"}}}).State
-	moved := step(t, step(t, previewed, key("enter")).State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", NewShortID: "9", Count: 2}).State
-	if got := toastText(moved.Model); got != "Moved #a and 1 descendant to shop#9." {
+	moved := step(t, step(t, previewed, key("enter")).State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", NewShortID: "9", Count: 2})
+	if got := toastText(t, moved); got != "Moved #a and 1 descendant to shop#9." {
 		t.Errorf("toast %q", got)
 	}
 }

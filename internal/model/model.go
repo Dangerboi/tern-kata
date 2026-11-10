@@ -99,9 +99,11 @@ type Model struct {
 	FieldForm FieldFormState
 	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
 	Notice string
-	// Toast is the latest toast raised: one button on a Notice that answers with a key or opens an Issue. It stays until the next one replaces it,
-	// and the view keys its node on Seq, so each message shows once, and the same message twice shows twice.
+	// Toast is a Notice with one button (a key it presses, or an Issue it opens). It is drawn from the step that raised it until
+	// ToastExpired for its Seq, so a client that attaches late never gets a stale button. ToastSeq counts the toasts raised: the
+	// view keys the node on it, so each message shows once and the same message twice shows twice.
 	Toast       *Toast
+	ToastSeq    int
 	MoveProject MoveProjectState
 	// afterMove is the Issue just moved to another Project and its neighbouring row, until a snapshot stops listing it.
 	afterMove *movedIssue
@@ -466,6 +468,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return agentSessionsRead(m, msg)
 	case AgentSessionTick:
 		return agentSessionTick(m, msg)
+	case ToastExpired:
+		return toastExpired(m, msg), nil
 	case AgentHandedOff:
 		m = agentHandedOff(m, msg)
 	case AgentIssueRead:

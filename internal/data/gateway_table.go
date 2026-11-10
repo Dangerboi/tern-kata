@@ -186,6 +186,7 @@ func init() {
 	local((*Gateway).refreshAgents)
 	local((*Gateway).readAgentSessions)
 	local((*Gateway).waitAgentSessions)
+	local((*Gateway).waitToast)
 	local((*Gateway).openAgent)
 	local(withoutCtx((*Gateway).setAgentOpenFlag))
 	local((*Gateway).sendAgentBack)

@@ -30,6 +30,11 @@ func (g *Gateway) waitAgentSessions(ctx context.Context, cmd model.WaitAgentSess
 	return model.AgentSessionTick(cmd)
 }
 
+func (g *Gateway) waitToast(ctx context.Context, cmd model.WaitToast) model.ToastExpired {
+	g.pause(ctx, model.ToastLife)
+	return model.ToastExpired(cmd)
+}
+
 func (g *Gateway) readAgentSessions(ctx context.Context, cmd model.ReadAgentSessions) model.AgentSessionsRead {
 	out := model.AgentSessionsRead{Request: cmd.Request, Sessions: make([]model.AgentSessionFacts, 0, len(cmd.Agents))}
 	for _, a := range cmd.Agents {

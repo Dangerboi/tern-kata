@@ -180,8 +180,8 @@ func TestMovingTheOnlyCardOfALaneLeavesItEmpty(t *testing.T) {
 func TestMovingADoneCardInTheLaneViewPointsAtReopen(t *testing.T) {
 	s := feed(t, boardPane(t, closedAt("d", 10, 5)), key("enter")).State
 	out := step(t, s, key(">"))
-	if len(out.Cmds) != 0 || !containsAll(toastText(out.State.Model), "press r") {
-		t.Errorf("cmds %#v, toast %q", out.Cmds, toastText(out.State.Model))
+	if len(withoutToastWait(out.Cmds)) != 0 || !containsAll(toastText(t, out), "press r") {
+		t.Errorf("cmds %#v, toast %q", out.Cmds, toastText(t, out))
 	}
 }
 

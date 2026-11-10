@@ -45,7 +45,8 @@ func footerTexts(m model.Model) []ui.Text {
 	return texts
 }
 
-// toasts is the model's latest toast, keyed on its Seq so each one shows once; Tern ignores the button before it learned them.
+// toasts is the model's toast, drawn from the step that raised it until ToastExpired for its Seq, so a late client never gets a stale
+// button. The node is keyed on Seq so each one shows once; Tern ignores the button before it learned them.
 func toasts(m model.Model) []tern.Element {
 	t := m.Toast
 	if t == nil {
