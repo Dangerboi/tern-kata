@@ -188,12 +188,12 @@ func TestTheCardFollowsTheJobWithTheRowsWordsABarAndPolling(t *testing.T) {
 func TestTheCardSaysARestartIsNeededWhenTheJobIsDone(t *testing.T) {
 	sent := turnedOn(t, embeddingsCardOpen(t))
 	out := step(t, sent.State, model.EmbeddingsTurnedOn{Status: restartOwed, Connection: sent.State.Model.Connection})
-	wantText(t, "restart", wireTextOf(t, out.State), "set up: restart needed")
+	wantText(t, "restart", wireTextOf(t, out.State), model.RestartQuestion)
 	if _, polled := askedEmbeddings(out.Cmds); polled {
 		t.Errorf("a job waiting for a restart is polled: %#v", out.Cmds)
 	}
-	if out.State.Model.CurrentMode() != model.ModeEmbeddings {
-		t.Errorf("mode %s, want the following mode", out.State.Model.CurrentMode())
+	if out.State.Model.CurrentMode() != model.ModeEmbeddingsRestart {
+		t.Errorf("mode %s, want the restart question", out.State.Model.CurrentMode())
 	}
 }
 

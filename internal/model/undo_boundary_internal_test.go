@@ -106,6 +106,7 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{RunJobNow{}, false},
 		{SaveAgentConfig{}, false},
 		{SwitchDocbank{}, false},
+		{RestartKataDaemon{}, false},
 		{SaveAgentStates{}, false},
 		{SaveDraft{}, false},
 		{SaveFilters{}, false},

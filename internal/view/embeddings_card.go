@@ -45,6 +45,10 @@ func embeddingsLayer(m model.Model) tern.Element {
 		children = append(children, buttonRow(
 			cardButton("turn-on", mode, model.TurnOnEmbeddingsConfirm, "Turn on", true),
 			cardButton("decline", mode, model.TurnOnEmbeddingsDecline, "Not now", false)))
+	case model.ModeEmbeddingsRestart:
+		children = append(children, buttonRow(
+			cardButton("restart", mode, model.RestartDaemonConfirm, "Restart now", true),
+			cardButton("decline", mode, model.RestartDaemonDecline, "Not now", false)))
 	case model.ModeEmbeddingsOff:
 		children = append(children, buttonRow(
 			cardButton("turn-on", mode, model.TurnOnEmbeddingsAsk, "Turn on…", true),

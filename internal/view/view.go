@@ -141,6 +141,9 @@ func issues(m model.Model, now time.Time) tern.Element {
 	}
 	if line := m.SearchLine(); line != "" {
 		children = append(children, plainText("search-line", ui.ToneMuted, line))
+		if m.SearchTurnOnOffered() {
+			children = append(children, emptyButton(m, "search-turn-on", model.TurnOnSearchMeaning, "Turn on…", false)...)
+		}
 	}
 	empty := emptyState("No Issues", "This Collection has none. Select another Collection or create one with kata create.")
 	// The Board ignores the status filter, so the Lane view judges the filters without it and names an empty Lane, not the Collection.

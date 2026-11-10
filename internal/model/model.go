@@ -240,6 +240,8 @@ func staleConnection(m Model, msg Msg) bool {
 		return msg.Connection != m.Connection
 	case EmbeddingsTurnedOn:
 		return msg.Connection != m.Connection
+	case KataDaemonRestarted:
+		return msg.Connection != m.Connection
 	}
 	return false
 }

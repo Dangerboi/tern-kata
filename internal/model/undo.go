@@ -161,7 +161,7 @@ func undoBoundary(cmd Cmd) (string, bool) {
 		SaveWorkerEdit, StopWorker, SetWorkerSupervision, LoadLocalRun, RunJobNow, ResumeJob, ResumeLocalRun, AbandonLocalRun,
 		OpenRunSession, StartAgent, StartTeam, DriveTeams, PruneAgents, RefreshAgents, ReadAgentSessions, WaitAgentSessions, FocusAgent, OpenAgent, SendAgentBack, SetAgentOpen, CloseAgent, StopAgent, HandOffAgent, InterruptAgent, ReadAgentIssue, ReadSweepComments, RaiseAgentAttention, ClearAgentAttention, ClearAgentAddress, CreateProject, BindProject, LookupDeleted, LoadDaemons, SwitchDaemon, LoadConfigFiles, LoadEmbeddingsStatus, TurnOnEmbeddings, LoadAttention, LoadAuthCapabilities, OpenAttachment,
 		LoadCredentials, LoadFederation, LoadFederationHubs, LoadFederationHubProjects, BrowseFederationHubs,
-		SaveAgentConfig, SwitchDocbank,
+		SaveAgentConfig, SwitchDocbank, RestartKataDaemon,
 		LoadTeamKids, ResolveComment,
 		ForgetAgentRecord,
 		LoadRemoteAgents,

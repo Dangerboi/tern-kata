@@ -445,7 +445,7 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardEmbeddings, name: "embeddings", open: func(m Model) bool { return m.EmbeddingsCard.Open },
-			modes: []Mode{ModeEmbeddingsAsk, ModeEmbeddings, ModeEmbeddingsOff}, mode: Model.EmbeddingsCardMode,
+			modes: []Mode{ModeEmbeddingsAsk, ModeEmbeddings, ModeEmbeddingsOff, ModeEmbeddingsRestart}, mode: Model.EmbeddingsCardMode,
 			key:  embeddingsCardKey,
 			busy: func(Model) bool { return false }, fields: []FieldSpec{},
 		},

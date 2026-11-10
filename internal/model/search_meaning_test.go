@@ -202,7 +202,7 @@ func TestSearchLineNamesWhatKataSaid(t *testing.T) {
 		want string
 	}{
 		{"words with kata's reason", model.SearchByMeaningDone{RankedAnswer: model.RankedAnswer{UIDs: []string{"a"}, Lexical: true, Reason: "embedding model is loading"}}, "kata searched by words: embedding model is loading"},
-		{"words without a reason", model.SearchByMeaningDone{RankedAnswer: model.RankedAnswer{UIDs: []string{"a"}, Lexical: true}}, "kata searched by words: turn on search by meaning with `kata daemon local-embeddings`"},
+		{"words without a reason, status unread", model.SearchByMeaningDone{RankedAnswer: model.RankedAnswer{UIDs: []string{"a"}, Lexical: true}}, "kata searched by words: search by meaning is not in use on this daemon"},
 		{"hybrid but degraded", model.SearchByMeaningDone{RankedAnswer: model.RankedAnswer{UIDs: []string{"a"}, Reason: "search filters exhausted the semantic candidate ceiling; semantic results may be incomplete"}}, "kata: search filters exhausted the semantic candidate ceiling; semantic results may be incomplete"},
 		{"truncated", model.SearchByMeaningDone{RankedAnswer: model.RankedAnswer{UIDs: []string{"a"}, Truncated: true}}, "showing the best 50"},
 		{"hybrid and complete", ranking("a"), ""},

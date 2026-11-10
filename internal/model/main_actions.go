@@ -235,6 +235,7 @@ var mainRows = []actionEntry{
 	{action: SearchEnter, modes: []Mode{ModeSearch}, keys: keys("enter", "enter"), help: "results", footer: []Mode{ModeSearch}, handle: searchEnter},
 	{action: SearchBack, modes: []Mode{ModeSearch}, keys: keys("escape", "esc"), help: "cancel search", footer: []Mode{ModeSearch}, handle: searchBack},
 	{action: ToggleSearchMeaning, modes: searching, keys: keys("ctrl+t", "ctrl+t", "meta+t", ""), help: "by meaning", label: searchMeaningLabel, footer: searching, sheet: []sheetLine{{sheetFilters, 5, "search by meaning or by words (inside one Project)"}}, handle: toggleSearchMeaning},
+	{action: TurnOnSearchMeaning, modes: searching, keys: keys("ctrl+o", "ctrl+o", "meta+o", ""), help: "turn on by meaning", footer: searching, sheet: []sheetLine{{sheetFilters, 6, "turn on search by meaning, when kata searched by words because it is off (opens its card)"}}, handle: openEmbeddingsCard, when: searchTurnOnOffered},
 	{action: MoveUp, modes: []Mode{ModeSearch}, keys: slices.Concat(keys("up", "up"), emacsUp), help: "previous result", handle: searchMoving(MoveUp)},
 	{action: MoveDown, modes: []Mode{ModeSearch}, keys: slices.Concat(keys("down", "down"), emacsDown), help: "next result", handle: searchMoving(MoveDown)},
 	{action: DeleteInput, modes: []Mode{ModeSearch}, keys: keys("backspace", "backspace"), help: "delete", handle: searchErasing(DeleteInput)},

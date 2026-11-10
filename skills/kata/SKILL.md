@@ -133,7 +133,7 @@ kata close <ref> --done --docbank <node-id|/abs/path> --message "<…>"   # link
 
 ## Attachments
 
-An Issue's files are native attachments: the bytes live in Docbank and the Issue holds one `attachment.<id>` meta key per file with `{name, media_type, size, docbank_version}`. They need the daemon to have a `[docbank]` section; without it every call below fails with `docbank_not_configured`, and you should tell the user that is what is missing rather than work around it. The user sets it up with `kata docbank setup` (Docbank on this machine: kata starts it and follows its port and key) or `kata docbank setup --url <url> --key-file <file>` (a Docbank elsewhere); run it only when the user asks.
+An Issue's files are native attachments: the bytes live in Docbank and the Issue holds one `attachment.<id>` meta key per file with `{name, media_type, size, docbank_version}`. They need the daemon to have a `[docbank]` section; without it every call below fails with `docbank_not_configured`, and you should tell the user that is what is missing rather than work around it. The user sets it up with `kata docbank setup` (Docbank on this machine: kata starts it and follows its port and key) or `kata docbank setup --url <url> --key-file <file>` (a Docbank elsewhere); run it only when the user asks. Likewise turning search by meaning on (the Pane's Search by meaning card, or `kata daemon local-embeddings`) is the user's call: it downloads a model or starts using their Ollama, so never start it yourself; tell the user instead.
 
 ```bash
 kata docbank attachments ls <ref> --agent          # id, name, media type and size of each attachment

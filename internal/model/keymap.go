@@ -43,6 +43,7 @@ const (
 	PageSearchClear            Action = "page-search-clear"
 	SearchEnter                Action = "search-enter"
 	ToggleSearchMeaning        Action = "toggle-search-meaning"
+	TurnOnSearchMeaning        Action = "turn-on-search-meaning"
 	SearchBack                 Action = "search-back"
 	SearchQuery                Action = "search-query"
 	DeleteInput                Action = "delete-input"
@@ -424,4 +425,7 @@ var cardBindings = []Binding{
 	{Chord: "s", Key: "s", Action: TurnOnEmbeddingsAsk, Help: "turn on…", Mode: ModeEmbeddingsOff, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: EmbeddingsCardClose, Help: "close", Mode: ModeEmbeddingsOff, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: EmbeddingsCardClose, Help: "close", Mode: ModeEmbeddings, ShowInFooter: true},
+	{Chord: "y", Key: "y", Action: RestartDaemonConfirm, Help: "restart", Mode: ModeEmbeddingsRestart, ShowInFooter: true},
+	{Chord: "n", Key: "n", Action: RestartDaemonDecline, Help: "not now", Mode: ModeEmbeddingsRestart, ShowInFooter: true},
+	{Chord: "escape", Key: "esc", Action: RestartDaemonDecline, Help: "not now", Mode: ModeEmbeddingsRestart},
 }

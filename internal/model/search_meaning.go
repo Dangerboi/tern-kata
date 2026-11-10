@@ -189,7 +189,12 @@ func searchMeaningDone(m Model, msg SearchByMeaningDone) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Ranked = RankedSearch{Have: true, RankedAnswer: msg.RankedAnswer, SearchedWith: m.rankedAsked.Filters}
-	return relist(m)
+	m, cmds := relist(m)
+	if m.Ranked.Lexical && m.Ranked.Reason == "" {
+		// kata gave no reason for searching by words: its status says why, and is read once per such answer.
+		cmds = append(cmds, askEmbeddings(&m, 0))
+	}
+	return m, cmds
 }
 
 // rankedGroup is the ranked answer's Issues, those the snapshot lists, in kata's order as one group under Results.
@@ -222,11 +227,7 @@ func (m Model) SearchLine() string {
 			parts = append(parts, "kata: "+m.Ranked.Reason)
 		}
 		if m.Ranked.Have && m.Ranked.Lexical {
-			reason := m.Ranked.Reason
-			if reason == "" {
-				reason = "turn on search by meaning with `kata daemon local-embeddings`"
-			}
-			parts = append(parts, "kata searched by words: "+reason)
+			parts = append(parts, "kata searched by words: "+m.wordsReason())
 		}
 		if m.Ranked.Have && m.Ranked.Truncated {
 			parts = append(parts, "showing the best "+strconv.Itoa(SearchLimit))
@@ -247,6 +248,38 @@ func (m Model) SearchLine() string {
 	}
 	return strings.Join(parts, " · ")
 }
+
+// wordsReason is why kata searched by words: its own reason when it gave one, otherwise what the status last read says about
+// search by meaning on the connected daemon. Until that status is read, the wording claims nothing about it.
+func (m Model) wordsReason() string {
+	if reason := m.Ranked.Reason; reason != "" {
+		return reason
+	}
+	s := m.Embeddings
+	switch {
+	case !s.Read || s.Err != nil:
+		return "search by meaning is not in use on this daemon"
+	case s.Status.TurnOnOffered():
+		return "search by meaning is off on this daemon"
+	case s.Status.RestartOwed():
+		if s.Status.Remote {
+			return "search by meaning is set up and waits for a kata daemon restart (run `kata daemon restart` on that machine)"
+		}
+		return "search by meaning is set up and waits for a kata daemon restart (`r` on the Config Page, `K`)"
+	case s.Status.Provider != EmbeddingsOff || s.Status.Job != nil:
+		return "search by meaning is being set up on this daemon (see the Config Page, `K`)"
+	}
+	return "search by meaning is off; a daemon administrator can turn it on (kata's Settings or `kata daemon local-embeddings`)"
+}
+
+// searchTurnOnOffered says the search line offers Turn on…: the search box is open, kata searched by words with no reason, and
+// the status last read says kata would take a turn-on.
+func searchTurnOnOffered(m Model) bool {
+	return m.Search.Open && (m.Search.Meaning || m.rankedShown()) && m.Ranked.Have && m.Ranked.Lexical && m.Ranked.Reason == "" && m.embeddingsAskable()
+}
+
+// SearchTurnOnOffered is searchTurnOnOffered for the view's Turn on… button.
+func (m Model) SearchTurnOnOffered() bool { return searchTurnOnOffered(m) }
 
 // labelList is the Label filter's comma-separated labels.
 func labelList(filter string) []string {

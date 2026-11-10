@@ -13,12 +13,13 @@ import (
 const (
 	// ModeEmbeddingsAsk is the question: y turns it on, n or esc closes the card.
 	ModeEmbeddingsAsk Mode = "embeddings-ask"
-	// ModeEmbeddings is the card following the setup, or showing a state with nothing to do: esc closes it. A later step adds the
-	// restart question here, for the state where kata owes a daemon restart (RestartOwed).
+	// ModeEmbeddings is the card following the setup, or showing a state with nothing to do: esc closes it.
 	ModeEmbeddings Mode = "embeddings"
 	// ModeEmbeddingsOff is the card while kata would take a turn-on again (a failed job, or a refusal on a status that was out of
 	// date): s asks the question again.
 	ModeEmbeddingsOff Mode = "embeddings-off"
+	// ModeEmbeddingsRestart is the question whether the Pane restarts the kata daemon now: y restarts it, n or esc keeps the card.
+	ModeEmbeddingsRestart Mode = "embeddings-restart"
 )
 
 const (
@@ -26,6 +27,10 @@ const (
 	TurnOnEmbeddingsDecline Action = "turn-on-embeddings-decline"
 	TurnOnEmbeddingsAsk     Action = "turn-on-embeddings-ask"
 	EmbeddingsCardClose     Action = "embeddings-card-close"
+	RestartDaemonConfirm    Action = "restart-daemon-confirm"
+	RestartDaemonDecline    Action = "restart-daemon-decline"
+	// ConfigRestartDaemon is r on the Config row that owes a restart.
+	ConfigRestartDaemon Action = "config-restart-daemon"
 )
 
 // TurnOnEmbeddings asks the daemon the Pane is connected to to start its local search by meaning setup job: the user said yes to
@@ -49,14 +54,36 @@ type EmbeddingsTurnedOn struct {
 
 func (EmbeddingsTurnedOn) msg() {}
 
+// RestartQuestion is what the card asks before the Pane restarts the kata daemon it is connected to.
+const RestartQuestion = "Restart the kata daemon now? Other Panes, agents and the worker lose their connection for a moment and reconnect. y/n"
+
+// RestartKataDaemon asks for `kata daemon restart` on the daemon the Pane is connected to: the user said yes to the question.
+type RestartKataDaemon struct {
+	Workspace string
+	// Connection is the Pane's connection number when it asked: an answer from an earlier daemon is dropped.
+	Connection int
+}
+
+func (RestartKataDaemon) cmd() {}
+
+// KataDaemonRestarted answers RestartKataDaemon. Err is kata's last stderr line, or why the restart did not run.
+type KataDaemonRestarted struct {
+	Err        error
+	Connection int
+}
+
+func (KataDaemonRestarted) msg() {}
+
 // EmbeddingsCardState is the Search by meaning card. Asking says the question is shown. askOnRead says the card was opened before
 // any status was read and shows the question once one comes, when kata would take a turn-on. Err is kata's refusal of the last
 // turn-on.
 type EmbeddingsCardState struct {
-	Open      bool
-	Asking    bool
-	askOnRead bool
-	Err       error
+	Open   bool
+	Asking bool
+	// AskingRestart says the restart question is shown.
+	AskingRestart bool
+	askOnRead     bool
+	Err           error
 }
 
 // EmbeddingsQuestion is what the card asks before anything starts, worded from the status.
@@ -76,6 +103,9 @@ func EmbeddingsQuestion(s EmbeddingsStatus) string {
 // cardWords is the card's text for the status: the row's words, except that a finished job says the restart is still to come.
 func (s EmbeddingsStatus) cardWords() string {
 	if s.RestartOwed() {
+		if s.Remote {
+			return "set up: restart needed · " + remoteRestartWords
+		}
 		return "set up: restart needed"
 	}
 	return s.Words()
@@ -122,6 +152,10 @@ func (m Model) EmbeddingsCardBody() EmbeddingsCardBody {
 		b.State, b.Failed = "kata cannot report search by meaning here: "+oneLine(s.Err.Error()), true
 	case s.Turning:
 		b.State, b.Pending = "Turning it on…", true
+	case s.Restarting:
+		b.State, b.Pending = "Restarting the kata daemon…", true
+	case m.EmbeddingsCard.AskingRestart:
+		b.Question = RestartQuestion
 	case m.EmbeddingsCard.Asking:
 		b.Question = EmbeddingsQuestion(s.Status)
 	default:
@@ -144,6 +178,8 @@ func (m Model) EmbeddingsCardBody() EmbeddingsCardBody {
 // EmbeddingsCardMode is the keymap mode of the open card.
 func (m Model) EmbeddingsCardMode() Mode {
 	switch {
+	case m.EmbeddingsCard.AskingRestart:
+		return ModeEmbeddingsRestart
 	case m.EmbeddingsCard.Asking:
 		return ModeEmbeddingsAsk
 	case m.embeddingsAskable():
@@ -204,6 +240,9 @@ func (m Model) embeddingsCardRead() Model {
 	if c.Asking && !m.embeddingsAskable() {
 		c.Asking = false
 	}
+	if c.AskingRestart && (!m.Embeddings.Status.RestartOwed() || m.Embeddings.Status.Remote || m.Embeddings.Restarting) {
+		c.AskingRestart = false
+	}
 	return m
 }
 
@@ -220,6 +259,10 @@ func embeddingsCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.EmbeddingsCard.Asking, m.EmbeddingsCard.Err = true, nil
 	case TurnOnEmbeddingsDecline, EmbeddingsCardClose:
 		m.EmbeddingsCard = EmbeddingsCardState{}
+	case RestartDaemonConfirm:
+		return confirmRestartDaemon(m)
+	case RestartDaemonDecline:
+		m.EmbeddingsCard.AskingRestart = false
 	}
 	return m, nil
 }
@@ -254,6 +297,67 @@ func embeddingsTurnedOn(m Model, msg EmbeddingsTurnedOn) (Model, []Cmd) {
 	return embeddingsRead(m, msg.Status, nil)
 }
 
+// restartOffered says the Pane may restart the daemon: kata finished the setup, the daemon is local, and no restart is out.
+func (m Model) restartOffered() bool {
+	s := m.Embeddings
+	return s.Read && s.Err == nil && !s.Restarting && s.Status.RestartOwed() && !s.Status.Remote
+}
+
+// askRestartOnArrival opens the restart question on a card that is showing when the status has just reached the restart state.
+func (m Model) askRestartOnArrival() Model {
+	if m.EmbeddingsCard.Open && m.restartOffered() {
+		m.EmbeddingsCard.Asking, m.EmbeddingsCard.AskingRestart, m.EmbeddingsCard.Err = false, true, nil
+	}
+	return m
+}
+
+// restartEmbeddingsDaemon is r on the Config row: the card opens on the restart question.
+func restartEmbeddingsDaemon(m Model) (Model, []Cmd) {
+	m, cmds := openEmbeddingsCard(m)
+	if m.restartOffered() {
+		m.EmbeddingsCard.Asking, m.EmbeddingsCard.AskingRestart = false, true
+	}
+	return m, cmds
+}
+
+// confirmRestartDaemon is y: the one restart goes out. A second y while it is out sends nothing.
+func confirmRestartDaemon(m Model) (Model, []Cmd) {
+	if !m.EmbeddingsCard.AskingRestart || m.Embeddings.Restarting {
+		return m, nil
+	}
+	if m.Stale {
+		m.EmbeddingsCard.Err = errors.New("Daemon disconnected; reconnect before restarting the kata daemon.")
+		return m, nil
+	}
+	m.EmbeddingsCard.AskingRestart, m.EmbeddingsCard.Err = false, nil
+	m.Embeddings.Restarting = true
+	m = m.withEmbeddingsRow()
+	return m, []Cmd{RestartKataDaemon{Workspace: m.Workspace, Connection: m.Connection}}
+}
+
+// kataDaemonRestarted takes the restart's answer. Success reads the status again, which shows the indexing that follows. A
+// failure shows kata's line on the card, or on the Config Page's message line, or as a Notice when neither is shown.
+func kataDaemonRestarted(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
+	if !m.Embeddings.Restarting {
+		return m, nil
+	}
+	m.Embeddings.Restarting = false
+	m = m.withEmbeddingsRow()
+	if msg.Err == nil {
+		return m, []Cmd{askEmbeddings(&m, 0)}
+	}
+	text := "The kata daemon was not restarted: " + oneLine(msg.Err.Error())
+	switch {
+	case m.EmbeddingsCard.Open:
+		m.EmbeddingsCard.Err = errors.New(text)
+	case m.OnConfig():
+		m.ConfigPage.Message, m.ConfigPage.MessageErr = text, true
+	default:
+		m.Notice = text
+	}
+	return m, nil
+}
+
 // updateEmbeddings takes the answers about search by meaning, whichever Page is shown.
 func updateEmbeddings(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
@@ -262,6 +366,9 @@ func updateEmbeddings(m Model, msg Msg) (Model, []Cmd, bool) {
 		return m, cmds, true
 	case EmbeddingsTurnedOn:
 		m, cmds := embeddingsTurnedOn(m, msg)
+		return m, cmds, true
+	case KataDaemonRestarted:
+		m, cmds := kataDaemonRestarted(m, msg)
 		return m, cmds, true
 	}
 	return m, nil, false

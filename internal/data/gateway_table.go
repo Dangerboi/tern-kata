@@ -414,6 +414,8 @@ func init() {
 			return model.EmbeddingsTurnedOn{Err: err, Connection: cmd.Connection}
 		})
 
+	local((*Gateway).restartKataDaemon)
+
 	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.LoadDetail) (model.DetailLoaded, error) {
 			return c.ReadDetail(ctx, cmd.UID)

@@ -51,6 +51,11 @@ func (g *Gateway) RestartDaemon(ctx context.Context, workspace string) error {
 	return runDaemonRestart(ctx, home)
 }
 
+// restartKataDaemon answers the Pane's RestartKataDaemon with the restart's outcome.
+func (g *Gateway) restartKataDaemon(ctx context.Context, cmd model.RestartKataDaemon) model.Msg {
+	return model.KataDaemonRestarted{Err: g.RestartDaemon(ctx, cmd.Workspace), Connection: cmd.Connection}
+}
+
 // runDaemonRestart runs `kata daemon restart` for the daemon whose home is kataHome, on a context that ignores ctx's cancellation
 // and ends after daemonRestartTimeout. Its error is kata's last non-empty stderr line, or the run's own error when kata printed
 // none; a kata killed at the timeout is reported as not having answered in time.

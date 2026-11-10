@@ -86,6 +86,9 @@ func (s EmbeddingsStatus) Words() string {
 			}
 			return "downloading " + megabytes(s.Job.Downloaded) + " MB"
 		case EmbeddingsRestart:
+			if s.Remote {
+				return "set up: needs a kata daemon restart · " + remoteRestartWords
+			}
 			return "set up: needs a kata daemon restart"
 		case EmbeddingsFailed:
 			if reason := oneLine(s.Job.Error); reason != "" {
@@ -162,6 +165,8 @@ type EmbeddingsSetup struct {
 	Err    error
 	// Turning says a turn-on is out and has not answered: nothing sends another.
 	Turning bool
+	// Restarting says a daemon restart is out and has not answered: nothing sends another.
+	Restarting bool
 	// reads numbers the asks, so an answer to an older one is dropped.
 	reads Latest
 }
@@ -184,6 +189,10 @@ func embeddingsRow(daemon string, s EmbeddingsSetup) ConfigFile {
 		daemon = "default"
 	}
 	row := ConfigFile{Key: ConfigEmbeddings, Title: "Search by meaning (kata daemon: " + oneLine(daemon) + ")", Actions: []ConfigAction{ConfigOpen}}
+	if s.Restarting {
+		row.Summary = "restarting the kata daemon…"
+		return row
+	}
 	switch {
 	case s.Err != nil:
 		row.Status, row.Err = ConfigBroken, s.Err.Error()
@@ -196,6 +205,9 @@ func embeddingsRow(daemon string, s EmbeddingsSetup) ConfigFile {
 		if s.Status.TurnOnOffered() {
 			row.Actions = append(row.Actions, ConfigTurnOn)
 		}
+		if s.Status.RestartOwed() && !s.Status.Remote {
+			row.Actions = append(row.Actions, ConfigRestart)
+		}
 	}
 	return row
 }
@@ -203,6 +215,17 @@ func embeddingsRow(daemon string, s EmbeddingsSetup) ConfigFile {
 // askEmbeddings reads the status again, After a pause. The ask supersedes any read out.
 func askEmbeddings(m *Model, after time.Duration) Cmd {
 	return LoadEmbeddingsStatus{Workspace: m.Workspace, Request: m.Embeddings.reads.Ask(), After: after}
+}
+
+// remoteRestartWords is the instruction for a daemon on another machine, which the Pane cannot restart.
+const remoteRestartWords = "run `kata daemon restart` on that machine"
+
+// withEmbeddingsRow words the Config row again from the status last read, when the rows are listed.
+func (m Model) withEmbeddingsRow() Model {
+	if len(m.ConfigPage.Files) > 0 {
+		m.ConfigPage.setFiles(m.Daemon.Name, m.Embeddings, m.ConfigPage.Files)
+	}
+	return m
 }
 
 // embeddingsWatched says something is showing the status: the Config Page or the Search by meaning card, wherever it was opened.
@@ -238,11 +261,12 @@ func embeddingsLoaded(m Model, msg EmbeddingsStatusLoaded) (Model, []Cmd) {
 // embeddingsRead keeps a status as the one last read and acts on it: the Config row and the card follow it, and a busy one is
 // read again while something shows it.
 func embeddingsRead(m Model, status EmbeddingsStatus, err error) (Model, []Cmd) {
+	owed := m.Embeddings.Read && m.Embeddings.Err == nil && m.Embeddings.Status.RestartOwed()
 	m.Embeddings.Read, m.Embeddings.Status, m.Embeddings.Err = true, status, err
-	if len(m.ConfigPage.Files) > 0 {
-		m.ConfigPage.setFiles(m.Daemon.Name, m.Embeddings, m.ConfigPage.Files)
+	m = m.withEmbeddingsRow().embeddingsCardRead()
+	if !owed {
+		m = m.askRestartOnArrival()
 	}
-	m = m.embeddingsCardRead()
 	if err == nil && status.Busy() && m.embeddingsWatched() {
 		cmd := askEmbeddings(&m, embeddingsPollEvery)
 		return m, []Cmd{cmd}
