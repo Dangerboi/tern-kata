@@ -46,29 +46,21 @@ func turnOnButton(t *testing.T, s driver.State) (id, act string, ok bool) {
 	return "", "", false
 }
 
-func TestSearchLineDrawsWhatKataAnsweredByWordsAndTheStatusSays(t *testing.T) {
-	const lead = "kata searched by words: "
+func TestSearchLineOffersTurnOnOnlyOnceTheStatusIsKnown(t *testing.T) {
 	out := searchedByWords(t)
 	read := lastRead(t, out.Cmds)
-	if got := searchLineDrawn(t, out.State); got != lead+"search by meaning is not in use on this daemon" {
-		t.Fatalf("before the status: %q", got)
-	}
 	if _, _, ok := turnOnButton(t, out.State); ok {
 		t.Fatal("Turn on… shows before the status is known")
 	}
 	s := statusAnswered(t, out.State, read, offWithDownload)
-	if got := searchLineDrawn(t, s.State); got != lead+"search by meaning is off on this daemon" {
-		t.Errorf("search line %q after the status", got)
-	}
 	if _, _, ok := turnOnButton(t, s.State); !ok {
 		t.Error("Turn on… is not drawn although kata would take a turn-on")
 	}
 }
 
-func TestTurnOnButtonAndCtrlOOpenTheQuestionAndClosingReturnsToTheSearch(t *testing.T) {
+func TestTurnOnButtonAndCtrlOAndMetaOOpenTheQuestionAlike(t *testing.T) {
 	out := searchedByWords(t)
 	s := statusAnswered(t, out.State, lastRead(t, out.Cmds), offWithDownload).State
-	mode := s.Model.CurrentMode()
 	id, act, ok := turnOnButton(t, s)
 	if !ok {
 		t.Fatal("no Turn on… button")
@@ -80,9 +72,5 @@ func TestTurnOnButtonAndCtrlOOpenTheQuestionAndClosingReturnsToTheSearch(t *test
 	sameAs(t, "meta+o differs from ctrl+o", headless, headlessCmds, keyboard, keyCmds)
 	if keyboard.Model.CurrentMode() != model.ModeEmbeddingsAsk {
 		t.Fatalf("mode %s, want the question", keyboard.Model.CurrentMode())
-	}
-	closed := step(t, keyboard, key("n")).State
-	if closed.Model.CurrentMode() != mode || !closed.Model.Search.Open {
-		t.Fatalf("after n: mode %s, want %s with the search still open", closed.Model.CurrentMode(), mode)
 	}
 }

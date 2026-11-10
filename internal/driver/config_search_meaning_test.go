@@ -26,9 +26,9 @@ var embeddingsFilesFixture = []model.ConfigFile{
 	{Key: model.ConfigKata, Title: "config.toml (kata's, read-only)", Path: "/kata/config.toml", Summary: "1 daemon"},
 }
 
-// embeddingsPane is the Config Page opened on a Pane connected to daemon "home", its rows answered and its status read asked but
-// not yet answered.
-func embeddingsPane(t *testing.T) (driver.State, model.LoadEmbeddingsStatus) {
+// embeddingsPane is the Config Page opened on a Pane connected to daemon "home", its rows answered with rows and its status read
+// asked but not yet answered.
+func embeddingsPane(t *testing.T, rows []model.ConfigFile) (driver.State, model.LoadEmbeddingsStatus) {
 	t.Helper()
 	s := projectPane(t, 160, boardCard("a"))
 	s.Model.Daemon = model.Daemon{Name: "home", Kind: model.DaemonLocal}
@@ -38,7 +38,7 @@ func embeddingsPane(t *testing.T) (driver.State, model.LoadEmbeddingsStatus) {
 		t.Fatalf("entering the Config Page sent %#v, want a read of the search by meaning status", out.Cmds)
 	}
 	files, _ := askedConfigFiles(out.Cmds)
-	return step(t, out.State, model.ConfigFilesLoaded{Request: files.Request, Folder: "/cfg/tern-kata", Files: embeddingsFilesFixture}).State, status
+	return step(t, out.State, model.ConfigFilesLoaded{Request: files.Request, Folder: "/cfg/tern-kata", Files: rows}).State, status
 }
 
 func statusAnswered(t *testing.T, s driver.State, ask model.LoadEmbeddingsStatus, status model.EmbeddingsStatus) driver.Output {
@@ -64,7 +64,7 @@ func TestConfigPageSearchByMeaningRowSaysWhatKataReportsForTheConnectedDaemon(t 
 		"Ollama":                      {model.EmbeddingsStatus{Provider: model.EmbeddingsOllama}, "on · your Ollama"},
 		"another provider":            {model.EmbeddingsStatus{Provider: model.EmbeddingsOther}, "on · another provider (kata's config.toml)"},
 	} {
-		s, ask := embeddingsPane(t)
+		s, ask := embeddingsPane(t, embeddingsFilesFixture)
 		answered := statusAnswered(t, s, ask, tc.status).State
 		text := wireTextOf(t, answered)
 		const rowID = "main.columns.list.config.embeddings"
@@ -92,7 +92,7 @@ func TestConfigPageSearchByMeaningRowSaysWhatKataReportsForTheConnectedDaemon(t 
 }
 
 func TestConfigPageSearchByMeaningRowShowsKatasErrorWhenTheStatusCannotBeRead(t *testing.T) {
-	s, ask := embeddingsPane(t)
+	s, ask := embeddingsPane(t, embeddingsFilesFixture)
 	out := step(t, s, model.EmbeddingsStatusLoaded{Request: ask.Request, Err: errors.New("local embeddings setup is unavailable")})
 	wantText(t, "a failed read", wireTextOf(t, out.State), "kata cannot report search by meaning here: local embeddings setup is unavailable")
 	if _, again := askedEmbeddings(out.Cmds); again {
@@ -102,7 +102,7 @@ func TestConfigPageSearchByMeaningRowShowsKatasErrorWhenTheStatusCannotBeRead(t 
 
 func TestConfigPageReadsTheStatusAgainEveryTwoSecondsOnlyWhileKataIsBusyAndThePageIsShown(t *testing.T) {
 	downloading := model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading, Downloaded: 1, Total: 2}}
-	s, ask := embeddingsPane(t)
+	s, ask := embeddingsPane(t, embeddingsFilesFixture)
 	out := statusAnswered(t, s, ask, downloading)
 	next, ok := askedEmbeddings(out.Cmds)
 	if !ok || next.After != 2*time.Second || next.Request == ask.Request {
@@ -132,7 +132,7 @@ func TestConfigPageReadsTheStatusAgainEveryTwoSecondsOnlyWhileKataIsBusyAndThePa
 }
 
 func TestConfigPageDropsALateStatusAnswer(t *testing.T) {
-	s, first := embeddingsPane(t)
+	s, first := embeddingsPane(t, embeddingsFilesFixture)
 	left := step(t, s, key("escape")).State
 	second := configOpened(t, left)
 	secondAsk, _ := askedEmbeddings(second.Cmds)
@@ -151,7 +151,7 @@ func TestConfigPageDropsALateStatusAnswer(t *testing.T) {
 }
 
 func TestConfigPageSearchByMeaningRowFollowsADaemonSwitch(t *testing.T) {
-	s, ask := embeddingsPane(t)
+	s, ask := embeddingsPane(t, embeddingsFilesFixture)
 	s = statusAnswered(t, s, ask, model.EmbeddingsStatus{Provider: model.EmbeddingsOllama}).State
 	wantText(t, "before the switch", wireTextOf(t, s), "Search by meaning (kata daemon: home)", "on · your Ollama")
 
@@ -186,10 +186,11 @@ func TestSearchByMeaningRowButtonsClickLikeTheirKeys(t *testing.T) {
 		status model.EmbeddingsStatus
 		action model.ConfigAction
 		chord  string
+		want   model.Mode
 	}{
-		"turn on": {offWithDownload, model.ConfigTurnOn, "s"},
-		"restart": {restartOwed, model.ConfigRestart, "r"},
-		"open":    {offWithDownload, model.ConfigOpen, "enter"},
+		"turn on": {offWithDownload, model.ConfigTurnOn, "s", model.ModeEmbeddingsAsk},
+		"restart": {restartOwed, model.ConfigRestart, "r", model.ModeEmbeddingsRestart},
+		"open":    {offWithDownload, model.ConfigOpen, "enter", model.ModeEmbeddingsAsk},
 	} {
 		s := embeddingsRowOn(t, tc.status)
 		if f := s.Model.SelectedConfigFile(); f == nil || !f.Has(tc.action) {
@@ -197,8 +198,8 @@ func TestSearchByMeaningRowButtonsClickLikeTheirKeys(t *testing.T) {
 		}
 		keyboard, keyCmds := keys(tc.chord)(s)
 		pointer, clickCmds := clicked(s, model.ConfigActMsg{Key: model.ConfigEmbeddings, Action: tc.action})
-		if keyboard.Model.CurrentMode() == s.Model.CurrentMode() {
-			t.Errorf("%s: %s did nothing", name, tc.chord)
+		if got := keyboard.Model.CurrentMode(); got != tc.want {
+			t.Errorf("%s: %s gave mode %s, want %s", name, tc.chord, got, tc.want)
 		}
 		sameAs(t, name, pointer, clickCmds, keyboard, keyCmds)
 	}

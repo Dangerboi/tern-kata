@@ -103,17 +103,6 @@ func EmbeddingsQuestion(s EmbeddingsStatus) string {
 		"). Search stays by words until the daemon restarts. y/n"
 }
 
-// cardWords is the card's text for the status: the row's words, except that a finished job says the restart is still to come.
-func (s EmbeddingsStatus) cardWords() string {
-	if s.RestartOwed() {
-		if s.Remote {
-			return "set up: restart needed · " + s.remoteRestartWords()
-		}
-		return "set up: restart needed"
-	}
-	return s.Words()
-}
-
 // EmbeddingsProgress is a bar of the card. Fraction is nil when kata gives no total, which draws a bar that sweeps.
 type EmbeddingsProgress struct {
 	Fraction *float64
@@ -163,8 +152,7 @@ func (m Model) EmbeddingsCardBody() EmbeddingsCardBody {
 		b.Question = EmbeddingsQuestion(s.Status)
 	default:
 		st := s.Status
-		b.State = st.cardWords()
-		b.Failed = st.Job != nil && st.Job.State == EmbeddingsFailed || st.Indexing != nil && st.Indexing.Failed && st.Provider != EmbeddingsOff
+		b.State, b.Failed = st.Words(), st.failed()
 		if st.Job != nil && st.Job.State == EmbeddingsDownloading {
 			p := progressOf(st.Job.Downloaded, st.Job.Total)
 			b.Download = &p
@@ -204,18 +192,13 @@ func (m Model) embeddingsAskable() bool {
 func openEmbeddingsCard(m Model) (Model, []Cmd) {
 	m.HelpOpen = false
 	m.EmbeddingsCard = EmbeddingsCardState{Open: true}
-	m.EmbeddingsCard.Asking = m.embeddingsAsksOnOpen()
+	// A failed job is read first, which shows kata's error; s asks again.
+	m.EmbeddingsCard.Asking = m.embeddingsAskable() && m.Embeddings.Status.Job == nil
 	m.EmbeddingsCard.AskingRestart = m.restartOffered()
 	if m.Embeddings.Err != nil || m.Embeddings.Status.Busy() {
 		return m, []Cmd{askEmbeddings(&m, 0)}
 	}
 	return m, nil
-}
-
-// embeddingsAsksOnOpen says a card opened on the status last read starts with the question: kata would take a turn-on and no failed
-// job is waiting to be read first (that shows kata's error, and s asks again).
-func (m Model) embeddingsAsksOnOpen() bool {
-	return m.embeddingsAskable() && m.Embeddings.Status.Job == nil
 }
 
 // turnOnEmbeddings is s on the Config row: the card opens on the question, also after a failed job.
@@ -234,12 +217,8 @@ func (m Model) embeddingsCardRead() Model {
 	if !c.Open {
 		return m
 	}
-	if c.Asking && !m.embeddingsAskable() {
-		c.Asking = false
-	}
-	if c.AskingRestart && (!m.Embeddings.Status.RestartOwed() || m.Embeddings.Status.Remote || m.Embeddings.Restarting) {
-		c.AskingRestart = false
-	}
+	c.Asking = c.Asking && m.embeddingsAskable()
+	c.AskingRestart = c.AskingRestart && m.restartOffered()
 	return m
 }
 
@@ -279,21 +258,28 @@ func confirmTurnOnEmbeddings(m Model) (Model, []Cmd) {
 	return m, []Cmd{TurnOnEmbeddings{Workspace: m.Workspace, Connection: m.Connection}}
 }
 
-// embeddingsTurnedOn takes kata's answer to the turn-on. A refusal (403, 409) or a failure to reach the daemon is shown on the card,
-// or on the Config Page's message line, or as a Notice when neither is shown, and the status is read again, as it has changed under the card or never allowed this. kata's 202 carries the status the job starts with,
-// which is read like any other, so polling begins while the card or the Config Page shows it.
+// embeddingsFailed shows text where the Pane is looking: on the card, or on the Config Page's message line, or as a Notice when
+// neither is shown.
+func (m Model) embeddingsFailed(text string) Model {
+	switch {
+	case m.EmbeddingsCard.Open:
+		m.EmbeddingsCard.Err = errors.New(text)
+	case m.OnConfig():
+		m.ConfigPage.Message, m.ConfigPage.MessageErr = text, true
+	default:
+		m.Notice = text
+	}
+	return m
+}
+
+// embeddingsTurnedOn takes kata's answer to the turn-on. A refusal (403, 409) or a failure to reach the daemon is reported by
+// embeddingsFailed, and the status is read again, as it has changed under the card or never allowed this. kata's 202 carries the
+// status the job starts with, which is read like any other, so polling begins while the card or the Config Page shows it.
 func embeddingsTurnedOn(m Model, msg EmbeddingsTurnedOn) (Model, []Cmd) {
 	m.Embeddings.Turning = false
 	if msg.Err != nil {
-		text := "Search by meaning was not turned on: " + oneLine(msg.Err.Error())
-		switch {
-		case m.EmbeddingsCard.Open:
-			m.EmbeddingsCard.Asking, m.EmbeddingsCard.Err = false, errors.New(text)
-		case m.OnConfig():
-			m.ConfigPage.Message, m.ConfigPage.MessageErr = text, true
-		default:
-			m.Notice = text
-		}
+		m.EmbeddingsCard.Asking = false
+		m = m.embeddingsFailed("Search by meaning was not turned on: " + oneLine(msg.Err.Error()))
 		return m, []Cmd{askEmbeddings(&m, 0)}
 	}
 	m.Embeddings.reads.Discard()
@@ -314,15 +300,6 @@ func (m Model) askRestartOnArrival() Model {
 	return m
 }
 
-// restartEmbeddingsDaemon is r on the Config row: the card opens on the restart question.
-func restartEmbeddingsDaemon(m Model) (Model, []Cmd) {
-	m, cmds := openEmbeddingsCard(m)
-	if m.restartOffered() {
-		m.EmbeddingsCard.Asking, m.EmbeddingsCard.AskingRestart = false, true
-	}
-	return m, cmds
-}
-
 // confirmRestartDaemon is y: the one restart goes out. A second y while it is out sends nothing.
 func confirmRestartDaemon(m Model) (Model, []Cmd) {
 	if !m.EmbeddingsCard.AskingRestart || m.Embeddings.Restarting {
@@ -339,7 +316,7 @@ func confirmRestartDaemon(m Model) (Model, []Cmd) {
 }
 
 // kataDaemonRestarted takes the restart's answer. Success reads the status again, which shows the indexing that follows. A
-// failure shows kata's line on the card, or on the Config Page's message line, or as a Notice when neither is shown.
+// failure is reported by embeddingsFailed.
 func kataDaemonRestarted(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
 	if !m.Embeddings.Restarting {
 		return m, nil
@@ -350,16 +327,7 @@ func kataDaemonRestarted(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
 		m.Embeddings.returning = true
 		return m, []Cmd{askEmbeddings(&m, 0)}
 	}
-	text := "The kata daemon was not restarted: " + oneLine(msg.Err.Error())
-	switch {
-	case m.EmbeddingsCard.Open:
-		m.EmbeddingsCard.Err = errors.New(text)
-	case m.OnConfig():
-		m.ConfigPage.Message, m.ConfigPage.MessageErr = text, true
-	default:
-		m.Notice = text
-	}
-	return m, nil
+	return m.embeddingsFailed("The kata daemon was not restarted: " + oneLine(msg.Err.Error())), nil
 }
 
 // updateEmbeddings takes the answers about search by meaning, whichever Page is shown.
@@ -379,9 +347,12 @@ func updateEmbeddings(m Model, msg Msg) (Model, []Cmd, bool) {
 }
 
 // EmbeddingsCardTitle names the daemon the card is about, as the Config row does.
-func (m Model) EmbeddingsCardTitle() string {
-	name := strings.TrimSpace(oneLine(m.Daemon.Name))
-	if name == "" {
+func (m Model) EmbeddingsCardTitle() string { return daemonTitle(m.Daemon.Name) }
+
+// daemonTitle is "kata daemon: name", the daemon named "default" when its name is empty. The card's title and the Config row's
+// title are both built from it.
+func daemonTitle(name string) string {
+	if name = strings.TrimSpace(oneLine(name)); name == "" {
 		name = "default"
 	}
 	return "kata daemon: " + name

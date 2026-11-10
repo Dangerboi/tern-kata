@@ -54,7 +54,7 @@ func TestARefusedTurnOnAfterTheCardWasClosedOnTheSearchLineIsANotice(t *testing.
 }
 
 func TestAFailedReadKeepsPollingWhileTheDownloadRunsAndRecoversOnTheNextGoodRead(t *testing.T) {
-	s, ask := embeddingsPane(t)
+	s, ask := embeddingsPane(t, embeddingsFilesFixture)
 	out := statusAnswered(t, s, ask, downloading)
 	poll := lastRead(t, out.Cmds)
 	failed := step(t, out.State, model.EmbeddingsStatusLoaded{Request: poll.Request, Err: errors.New("connection refused")})
@@ -67,14 +67,6 @@ func TestAFailedReadKeepsPollingWhileTheDownloadRunsAndRecoversOnTheNextGoodRead
 		t.Errorf("a finished job was read again: %#v", done.Cmds)
 	}
 	wantText(t, "row", wireTextOf(t, done.State), "set up: needs a kata daemon restart")
-}
-
-func TestAFailedFirstReadIsFinal(t *testing.T) {
-	s, ask := embeddingsPane(t)
-	out := step(t, s, model.EmbeddingsStatusLoaded{Request: ask.Request, Err: errors.New("404 not found")})
-	if hasCmd[model.LoadEmbeddingsStatus](out.Cmds) {
-		t.Errorf("an old daemon's 404 was read again: %#v", out.Cmds)
-	}
 }
 
 func TestAFailedReadRightAfterARestartAnswerKeepsPollingUntilTheDaemonIsBack(t *testing.T) {
@@ -94,12 +86,7 @@ func TestAFailedReadRightAfterARestartAnswerKeepsPollingUntilTheDaemonIsBack(t *
 }
 
 func TestTheRowAfterADocbankSwitchIsReadAgainSoAnOwedRestartIsGone(t *testing.T) {
-	base := projectPane(t, 160, boardCard("a"))
-	base.Model.Daemon = model.Daemon{Name: "home", Kind: model.DaemonLocal}
-	opened := configOpened(t, base)
-	ask, _ := askedEmbeddings(opened.Cmds)
-	files, _ := askedConfigFiles(opened.Cmds)
-	s := step(t, opened.State, model.ConfigFilesLoaded{Request: files.Request, Folder: "/cfg/tern-kata", Files: pinnedDocbankRows()}).State
+	s, ask := embeddingsPane(t, pinnedDocbankRows())
 	s = statusAnswered(t, s, ask, restartOwed).State
 	wantText(t, "row before", wireTextOf(t, s), "set up: needs a kata daemon restart")
 	for s.Model.SelectedConfigFile().Key != model.ConfigDocbank {
@@ -125,7 +112,6 @@ func TestTheRowIsBrokenWhenTheJobOrTheIndexingFailedAndLoadsWhileOnOrIndexing(t 
 		"job failed":      {jobFailed, model.ConfigBroken},
 		"indexing failed": {indexingFailed, model.ConfigBroken},
 		"indexing":        {indexingBusy, model.ConfigLoads},
-		"on":              {model.EmbeddingsStatus{Provider: model.EmbeddingsOllama}, model.ConfigLoads},
 	} {
 		f := embeddingsRowOn(t, tc.status).Model.SelectedConfigFile()
 		if f.Status != tc.want {

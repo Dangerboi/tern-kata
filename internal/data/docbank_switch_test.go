@@ -171,9 +171,9 @@ func waitForFile(t *testing.T, path string) {
 }
 
 func TestSwitchDocbankKataNotAnsweringInTimeIsKilledAndTheOriginalBytesComeBack(t *testing.T) {
-	old := docbankSetupTimeout
-	docbankSetupTimeout = 200 * time.Millisecond
-	t.Cleanup(func() { docbankSetupTimeout = old })
+	old := kataRunTimeout
+	kataRunTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { kataRunTimeout = old })
 	f := newDocbankSwitchFixture(t, pinnedKataConfig, "exec sleep 30\n")
 	start := time.Now()
 	got := as[model.DocbankSwitched](t, run(t, f.g, model.SwitchDocbank{}))

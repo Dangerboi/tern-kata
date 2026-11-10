@@ -274,14 +274,11 @@ func (m Model) wordsReason() string {
 	return "search by meaning is off; a daemon administrator can turn it on (kata's Settings or `kata daemon local-embeddings`)"
 }
 
-// searchTurnOnOffered says the search line offers Turn on…: the search box is open, kata searched by words with no reason, and
+// SearchTurnOnOffered says the search line offers Turn on…: the search box is open, kata searched by words with no reason, and
 // the status last read says kata would take a turn-on.
-func searchTurnOnOffered(m Model) bool {
+func (m Model) SearchTurnOnOffered() bool {
 	return m.Search.Open && (m.Search.Meaning || m.rankedShown()) && m.Ranked.Have && m.Ranked.Lexical && m.Ranked.Reason == "" && m.embeddingsAskable()
 }
-
-// SearchTurnOnOffered is searchTurnOnOffered for the view's Turn on… button.
-func (m Model) SearchTurnOnOffered() bool { return searchTurnOnOffered(m) }
 
 // labelList is the Label filter's comma-separated labels.
 func labelList(filter string) []string {

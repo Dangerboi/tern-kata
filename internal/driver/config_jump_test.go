@@ -354,32 +354,17 @@ func TestConfigSwitchAnswerIsReportedAfterLeavingThePage(t *testing.T) {
 }
 
 func TestConfigFooterAndHelpSheetListSOnlyOnThePinnedDocbankRow(t *testing.T) {
-	hasS := func(m model.Model) (footer, sheet bool) {
-		for b := range model.BindingsForMode(m.CurrentMode(), true) {
-			if b.Chord == "s" && b.Offered(m) {
-				footer = true
-			}
-		}
-		for _, g := range model.HelpSheetOn(model.PageConfig, m) {
-			for _, l := range g.Lines {
-				if slices.Contains(l.Keys, "s") {
-					sheet = true
-				}
-			}
-		}
-		return
-	}
 	on := configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), model.ConfigDocbank).Model
-	if footer, sheet := hasS(on); !footer || !sheet {
+	if footer, sheet := offered(on, "s"); !footer || !sheet {
 		t.Errorf("on the pinned row: footer %v, help sheet %v, want both", footer, sheet)
 	}
 	for _, key_ := range []model.ConfigFileKey{model.ConfigLanes, model.ConfigAgent, model.ConfigKata} {
-		if footer, sheet := hasS(configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), key_).Model); footer || sheet {
+		if footer, sheet := offered(configOn(t, projectPane(t, 160, boardCard("a")), pinnedDocbankRows(), key_).Model, "s"); footer || sheet {
 			t.Errorf("on %s: footer %v, help sheet %v, want neither", key_, footer, sheet)
 		}
 	}
 	other := configOn(t, projectPane(t, 160, boardCard("a")), configAllRows(), model.ConfigDocbank).Model
-	if footer, sheet := hasS(other); footer || sheet {
+	if footer, sheet := offered(other, "s"); footer || sheet {
 		t.Errorf("on another Docbank form: footer %v, help sheet %v, want neither", footer, sheet)
 	}
 }

@@ -49,8 +49,8 @@ type EmbeddingsIndexing struct {
 }
 
 // EmbeddingsStatus is kata's answer for one daemon. Job and Indexing are nil when there is none. CanChange says this account may
-// turn search by meaning on. Daemon is the catalog name of the daemon the answer came from, "" for an unnamed connection, and Remote
-// says it runs on another machine. Host is that machine as the Pane reaches it ("" when unknown or the daemon is local).
+// turn search by meaning on. Remote says the daemon runs on another machine. Host is that machine as the Pane reaches it ("" when
+// unknown or the daemon is local).
 type EmbeddingsStatus struct {
 	Provider        EmbeddingsProvider
 	DownloadBytes   int64
@@ -58,7 +58,6 @@ type EmbeddingsStatus struct {
 	CanChange       bool
 	Job             *EmbeddingsJob
 	Indexing        *EmbeddingsIndexing
-	Daemon          string
 	Remote          bool
 	Host            string
 }
@@ -194,10 +193,7 @@ func (s EmbeddingsStatus) TurnOnOffered() bool {
 // embeddingsRow is the Config Page's Search by meaning row. It reads the daemon the Pane is connected to, so it is titled with that
 // daemon's name and holds no path. enter opens the card; s turns it on where kata allows it.
 func embeddingsRow(daemon string, s EmbeddingsSetup) ConfigFile {
-	if daemon == "" {
-		daemon = "default"
-	}
-	row := ConfigFile{Key: ConfigEmbeddings, Title: "Search by meaning (kata daemon: " + oneLine(daemon) + ")", Actions: []ConfigAction{ConfigOpen}}
+	row := ConfigFile{Key: ConfigEmbeddings, Title: "Search by meaning (" + daemonTitle(daemon) + ")", Actions: []ConfigAction{ConfigOpen}}
 	if s.Restarting {
 		row.Summary = "restarting the kata daemon…"
 		return row

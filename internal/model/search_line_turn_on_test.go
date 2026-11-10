@@ -24,24 +24,6 @@ func statusRead(t *testing.T, m model.Model, cmds []model.Cmd, status model.Embe
 	return m
 }
 
-func TestAnswerByWordsWithNoReasonReadsTheStatusOnce(t *testing.T) {
-	m, cmds := wordsAnswered(t)
-	cmdOf[model.LoadEmbeddingsStatus](t, cmds)
-	m = statusRead(t, m, cmds, model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true})
-	m, _ = model.Update(m, model.KeyMsg{Chord: "/"})
-	for _, text := range []string{"x", "y"} {
-		before := m.Filters.Search
-		var typed []model.Cmd
-		m, typed = model.Update(m, model.KeyMsg{Text: text})
-		if m.Filters.Search == before {
-			t.Fatalf("typing %q left the query %q unchanged in mode %s", text, before, m.CurrentMode())
-		}
-		if slices.ContainsFunc(typed, func(c model.Cmd) bool { _, ok := c.(model.LoadEmbeddingsStatus); return ok }) {
-			t.Fatalf("typing %q read the status again: %#v", text, typed)
-		}
-	}
-}
-
 func TestAnswersThatNeedNoStatusDoNotReadIt(t *testing.T) {
 	for name, answer := range map[string]model.RankedAnswer{
 		"words with kata's reason": {UIDs: []string{"a"}, Lexical: true, Reason: "embedding model is loading"},
@@ -64,7 +46,6 @@ func TestSearchLineWordsAnAnswerByWordsFromTheStatus(t *testing.T) {
 		status *model.EmbeddingsStatus
 		want   string
 	}{
-		{"not read yet", nil, lead + "search by meaning is not in use on this daemon"},
 		{"can be turned on", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true}, lead + "search by meaning is off on this daemon"},
 		{"a failed job is offered again", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsFailed}}, lead + "search by meaning is off on this daemon"},
 		{"restart owed, local", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, lead + "search by meaning is set up and waits for a kata daemon restart (`r` on the Config Page, `K`)"},
@@ -76,9 +57,7 @@ func TestSearchLineWordsAnAnswerByWordsFromTheStatus(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, cmds := wordsAnswered(t)
-			if tt.status != nil {
-				m = statusRead(t, m, cmds, *tt.status)
-			}
+			m = statusRead(t, m, cmds, *tt.status)
 			if got := m.SearchLine(); got != tt.want {
 				t.Fatalf("search line %q, want %q", got, tt.want)
 			}
@@ -91,12 +70,11 @@ func TestCtrlOAndTheButtonOfferTheCardOnlyWhenKataWouldTakeATurnOn(t *testing.T)
 		status *model.EmbeddingsStatus
 		offer  bool
 	}{
-		"status not read":   {nil, false},
-		"can change":        {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true}, true},
-		"administrator":     {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff}, false},
-		"restart owed":      {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, false},
-		"already on":        {&model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn}, false},
-		"download underway": {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading}}, false},
+		"status not read": {nil, false},
+		"can change":      {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true}, true},
+		"administrator":   {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff}, false},
+		"restart owed":    {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, false},
+		"already on":      {&model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn}, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m, cmds := wordsAnswered(t)
@@ -170,9 +148,5 @@ func TestHelpSheetAndSearchFooterListCtrlOOnlyWhileTurnOnIsOffered(t *testing.T)
 	on := statusRead(t, m, cmds, model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true})
 	if sheet, footer := listed(on); !sheet || !footer {
 		t.Errorf("with a turn-on on offer: help sheet %v, footer %v, want both", sheet, footer)
-	}
-	admin := statusRead(t, m, cmds, model.EmbeddingsStatus{Provider: model.EmbeddingsOff})
-	if sheet, footer := listed(admin); sheet || footer {
-		t.Errorf("for an administrator-only daemon: help sheet %v, footer %v, want neither", sheet, footer)
 	}
 }

@@ -23,9 +23,7 @@ func (c *Client) EmbeddingsStatus(ctx context.Context, _ model.LoadEmbeddingsSta
 	if response.JSON200 == nil {
 		return model.EmbeddingsStatusLoaded{}, errors.New("kata answered without a search by meaning status")
 	}
-	status := embeddingsStatus(*response.JSON200)
-	status.Daemon, status.Remote, status.Host = c.name, c.kind == model.DaemonRemote, c.remoteHost()
-	return model.EmbeddingsStatusLoaded{Status: status}, nil
+	return model.EmbeddingsStatusLoaded{Status: c.embeddingsStatus(*response.JSON200)}, nil
 }
 
 // remoteHost is the remote daemon's host[:port] as the Pane reaches it: the catalog entry's URL, KATA_SERVER or the workspace's
@@ -52,14 +50,14 @@ func (c *Client) TurnOnEmbeddings(ctx context.Context, cmd model.TurnOnEmbedding
 	if response.JSON202 == nil {
 		return model.EmbeddingsTurnedOn{}, errors.New("kata answered without a search by meaning status")
 	}
-	status := embeddingsStatus(*response.JSON202)
-	status.Daemon, status.Remote, status.Host = c.name, c.kind == model.DaemonRemote, c.remoteHost()
-	return model.EmbeddingsTurnedOn{Status: status, Connection: cmd.Connection}, nil
+	return model.EmbeddingsTurnedOn{Status: c.embeddingsStatus(*response.JSON202), Connection: cmd.Connection}, nil
 }
 
-// embeddingsStatus maps kata's status. A job or indexing kata does not report stays nil.
-func embeddingsStatus(s g.LocalEmbeddingsStatus) model.EmbeddingsStatus {
+// embeddingsStatus maps kata's status and marks whether the daemon is remote and where. A job or indexing kata does not report
+// stays nil.
+func (c *Client) embeddingsStatus(s g.LocalEmbeddingsStatus) model.EmbeddingsStatus {
 	status := model.EmbeddingsStatus{
+		Remote: c.kind == model.DaemonRemote, Host: c.remoteHost(),
 		Provider: model.EmbeddingsProvider(s.Provider), DownloadBytes: s.DownloadBytes, OllamaAvailable: s.OllamaAvailable, CanChange: s.CanChange,
 	}
 	if j := s.Job; j != nil {

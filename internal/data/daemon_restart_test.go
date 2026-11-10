@@ -92,9 +92,9 @@ func TestRestartDaemonKataFailingReturnsItsLastStderrLine(t *testing.T) {
 }
 
 func TestRestartDaemonKataNotAnsweringInTimeIsKilledAndReportedAsATimeout(t *testing.T) {
-	old := daemonRestartTimeout
-	daemonRestartTimeout = 200 * time.Millisecond
-	t.Cleanup(func() { daemonRestartTimeout = old })
+	old := kataRunTimeout
+	kataRunTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { kataRunTimeout = old })
 	f := newRestartFixture(t, false, "exec sleep 30\n")
 	start := time.Now()
 	err := f.g.RestartDaemon(t.Context(), t.TempDir())

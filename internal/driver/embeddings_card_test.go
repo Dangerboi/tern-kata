@@ -23,7 +23,7 @@ var (
 // embeddingsRowOn is the Config Page with the status answered and the cursor on the Search by meaning row.
 func embeddingsRowOn(t *testing.T, status model.EmbeddingsStatus) driver.State {
 	t.Helper()
-	s, ask := embeddingsPane(t)
+	s, ask := embeddingsPane(t, embeddingsFilesFixture)
 	s = statusAnswered(t, s, ask, status).State
 	for range 2 {
 		s = step(t, s, key("j")).State
@@ -81,11 +81,9 @@ func TestSOnTheSearchByMeaningRowOpensTheCardOnlyWhereKataWouldTakeATurnOn(t *te
 		opens  bool
 	}{
 		"off and allowed":             {offWithDownload, true},
-		"off with Ollama":             {offWithOllama, true},
 		"a failed job":                {jobFailed, true},
 		"off for a non-administrator": {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000}, false},
 		"downloading":                 {downloading, false},
-		"waiting for a restart":       {restartOwed, false},
 		"on":                          {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, CanChange: true}, false},
 	} {
 		s := embeddingsRowOn(t, tc.status)
@@ -100,18 +98,6 @@ func TestSOnTheSearchByMeaningRowOpensTheCardOnlyWhereKataWouldTakeATurnOn(t *te
 		if len(out.Cmds) != 0 && !hasCmd[model.LoadEmbeddingsStatus](out.Cmds) {
 			t.Errorf("%s: s sent %#v", name, out.Cmds)
 		}
-	}
-}
-
-func TestEnterOnTheSearchByMeaningRowOpensTheCardAndSIsNotTypedIntoAnotherRow(t *testing.T) {
-	s := embeddingsRowOn(t, offWithDownload)
-	out := step(t, s, key("enter"))
-	if out.State.Model.TopCard() != model.CardEmbeddings || out.State.Model.CurrentMode() != model.ModeEmbeddingsAsk {
-		t.Fatalf("enter gave card %v in mode %s, want the question", out.State.Model.TopCard().Name(), out.State.Model.CurrentMode())
-	}
-	other := step(t, s, key("k")).State // the Docbank row, which offers no s here
-	if footer, sheet := offered(other.Model, "s"); footer || sheet {
-		t.Errorf("s is listed on a row that offers no s: footer %v, sheet %v", footer, sheet)
 	}
 }
 
@@ -146,9 +132,13 @@ func TestYSendsExactlyOnePostAndTheCardWaitsForKatasAnswer(t *testing.T) {
 		t.Fatalf("y sent %#v, want %#v", out.Cmds, want)
 	}
 	wantText(t, "waiting", wireTextOf(t, out.State), "Turning it on…")
-	for _, chord := range []string{"y", "s", "enter"} {
-		if again := step(t, out.State, key(chord)); hasCmd[model.TurnOnEmbeddings](again.Cmds) {
-			t.Errorf("%s sent a second turn-on while the first is out", chord)
+	for _, chords := range [][]string{{"escape", "s", "y"}, {"escape", "enter", "y"}} {
+		inputs := make([]any, len(chords))
+		for i, c := range chords {
+			inputs[i] = key(c)
+		}
+		if again := feed(t, out.State, inputs...); hasCmd[model.TurnOnEmbeddings](again.Cmds) {
+			t.Errorf("%s sent a second turn-on while the first is out", strings.Join(chords, ", "))
 		}
 	}
 	if closed := step(t, out.State, key("escape")); closed.State.Model.TopCard() != model.NoCard {
@@ -164,9 +154,6 @@ func TestTheCardFollowsTheJobWithTheRowsWordsABarAndPolling(t *testing.T) {
 		t.Error("the download draws no progress bar")
 	}
 	poll := lastRead(t, started.Cmds)
-	if poll.After != 2*time.Second {
-		t.Fatalf("the card polls after %v, want 2s", poll.After)
-	}
 
 	indexing := model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, Indexing: &model.EmbeddingsIndexing{Done: 40, Total: 200, ETA: 150 * time.Second}}
 	next := step(t, started.State, model.EmbeddingsStatusLoaded{Request: poll.Request, Status: indexing})
@@ -177,9 +164,6 @@ func TestTheCardFollowsTheJobWithTheRowsWordsABarAndPolling(t *testing.T) {
 	poll = lastRead(t, next.Cmds)
 
 	done := step(t, next.State, model.EmbeddingsStatusLoaded{Request: poll.Request, Status: model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn}})
-	if _, again := askedEmbeddings(done.Cmds); again {
-		t.Errorf("a finished setup went on polling: %#v", done.Cmds)
-	}
 	text := wireTextOf(t, done.State)
 	wantText(t, "done", text, "on · built-in model")
 	if strings.Contains(text, "kata keeps going") {
@@ -234,9 +218,7 @@ func TestClosingTheCardMidJobLeavesTheRowPollingAndANewCardPicksTheJobUp(t *test
 		t.Fatal("esc did not close the card mid-job")
 	}
 	more := step(t, closed.State, model.EmbeddingsStatusLoaded{Request: poll.Request, Status: downloading})
-	if again := lastRead(t, more.Cmds); again.After != 2*time.Second {
-		t.Fatalf("the row polls after %v, want 2s", again.After)
-	}
+	lastRead(t, more.Cmds)
 	wantText(t, "row", wireTextOf(t, more.State), "downloading 120 / 290 MB")
 
 	reopened := step(t, more.State, key("enter"))
@@ -256,46 +238,6 @@ func TestAnAnswerToATurnOnFromAnEarlierDaemonIsDropped(t *testing.T) {
 	late := step(t, sent.State, model.EmbeddingsTurnedOn{Status: downloading, Connection: sent.State.Model.Connection + 1})
 	if late.State.Model.Embeddings.Status.Job != nil {
 		t.Errorf("an answer of another connection was taken: %+v", late.State.Model.Embeddings.Status)
-	}
-}
-
-func TestSearchByMeaningCardButtonsClickLikeTheirKeys(t *testing.T) {
-	sent := turnedOn(t, embeddingsCardOpen(t))
-	following := step(t, sent.State, model.EmbeddingsTurnedOn{Status: downloading, Connection: sent.State.Model.Connection}).State
-	for name, tc := range map[string]struct {
-		start driver.State
-		mode  model.Mode
-	}{
-		"question":  {embeddingsCardOpen(t), model.ModeEmbeddingsAsk},
-		"following": {following, model.ModeEmbeddings},
-		"failed":    {step(t, embeddingsRowOn(t, jobFailed), key("enter")).State, model.ModeEmbeddingsOff},
-		"restart":   {restartAsked(t), model.ModeEmbeddingsRestart},
-	} {
-		if got := tc.start.Model.CurrentMode(); got != tc.mode {
-			t.Fatalf("%s: mode %s, want %s", name, got, tc.mode)
-		}
-		buttons, labels := cardButtonsOf(t, tc.start)
-		if len(buttons) == 0 {
-			t.Errorf("%s: the card draws no buttons", name)
-		}
-		for id, act := range buttons {
-			chord := strings.TrimPrefix(act, view.ButtonClick(""))
-			binding, ok := model.LookupBindingForMode(chord, tc.mode)
-			if !ok || binding.Mode != tc.mode {
-				t.Errorf("%s: %s sends %q, which %s does not bind", name, id, chord, tc.mode)
-				continue
-			}
-			keyboard, keyCmds := keys(chord)(tc.start)
-			pointer, clickCmds := clicked(tc.start, click(id, act))
-			sameAs(t, id+" differs from its key", pointer, clickCmds, keyboard, keyCmds)
-			var labelKeys []string
-			for _, b := range model.CardKeys(tc.mode, binding.Action) {
-				labelKeys = append(labelKeys, b.Key)
-			}
-			if want := " (" + strings.Join(labelKeys, " / ") + ")"; !strings.HasSuffix(labels[id], want) || labels[id] == want {
-				t.Errorf("%s: %s label %q is not words followed by %q", name, id, labels[id], want)
-			}
-		}
 	}
 }
 

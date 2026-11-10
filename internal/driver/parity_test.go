@@ -370,6 +370,13 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 		{"New Project", newProject(), model.ModeProjectForm},
 		{"Menu", step(t, bound, openMenu).State, model.ModePicker},
 		{"Menu Projects", pressed(bound, "shift+p"), model.ModePicker},
+		{"Search by meaning question", embeddingsCardOpen(t), model.ModeEmbeddingsAsk},
+		{"Search by meaning following", func() driver.State {
+			sent := turnedOn(t, embeddingsCardOpen(t))
+			return step(t, sent.State, model.EmbeddingsTurnedOn{Status: downloading, Connection: sent.State.Model.Connection}).State
+		}(), model.ModeEmbeddings},
+		{"Search by meaning failed", step(t, embeddingsRowOn(t, jobFailed), key("enter")).State, model.ModeEmbeddingsOff},
+		{"Search by meaning restart", restartAsked(t), model.ModeEmbeddingsRestart},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.start.Model.CurrentMode(); got != tt.mode {

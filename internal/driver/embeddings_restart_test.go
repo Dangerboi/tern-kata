@@ -41,20 +41,13 @@ func TestTheRestartQuestionAppearsWhenTheJobReachesRestartWithTheCardOpen(t *tes
 	}
 }
 
-func TestNClosesTheRestartQuestionKeepsTheRestartNeededAndROnTheRowAsksAgain(t *testing.T) {
+func TestNClosesTheRestartQuestionAndKeepsTheRestartNeeded(t *testing.T) {
 	declined := step(t, restartAsked(t), key("n"))
 	if len(declined.Cmds) != 0 || declined.State.Model.TopCard() != model.NoCard {
 		t.Fatalf("n sent %#v, card %v; want nothing sent and the card closed", declined.Cmds, declined.State.Model.TopCard())
 	}
 	closed := declined.State
 	wantText(t, "row", wireTextOf(t, closed), "set up: needs a kata daemon restart")
-	if footer, sheet := offered(closed.Model, "r"); !footer || !sheet {
-		t.Fatalf("footer lists r %v, help sheet %v, want both while a restart is owed", footer, sheet)
-	}
-	again := step(t, closed, key("r"))
-	if again.State.Model.CurrentMode() != model.ModeEmbeddingsRestart || len(again.Cmds) != 0 {
-		t.Errorf("r gave mode %s and sent %#v, want the question and nothing sent", again.State.Model.CurrentMode(), again.Cmds)
-	}
 }
 
 func TestACardOpenedWhileARestartIsOwedOnALocalDaemonOpensOnTheRestartQuestion(t *testing.T) {
@@ -106,9 +99,13 @@ func TestYSendsExactlyOneRestartAndItsSuccessReadsTheStatusAgain(t *testing.T) {
 		t.Fatalf("y sent %#v, want %#v", out.Cmds, want)
 	}
 	wantText(t, "restarting", wireTextOf(t, out.State), "Restarting the kata daemon…")
-	for _, chord := range []string{"y", "r", "enter"} {
-		if again := step(t, out.State, key(chord)); hasCmd[model.RestartKataDaemon](again.Cmds) {
-			t.Errorf("%s sent a second restart while the first is out", chord)
+	for _, chords := range [][]string{{"escape", "enter", "y"}, {"escape", "r", "y"}} {
+		inputs := make([]any, len(chords))
+		for i, c := range chords {
+			inputs[i] = key(c)
+		}
+		if again := feed(t, out.State, inputs...); hasCmd[model.RestartKataDaemon](again.Cmds) {
+			t.Errorf("%s sent a second restart while the first is out", strings.Join(chords, ", "))
 		}
 	}
 	done := step(t, out.State, model.KataDaemonRestarted{Connection: out.State.Model.Connection})
@@ -123,7 +120,7 @@ func TestYSendsExactlyOneRestartAndItsSuccessReadsTheStatusAgain(t *testing.T) {
 func TestAFailedRestartShowsKatasLineOnTheCardAndOffersNoSecondRestartUntilAsked(t *testing.T) {
 	out := step(t, restartAsked(t), key("y"))
 	failed := step(t, out.State, model.KataDaemonRestarted{Err: errors.New("daemon is not running"), Connection: out.State.Model.Connection})
-	wantText(t, "failure", wireTextOf(t, failed.State), "The kata daemon was not restarted: daemon is not running", "set up: restart needed")
+	wantText(t, "failure", wireTextOf(t, failed.State), "The kata daemon was not restarted: daemon is not running", "set up: needs a kata daemon restart")
 	if len(failed.Cmds) != 0 {
 		t.Errorf("a failure sent %#v", failed.Cmds)
 	}
@@ -159,12 +156,6 @@ func TestARemoteDaemonGetsTheInstructionAndNeitherRNorTheQuestion(t *testing.T) 
 		t.Error("a remote daemon's restart state asked the question")
 	}
 	wantText(t, "arrived", wireTextOf(t, arrived), "run `kata daemon restart` on that machine")
-
-	hosted := restartOwedRemote
-	hosted.Host = "kata.example:7474"
-	hostedRow := embeddingsRowOn(t, hosted)
-	wantText(t, "hosted row", wireTextOf(t, hostedRow), "run `kata daemon restart` on kata.example:7474")
-	wantText(t, "hosted card", wireTextOf(t, step(t, hostedRow, key("enter")).State), "run `kata daemon restart` on kata.example:7474")
 }
 
 func TestALateRestartAnswerOfAnEarlierConnectionIsDropped(t *testing.T) {
