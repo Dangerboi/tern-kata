@@ -21,7 +21,9 @@ func (c *Client) SearchIssues(ctx context.Context, cmd model.SearchByMeaning) (m
 		return model.SearchByMeaningDone{}, daemonError(err)
 	}
 	body := response.JSON200
-	done := model.SearchByMeaningDone{Request: cmd.Request, RankedAnswer: model.RankedAnswer{Query: cmd.Query, Lexical: body.Mode == string(g.Lexical), Truncated: body.Truncated}}
+	// kata marks every ranked answer it cannot page as truncated, so only an answer that fills the limit can have been cut.
+	cut := body.Truncated && len(body.Results) >= model.SearchLimit
+	done := model.SearchByMeaningDone{Request: cmd.Request, RankedAnswer: model.RankedAnswer{Query: cmd.Query, Lexical: body.Mode == string(g.Lexical), Truncated: cut}}
 	if body.DegradedReason != nil {
 		done.Reason = *body.DegradedReason
 	}
