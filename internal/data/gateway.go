@@ -36,7 +36,8 @@ type Gateway struct {
 	current    string
 	// epoch counts daemon switches, so a connect that raced one is dropped rather than cached against the new daemon.
 	epoch uint64
-	// switches counts the Docbank switches running; Add happens under mu while closed is false, so Close's Wait never races it.
+	// switches counts the kata runs Close waits for (Docbank switches, daemon restarts); Add happens under mu while closed is false,
+	// so Close's Wait never races it.
 	switches sync.WaitGroup
 
 	streamMu         sync.Mutex
