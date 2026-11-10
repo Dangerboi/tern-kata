@@ -144,8 +144,8 @@ func TestADeleteClosesTheCardLeavesTheListAndUDeletesItBack(t *testing.T) {
 	sent := step(t, s, key("enter"))
 	out := step(t, sent.State, deleted("a"))
 	m := out.State.Model
-	if m.TopCard() != model.NoCard || m.Notice != "Deleted work#a. Press u to restore it." {
-		t.Fatalf("card %v notice %q", m.TopCard(), m.Notice)
+	if m.TopCard() != model.NoCard || m.Notice != "" || toastText(m) != "Deleted work#a. Press u to restore it." {
+		t.Fatalf("card %v notice %q toast %q", m.TopCard(), m.Notice, toastText(m))
 	}
 	after := movedSnapshot(t, out.State, out.Cmds, movable("b"))
 	if after.Model.SelectedUID != "b" {

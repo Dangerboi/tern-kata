@@ -1,6 +1,6 @@
 # M on the selected Issue opens the Move card: the list of other Projects takes a typed filter, enter previews the move with
-# kata's dry run (it names the Project, not the new id) and enter again moves. A Notice then names the new project#id as a link,
-# and clicking it opens the Issue in its new Project. Own Issue and Project; it deletes the Issue. Move an Inbox Issue the same
+# kata's dry run (it names the Project, not the new id) and enter again moves. A toast then names the new project#id with an Open
+# button, and clicking the button opens the Issue in its new Project. Own Issue and Project; it deletes the Issue. Move an Inbox Issue the same
 # way by designating the Inbox Project first: that takes a raw project-metadata request, which the kata CLI does not send, so
 # this step moves a Project Issue and leaves the Inbox Collection to the driver tests.
 mv_dir="$tmp/workspace"
@@ -25,12 +25,13 @@ expect_tree "$mv_row" '.ok and .count == 1'
 
 ctl key enter
 expect_tree "[data-id='layer.move']" '.ok and .count == 0'
-expect_tree "[data-id\$='.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("move-target#"))'
+expect_tree ".toast" '.ok and .count == 1 and (.nodes[0].text | test("^Moved #[a-z0-9]+ to move-target#[a-z0-9]+\\.Open$"))'
+expect_tree "[data-id\$='.notice']" '.ok and .count == 0'
 expect_tree "$mv_row" '.ok and .count == 0'
 
-# The notice is a link: a click opens the Issue in its new Project.
-mv_ref=$(ctl tree "[data-id\$='.notice']" | jq -er '.nodes[0].text | capture("(?<ref>move-target#[a-z0-9]+)").ref')
-ctl click "[data-id\$='.notice']"
+# The toast's Open button opens the Issue in its new Project.
+mv_ref=$(ctl tree ".toast" | jq -er '.nodes[0].text | capture("(?<ref>move-target#[a-z0-9]+)").ref')
+ctl click "button.toast-act"
 expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("Project: move-target"))'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke move Issue")))'
 

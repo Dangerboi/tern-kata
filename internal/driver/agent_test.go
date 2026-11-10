@@ -68,8 +68,8 @@ func TestAClosedIssueOpensNoCardAndSaysToReopenIt(t *testing.T) {
 	closed.ProjectID, closed.QualifiedID = 7, "work#t1"
 	for name, s := range agentPanes(t, closed) {
 		got := step(t, s, key("w"))
-		if len(got.Cmds) != 0 || got.State.Model.TopCard() == model.CardAgent || got.State.Model.Notice != "This Issue is closed; reopen it first (r)." {
-			t.Errorf("%s: card %v, cmds %#v, notice %q", name, got.State.Model.TopCard(), got.Cmds, got.State.Model.Notice)
+		if len(got.Cmds) != 0 || got.State.Model.TopCard() == model.CardAgent || got.State.Model.Notice != "" || toastText(got.State.Model) != "This Issue is closed; reopen it first (r)." {
+			t.Errorf("%s: card %v, cmds %#v, notice %q, toast %q", name, got.State.Model.TopCard(), got.Cmds, got.State.Model.Notice, toastText(got.State.Model))
 		}
 	}
 }
@@ -80,8 +80,8 @@ func TestAClosedIssueWithLiveAgentsRefusesWToo(t *testing.T) {
 	for name, s := range agentPanes(t, closed) {
 		s = withAgentRows(s)
 		got := step(t, s, key("w"))
-		if len(got.Cmds) != 0 || got.State.Model.TopCard() == model.CardAgent || got.State.Model.Notice != "This Issue is closed; reopen it first (r)." {
-			t.Errorf("%s: card %v, cmds %#v, notice %q", name, got.State.Model.TopCard(), got.Cmds, got.State.Model.Notice)
+		if len(got.Cmds) != 0 || got.State.Model.TopCard() == model.CardAgent || got.State.Model.Notice != "" || toastText(got.State.Model) != "This Issue is closed; reopen it first (r)." {
+			t.Errorf("%s: card %v, cmds %#v, notice %q, toast %q", name, got.State.Model.TopCard(), got.Cmds, got.State.Model.Notice, toastText(got.State.Model))
 		}
 	}
 }

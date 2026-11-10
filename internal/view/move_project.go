@@ -36,7 +36,7 @@ func moveChoosing(m model.Model) []tern.Element {
 		selected = itemID(MoveListID, targets[min(f.Cursor, len(targets)-1)].UID)
 	}
 	children := []tern.Element{
-		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Filter Projects"}, Field: ui.Field{Text: f.Filter, Cursor: caretAt(f.Caret, "", f.Filter), Mode: "insert", Placeholder: ui.T("Filter Projects")}},
+		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Filter Projects"}, Field: ui.Field{Text: f.Filter, Cursor: caretAt(f.Caret, "", f.Filter), Mode: "insert", Placeholder: ui.T("Filter Projects")}, Clear: true},
 		ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Empty: ui.T("No other Projects match."), Max: ui.MaxLines(12), Children: items},
 	}
 	if f.Err != nil {

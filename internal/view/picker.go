@@ -56,7 +56,7 @@ func pickerLayer(m model.Model) tern.Element {
 		notes = append(notes, toneText("views-problem-"+strconv.Itoa(i), ui.ToneWarning, "Saved view left out: "+problem.Error()))
 	}
 	children := []tern.Element{
-		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Filter Menu"}, Field: ui.Field{Text: m.Picker.Filter, Cursor: caretAt(m.Picker.Caret, "", m.Picker.Filter), Mode: "insert", Placeholder: ui.T("Filter Menu")}},
+		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Filter Menu"}, Field: ui.Field{Text: m.Picker.Filter, Cursor: caretAt(m.Picker.Caret, "", m.Picker.Filter), Mode: "insert", Placeholder: ui.T("Filter Menu")}, Clear: true},
 		ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Empty: ui.T(empty), Max: ui.MaxLines(12), Children: items},
 	}
 	children = append(children, notes...)

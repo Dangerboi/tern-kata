@@ -48,8 +48,8 @@ func TestWOnAClosedIssueOpensNoCard(t *testing.T) {
 	m := cardModel()
 	m.Issues[0].Status = "closed"
 	after, cmds := press(m, "w")
-	if _, started := agentCmd[model.StartAgent](cmds); after.TopCard() == model.CardAgent || started || after.Notice != model.ClosedIssueRefusal {
-		t.Errorf("card %v, cmds %#v, notice %q", after.TopCard(), cmds, after.Notice)
+	if _, started := agentCmd[model.StartAgent](cmds); after.TopCard() == model.CardAgent || started || after.Notice != "" || after.Toast == nil || after.Toast.Text != model.ClosedIssueRefusal {
+		t.Errorf("card %v, cmds %#v, notice %q, toast %+v", after.TopCard(), cmds, after.Notice, after.Toast)
 	}
 }
 

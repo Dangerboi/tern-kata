@@ -80,9 +80,27 @@ type MoveProjectState struct {
 	Err         error
 }
 
-type NoticeLink struct{ Text, Ref string }
+// Toast is a Notice with one button. Chord is the key the button presses; Ref, when set, is an Issue the button opens instead.
+type Toast struct {
+	Seq   int
+	Text  string
+	Label string
+	Chord string
+	Ref   string
+}
 
-type OpenNoticeLinkMsg struct{}
+// raiseToast shows t as the model's toast, under a Seq no earlier toast had.
+func (m Model) raiseToast(t Toast) Model {
+	t.Seq = 1
+	if m.Toast != nil {
+		t.Seq = m.Toast.Seq + 1
+	}
+	m.Toast = &t
+	return m
+}
+
+// OpenNoticeLinkMsg opens the Issue Ref, the button of the toast that reports a move.
+type OpenNoticeLinkMsg struct{ Ref string }
 
 func (OpenNoticeLinkMsg) msg() {}
 
@@ -251,12 +269,12 @@ func updateMoveProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 func movedToProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 	f := m.MoveProject
 	m.MoveProject = MoveProjectState{}
-	link := NoticeLink{Text: f.Target.Name + "#" + msg.NewShortID, Ref: f.Target.Name + "/" + msg.NewShortID}
+	ref := f.Target.Name + "/" + msg.NewShortID
 	moved := "#" + f.ShortID
 	if msg.Count > 1 {
 		moved = fmt.Sprintf("#%s and %s", f.ShortID, descendantCount(msg.Count-1))
 	}
-	m.Notice, m.NoticeLink = fmt.Sprintf("Moved %s to %s.", moved, link.Text), &link
+	m = m.raiseToast(Toast{Text: fmt.Sprintf("Moved %s to %s.", moved, f.Target.Name+"#"+msg.NewShortID), Label: "Open", Ref: ref})
 	m = issueGone(m, f.UID)
 	return snapshotChanged(m.issueWritten(f.UID))
 }
@@ -310,15 +328,6 @@ func (m Model) afterMoveSelection() Model {
 		}
 	}
 	return m
-}
-
-func openNoticeLink(m Model) (Model, []Cmd) {
-	link := m.NoticeLink
-	if link == nil || m.Notice == "" {
-		return m, nil
-	}
-	m.Notice, m.NoticeLink = "", nil
-	return openIssue(m, link.Ref)
 }
 
 func moveProjectKey(m Model, msg KeyMsg) (Model, []Cmd) {

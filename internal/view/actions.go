@@ -19,6 +19,7 @@ import (
 const (
 	keyAct             = "key"
 	buttonAct          = "press"
+	clearAct           = "clear"
 	jumpAct            = "jump"
 	activityTabAct     = "activity-tab"
 	detailItemAct      = "detail-item"
@@ -125,6 +126,8 @@ func DecodeAction(id, act, value string) model.Msg {
 	switch act {
 	case keyAct:
 		return model.KeyMsg{Chord: value}
+	case clearAct:
+		return model.ButtonPressMsg{Chord: "ctrl+u"}
 	case buttonAct:
 		return model.ButtonPressMsg{Chord: value}
 	case string(model.AgentStatesAction):
@@ -138,7 +141,7 @@ func DecodeAction(id, act, value string) model.Msg {
 			return model.Retry{}
 		}
 	case NoticeLinkClick:
-		return model.OpenNoticeLinkMsg{}
+		return model.OpenNoticeLinkMsg{Ref: value}
 	case activityTabAct:
 		if tab, ok := parseTab(value); ok {
 			return model.ActivityTabMsg{Tab: tab}

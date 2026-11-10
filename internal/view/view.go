@@ -93,6 +93,7 @@ func Render(m model.Model, now time.Time) tern.View {
 	for _, text := range footerTexts(m) {
 		main = append(main, text)
 	}
+	main = append(main, toasts(m)...)
 	layer := topLayer(m, now)
 	if m.CloseForm.Err != nil && !m.CloseForm.Open {
 		main = append(main, plainText("close-error", ui.ToneError, m.CloseForm.Err.Error()))
@@ -178,13 +179,13 @@ func searchInput(m model.Model) tern.Element {
 	if m.Search.Meaning {
 		placeholder = "Search Issues by meaning in " + m.Collection.Title
 	}
-	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Cursor: caretAt(m.Search.Caret, "", m.Filters.Search), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}}
+	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search Issues"}, Field: ui.Field{Text: m.Filters.Search, Cursor: caretAt(m.Search.Caret, "", m.Filters.Search), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: m.Search.Results, Prompt: []ui.Span{{T: "/ "}}}, Clear: true}
 }
 
 func pageSearchInput(m model.Model) tern.Element {
 	noun := m.PageSearchNoun()
 	text := m.PageSearch.Text
-	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search " + noun}, Field: ui.Field{Text: text, Cursor: caretAt(m.PageSearch.Caret, "", text), Mode: "insert", Placeholder: ui.T("Search " + noun), Readonly: !m.PageSearch.Open, Prompt: []ui.Span{{T: "/ "}}}}
+	return ui.Input{Common: ui.Common{Key: "search", Tone: ui.ToneAccent, Aria: "Search " + noun}, Field: ui.Field{Text: text, Cursor: caretAt(m.PageSearch.Caret, "", text), Mode: "insert", Placeholder: ui.T("Search " + noun), Readonly: !m.PageSearch.Open, Prompt: []ui.Span{{T: "/ "}}}, Clear: true}
 }
 
 func searchEmpty(m model.Model) ui.Empty {
@@ -442,7 +443,8 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		ownerStyle: toneStyle(ownerTone),
 	})
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
-	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: menu.of(row.Issue)}
+	entries := menu.of(row.Issue)
+	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: entries, Hold: entries}
 	if row.HasChildren {
 		actions.Click = ToggleClick(row.UID)
 	}

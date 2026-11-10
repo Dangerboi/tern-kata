@@ -69,8 +69,8 @@ func TestCIsRefusedWithItsReasonAndStartsNothing(t *testing.T) {
 			t.Errorf("%s: dialog %v, cmds %#v, notice %q; want the reason and nothing started", name, after.AgentCard.Team.Open, cmds, after.Notice)
 		}
 	}
-	if after, _ := press(closed, "w"); after.TopCard() == model.CardAgent || after.Notice != model.ClosedIssueRefusal {
-		t.Errorf("a closed Issue opened the card: %v %q", after.TopCard(), after.Notice)
+	if after, _ := press(closed, "w"); after.TopCard() == model.CardAgent || after.Toast == nil || after.Toast.Text != model.ClosedIssueRefusal {
+		t.Errorf("a closed Issue opened the card: %v %+v", after.TopCard(), after.Toast)
 	}
 }
 

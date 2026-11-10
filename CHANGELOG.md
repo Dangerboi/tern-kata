@@ -12,11 +12,23 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The check is the installed release's own, the one `tern-kata update` runs before a swap, and the install goes ahead whatever it finds.
 - `tern-kata update` and the install scripts warn when the kata daemon is older than kata v0.23.0, which attachments and search by meaning need.
 
+#### Issues and Pages
+
+- On a phone or tablet, a long press on an Issue row or a Board card lists what its right-click menu lists, refused the same way.
+- The search box, the Page search, the Menu filter and the Move to Project filter have a clear button (×) while they hold text, which empties them as `ctrl+u` does.
+
 ### Changed
 
 #### Install and update
 
 - `tern-kata update`'s warning that the kata daemon can't be reached names the kata version tern-kata needs, and its refusal of a too-old daemon or a `worker.toml` reads right after an install too.
+
+#### Issues and Pages
+
+- Deleting an Issue, moving one to another Project, and the refusals that name a key show a toast with a button that does it, in place of the line under the columns.
+  - "Deleted X. Press u to restore it." has Undo, "Moved X to Y." has Open, and "reopen it first (r)" and "X is closed; press r to reopen it." have Reopen.
+  - "X is in the last Lane; press x to close it." has Close.
+  - The key still works and the toast still names it; Tern before 0.9.14 shows the toast without the button.
 
 ## [0.11.0] - 2026-11-10
 

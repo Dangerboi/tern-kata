@@ -138,7 +138,7 @@ type AgentsPruned struct {
 
 func (AgentsPruned) msg() {}
 
-// ClosedIssueRefusal is the Notice `w` shows on a closed Issue, and the reason the buttons that start an agent on one are off.
+// ClosedIssueRefusal is the toast `w` shows on a closed Issue, and the reason the buttons that start an agent on one are off.
 const ClosedIssueRefusal = "This Issue is closed; reopen it first (r)."
 
 const ClosedAlreadyRefusal = "This Issue is already closed."
@@ -166,7 +166,7 @@ func openAgent(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if reason := IssueRefusal(*issue, OpenAgentCardAction); reason != "" {
-		m.Notice = reason
+		m = m.raiseToast(Toast{Text: reason, Label: "Reopen", Chord: "r"})
 		return m, nil
 	}
 	m = openAgentCard(m, *issue)

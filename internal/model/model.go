@@ -98,8 +98,10 @@ type Model struct {
 	HostID    string
 	FieldForm FieldFormState
 	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
-	Notice      string
-	NoticeLink  *NoticeLink
+	Notice string
+	// Toast is the latest toast raised: one button on a Notice that answers with a key or opens an Issue. It stays until the next one replaces it,
+	// and the view keys its node on Seq, so each message shows once, and the same message twice shows twice.
+	Toast       *Toast
 	MoveProject MoveProjectState
 	// afterMove is the Issue just moved to another Project and its neighbouring row, until a snapshot stops listing it.
 	afterMove *movedIssue
@@ -215,7 +217,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		msg = KeyMsg{Chord: press.Chord}
 	}
 	if _, ok := msg.(KeyMsg); ok {
-		m.Notice, m.NoticeLink = "", nil
+		m.Notice = ""
 	}
 	next, cmds := updateWithDetail(m, msg)
 	switch msg.(type) {
@@ -316,7 +318,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case MoveTargetSelected:
 		return moveTargetSelected(m, msg.Key)
 	case OpenNoticeLinkMsg:
-		return openNoticeLink(m)
+		return openIssue(m, msg.Ref)
 	}
 	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)
@@ -531,7 +533,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		if selected.SelectedUID != msg.UID {
 			return m, nil
 		}
-		selected.Notice, selected.NoticeLink = "", nil
+		selected.Notice = ""
 		next, cmds, _ := runChord(selected, msg.Chord, msg.Mode)
 		return next, cmds
 	case ResizeMsg:

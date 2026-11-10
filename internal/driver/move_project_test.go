@@ -9,6 +9,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
+	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 var moveCatalog = []model.CatalogProject{
@@ -210,19 +211,20 @@ func TestMoveCardNoticeLinksToTheNewProjectAndIssueAndOpensIt(t *testing.T) {
 	if _, ok := snapshotFor(done.Cmds); !ok {
 		t.Errorf("no fresh snapshot asked for after the move: %v", done.Cmds)
 	}
-	if !strings.Contains(done.State.Model.Notice, "shop#n3w1") {
-		t.Fatalf("notice %q, want it to name shop#n3w1", done.State.Model.Notice)
+	if text := toastText(done.State.Model); !strings.Contains(text, "shop#n3w1") || done.State.Model.Notice != "" {
+		t.Fatalf("toast %q notice %q, want the toast to name shop#n3w1 and no Notice", text, done.State.Model.Notice)
 	}
-	var link string
-	for _, n := range wireNodes(t, view.Render(done.State.Model, now)) {
-		if strings.HasSuffix(n.ID, "notice") {
-			link = n.ID
+	var link *tern.WireNode
+	nodes := wireNodes(t, view.Render(done.State.Model, now))
+	for i, n := range nodes {
+		if n.K == "toast" {
+			link = &nodes[i]
 		}
 	}
-	if link == "" {
-		t.Fatal("the notice is not drawn")
+	if link == nil || link.P["label"] != "Open" {
+		t.Fatal("the toast is not drawn with an Open button")
 	}
-	opened := step(t, done.State, click(link, view.NoticeLinkClick))
+	opened := step(t, done.State, click(link.ID, link.P["action"].(string)))
 	var open *model.OpenIssue
 	for _, cmd := range opened.Cmds {
 		if c, ok := cmd.(model.OpenIssue); ok {
@@ -230,10 +232,7 @@ func TestMoveCardNoticeLinksToTheNewProjectAndIssueAndOpensIt(t *testing.T) {
 		}
 	}
 	if open == nil || open.Ref != "shop/n3w1" || open.ProjectID != 8 {
-		t.Fatalf("clicking the notice sent %#v, want the new Issue opened in shop", opened.Cmds)
-	}
-	if opened.State.Model.Notice != "" {
-		t.Errorf("notice %q stays after the click", opened.State.Model.Notice)
+		t.Fatalf("clicking the toast's button sent %#v, want the new Issue opened in shop", opened.Cmds)
 	}
 }
 
@@ -384,7 +383,7 @@ func TestMoveCardNoticeCountsTheIssuesMoved(t *testing.T) {
 	preview := moving(t, movePane(t, movable("a")), "shop")
 	previewed := step(t, preview.State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", DryRun: true, Revision: 3, Count: 2, Descendants: []model.MovedIssue{{ShortID: "b"}}}).State
 	moved := step(t, step(t, previewed, key("enter")).State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", NewShortID: "9", Count: 2}).State
-	if got := moved.Model.Notice; got != "Moved #a and 1 descendant to shop#9." {
-		t.Errorf("notice %q", got)
+	if got := toastText(moved.Model); got != "Moved #a and 1 descendant to shop#9." {
+		t.Errorf("toast %q", got)
 	}
 }

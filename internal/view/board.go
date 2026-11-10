@@ -169,8 +169,9 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		}
 	}
 	body = slices.Insert(body, 0, tern.Element(ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}))
+	entries := menu.of(issue)
 	return ui.Card{
-		Common:   ui.Common{Key: issue.UID, Tone: cardTone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID), Menu: menu.of(issue)}},
+		Common:   ui.Common{Key: issue.UID, Tone: cardTone, Actions: &ui.Actions{Click: CardClick(issue.UID), DblClick: OpenRowClick(issue.UID), Menu: entries, Hold: entries}},
 		Selected: selected,
 		Children: body,
 	}

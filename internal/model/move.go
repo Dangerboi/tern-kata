@@ -45,7 +45,7 @@ func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
 		return m, nil
 	}
 	if IsClosed(issue) {
-		m.Notice = fmt.Sprintf("%s is closed; press r to reopen it.", issue.ShortID)
+		m = m.raiseToast(Toast{Text: fmt.Sprintf("%s is closed; press r to reopen it.", issue.ShortID), Label: "Reopen", Chord: "r"})
 		return m, nil
 	}
 	lanes := m.LaneList()
@@ -55,7 +55,7 @@ func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
 	case to < 0:
 		return m, nil
 	case to >= len(columns):
-		m.Notice = fmt.Sprintf("%s is in the last Lane; press x to close it.", issue.ShortID)
+		m = m.raiseToast(Toast{Text: fmt.Sprintf("%s is in the last Lane; press x to close it.", issue.ShortID), Label: "Close", Chord: "x"})
 		return m, nil
 	}
 	target := columns[to]

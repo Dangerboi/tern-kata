@@ -29,7 +29,10 @@ ctl key tab
 ctl type '"smoke duplicate"'
 ctl key enter
 expect_tree "[data-id='layer.delete']" '.ok and .count == 0'
-expect_tree "$dl_notice" ".ok and .count == 1 and (.nodes[0].text == \"Deleted $dl_ref. Press u to restore it.\")"
+# The delete is a toast with an Undo button, not a Notice line: the toast node has no data-id, so it is found by class,
+# and its text is the message followed by the button label.
+expect_tree ".toast" ".ok and .count == 1 and (.nodes[0].text == \"Deleted $dl_ref. Press u to restore it.Undo\")"
+expect_tree "$dl_notice" '.ok and .count == 0'
 expect_tree "$dl_row" '.ok and .count == 0'
 if kata --workspace "$dl_dir" show "$dl_uid" --json >/dev/null 2>&1; then
   echo "the Issue is still shown after the delete" >&2
