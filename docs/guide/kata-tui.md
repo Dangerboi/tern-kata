@@ -37,7 +37,7 @@ The Comments tab shows a discussion as a reply tree, as kata's TUI does: a reply
 
 ## Config
 
-`K` opens the Config Page as a Lettered Page, and the Menu lists it. kata tui has no such view: the Page lists tern-kata's own config files (`lanes.toml`, `filters.toml`, `views.toml`, `seen.toml`, `worker.toml`, `agent.toml`) with their paths and whether each exists and loads, and shows kata's `config.toml` read-only with its number of daemons and its `[tui] confirm_quit` setting. See [Pages and the Board](pages-and-board.md#lettered-pages).
+`K` opens the Config Page as a Lettered Page, and the Menu lists it. kata tui has no such view: the Page lists tern-kata's own config files (`lanes.toml`, `filters.toml`, `views.toml`, `seen.toml`, `worker.toml`, `agent.toml`) with their paths and whether each exists and loads, a Docbank row that says what kata's `[docbank]` section sets up (with `s` to switch tern-kata 0.10's pinned setup to kata's local Docbank), and shows kata's `config.toml` read-only with its number of daemons and its `[tui] confirm_quit` setting. See [Pages and the Board](pages-and-board.md#lettered-pages).
 
 ## Jobs, Runs and Workflows
 
@@ -86,7 +86,7 @@ Every other change to an Issue clears the history, and the next `u` says "nothin
 
 ## Quitting
 
-`q` outside text fields asks "Quit tern-kata? y/n": `y` quits, `n` or `esc` stays, and every other key is ignored while the question shows. `ctrl+c` quits at once, asked or not. `q` typed into search or a Popup card stays text. kata's own `[tui] confirm_quit = false` in `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless `KATA_HOME` is set) makes `q` quit at once in tern-kata too; a config file kata would refuse leaves the question on. Closing a tern-kata Pane (its tab, or Tern's close) follows the same setting as it stands when the Pane starts: Tern closes it without asking only when `confirm_quit = false`, and asks otherwise.
+`q` outside text fields asks "Quit tern-kata? y/n": `y` quits, `n` or `esc` stays, and every other key is ignored while the question shows. `ctrl+c` quits at once, asked or not. `q` typed into search or a Popup card stays text. kata's own `[tui] confirm_quit = false` in `<KATA_HOME>/config.toml` (`~/.kata/config.toml` unless `KATA_HOME` is set) makes `q` quit at once in tern-kata too; a config file kata would refuse leaves the question on. Closing a tern-kata Pane (its tab, or Tern's close) follows the same setting as it stands when the Pane starts: Tern closes it without asking only when `confirm_quit = false`, and asks otherwise. While the Config Page's Docbank switch runs, `q` and `ctrl+c` are refused and a closing Pane waits for it (see [Attachments](attachments.md)).
 
 ## Key aliases
 
