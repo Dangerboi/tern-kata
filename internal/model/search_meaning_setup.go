@@ -6,7 +6,8 @@ import (
 )
 
 // Search by meaning needs embeddings on the kata daemon. This file is what the Pane knows of that setup: the status kata reports
-// for the daemon the Pane is connected to, and the Config Page's read-only row that words it. Other places that act on the setup
+// for the daemon the Pane is connected to, and the Config Page's row that words it, which opens the card and offers turning it on
+// and restarting the daemon. Other places that act on the setup
 // read the same EmbeddingsStatus.
 
 // EmbeddingsProvider is who produces the vectors search by meaning ranks with, as kata names it.
@@ -49,7 +50,7 @@ type EmbeddingsIndexing struct {
 
 // EmbeddingsStatus is kata's answer for one daemon. Job and Indexing are nil when there is none. CanChange says this account may
 // turn search by meaning on. Daemon is the catalog name of the daemon the answer came from, "" for an unnamed connection, and Remote
-// says it runs on another machine.
+// says it runs on another machine. Host is that machine as the Pane reaches it ("" when unknown or the daemon is local).
 type EmbeddingsStatus struct {
 	Provider        EmbeddingsProvider
 	DownloadBytes   int64
@@ -59,6 +60,7 @@ type EmbeddingsStatus struct {
 	Indexing        *EmbeddingsIndexing
 	Daemon          string
 	Remote          bool
+	Host            string
 }
 
 // Busy says kata is still working: a download runs or the indexing is under way, so the status is worth reading again soon. A
@@ -87,7 +89,7 @@ func (s EmbeddingsStatus) Words() string {
 			return "downloading " + megabytes(s.Job.Downloaded) + " MB"
 		case EmbeddingsRestart:
 			if s.Remote {
-				return "set up: needs a kata daemon restart · " + remoteRestartWords
+				return "set up: needs a kata daemon restart · " + s.remoteRestartWords()
 			}
 			return "set up: needs a kata daemon restart"
 		case EmbeddingsFailed:
@@ -218,7 +220,12 @@ func askEmbeddings(m *Model, after time.Duration) Cmd {
 }
 
 // remoteRestartWords is the instruction for a daemon on another machine, which the Pane cannot restart.
-const remoteRestartWords = "run `kata daemon restart` on that machine"
+func (s EmbeddingsStatus) remoteRestartWords() string {
+	if s.Host == "" {
+		return "run `kata daemon restart` on that machine"
+	}
+	return "run `kata daemon restart` on " + s.Host
+}
 
 // withEmbeddingsRow words the Config row again from the status last read, when the rows are listed.
 func (m Model) withEmbeddingsRow() Model {

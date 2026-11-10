@@ -365,6 +365,8 @@ func configClicked(m Model, msg ConfigActMsg) (Model, []Cmd) {
 		return askSwitchDocbank(m)
 	case ConfigTurnOn:
 		return turnOnEmbeddings(m)
+	case ConfigRestart:
+		return restartEmbeddingsDaemon(m)
 	}
 	return openConfigFile(m)
 }

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
+	"strings"
 	"time"
 
 	"go.kenn.io/kit/consolewindow"
@@ -34,8 +36,8 @@ func (g *Gateway) RestartDaemon(ctx context.Context, workspace string) error {
 	if c.kind == model.DaemonRemote {
 		return errors.New("a remote daemon is restarted on its own machine: run `kata daemon restart` there")
 	}
-	home := c.entry.Home
-	if home == "" {
+	home, profile := c.entry.Home, c.entry.Home != ""
+	if !profile {
 		if home, err = kataHome(); err != nil {
 			return err
 		}
@@ -48,7 +50,7 @@ func (g *Gateway) RestartDaemon(ctx context.Context, workspace string) error {
 	g.switches.Add(1)
 	g.mu.Unlock()
 	defer g.switches.Done()
-	return runDaemonRestart(ctx, home)
+	return runDaemonRestart(ctx, home, profile)
 }
 
 // restartKataDaemon answers the Pane's RestartKataDaemon with the restart's outcome.
@@ -57,9 +59,11 @@ func (g *Gateway) restartKataDaemon(ctx context.Context, cmd model.RestartKataDa
 }
 
 // runDaemonRestart runs `kata daemon restart` for the daemon whose home is kataHome, on a context that ignores ctx's cancellation
-// and ends after daemonRestartTimeout. Its error is kata's last non-empty stderr line, or the run's own error when kata printed
+// and ends after daemonRestartTimeout. A catalog profile's run starts without the Pane's route and storage variables (KATA_DB,
+// KATA_DSN and the rest of routeNames): kata reads them before the home's own storage, so they would name another runtime
+// namespace than the profile's. Its error is kata's last non-empty stderr line, or the run's own error when kata printed
 // none; a kata killed at the timeout is reported as not having answered in time.
-func runDaemonRestart(ctx context.Context, kataHome string) error {
+func runDaemonRestart(ctx context.Context, kataHome string, profile bool) error {
 	exe := kataExecutable()
 	if exe == "" {
 		return errors.New("kata is not on PATH")
@@ -67,7 +71,14 @@ func runDaemonRestart(ctx context.Context, kataHome string) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), daemonRestartTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, exe, "daemon", "restart")
-	cmd.Env = append(os.Environ(), "KATA_HOME="+kataHome)
+	env := os.Environ()
+	if profile {
+		env = slices.DeleteFunc(env, func(kv string) bool {
+			name, _, _ := strings.Cut(kv, "=")
+			return slices.ContainsFunc(routeNames, func(r string) bool { return strings.EqualFold(name, r) })
+		})
+	}
+	cmd.Env = append(env, "KATA_HOME="+kataHome)
 	cmd.WaitDelay = daemonRestartWaitDelay
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

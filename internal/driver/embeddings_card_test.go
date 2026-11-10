@@ -123,6 +123,8 @@ func TestTheSearchByMeaningCardAsksInTheWordsOfWhatWillHappen(t *testing.T) {
 		"your Ollama":     {offWithOllama, "Turn on search by meaning? kata will use your Ollama; nothing to download. y/n"},
 		"this machine":    {offWithDownload, "Turn on search by meaning? kata downloads about 290 MB (shared by all Kenn apps) to the kata daemon's machine (this machine). Search stays by words until the daemon restarts. y/n"},
 		"another machine": {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true, Remote: true}, "Turn on search by meaning? kata downloads about 290 MB (shared by all Kenn apps) to the kata daemon's machine (another machine). Search stays by words until the daemon restarts. y/n"},
+		"a named host":    {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true, Remote: true, Host: "kata.example:7474"}, "Turn on search by meaning? kata downloads about 290 MB (shared by all Kenn apps) to the kata daemon's machine (kata.example:7474). Search stays by words until the daemon restarts. y/n"},
+		"already there":   {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true}, "Turn on search by meaning? kata will use its built-in model, already on the kata daemon's machine; nothing to download. Search stays by words until the daemon restarts. y/n"},
 	} {
 		s := step(t, embeddingsRowOn(t, tc.status), key("s")).State
 		wantText(t, name, wireTextOf(t, s), "Search by meaning", tc.want, "Turn on", "Not now")

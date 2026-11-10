@@ -162,3 +162,26 @@ func embeddingsRowOf(s driver.State) (model.ConfigFile, bool) {
 	}
 	return model.ConfigFile{}, false
 }
+
+func TestSearchByMeaningRowButtonsClickLikeTheirKeys(t *testing.T) {
+	for name, tc := range map[string]struct {
+		status model.EmbeddingsStatus
+		action model.ConfigAction
+		chord  string
+	}{
+		"turn on": {offWithDownload, model.ConfigTurnOn, "s"},
+		"restart": {restartOwed, model.ConfigRestart, "r"},
+		"open":    {offWithDownload, model.ConfigOpen, "enter"},
+	} {
+		s := embeddingsRowOn(t, tc.status)
+		if f := s.Model.SelectedConfigFile(); f == nil || !f.Has(tc.action) {
+			t.Fatalf("%s: the row does not offer %s: %+v", name, tc.action, f)
+		}
+		keyboard, keyCmds := keys(tc.chord)(s)
+		pointer, clickCmds := clicked(s, model.ConfigActMsg{Key: model.ConfigEmbeddings, Action: tc.action})
+		if keyboard.Model.CurrentMode() == s.Model.CurrentMode() {
+			t.Errorf("%s: %s did nothing", name, tc.chord)
+		}
+		sameAs(t, name, pointer, clickCmds, keyboard, keyCmds)
+	}
+}

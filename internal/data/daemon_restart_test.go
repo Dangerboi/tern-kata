@@ -25,7 +25,7 @@ func newRestartFixture(t *testing.T, remote bool, script string) *restartFixture
 	target.Remote = remote
 	f := &restartFixture{g: newGateway(t, newLocator(target)), log: filepath.Join(t.TempDir(), "kata.log")}
 	bin := t.TempDir()
-	body := "#!/bin/sh\necho \"$@\" >> '" + f.log + ".args'\necho \"$KATA_HOME\" >> '" + f.log + ".home'\n" + script
+	body := "#!/bin/sh\necho \"$@\" >> '" + f.log + ".args'\necho \"$KATA_HOME\" >> '" + f.log + ".home'\necho \"db=$KATA_DB dsn=$KATA_DSN schema=$KATA_POSTGRES_SCHEMA\" >> '" + f.log + ".storage'\n" + script
 	if err := os.WriteFile(filepath.Join(bin, "kata"), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -43,6 +43,9 @@ func (f *restartFixture) logged(t *testing.T, suffix string) string {
 }
 
 func TestRestartDaemonRunsDaemonRestartWithTheDaemonsHome(t *testing.T) {
+	t.Setenv("KATA_DB", "/pane.db")
+	t.Setenv("KATA_DSN", "postgres://u:pw@h/db")
+	t.Setenv("KATA_POSTGRES_SCHEMA", "pane_schema")
 	f := newRestartFixture(t, false, "exit 0\n")
 	home := os.Getenv("KATA_HOME")
 	if err := f.g.RestartDaemon(t.Context(), t.TempDir()); err != nil {
@@ -54,12 +57,18 @@ func TestRestartDaemonRunsDaemonRestartWithTheDaemonsHome(t *testing.T) {
 	if got := f.logged(t, ".home"); got != home+"\n" {
 		t.Errorf("KATA_HOME %q, want %q", got, home)
 	}
+	if got := f.logged(t, ".storage"); got != "db=/pane.db dsn=postgres://u:pw@h/db schema=pane_schema\n" {
+		t.Errorf("kata saw %q, want the Pane's storage variables for the default daemon", got)
+	}
 }
 
 func TestRestartDaemonOfACatalogProfileRunsWithTheProfilesHome(t *testing.T) {
 	f := newRestartFixture(t, false, "exit 0\n")
 	profileHome := t.TempDir()
 	writeCatalog(t, "active_daemon = \"work\"\n\n[[daemon]]\nname = \"work\"\nlocal = true\nhome = '"+profileHome+"'\ninstance_uid = \"01ARZ3NDEKTSV4RRFFQ69G5FAV\"\n")
+	t.Setenv("KATA_DB", "/pane.db")
+	t.Setenv("KATA_DSN", "postgres://u:pw@h/db")
+	t.Setenv("KATA_POSTGRES_SCHEMA", "pane_schema")
 	if err := f.g.RestartDaemon(t.Context(), t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
@@ -68,6 +77,9 @@ func TestRestartDaemonOfACatalogProfileRunsWithTheProfilesHome(t *testing.T) {
 	}
 	if got := f.logged(t, ".args"); strings.Contains(got, "--daemon") {
 		t.Errorf("kata ran with %q; `daemon restart` refuses --daemon", got)
+	}
+	if got := f.logged(t, ".storage"); got != "db= dsn= schema=\n" {
+		t.Errorf("kata saw %q, want none of the Pane's storage variables", got)
 	}
 }
 

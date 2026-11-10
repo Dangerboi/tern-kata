@@ -263,9 +263,11 @@ func (m Model) wordsReason() string {
 		return "search by meaning is off on this daemon"
 	case s.Status.RestartOwed():
 		if s.Status.Remote {
-			return "search by meaning is set up and waits for a kata daemon restart (run `kata daemon restart` on that machine)"
+			return "search by meaning is set up and waits for a kata daemon restart (" + s.Status.remoteRestartWords() + ")"
 		}
 		return "search by meaning is set up and waits for a kata daemon restart (`r` on the Config Page, `K`)"
+	case !s.Status.CanChange && s.Status.Provider == EmbeddingsOff && s.Status.Job != nil && s.Status.Job.State == EmbeddingsFailed:
+		return "turning on search by meaning failed on this daemon; a daemon administrator can try again (kata's Settings or `kata daemon local-embeddings`)"
 	case s.Status.Provider != EmbeddingsOff || s.Status.Job != nil:
 		return "search by meaning is being set up on this daemon (see the Config Page, `K`)"
 	}

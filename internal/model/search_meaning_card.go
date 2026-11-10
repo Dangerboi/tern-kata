@@ -89,12 +89,18 @@ type EmbeddingsCardState struct {
 // EmbeddingsQuestion is what the card asks before anything starts, worded from the status.
 func EmbeddingsQuestion(s EmbeddingsStatus) string {
 	const lead = "Turn on search by meaning? "
-	if s.OllamaAvailable {
+	switch {
+	case s.OllamaAvailable:
 		return lead + "kata will use your Ollama; nothing to download. y/n"
+	case s.DownloadBytes == 0:
+		return lead + "kata will use its built-in model, already on the kata daemon's machine; nothing to download. Search stays by words until the daemon restarts. y/n"
 	}
 	where := "this machine"
 	if s.Remote {
 		where = "another machine"
+		if s.Host != "" {
+			where = s.Host
+		}
 	}
 	return lead + "kata downloads about " + megabytes(s.DownloadBytes) + " MB (shared by all Kenn apps) to the kata daemon's machine (" + where +
 		"). Search stays by words until the daemon restarts. y/n"
@@ -104,7 +110,7 @@ func EmbeddingsQuestion(s EmbeddingsStatus) string {
 func (s EmbeddingsStatus) cardWords() string {
 	if s.RestartOwed() {
 		if s.Remote {
-			return "set up: restart needed · " + remoteRestartWords
+			return "set up: restart needed · " + s.remoteRestartWords()
 		}
 		return "set up: restart needed"
 	}
@@ -195,8 +201,9 @@ func (m Model) embeddingsAskable() bool {
 }
 
 // openEmbeddingsCard opens the Search by meaning card, from the Config row or from anywhere else. Its first state asks, when kata
-// would take a turn-on and the setup is not already under way; otherwise it shows the status. A status that is not known yet, that
-// could not be read or that is still busy is read first, which also starts the card's polling.
+// would take a turn-on and the setup is not already under way, or asks to restart the daemon when a restart is owed and the daemon
+// is local; otherwise it shows the status. A status that is not known yet, that could not be read or that is still busy is read
+// first, which also starts the card's polling.
 func openEmbeddingsCard(m Model) (Model, []Cmd) {
 	m.HelpOpen = false
 	m.EmbeddingsCard = EmbeddingsCardState{Open: true}
@@ -205,6 +212,7 @@ func openEmbeddingsCard(m Model) (Model, []Cmd) {
 		return m, []Cmd{askEmbeddings(&m, 0)}
 	}
 	m.EmbeddingsCard.Asking = m.embeddingsAsksOnOpen()
+	m.EmbeddingsCard.AskingRestart = m.restartOffered()
 	if m.Embeddings.Err != nil || m.Embeddings.Status.Busy() {
 		return m, []Cmd{askEmbeddings(&m, 0)}
 	}
@@ -262,7 +270,7 @@ func embeddingsCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case RestartDaemonConfirm:
 		return confirmRestartDaemon(m)
 	case RestartDaemonDecline:
-		m.EmbeddingsCard.AskingRestart = false
+		m.EmbeddingsCard = EmbeddingsCardState{}
 	}
 	return m, nil
 }

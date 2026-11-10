@@ -79,6 +79,27 @@ func TestGatewayEmbeddingsStatusMapsEachProviderJobAndIndexingShape(t *testing.T
 	}
 }
 
+func TestEmbeddingsStatusHostIsTheRemoteDaemonsHostAndEmptyForALocalOne(t *testing.T) {
+	for name, tc := range map[string]struct {
+		c      Client
+		server string
+		want   string
+	}{
+		"catalog entry":   {Client{kind: model.DaemonRemote, entry: CatalogEntry{URL: "https://kata.example:7474/"}}, "https://ignored.example", "kata.example:7474"},
+		"KATA_SERVER":     {Client{kind: model.DaemonRemote}, "https://env.example", "env.example"},
+		"pinned url":      {Client{kind: model.DaemonRemote, pinURL: "http://pinned.example:80"}, "", "pinned.example:80"},
+		"remote, unknown": {Client{kind: model.DaemonRemote}, "", ""},
+		"local":           {Client{kind: model.DaemonLocal, pinURL: "https://pinned.example"}, "https://env.example", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("KATA_SERVER", tc.server)
+			if got := tc.c.remoteHost(); got != tc.want {
+				t.Errorf("host %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestGatewayEmbeddingsStatusReportsKatasErrorForADaemonThatCannotReportIt(t *testing.T) {
 	gateway := cannedEmbeddings(t, http.StatusNotFound, map[string]any{"status": 404, "error": map[string]any{"code": "not_found", "message": "local embeddings setup is unavailable"}})
 	loaded := as[model.EmbeddingsStatusLoaded](t, run(t, gateway, model.LoadEmbeddingsStatus{Workspace: t.TempDir(), Request: 8}))

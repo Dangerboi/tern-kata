@@ -37,7 +37,7 @@ The Comments tab shows a discussion as a reply tree, as kata's TUI does: a reply
 
 ## Config
 
-`K` opens the Config Page as a Lettered Page, and the Menu lists it. kata tui has no such view: the Page lists tern-kata's own config files (`lanes.toml`, `filters.toml`, `views.toml`, `seen.toml`, `worker.toml`, `agent.toml`) with their paths and whether each exists and loads, a Docbank row that says what kata's `[docbank]` section sets up (with `s` to switch tern-kata 0.10's pinned setup to kata's local Docbank), and shows kata's `config.toml` read-only with its number of daemons and its `[tui] confirm_quit` setting. See [Pages and the Board](pages-and-board.md#lettered-pages).
+`K` opens the Config Page as a Lettered Page, and the Menu lists it. kata tui has no such view and no Search by meaning row: the Page lists tern-kata's own config files (`lanes.toml`, `filters.toml`, `views.toml`, `seen.toml`, `worker.toml`, `agent.toml`) with their paths and whether each exists and loads, a Docbank row that says what kata's `[docbank]` section sets up (with `s` to switch tern-kata 0.10's pinned setup to kata's local Docbank), a Search by meaning row that shows the status for the connected kata daemon (`s` turns it on, `r` restarts the daemon when the setup waits for it), and shows kata's `config.toml` read-only with its number of daemons and its `[tui] confirm_quit` setting. See [Pages and the Board](pages-and-board.md#lettered-pages).
 
 ## Jobs, Runs and Workflows
 
