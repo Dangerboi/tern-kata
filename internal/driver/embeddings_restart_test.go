@@ -24,9 +24,21 @@ func restartAsked(t *testing.T) driver.State {
 	return s
 }
 
+// The restart question comes up whether the job reaches restart through kata's answer to the turn-on or through a later status read,
+// and a job waiting for a restart is not polled.
 func TestTheRestartQuestionAppearsWhenTheJobReachesRestartWithTheCardOpen(t *testing.T) {
 	s := restartAsked(t)
 	wantText(t, "question", wireTextOf(t, s), "Restart the kata daemon now? Other Panes, agents and the worker lose their connection for a moment and reconnect. y/n", "Restart now", "Not now")
+
+	sent := turnedOn(t, embeddingsCardOpen(t))
+	out := step(t, sent.State, model.EmbeddingsTurnedOn{Status: restartOwed, Connection: sent.State.Model.Connection})
+	wantText(t, "restart after the turn-on", wireTextOf(t, out.State), model.RestartQuestion)
+	if _, polled := askedEmbeddings(out.Cmds); polled {
+		t.Errorf("a job waiting for a restart is polled: %#v", out.Cmds)
+	}
+	if out.State.Model.CurrentMode() != model.ModeEmbeddingsRestart {
+		t.Errorf("mode %s, want the restart question", out.State.Model.CurrentMode())
+	}
 }
 
 func TestNClosesTheRestartQuestionKeepsTheRestartNeededAndROnTheRowAsksAgain(t *testing.T) {

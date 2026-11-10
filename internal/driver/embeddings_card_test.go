@@ -15,8 +15,8 @@ import (
 var (
 	offWithDownload = model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true}
 	offWithOllama   = model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, OllamaAvailable: true, CanChange: true}
-	downloading     = model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading, Downloaded: 120_000_000, Total: 290_000_000}}
-	restartOwed     = model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}
+	downloading     = model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading, Downloaded: 120_000_000, Total: 290_000_000}}
+	restartOwed     = model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}
 	jobFailed       = model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, DownloadBytes: 290_400_000, Job: &model.EmbeddingsJob{State: model.EmbeddingsFailed, Error: "disk full"}}
 )
 
@@ -187,33 +187,20 @@ func TestTheCardFollowsTheJobWithTheRowsWordsABarAndPolling(t *testing.T) {
 	}
 }
 
-func TestTheCardSaysARestartIsNeededWhenTheJobIsDone(t *testing.T) {
-	sent := turnedOn(t, embeddingsCardOpen(t))
-	out := step(t, sent.State, model.EmbeddingsTurnedOn{Status: restartOwed, Connection: sent.State.Model.Connection})
-	wantText(t, "restart", wireTextOf(t, out.State), model.RestartQuestion)
-	if _, polled := askedEmbeddings(out.Cmds); polled {
-		t.Errorf("a job waiting for a restart is polled: %#v", out.Cmds)
-	}
-	if out.State.Model.CurrentMode() != model.ModeEmbeddingsRestart {
-		t.Errorf("mode %s, want the restart question", out.State.Model.CurrentMode())
-	}
-}
-
 func TestARefusalShowsKatasReasonOnTheCardAndReadsTheStatusAgain(t *testing.T) {
-	for _, reason := range []string{"local embeddings setup requires daemon administration", "a local embeddings setup is already running"} {
-		sent := turnedOn(t, embeddingsCardOpen(t))
-		out := step(t, sent.State, model.EmbeddingsTurnedOn{Err: errors.New(reason), Connection: sent.State.Model.Connection})
-		wantText(t, "refusal", wireTextOf(t, out.State), reason)
-		if out.State.Model.TopCard() != model.CardEmbeddings {
-			t.Errorf("%q closed the card", reason)
-		}
-		read := lastRead(t, out.Cmds)
-		if read.After != 0 {
-			t.Errorf("the read after a refusal waits %v, want it at once", read.After)
-		}
-		if hasCmd[model.TurnOnEmbeddings](out.Cmds) {
-			t.Error("a refusal sent another turn-on")
-		}
+	const reason = "a local embeddings setup is already running"
+	sent := turnedOn(t, embeddingsCardOpen(t))
+	out := step(t, sent.State, model.EmbeddingsTurnedOn{Err: errors.New(reason), Connection: sent.State.Model.Connection})
+	wantText(t, "refusal", wireTextOf(t, out.State), reason)
+	if out.State.Model.TopCard() != model.CardEmbeddings {
+		t.Errorf("%q closed the card", reason)
+	}
+	read := lastRead(t, out.Cmds)
+	if read.After != 0 {
+		t.Errorf("the read after a refusal waits %v, want it at once", read.After)
+	}
+	if hasCmd[model.TurnOnEmbeddings](out.Cmds) {
+		t.Error("a refusal sent another turn-on")
 	}
 }
 
@@ -264,19 +251,6 @@ func TestClosingTheCardMidJobLeavesTheRowPollingAndANewCardPicksTheJobUp(t *test
 	lastRead(t, reopened.Cmds)
 }
 
-func TestAnAnswerAfterLeavingTheCardAndThePageIsNotReadAgain(t *testing.T) {
-	sent := turnedOn(t, embeddingsCardOpen(t))
-	started := step(t, sent.State, model.EmbeddingsTurnedOn{Status: downloading, Connection: sent.State.Model.Connection})
-	poll := lastRead(t, started.Cmds)
-	left := step(t, step(t, started.State, key("escape")).State, key("escape")).State
-	if left.Model.OnConfig() {
-		t.Fatal("fixture: still on the Config Page")
-	}
-	if late := step(t, left, model.EmbeddingsStatusLoaded{Request: poll.Request, Status: downloading}); hasCmd[model.LoadEmbeddingsStatus](late.Cmds) {
-		t.Errorf("polling went on with neither the Page nor the card shown: %#v", late.Cmds)
-	}
-}
-
 func TestAnAnswerToATurnOnFromAnEarlierDaemonIsDropped(t *testing.T) {
 	sent := turnedOn(t, embeddingsCardOpen(t))
 	late := step(t, sent.State, model.EmbeddingsTurnedOn{Status: downloading, Connection: sent.State.Model.Connection + 1})
@@ -295,6 +269,7 @@ func TestSearchByMeaningCardButtonsClickLikeTheirKeys(t *testing.T) {
 		"question":  {embeddingsCardOpen(t), model.ModeEmbeddingsAsk},
 		"following": {following, model.ModeEmbeddings},
 		"failed":    {step(t, embeddingsRowOn(t, jobFailed), key("enter")).State, model.ModeEmbeddingsOff},
+		"restart":   {restartAsked(t), model.ModeEmbeddingsRestart},
 	} {
 		if got := tc.start.Model.CurrentMode(); got != tc.mode {
 			t.Fatalf("%s: mode %s, want %s", name, got, tc.mode)

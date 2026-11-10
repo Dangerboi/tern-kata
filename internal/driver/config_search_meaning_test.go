@@ -8,6 +8,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
 func askedEmbeddings(cmds []model.Cmd) (model.LoadEmbeddingsStatus, bool) {
@@ -53,8 +54,8 @@ func TestConfigPageSearchByMeaningRowSaysWhatKataReportsForTheConnectedDaemon(t 
 		"off with a download":         {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true}, "off: kata searches by words · about 290 MB to download"},
 		"off with Ollama":             {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, OllamaAvailable: true, DownloadBytes: 290_400_000, CanChange: true}, "off: kata searches by words · your Ollama will be used"},
 		"off for a non-administrator": {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000}, "off: turning it on needs a daemon administrator"},
-		"downloading":                 {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading, Downloaded: 120_000_000, Total: 290_000_000}}, "downloading 120 / 290 MB"},
-		"restart owed":                {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, "set up: needs a kata daemon restart"},
+		"downloading":                 {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading, Downloaded: 120_000_000, Total: 290_000_000}}, "downloading 120 / 290 MB"},
+		"restart owed":                {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, "set up: needs a kata daemon restart"},
 		"job failed":                  {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsFailed, Error: "disk full\nfree some space"}}, "turning it on failed: disk full free some space"},
 		"indexing with an ETA":        {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, Indexing: &model.EmbeddingsIndexing{Done: 40, Total: 200, ETA: 150 * time.Second}}, "indexing 40 / 200 Issues · about 3 min"},
 		"indexing without an ETA":     {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, Indexing: &model.EmbeddingsIndexing{Done: 40, Total: 200}}, "indexing 40 / 200 Issues"},
@@ -64,7 +65,24 @@ func TestConfigPageSearchByMeaningRowSaysWhatKataReportsForTheConnectedDaemon(t 
 		"another provider":            {model.EmbeddingsStatus{Provider: model.EmbeddingsOther}, "on · another provider (kata's config.toml)"},
 	} {
 		s, ask := embeddingsPane(t)
-		text := wireTextOf(t, statusAnswered(t, s, ask, tc.status).State)
+		answered := statusAnswered(t, s, ask, tc.status).State
+		text := wireTextOf(t, answered)
+		const rowID = "main.columns.list.config.embeddings"
+		var titled bool
+		for _, n := range wireNodes(t, view.Render(answered.Model, now)) {
+			switch n.ID {
+			case rowID + ".title":
+				titled = true
+				if got := wireText(n); !strings.Contains(got, `"spans":[{"s":"strong","t":"Search by meaning (kata daemon: home)"}]`) {
+					t.Errorf("%s: title node %s, want exactly the row's name and daemon", name, got)
+				}
+			case rowID + ".path":
+				t.Errorf("%s: the row is not a file but draws a path: %s", name, wireText(n))
+			}
+		}
+		if !titled {
+			t.Errorf("%s: no title node drawn for the row", name)
+		}
 		wantText(t, name, text, "Search by meaning (kata daemon: home)", tc.want, "3 files in /cfg/tern-kata")
 		docbank, row, kata := strings.Index(text, "Docbank (kata's"), strings.Index(text, "Search by meaning (kata daemon"), strings.Index(text, "config.toml (kata's, read-only)")
 		if !(docbank < row && row < kata) {
@@ -102,7 +120,7 @@ func TestConfigPageReadsTheStatusAgainEveryTwoSecondsOnlyWhileKataIsBusyAndThePa
 	}
 	wantText(t, "the finished setup", wireTextOf(t, done.State), "on · built-in model")
 
-	// Leaving the Page stops the polling: the answer that comes then is dropped and asks nothing.
+	// Leaving the Page stops the polling: the answer that comes then is taken but not read again.
 	left := step(t, out.State, key("escape"))
 	if left.State.Model.Page == model.PageConfig {
 		t.Fatalf("escape left the Page on %v", left.State.Model.Page)

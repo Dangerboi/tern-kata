@@ -531,19 +531,24 @@ func docbankSwitched(m Model, msg DocbankSwitched) (Model, []Cmd) {
 		return m, nil
 	}
 	c.Switching = false
+	var cmds []Cmd
 	text, failed := "Switched to kata's local Docbank; kata restarted its daemon. docbank.key (in KATA_HOME) and docbank.manual (in tern-kata's config folder) are no longer used and can be deleted.", false
 	if msg.Err != nil {
 		text, failed = "Docbank was not switched: "+oneLine(msg.Err.Error()), true
 	}
+	if msg.Err == nil {
+		// The switch restarted the daemon: a restart the status owed is gone.
+		cmds = append(cmds, askEmbeddings(&m, 0))
+	}
 	if !m.OnConfig() {
 		m.Notice = text
-		return m, nil
+		return m, cmds
 	}
 	c.Message, c.MessageErr = text, failed
 	if failed {
-		return m, nil
+		return m, cmds
 	}
-	return m, []Cmd{LoadConfigFiles{Request: c.reads.Ask()}}
+	return m, append(cmds, LoadConfigFiles{Request: c.reads.Ask()})
 }
 
 func configEditLabel(m Model) string {

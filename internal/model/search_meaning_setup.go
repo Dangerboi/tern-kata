@@ -72,6 +72,11 @@ func (s EmbeddingsStatus) Busy() bool {
 	return s.Provider != EmbeddingsOff && s.Indexing != nil && !s.Indexing.Failed
 }
 
+// failed says the setup job failed or the indexing of a provider in use failed.
+func (s EmbeddingsStatus) failed() bool {
+	return s.Job != nil && s.Job.State == EmbeddingsFailed || s.Provider != EmbeddingsOff && s.Indexing != nil && s.Indexing.Failed
+}
+
 // RestartOwed says the setup job finished and waits for a kata daemon restart.
 func (s EmbeddingsStatus) RestartOwed() bool { return s.Job != nil && s.Job.State == EmbeddingsRestart }
 
@@ -169,6 +174,8 @@ type EmbeddingsSetup struct {
 	Turning bool
 	// Restarting says a daemon restart is out and has not answered: nothing sends another.
 	Restarting bool
+	// returning says a daemon restart was just answered: a read that fails while the daemon comes back is asked again.
+	returning bool
 	// reads numbers the asks, so an answer to an older one is dropped.
 	reads Latest
 }
@@ -201,7 +208,10 @@ func embeddingsRow(daemon string, s EmbeddingsSetup) ConfigFile {
 		row.Summary = "kata cannot report search by meaning here: " + oneLine(s.Err.Error())
 	default:
 		row.Summary = s.Status.Words()
-		if s.Status.Provider != EmbeddingsOff && s.Status.Job == nil {
+		switch {
+		case s.Status.failed():
+			row.Status = ConfigBroken
+		case s.Status.Provider != EmbeddingsOff && s.Status.Job == nil:
 			row.Status = ConfigLoads
 		}
 		if s.Status.TurnOnOffered() {
@@ -266,15 +276,21 @@ func embeddingsLoaded(m Model, msg EmbeddingsStatusLoaded) (Model, []Cmd) {
 }
 
 // embeddingsRead keeps a status as the one last read and acts on it: the Config row and the card follow it, and a busy one is
-// read again while something shows it.
+// read again while something shows it. A failed read keeps the last good status and is read again while something shows it, when
+// that status was busy or a daemon restart was just answered (the daemon is coming back); otherwise it is final, as an old daemon's
+// 404 is.
 func embeddingsRead(m Model, status EmbeddingsStatus, err error) (Model, []Cmd) {
 	owed := m.Embeddings.Read && m.Embeddings.Err == nil && m.Embeddings.Status.RestartOwed()
-	m.Embeddings.Read, m.Embeddings.Status, m.Embeddings.Err = true, status, err
+	retry := err != nil && (m.Embeddings.Status.Busy() || m.Embeddings.returning)
+	m.Embeddings.Read, m.Embeddings.Err = true, err
+	if err == nil {
+		m.Embeddings.Status, m.Embeddings.returning = status, false
+	}
 	m = m.withEmbeddingsRow().embeddingsCardRead()
 	if !owed {
 		m = m.askRestartOnArrival()
 	}
-	if err == nil && status.Busy() && m.embeddingsWatched() {
+	if (err == nil && status.Busy() || retry) && m.embeddingsWatched() {
 		cmd := askEmbeddings(&m, embeddingsPollEvery)
 		return m, []Cmd{cmd}
 	}

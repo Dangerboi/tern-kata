@@ -28,9 +28,14 @@ func TestAnswerByWordsWithNoReasonReadsTheStatusOnce(t *testing.T) {
 	m, cmds := wordsAnswered(t)
 	cmdOf[model.LoadEmbeddingsStatus](t, cmds)
 	m = statusRead(t, m, cmds, model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "/"})
 	for _, text := range []string{"x", "y"} {
+		before := m.Filters.Search
 		var typed []model.Cmd
 		m, typed = model.Update(m, model.KeyMsg{Text: text})
+		if m.Filters.Search == before {
+			t.Fatalf("typing %q left the query %q unchanged in mode %s", text, before, m.CurrentMode())
+		}
 		if slices.ContainsFunc(typed, func(c model.Cmd) bool { _, ok := c.(model.LoadEmbeddingsStatus); return ok }) {
 			t.Fatalf("typing %q read the status again: %#v", text, typed)
 		}
@@ -62,12 +67,12 @@ func TestSearchLineWordsAnAnswerByWordsFromTheStatus(t *testing.T) {
 		{"not read yet", nil, lead + "search by meaning is not in use on this daemon"},
 		{"can be turned on", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true}, lead + "search by meaning is off on this daemon"},
 		{"a failed job is offered again", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsFailed}}, lead + "search by meaning is off on this daemon"},
-		{"restart owed, local", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, lead + "search by meaning is set up and waits for a kata daemon restart (`r` on the Config Page, `K`)"},
+		{"restart owed, local", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, lead + "search by meaning is set up and waits for a kata daemon restart (`r` on the Config Page, `K`)"},
 		{"restart owed, remote", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Remote: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, lead + "search by meaning is set up and waits for a kata daemon restart (run `kata daemon restart` on that machine)"},
 		{"restart owed, remote host", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Remote: true, Host: "kata.example:7474", Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, lead + "search by meaning is set up and waits for a kata daemon restart (run `kata daemon restart` on kata.example:7474)"},
 		{"failed job, administrators only", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsFailed}}, lead + "turning on search by meaning failed on this daemon; a daemon administrator can try again (kata's Settings or `kata daemon local-embeddings`)"},
 		{"administrators only", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff}, lead + "search by meaning is off; a daemon administrator can turn it on (kata's Settings or `kata daemon local-embeddings`)"},
-		{"downloading", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading}}, lead + "search by meaning is being set up on this daemon (see the Config Page, `K`)"},
+		{"downloading", &model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading}}, lead + "search by meaning is being set up on this daemon (see the Config Page, `K`)"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m, cmds := wordsAnswered(t)
@@ -89,39 +94,37 @@ func TestCtrlOAndTheButtonOfferTheCardOnlyWhenKataWouldTakeATurnOn(t *testing.T)
 		"status not read":   {nil, false},
 		"can change":        {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true}, true},
 		"administrator":     {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff}, false},
-		"restart owed":      {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, false},
-		"already on":        {&model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, CanChange: true}, false},
-		"download underway": {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading}}, false},
+		"restart owed":      {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, false},
+		"already on":        {&model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn}, false},
+		"download underway": {&model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading}}, false},
 	} {
-		for _, chord := range []string{"ctrl+o", "meta+o"} {
-			t.Run(name+" "+chord, func(t *testing.T) {
-				m, cmds := wordsAnswered(t)
-				if tt.status != nil {
-					m = statusRead(t, m, cmds, *tt.status)
+		t.Run(name, func(t *testing.T) {
+			m, cmds := wordsAnswered(t)
+			if tt.status != nil {
+				m = statusRead(t, m, cmds, *tt.status)
+			}
+			if m.SearchTurnOnOffered() != tt.offer {
+				t.Fatalf("button offered %v, want %v", m.SearchTurnOnOffered(), tt.offer)
+			}
+			mode := m.CurrentMode()
+			opened, _ := press(m, "ctrl+o")
+			if opened.EmbeddingsCard.Open != tt.offer {
+				t.Fatalf("card open %v, want %v", opened.EmbeddingsCard.Open, tt.offer)
+			}
+			if !tt.offer {
+				if opened.CurrentMode() != mode {
+					t.Fatalf("mode %s, want %s", opened.CurrentMode(), mode)
 				}
-				if m.SearchTurnOnOffered() != tt.offer {
-					t.Fatalf("button offered %v, want %v", m.SearchTurnOnOffered(), tt.offer)
-				}
-				mode := m.CurrentMode()
-				opened, _ := press(m, chord)
-				if opened.EmbeddingsCard.Open != tt.offer {
-					t.Fatalf("card open %v, want %v", opened.EmbeddingsCard.Open, tt.offer)
-				}
-				if !tt.offer {
-					if opened.CurrentMode() != mode {
-						t.Fatalf("mode %s, want %s", opened.CurrentMode(), mode)
-					}
-					return
-				}
-				if opened.CurrentMode() != model.ModeEmbeddingsAsk {
-					t.Fatalf("mode %s, want the question", opened.CurrentMode())
-				}
-				closed, _ := press(opened, "n")
-				if closed.CurrentMode() != mode || !closed.Search.Open || closed.Search.Results != m.Search.Results {
-					t.Fatalf("closing the card left mode %s with search %+v, want %s", closed.CurrentMode(), closed.Search, mode)
-				}
-			})
-		}
+				return
+			}
+			if opened.CurrentMode() != model.ModeEmbeddingsAsk {
+				t.Fatalf("mode %s, want the question", opened.CurrentMode())
+			}
+			closed, _ := press(opened, "n")
+			if closed.CurrentMode() != mode || !closed.Search.Open || closed.Search.Results != m.Search.Results {
+				t.Fatalf("closing the card left mode %s with search %+v, want %s", closed.CurrentMode(), closed.Search, mode)
+			}
+		})
 	}
 }
 
@@ -143,10 +146,33 @@ func TestCtrlOIsNotOfferedWhenKataGaveAReasonOrAnsweredByMeaning(t *testing.T) {
 	}
 }
 
-func TestCtrlOIsTheTurnOnBindingInTheSearchModes(t *testing.T) {
+// ctrl+o is listed in the search footer and the help sheet only while Turn on… is on offer.
+func TestHelpSheetAndSearchFooterListCtrlOOnlyWhileTurnOnIsOffered(t *testing.T) {
+	listed := func(m model.Model) (sheet, footer bool) {
+		for _, group := range model.HelpSheetOn(model.PageIssues, m) {
+			for _, line := range group.Lines {
+				if slices.Contains(line.Keys, "ctrl+o") && strings.Contains(line.Text, "turn on search by meaning") {
+					sheet = true
+				}
+			}
+		}
+		for binding := range model.BindingsForMode(m.CurrentMode(), true) {
+			if binding.Chord == "ctrl+o" && binding.Offered(m) {
+				footer = true
+			}
+		}
+		return sheet, footer
+	}
 	m, cmds := wordsAnswered(t)
-	m = statusRead(t, m, cmds, model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true})
-	if b, ok := model.LookupBindingForMode("ctrl+o", m.CurrentMode()); !ok || b.Action != model.TurnOnSearchMeaning || !strings.Contains(b.Help, "turn on") {
-		t.Fatalf("ctrl+o in %s: %+v (bound %v)", m.CurrentMode(), b, ok)
+	if sheet, footer := listed(m); sheet || footer {
+		t.Errorf("before the status is read: help sheet %v, footer %v, want neither", sheet, footer)
+	}
+	on := statusRead(t, m, cmds, model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true})
+	if sheet, footer := listed(on); !sheet || !footer {
+		t.Errorf("with a turn-on on offer: help sheet %v, footer %v, want both", sheet, footer)
+	}
+	admin := statusRead(t, m, cmds, model.EmbeddingsStatus{Provider: model.EmbeddingsOff})
+	if sheet, footer := listed(admin); sheet || footer {
+		t.Errorf("for an administrator-only daemon: help sheet %v, footer %v, want neither", sheet, footer)
 	}
 }

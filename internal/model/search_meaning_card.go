@@ -18,7 +18,7 @@ const (
 	// ModeEmbeddingsOff is the card while kata would take a turn-on again (a failed job, or a refusal on a status that was out of
 	// date): s asks the question again.
 	ModeEmbeddingsOff Mode = "embeddings-off"
-	// ModeEmbeddingsRestart is the question whether the Pane restarts the kata daemon now: y restarts it, n or esc keeps the card.
+	// ModeEmbeddingsRestart is the question whether the Pane restarts the kata daemon now: y restarts it, n or esc closes the card.
 	ModeEmbeddingsRestart Mode = "embeddings-restart"
 )
 
@@ -74,15 +74,12 @@ type KataDaemonRestarted struct {
 
 func (KataDaemonRestarted) msg() {}
 
-// EmbeddingsCardState is the Search by meaning card. Asking says the question is shown. askOnRead says the card was opened before
-// any status was read and shows the question once one comes, when kata would take a turn-on. Err is kata's refusal of the last
-// turn-on.
+// EmbeddingsCardState is the Search by meaning card. Asking says the question is shown. Err is kata's refusal of the last turn-on.
 type EmbeddingsCardState struct {
 	Open   bool
 	Asking bool
 	// AskingRestart says the restart question is shown.
 	AskingRestart bool
-	askOnRead     bool
 	Err           error
 }
 
@@ -154,12 +151,12 @@ func (m Model) EmbeddingsCardBody() EmbeddingsCardBody {
 	switch {
 	case !s.Read:
 		b.State, b.Pending = "Reading search by meaning from the kata daemon…", true
+	case s.Restarting:
+		b.State, b.Pending = "Restarting the kata daemon…", true
 	case s.Err != nil:
 		b.State, b.Failed = "kata cannot report search by meaning here: "+oneLine(s.Err.Error()), true
 	case s.Turning:
 		b.State, b.Pending = "Turning it on…", true
-	case s.Restarting:
-		b.State, b.Pending = "Restarting the kata daemon…", true
 	case m.EmbeddingsCard.AskingRestart:
 		b.Question = RestartQuestion
 	case m.EmbeddingsCard.Asking:
@@ -202,15 +199,11 @@ func (m Model) embeddingsAskable() bool {
 
 // openEmbeddingsCard opens the Search by meaning card, from the Config row or from anywhere else. Its first state asks, when kata
 // would take a turn-on and the setup is not already under way, or asks to restart the daemon when a restart is owed and the daemon
-// is local; otherwise it shows the status. A status that is not known yet, that could not be read or that is still busy is read
-// first, which also starts the card's polling.
+// is local; otherwise it shows the status. Every opener has read a status already. One that could not be read or that is still busy
+// is read again, which also starts the card's polling.
 func openEmbeddingsCard(m Model) (Model, []Cmd) {
 	m.HelpOpen = false
 	m.EmbeddingsCard = EmbeddingsCardState{Open: true}
-	if !m.Embeddings.Read {
-		m.EmbeddingsCard.askOnRead = true
-		return m, []Cmd{askEmbeddings(&m, 0)}
-	}
 	m.EmbeddingsCard.Asking = m.embeddingsAsksOnOpen()
 	m.EmbeddingsCard.AskingRestart = m.restartOffered()
 	if m.Embeddings.Err != nil || m.Embeddings.Status.Busy() {
@@ -234,16 +227,12 @@ func turnOnEmbeddings(m Model) (Model, []Cmd) {
 	return m, cmds
 }
 
-// embeddingsCardRead settles the card for a status that has just been read: it opens on the question when it waited for one, and
-// drops the question when kata would no longer take a turn-on.
+// embeddingsCardRead settles the card for a status that has just been read: it drops the question when kata would no longer take a
+// turn-on.
 func (m Model) embeddingsCardRead() Model {
 	c := &m.EmbeddingsCard
 	if !c.Open {
 		return m
-	}
-	if c.askOnRead {
-		c.askOnRead = false
-		c.Asking = m.embeddingsAsksOnOpen()
 	}
 	if c.Asking && !m.embeddingsAskable() {
 		c.Asking = false
@@ -290,14 +279,20 @@ func confirmTurnOnEmbeddings(m Model) (Model, []Cmd) {
 	return m, []Cmd{TurnOnEmbeddings{Workspace: m.Workspace, Connection: m.Connection}}
 }
 
-// embeddingsTurnedOn takes kata's answer to the turn-on. A refusal (403, 409) is shown on the card, when it is still open, and the
-// status is read again, as it has changed under the card or never allowed this. kata's 202 carries the status the job starts with,
+// embeddingsTurnedOn takes kata's answer to the turn-on. A refusal (403, 409) or a failure to reach the daemon is shown on the card,
+// or on the Config Page's message line, or as a Notice when neither is shown, and the status is read again, as it has changed under the card or never allowed this. kata's 202 carries the status the job starts with,
 // which is read like any other, so polling begins while the card or the Config Page shows it.
 func embeddingsTurnedOn(m Model, msg EmbeddingsTurnedOn) (Model, []Cmd) {
 	m.Embeddings.Turning = false
 	if msg.Err != nil {
-		if m.EmbeddingsCard.Open {
-			m.EmbeddingsCard.Asking, m.EmbeddingsCard.Err = false, msg.Err
+		text := "Search by meaning was not turned on: " + oneLine(msg.Err.Error())
+		switch {
+		case m.EmbeddingsCard.Open:
+			m.EmbeddingsCard.Asking, m.EmbeddingsCard.Err = false, errors.New(text)
+		case m.OnConfig():
+			m.ConfigPage.Message, m.ConfigPage.MessageErr = text, true
+		default:
+			m.Notice = text
 		}
 		return m, []Cmd{askEmbeddings(&m, 0)}
 	}
@@ -352,6 +347,7 @@ func kataDaemonRestarted(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
 	m.Embeddings.Restarting = false
 	m = m.withEmbeddingsRow()
 	if msg.Err == nil {
+		m.Embeddings.returning = true
 		return m, []Cmd{askEmbeddings(&m, 0)}
 	}
 	text := "The kata daemon was not restarted: " + oneLine(msg.Err.Error())

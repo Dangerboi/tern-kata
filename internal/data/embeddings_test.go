@@ -1,8 +1,11 @@
 package data
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -13,6 +16,12 @@ import (
 
 // cannedEmbeddings is a daemon answering GET /api/v1/embeddings/local with status in the given HTTP status.
 func cannedEmbeddings(t *testing.T, code int, body map[string]any) *Gateway {
+	t.Helper()
+	return cannedEmbeddingsDaemon(t, false, code, body)
+}
+
+// cannedEmbeddingsDaemon is cannedEmbeddings for a daemon the connection reads as remote or local.
+func cannedEmbeddingsDaemon(t *testing.T, remote bool, code int, body map[string]any) *Gateway {
 	t.Helper()
 	server := startKata(t, "0.23.0")
 	hook := func(w http.ResponseWriter, r *http.Request) bool {
@@ -25,7 +34,9 @@ func cannedEmbeddings(t *testing.T, code int, body map[string]any) *Gateway {
 		return true
 	}
 	server.intercept.Store(&hook)
-	return newGateway(t, newLocator(server.target()))
+	target := server.target()
+	target.Remote = remote
+	return newGateway(t, newLocator(target))
 }
 
 func TestGatewayEmbeddingsStatusMapsEachProviderJobAndIndexingShape(t *testing.T) {
@@ -79,24 +90,69 @@ func TestGatewayEmbeddingsStatusMapsEachProviderJobAndIndexingShape(t *testing.T
 	}
 }
 
-func TestEmbeddingsStatusHostIsTheRemoteDaemonsHostAndEmptyForALocalOne(t *testing.T) {
+func TestEmbeddingsStatusNamesTheRemoteDaemonsHostAndNoHostForALocalOne(t *testing.T) {
+	body := map[string]any{"provider": "none", "download_bytes": 0, "ollama_available": false, "can_change": true}
+	const catalog = "[[daemon]]\nname = \"hub\"\nurl = \"https://kata.example:7474/\"\n"
+	const pin = "version = 1\n[server]\nurl = \"http://pinned.example:80\"\n"
 	for name, tc := range map[string]struct {
-		c      Client
-		server string
-		want   string
+		remote  bool
+		server  string // KATA_SERVER
+		current string // the catalog entry the Pane switched to
+		pin     string // the workspace's .kata.local.toml
+		want    string
 	}{
-		"catalog entry":   {Client{kind: model.DaemonRemote, entry: CatalogEntry{URL: "https://kata.example:7474/"}}, "https://ignored.example", "kata.example:7474"},
-		"KATA_SERVER":     {Client{kind: model.DaemonRemote}, "https://env.example", "env.example"},
-		"pinned url":      {Client{kind: model.DaemonRemote, pinURL: "http://pinned.example:80"}, "", "pinned.example:80"},
-		"remote, unknown": {Client{kind: model.DaemonRemote}, "", ""},
-		"local":           {Client{kind: model.DaemonLocal, pinURL: "https://pinned.example"}, "https://env.example", ""},
+		"catalog entry, which outranks KATA_SERVER": {true, "https://ignored.example", "hub", "", "kata.example:7474"},
+		"KATA_SERVER":                       {true, "https://env.example", "", "", "env.example"},
+		"pinned url":                        {true, "", "", pin, "pinned.example:80"},
+		"KATA_SERVER outranks a pinned url": {true, "https://env.example", "", pin, "env.example"},
+		"remote with no known url":          {true, "", "", "", ""},
+		"local":                             {false, "https://env.example", "", pin, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
+			gateway := cannedEmbeddingsDaemon(t, tc.remote, http.StatusOK, body)
 			t.Setenv("KATA_SERVER", tc.server)
-			if got := tc.c.remoteHost(); got != tc.want {
-				t.Errorf("host %q, want %q", got, tc.want)
+			writeCatalog(t, catalog)
+			gateway.current = tc.current
+			workspace := t.TempDir()
+			for file, text := range map[string]string{".kata.toml": "version = 1\n", ".kata.local.toml": tc.pin} {
+				if text == "" {
+					continue
+				}
+				if err := os.WriteFile(filepath.Join(workspace, file), []byte(text), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			loaded := as[model.EmbeddingsStatusLoaded](t, run(t, gateway, model.LoadEmbeddingsStatus{Workspace: workspace}))
+			if loaded.Err != nil || loaded.Status.Remote != tc.remote || loaded.Status.Host != tc.want {
+				t.Errorf("remote %v host %q (err %v), want remote %v host %q", loaded.Status.Remote, loaded.Status.Host, loaded.Err, tc.remote, tc.want)
 			}
 		})
+	}
+}
+
+func TestGatewayHoldsAnEmbeddingsStatusReadUntilItsPauseHasPassedOnTheWallClock(t *testing.T) {
+	gateway := cannedEmbeddings(t, http.StatusOK, map[string]any{"provider": "none", "download_bytes": 0, "ollama_available": false, "can_change": true})
+	gateway.wakePoll = 5 * time.Millisecond
+	start := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	var wall atomic.Int64
+	wall.Store(start.UnixNano())
+	gateway.now = func() time.Time { return time.Unix(0, wall.Load()) }
+
+	messages := make(chan model.Msg, 1)
+	go gateway.Run(context.Background(), model.LoadEmbeddingsStatus{Workspace: t.TempDir(), Request: 9, After: 2 * time.Second}, messages)
+	select {
+	case msg := <-messages:
+		t.Fatalf("read before the pause: %+v", msg)
+	case <-time.After(60 * time.Millisecond):
+	}
+	wall.Store(start.Add(2 * time.Second).UnixNano())
+	select {
+	case msg := <-messages:
+		if loaded := as[model.EmbeddingsStatusLoaded](t, msg); loaded.Err != nil || loaded.Request != 9 {
+			t.Fatalf("read %+v", loaded)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no read after the pause")
 	}
 }
 

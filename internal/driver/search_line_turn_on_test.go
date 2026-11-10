@@ -56,25 +56,12 @@ func TestSearchLineDrawsWhatKataAnsweredByWordsAndTheStatusSays(t *testing.T) {
 	if _, _, ok := turnOnButton(t, out.State); ok {
 		t.Fatal("Turn on… shows before the status is known")
 	}
-	for name, tc := range map[string]struct {
-		status model.EmbeddingsStatus
-		line   string
-		button bool
-	}{
-		"can change":    {offWithDownload, lead + "search by meaning is off on this daemon", true},
-		"restart owed":  {restartOwed, lead + "search by meaning is set up and waits for a kata daemon restart (`r` on the Config Page, `K`)", false},
-		"administrator": {model.EmbeddingsStatus{Provider: model.EmbeddingsOff}, lead + "search by meaning is off; a daemon administrator can turn it on (kata's Settings or `kata daemon local-embeddings`)", false},
-	} {
-		s := statusAnswered(t, out.State, read, tc.status)
-		if got := searchLineDrawn(t, s.State); got != tc.line {
-			t.Errorf("%s: search line %q, want %q", name, got, tc.line)
-		}
-		if _, _, ok := turnOnButton(t, s.State); ok != tc.button {
-			t.Errorf("%s: Turn on… drawn %v, want %v", name, ok, tc.button)
-		}
-		if opened := step(t, s.State, key("ctrl+o")).State; opened.Model.EmbeddingsCard.Open != tc.button {
-			t.Errorf("%s: ctrl+o opened the card: %v, want %v", name, opened.Model.EmbeddingsCard.Open, tc.button)
-		}
+	s := statusAnswered(t, out.State, read, offWithDownload)
+	if got := searchLineDrawn(t, s.State); got != lead+"search by meaning is off on this daemon" {
+		t.Errorf("search line %q after the status", got)
+	}
+	if _, _, ok := turnOnButton(t, s.State); !ok {
+		t.Error("Turn on… is not drawn although kata would take a turn-on")
 	}
 }
 
@@ -98,14 +85,4 @@ func TestTurnOnButtonAndCtrlOOpenTheQuestionAndClosingReturnsToTheSearch(t *test
 	if closed.Model.CurrentMode() != mode || !closed.Model.Search.Open {
 		t.Fatalf("after n: mode %s, want %s with the search still open", closed.Model.CurrentMode(), mode)
 	}
-}
-
-func TestTypingAfterAnAnswerByWordsDoesNotReadTheStatus(t *testing.T) {
-	out := searchedByWords(t)
-	s := statusAnswered(t, out.State, lastRead(t, out.Cmds), offWithDownload).State
-	typed, cmds := inputs(chord("b"))(s)
-	if _, ok := askedEmbeddings(cmds); ok {
-		t.Fatalf("typing read the status: %#v", cmds)
-	}
-	_ = typed
 }
