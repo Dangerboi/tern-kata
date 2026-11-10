@@ -40,8 +40,9 @@ type LaunchPlan struct {
 	Replace   bool
 	InitFlags map[string]string
 	// Force and Pause are `update --force` and `update --pause`. Preflight is `update --preflight`, the check one release
-	// runs of another; it is not for people, so usage and completion leave it out.
-	Force, Pause, Preflight bool
+	// runs of another, and PreflightText its `--text` form for the install scripts; neither is for people, so usage and
+	// completion leave them out.
+	Force, Pause, Preflight, PreflightText bool
 	// MessageText is `message -m`: the text to send. Teammate is the sender's KATA_TEAMMATE, which the slot carries so the receiving
 	// agent knows a peer wrote it; empty when a person sends. `agents --issue` and `message`'s address or ref are TargetRef.
 	MessageText string
@@ -131,6 +132,9 @@ func subcommandFlag(sub string, args []string, i *int, plan *LaunchPlan) (matche
 		return true, nil
 	case sub == "update" && arg == "--preflight":
 		plan.Preflight = true
+		return true, nil
+	case sub == "update" && arg == "--text":
+		plan.PreflightText = true
 		return true, nil
 	case sub == "worker" && arg == "--takeover":
 		plan.Takeover = true
@@ -394,6 +398,8 @@ func planSubcommand(args []string, lookup func(string) (string, bool)) (LaunchPl
 		return LaunchPlan{}, fmt.Errorf("%s: --as applies to %s only", plan.Subcommand, asForms[plan.Subcommand])
 	case plan.Subcommand == "update" && len(operands) > 0:
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata update [--force] [--pause]")
+	case plan.Subcommand == "update" && plan.PreflightText && !plan.Preflight:
+		return LaunchPlan{}, fmt.Errorf("update: --text applies to `tern-kata update --preflight` only")
 	case plan.Subcommand == "completion" && (len(operands) != 1 || !slices.Contains(completionShells, operands[0])):
 		return LaunchPlan{}, fmt.Errorf("usage: tern-kata completion bash|zsh|fish")
 	}

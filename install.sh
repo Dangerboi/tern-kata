@@ -96,6 +96,10 @@ main() {
 	chmod 755 "$dir/.tern-kata.new"
 	mv -f "$dir/.tern-kata.new" "$dir/tern-kata"
 	echo "Installed $("$dir/tern-kata" --version) to $dir/tern-kata"
+	# The installed binary checks this machine's kata daemon and worker.toml as `tern-kata update` does before a swap; here
+	# what it finds is only printed. A release before `--preflight --text` prints nothing on stdout; stdin is /dev/null
+	# because releases before 0.5 open a kata Pane for unknown arguments when run inside Tern from a terminal.
+	"$dir/tern-kata" update --preflight --text </dev/null >&2 2>/dev/null || :
 
 	case ":$PATH:" in
 	*":$dir:"*) ;;

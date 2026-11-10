@@ -237,7 +237,7 @@ func runCommand(ctx context.Context, plan LaunchPlan) error {
 		if err != nil {
 			return err
 		}
-		return runPreflight(ctx, env, os.Stdout)
+		return runPreflight(ctx, env, plan.PreflightText, out)
 	}
 	if plan.Subcommand == "update" {
 		env, err := newUpdateEnv()

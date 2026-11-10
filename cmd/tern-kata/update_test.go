@@ -334,6 +334,9 @@ func TestUpdateCommandLine(t *testing.T) {
 	if plan, err := PlanLaunch([]string{"update", "--preflight"}, lookupFrom(nil), "v"); err != nil || !plan.Preflight || plan.Force {
 		t.Errorf("update --preflight: %+v, %v", plan, err)
 	}
+	if plan, err := PlanLaunch([]string{"update", "--preflight", "--text"}, lookupFrom(nil), "v"); err != nil || !plan.Preflight || !plan.PreflightText {
+		t.Errorf("update --preflight --text: %+v, %v", plan, err)
+	}
 	plan, err := PlanLaunch([]string{"update", "--force", "--pause"}, lookupFrom(nil), "v")
 	if err != nil || plan.Subcommand != "update" || !plan.Force || !plan.Pause {
 		t.Errorf("update --force --pause: %+v, %v", plan, err)
@@ -345,6 +348,7 @@ func TestUpdateCommandLine(t *testing.T) {
 		"update now":    "usage: tern-kata update [--force] [--pause]",
 		"update --as x": "update: unknown flag --as",
 		"update --to 1": "update: unknown flag --to",
+		"update --text": "update: --text applies to `tern-kata update --preflight` only",
 	} {
 		if _, err := PlanLaunch(strings.Fields(args), lookupFrom(nil), "v"); err == nil || err.Error() != want {
 			t.Errorf("%s: error %v, want %q", args, err, want)

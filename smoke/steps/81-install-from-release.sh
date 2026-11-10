@@ -64,10 +64,20 @@ in_plugin_ok() { # CONFIG_DIR: the plugin folder holds the release's plugin file
 }
 mkdir -p "$tmp/install-home"
 
-# Full install: the binary, and the plugin from the archive.
-in_run "$in_tools/with-tern" "$tmp/install-config-full" "$tmp/install-bin-full" >"$tmp/install-full.out"
+# Full install: the binary, and the plugin from the archive. No kata daemon answers for its own HOME, so the installed
+# binary's pre-flight warns that it cannot check kata, and the install still succeeds.
+in_run "$in_tools/with-tern" "$tmp/install-config-full" "$tmp/install-bin-full" >"$tmp/install-full.out" 2>"$tmp/install-full.err"
 [[ $("$tmp/install-bin-full/tern-kata" --version) == *"v$in_version"* ]]
 in_plugin_ok "$tmp/install-config-full"
+grep -q "^warning: cannot check this machine's kata daemon (tern-kata v$in_version needs kata v" "$tmp/install-full.err"
+
+# Against the run's own kata daemon, which has every feature, the pre-flight has nothing to say.
+in_run "$in_tools/with-tern" "$tmp/install-config-full" "$tmp/install-bin-full" KATA_HOME="$KATA_HOME" >"$tmp/install-daemon.out" 2>&1
+if grep -q '^warning:' "$tmp/install-daemon.out"; then
+  echo "install against a current kata daemon printed a warning:" >&2
+  cat "$tmp/install-daemon.out" >&2
+  return 1
+fi
 
 # Plugin-only: the plugin and nothing else.
 in_run "$in_tools/with-tern" "$tmp/install-config-only" "$tmp/install-bin-only" TERN_KATA_PLUGIN_ONLY=1 >"$tmp/install-only.out"

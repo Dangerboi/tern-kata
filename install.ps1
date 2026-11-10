@@ -85,6 +85,14 @@ function Install-TernKata {
         }
         Move-Item (Join-Path $tmp 'tern-kata.exe') $exe
         Write-Host "Installed $(& $exe --version) to $exe"
+        # The installed binary checks this machine's kata daemon and worker.toml as `tern-kata update` does before a swap; here
+        # what it finds is only printed. A release before `--preflight --text` prints nothing on stdout; stdin is piped because
+        # releases before 0.5 open a kata Pane for unknown arguments when run inside Tern from a terminal. Continue, not Stop:
+        # under Windows PowerShell 5.1 a native command's stderr line is an error record, which Stop throws.
+        & {
+            $ErrorActionPreference = 'Continue'
+            $null | & $exe update --preflight --text 2>$null | ForEach-Object { Write-Warning ("$_" -replace '^warning: ', '') }
+        }
         if (-not $hasPlugin) {
             Write-Host 'This release carries no Tern window plugin, so the plugin was left as it is.'
         } elseif (Get-Command tern -ErrorAction SilentlyContinue) {

@@ -45,7 +45,7 @@ func preflightOf(t *testing.T, locate data.Locator, config string) (preflightAns
 		}
 	}
 	var out bytes.Buffer
-	err := runPreflight(context.Background(), preflightEnv{Locate: locate, Dirs: dirs, Version: "v0.9.0"}, &out)
+	err := runPreflight(context.Background(), preflightEnv{Locate: locate, Dirs: dirs, Version: "v0.9.0"}, false, &out)
 	status := 0
 	if err != nil {
 		status = exitStatus(err)
@@ -60,7 +60,7 @@ func preflightOf(t *testing.T, locate data.Locator, config string) (preflightAns
 func TestPreflightOfAHealthyMachineRefusesNothing(t *testing.T) {
 	var out bytes.Buffer
 	dirs := worker.Dirs{Config: t.TempDir(), State: t.TempDir()}
-	err := runPreflight(context.Background(), preflightEnv{Locate: daemonAt(t, "0.21.0"), Dirs: dirs, Version: "v0.9.0"}, &out)
+	err := runPreflight(context.Background(), preflightEnv{Locate: daemonAt(t, "0.23.0"), Dirs: dirs, Version: "v0.9.0"}, false, &out)
 	if err != nil || strings.TrimSpace(out.String()) != `{"refusals":[],"warnings":[]}` {
 		t.Errorf("got %q, %v", out.String(), err)
 	}
@@ -68,9 +68,41 @@ func TestPreflightOfAHealthyMachineRefusesNothing(t *testing.T) {
 
 func TestPreflightRefusesADaemonOlderThanTheNewBinaryNeeds(t *testing.T) {
 	answer, status := preflightOf(t, daemonAt(t, "0.19.0"), "")
-	want := "tern-kata v0.9.0 needs kata " + worker.MinKataVersion + " or newer; this machine's daemon is v0.19.0: upgrade kata, then run tern-kata update again"
+	want := "tern-kata v0.9.0 needs kata " + worker.MinKataVersion + " or newer; this machine's daemon is v0.19.0: upgrade kata"
 	if status != 1 || len(answer.Refusals) != 1 || answer.Refusals[0] != (preflightRefusal{Kind: "kata", Message: want}) || len(answer.Warnings) != 0 {
 		t.Errorf("status %d, answer %+v, want a kata refusal %q", status, answer, want)
+	}
+}
+
+func TestPreflightWarnsOfADaemonWithoutEveryFeatureAndStillExitsZero(t *testing.T) {
+	answer, status := preflightOf(t, daemonAt(t, "0.22.1"), "")
+	want := "this machine's kata daemon is v0.22.1: attachments and search by meaning need kata v0.23.0 or newer"
+	if status != 0 || len(answer.Refusals) != 0 || len(answer.Warnings) != 1 || answer.Warnings[0] != want {
+		t.Errorf("status %d, answer %+v, want the warning %q", status, answer, want)
+	}
+}
+
+func TestPreflightTextPrintsEveryRefusalAndWarningAsAWarningLine(t *testing.T) {
+	dirs := worker.Dirs{Config: t.TempDir(), State: t.TempDir()}
+	if err := os.WriteFile(dirs.ConfigPath(), []byte("no_such_key = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	err := runPreflight(context.Background(), preflightEnv{Locate: daemonAt(t, "0.19.0"), Dirs: dirs, Version: "v0.9.0"}, true, &out)
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if exitStatus(err) != 1 || len(lines) != 2 ||
+		lines[0] != "warning: tern-kata v0.9.0 needs kata "+worker.MinKataVersion+" or newer; this machine's daemon is v0.19.0: upgrade kata" ||
+		!strings.HasPrefix(lines[1], "warning: ") || !strings.Contains(lines[1], "no_such_key") {
+		t.Errorf("exit %d, output:\n%s", exitStatus(err), out.String())
+	}
+
+	out.Reset()
+	err = runPreflight(context.Background(), preflightEnv{Locate: func(context.Context, string) (data.Target, error) {
+		return data.Target{}, errors.New("no daemon\nstart the kata daemon")
+	}, Dirs: worker.Dirs{Config: t.TempDir(), State: t.TempDir()}, Version: "v0.9.0"}, true, &out)
+	want := "warning: cannot check this machine's kata daemon (tern-kata v0.9.0 needs kata " + worker.MinKataVersion + " or newer): no daemon\n"
+	if err != nil || out.String() != want {
+		t.Errorf("unreachable daemon: %v, output %q, want %q", err, out.String(), want)
 	}
 }
 
@@ -100,7 +132,7 @@ func TestPreflightRefusesAWorkerConfigTheNewBinaryCannotLoad(t *testing.T) {
 		t.Fatalf("status %d, answer %+v", status, answer)
 	}
 	msg := answer.Refusals[0].Message
-	if !strings.Contains(msg, "unknown key no_such_key") || !strings.HasSuffix(msg, "after updating, fix it with `tern-kata worker upgrade` or `tern-kata worker edit`") {
+	if !strings.Contains(msg, "unknown key no_such_key") || !strings.HasSuffix(msg, "tern-kata v0.9.0's `worker upgrade` or `worker edit` fixes it") {
 		t.Errorf("message %q", msg)
 	}
 }
@@ -111,14 +143,14 @@ func TestPreflightAcceptsAWorkerConfigTheNewBinaryCanLoad(t *testing.T) {
 	}
 }
 
-const refusingKata = `{"refusals":[{"kind":"kata","message":"tern-kata v0.2.0 needs kata v0.21.0 or newer; this machine's daemon is v0.19.0: upgrade kata, then run tern-kata update again"}],"warnings":["a warning"]}`
-const refusingConfig = `{"refusals":[{"kind":"config","message":"worker.toml: unknown key x; after updating, fix it with ` + "`tern-kata worker upgrade`" + ` or ` + "`tern-kata worker edit`" + `"}],"warnings":[]}`
+const refusingKata = `{"refusals":[{"kind":"kata","message":"tern-kata v0.2.0 needs kata v0.21.0 or newer; this machine's daemon is v0.19.0: upgrade kata"}],"warnings":["a warning"]}`
+const refusingConfig = `{"refusals":[{"kind":"config","message":"worker.toml: unknown key x; tern-kata v0.2.0's ` + "`worker upgrade`" + ` or ` + "`worker edit`" + ` fixes it"}],"warnings":[]}`
 
 func TestUpdateStopsOnAPreflightRefusalWithTheBinaryUntouched(t *testing.T) {
 	f := newUpdateFixture(t, "v0.1.0", "0.2.0", nil)
 	f.preflight(t, refusingKata, 1, "")
 	err := f.run(LaunchPlan{Subcommand: "update"})
-	if err == nil || exitStatus(err) != 1 || !strings.Contains(err.Error(), "this machine's daemon is v0.19.0: upgrade kata, then run tern-kata update again") || !strings.Contains(err.Error(), "nothing was installed") {
+	if err == nil || exitStatus(err) != 1 || !strings.Contains(err.Error(), "this machine's daemon is v0.19.0: upgrade kata") || !strings.Contains(err.Error(), "nothing was installed") {
 		t.Errorf("error %v (exit %d)", err, exitStatus(err))
 	}
 	if !strings.Contains(f.out.String(), "warning: a warning\n") || strings.Contains(f.out.String(), "Updated") {
@@ -233,7 +265,7 @@ func TestPreflightWarnsOfADaemonThatNeverAnswersWellBeforeTheTimeout(t *testing.
 		KataTimeout: 300 * time.Millisecond,
 	}
 	start := time.Now()
-	err = runPreflight(context.Background(), env, &out)
+	err = runPreflight(context.Background(), env, false, &out)
 	var answer preflightAnswer
 	if jsonErr := json.Unmarshal(out.Bytes(), &answer); jsonErr != nil {
 		t.Fatalf("stdout %q is not JSON: %v", out.String(), jsonErr)

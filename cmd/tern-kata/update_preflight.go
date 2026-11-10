@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 	"go.kenn.io/kit/consolewindow"
@@ -20,6 +22,9 @@ import (
 // Pre-flight is the check one release makes of another: `tern-kata update --preflight`, run by the old binary on the unpacked
 // new one before the swap. It is a contract between releases, which later ones may only add to: exit 0 when nothing is
 // refused and 1 when something is, and stdout is JSON, {"refusals":[{"kind":"kata"|"config","message":"…"}],"warnings":["…"]}.
+// `update --preflight --text` is the same check for the install scripts, which run it on the binary they just installed: the
+// same exit status, and stdout is one "warning: …" line per refusal and warning. A release before --text exits 2 with nothing
+// on stdout, so the scripts print nothing for it.
 
 // Refusal kinds. refusalFailed is not part of the contract: it is how this side records that the check itself could not run,
 // and never appears in the JSON.
@@ -37,6 +42,10 @@ const (
 	preflightTimeout = 30 * time.Second
 	kataTimeout      = 10 * time.Second
 )
+
+// featuresKataVersion is the oldest kata daemon with everything tern-kata offers: attachments set up by `kata docbank setup`
+// and search by meaning. A daemon between worker.MinKataVersion and this one gets a warning, never a refusal.
+const featuresKataVersion = "v0.23.0"
 
 type preflightRefusal struct {
 	Kind    string `json:"kind"`
@@ -65,31 +74,49 @@ func preflightAnswerFor(ctx context.Context, env preflightEnv) preflightAnswer {
 	kctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	target, err := env.Locate(kctx, "")
+	version := ""
 	if err == nil {
-		_, err = worker.NewKata(target.Client).Ping(kctx)
+		version, err = worker.NewKata(target.Client).Ping(kctx)
 	}
-	if tooOld, ok := errors.AsType[*worker.KataTooOldError](err); ok {
+	uncheckedPrefix := fmt.Sprintf("cannot check this machine's kata daemon (tern-kata %s needs kata %s or newer): ", withV(env.Version), worker.MinKataVersion)
+	switch tooOld, ok := errors.AsType[*worker.KataTooOldError](err); {
+	case ok:
 		answer.Refusals = append(answer.Refusals, preflightRefusal{Kind: refusalKata, Message: fmt.Sprintf(
-			"tern-kata %s needs kata %s or newer; this machine's daemon is %s: upgrade kata, then run tern-kata update again",
+			"tern-kata %s needs kata %s or newer; this machine's daemon is %s: upgrade kata",
 			withV(env.Version), worker.MinKataVersion, withV(tooOld.Version))})
-	} else if err != nil && kctx.Err() != nil && ctx.Err() == nil {
-		answer.Warnings = append(answer.Warnings, fmt.Sprintf("cannot check this machine's kata daemon: it did not answer within %s", timeout))
-	} else if err != nil {
-		answer.Warnings = append(answer.Warnings, "cannot check this machine's kata daemon: "+firstLine(err.Error()))
+	case err != nil && kctx.Err() != nil && ctx.Err() == nil:
+		answer.Warnings = append(answer.Warnings, fmt.Sprintf("%sit did not answer within %s", uncheckedPrefix, timeout))
+	case err != nil:
+		answer.Warnings = append(answer.Warnings, uncheckedPrefix+firstLine(err.Error()))
+	case semver.Compare(version, featuresKataVersion) < 0:
+		answer.Warnings = append(answer.Warnings, fmt.Sprintf(
+			"this machine's kata daemon is %s: attachments and search by meaning need kata %s or newer", version, featuresKataVersion))
 	}
 	path := env.Dirs.ConfigPath()
 	if _, statErr := os.Stat(path); statErr == nil {
 		if _, err := worker.LoadConfig(path); err != nil {
 			answer.Refusals = append(answer.Refusals, preflightRefusal{Kind: refusalConfig, Message: fmt.Sprintf(
-				"%s; after updating, fix it with `tern-kata worker upgrade` or `tern-kata worker edit`", err)})
+				"%s; tern-kata %s's `worker upgrade` or `worker edit` fixes it", err, withV(env.Version))})
 		}
 	}
 	return answer
 }
 
-func runPreflight(ctx context.Context, env preflightEnv, out io.Writer) error {
+// runPreflight prints the answer as JSON, or with text as the install scripts' "warning: …" lines.
+func runPreflight(ctx context.Context, env preflightEnv, text bool, out io.Writer) error {
 	answer := preflightAnswerFor(ctx, env)
-	if err := json.NewEncoder(out).Encode(answer); err != nil {
+	if text {
+		var b strings.Builder
+		for _, r := range answer.Refusals {
+			b.WriteString("warning: " + r.Message + "\n")
+		}
+		for _, w := range answer.Warnings {
+			b.WriteString("warning: " + w + "\n")
+		}
+		if _, err := io.WriteString(out, b.String()); err != nil {
+			return err
+		}
+	} else if err := json.NewEncoder(out).Encode(answer); err != nil {
 		return err
 	}
 	if len(answer.Refusals) > 0 {

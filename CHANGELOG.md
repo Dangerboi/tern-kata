@@ -4,6 +4,20 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Install and update
+
+- The install scripts check this machine after installing and print a warning when the kata daemon is older than tern-kata needs or can't be reached, or `worker.toml` won't load.
+  - The check is the installed release's own, the one `tern-kata update` runs before a swap, and the install goes ahead whatever it finds.
+- `tern-kata update` and the install scripts warn when the kata daemon is older than kata v0.23.0, which attachments and search by meaning need.
+
+### Changed
+
+#### Install and update
+
+- `tern-kata update`'s warning that the kata daemon can't be reached names the kata version tern-kata needs, and its refusal of a too-old daemon or a `worker.toml` reads right after an install too.
+
 ## [0.11.0] - 2026-11-10
 
 ### Added
