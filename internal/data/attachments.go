@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 
 	"github.com/doordash-oss/oapi-codegen-dd/v3/pkg/runtime"
@@ -60,14 +61,37 @@ func (c *Client) attachmentsConfigured(ctx context.Context) (bool, error) {
 // kata leaves the field out when it has no Docbank, so absent reads as not configured.
 func docbankConfigured(c g.UICapabilities) bool { return c.Attachments != nil && *c.Attachments }
 
+// attachSource resolves what the user typed or pasted into a file to attach. Tern pastes a copied file shell-escaped (`my\ file.txt`),
+// so when the path as typed does not exist, the path with POSIX backslash escapes removed is tried. The literal path wins so a
+// Windows path or a name holding a real backslash still works.
 func attachSource(workspace, input string) (string, error) {
-	path := strings.TrimSpace(input)
-	if len(path) >= 2 && (path[0] == '"' || path[0] == '\'') && path[len(path)-1] == path[0] {
-		path = path[1 : len(path)-1]
+	typed := strings.TrimSpace(input)
+	if len(typed) >= 2 && (typed[0] == '"' || typed[0] == '\'') && typed[len(typed)-1] == typed[0] {
+		typed = typed[1 : len(typed)-1]
 	}
-	if path == "" {
+	if typed == "" {
 		return "", errors.New("No file given.")
 	}
+	path, err := resolveAttachPath(workspace, typed)
+	if err != nil {
+		return "", err
+	}
+	if _, statErr := os.Stat(path); errors.Is(statErr, fs.ErrNotExist) && goruntime.GOOS != "windows" {
+		if unescaped := unescapeShell(typed); unescaped != typed {
+			if alt, altErr := resolveAttachPath(workspace, unescaped); altErr == nil {
+				if _, altStat := os.Stat(alt); !errors.Is(altStat, fs.ErrNotExist) {
+					path = alt
+				}
+			}
+		}
+	}
+	if err := attachableFile(path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func resolveAttachPath(workspace, path string) (string, error) {
 	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -78,10 +102,19 @@ func attachSource(workspace, input string) (string, error) {
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(workspace, path)
 	}
-	if err := attachableFile(path); err != nil {
-		return "", err
-	}
 	return path, nil
+}
+
+// unescapeShell turns each `\<char>` into `<char>`; a trailing lone backslash stays.
+func unescapeShell(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			i++
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 func attachableFile(path string) error {

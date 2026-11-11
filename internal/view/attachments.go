@@ -6,5 +6,5 @@ import (
 )
 
 func attachmentSpans(row model.DetailRow) []ui.Span {
-	return []ui.Span{{T: row.File.Name, S: "accent"}, {T: "  " + row.File.Description(), S: "muted"}}
+	return []ui.Span{{T: row.File.Name, S: "accent link"}, {T: "  " + row.File.Description(), S: "muted"}}
 }

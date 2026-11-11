@@ -3,11 +3,13 @@ package data
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kit/consolewindow"
@@ -48,6 +50,34 @@ func isOpenable(name string) bool {
 	return slices.Contains(openableExtensions, strings.ToLower(filepath.Ext(name)))
 }
 
+// ternShows are the extensions Tern's own file block draws in place beside the Pane: images, plain text, Markdown and JSON. Video, audio
+// and PDFs open in a block that only hands them to the OS of the machine showing the window, and a CSV opens a table block that
+// takes the focus, so those go to the OS opener of the session host as before.
+var ternShows = []string{".png", ".jpg", ".jpeg", ".gif", ".txt", ".md", ".json"}
+
+// inTern reports whether this program runs in a Tern Pane or a headless Tern session, the two cases where `tern open` finds the window
+// that shows it.
+func inTern() bool {
+	return os.Getenv("TERN_PANE") != "" || os.Getenv("TERN_WINDOW_SOCKET") != ""
+}
+
+// openInTern shows path in the preview block of the Pane's tab with `tern open --preview`, which leaves the focus in the Pane and
+// replaces the preview it showed before. It runs with the Pane's environment, which carries the window `tern open` answers to.
+func (g *Gateway) openInTern(ctx context.Context, path string) error {
+	ctx, cancel := context.WithTimeout(ctx, ternOpenTimeout)
+	defer cancel()
+	out, err := g.runTern(ctx, []string{"open", "--preview", path})
+	if err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("tern open: %s: %w", msg, err)
+		}
+		return fmt.Errorf("tern open: %w", err)
+	}
+	return nil
+}
+
+const ternOpenTimeout = 15 * time.Second
+
 func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) model.Msg {
 	failed := func(err error) model.Msg {
 		return model.AttachmentOpened{UID: cmd.UID, Name: cmd.Attachment.Name, Err: err}
@@ -67,6 +97,10 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 		opened.Err = fmt.Errorf("saved at %s and not opened: tern-kata opens only images, video, audio, PDFs and text", opened.Path)
 		return opened
 	}
+	if inTern() && slices.Contains(ternShows, strings.ToLower(filepath.Ext(cmd.Attachment.Name))) && g.openInTern(ctx, opened.Path) == nil {
+		return opened
+	}
+	opened.OutsideTern = true
 	if err := g.openFile(opened.Path); err != nil {
 		opened.Err = fmt.Errorf("Saved %s but could not open it: %w", opened.Path, err)
 	}

@@ -23,6 +23,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - `tern-kata update`'s warning that the kata daemon can't be reached names the kata version tern-kata needs, and its refusal of a too-old daemon or a `worker.toml` reads right after an install too.
 
+#### Attachments
+
+- Opening an Attachment shows images (`.png`, `.jpg`, `.jpeg`, `.gif`), text, Markdown and JSON in Tern's preview block beside the kata Pane, with the focus staying in the Pane.
+  - Video, audio, PDFs and the other files tern-kata opens still go to your OS's program, as does any file when tern-kata does not run in a Tern Pane or `tern open` fails; the notice then says it opened outside Tern.
+
 #### Issues and Pages
 
 - The kata Pane works from 40 columns, down from 80, so it fits a phone held upright, a phone held sideways beside an agent, and an iPad in a split.
@@ -44,6 +49,15 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Install and update
 
 - On Tern 0.9.16 and later, Update tern-kata reports how the window machine's plugin step ended even when the step's install reloads the plugin before it finishes: a step that fails after that reload shows "tern-kata plugin was not updated" with its last error line, where tern-kata used to say the plugin was updated.
+
+#### Attachments
+
+- The attach field accepts the path Tern pastes for a copied file, which escapes spaces and parentheses with backslashes (`my\ file.txt`).
+- Clicking an Attachment in the Attachments tab opens it, as Enter does, and its name shows as a link.
+
+#### Issues and Pages
+
+- Hovering an Issue row shows a step of its own on plain and striped rows, wide and two-line, where it used to match the stripe or drop it.
 
 ## [0.11.0] - 2026-11-10
 

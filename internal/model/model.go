@@ -366,6 +366,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case AttachmentOpened:
 		if msg.Err != nil {
 			m.Notice = fmt.Sprintf("Cannot open %s: %v", msg.Name, msg.Err)
+		} else if msg.OutsideTern {
+			m.Notice = fmt.Sprintf("Opened %s outside Tern (%s)", msg.Name, msg.Path)
 		} else {
 			m.Notice = fmt.Sprintf("Opened %s (%s)", msg.Name, msg.Path)
 		}
@@ -435,6 +437,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case DetailItemMsg:
 		if msg.Tab < TabCount {
 			m = m.chooseRow(msg.Tab, msg.Key)
+			if row, ok := m.withRows().cursorRow(); ok && row.Kind == RowAttachment && row.Key == msg.Key {
+				return m.openCursorRow() // an Attachment opens on a click as it does on enter
+			}
 		}
 	case CollectionSelected:
 		return updateCollection(m, msg)

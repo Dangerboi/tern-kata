@@ -50,6 +50,8 @@ func (OpenAttachment) cmd() {}
 type AttachmentOpened struct {
 	UID, Name, Path string
 	Err             error
+	// OutsideTern is set when the file went to the OS opener rather than Tern's preview block.
+	OutsideTern bool
 }
 
 func (AttachmentOpened) msg() {}

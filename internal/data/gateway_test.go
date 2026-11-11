@@ -111,6 +111,9 @@ func (l *locator) locate(context.Context, string) (Target, error) {
 func newGateway(t testing.TB, l *locator) *Gateway {
 	t.Helper()
 	gateway := NewGateway(l.locate)
+	// A test run from a Tern Pane must not ask that Tern to open what a test downloads.
+	t.Setenv("TERN_PANE", "")
+	t.Setenv("TERN_WINDOW_SOCKET", "")
 	state := t.TempDir()
 	gateway.workerDirs = func() (worker.Dirs, error) { return worker.Dirs{Config: state, State: state}, nil }
 	t.Cleanup(gateway.Close)

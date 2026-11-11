@@ -609,3 +609,66 @@ func TestCloseCitingAnAttachmentTheIssueDoesNotHaveIsRefused(t *testing.T) {
 		t.Fatalf("close %+v, status %q", closed, f.issue(t, f.uid).Status)
 	}
 }
+
+func TestAttachSource(t *testing.T) {
+	workspace := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	write := func(dir, name string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	spaced := write(workspace, "test .txt")
+	quoted := write(workspace, `it's (1).txt`)
+	plain := write(workspace, "plain.txt")
+	homed := write(home, "my file.txt")
+
+	tests := []struct {
+		name, input, want string
+	}{
+		{"plain path", plain, plain},
+		{"quoted path", `"` + plain + `"`, plain},
+		{"relative path", "plain.txt", plain},
+		{"escaped space", strings.ReplaceAll(spaced, " ", `\ `), spaced},
+		{"escaped quote and parentheses", filepath.Join(workspace, `it\'s\ \(1\).txt`), quoted},
+		{"escaped space relative", `test\ .txt`, spaced},
+		{"home with escaped space", `~/my\ file.txt`, homed},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if runtime.GOOS == "windows" && strings.Contains(tc.input, `\`) {
+				t.Skip("backslash is the path separator on Windows")
+			}
+			got, err := attachSource(workspace, tc.input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("literal backslash name wins", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("a backslash cannot be part of a Windows file name")
+		}
+		literal := write(workspace, `a\ b.txt`)
+		write(workspace, "a b.txt")
+		got, err := attachSource(workspace, literal)
+		if err != nil || got != literal {
+			t.Fatalf("got %q, %v; want %q", got, err, literal)
+		}
+	})
+
+	t.Run("missing path names the typed text", func(t *testing.T) {
+		_, err := attachSource(workspace, `/nowhere/no\ file.txt`)
+		if err == nil || !strings.Contains(err.Error(), `/nowhere/no\ file.txt`) || !strings.Contains(err.Error(), "does not exist") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+}

@@ -55,10 +55,16 @@ const ModeChipCSS = `.sf-ed-mode { display: none !important; }`
 const OrderedListCSS = `.md ol { padding-left: 40px !important; }`
 
 // StripeCSS is the plugin's style sheet, installed once on the surface (Tern
-// confines it to the surface). The shade mixes the theme's text colour into the
-// row, so it is a light tint on a dark theme and a dark one on a light theme.
-// :not(.sel) leaves the selected row's own highlight, :not(:hover) the hover's.
-const StripeCSS = `.sf-item[data-role~='` + StripeRole + `']:not(.sel):not(:hover), .sf-row[data-role~='` + StripeRole + `']:not(:hover) { background-color: color-mix(in srgb, var(--t1) 5%, transparent); }`
+// confines it to the surface). The shades mix the theme's text colour into the
+// row, so they are light tints on a dark theme and dark ones on a light theme: 5%
+// for a striped row, 12% for the row under the pointer, striped or not. Tern's own
+// hover is hardly apart from the stripe, so the rule sets its own, and has the
+// specificity to win. The darker hover leaves Tern's muted text (--t3) under 4.5:1 in a
+// light theme, so a hovered row's muted spans move 40% toward --t1. :not(.sel) leaves
+// the selected row's own highlight and white text.
+const StripeCSS = `.sf-item[data-role~='` + StripeRole + `']:not(.sel), .sf-row[data-role~='` + StripeRole + `'] { background-color: color-mix(in srgb, var(--t1) 5%, transparent); }
+.sf-item[data-role~='` + ListRowRole + `']:not(.sel):hover { background-color: color-mix(in srgb, var(--t1) 12%, transparent); }
+.sf-item[data-role~='` + ListRowRole + `']:not(.sel):hover .sf-t-muted { color: color-mix(in srgb, var(--t3), var(--t1) 40%); }`
 
 // SelectedCSS paints the selected Issue row (Tern marks it .sel from the list's
 // Selected) with the theme's accent fill and white text, the pairing Tern's own
@@ -102,7 +108,9 @@ const (
 )
 
 // TwoLineRowCSS gives the two-line row, a Col, the padding of an Item and the selected look of SelectedCSS, which only reaches
-// Items. It also shades unselected striped rows, as StripeCSS does Items.
+// Items. It also shades striped rows and the row under the pointer as StripeCSS does Items.
 const TwoLineRowCSS = `.sf-col[data-role~='` + TwoLineRowRole + `'] { padding: 2px 8px; }
-.sf-col[data-role~='` + StripeRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):not(:hover) { background-color: color-mix(in srgb, var(--t1) 5%, transparent); }
+.sf-col[data-role~='` + StripeRole + `']:not([data-role~='` + TwoLineSelectedRole + `']) { background-color: color-mix(in srgb, var(--t1) 5%, transparent); }
+.sf-col[data-role~='` + TwoLineRowRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):hover { background-color: color-mix(in srgb, var(--t1) 12%, transparent); }
+.sf-col[data-role~='` + TwoLineRowRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):hover .sf-t-muted { color: color-mix(in srgb, var(--t3), var(--t1) 40%); }
 .sf-col[data-role~='` + TwoLineSelectedRole + `'], .sf-col[data-role~='` + TwoLineSelectedRole + `'] * { background-color: var(--accent-fill) !important; color: #fff !important; }`

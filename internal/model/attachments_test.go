@@ -131,6 +131,26 @@ func TestEnterOnAnAttachmentRowDownloadsAndOpensIt(t *testing.T) {
 	}
 }
 
+func TestClickingAnAttachmentRowSelectsAndOpensIt(t *testing.T) {
+	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5), "attachment.B": reference("b.png", "image/png", 5)})
+	next, cmds := model.Update(m, model.DetailItemMsg{Tab: model.TabAttachments, Key: model.AttachmentRowKey("B")})
+	open, ok := model.OpenAttachment{}, false
+	if len(cmds) == 1 {
+		open, ok = cmds[0].(model.OpenAttachment)
+	}
+	if !ok || open.Attachment.ID != "B" || open.UID != "a" || cursorKey(next) != model.AttachmentRowKey("B") {
+		t.Fatalf("click: cmds %#v, cursor %q", cmds, cursorKey(next))
+	}
+}
+
+func TestAnAttachmentOpenedByTheOSIsSaidToBeOutsideTern(t *testing.T) {
+	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5)})
+	m, _ = model.Update(m, model.AttachmentOpened{UID: "a", Name: "a.png", Path: "/cache/a.png", OutsideTern: true})
+	if m.Notice != "Opened a.png outside Tern (/cache/a.png)" {
+		t.Fatalf("notice %q", m.Notice)
+	}
+}
+
 func TestAnOpenedAttachmentIsSaidAsANoticeAndAFailureToo(t *testing.T) {
 	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5)})
 	m, _ = model.Update(m, model.AttachmentOpened{UID: "a", Name: "a.png", Path: "/cache/a.png"})
