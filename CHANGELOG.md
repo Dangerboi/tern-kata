@@ -4,6 +4,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+#### Daemons and Federation
+
+- The explicit-Unix integration requires the reviewable Kata SDK fork: environment and workspace Unix endpoints select their socket without target runtime records, support `KATA_AUTH_TOKEN_FILE`, and fail without fallback or daemon startup when that socket disappears. This checkout is not a released installer artifact.
+
 ## [0.11.0] - 2026-11-10
 
 ### Added
