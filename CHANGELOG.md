@@ -69,6 +69,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - The Issue row under the pointer is shaded darker than a striped row, so it stands out on plain and striped rows, one-line and two-line, where it used to look like the stripe or lose its shade.
 
+#### Jobs and worker
+
+- The worker reads a Project's job list again about 2 seconds after a failed read that a job change asked for, so a job created or edited while the kata daemon briefly failed is picked up then, not at the next periodic refresh minutes later.
+
 ## [0.11.0] - 2026-11-10
 
 ### Added

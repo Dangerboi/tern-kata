@@ -97,8 +97,8 @@ type projectState struct {
 	jobs    map[string]cronjob.Job
 	jobsErr string
 	jobsAt  time.Time // when the job list was last read, successfully or not
-	// jobsReads counts the reads of the job list, so a read after an event is told apart from one before it even when the
-	// clock reads the same for both.
+	// jobsReads counts the successful reads of the job list, so a read after an event is told apart from one before it even
+	// when the clock reads the same for both, and a failed read does not answer the event.
 	jobsReads  uint64
 	streamOpen bool
 

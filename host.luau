@@ -31,6 +31,9 @@ local running = false
 local started_text: string? = nil
 -- A `worker supervised` question is out; its answer arms the next look.
 local asking = false
+-- The worker named in the held line ended while a question was out: a HELD answer to that question may name the dead worker,
+-- so the next look comes at once instead of after POLL_MS.
+local recheck = false
 local warned_missing = false
 local warned_status = false
 local ASK_LIMIT_MS = 10000
@@ -204,7 +207,11 @@ end
 -- this function: it ends as a `process_exit` event, which worker_ended does not take for the worker's end.
 local function answered(binary: string, result: ProcessResult)
     asking = false
+    local again = recheck
+    recheck = false
     if result.status == HELD and not result.timed_out then
+        -- The question may have seen the worker that has since ended: ask again at once, logging nothing for it.
+        if again then return arm(0) end
         -- worker.lock would refuse a second worker: start none, and look again next poll.
         local line = last_line(result.stdout)
         if line ~= held_line then
@@ -282,6 +289,7 @@ local function worker_ended(ev: any)
         -- The line may come from tern.kv alone (the reloaded VM's first poll has not answered), so forget_held sees it.
         held_line = line
         forget_held()
+        recheck = asking
     end
     start()
 end

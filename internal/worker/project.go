@@ -249,11 +249,12 @@ func (w *Worker) refreshJobs(ctx context.Context, ps *projectState) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	ps.jobsAt = w.clock.Now()
-	ps.jobsReads++
 	if err != nil {
 		ps.jobsErr = err.Error()
 		return fmt.Errorf("listing jobs: %w", err)
 	}
+	// Only a listing that answered counts: a failed one leaves an event's dirty job list dirty, so it is tried again.
+	ps.jobsReads++
 	ps.jobs = make(map[string]cronjob.Job, len(jobs))
 	for _, j := range jobs {
 		ps.jobs[j.UID] = j

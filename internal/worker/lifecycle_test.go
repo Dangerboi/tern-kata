@@ -83,6 +83,35 @@ func TestRunNowIsRefusedWhenTheProjectsJobsCannotBeRefreshed(t *testing.T) {
 	}
 }
 
+// A job event whose listing fails keeps the job list out of date: the next listing comes after the debounce, not at the next
+// periodic refresh minutes later. The clock stands still between steps, so the worker lists only when the test moves it.
+func TestAJobEventWhoseListingFailsListsAgainAfterTheDebounce(t *testing.T) {
+	h := newHarness(t)
+	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "first", Prompt: "Do it.", Checkout: "repo"})
+	r := h.start(worker.Hooks{})
+	h.admitting(r)
+	h.eventually("the first job to be known", func() bool { return r.w.Status().Projects[0].AdapterJobs == 1 })
+	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "second", Prompt: "Do it.", Checkout: "repo"})
+	time.Sleep(200 * time.Millisecond) // the job event reaches the worker, which waits for the debounce
+	var failed atomic.Int32
+	h.kata.Fail(func(req *http.Request) bool {
+		if !isJobList(req) {
+			return false
+		}
+		failed.Add(1)
+		return true
+	})
+	h.clock.Advance(3 * time.Second)
+	h.eventually("the listing the event asks for to fail", func() bool { return failed.Load() > 0 })
+	time.Sleep(100 * time.Millisecond)
+	h.kata.Heal()
+	if n := r.w.Status().Projects[0].AdapterJobs; n != 1 {
+		t.Fatalf("%d jobs known while the listing failed, want 1", n)
+	}
+	h.clock.Advance(3 * time.Second)
+	h.eventually("the second job to be known", func() bool { return r.w.Status().Projects[0].AdapterJobs == 2 })
+}
+
 // A notify job has no readiness requirement: its Issue being closed is no reason to refuse it.
 func TestANotifyJobOnAClosedIssueStillNotifies(t *testing.T) {
 	h := newHarness(t)
