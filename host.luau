@@ -211,7 +211,7 @@ local function answered(binary: string, result: ProcessResult)
     recheck = false
     if result.status == HELD and not result.timed_out then
         -- The question may have seen the worker that has since ended: ask again at once, logging nothing for it.
-        if again then return arm(0) end
+        if again then return arm(1) end
         -- worker.lock would refuse a second worker: start none, and look again next poll.
         local line = last_line(result.stdout)
         if line ~= held_line then
