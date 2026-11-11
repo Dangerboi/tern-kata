@@ -62,7 +62,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 ![The Dates card over the Board, with "+1w" typed in Scheduled and the date it resolves to below it](docs/images/dates-card.png)
 
-**Moving an Issue.** `M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. The Issue moves with its open descendants; `o` (Only this Issue) moves it alone. A Notice links to the Issue in its new Project. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
+**Moving an Issue.** `M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. The Issue moves with its open descendants; `o` (Only this Issue) moves it alone. A toast names the Issue in its new Project, and its Open button opens it there. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
 
 **Deleting and restoring an Issue.** `X` opens the Delete card on the selected Issue: type its `project#id` (or `DELETE project#id`, as in kata tui) to confirm, add a reason if you like (kept as a `Deleted: <reason>` comment on the Issue), and kata deletes it (soft: it keeps the Issue and its history). `u` right after restores it, and the Menu's "Restore a deleted Issue" brings back an earlier one by short id, `project#id` or ULID. See [Deleting and restoring an Issue](docs/guide/pages-and-board.md#deleting-and-restoring-an-issue).
 

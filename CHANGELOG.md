@@ -22,7 +22,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Install and update
 
 - `tern-kata update`'s warning that the kata daemon can't be reached names the kata version tern-kata needs.
-- `tern-kata update`'s refusal of a too-old kata daemon says "upgrade kata" without "then run tern-kata update again", and its refusal of a `worker.toml` that won't load names the version's `worker upgrade` and `worker edit` as the fix, so both read right after an install too.
+- `tern-kata update`'s refusal of a too-old kata daemon says "upgrade kata" without "then run tern-kata update again", so it reads right after an install too.
+- `tern-kata update`'s refusal of a `worker.toml` that won't load names the new version's `worker upgrade` and `worker edit` as the fix.
 
 #### Attachments
 
@@ -40,7 +41,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Jobs and worker
 
-- The plugin starts a new worker at once, instead of within 10 seconds, when a worker that kept running through a plugin reload or a Tern update ends, and Tern's daemon log says how the old one ended (Tern 0.9.16 and later).
+- The plugin starts a new worker at once, instead of within 10 seconds, when a worker that kept running through a plugin reload or a Tern update ends (Tern 0.9.16 and later).
+  - Tern's daemon log says how the old worker ended.
 
 #### Tern window
 

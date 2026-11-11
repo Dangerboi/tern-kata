@@ -543,6 +543,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case SelectMsg:
 		return selectRow(m, msg.UID), nil
 	case ContextMenuPickMsg:
+		// A pick is a click on its row and then the key: the list takes the focus even when the row is already selected, so a key
+		// that depends on the focus (enter) acts on the row, never on the detail's cursor row.
+		if !m.covered() {
+			m = selectRow(m, msg.UID)
+		}
 		return runChordOn(m, msg.UID, msg.Chord, msg.Mode)
 	case ResizeMsg:
 		m.Cols, m.Rows = msg.Cols, msg.Rows
@@ -564,14 +569,14 @@ func runChord(m Model, chord string, mode Mode) (next Model, cmds []Cmd, ran boo
 	return next, cmds, true
 }
 
-// runChordOn runs the binding of chord in mode on Issue uid, selected as a click selects it (the list takes the focus), whatever
-// mode the Pane's list, Board or search line is in now: a context menu pick and a toast's button. An empty uid acts on no Issue;
-// an Issue that does not show as a row, or a Pane covered by a card or a question, does nothing.
+// runChordOn runs the binding of chord in mode on Issue uid, selecting it first when the selection has moved off it, whatever mode
+// the Pane's list, Board or search line is in now: a context menu pick and a toast's button. An empty uid acts on no Issue. It does
+// nothing when the selection has moved off uid and uid no longer shows as a row, or while a card, a question or help covers the Pane.
 func runChordOn(m Model, uid, chord string, mode Mode) (Model, []Cmd) {
 	if m.covered() {
 		return m, nil
 	}
-	if uid != "" {
+	if uid != "" && m.SelectedUID != uid {
 		if m = selectRow(m, uid); m.SelectedUID != uid {
 			return m, nil
 		}

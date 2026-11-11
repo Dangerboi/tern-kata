@@ -143,8 +143,10 @@ func (m Model) DetailRowCount(tab ActivityTab) int {
 }
 
 // Width tiers, in Pane columns. MinCols fits a phone held upright (about 47 columns) and sideways beside an agent (43);
-// below TwoLineRowCols an Issue row puts its title on a line of its own, and below FoldedLegendCols the key legend folds
-// behind a keys chip. SideBySideCols matches kata's own TUI.
+// below TwoLineRowCols an Issue row puts its title on a line of its own and pages move half as far. FoldedLegendCols is the narrow
+// layout's edge: below it the key legend folds behind a keys chip, the Page bar shows icons for the other Pages, the detail's tabs
+// drop their counts, the heading drops the counts and the Daemon chip, and the Agent card puts Cancel last. SideBySideCols matches
+// kata's own TUI.
 const (
 	MinCols          = 40
 	TwoLineRowCols   = 60
