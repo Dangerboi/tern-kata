@@ -336,9 +336,7 @@ func TestUnixAgentRouteProcess(t *testing.T) {
 	}
 	for _, line := range set {
 		name, value, _ := strings.Cut(line, "=")
-		if err := os.Setenv(name, value); err != nil {
-			t.Fatal(err)
-		}
+		t.Setenv(name, value)
 	}
 	target, err := LocateWithKata(t.Context(), "")
 	if err != nil {
