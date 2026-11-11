@@ -61,8 +61,9 @@ const OrderedListCSS = `.md ol { padding-left: 40px !important; }`
 // hover is hardly apart from the stripe, so the rule sets its own, and has the
 // specificity to win. The darker hover leaves Tern's muted text (--t3) under 4.5:1 in a
 // light theme, so a hovered row's muted spans move 40% toward --t1. :not(.sel) leaves
-// the selected row's own highlight and white text.
-const StripeCSS = `.sf-item[data-role~='` + StripeRole + `']:not(.sel), .sf-row[data-role~='` + StripeRole + `'] { background-color: color-mix(in srgb, var(--t1) 5%, transparent); }
+// the selected row's own highlight and white text; :not(:hover) leaves the hover of
+// rows that are not Issue rows (Workflows) to Tern.
+const StripeCSS = `.sf-item[data-role~='` + StripeRole + `']:not(.sel):not(:hover), .sf-row[data-role~='` + StripeRole + `']:not(:hover) { background-color: color-mix(in srgb, var(--t1) 5%, transparent); }
 .sf-item[data-role~='` + ListRowRole + `']:not(.sel):hover { background-color: color-mix(in srgb, var(--t1) 12%, transparent); }
 .sf-item[data-role~='` + ListRowRole + `']:not(.sel):hover .sf-t-muted { color: color-mix(in srgb, var(--t3), var(--t1) 40%); }`
 

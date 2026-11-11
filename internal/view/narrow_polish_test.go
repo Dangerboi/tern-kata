@@ -63,6 +63,16 @@ func TestNarrowPageBarKeepsEachChipsClickAndTitle(t *testing.T) {
 	}
 }
 
+// The Attention count is the one sign of a waiting agent on a narrow Pane, whose header leaves out the counts.
+func TestNarrowPageBarKeepsTheAttentionCountBesideItsIcon(t *testing.T) {
+	m := browsing()
+	m.Attention.Requests = make([]model.AttentionRequest, 3)
+	m = atCols(m, phoneCols)
+	if label := pageChips(t, render(t, m), m)["attention"]; !strings.Contains(label, "icon:") || !strings.Contains(label, "3") {
+		t.Errorf("attention chip is %q, want its icon and the count 3", label)
+	}
+}
+
 func TestEightyColumnPageBarKeepsKeycapsAndLabels(t *testing.T) {
 	m := atCols(browsing(), model.FoldedLegendCols)
 	nodes := render(t, m)

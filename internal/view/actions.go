@@ -38,13 +38,13 @@ const (
 	configAct          = "config"
 	contextMenuPickAct = "pick"
 	legendAct          = "legend"
+	toastAct           = "toast"
 )
 
 const (
 	FocusDetailClick = string(model.FocusDetail)
 	RetryClick       = string(model.RetryAction)
 	MenuClick        = string(model.OpenPicker)
-	NoticeLinkClick  = "notice-link"
 )
 
 func click(act, value string) string { return act + "=" + value }
@@ -57,6 +57,9 @@ func LegendClick() string { return legendAct }
 // ButtonClick is the click of a card's button: its chord pressed with the card as it stands, so no overlay of the card (its open
 // calendar or dropdown) takes the chord in place of the button.
 func ButtonClick(chord string) string { return click(buttonAct, chord) }
+
+// ToastClick is the tap on toast seq's button.
+func ToastClick(seq int) string { return click(toastAct, strconv.Itoa(seq)) }
 
 func JumpClick(uid string) string { return click(jumpAct, uid) }
 
@@ -146,8 +149,10 @@ func DecodeAction(id, act, value string) model.Msg {
 		if id == RetryID {
 			return model.Retry{}
 		}
-	case NoticeLinkClick:
-		return model.OpenNoticeLinkMsg{Ref: value}
+	case toastAct:
+		if seq, err := strconv.Atoi(value); err == nil {
+			return model.ToastPressMsg{Seq: seq}
+		}
 	case activityTabAct:
 		if tab, ok := parseTab(value); ok {
 			return model.ActivityTabMsg{Tab: tab}

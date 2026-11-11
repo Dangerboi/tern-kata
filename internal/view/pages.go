@@ -49,12 +49,12 @@ func iconOnly(m model.Model, entry model.PageBarEntry, compact bool) bool {
 }
 
 func entryCols(m model.Model, entry model.PageBarEntry, compact bool) int {
-	if iconOnly(m, entry, compact) {
-		return iconCols
-	}
-	cols := utf8.RuneCountInString(entry.Chord) + keycapPadCols
-	if !compact || entry.Current {
-		cols += 1 + displayWidth(entry.Label)
+	cols := iconCols
+	if !iconOnly(m, entry, compact) {
+		cols = utf8.RuneCountInString(entry.Chord) + keycapPadCols
+		if !compact || entry.Current {
+			cols += 1 + displayWidth(entry.Label)
+		}
 	}
 	if entry.Count > 0 {
 		cols += badgeGapCols + len(strconv.Itoa(entry.Count)) + badgePadCols
@@ -99,16 +99,16 @@ func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, c
 		}
 		cell := flexCell(entry.ID, tone, 0)
 		cell.Title, cell.Actions = entry.Label+" page", &ui.Actions{Click: KeyClick(entry.Press)}
+		var parts tern.Nodes
 		if iconOnly(m, entry, compact) {
-			icon := ui.Icon{Common: ui.Common{Key: "icon", Tone: tone, Aria: entry.Label}, Name: pageIcons[entry.ID]}
-			cells = append(cells, ui.Row{Common: cell, Gap: ui.GapXS, Align: ui.AlignCenter, Children: ui.Nodes(icon)})
-			continue
+			parts = ui.Nodes(ui.Icon{Common: ui.Common{Key: "icon", Tone: tone, Aria: entry.Label}, Name: pageIcons[entry.ID]})
+		} else {
+			spans := []ui.Span{{T: keycap(entry.Chord, entry.Chord), S: "key"}}
+			if !compact || entry.Current {
+				spans = append(spans, ui.Span{T: " " + entry.Label, S: style})
+			}
+			parts = ui.Nodes(ui.Text{Common: ui.Common{Key: "label", Tone: tone}, Spans: spans, Wrap: ui.WrapNone})
 		}
-		spans := []ui.Span{{T: keycap(entry.Chord, entry.Chord), S: "key"}}
-		if !compact || entry.Current {
-			spans = append(spans, ui.Span{T: " " + entry.Label, S: style})
-		}
-		parts := ui.Nodes(ui.Text{Common: ui.Common{Key: "label", Tone: tone}, Spans: spans, Wrap: ui.WrapNone})
 		if entry.Count > 0 {
 			parts = append(parts, ui.Badge{Common: ui.Common{Key: "count", Tone: ui.ToneAccent, Role: MonoRole}, Text: strconv.Itoa(entry.Count)})
 		}

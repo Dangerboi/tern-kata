@@ -81,12 +81,15 @@ type MoveProjectState struct {
 	Err         error
 }
 
-// Toast is a Notice with one button. Chord is the key the button presses; Ref, when set, is an Issue the button opens instead.
+// Toast is a Notice with one button. Chord is the key the button presses in Mode, the mode the toast was raised in, on the Issue UID
+// when one is set; Ref, when set, is an Issue the button opens instead.
 type Toast struct {
 	Seq   int
 	Text  string
 	Label string
 	Chord string
+	UID   string
+	Mode  Mode
 	Ref   string
 }
 
@@ -102,10 +105,11 @@ type ToastExpired struct{ Seq int }
 
 func (ToastExpired) msg() {}
 
-// raiseToast shows t as the model's toast, under a Seq no earlier toast had, and returns the Cmd that ends it.
+// raiseToast shows t as the model's toast, under a Seq no earlier toast had, and returns the Cmd that ends it. The toast keeps the
+// mode the Pane is in now, so its button does what its key does here, whatever mode the Pane has moved to by the tap.
 func (m Model) raiseToast(t Toast) (Model, Cmd) {
 	m.ToastSeq++
-	t.Seq = m.ToastSeq
+	t.Seq, t.Mode = m.ToastSeq, m.CurrentMode()
 	m.Toast = &t
 	return m, WaitToast{Seq: t.Seq}
 }
@@ -118,10 +122,30 @@ func toastExpired(m Model, msg ToastExpired) Model {
 	return m
 }
 
-// OpenNoticeLinkMsg opens the Issue Ref, the button of the toast that reports a move.
-type OpenNoticeLinkMsg struct{ Ref string }
+// ToastPressMsg is a tap on the button of toast Seq.
+type ToastPressMsg struct{ Seq int }
 
-func (OpenNoticeLinkMsg) msg() {}
+func (ToastPressMsg) msg() {}
+
+// pressToast opens the toast's Ref, or runs its Chord in its Mode on the Issue it names, selecting that Issue again when the
+// selection has moved since. A toast that has gone, or whose Issue no longer shows, does nothing.
+func pressToast(m Model, seq int) (Model, []Cmd) {
+	t := m.Toast
+	if t == nil || t.Seq != seq {
+		return m, nil
+	}
+	if t.Ref != "" {
+		return openIssue(m, t.Ref)
+	}
+	if t.UID != "" && m.SelectedUID != t.UID {
+		if m = selectRow(m, t.UID); m.SelectedUID != t.UID {
+			return m, nil
+		}
+	}
+	m.Notice = ""
+	next, cmds, _ := runChord(m, t.Chord, t.Mode)
+	return next, cmds
+}
 
 // MoveTargets are the Projects the open card lists: the catalog's, without the Issue's own and archived ones, whose name
 // contains the filter in any case.

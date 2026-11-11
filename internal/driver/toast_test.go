@@ -70,7 +70,7 @@ func TestANoticeWithAKeyIsOneToastWhoseButtonDoesWhatTheKeyDoes(t *testing.T) {
 			if len(nodes) != 1 || tc.raised.State.Model.Notice != "" {
 				t.Fatalf("%d toasts, notice %q; want one toast and no Notice line", len(nodes), tc.raised.State.Model.Notice)
 			}
-			p, act := nodes[0].P, view.ButtonClick(tc.chord)
+			p, act := nodes[0].P, view.ToastClick(tc.raised.State.Model.Toast.Seq)
 			if p["text"] != tc.text || p["label"] != tc.label || p["action"] != act {
 				t.Fatalf("toast text %q label %q action %q, want %q, %q, %q", p["text"], p["label"], p["action"], tc.text, tc.label, act)
 			}
@@ -84,6 +84,44 @@ func TestANoticeWithAKeyIsOneToastWhoseButtonDoesWhatTheKeyDoes(t *testing.T) {
 				t.Errorf("%s did nothing", tc.label)
 			}
 		})
+	}
+}
+
+// A toast's button acts on the Issue the toast names, in the mode it was raised in: the selection or mode the Pane has moved to by
+// the tap does not change what it does.
+func TestAToastButtonIgnoresTheSelectionAndModeThePaneHasMovedTo(t *testing.T) {
+	raised := step(t, boardPane(t, closedAt("d", 10, 5), closedAt("e", 10, 4)), key(">"))
+	if raised.State.Model.SelectedUID != "d" {
+		t.Fatalf("selected %q when the toast was raised, want d", raised.State.Model.SelectedUID)
+	}
+	act := view.ToastClick(raised.State.Model.Toast.Seq)
+	for _, tc := range []struct {
+		name  string
+		moved driver.State
+	}{
+		{"another card selected", feed(t, raised.State, key("j")).State},
+		{"search line open", feed(t, raised.State, key("/")).State},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if m := tc.moved.Model; m.SelectedUID == "d" && m.CurrentMode() == model.ModeBoard {
+				t.Fatalf("selection d and mode %s after the move, want either changed", m.CurrentMode())
+			}
+			pressed := step(t, tc.moved, click("", act))
+			var reopened []string
+			for _, c := range pressed.Cmds {
+				if r, ok := c.(model.ReopenIssueCmd); ok {
+					reopened = append(reopened, r.UID)
+				}
+			}
+			if !slices.Equal(reopened, []string{"d"}) || pressed.State.Model.Filters.Search != tc.moved.Model.Filters.Search {
+				t.Errorf("Reopen reopened %v and left search %q, want d reopened and search %q", reopened,
+					pressed.State.Model.Filters.Search, tc.moved.Model.Filters.Search)
+			}
+		})
+	}
+	gone := step(t, raised.State, model.ToastExpired(theToastWait(t, raised.Cmds))).State
+	if late := step(t, gone, click("", act)); len(withoutToastWait(late.Cmds)) != 0 {
+		t.Errorf("a tap after the toast expired sent %#v", late.Cmds)
 	}
 }
 

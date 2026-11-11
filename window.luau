@@ -719,8 +719,10 @@ local function onLoad(cx: WindowCx)
     if pending ~= nil then
         local own = ownVersion()
         local outcome = if own then releases.pendingOutcome(pending, own, os.time()) else "wait"
-        if outcome == "updated" and hasProcessExit and not (pending :: any).done then
-            -- The step may still fail after it copied the plugin: its end tells, unless the old VM saw it end well.
+        if outcome == "updated" and hasProcessExit and not (pending :: any).done
+            and os.time() - (pending :: any).at <= releases.PENDING_TTL then
+            -- The step may still fail after it copied the plugin: its end tells, unless the old VM saw it end well. A step that
+            -- never reported (Tern closed while it ran) leaves the key to the load after the 10 minutes, which reports the update.
             outcome = "wait"
         end
         if outcome == "updated" then

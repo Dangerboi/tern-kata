@@ -52,9 +52,5 @@ func toasts(m model.Model) []tern.Element {
 	if t == nil {
 		return nil
 	}
-	act := ButtonClick(t.Chord)
-	if t.Ref != "" {
-		act = click(NoticeLinkClick, t.Ref)
-	}
-	return []tern.Element{ui.Toast{Common: ui.Common{Key: "toast-" + strconv.Itoa(t.Seq), Tone: ui.ToneAccent}, Text: t.Text, Action: act, Label: t.Label}}
+	return []tern.Element{ui.Toast{Common: ui.Common{Key: "toast-" + strconv.Itoa(t.Seq), Tone: ui.ToneAccent}, Text: t.Text, Action: ToastClick(t.Seq), Label: t.Label}}
 }

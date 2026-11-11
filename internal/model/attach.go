@@ -37,8 +37,9 @@ type AttachmentUnlinked struct {
 
 func (AttachmentUnlinked) msg() {}
 
-// OpenAttachment downloads the Attachment to the cache folder, unless the folder already holds it, and opens it with the program
-// the OS chooses for its type when it is an image, video, audio, PDF or text file.
+// OpenAttachment downloads the Attachment to the cache folder, unless the folder already holds it, and opens it: in Tern's preview
+// block when the Pane runs in Tern and Tern previews its kind, else with the program the OS chooses for its type when it is an
+// image, video, audio, PDF or text file.
 type OpenAttachment struct {
 	Workspace, UID string
 	ProjectID      int64

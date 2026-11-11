@@ -324,8 +324,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return agentCardSelected(m, msg), nil
 	case MoveTargetSelected:
 		return moveTargetSelected(m, msg.Key)
-	case OpenNoticeLinkMsg:
-		return openIssue(m, msg.Ref)
+	case ToastPressMsg:
+		return pressToast(m, msg.Seq)
 	}
 	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)

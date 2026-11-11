@@ -121,7 +121,7 @@ func layoutTwoLine(p rowParts) twoLineParts {
 		if len(meta) > 0 {
 			gap = " "
 		}
-		meta = append(meta, ui.Span{T: gap + cut(p.owner, ownerWidth), S: p.ownerStyle})
+		meta = append(meta, ui.Span{T: gap + p.owner, S: p.ownerStyle})
 	}
 	var title []ui.Span
 	for _, badge := range p.badges {

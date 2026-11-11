@@ -1,4 +1,4 @@
-# Enter on an image Attachment shows it in Tern: `tern open --preview` runs from the Pane, so the tab gets a preview file block on
+# A click on an image Attachment shows it in Tern: `tern open --preview` runs from the Pane, so the tab gets a preview file block on
 # the downloaded copy in tern-kata's cache and the focus stays in the Pane. A second Attachment replaces the preview. This step
 # gives the smoke daemon a Docbank of its own (a vault in $tmp) and runs last, because the earlier steps expect no Docbank.
 export DOCBANK_HOME="$tmp/docbank" DOCBANK_TELEMETRY_ENABLED=0
@@ -20,12 +20,11 @@ ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab3']"
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.attachment-']" '.ok and .count == 2'
 oa_focus=$(ctl state | jq '.focused.id')
 
-# Enter on the row of the Attachment named $1: its row key is its id in hex.
+# A click on the row of the Attachment named $1 opens it: its row key is its id in hex.
 oa_open_row() {
   local id
   id=$(kata --workspace "$oa_dir" docbank attachments ls "$oa_short" --json | jq -r --arg n "$1" '.attachments | to_entries[] | select(.value.name == $n) | .key')
   ctl click "[data-id='main.columns.detail.viewport.content.activity.attachment-$(printf %s "$id" | od -An -tx1 | tr -d ' \n')']"
-  ctl key Enter
 }
 # The tab's one preview block shows file $2 (of kind $1) from the cache, and the focus is where it was.
 oa_expect_preview() {
@@ -47,8 +46,7 @@ expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text |
 oa_open_row notes.txt
 oa_expect_preview code notes.txt
 
-# Leave as found: the Issue is deleted, the cached copies and the vault go, and the daemon has no Docbank again for later steps.
-oa_cache=$(jq -r '.file_blocks[0].path' "$tmp/oa-state.json" | sed -E 's|(/tern-kata/attachments/[^/]+)/.*|\1|')
+# Leave as found: the Issue is deleted and the daemon has no Docbank again for later steps. The cached copies and the vault are in
+# $tmp, which the run removes.
 kata --workspace "$oa_dir" delete "$oa_uid" --force --confirm "DELETE smoke#$oa_short" --json >/dev/null
-rm -rf "$oa_cache"
 docbank daemon stop >/dev/null 2>&1 || true

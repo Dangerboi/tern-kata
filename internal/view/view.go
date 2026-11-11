@@ -219,6 +219,7 @@ func topBar(m model.Model) tern.Element {
 	flexCell := func(key string, tone ui.Tone, shrink float64) ui.Common {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
+	narrow := m.Cols > 0 && m.Cols < model.FoldedLegendCols
 	headingCell := flexCell("heading", ui.ToneAccent, 0)
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
 	// The right cell never narrows below "… · Menu" with the Menu button's keycap, so the button is never pushed off the bar; the
@@ -235,18 +236,17 @@ func topBar(m model.Model) tern.Element {
 	if fit := topBarFit(m); fit != barOwnLine {
 		leftCells = append(leftCells, pageBar(m, flexCell, fit == barCompact))
 	}
-	// Below FoldedLegendCols the counts and the Daemon would only be drawn as fragments, so they are left out.
-	right := append(zoneNote, ui.Nodes(
-		ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
-		ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
-		menuButton(m),
-	)...)
 	cells := ui.Nodes(ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapMD, Children: leftCells})
-	if m.Cols > 0 && m.Cols < model.FoldedLegendCols {
-		right = append(zoneNote, menuButton(m))
-	} else {
+	right := zoneNote
+	// Below FoldedLegendCols the counts and the Daemon would only be drawn as fragments, so they are left out.
+	if !narrow {
 		cells = append(cells, ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Spans: monoSpans(m.CountsLine(), "muted"), Wrap: ui.WrapNone})
+		right = append(right,
+			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
+			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
+		)
 	}
+	right = append(right, menuButton(m))
 	cells = append(cells, ui.Row{Common: rightCell, Gap: ui.GapNone, Children: right})
 	return ui.Row{Common: ui.Common{Key: "topbar", Hidden: m.HelpOpen}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: cells}
 }

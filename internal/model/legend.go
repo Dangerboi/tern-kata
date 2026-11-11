@@ -22,14 +22,14 @@ func toggleLegend(m Model) Model {
 	return m
 }
 
-// foldLegend closes an open legend once a key or a tap on a hint has run, or the Pane has changed mode or grown past the width the
-// legend folds at.
+// foldLegend closes an open legend once a key (a tap on a hint or a card's button arrives as its key) has run, or the Pane has
+// changed mode or grown past the width the legend folds at.
 func foldLegend(msg Msg, next Model) Model {
 	if !next.LegendOpen {
 		return next
 	}
 	switch msg.(type) {
-	case KeyMsg, ButtonPressMsg:
+	case KeyMsg:
 		next.LegendOpen = false
 	default:
 		if next.Cols >= FoldedLegendCols || next.CurrentMode() != next.legendMode {
