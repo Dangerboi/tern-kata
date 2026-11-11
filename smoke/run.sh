@@ -56,6 +56,8 @@ export KATA_HOME="$tmp/kata"
 export TERN_CONFIG_DIR="$tmp/config"
 export XDG_CONFIG_HOME="$tmp/xdg-config"
 export XDG_STATE_HOME="$tmp/xdg-state"
+# tern-kata downloads Attachments into os.UserCacheDir: keep them in $tmp, not the user's ~/.cache.
+export XDG_CACHE_HOME="$tmp/xdg-cache"
 export TERN_DAEMON_SOCKET="$tmp/tern-daemon.sock"
 export STENCIL_LOG_DIR="$tmp/logs"
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
@@ -81,6 +83,8 @@ cleanup() {
     wait "$server_pid" 2>/dev/null || true
   fi
   kata daemon stop >/dev/null 2>&1 || true
+  # A step that set up its own Docbank exported DOCBANK_HOME into $tmp; stop that daemon even when the step failed.
+  [[ ${DOCBANK_HOME:-} != "$tmp"/* ]] || docbank daemon stop >/dev/null 2>&1 || true
   if [[ $status -ne 0 ]]; then
     printf 'Smoke failed; artifacts: %s\n' "$tmp" >&2
     [[ ! -f "$tmp/tern.log" ]] || cat "$tmp/tern.log" >&2

@@ -41,6 +41,8 @@ oa_expect_preview() {
 }
 oa_open_row shot.png
 oa_expect_preview image shot.png
+# The Pane inherits run.sh's XDG_CACHE_HOME, so the download lands in $tmp and never in the user's ~/.cache.
+jq -e --arg cache "$XDG_CACHE_HOME/" '.file_blocks[0].path | startswith($cache)' "$tmp/oa-state.json" >/dev/null || { echo "Attachment downloaded outside $XDG_CACHE_HOME" >&2; exit 1; }
 expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("shot.png"))'
 oa_open_row notes.txt
 oa_expect_preview code notes.txt
