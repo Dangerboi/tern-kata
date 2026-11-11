@@ -51,10 +51,11 @@ type ToastPressMsg struct{ Seq int }
 func (ToastPressMsg) msg() {}
 
 // pressToast opens the toast's Ref, or runs its Chord in its Mode on the Issue it names, once: the toast goes with the tap. A toast
-// that has gone, whose Issue no longer shows, or whose delete is no longer the newest Undo entry, does nothing.
+// that has gone, whose Issue no longer shows, or whose delete is no longer the newest Undo entry, does nothing; so does a tap while
+// a card, a question or help covers the Pane, which leaves the toast for a later tap.
 func pressToast(m Model, seq int) (Model, []Cmd) {
 	t := m.Toast
-	if t == nil || t.Seq != seq {
+	if t == nil || t.Seq != seq || m.covered() {
 		return m, nil
 	}
 	m.Toast = nil

@@ -127,8 +127,10 @@ func TestAToastButtonIgnoresTheSelectionAndModeThePaneHasMovedTo(t *testing.T) {
 	if carded.Model.TopCard() == model.NoCard {
 		t.Fatal("n opened no card")
 	}
-	if under := step(t, carded, click("", act)); len(under.Cmds) != 0 || under.State.Model.TopCard() != carded.Model.TopCard() {
-		t.Errorf("a tap under the %v card sent %#v and left card %v", carded.Model.TopCard(), under.Cmds, under.State.Model.TopCard())
+	under := step(t, carded, click("", act))
+	if len(under.Cmds) != 0 || under.State.Model.TopCard() != carded.Model.TopCard() || under.State.Model.Toast == nil {
+		t.Errorf("a tap under the %v card sent %#v, left card %v and toast %v; want nothing sent and the toast kept",
+			carded.Model.TopCard(), under.Cmds, under.State.Model.TopCard(), under.State.Model.Toast)
 	}
 }
 

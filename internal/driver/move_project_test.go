@@ -228,6 +228,13 @@ func TestMoveCardNoticeLinksToTheNewProjectAndIssueAndOpensIt(t *testing.T) {
 	if open == nil || open.Ref != "shop/n3w1" || open.ProjectID != 8 {
 		t.Fatalf("clicking the toast's button sent %#v, want the new Issue opened in shop", opened.Cmds)
 	}
+	carded := feed(t, done.State, key("n")).State
+	if carded.Model.TopCard() == model.NoCard {
+		t.Fatal("n opened no card")
+	}
+	if under := step(t, carded, click(link.ID, link.P["action"].(string))); len(under.Cmds) != 0 {
+		t.Errorf("a tap on Open under the %v card sent %#v", carded.Model.TopCard(), under.Cmds)
+	}
 }
 
 func TestMovingAnIssueSelectsTheNeighbouringRowOnceTheCollectionNoLongerShowsIt(t *testing.T) {

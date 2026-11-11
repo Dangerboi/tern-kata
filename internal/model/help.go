@@ -7,27 +7,30 @@ import (
 	"strings"
 )
 
-// covered reports whether a card, a question or the help sheet takes the Pane's keys: a context menu pick or a toast's button,
-// which would act on the Issue beneath it, does nothing then.
-func (m Model) covered() bool {
-	return m.cardMode() != "" || m.AskQuit || m.Views.Deleting != "" || m.ConfigPage.AskSwitch || m.HelpOpen
+// coverMode is the mode of a card, a question or the help sheet that takes the Pane's keys, "" when none does.
+func (m Model) coverMode() Mode {
+	switch mode := m.cardMode(); {
+	case mode != "":
+		return mode
+	case m.AskQuit:
+		return ModeQuit
+	case m.Views.Deleting != "":
+		return ModeDeleteView
+	case m.ConfigPage.AskSwitch:
+		return ModeSwitchDocbank
+	case m.HelpOpen:
+		return ModeHelp
+	}
+	return ""
 }
 
+// covered reports whether a card, a question or the help sheet takes the Pane's keys: a context menu pick or a toast's button,
+// which would act on the Issue beneath it, does nothing then.
+func (m Model) covered() bool { return m.coverMode() != "" }
+
 func (m Model) CurrentMode() Mode {
-	if mode := m.cardMode(); mode != "" {
+	if mode := m.coverMode(); mode != "" {
 		return mode
-	}
-	if m.AskQuit {
-		return ModeQuit
-	}
-	if m.Views.Deleting != "" {
-		return ModeDeleteView
-	}
-	if m.ConfigPage.AskSwitch {
-		return ModeSwitchDocbank
-	}
-	if m.HelpOpen {
-		return ModeHelp
 	}
 	if m.PageSearch.Open {
 		return ModePageSearch

@@ -457,13 +457,19 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		return twoLineRow(row, parts, selected, role, menu)
 	}
 	laid := layoutRow(cols, lookups.width, parts)
-	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
-	entries := menu.of(row.Issue)
-	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: entries, Hold: entries}
-	if row.HasChildren {
-		actions.Click = ToggleClick(row.UID)
+	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: rowActions(row.Issue, row.HasChildren, menu, "")}, Label: ui.Spans(laid.label...), Detail: ui.T(strings.Repeat(" ", itemDetailWidth)), Value: ui.Spans(laid.value...)}
+}
+
+// rowActions are an Issue row's or card's actions: click (a parent's click folds it instead), the double click that opens it, and
+// its context menu as the right-click menu and the long press. Tern sends a double click's two clicks first, so a parent's fold
+// ends where it began.
+func rowActions(issue model.Issue, parent bool, menu contextMenuKeys, click string) *ui.Actions {
+	entries := menu.of(issue)
+	actions := &ui.Actions{Click: click, DblClick: OpenRowClick(issue.UID), Menu: entries, Hold: entries}
+	if parent {
+		actions.Click = ToggleClick(issue.UID)
 	}
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(laid.label...), Detail: ui.T(strings.Repeat(" ", itemDetailWidth)), Value: ui.Spans(laid.value...)}
+	return actions
 }
 
 // twoLineRow is an Issue row of two lines, one node: a Col, because an Item has one line and a Card draws a border. The
@@ -475,11 +481,7 @@ func twoLineRow(row model.IssueRow, p rowParts, selected bool, role string, menu
 	if model.IsClosed(row.Issue) {
 		tone = ui.ToneMuted
 	}
-	entries := menu.of(row.Issue)
-	actions := &ui.Actions{Click: CardClick(row.UID), DblClick: OpenRowClick(row.UID), Menu: entries, Hold: entries}
-	if row.HasChildren {
-		actions.Click = ToggleClick(row.UID)
-	}
+	actions := rowActions(row.Issue, row.HasChildren, menu, CardClick(row.UID))
 	role = strings.TrimSpace(role + " " + TwoLineRowRole)
 	if selected {
 		role += " " + TwoLineSelectedRole

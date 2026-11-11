@@ -63,9 +63,16 @@ const OrderedListCSS = `.md ol { padding-left: 40px !important; }`
 // light theme, so a hovered row's muted spans move 40% toward --t1. :not(.sel) leaves
 // the selected row's own highlight and white text; :not(:hover) leaves the hover of
 // rows that are not Issue rows (Workflows) to Tern.
-const StripeCSS = `.sf-item[data-role~='` + StripeRole + `']:not(.sel):not(:hover), .sf-row[data-role~='` + StripeRole + `']:not(:hover) { background-color: color-mix(in srgb, var(--t1) 5%, transparent); }
-.sf-item[data-role~='` + ListRowRole + `']:not(.sel):hover { background-color: color-mix(in srgb, var(--t1) 12%, transparent); }
-.sf-item[data-role~='` + ListRowRole + `']:not(.sel):hover .sf-t-muted { color: color-mix(in srgb, var(--t3), var(--t1) 40%); }`
+const StripeCSS = `.sf-item[data-role~='` + StripeRole + `']:not(.sel):not(:hover), .sf-row[data-role~='` + StripeRole + `']:not(:hover) { background-color: ` + stripeShade + `; }
+.sf-item[data-role~='` + ListRowRole + `']:not(.sel):hover { background-color: ` + hoverShade + `; }
+.sf-item[data-role~='` + ListRowRole + `']:not(.sel):hover .sf-t-muted { color: ` + hoverMuted + `; }`
+
+// The shades StripeCSS and TwoLineRowCSS share: the striped row, the row under the pointer and its muted text.
+const (
+	stripeShade = "color-mix(in srgb, var(--t1) 5%, transparent)"
+	hoverShade  = "color-mix(in srgb, var(--t1) 12%, transparent)"
+	hoverMuted  = "color-mix(in srgb, var(--t3), var(--t1) 40%)"
+)
 
 // SelectedCSS paints the selected Issue row (Tern marks it .sel from the list's
 // Selected) with the theme's accent fill and white text, the pairing Tern's own
@@ -111,7 +118,7 @@ const (
 // TwoLineRowCSS gives the two-line row, a Col, the padding of an Item and the selected look of SelectedCSS, which only reaches
 // Items. It also shades striped rows and the row under the pointer as StripeCSS does Items.
 const TwoLineRowCSS = `.sf-col[data-role~='` + TwoLineRowRole + `'] { padding: 2px 8px; }
-.sf-col[data-role~='` + StripeRole + `']:not([data-role~='` + TwoLineSelectedRole + `']) { background-color: color-mix(in srgb, var(--t1) 5%, transparent); }
-.sf-col[data-role~='` + TwoLineRowRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):hover { background-color: color-mix(in srgb, var(--t1) 12%, transparent); }
-.sf-col[data-role~='` + TwoLineRowRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):hover .sf-t-muted { color: color-mix(in srgb, var(--t3), var(--t1) 40%); }
+.sf-col[data-role~='` + StripeRole + `']:not([data-role~='` + TwoLineSelectedRole + `']) { background-color: ` + stripeShade + `; }
+.sf-col[data-role~='` + TwoLineRowRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):hover { background-color: ` + hoverShade + `; }
+.sf-col[data-role~='` + TwoLineRowRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):hover .sf-t-muted { color: ` + hoverMuted + `; }
 .sf-col[data-role~='` + TwoLineSelectedRole + `'], .sf-col[data-role~='` + TwoLineSelectedRole + `'] * { background-color: var(--accent-fill) !important; color: #fff !important; }`

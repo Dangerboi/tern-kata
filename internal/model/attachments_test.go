@@ -29,6 +29,20 @@ func attachmentKeys(m model.Model) []string {
 	return keys
 }
 
+// A menu pick on the selected Issue's row acts on the row, as a click then the key would: the detail's cursor row is not opened.
+func TestAMenuPickOnTheSelectedRowLeavesTheDetailCursorAlone(t *testing.T) {
+	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5)})
+	next, cmds := model.Update(m, model.ContextMenuPickMsg{UID: "a", Mode: model.ModeList, Chord: "enter"})
+	for _, c := range cmds {
+		if _, ok := c.(model.OpenAttachment); ok {
+			t.Fatalf("the pick opened the detail's Attachment: %#v", cmds)
+		}
+	}
+	if next.Focus != model.ColumnDetail || next.SelectedUID != "a" {
+		t.Errorf("focus %v selected %q, want the detail focused on a as enter in the list does", next.Focus, next.SelectedUID)
+	}
+}
+
 func TestAttachmentsIsTheFourthTabAndCycles(t *testing.T) {
 	m := attached(nil)
 	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabLinks})

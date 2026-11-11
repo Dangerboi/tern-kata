@@ -144,7 +144,7 @@ for ((attempt=0; attempt<200; attempt++)); do
 done
 [[ -S "$tmp/control.sock" ]]
 ctl ready
-# Each split Pane gets half the window and kata lays out from 80 columns.
+# Each split Pane gets half the window, and the checks below expect kata's wide layout (80 columns and up).
 read -r window_height < <(ctl stats | jq -r '.viewport[1]')
 ctl resize 1600 "$window_height"
 ctl plugins fixtures

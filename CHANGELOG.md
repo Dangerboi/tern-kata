@@ -14,7 +14,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
-- On a phone or tablet, a long press on an Issue row or a Board card lists what its right-click menu lists, refused the same way.
+- A long press on an Issue row or a Board card, on a phone or tablet, lists what its right-click menu lists, refused the same way.
 - The search box, the Page search, the Menu filter and the Move to Project filter have a clear button (×) while they hold text, which empties them as `ctrl+u` does.
 
 ### Changed
@@ -22,7 +22,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Install and update
 
 - `tern-kata update`'s warning that the kata daemon can't be reached names the kata version tern-kata needs.
-- `tern-kata update`'s refusal of a too-old kata daemon or a `worker.toml` that won't load reads right after an install too.
+- `tern-kata update`'s refusal of a too-old kata daemon says "upgrade kata" without "then run tern-kata update again", and its refusal of a `worker.toml` that won't load names the version's `worker upgrade` and `worker edit` as the fix, so both read right after an install too.
 
 #### Attachments
 
@@ -40,7 +40,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Jobs and worker
 
-- On Tern 0.9.16 and later, when a worker that kept running through a plugin reload or a Tern update ends, the plugin starts a new one at once instead of within 10 seconds, and Tern's daemon log says how the old one ended.
+- The plugin starts a new worker at once, instead of within 10 seconds, when a worker that kept running through a plugin reload or a Tern update ends, and Tern's daemon log says how the old one ended (Tern 0.9.16 and later).
 
 #### Tern window
 
@@ -48,13 +48,15 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - "Deleted X. Press u to restore it." has Undo, "Moved X to Y." has Open, and "reopen it first (r)" and "X is closed; press r to reopen it." have Reopen.
   - "X is in the last Lane; press x to close it." has Close.
   - The key still works and the toast still names it; Tern before 0.9.14 shows the toast without the button.
-  - The button acts on the Issue the toast names, as its key did when the toast came up, even after the selection has moved or the search line has opened; while a card or a question is open it does nothing.
+  - The button acts on the Issue the toast names, as its key did when the toast came up, even after the selection has moved or the search line has opened; while a card, a question or help is open it does nothing.
+  - Undo restores only the delete it reports, and does nothing once another change is newer.
 
 ### Fixed
 
 #### Install and update
 
-- On Tern 0.9.16 and later, Update tern-kata reports how the window machine's plugin step ended even when the step's install reloads the plugin before it finishes: a step that fails after that reload shows "tern-kata plugin was not updated" with its last error line, where tern-kata used to say the plugin was updated.
+- Update tern-kata reports how the window machine's plugin step ended even when the step's install reloads the plugin before it finishes (Tern 0.9.16 and later).
+  - A step that fails after that reload shows "tern-kata plugin was not updated" with its last error line, where tern-kata used to say the plugin was updated.
 
 #### Attachments
 
