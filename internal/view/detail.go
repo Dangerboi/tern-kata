@@ -101,15 +101,13 @@ func activityTabs(m model.Model) tern.Element {
 		tabs = ui.Nodes(ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: "Activity", S: "strong"}}})
 	}
 	for tab := model.TabComments; tab < model.TabCount; tab++ {
-		name, style := fmt.Sprintf("%s (%d)", tab, m.DetailRowCount(tab)), ""
+		label, open, closing := fmt.Sprintf("%s (%d)", tab, m.DetailRowCount(tab)), "[ ", " ]"
 		if narrow {
-			name = tab.String()
+			label, open, closing = tab.String(), "[", "]"
 		}
+		name, style := label, ""
 		if tab == m.ActiveTab() {
-			name, style = "[ "+name+" ]", "accent strong"
-			if narrow {
-				name = "[" + tab.String() + "]"
-			}
+			name, style = open+label+closing, "accent strong"
 		}
 		text := ui.Text{Common: ui.Common{Key: "tab" + strconv.Itoa(int(tab)), Actions: &ui.Actions{Click: ActivityTabClick(tab)}}, Spans: []ui.Span{{T: name, S: style}}}
 		if narrow {
