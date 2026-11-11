@@ -72,6 +72,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Jobs and worker
 
 - The worker reads a Project's job list again about 2 seconds after a failed read that a job change asked for, so a job created or edited while the kata daemon briefly failed is picked up then, not at the next periodic refresh minutes later.
+  - A read that keeps failing is tried at doubling intervals, up to every 5 minutes.
 
 ## [0.11.0] - 2026-11-10
 

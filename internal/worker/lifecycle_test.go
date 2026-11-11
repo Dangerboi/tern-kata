@@ -83,9 +83,10 @@ func TestRunNowIsRefusedWhenTheProjectsJobsCannotBeRefreshed(t *testing.T) {
 	}
 }
 
-// A job event whose listing fails keeps the job list out of date: the next listing comes after the debounce, not at the next
-// periodic refresh minutes later. The clock stands still between steps, so the worker lists only when the test moves it.
-func TestAJobEventWhoseListingFailsListsAgainAfterTheDebounce(t *testing.T) {
+// A job event whose listing fails keeps the job list out of date: it is read again after the debounce, not at the next periodic
+// refresh minutes later, and a listing that keeps failing is tried less and less often. The clock stands still between steps,
+// so the worker lists only when the test moves it.
+func TestAJobEventWhoseListingFailsListsAgainWithABackoff(t *testing.T) {
 	h := newHarness(t)
 	h.kata.CreateJob(t, h.proj, workertest.Job{Name: "first", Prompt: "Do it.", Checkout: "repo"})
 	r := h.start(worker.Hooks{})
@@ -102,14 +103,22 @@ func TestAJobEventWhoseListingFailsListsAgainAfterTheDebounce(t *testing.T) {
 		return true
 	})
 	h.clock.Advance(3 * time.Second)
-	h.eventually("the listing the event asks for to fail", func() bool { return failed.Load() > 0 })
+	h.within("the listing the event asks for to fail", func() bool { return failed.Load() > 0 })
+	// A minute of failures in 3 s steps: at 2, 4, 8, 16 and 32 s apart that is about 5 listings, not one per step.
+	for range 20 {
+		time.Sleep(20 * time.Millisecond)
+		h.clock.Advance(3 * time.Second)
+	}
 	time.Sleep(100 * time.Millisecond)
+	if n := failed.Load(); n < 2 || n > 7 {
+		t.Fatalf("a minute of failing listings tried %d times, want a few that back off", n)
+	}
 	h.kata.Heal()
 	if n := r.w.Status().Projects[0].AdapterJobs; n != 1 {
 		t.Fatalf("%d jobs known while the listing failed, want 1", n)
 	}
-	h.clock.Advance(3 * time.Second)
-	h.eventually("the second job to be known", func() bool { return r.w.Status().Projects[0].AdapterJobs == 2 })
+	h.clock.Advance(70 * time.Second)
+	h.within("the second job to be known", func() bool { return r.w.Status().Projects[0].AdapterJobs == 2 })
 }
 
 // A notify job has no readiness requirement: its Issue being closed is no reason to refuse it.

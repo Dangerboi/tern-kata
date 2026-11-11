@@ -40,7 +40,10 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		dirty     bool
 		// dirtyReads is the job list's read count when the last event dirtied it: a read past it answers that event.
 		dirtyReads uint64
-		recovered  bool
+		// dirtyWait is how long after the last read a dirty job list is read again: the debounce, doubled after each failed
+		// read up to maxDirtyWait, and back to the debounce once a read answers.
+		dirtyWait = jobRefreshDebounce
+		recovered bool
 		// recoveredRuns outlives a pass that could not read every journal, so the next one only picks up what is left.
 		recoveredRuns = map[string]bool{}
 		started       bool
@@ -49,9 +52,9 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		// issueEvent is set when the loop woke for an Issue event: only that tick may reuse a young job listing.
 		issueEvent bool
 	)
-	// dirtyDue is when events that dirtied the job list may refresh it: after a short settle and the debounce.
+	// dirtyDue is when events that dirtied the job list may refresh it: after a short settle and dirtyWait.
 	dirtyDue := func() time.Time {
-		return maxTime(dirtyAt.Add(250*time.Millisecond), w.jobsListedAt(ps).Add(jobRefreshDebounce))
+		return maxTime(dirtyAt.Add(250*time.Millisecond), w.jobsListedAt(ps).Add(dirtyWait))
 	}
 	starting, ok := w.beginStarting(ctx)
 	if !ok {
@@ -154,6 +157,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 				if err := w.refreshJobs(ctx, ps); err != nil {
 					w.opt.Log("Project %s: %v", ps.cfg.Name, err)
 					dirty = true // dirty flags survive failed refreshes
+					dirtyWait = min(2*dirtyWait, maxDirtyWait)
 				}
 				nextDefs = w.clock.Now().Add(w.refreshEvery(ps))
 			}
@@ -167,6 +171,9 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		}
 		if dirty && w.jobsReadCount(ps) > dirtyReads {
 			dirty = false // a listing after the event already satisfied it
+		}
+		if !dirty {
+			dirtyWait = jobRefreshDebounce
 		}
 		if w.leaseHeld(ps) {
 			if next := w.tick(ctx, ps, issueEvent && !dirty); !next.IsZero() {
@@ -199,6 +206,9 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 // jobRefreshDebounce is the least time between two reads of a Project's job list that events caused. Only a tick that
 // answers an Issue event may reuse a listing this young; due-time and freed-slot admission always lists again.
 const jobRefreshDebounce = 2 * time.Second
+
+// maxDirtyWait caps the backoff of a job list that keeps failing to read after an event, as the loop's other retries are capped.
+const maxDirtyWait = 5 * time.Minute
 
 func (w *Worker) jobsListedAt(ps *projectState) time.Time {
 	w.mu.Lock()
