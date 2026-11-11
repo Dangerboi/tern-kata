@@ -199,7 +199,7 @@ func TestMoveCardConflictKeepsTheCardOpenAndOffersAFreshPreview(t *testing.T) {
 	}
 }
 
-func TestMoveCardNoticeLinksToTheNewProjectAndIssueAndOpensIt(t *testing.T) {
+func TestMoveCardToastNamesTheNewIssueAndItsOpenButtonOpensIt(t *testing.T) {
 	s := movePane(t, movable("a"), movable("b"))
 	previewed := step(t, moving(t, s, "shop").State, model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", DryRun: true, Revision: 3}).State
 	sent := step(t, previewed, key("enter"))

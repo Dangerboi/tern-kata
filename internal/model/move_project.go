@@ -240,8 +240,8 @@ func updateMoveProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 	return movedToProject(m, msg)
 }
 
-// movedToProject closes the card after the move: the Notice names the Issue's new project#id as a link, the selection goes to the
-// neighbouring row once the Collection no longer shows the Issue, and the Issue's detail is left.
+// movedToProject closes the card after the move: a toast names the Issue's new project#id with an Open button that opens it, the
+// selection goes to the neighbouring row once the Collection no longer shows the Issue, and the Issue's detail is left.
 func movedToProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 	f := m.MoveProject
 	m.MoveProject = MoveProjectState{}
