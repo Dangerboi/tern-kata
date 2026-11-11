@@ -233,8 +233,17 @@ since_reload=$(tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log")
 if grep -q 'already running on this machine' <<<"$since_reload"; then echo "the reloaded host half started a second worker" >&2; exit 1; fi
 if grep -q '`worker supervised` exited with status' <<<"$since_reload"; then echo "the reloaded host half does not know the held answer" >&2; exit 1; fi
 [[ $(grep -c "worker $adopted .*is already running" <<<"$since_reload") -eq 1 ]] || { echo "the reloaded host half did not name the running worker once" >&2; exit 1; }
+# From Tern 0.9.16 the reloaded host half is told when the worker its earlier load started ends: it starts a worker at once
+# and logs the old one's exit. An older Tern sends nothing, so the poll starts one within 10 s and nothing is logged.
+log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
+t_kill=$(date +%s.%N)
 kill -9 "$adopted"
 wait_started "$adopted" 13 || { echo "the reloaded host half did not start a worker within a poll of the running one's end" >&2; exit 1; }
+since_kill=$(echo "$(date +%s.%N) - $t_kill" | bc)
+if [[ $(printf '%s\n0.9.16\n' "$("$tern_bin" --version | sed -n 's/^tern \([0-9.]*\).*/\1/p')" | sort -V | sed -n 1p) == 0.9.16 ]]; then
+  (( $(echo "$since_kill < 4" | bc) )) || { echo "the reloaded host half started a worker $since_kill s after the running one's end, not at once" >&2; exit 1; }
+  [[ $(tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log" | grep -c "worker $adopted exited with status") -eq 1 ]] || { echo "the reloaded host half did not log the old worker's exit once" >&2; exit 1; }
+fi
 run_job 5
 # `update` moves a supervised worker to the new binary: a release build older than the dist/ is what the host half starts,
 # `update` against the local dist/ swaps it and stops the worker when idle, and the fresh worker the host half starts

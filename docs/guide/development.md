@@ -6,7 +6,7 @@ CGO_ENABLED=0 go test ./...
 bun test internal/data/ompext # the omp extension tern-kata loads into its agents (TypeScript, embedded in the binary)
 ./smoke/run.sh               # end-to-end against headless Tern servers and throwaway kata daemons
 scripts/check.sh             # everything: static (gofmt, vet, golangci-lint, placement tests, builds), test or smoke alone with that argument
-tern plugin link .           # use this checkout as the window plugin
+tern plugin link .           # use this checkout as the window plugin; changing a file in it reloads it (from Tern 0.9.16, `git status` and other changes under .git/ don't)
 tern plugin reload tern-kata # exits 1 if it fails to load; window failures show only as a toast
 ```
 

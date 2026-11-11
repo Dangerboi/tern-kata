@@ -121,14 +121,29 @@ done
 [[ $(fetches) -eq $((fetches_before + 2)) ]]
 stop_tern
 
-# A pending key naming this plugin's own version, left behind by the plugin step, toasts after a reload and is cleared.
+# A pending key naming this plugin's own version, left behind by a plugin step that ended well (done), toasts after a
+# reload and is cleared.
 start_tern
 kv=$(find "$TERN_CONFIG_DIR" -name kv.json)
-jq -n --argjson at "$(date +%s)" '{"update.pending": {version: "0.0.1", at: $at}, "release_check.last": $at}' >"$kv"
+jq -n --argjson at "$(date +%s)" '{"update.pending": {version: "0.0.1", at: $at, done: true}, "release_check.last": $at}' >"$kv"
 ctl plugins fixtures
 expect_toast 'tern-kata plugin updated to v0.0.1'
 [[ $(jq 'has("update.pending")' "$kv") == false ]]
 stop_tern
+
+# From Tern 0.9.16 a step that outlives the reload ends as an event, which reports it. A key not marked done means the step
+# is still running: the reload alone says nothing and leaves the key for the event.
+if [[ $(printf '%s\n0.9.16\n' "$("$real_tern" --version | sed -n 's/^tern \([0-9.]*\).*/\1/p')" | sort -V | sed -n 1p) == 0.9.16 ]]; then
+  start_tern
+  kv=$(find "$TERN_CONFIG_DIR" -name kv.json)
+  jq -n --argjson at "$(date +%s)" '{"update.pending": {version: "0.0.1", at: $at}, "release_check.last": $at}' >"$kv"
+  ctl plugins fixtures
+  printf 'run "true"\n' >"$tmp/pump.ctl"
+  for ((attempt = 0; attempt < 10; attempt++)); do ctl --file "$tmp/pump.ctl" >/dev/null; sleep 0.1; done
+  expect_no_toast 'tern-kata plugin updated'
+  [[ $(jq 'has("update.pending")' "$kv") == true ]]
+  stop_tern
+fi
 
 # The variable keeps checks off, though the stored state is gone.
 clear_kv

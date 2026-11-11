@@ -119,6 +119,10 @@ function M.releaseBase(configured: string?, version: string?): string
     return if version then RELEASES .. "/download/v" .. version else RELEASES .. "/latest/download"
 end
 
+-- The first line the plugin step prints. A step that outlives its VM ends as a `process_exit` event, which carries no
+-- command: the marker in its stdout (the last 64 KiB; the install prints far less) tells it from other children.
+M.STEP_MARKER = "tern-kata-plugin-step"
+
 -- The plugin-only install of `version`, run without a terminal: the command, its added environment and the text for its
 -- stdin (nil when it needs none). The script comes from the version's tag; the files it installs come from that version's
 -- download folder unless the user set their own.
@@ -132,9 +136,9 @@ function M.pluginStep(version: string, os: string, configuredBase: string?): ({ 
     }
     if os == "windows" then
         return {"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "-"}, env,
-            "irm " .. RAW .. version .. "/install.ps1 | iex\r\n"
+            "Write-Output " .. M.STEP_MARKER .. "\r\nirm " .. RAW .. version .. "/install.ps1 | iex\r\n"
     end
-    return {"sh", "-c", "script=$(curl -fsSL " .. RAW .. version .. "/install.sh) && printf '%s\\n' \"$script\" | sh"}, env, nil
+    return {"sh", "-c", "echo " .. M.STEP_MARKER .. "; script=$(curl -fsSL " .. RAW .. version .. "/install.sh) && printf '%s\\n' \"$script\" | sh"}, env, nil
 end
 
 return M

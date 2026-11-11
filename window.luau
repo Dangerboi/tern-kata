@@ -694,6 +694,12 @@ local function releaseCheck()
     end)
 end
 
+local function lastStderrLine(text: string): string
+    local line = ""
+    for l in text:gmatch("[^\r\n]+") do line = l end
+    return line
+end
+
 -- The window machine's plugin step of Update tern-kata leaves its pending key behind; the plugin that loads after a
 -- successful install is the version it names. A key of another version waits (the install may still be running) until
 -- it is 10 minutes old.
@@ -703,6 +709,9 @@ local KV_PENDING = "update.pending"
 -- window_start (the plugin the install left behind reports its update and carries the daily check on).
 local loaded = false
 
+-- Whether this Tern delivers a step that outlived its VM as an event (set where the handler is registered, below).
+local hasProcessExit = false
+
 local function onLoad(cx: WindowCx)
     if loaded then return end
     loaded = true
@@ -710,6 +719,10 @@ local function onLoad(cx: WindowCx)
     if pending ~= nil then
         local own = ownVersion()
         local outcome = if own then releases.pendingOutcome(pending, own, os.time()) else "wait"
+        if outcome == "updated" and hasProcessExit and not (pending :: any).done then
+            -- The step may still fail after it copied the plugin: its end tells, unless the old VM saw it end well.
+            outcome = "wait"
+        end
         if outcome == "updated" then
             tern.kv.set(KV_PENDING, nil)
             cx:toast("info", "tern-kata plugin updated to v" .. (pending :: any).version)
@@ -719,6 +732,24 @@ local function onLoad(cx: WindowCx)
     end
     releaseCheck()
 end
+
+-- A plugin step still running when this plugin reloaded (its install replaced the files) ends as an event here, since its
+-- callback went with the old VM. Tern without the event leaves the outcome to onLoad. While the key is set an event is
+-- the step's end only when its stdout holds the step's marker line: other children (`tern plugin dir`) end the same way.
+-- Clearing the key here also keeps onLoad, which runs on the same load, from reporting a success a second time.
+hasProcessExit = pcall(function()
+    tern.on("process_exit", function(ev, cx)
+        local pending: any = tern.kv.get(KV_PENDING)
+        if pending == nil or not ev.stdout:find(releases.STEP_MARKER, 1, true) then return end
+        tern.kv.set(KV_PENDING, nil)
+        if ev.status == 0 then
+            cx:toast("info", "tern-kata plugin updated to v" .. tostring(pending.version))
+        else
+            local line = lastStderrLine(ev.stderr)
+            cx:toast("error", "tern-kata plugin was not updated", line ~= "" and line or ("the install script exited with status " .. tostring(ev.status)))
+        end
+    end)
+end)
 
 tern.on("window_start", onLoad)
 tern.timer(1, function(cx)
@@ -779,12 +810,6 @@ tern.command({
 
 -- Update tern-kata: the session host first, in a Pane on the focused Pane's host. The window machine's plugin follows when
 -- the update ended well and that host is another machine; on the window's own machine the update brought the plugin along.
-local function lastStderrLine(text: string): string
-    local line = ""
-    for l in text:gmatch("[^\r\n]+") do line = l end
-    return line
-end
-
 local function updatePlugin(cx: WindowCx, version: string)
     tern.kv.set(KV_PENDING, {version = version, at = os.time()})
     local argv, env, stdin = releases.pluginStep(version, tern.runtime.os, tern.getenv("TERN_KATA_BASE_URL"))
@@ -793,8 +818,16 @@ local function updatePlugin(cx: WindowCx, version: string)
     local home = tern.getenv(if tern.runtime.os == "windows" then "USERPROFILE" else "HOME")
     local ok = pcall(function()
         tern.process.run(argv, {cwd = home, env = env, stdin = stdin, timeout_ms = 5 * 60 * 1000}, function(result, cx2)
-            -- Success reloads the plugin, so this callback usually never runs; the new one reports it.
-            if result.status == 0 then return end
+            -- Success reloads the plugin, so this callback usually never runs; the new one reports it. A step that ended
+            -- before the reload reached this VM marks the key done, which tells the new load the step ended well.
+            if result.status == 0 then
+                local pending: any = tern.kv.get(KV_PENDING)
+                if type(pending) == "table" then
+                    pending.done = true
+                    tern.kv.set(KV_PENDING, pending)
+                end
+                return
+            end
             tern.kv.set(KV_PENDING, nil)
             if cx2 then
                 local line = lastStderrLine(result.stderr)

@@ -35,6 +35,16 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - "X is in the last Lane; press x to close it." has Close.
   - The key still works and the toast still names it; Tern before 0.9.14 shows the toast without the button.
 
+#### Jobs and worker
+
+- On Tern 0.9.16 and later, when a worker that kept running through a plugin reload or a Tern update ends, the plugin starts a new one at once instead of within 10 seconds, and Tern's daemon log says how the old one ended.
+
+### Fixed
+
+#### Install and update
+
+- On Tern 0.9.16 and later, Update tern-kata reports how the window machine's plugin step ended even when the step's install reloads the plugin before it finishes: a step that fails after that reload shows "tern-kata plugin was not updated" with its last error line, where tern-kata used to say the plugin was updated.
+
 ## [0.11.0] - 2026-11-10
 
 ### Added

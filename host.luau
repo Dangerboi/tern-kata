@@ -3,8 +3,9 @@
 -- The host half runs in Tern's session daemon, with or without a window. It keeps `tern-kata worker` running: it starts
 -- the worker when the Supervision rule holds, and starts it again, backing off, whenever it exits. A worker it did not
 -- start is left running: one its earlier load started (a plugin reload or a Tern update's handoff loads this file again
--- while the worker runs on, and Tern never calls the old exit callback) or one started by hand. It starts one within a
--- poll of that worker's end.
+-- while the worker runs on) or one started by hand. On Tern 0.9.16+ the end of a worker its earlier load started comes as a
+-- `process_exit` event: the host half then starts one at once and logs how that worker ended. Elsewhere (older Tern, a
+-- worker started by hand, a daemon restart) it starts one within a poll of that worker's end.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
 -- This file does not decide the rule, find the config folder or see which worker runs: it asks `tern-kata worker
 -- supervised`, whose answer is worker.SupervisionOn and worker.RunningWorker in internal/worker/supervision.go (the one
@@ -34,8 +35,8 @@ local warned_missing = false
 local warned_status = false
 local ASK_LIMIT_MS = 10000
 -- `worker supervised` exits with HELD, printing one line that names the worker, when the rule holds and a worker this
--- load did not start already runs. The line is logged once per worker: a reload (each `git status` in a checkout linked
--- with `tern plugin link`) runs this file again, so the last line logged is kept in tern.kv, which outlives the load.
+-- load did not start already runs. The line is logged once per worker: a reload (a file saved in a checkout linked with
+-- `tern plugin link`, `tern plugin reload`) runs this file again, so the last line logged is kept in tern.kv, which outlives the load.
 local HELD = 4
 local KV_HELD = "supervision.held"
 local held_line: string? = nil
@@ -199,7 +200,8 @@ end
 -- worker runs, HELD and a line naming the worker when one does, status 1 when the rule does not hold. Any other status (a
 -- timeout, a binary that cannot run) says nothing about the rule, so the state stays; a status that is neither a timeout
 -- nor -1 (killed by a signal) is logged once per daemon: an older tern-kata binary exits 2 on `worker supervised`, and
--- then the worker never starts until the binary is updated.
+-- then the worker never starts until the binary is updated. A question still out when the plugin reloads never reaches
+-- this function: it ends as a `process_exit` event, which worker_ended does not take for the worker's end.
 local function answered(binary: string, result: ProcessResult)
     asking = false
     if result.status == HELD and not result.timed_out then
@@ -261,9 +263,40 @@ function start()
     end
 end
 
+-- Tern 0.9.16+ reports a `tern.process.run` child that ends after the VM that started it is gone as a `process_exit` event
+-- in the new VM: the worker a reload or a Tern update in place left running, or a `worker supervised` question that was
+-- out. The event always asks for a new look now. It is the worker's end only when its pid is the one in the last held
+-- line (`worker <pid> ...`), which the poll logged in this load or an earlier one (tern.kv keeps it): then its status and
+-- last stderr line are logged as `exited` would have, and the held line is forgotten. Any other pid logs nothing, and
+-- start() asks nothing while a question is out or this load's own worker runs.
+local function worker_ended(ev: any)
+    local line = held_line
+    if line == nil then
+        local ok, logged = pcall(tern.kv.get, KV_HELD)
+        if ok and type(logged) == "string" then line = logged end
+    end
+    local pid = line ~= nil and tonumber(line:match("^worker (%d+) ")) or nil
+    if pid ~= nil and pid == ev.pid then
+        local how = ev.timed_out and "timed out at the run limit" or "exited with status " .. ev.status
+        tern.log.warn("tern-kata: worker " .. pid .. " " .. how .. " (" .. last_line(ev.stderr) .. "); starting a new one")
+        forget_held()
+    end
+    start()
+end
+
 -- The first look waits a moment so loading stays well inside the 2 s budget. A daemon restart or a plugin reload loads this
 -- file again: it starts the worker, or leaves the one still running and starts one when that ends.
 arm(500)
+
+-- Tern before 0.9.16 raises on an event name it does not know, and then the poll alone notices the worker's end.
+do
+    local ok, err = pcall(function()
+        tern.on("process_exit", worker_ended)
+    end)
+    if not ok then
+        tern.log.info("tern-kata: Tern does not report a process that outlived a reload, so a worker's end is noticed by the poll: " .. tostring(err))
+    end
+end
 
 -- Windows: Tern runs a Pane's command as `pwsh -c <command>`, which loads the user's PowerShell profile first. The Pane
 -- commands this plugin starts (panecommands.luau) get `-NoProfile`; every other Pane, the user's shells included, starts as
