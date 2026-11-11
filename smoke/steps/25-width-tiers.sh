@@ -22,8 +22,9 @@ read -r width_full width_height < <(ctl stats | jq -r '.viewport[0:2] | @tsv')
 width_dir="$tmp/width-workspace"
 mkdir -p "$width_dir"
 kata --workspace "$width_dir" init --project width-tiers --json >/dev/null
+declare -A width_uid
 for name in first second third; do
-  kata --workspace "$width_dir" create "Width $name" --body "Width $name body" --json >/dev/null
+  width_uid[$name]=$(kata --workspace "$width_dir" create "Width $name" --body "Width $name body" --json | jq -r '.issue.uid')
 done
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$width_dir" "$KATA_HOME" "$tmp" >"$tmp/width-launch.ctl"
@@ -78,6 +79,26 @@ ctl click "[data-id='dock.hints.keys']"
 expect_tree "[data-id^='dock.hints.grid.']" ".ok and .count > $folded_hints"
 ctl click "[data-id='dock.hints.keys']"
 expect_tree "[data-id^='dock.hints.grid.']" ".ok and .count == $folded_hints"
+
+# From 40 to 59 columns an Issue row is two lines, one node carrying the row's click; the selected one takes the role the
+# row CSS paints. A tap selects the row and enter opens it, which is the phone's main gesture.
+expect_width 376 0 1 0
+(( $(width_cols) >= 40 && $(width_cols) < 60 ))
+ctl key esc
+width_row() { printf "[data-id='main.columns.list.issues.%s']" "${width_uid[$1]}"; }
+expect_tree "$(width_row first)" '.ok and .count == 1 and (.nodes[0].text | contains("Width first"))'
+ctl click "$(width_row first)"
+expect_tree ".sf-col$(width_row first)[data-role~='tern-kata.row2sel']" '.ok and .count == 1'
+expect_tree ".sf-col$(width_row second)[data-role~='tern-kata.row2sel']" '.ok and .count == 0'
+ctl key enter
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and .count == 1 and (.nodes[0].text | contains("Width first") and (contains("loading") | not))'
+# Back to the second Issue's detail, which the rest of the step expects.
+ctl key esc
+expect_tree "$(width_row second)" '.ok and .count == 1'
+ctl click "$(width_row second)"
+expect_tree ".sf-col$(width_row second)[data-role~='tern-kata.row2sel']" '.ok and .count == 1'
+ctl key enter
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".nodes[0].text == $(jq -Rn --arg t "$width_title" '$t')"
 
 # Below 40 columns one centred notice replaces everything, down to a sliver.
 expect_width 300 0 0 1
