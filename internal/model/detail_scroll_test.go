@@ -30,7 +30,7 @@ func TestArrowAndPageKeysScrollTheDetailViewport(t *testing.T) {
 // Whether a column is drawn is the Pane driver's call: the model asks for the scroll whatever the width.
 func TestDetailScrollIntentsDoNotDependOnTheWidth(t *testing.T) {
 	detail := arrowModes(t)["detail"]
-	detail.Cols = 60
+	detail.Cols = model.MinCols - 1
 	if detail.Shows(model.ColumnDetail) {
 		t.Fatal("fixture: the detail is on screen")
 	}

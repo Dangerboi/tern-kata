@@ -33,7 +33,25 @@ const (
 	badgeGapCols = 1
 )
 
-func entryCols(entry model.PageBarEntry, compact bool) int {
+// pageIcons name the Pages that are not current on a Pane narrower than FoldedLegendCols, where a bare chord says nothing on a
+// touch screen.
+var pageIcons = map[string]ui.IconName{
+	"issues": ui.IconInbox, "jobs": ui.IconTimer, "runs": ui.IconPlay,
+	"workflows": ui.IconBranch, "board": ui.IconColumns, "attention": ui.IconBell,
+}
+
+const iconCols = 2
+
+// iconOnly is a compact Page chip that is only an icon: below FoldedLegendCols the other Pages' chords are dropped for their
+// icons.
+func iconOnly(m model.Model, entry model.PageBarEntry, compact bool) bool {
+	return compact && !entry.Current && m.Cols > 0 && m.Cols < model.FoldedLegendCols
+}
+
+func entryCols(m model.Model, entry model.PageBarEntry, compact bool) int {
+	if iconOnly(m, entry, compact) {
+		return iconCols
+	}
 	cols := utf8.RuneCountInString(entry.Chord) + keycapPadCols
 	if !compact || entry.Current {
 		cols += 1 + displayWidth(entry.Label)
@@ -44,13 +62,13 @@ func entryCols(entry model.PageBarEntry, compact bool) int {
 	return cols
 }
 
-func entriesWidth(entries []model.PageBarEntry, compact bool) int {
+func entriesWidth(m model.Model, entries []model.PageBarEntry, compact bool) int {
 	width := 0
 	for i, entry := range entries {
 		if i > 0 {
 			width += entryGap
 		}
-		width += entryCols(entry, compact)
+		width += entryCols(m, entry, compact)
 	}
 	return width
 }
@@ -63,9 +81,9 @@ func pageBarFit(m model.Model, headingCols int) barFit {
 	entries := m.PageBar()
 	fixed := headingCols + entryGap + menuCols + slackCols
 	switch {
-	case m.Cols == 0, fixed+entriesWidth(entries, false) <= m.Cols:
+	case m.Cols == 0, fixed+entriesWidth(m, entries, false) <= m.Cols:
 		return barFull
-	case fixed+entriesWidth(entries, true) <= m.Cols:
+	case fixed+entriesWidth(m, entries, true) <= m.Cols:
 		return barCompact
 	}
 	return barOwnLine
@@ -81,6 +99,11 @@ func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, c
 		}
 		cell := flexCell(entry.ID, tone, 0)
 		cell.Title, cell.Actions = entry.Label+" page", &ui.Actions{Click: KeyClick(entry.Press)}
+		if iconOnly(m, entry, compact) {
+			icon := ui.Icon{Common: ui.Common{Key: "icon", Tone: tone, Aria: entry.Label}, Name: pageIcons[entry.ID]}
+			cells = append(cells, ui.Row{Common: cell, Gap: ui.GapXS, Align: ui.AlignCenter, Children: ui.Nodes(icon)})
+			continue
+		}
 		spans := []ui.Span{{T: keycap(entry.Chord, entry.Chord), S: "key"}}
 		if !compact || entry.Current {
 			spans = append(spans, ui.Span{T: " " + entry.Label, S: style})

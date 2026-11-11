@@ -1,7 +1,8 @@
-# Width tiers: list and detail side by side from 140 columns, one column from 80,
-# one notice below, and the plugin lives at every width. `ctl resize` takes
-# pixels; the headless Pane is about 8 pixels per column, so the pixel widths
-# below are checked against the columns Tern reports. It makes its own Project.
+# Width tiers: list and detail side by side from 140 columns, one column from 40
+# with the key legend folded behind a keys chip below 80, one notice below 40, and
+# the plugin lives at every width. `ctl resize` takes pixels; the headless Pane is
+# about 8 pixels per column, so the pixel widths below are checked against the
+# columns Tern reports. It makes its own Project.
 width_cols() { ctl state | jq -r '.panes[0].cols'; }
 expect_alive() {
   ctl state | jq -e '.focused.running != null' >/dev/null || { printf 'tern-kata exited at %s\n' "$1" >&2; return 1; }
@@ -68,20 +69,30 @@ ctl key j
 ctl key tab
 expect_alive "j and tab in the detail-only tier"
 
-# Below 80 columns one centred notice replaces everything, down to a sliver.
-expect_width 620 0 0 1
-(( $(width_cols) < 80 ))
-expect_tree "[data-id='main.notice.text']" '.nodes[0].text | contains("80 columns")'
-# Keys below 80 columns must not end the Pane: j and tab with detail focus, then j with list focus.
+# From 40 to 79 columns the detail still shows, and the legend folds to one line with a keys chip that unfolds it.
+expect_width 620 0 1 0
+(( $(width_cols) >= 40 && $(width_cols) < 80 ))
+expect_tree "[data-id='dock.hints.keys']" '.ok and .count == 1'
+folded_hints=$(ctl tree "[data-id^='dock.hints.grid.']" | jq '.count')
+ctl click "[data-id='dock.hints.keys']"
+expect_tree "[data-id^='dock.hints.grid.']" ".ok and .count > $folded_hints"
+ctl click "[data-id='dock.hints.keys']"
+expect_tree "[data-id^='dock.hints.grid.']" ".ok and .count == $folded_hints"
+
+# Below 40 columns one centred notice replaces everything, down to a sliver.
+expect_width 300 0 0 1
+(( $(width_cols) < 40 ))
+expect_tree "[data-id='main.notice.text']" '.nodes[0].text | contains("40 columns")'
+# Keys below 40 columns must not end the Pane: j and tab with detail focus, then j with list focus.
 ctl key j
 ctl key tab
 ctl key esc
 ctl key j
 ctl key k
 ctl key enter
-expect_alive "j and tab below 80 columns"
+expect_alive "j and tab below 40 columns"
 expect_tree "[data-id='dock.hints']" '.ok and .count == 0'
-for width in 300 120 40 8; do
+for width in 120 40 8; do
   expect_width "$width" 0 0 1
 done
 
@@ -90,7 +101,7 @@ done
 ctl key PageDown
 ctl key PageUp
 ctl key '?'
-expect_alive "keys below 80 columns"
+expect_alive "keys below 40 columns"
 expect_tree "[data-id='main.help']" '.ok and .count == 0'
 ctl resize "$width_full" "$width_height"
 expect_tree "[data-id='main.help']" '.ok and .count == 1'
@@ -101,7 +112,7 @@ expect_width 1200 1 1 0
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".nodes[0].text == $title_json"
 expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
 
-# q still quits below 80 columns.
+# q still quits below 40 columns.
 expect_width 300 0 0 1
 quit_app
 kata projects remove width-tiers --force --json >/dev/null

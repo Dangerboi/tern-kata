@@ -47,3 +47,12 @@ func keepSelected[T any](items []T, uid func(T) string, sel *string) {
 // not drive a list's own scroller and the Pane's rows are unknown here.
 // ponytail: a fixed step, not a measured page; if ResizeMsg ever carries rows, use rows minus the chrome.
 const listPage = 10
+
+// issuePage is how far Page Up/Page Down move the Issue list: a row takes two lines under TwoLineRowCols, so a page holds half
+// the rows.
+func (m Model) issuePage() int {
+	if m.Cols < TwoLineRowCols {
+		return listPage / 2
+	}
+	return listPage
+}

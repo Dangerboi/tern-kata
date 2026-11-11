@@ -92,16 +92,36 @@ func statusText(issue *model.Issue) string {
 	return issue.Status
 }
 
+// activityTabs draws the tab row. Below FoldedLegendCols it is one line of bare labels that never wrap or shrink: the "Activity"
+// heading and the counts go, so the four labels fit a phone's width without a word broken.
 func activityTabs(m model.Model) tern.Element {
-	tabs := ui.Nodes(ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: "Activity", S: "strong"}}})
+	narrow := m.Cols > 0 && m.Cols < model.FoldedLegendCols
+	var tabs tern.Nodes
+	if !narrow {
+		tabs = ui.Nodes(ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: "Activity", S: "strong"}}})
+	}
 	for tab := model.TabComments; tab < model.TabCount; tab++ {
 		name, style := fmt.Sprintf("%s (%d)", tab, m.DetailRowCount(tab)), ""
+		if narrow {
+			name = tab.String()
+		}
 		if tab == m.ActiveTab() {
 			name, style = "[ "+name+" ]", "accent strong"
+			if narrow {
+				name = "[" + tab.String() + "]"
+			}
 		}
-		tabs = append(tabs, ui.Text{Common: ui.Common{Key: "tab" + strconv.Itoa(int(tab)), Actions: &ui.Actions{Click: ActivityTabClick(tab)}}, Spans: []ui.Span{{T: name, S: style}}})
+		text := ui.Text{Common: ui.Common{Key: "tab" + strconv.Itoa(int(tab)), Actions: &ui.Actions{Click: ActivityTabClick(tab)}}, Spans: []ui.Span{{T: name, S: style}}}
+		if narrow {
+			text.Shrink, text.Wrap = new(float64), ui.WrapNone
+		}
+		tabs = append(tabs, text)
 	}
-	return ui.Row{Common: ui.Common{Key: "tabs"}, Gap: ui.GapMD, Children: tabs}
+	gap := ui.GapMD
+	if narrow {
+		gap = ui.GapSM
+	}
+	return ui.Row{Common: ui.Common{Key: "tabs"}, Gap: gap, Children: tabs}
 }
 
 func detailRows(m model.Model, now time.Time) (children []detailChild, activity tern.Nodes) {

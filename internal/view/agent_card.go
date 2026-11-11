@@ -134,6 +134,14 @@ func agentFoot(m model.Model) tern.Element {
 	if len(m.AgentCardRemoteRows()) > 0 {
 		selected = append(selected, b("forget", model.AgentCardForget, "Forget", false))
 	}
+	cancel := cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)
+	var end []tern.Element
+	if m.Cols > 0 && m.Cols < model.FoldedLegendCols {
+		// Beside the first group it would wrap into the middle of the buttons; last in the grid it wraps with them, in order.
+		selected = append(selected, cancel)
+	} else {
+		end = append(end, cancel)
+	}
 	return ui.Col{Common: ui.Common{Key: footKey}, Gap: ui.GapSM, Children: ui.Nodes(
 		footGroup("new", "New agent", []tern.Element{
 			b("split", model.AgentCardSplit, "Split", false),
@@ -141,7 +149,7 @@ func agentFoot(m model.Model) tern.Element {
 			b("new-background", model.AgentCardNewBackground, "Background", false),
 			b("team", model.AgentCardTeam, "Team", false),
 			b("pause", model.AgentCardPause, pauseLabel(m), false),
-		}, cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)),
+		}, end...),
 		footGroup("agent", "Selected", selected),
 	)}
 }

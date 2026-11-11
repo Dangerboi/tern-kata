@@ -142,10 +142,14 @@ func (m Model) DetailRowCount(tab ActivityTab) int {
 	return 0
 }
 
-// Width tiers, in Pane columns, matching kata's own TUI.
+// Width tiers, in Pane columns. MinCols fits a phone held upright (about 47 columns) and sideways beside an agent (43);
+// below TwoLineRowCols an Issue row puts its title on a line of its own, and below FoldedLegendCols the key legend folds
+// behind a keys chip. SideBySideCols matches kata's own TUI.
 const (
-	MinCols        = 80
-	SideBySideCols = 140
+	MinCols          = 40
+	TwoLineRowCols   = 60
+	FoldedLegendCols = 80
+	SideBySideCols   = 140
 )
 
 // SidebarShown reports whether the Collections sidebar is a column: an unbound

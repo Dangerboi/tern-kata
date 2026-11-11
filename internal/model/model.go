@@ -168,6 +168,8 @@ type Model struct {
 	Groups         []IssueGroup
 	Calendar       PaneCalendar
 	HelpOpen       bool
+	LegendOpen     bool // the key legend shows its grid under FoldedLegendCols; legendMode is the mode it was opened in
+	legendMode     Mode
 	Flat           bool
 	GraphOrder     bool // nested siblings in blocking order, not creation order; Pane state, never saved
 	ExpandedUIDs   map[string]bool
@@ -214,6 +216,9 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	if staleConnection(m, msg) {
 		return m, nil
 	}
+	if _, ok := msg.(ToggleLegendMsg); ok {
+		return toggleLegend(m), nil
+	}
 	if press, ok := msg.(ButtonPressMsg); ok {
 		m.DateCalendar, m.Dropdown = CalendarState{}, Dropdown{}
 		msg = KeyMsg{Chord: press.Chord}
@@ -230,7 +235,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		cmds = append(append(cmds, raised...), ended...)
 	}
 	next = next.recordWrite(msg).noteWrites(cmds)
-	return next.cancelPending(m, msg).settleDropdown().settleCalendar().withCollectionRows(), cmds
+	return foldLegend(msg, next.cancelPending(m, msg).settleDropdown().settleCalendar().withCollectionRows()), cmds
 }
 
 // staleConnection reports an answer asked of a daemon the Pane has since switched away from: it changes nothing.

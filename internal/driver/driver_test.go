@@ -193,7 +193,7 @@ func TestNoOpNamesAColumnTheViewDoesNotDraw(t *testing.T) {
 		click("", view.ActivityTabClick(model.TabEvents)), click("", view.FocusDetailClick),
 		&tern.Select{ID: view.IssueListID, Item: betaRow},
 	}
-	for _, cols := range []int{60, 79, 80, 100, 139, 140, 160} {
+	for _, cols := range []int{model.MinCols, 47, 60, 79, 80, 100, 139, 140, 160} {
 		for _, detailFocused := range []bool{false, true} {
 			base := browsing(t, cols)
 			if detailFocused {
@@ -212,7 +212,7 @@ func TestScrollsAndRevealsAreDroppedWhenNothingIsDrawn(t *testing.T) {
 	}
 	firstLoad := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160)).State
 	failed := feed(t, browsing(t, 160), click("", view.FocusDetailClick), model.Failed{Err: errors.New("kata server not responding")}).State
-	for name, s := range map[string]driver.State{"below 80 columns": detailFocused(79), "first load": firstLoad, "daemon failure": failed} {
+	for name, s := range map[string]driver.State{"below 40 columns": detailFocused(model.MinCols - 1), "first load": firstLoad, "daemon failure": failed} {
 		for _, chord := range []string{"page_down", "page_up", "down", "up", "tab", "shift+tab", "j"} {
 			for _, op := range step(t, s, key(chord)).Ops {
 				if op[0] == "reveal" || op[0] == "scroll" {
@@ -264,7 +264,7 @@ func TestActivityTabRevealGoesOutInOrder(t *testing.T) {
 
 func TestActivityTabRevealIsDroppedWhileTheTabsAreNotDrawn(t *testing.T) {
 	loaded := feed(t, browsing(t, 160), click("", view.FocusDetailClick)).State
-	folded := feed(t, loaded, resize(60)).State
+	folded := feed(t, loaded, resize(model.MinCols-1)).State
 	wantOps(t, step(t, folded, key("tab")))
 
 	failed := feed(t, browsing(t, 160), model.DetailFailed{UID: "alpha", Err: errors.New("down")}, click("", view.FocusDetailClick)).State

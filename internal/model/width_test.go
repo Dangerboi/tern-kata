@@ -17,13 +17,13 @@ func TestVisibleColumnsByWidth(t *testing.T) {
 		focus model.Column
 		want  []model.Column
 	}{
-		{"bound 79 shows nothing", 79, true, list, nil},
-		{"unbound 79 shows nothing", 79, false, list, nil},
-		{"bound 80 shows the list", 80, true, list, []model.Column{list}},
-		{"unbound 80 shows the list", 80, false, list, []model.Column{list}},
+		{"bound 39 shows nothing", 39, true, list, nil},
+		{"unbound 39 shows nothing", 39, false, list, nil},
+		{"bound 40 shows the list", 40, true, list, []model.Column{list}},
+		{"unbound 40 shows the list", 40, false, list, []model.Column{list}},
 		{"bound 139 shows the list", 139, true, list, []model.Column{list}},
 		{"unbound 139 shows the list", 139, false, list, []model.Column{list}},
-		{"bound 80 detail focused shows detail", 80, true, detail, []model.Column{detail}},
+		{"bound 40 detail focused shows detail", 40, true, detail, []model.Column{detail}},
 		{"bound 139 detail focused shows detail", 139, true, detail, []model.Column{detail}},
 		{"unbound 139 sidebar focused shows the sidebar", 139, false, sidebar, []model.Column{sidebar}},
 		{"bound 140 shows list and detail", 140, true, list, []model.Column{list, detail}},
@@ -54,7 +54,7 @@ func TestResizeBelowMinimumKeepsEverythingElse(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			wide, _ := pickerKeys(pickerStart(160, tt.bound), tt.keys...)
-			narrow, cmds := model.Update(wide, model.ResizeMsg{Cols: 40})
+			narrow, cmds := model.Update(wide, model.ResizeMsg{Cols: model.MinCols - 1})
 			if len(cmds) != 0 || len(narrow.VisibleColumns()) != 0 {
 				t.Fatalf("narrow: columns=%v commands=%#v", narrow.VisibleColumns(), cmds)
 			}
@@ -74,13 +74,13 @@ func TestQuitStillWorksBelowMinimumWidth(t *testing.T) {
 				m, _ = model.Update(m, model.KeyMsg{Chord: "y", Text: "y"})
 			}
 			if !m.Quitting {
-				t.Fatalf("%s did not quit below 80 columns", chord)
+				t.Fatalf("%s did not quit below 40 columns", chord)
 			}
 		})
 	}
 }
 
-// The model asks for a scroll whatever is drawn (a Pane under 80 columns, one
+// The model asks for a scroll whatever is drawn (a Pane under 40 columns, one
 // column of two, the first load, a daemon failure); the Pane driver drops the
 // ones Tern would reject.
 func TestScrollIntentsDoNotDependOnWhatIsDrawn(t *testing.T) {
@@ -93,8 +93,8 @@ func TestScrollIntentsDoNotDependOnWhatIsDrawn(t *testing.T) {
 		msg   model.Msg
 		want  []model.Cmd
 	}{
-		{"page below 80 columns from the list", 79, list, nil, model.KeyMsg{Chord: "page_down"}, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "b"}}},
-		{"page below 80 columns from the detail", 79, detail, nil, model.KeyMsg{Chord: "page_up"}, []model.Cmd{model.Scroll{Column: detail, By: model.ScrollPageUp}}},
+		{"page below 40 columns from the list", 39, list, nil, model.KeyMsg{Chord: "page_down"}, []model.Cmd{model.LoadDetail{Workspace: "/repo", UID: "b"}}},
+		{"page below 40 columns from the detail", 39, detail, nil, model.KeyMsg{Chord: "page_up"}, []model.Cmd{model.Scroll{Column: detail, By: model.ScrollPageUp}}},
 		{"page in the one column shown scrolls it", 100, detail, nil, model.KeyMsg{Chord: "page_down"}, []model.Cmd{model.Scroll{Column: detail, By: model.ScrollPageDown}}},
 		{"another detail arrives behind the single list", 100, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, []model.Cmd{model.Scroll{Column: detail, By: model.ScrollToStart}}},
 		{"another detail arrives beside the list", 160, list, []model.Msg{model.DetailLoaded{UID: "a", Selected: authority("a")}, model.SelectMsg{UID: "b"}}, model.DetailLoaded{UID: "b", Selected: authority("b")}, []model.Cmd{model.Scroll{Column: detail, By: model.ScrollToStart}}},
@@ -130,8 +130,8 @@ func TestShowsOnlyTheDrawnColumns(t *testing.T) {
 		column model.Column
 		want   bool
 	}{
-		{"below 80 draws no list", 79, list, nil, list, false},
-		{"below 80 draws no detail", 79, detail, nil, detail, false},
+		{"below 40 draws no list", 39, list, nil, list, false},
+		{"below 40 draws no detail", 39, detail, nil, detail, false},
 		{"one column draws the focused list", 100, list, nil, list, true},
 		{"one column draws no detail behind the list", 100, list, nil, detail, false},
 		{"one column draws the focused detail", 100, detail, nil, detail, true},

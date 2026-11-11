@@ -37,6 +37,7 @@ const (
 	agentAct           = "agent"
 	configAct          = "config"
 	contextMenuPickAct = "pick"
+	legendAct          = "legend"
 )
 
 const (
@@ -49,6 +50,9 @@ const (
 func click(act, value string) string { return act + "=" + value }
 
 func KeyClick(chord string) string { return click(keyAct, chord) }
+
+// LegendClick is the tap on the keys chip: it unfolds the legend or folds it again.
+func LegendClick() string { return legendAct }
 
 // ButtonClick is the click of a card's button: its chord pressed with the card as it stands, so no overlay of the card (its open
 // calendar or dropdown) takes the chord in place of the button.
@@ -124,6 +128,8 @@ var uidActs = map[string]func(value string) model.Msg{
 
 func DecodeAction(id, act, value string) model.Msg {
 	switch act {
+	case legendAct:
+		return model.ToggleLegendMsg{}
 	case keyAct:
 		return model.KeyMsg{Chord: value}
 	case clearAct:

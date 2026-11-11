@@ -51,7 +51,7 @@ func moveSelection(m Model, action Action) Model {
 		return m
 	}
 	at := slices.IndexFunc(rows, func(issue IssueRow) bool { return issue.UID == m.SelectedUID })
-	m.SelectedUID = rows[movedIndex(at, len(rows), listPage, action)].UID
+	m.SelectedUID = rows[movedIndex(at, len(rows), m.issuePage(), action)].UID
 	return m
 }
 

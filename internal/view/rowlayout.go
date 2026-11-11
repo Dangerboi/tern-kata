@@ -99,3 +99,37 @@ func rightCells(kids, owner, updated string, cols listColumns, style, ownerStyle
 	}
 	return append(spans, ui.Span{T: cellGap + cell(updated, updatedWidth), S: style})
 }
+
+type twoLineParts struct {
+	head, meta, title []ui.Span
+}
+
+// layoutTwoLine splits a row for a Pane under model.TwoLineRowCols: the first line holds id, priority and status with the
+// kids and owner at its end (the updated cell is dropped), the second the badges, title and Date badge.
+func layoutTwoLine(p rowParts) twoLineParts {
+	head := []ui.Span{{T: p.id.T, S: p.id.S}}
+	if p.prio.T != "" {
+		head = append(head, ui.Span{T: " " + p.prio.T, S: p.prio.S})
+	}
+	head = append(head, ui.Span{T: " " + p.status.T, S: p.status.S})
+	var meta []ui.Span
+	if p.kids != "" {
+		meta = append(meta, ui.Span{T: p.kids, S: p.cellStyle})
+	}
+	if p.owner != "" {
+		gap := ""
+		if len(meta) > 0 {
+			gap = " "
+		}
+		meta = append(meta, ui.Span{T: gap + cut(p.owner, ownerWidth), S: p.ownerStyle})
+	}
+	var title []ui.Span
+	for _, badge := range p.badges {
+		title = append(title, ui.Span{T: badge.T + " ", S: badge.S})
+	}
+	title = append(title, ui.Span{T: p.title})
+	if p.date.T != "" {
+		title = append(title, ui.Span{T: " " + p.date.T, S: p.date.S})
+	}
+	return twoLineParts{head: head, meta: meta, title: title}
+}

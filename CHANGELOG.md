@@ -25,6 +25,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
+- The kata Pane works from 40 columns, down from 80, so it fits a phone held upright, a phone held sideways beside an agent, and an iPad in a split.
+  - Below 60 columns an Issue row takes two lines: id, priority, status and owner, then the title.
+  - Below 80 columns the key legend folds to one line with a keys chip; tapping the chip shows every key of the current screen, and tapping one runs it.
+  - Below 80 columns every Page in the Page bar is named, the detail's tabs stay on one line, and the heading leaves out the counts and the Daemon chip rather than cutting them.
+  - Below 40 columns the Pane still asks to be widened.
 - Deleting an Issue, moving one to another Project, and the refusals that name a key show a toast with a button that does it, in place of the line under the columns.
   - "Deleted X. Press u to restore it." has Undo, "Moved X to Y." has Open, and "reopen it first (r)" and "X is closed; press r to reopen it." have Reopen.
   - "X is in the last Lane; press x to close it." has Close.

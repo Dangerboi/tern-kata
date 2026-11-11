@@ -113,7 +113,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 		owners[i] = listOwner(m, row, now)
 		cols.fit(displayWidth(idCell(row)), displayWidth(owners[i]))
 	}
-	lookups := rowLookups{lanes: m.LaneList(), badges: m.AgentBadges(), today: model.NewCalendarDay(m.Calendar.Date), width: listWidth(m)}
+	lookups := rowLookups{lanes: m.LaneList(), badges: m.AgentBadges(), today: model.NewCalendarDay(m.Calendar.Date), width: listWidth(m), twoLine: twoLineRows(m)}
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
 	for _, group := range m.Groups {
@@ -136,7 +136,9 @@ func issues(m model.Model, now time.Time) tern.Element {
 	if m.LaneViewShown() {
 		children = append(children, laneHeader(m))
 	}
-	children = append(children, headerRow(cols))
+	if !lookups.twoLine {
+		children = append(children, headerRow(cols))
+	}
 	if m.Search.Open {
 		children = append(children, searchInput(m))
 	}
@@ -233,15 +235,20 @@ func topBar(m model.Model) tern.Element {
 	if fit := topBarFit(m); fit != barOwnLine {
 		leftCells = append(leftCells, pageBar(m, flexCell, fit == barCompact))
 	}
-	return ui.Row{Common: ui.Common{Key: "topbar", Hidden: m.HelpOpen}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
-		ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapMD, Children: leftCells},
-		ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Spans: monoSpans(m.CountsLine(), "muted"), Wrap: ui.WrapNone},
-		ui.Row{Common: rightCell, Gap: ui.GapNone, Children: append(zoneNote, ui.Nodes(
-			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
-			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
-			menuButton(m),
-		)...)},
-	)}
+	// Below FoldedLegendCols the counts and the Daemon would only be drawn as fragments, so they are left out.
+	right := append(zoneNote, ui.Nodes(
+		ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
+		ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
+		menuButton(m),
+	)...)
+	cells := ui.Nodes(ui.Row{Common: flexCell("left", ui.ToneNeutral, 0), Gap: ui.GapMD, Children: leftCells})
+	if m.Cols > 0 && m.Cols < model.FoldedLegendCols {
+		right = append(zoneNote, menuButton(m))
+	} else {
+		cells = append(cells, ui.Text{Common: flexCell("counts", ui.ToneMuted, 1), Spans: monoSpans(m.CountsLine(), "muted"), Wrap: ui.WrapNone})
+	}
+	cells = append(cells, ui.Row{Common: rightCell, Gap: ui.GapNone, Children: right})
+	return ui.Row{Common: ui.Common{Key: "topbar", Hidden: m.HelpOpen}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: cells}
 }
 
 func filterLine(m model.Model) []tern.Element {
@@ -353,10 +360,11 @@ func stripeRole(i int) string {
 }
 
 type rowLookups struct {
-	lanes  []string
-	badges model.AgentBadgeIndex
-	today  model.CalendarDay
-	width  int // the list column's width in cells
+	lanes   []string
+	badges  model.AgentBadgeIndex
+	today   model.CalendarDay
+	width   int  // the list column's width in cells
+	twoLine bool // whether a row takes two lines, the Pane being under model.TwoLineRowCols wide
 }
 
 // Flex rules of the columns Row (see issues and detail), which Tern lays out and the plugin never sees: the list and detail
@@ -368,6 +376,9 @@ const (
 	columnGap     = 2
 	sidebarChrome = 4 // the Collections column's border and padding
 )
+
+// twoLineRows is whether the list's Issue rows take two lines: the Pane is under model.TwoLineRowCols wide.
+func twoLineRows(m model.Model) bool { return m.Cols < model.TwoLineRowCols }
 
 func listWidth(m model.Model) int {
 	columns := m.VisibleColumns()
@@ -429,7 +440,7 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 			dateBadge = ui.Span{T: date.Text, S: mono(toneStyle(dateTones[date.Tone]))}
 		}
 	}
-	laid := layoutRow(cols, lookups.width, rowParts{
+	parts := rowParts{
 		id:         ui.Span{T: idCell(row), S: mono(toneStyle(issueLaneToneIn(lookups.lanes, row.Issue)))},
 		prio:       ui.Span{T: prio, S: mono(prioStyle)},
 		status:     ui.Span{T: row.Status, S: statusStyle},
@@ -441,7 +452,11 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		updated:    model.RelativeTime(row.UpdatedAt, now),
 		cellStyle:  mono("muted"),
 		ownerStyle: toneStyle(ownerTone),
-	})
+	}
+	if lookups.twoLine {
+		return twoLineRow(row, parts, selected, role, menu)
+	}
+	laid := layoutRow(cols, lookups.width, parts)
 	// A parent's click folds it; a double click on any row opens it. Tern sends the two clicks first, so a parent's fold ends where it began.
 	entries := menu.of(row.Issue)
 	actions := &ui.Actions{DblClick: OpenRowClick(row.UID), Menu: entries, Hold: entries}
@@ -449,6 +464,34 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		actions.Click = ToggleClick(row.UID)
 	}
 	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: actions}, Label: ui.Spans(laid.label...), Detail: ui.T(strings.Repeat(" ", itemDetailWidth)), Value: ui.Spans(laid.value...)}
+}
+
+// twoLineRow is an Issue row of two lines, one node: a Col, because an Item has one line and a Card draws a border. The
+// selected row takes TwoLineSelectedRole, which TwoLineRowCSS paints like a selected one-line row. Its click selects the row, or
+// folds a parent (which selects it first); the double click, menu and hold are the one-line row's.
+func twoLineRow(row model.IssueRow, p rowParts, selected bool, role string, menu contextMenuKeys) tern.Element {
+	laid := layoutTwoLine(p)
+	tone := ui.ToneNeutral
+	if model.IsClosed(row.Issue) {
+		tone = ui.ToneMuted
+	}
+	entries := menu.of(row.Issue)
+	actions := &ui.Actions{Click: CardClick(row.UID), DblClick: OpenRowClick(row.UID), Menu: entries, Hold: entries}
+	if row.HasChildren {
+		actions.Click = ToggleClick(row.UID)
+	}
+	role = strings.TrimSpace(role + " " + TwoLineRowRole)
+	if selected {
+		role += " " + TwoLineSelectedRole
+	}
+	line := ui.Row{Common: ui.Common{Key: "line"}, Gap: ui.GapSM, Children: ui.Nodes(
+		ui.Text{Common: ui.Common{Key: "head", Grow: 1}, Spans: laid.head, Wrap: ui.WrapNone},
+		ui.Text{Common: ui.Common{Key: "meta", Shrink: new(float64)}, Spans: laid.meta, Wrap: ui.WrapNone},
+	)}
+	return ui.Col{
+		Common:   ui.Common{Key: row.UID, Role: role, Tone: tone, Actions: actions},
+		Children: ui.Nodes(line, ui.Text{Common: ui.Common{Key: "title"}, Spans: laid.title, Lines: 2}),
+	}
 }
 
 type footerHint struct{ chord, key, description string }
@@ -488,14 +531,20 @@ func footerHints(m model.Model) (hints []footerHint, position string) {
 
 func footer(m model.Model) tern.Element {
 	hints, position := footerHints(m)
+	if m.LegendFolded() {
+		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.chord != "escape" })
+	}
 	cells := make([]tern.Element, len(hints))
 	for i, hint := range hints {
 		cells[i] = ui.Text{Common: ui.Common{Key: hint.chord, Actions: &ui.Actions{Click: KeyClick(hint.chord)}},
 			Spans: []ui.Span{{T: keycap(hint.chord, hint.key), S: "key"}, {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
 	}
-	return ui.Nodes(ui.Row{Common: ui.Common{Key: "hints"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
-		ui.Row{Common: ui.Common{Key: "grid", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: cells},
-		ui.Text{Common: ui.Common{Key: "position", Shrink: new(float64), Tone: ui.ToneMuted}, Spans: []ui.Span{{T: position, S: mono("muted")}}, Wrap: ui.WrapNone})})
+	row := ui.Nodes(ui.Row{Common: ui.Common{Key: "grid", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: cells})
+	if m.LegendChip() {
+		row = append(row, ui.Button{Common: ui.Common{Key: "keys", Shrink: new(float64), Actions: &ui.Actions{Click: LegendClick()}}, Text: "keys"})
+	}
+	row = append(row, ui.Text{Common: ui.Common{Key: "position", Shrink: new(float64), Tone: ui.ToneMuted}, Spans: []ui.Span{{T: position, S: mono("muted")}}, Wrap: ui.WrapNone})
+	return ui.Nodes(ui.Row{Common: ui.Common{Key: "hints"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: row})
 }
 
 // headerRow labels the Issue rows. It is an Item like the rows, so its cells sit

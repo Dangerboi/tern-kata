@@ -25,23 +25,23 @@ func TestBelowMinimumWidthShowsOnlyTheNotice(t *testing.T) {
 			var texts []string
 			for id, node := range nodes {
 				if id != "main" && !strings.HasPrefix(id, "main.notice") {
-					t.Errorf("%s shown below 80 columns", id)
+					t.Errorf("%s shown below %d columns", id, model.MinCols)
 				}
 				if s := text(node); s != "" {
 					texts = append(texts, s)
 				}
 			}
-			if len(texts) != 1 || !strings.Contains(texts[0], "80 columns") {
-				t.Fatalf("texts = %q, want one notice asking for 80 columns", texts)
+			if len(texts) != 1 || !strings.Contains(texts[0], "40 columns") {
+				t.Fatalf("texts = %q, want one notice asking for 40 columns", texts)
 			}
 		})
 	}
 }
 
-func TestEightyColumnsLaysOutAgain(t *testing.T) {
+func TestMinimumColumnsLaysOutAgain(t *testing.T) {
 	nodes := render(t, apply(browsing(), model.ResizeMsg{Cols: model.MinCols}))
 	if len(nodes.under("main.notice")) != 0 || len(nodes.under("main.columns.list")) == 0 {
-		t.Fatalf("80 columns: %v", nodes.under("main"))
+		t.Fatalf("%d columns: %v", model.MinCols, nodes.under("main"))
 	}
 }
 

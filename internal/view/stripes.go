@@ -15,7 +15,7 @@ const (
 	ListOwnerRole = "tern-kata.ow"
 )
 
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + PropertiesCSS + "\n" + MonoCSS + "\n" + cellBoxCSS
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + PropertiesCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + TwoLineRowCSS
 
 const PropertyKeyRole = "tern-kata.propkey"
 
@@ -95,3 +95,14 @@ var cellBoxCSS = func() string {
 	}
 	return css.String()
 }()
+
+const (
+	TwoLineRowRole      = "tern-kata.row2"
+	TwoLineSelectedRole = "tern-kata.row2sel"
+)
+
+// TwoLineRowCSS gives the two-line row, a Col, the padding of an Item and the selected look of SelectedCSS, which only reaches
+// Items. It also shades unselected striped rows, as StripeCSS does Items.
+const TwoLineRowCSS = `.sf-col[data-role~='` + TwoLineRowRole + `'] { padding: 2px 8px; }
+.sf-col[data-role~='` + StripeRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):not(:hover) { background-color: color-mix(in srgb, var(--t1) 5%, transparent); }
+.sf-col[data-role~='` + TwoLineSelectedRole + `'], .sf-col[data-role~='` + TwoLineSelectedRole + `'] * { background-color: var(--accent-fill) !important; color: #fff !important; }`

@@ -20,13 +20,13 @@ func footerHints(t *testing.T, cols int) []string {
 }
 
 // The footer is a key legend: every hint is a muted label after a key span, in a row that wraps instead of a grid counted
-// in characters, and a narrow Pane keeps the same hints in the same order.
+// in characters, and from FoldedLegendCols up every width keeps the same hints in the same order.
 func TestFooterIsAKeyLegendThatKeepsEveryHintAtAnyWidth(t *testing.T) {
-	roomy, narrow := footerHints(t, model.SideBySideCols-1), footerHints(t, model.MinCols)
+	roomy, narrow := footerHints(t, model.SideBySideCols-1), footerHints(t, model.FoldedLegendCols)
 	if len(roomy) < 2 || !slices.Equal(roomy, narrow) {
 		t.Errorf("hints differ:\n%q\n%q", narrow, roomy)
 	}
-	nodes := render(t, apply(browsing(), model.ResizeMsg{Cols: model.MinCols}))
+	nodes := render(t, apply(browsing(), model.ResizeMsg{Cols: model.FoldedLegendCols}))
 	if row := nodes["dock.hints.grid"]; row.P["wrap"] != true {
 		t.Errorf("the legend does not wrap: %v", row.P)
 	}
