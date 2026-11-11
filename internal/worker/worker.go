@@ -94,9 +94,12 @@ type projectState struct {
 	route       routeState
 	instanceUID string
 
-	jobs       map[string]cronjob.Job
-	jobsErr    string
-	jobsAt     time.Time // when the job list was last read, successfully or not
+	jobs    map[string]cronjob.Job
+	jobsErr string
+	jobsAt  time.Time // when the job list was last read, successfully or not
+	// jobsReads counts the reads of the job list, so a read after an event is told apart from one before it even when the
+	// clock reads the same for both.
+	jobsReads  uint64
 	streamOpen bool
 
 	// pending counts slots reserved before a uid exists; held maps each slot-holding run uid to its job uid.

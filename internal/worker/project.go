@@ -38,7 +38,9 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		nextDefs  time.Time
 		dirtyAt   time.Time
 		dirty     bool
-		recovered bool
+		// dirtyReads is the job list's read count when the last event dirtied it: a read past it answers that event.
+		dirtyReads uint64
+		recovered  bool
 		// recoveredRuns outlives a pass that could not read every journal, so the next one only picks up what is left.
 		recoveredRuns = map[string]bool{}
 		started       bool
@@ -140,7 +142,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 			}
 			select {
 			case <-ps.wake:
-				dirty, dirtyAt = true, w.clock.Now()
+				dirty, dirtyAt, dirtyReads = true, w.clock.Now(), w.jobsReadCount(ps)
 			default:
 			}
 			due := nextDefs.IsZero() || !now.Before(nextDefs)
@@ -163,7 +165,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		if !recovered && w.leaseHeld(ps) {
 			wake = minTime(wake, now.Add(10*time.Second))
 		}
-		if dirty && w.jobsListedAt(ps).After(dirtyAt) {
+		if dirty && w.jobsReadCount(ps) > dirtyReads {
 			dirty = false // a listing after the event already satisfied it
 		}
 		if w.leaseHeld(ps) {
@@ -185,7 +187,7 @@ func (w *Worker) serveProject(ctx context.Context, ps *projectState) {
 		case <-ctx.Done():
 			return
 		case <-ps.wake:
-			dirty, dirtyAt = true, w.clock.Now()
+			dirty, dirtyAt, dirtyReads = true, w.clock.Now(), w.jobsReadCount(ps)
 		case <-ps.kick:
 		case <-ps.issueKick:
 			issueEvent = true
@@ -202,6 +204,12 @@ func (w *Worker) jobsListedAt(ps *projectState) time.Time {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return ps.jobsAt
+}
+
+func (w *Worker) jobsReadCount(ps *projectState) uint64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return ps.jobsReads
 }
 
 func minTime(a, b time.Time) time.Time {
@@ -241,6 +249,7 @@ func (w *Worker) refreshJobs(ctx context.Context, ps *projectState) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	ps.jobsAt = w.clock.Now()
+	ps.jobsReads++
 	if err != nil {
 		ps.jobsErr = err.Error()
 		return fmt.Errorf("listing jobs: %w", err)

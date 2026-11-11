@@ -387,6 +387,38 @@ func TestABurstOfIssueEventsListsTheCronJobsOncePerDebounceWhileAnOccurrenceWait
 	h.settled(h.waitRuns(job, 1)[0].UID)
 }
 
+// A job event the worker takes while the clock stands still is answered by a listing that reads the same clock. That listing
+// still answers it: a later burst of Issue events reuses it instead of listing the jobs on every event.
+func TestAJobEventAnsweredAtTheSameClockReadingStillLetsIssueEventsReuseTheListing(t *testing.T) {
+	h := newHarness(t)
+	issue := h.kata.Issue(t, h.proj, "Parked")
+	h.kata.SetSomeday(t, h.proj, issue.UID, true)
+	_, r, _ := h.hourlyOn(issue.UID)
+	h.waitsFor(r, "Issue is someday")
+	time.Sleep(200 * time.Millisecond)
+
+	listings := func() int {
+		return h.kata.Requests("GET /api/v1/projects/" + strconv.FormatInt(h.proj.ID, 10) + "/cron/jobs")
+	}
+	before := listings()
+	h.kata.CreateWorkflow(t, h.proj, "unrelated", workertest.Step{Key: "noop", Command: "true"})
+	// Wait in real time only: the clock must not move between the event and the listing that answers it.
+	for deadline := time.Now().Add(10 * time.Second); listings() == before; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the workflow event never made the worker list the jobs")
+		}
+	}
+	time.Sleep(200 * time.Millisecond)
+	before = listings()
+	for i := range 40 {
+		h.kata.EditIssue(t, h.proj, issue.UID, "Parked "+strconv.Itoa(i), "")
+	}
+	time.Sleep(500 * time.Millisecond)
+	if n := listings() - before; n > 1 {
+		t.Fatalf("after a job event answered at the same clock reading, 40 Issue events listed the Cron jobs %d times, want at most 1", n)
+	}
+}
+
 // A job disabled less than the refresh debounce after the last listing must not be admitted by the next Issue event.
 func TestAnIssueEventDoesNotAdmitADisabledJobFromAListingTakenBeforeItWasDisabled(t *testing.T) {
 	h := newHarness(t)
