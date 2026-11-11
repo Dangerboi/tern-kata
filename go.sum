@@ -14,6 +14,8 @@ github.com/andybalholm/brotli v1.2.7 h1:UgafRPGMam5ySHfRkhthMqOFA6IFoeF3D7mWIDLj
 github.com/andybalholm/brotli v1.2.7/go.mod h1:rzTDkvFWvIrjDXZHkuS16NPggd91W3kUSvPlQ1pLaKY=
 github.com/asg017/sqlite-vec-go-bindings v0.1.6 h1:Nx0jAzyS38XpkKznJ9xQjFXz2X9tI7KqjwVxV8RNoww=
 github.com/asg017/sqlite-vec-go-bindings v0.1.6/go.mod h1:A8+cTt/nKFsYCQF6OgzSNpKZrzNo5gQsXBTfsXHXY0Q=
+github.com/aw1cks-forks/kata v0.23.1-0.20261111022417-8bdf3741c2cd h1:69fbMdjPYBjWjVYC5fmnEvnChwaMBJ7IMFXqqKvMx90=
+github.com/aw1cks-forks/kata v0.23.1-0.20261111022417-8bdf3741c2cd/go.mod h1:VB2YO07FeBsFP89hj3GduRDGSB3pxdGhYoHXgHnvYsQ=
 github.com/bradleyfalzon/ghinstallation/v2 v2.19.0 h1:KQfD+43pRw9NUJhGycGrFr9vF1MubZacksKol1gomFI=
 github.com/bradleyfalzon/ghinstallation/v2 v2.19.0/go.mod h1:fe5ECIhCdEnxwLiBlNTxx9CP455wt42BELnlDVMvaAA=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
@@ -199,8 +201,6 @@ github.com/yuin/goldmark v1.8.6 h1:d0VcaP1sx9GkFVkoW+KtggpGi2KZ965i14b0+bDQST4=
 github.com/yuin/goldmark v1.8.6/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
-go.kenn.io/kata v0.23.0 h1:gIxDLGJOJUy01QvSuDpMGQFXOo0YIRxQf72TErY6dY4=
-go.kenn.io/kata v0.23.0/go.mod h1:DaPzNVWqCn8Y//W5yhZQwAxuD0Zs5Dn7wH280anDlfg=
 go.kenn.io/kit v0.48.2 h1:c+JfMBPJbp7kpvWj/o7uYrd/kxUT34bhL5svsDfEQBc=
 go.kenn.io/kit v0.48.2/go.mod h1:4g35Ia8V+5uTSUWp6XK/NurYdgPoq/PFZZLubtYly80=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=

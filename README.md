@@ -166,6 +166,16 @@ Turn it off with the **Turn tern-kata update checks off/on** palette command, wh
 
 If the Pane cannot find a local kata daemon whose storage is PostgreSQL, check the storage DSN: when it uses routing options (the `host`, `port`, `dbname`, `service` or `servicefile` query options, or `PG*` environment variables filling in missing parts), discovery fails because the lean kata client cannot resolve them. Set `KATA_SERVER` to the address `kata daemon locate` prints.
 
+### Explicit Unix endpoints (integration branch)
+
+Explicit Unix discovery requires the unreleased, reviewable Kata SDK fork with explicit-Unix discovery support; the released `go.kenn.io/kata v0.23.0` dependency does not provide it. This integration checkout is not a released installer artifact; use the exact fork module revision selected for review, not an unpinned branch.
+
+With that SDK, `KATA_SERVER=unix:///absolute/path/kata.sock` or a workspace's `.kata.local.toml` `[server].url` selects that socket without a target runtime record. `KATA_AUTH_TOKEN_FILE` supports a private credential file (an inline `KATA_AUTH_TOKEN` still takes precedence). If the selected socket disappears, discovery and reconnect report failure: they neither fall back to the default daemon nor start a daemon. Repair the endpoint or deliberately change the selection.
+
+A named `[[daemon]]` Unix URL already connects through the Daemons Page using its own `token` or `token_env`, never the ambient `KATA_AUTH_TOKEN`. Named `token_file` is a pre-existing Tern limitation, not implemented by this integration; use `token_env` instead.
+
+Set routing and credential variables in the environment that actually starts the Tern Pane on its host. An export in a separate terminal or a later login shell need not reach an already running Tern process; restart the relevant process with the intended environment. Agent blocks have a separate environment, so Tern passes the Pane's explicit or switched route through its agent wrapper (see [agents](docs/guide/agents.md#how-the-agent-runs)). These integration contracts do not claim verification of an actual Tern Pane.
+
 ## Guides
 
 The [guide index](docs/guide/README.md) lists every page:

@@ -75,3 +75,5 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.61.0 // indirect
 )
+
+replace go.kenn.io/kata => github.com/aw1cks-forks/kata v0.23.1-0.20261111022417-8bdf3741c2cd

@@ -92,6 +92,8 @@ The agent always runs through `tern-kata agent [--as=<actor>] [--address-prefix=
 - Tokens, a DSN (it may hold a password) and these values travel in private files beside the prompt file, deleted once read, never on the command line.
 - A remote daemon wins over the checkout's `.kata.local.toml` pin.
 - A switch to a local daemon that the checkout's pin or `active_daemon` would override, or to a remote entry without a token while `[auth]` in `config.toml` holds a credential, is refused with the reason in the "Cannot start an agent" Notice.
+- With the explicit-Unix SDK integration described in [Troubleshooting](../../README.md#explicit-unix-endpoints-integration-branch), a Pane's `KATA_SERVER=unix:///…` stays the agent's selected endpoint. The Pane's `KATA_AUTH_TOKEN_FILE` remains a file reference (including later credential rotation), not an inline token snapshot. A named Unix entry using `token_env` instead gets the entry's captured token, isolated from both the block's and Pane's ambient credentials. A missing selected socket is an error, never permission to use or start a default daemon. Named `token_file` remains unsupported in Tern.
+- For a workspace-selected Unix endpoint, a bound Project's agent starts in that same workspace (`--cwd`), so Kata reuses its `.kata.local.toml` selection; no second endpoint parser or synthetic catalog entry is needed.
 
 ### Agent badge
 
