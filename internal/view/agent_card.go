@@ -136,7 +136,7 @@ func agentFoot(m model.Model) tern.Element {
 	}
 	cancel := cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)
 	var end []tern.Element
-	if m.Cols > 0 && m.Cols < model.FoldedLegendCols {
+	if m.NarrowerThan(model.FoldedLegendCols) {
 		// Beside the first group it would wrap into the middle of the buttons; last in the grid it wraps with them, in order.
 		selected = append(selected, cancel)
 	} else {

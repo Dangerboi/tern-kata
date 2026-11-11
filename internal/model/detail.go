@@ -152,6 +152,9 @@ const (
 	SideBySideCols   = 140
 )
 
+// NarrowerThan reports whether the Pane is known to be under cols wide; a width Tern has not reported yet counts as wide.
+func (m Model) NarrowerThan(cols int) bool { return m.Cols > 0 && m.Cols < cols }
+
 // SidebarShown reports whether the Collections sidebar is a column: an unbound
 // directory shows it while a fixed Collection is current and drops it once a Project
 // is entered. Everywhere else the picker replaces it.

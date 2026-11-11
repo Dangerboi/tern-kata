@@ -8,12 +8,12 @@ func (ToggleLegendMsg) msg() {}
 // LegendFolded reports whether the key legend shows only the counter, esc and the keys chip. From FoldedLegendCols up the legend
 // is always the full grid and LegendOpen is ignored.
 func (m Model) LegendFolded() bool {
-	return m.Cols < FoldedLegendCols && !m.LegendOpen
+	return m.NarrowerThan(FoldedLegendCols) && !m.LegendOpen
 }
 
 // LegendChip reports whether the legend has its keys chip.
 func (m Model) LegendChip() bool {
-	return m.Cols < FoldedLegendCols
+	return m.NarrowerThan(FoldedLegendCols)
 }
 
 func toggleLegend(m Model) Model {
@@ -32,7 +32,7 @@ func foldLegend(msg Msg, next Model) Model {
 	case KeyMsg:
 		next.LegendOpen = false
 	default:
-		if next.Cols >= FoldedLegendCols || next.CurrentMode() != next.legendMode {
+		if !next.NarrowerThan(FoldedLegendCols) || next.CurrentMode() != next.legendMode {
 			next.LegendOpen = false
 		}
 	}

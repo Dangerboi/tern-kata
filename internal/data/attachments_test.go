@@ -627,20 +627,22 @@ func TestAttachSource(t *testing.T) {
 	plain := write(workspace, "plain.txt")
 	homed := write(home, "my file.txt")
 
+	// escaped marks Tern's backslash escapes, which Windows reads as separators; the plain and quoted paths are C:\… there.
 	tests := []struct {
 		name, input, want string
+		escaped           bool
 	}{
-		{"plain path", plain, plain},
-		{"quoted path", `"` + plain + `"`, plain},
-		{"relative path", "plain.txt", plain},
-		{"escaped space", strings.ReplaceAll(spaced, " ", `\ `), spaced},
-		{"escaped quote and parentheses", filepath.Join(workspace, `it\'s\ \(1\).txt`), quoted},
-		{"escaped space relative", `test\ .txt`, spaced},
-		{"home with escaped space", `~/my\ file.txt`, homed},
+		{"plain path", plain, plain, false},
+		{"quoted path", `"` + plain + `"`, plain, false},
+		{"relative path", "plain.txt", plain, false},
+		{"escaped space", strings.ReplaceAll(spaced, " ", `\ `), spaced, true},
+		{"escaped quote and parentheses", filepath.Join(workspace, `it\'s\ \(1\).txt`), quoted, true},
+		{"escaped space relative", `test\ .txt`, spaced, true},
+		{"home with escaped space", `~/my\ file.txt`, homed, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if runtime.GOOS == "windows" && strings.Contains(tc.input, `\`) {
+			if runtime.GOOS == "windows" && tc.escaped {
 				t.Skip("backslash is the path separator on Windows")
 			}
 			got, err := attachSource(workspace, tc.input)

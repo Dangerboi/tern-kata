@@ -194,7 +194,7 @@ kata moves an Issue **with its descendants**, as its CLI and web do. The preview
 
 The move is a Guarded write: it carries `If-Match` with the revision the card opened with (the preview carries it too). kata moves its revision on owner and status changes only, so a move after such a change is refused; the card stays open, says the Issue changed since it opened and nothing was moved, and `enter` asks for a fresh preview (read at the revision as it stands now) before `enter` moves.
 
-After the move a Notice names the new `project#id` as a link: click it to open the Issue in its new Project. The selection goes to the neighbouring row when the Collection no longer lists the Issue, and an open Issue detail closes to the list. A move cannot be undone: it clears the undo history.
+After the move a toast names the new `project#id`; its **Open** button opens the Issue in its new Project. The selection goes to the neighbouring row when the Collection no longer lists the Issue, and an open Issue detail closes to the list. A move cannot be undone: it clears the undo history.
 
 ## Deleting and restoring an Issue
 
@@ -202,7 +202,7 @@ After the move a Notice names the new `project#id` as a link: click it to open t
 
 1. The card names the Issue's qualified id (`project#id`) and title, says a deleted Issue can be restored, and asks you to type the qualified id, or `DELETE` and the qualified id as kata tui asks. An optional reason goes in the second field (`tab` moves between the two).
 2. `enter` with `<project>#<id>` or `DELETE <project>#<id>` typed (surrounding spaces ignored) sends the delete with kata's confirmation, `DELETE <project>#<id>`, and the actor. kata's delete records no reason, so a reason is first added to the Issue as a comment, `Deleted: <reason>`, by you; it shows in kata too. If that comment fails nothing is deleted and the card shows the error; if the delete fails after the comment, the comment stays. With anything else typed, the card refuses, names both forms and sends nothing. kata's own refusals (a federated replica, a changed Issue) show on the card, which stays open. `esc` closes it.
-3. After the delete the Issue leaves the list, the selection goes to the neighbouring row, an open Issue detail closes to the list, and a Notice says "Deleted project#id. Press u to restore it."
+3. After the delete the Issue leaves the list, the selection goes to the neighbouring row, an open Issue detail closes to the list, and a toast says "Deleted project#id. Press u to restore it." with an **Undo** button that does what `u` does.
 
 `u` right after a delete restores the Issue (also on the Attention Page, where it is offered only for a delete): the delete enters the undo history like any change, and the restore is refused as "already restored" when kata no longer holds the Issue as deleted. To bring back an Issue deleted earlier or elsewhere, open the Menu and choose **Restore a deleted Issue**. Its one field takes a short id (in the Pane's Project), `project#id` or an Issue's ULID. `enter` reads that Issue with deleted Issues included and shows its title and that it is deleted; `enter` again restores it. A delete's reason stays on the Issue as its `Deleted: <reason>` comment, visible in kata, through `u` and any restore. An Issue kata holds as not deleted is shown as such, and restoring it reports kata's answer that nothing changed. A restore from the Menu clears the undo history. Purging an Issue, which cannot be undone, stays in the CLI.
 

@@ -543,13 +543,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case SelectMsg:
 		return selectRow(m, msg.UID), nil
 	case ContextMenuPickMsg:
-		selected := selectRow(m, msg.UID)
-		if selected.SelectedUID != msg.UID {
-			return m, nil
-		}
-		selected.Notice = ""
-		next, cmds, _ := runChord(selected, msg.Chord, msg.Mode)
-		return next, cmds
+		return runChordOn(m, msg.UID, msg.Chord, msg.Mode)
 	case ResizeMsg:
 		m.Cols, m.Rows = msg.Cols, msg.Rows
 	case PaneRowsMsg:
@@ -568,4 +562,21 @@ func runChord(m Model, chord string, mode Mode) (next Model, cmds []Cmd, ran boo
 	}
 	next, cmds = binding.run(m)
 	return next, cmds, true
+}
+
+// runChordOn runs the binding of chord in mode on Issue uid, selecting it first when the selection has moved off it, whatever mode
+// the Pane's list, Board or search line is in now: a context menu pick and a toast's button. An empty uid acts on no Issue; an
+// Issue that does not show as a row, or a Pane covered by a card or a question, does nothing.
+func runChordOn(m Model, uid, chord string, mode Mode) (Model, []Cmd) {
+	if m.covered() {
+		return m, nil
+	}
+	if uid != "" && m.SelectedUID != uid {
+		if m = selectRow(m, uid); m.SelectedUID != uid {
+			return m, nil
+		}
+	}
+	m.Notice = ""
+	next, cmds, _ := runChord(m, chord, mode)
+	return next, cmds
 }

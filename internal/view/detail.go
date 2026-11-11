@@ -95,7 +95,7 @@ func statusText(issue *model.Issue) string {
 // activityTabs draws the tab row. Below FoldedLegendCols it is one line of bare labels that never wrap or shrink: the "Activity"
 // heading and the counts go, so the four labels fit a phone's width without a word broken.
 func activityTabs(m model.Model) tern.Element {
-	narrow := m.Cols > 0 && m.Cols < model.FoldedLegendCols
+	narrow := m.NarrowerThan(model.FoldedLegendCols)
 	var tabs tern.Nodes
 	if !narrow {
 		tabs = ui.Nodes(ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: "Activity", S: "strong"}}})

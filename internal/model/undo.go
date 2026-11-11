@@ -270,6 +270,12 @@ func newestUndoIsDelete(m Model) bool {
 	return n > 0 && m.Undo.Entries[n-1].Kind == UndoDelete
 }
 
+// newestUndoDeletes says the newest Undo entry is the delete of Issue uid.
+func newestUndoDeletes(m Model, uid string) bool {
+	n := len(m.Undo.Entries)
+	return newestUndoIsDelete(m) && m.Undo.Entries[n-1].UID == uid
+}
+
 func (m Model) sendUndo(entry UndoEntry, closeCmd *CloseIssueCmd) (Model, []Cmd) {
 	m.Undo.InFlight = true
 	m.Undo.out = entry

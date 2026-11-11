@@ -279,6 +279,8 @@ local function worker_ended(ev: any)
     if pid ~= nil and pid == ev.pid then
         local how = ev.timed_out and "timed out at the run limit" or "exited with status " .. ev.status
         tern.log.warn("tern-kata: worker " .. pid .. " " .. how .. " (" .. last_line(ev.stderr) .. "); starting a new one")
+        -- The line may come from tern.kv alone (the reloaded VM's first poll has not answered), so forget_held sees it.
+        held_line = line
         forget_held()
     end
     start()

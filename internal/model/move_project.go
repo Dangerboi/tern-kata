@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -79,72 +78,6 @@ type MoveProjectState struct {
 	Descendants []MovedIssue
 	Conflict    bool
 	Err         error
-}
-
-// Toast is a Notice with one button. Chord is the key the button presses in Mode, the mode the toast was raised in, on the Issue UID
-// when one is set; Ref, when set, is an Issue the button opens instead.
-type Toast struct {
-	Seq   int
-	Text  string
-	Label string
-	Chord string
-	UID   string
-	Mode  Mode
-	Ref   string
-}
-
-// ToastLife is how long Tern keeps a toast with a button up; the model drops its toast after as long.
-const ToastLife = 6 * time.Second
-
-// WaitToast is the pause of ToastLife after toast Seq was raised. It reads nothing; its answer ToastExpired takes the toast away.
-type WaitToast struct{ Seq int }
-
-func (WaitToast) cmd() {}
-
-type ToastExpired struct{ Seq int }
-
-func (ToastExpired) msg() {}
-
-// raiseToast shows t as the model's toast, under a Seq no earlier toast had, and returns the Cmd that ends it. The toast keeps the
-// mode the Pane is in now, so its button does what its key does here, whatever mode the Pane has moved to by the tap.
-func (m Model) raiseToast(t Toast) (Model, Cmd) {
-	m.ToastSeq++
-	t.Seq, t.Mode = m.ToastSeq, m.CurrentMode()
-	m.Toast = &t
-	return m, WaitToast{Seq: t.Seq}
-}
-
-// toastExpired drops the toast the answer is for; a newer toast stays.
-func toastExpired(m Model, msg ToastExpired) Model {
-	if m.Toast != nil && m.Toast.Seq == msg.Seq {
-		m.Toast = nil
-	}
-	return m
-}
-
-// ToastPressMsg is a tap on the button of toast Seq.
-type ToastPressMsg struct{ Seq int }
-
-func (ToastPressMsg) msg() {}
-
-// pressToast opens the toast's Ref, or runs its Chord in its Mode on the Issue it names, selecting that Issue again when the
-// selection has moved since. A toast that has gone, or whose Issue no longer shows, does nothing.
-func pressToast(m Model, seq int) (Model, []Cmd) {
-	t := m.Toast
-	if t == nil || t.Seq != seq {
-		return m, nil
-	}
-	if t.Ref != "" {
-		return openIssue(m, t.Ref)
-	}
-	if t.UID != "" && m.SelectedUID != t.UID {
-		if m = selectRow(m, t.UID); m.SelectedUID != t.UID {
-			return m, nil
-		}
-	}
-	m.Notice = ""
-	next, cmds, _ := runChord(m, t.Chord, t.Mode)
-	return next, cmds
 }
 
 // MoveTargets are the Projects the open card lists: the catalog's, without the Issue's own and archived ones, whose name

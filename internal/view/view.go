@@ -219,7 +219,7 @@ func topBar(m model.Model) tern.Element {
 	flexCell := func(key string, tone ui.Tone, shrink float64) ui.Common {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
 	}
-	narrow := m.Cols > 0 && m.Cols < model.FoldedLegendCols
+	narrow := m.NarrowerThan(model.FoldedLegendCols)
 	headingCell := flexCell("heading", ui.ToneAccent, 0)
 	rightCell := flexCell("right", ui.ToneNeutral, 100)
 	// The right cell never narrows below "… · Menu" with the Menu button's keycap, so the button is never pushed off the bar; the
@@ -378,7 +378,7 @@ const (
 )
 
 // twoLineRows is whether the list's Issue rows take two lines: the Pane is under model.TwoLineRowCols wide.
-func twoLineRows(m model.Model) bool { return m.Cols < model.TwoLineRowCols }
+func twoLineRows(m model.Model) bool { return m.NarrowerThan(model.TwoLineRowCols) }
 
 func listWidth(m model.Model) int {
 	columns := m.VisibleColumns()

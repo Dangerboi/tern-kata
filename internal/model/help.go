@@ -7,6 +7,12 @@ import (
 	"strings"
 )
 
+// covered reports whether a card, a question or the help sheet takes the Pane's keys: a context menu pick or a toast's button,
+// which would act on the Issue beneath it, does nothing then.
+func (m Model) covered() bool {
+	return m.cardMode() != "" || m.AskQuit || m.Views.Deleting != "" || m.ConfigPage.AskSwitch || m.HelpOpen
+}
+
 func (m Model) CurrentMode() Mode {
 	if mode := m.cardMode(); mode != "" {
 		return mode

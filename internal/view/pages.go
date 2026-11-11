@@ -45,7 +45,7 @@ const iconCols = 2
 // iconOnly is a compact Page chip that is only an icon: below FoldedLegendCols the other Pages' chords are dropped for their
 // icons.
 func iconOnly(m model.Model, entry model.PageBarEntry, compact bool) bool {
-	return compact && !entry.Current && m.Cols > 0 && m.Cols < model.FoldedLegendCols
+	return compact && !entry.Current && m.NarrowerThan(model.FoldedLegendCols)
 }
 
 func entryCols(m model.Model, entry model.PageBarEntry, compact bool) int {

@@ -123,6 +123,43 @@ func TestAToastButtonIgnoresTheSelectionAndModeThePaneHasMovedTo(t *testing.T) {
 	if late := step(t, gone, click("", act)); len(withoutToastWait(late.Cmds)) != 0 {
 		t.Errorf("a tap after the toast expired sent %#v", late.Cmds)
 	}
+	carded := feed(t, raised.State, key("n")).State
+	if carded.Model.TopCard() == model.NoCard {
+		t.Fatal("n opened no card")
+	}
+	if under := step(t, carded, click("", act)); len(under.Cmds) != 0 || under.State.Model.TopCard() != carded.Model.TopCard() {
+		t.Errorf("a tap under the %v card sent %#v and left card %v", carded.Model.TopCard(), under.Cmds, under.State.Model.TopCard())
+	}
+}
+
+// The Undo toast undoes its own delete, once: after a later change lands on top, or after one tap, it does nothing.
+func TestTheUndoToastUndoesOnlyItsOwnDelete(t *testing.T) {
+	raised := step(t, step(t, typed(t, deleting(t), "work#a"), key("enter")).State, deleted("a"))
+	act := view.ToastClick(raised.State.Model.Toast.Seq)
+	undid := func(cmds []model.Cmd) []string {
+		var uids []string
+		for _, c := range cmds {
+			if u, ok := c.(model.UndoChange); ok {
+				uids = append(uids, u.Entry.UID)
+			}
+		}
+		return uids
+	}
+	if got := undid(step(t, raised.State, click("", act)).Cmds); !slices.Equal(got, []string{"a"}) {
+		t.Fatalf("the tap undid %v, want a", got)
+	}
+	moved := model.UndoEntry{Kind: model.UndoLaneMove, UID: "b", ProjectID: 7, ShortID: "b"}
+	later := step(t, raised.State, model.MoveResultMsg{UID: "b", Record: model.WriteRecord{Entry: &moved}}).State
+	if e := later.Model.Undo.Entries; len(e) != 2 || e[1].UID != "b" {
+		t.Fatalf("undo entries %+v, want the move of b on top of the delete", e)
+	}
+	if got := undid(step(t, later, click("", act)).Cmds); len(got) != 0 {
+		t.Errorf("after a later change the tap undid %v, want nothing", got)
+	}
+	tapped := step(t, raised.State, click("", act)).State
+	if again := step(t, tapped, click("", act)); len(undid(again.Cmds)) != 0 || len(toastNodes(t, *again.View)) != 0 {
+		t.Errorf("a second tap sent %#v with the toast still drawn", again.Cmds)
+	}
 }
 
 func TestAToastStaysDrawnUntilItsOwnExpiry(t *testing.T) {

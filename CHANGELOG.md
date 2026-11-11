@@ -21,7 +21,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Install and update
 
-- `tern-kata update`'s warning that the kata daemon can't be reached names the kata version tern-kata needs, and its refusal of a too-old daemon or a `worker.toml` reads right after an install too.
+- `tern-kata update`'s warning that the kata daemon can't be reached names the kata version tern-kata needs.
+- `tern-kata update`'s refusal of a too-old kata daemon or a `worker.toml` that won't load reads right after an install too.
 
 #### Attachments
 
@@ -33,17 +34,21 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The kata Pane works from 40 columns, down from 80, so it fits a phone held upright, a phone held sideways beside an agent, and an iPad in a split.
   - Below 60 columns an Issue row takes two lines: id, priority, status and owner, then the title.
   - Below 80 columns the key legend folds to one line with a keys chip; tapping the chip shows every key of the current screen, and tapping one runs it.
-  - Below 80 columns the Page bar shows the current Page by name and every other Page by an icon, with the Attention count beside its bell, the detail's tabs stay on one line without their counts, and the heading leaves out the counts and the Daemon chip rather than cutting them.
+  - Below 80 columns the Page bar shows the current Page by name and every other Page by an icon, with the Attention count beside its bell.
+  - Below 80 columns the detail's tabs stay on one line without their counts, and the heading leaves out the counts and the Daemon chip rather than cutting them.
   - Below 40 columns the Pane still asks to be widened.
-- Deleting an Issue, moving one to another Project, and the refusals that name a key show a toast with a button that does it, in place of the line under the columns.
-  - "Deleted X. Press u to restore it." has Undo, "Moved X to Y." has Open, and "reopen it first (r)" and "X is closed; press r to reopen it." have Reopen.
-  - "X is in the last Lane; press x to close it." has Close.
-  - The key still works and the toast still names it; Tern before 0.9.14 shows the toast without the button.
-  - The button acts on the Issue the toast names, as its key did when the toast came up, even after the selection or the screen has changed.
 
 #### Jobs and worker
 
 - On Tern 0.9.16 and later, when a worker that kept running through a plugin reload or a Tern update ends, the plugin starts a new one at once instead of within 10 seconds, and Tern's daemon log says how the old one ended.
+
+#### Tern window
+
+- Deleting an Issue, moving one to another Project, and the refusals that name a key show a toast with a button that does it, in place of the line under the kata Pane's columns.
+  - "Deleted X. Press u to restore it." has Undo, "Moved X to Y." has Open, and "reopen it first (r)" and "X is closed; press r to reopen it." have Reopen.
+  - "X is in the last Lane; press x to close it." has Close.
+  - The key still works and the toast still names it; Tern before 0.9.14 shows the toast without the button.
+  - The button acts on the Issue the toast names, as its key did when the toast came up, even after the selection has moved or the search line has opened; while a card or a question is open it does nothing.
 
 ### Fixed
 
@@ -58,7 +63,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
-- Hovering an Issue row shows a step of its own on plain and striped rows, wide and two-line, where it used to match the stripe or drop it.
+- The Issue row under the pointer is shaded darker than a striped row, so it stands out on plain and striped rows, one-line and two-line, where it used to look like the stripe or lose its shade.
 
 ## [0.11.0] - 2026-11-10
 
