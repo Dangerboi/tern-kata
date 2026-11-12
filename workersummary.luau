@@ -19,6 +19,9 @@ export type Summary = {
 
 local M = {}
 
+-- The `tern.kv` key the host half stores the summary under and the window half reads it from.
+M.KEY = "worker.summary"
+
 local function list(value: any): { any }
     return if type(value) == "table" then value else {}
 end

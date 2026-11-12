@@ -5,7 +5,9 @@ local releases = require("./releases")
 local panecommands = require("./panecommands")
 local waitingtext = require("./waitingtext")
 local waitingagents = require("./waitingagents")
+local workersummary = require("./workersummary")
 local workerwidget = require("./workerwidget")
+local widgets = require("./widgets")
 
 -- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
 local launched: { [number]: boolean } = {}
@@ -478,7 +480,10 @@ local waitStamp = 0
 local waitingCount = 0
 local waitingTooltip = ""
 local GO_WAITING_ID = "go-to-waiting-agent"
-local GO_WAITING_COMMAND = "plugin.tern-kata." .. GO_WAITING_ID
+local function commandName(id: string): string
+    return "plugin.tern-kata." .. id
+end
+local GO_WAITING_COMMAND = commandName(GO_WAITING_ID)
 
 local function waitingPanes(cx: WindowCx, skip: number?): { number }
     local agents: { waitingagents.Agent } = {}
@@ -539,19 +544,21 @@ registerWidget("waiting", {
 
 -- The worker on this machine, as the host half's poll stores it. `tern.kv` here is this machine's, so a remote window shows its
 -- own worker, never the session host's. The timer reads the key and keeps the answer; `render` only reads what was kept.
-local WORKER_SUMMARY_KEY = "worker.summary"
 local WORKER_POLL_SECONDS = 5
 local SHOW_HELD_ID = "show-held-runs"
-local OPEN_COMMAND = "plugin.tern-kata.open"
-local workerSummary: workerwidget.Summary? = nil
+local workerSummary: workersummary.Summary? = nil
+-- What `workerSummary` was read as, to tell whether the next read differs (the host half compares the same way).
+local workerSummaryText = ""
 
 local function pollWorkerSummary()
     tern.timer(WORKER_POLL_SECONDS * 1000, function(cx)
         if cx then
-            local ok, saved = pcall(tern.kv.get, WORKER_SUMMARY_KEY)
-            local summary = if ok and type(saved) == "table" then saved :: workerwidget.Summary else nil
-            if not workerwidget.same(summary, workerSummary) then
+            local ok, saved = pcall(tern.kv.get, workersummary.KEY)
+            local summary = if ok and type(saved) == "table" then saved :: workersummary.Summary else nil
+            local text = if summary ~= nil then tern.json.encode(summary) else ""
+            if text ~= workerSummaryText then
                 workerSummary = summary
+                workerSummaryText = text
                 tern.chrome.refresh()
             end
         end
@@ -565,7 +572,7 @@ if registerWidget("worker", {
     icon = "server",
     styles = {"text", "ring"},
     render = function(_pane)
-        return workerwidget.view(workerSummary, "plugin.tern-kata." .. SHOW_HELD_ID, OPEN_COMMAND)
+        return workerwidget.view(workerSummary, commandName(SHOW_HELD_ID), commandName("open"))
     end,
 }) then
     pollWorkerSummary()
@@ -590,7 +597,7 @@ if #widgetsOffered > 0 then
                 table.insert(ids, widget.id)
                 names[widget.id] = widget.name
             end
-            local merged, added = waitingagents.mergeWidgets(if type(list) == "table" then list else {}, ids, "tern-kata")
+            local merged, added = widgets.mergeWidgets(if type(list) == "table" then list else {}, ids)
             if #added == 0 then
                 cx:toast("info", "The kata widgets are already in the widget bar")
                 return

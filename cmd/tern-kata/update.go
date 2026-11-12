@@ -86,6 +86,8 @@ func updateRelease(ctx context.Context, env updateEnv, force bool, out io.Writer
 		return err
 	}
 	defer unlock()
+	// The plugin download of the up-to-date path reports too, so the bar is cleared on every way out, before --pause's prompt.
+	defer env.Progress.Clear()
 
 	target, err := env.target()
 	if err != nil {
@@ -101,9 +103,8 @@ func updateRelease(ctx context.Context, env updateEnv, force bool, out io.Writer
 		return nil
 	}
 
-	// The bar shows from the start of the download to the end of the swap, and goes on any failure too.
+	// The bar shows from the start of the download to the end of the swap, and goes on any failure too (the defer above).
 	env.Progress.Working(progress.Unknown)
-	defer env.Progress.Clear()
 	release, cleanup, err := downloadBesideBinary(ctx, env, target, latest) // beside the binary: the swap's renames stay on one volume
 	if err != nil {
 		return fmt.Errorf("%w; nothing was installed", err)

@@ -2,6 +2,7 @@
 
 -- Tests of what the kata worker widget shows, on plain data, outside Tern: `luau test/workerwidget_test.luau`.
 
+local workersummary = require("../workersummary")
 local workerwidget = require("../workerwidget")
 
 local failures = 0
@@ -18,17 +19,17 @@ end
 local HELD = "plugin.tern-kata.show-held"
 local OPEN = "plugin.tern-kata.open"
 
-local function summary(running: number, held: { workerwidget.Held }?, capacity: number?, inUse: number?): workerwidget.Summary
+local function summary(running: number, held: { workersummary.Held }?, capacity: number?, inUse: number?): workersummary.Summary
     return {executor = "box", pid = 42, running = running, capacity = capacity or 4, inUse = inUse or running, held = held or {}}
 end
 
-local function heldRuns(count: number): { workerwidget.Held }
-    local list: { workerwidget.Held } = {}
+local function heldRuns(count: number): { workersummary.Held }
+    local list: { workersummary.Held } = {}
     for index = 1, count do table.insert(list, {ref = "r" .. index, job = "job" .. index, reason = "why" .. index}) end
     return list
 end
 
-local function view(s: workerwidget.Summary?): workerwidget.WidgetView
+local function view(s: workersummary.Summary?): workerwidget.WidgetView
     return assert(workerwidget.view(s, HELD, OPEN))
 end
 
@@ -71,14 +72,6 @@ end)
 test("five held runs get no more line", function()
     local lines = (view(summary(0, heldRuns(5))).title :: string):split("\n")
     assert(#lines == 7 and lines[7] == "0 running")
-end)
-
-test("same tells a changed summary", function()
-    assert(workerwidget.same(nil, nil))
-    assert(not workerwidget.same(nil, summary(0)))
-    assert(workerwidget.same(summary(1, heldRuns(2)), summary(1, heldRuns(2))))
-    assert(not workerwidget.same(summary(1, heldRuns(2)), summary(1, heldRuns(3))))
-    assert(not workerwidget.same(summary(1), summary(2)))
 end)
 
 if failures > 0 then error(failures .. " failed") end

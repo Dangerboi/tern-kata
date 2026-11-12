@@ -146,7 +146,7 @@ A job whose `options.conditions` caps its runs (`runs_per_day`, `runs_per_week`)
 
 On Tern 0.9.17 and later the window offers a **kata worker** widget for the widget bar. It shows "N running" (or "idle") and, in the warning tone, "N held" while a run waits for you; the ring style fills with the share of the worker's slots in use. The tooltip names the worker and each held run with its reason. A click on a held count runs **Show kata's held runs**, which opens kata's Attention Page; otherwise it opens kata. Place it with the palette command **Add kata widgets to the widget bar** or from Edit widgets....
 
-The widget shows the worker of the machine the window runs on. A remote window therefore does not show the worker of the session host. The widget is empty while no worker runs on that machine.
+The widget shows the worker of the machine the window runs on. A remote window therefore does not show the worker of the session host. The widget shows nothing while no worker runs on that machine. It also shows nothing for a worker the plugin did not start (one you started by hand, or one left from an earlier daemon) while `worker.manual` or a missing `worker.toml` turns supervision off; a worker the plugin started stays shown until it exits.
 
 ## Commands
 

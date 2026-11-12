@@ -194,7 +194,7 @@ ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/waiting", "tern-kata/wor
 ctl widgets set tern-kata/waiting tern-kata/worker
 ctl state | jq -e '.widgets.ids == ["tern-kata/waiting", "tern-kata/worker"]' >/dev/null
 [[ $(tern plugin list --json | jq '[.problems[] | select(tostring | contains("tern-kata"))] | length') == 0 ]]
-! grep -E 'could not register widget|hook="command add-widgets"' "$tmp/tern.log"
+! grep -qE 'could not register widget|hook="command add-widgets"' "$tmp/tern.log" || { echo "tern-kata widget registration failed" >&2; exit 1; }
 ctl widgets set
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
 show_issue_link() {
