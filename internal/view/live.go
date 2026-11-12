@@ -44,11 +44,11 @@ func footerNodes(m model.Model) []tern.Element {
 // question is a y/n question with a button for each answer, so a Pane on a phone, with no keyboard, can answer it. The
 // buttons press the question's own keys, so a click and the key never disagree.
 func question(q model.Question) tern.Element {
-	yes := cardButton("yes", q.Mode, q.Yes, q.YesWords, q.Primary)
+	yes := cardButton("yes", q.Mode, q.Yes, q.YesWords, !q.Danger)
 	if q.Danger {
 		yes = destructive(yes)
 	}
-	return ui.Row{Common: ui.Common{Key: q.Key}, Gap: ui.GapMD, Align: ui.AlignCenter, Wrap: true, Children: ui.Nodes(
+	return ui.Row{Common: ui.Common{Key: string(q.Mode)}, Gap: ui.GapMD, Align: ui.AlignCenter, Wrap: true, Children: ui.Nodes(
 		plainText("text", ui.ToneAccent, q.Text), yes, cardButton("no", q.Mode, q.No, q.NoWords, false))}
 }
 

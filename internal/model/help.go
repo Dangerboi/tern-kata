@@ -21,15 +21,14 @@ func (m Model) coverMode() Mode {
 	return ""
 }
 
-// Question is a y/n question waiting for its answer. Key names its node in the view; Yes and No are the actions of its keys, and
-// YesWords and NoWords what the buttons for them say.
+// Question is a y/n question waiting for its answer. Yes and No are the actions of its keys, and YesWords and NoWords what the
+// buttons for them say; Danger marks a Yes that destroys something.
 type Question struct {
-	Key               string
 	Mode              Mode
 	Text              string
 	Yes, No           Action
 	YesWords, NoWords string
-	Danger, Primary   bool
+	Danger            bool
 }
 
 // Question is the question to answer, if any. Only one is shown at a time: the quit question wins over the delete-view one,
@@ -37,11 +36,11 @@ type Question struct {
 func (m Model) Question() (Question, bool) {
 	switch {
 	case m.AskQuit:
-		return Question{Key: "quit", Mode: ModeQuit, Text: QuitQuestion, Yes: ConfirmQuitAction, No: StayAction, YesWords: "Quit", NoWords: "Stay", Primary: true}, true
+		return Question{Mode: ModeQuit, Text: "Quit tern-kata? y/n", Yes: ConfirmQuitAction, No: StayAction, YesWords: "Quit", NoWords: "Stay"}, true
 	case m.Views.Deleting != "":
-		return Question{Key: "delete-view", Mode: ModeDeleteView, Text: DeleteViewQuestion(m.Views.Deleting), Yes: ConfirmDeleteViewAction, No: KeepViewAction, YesWords: "Delete", NoWords: "Keep", Danger: true}, true
+		return Question{Mode: ModeDeleteView, Text: "Delete view " + m.Views.Deleting + "? y/n", Yes: ConfirmDeleteViewAction, No: KeepViewAction, YesWords: "Delete", NoWords: "Keep", Danger: true}, true
 	case m.ConfigPage.AskSwitch:
-		return Question{Key: "switch-docbank", Mode: ModeSwitchDocbank, Text: SwitchDocbankQuestion, Yes: ConfirmSwitchDocbankAction, No: KeepDocbankAction, YesWords: "Switch", NoWords: "Keep", Primary: true}, true
+		return Question{Mode: ModeSwitchDocbank, Text: "Switch to kata's local Docbank? kata restarts its daemon. y/n", Yes: ConfirmSwitchDocbankAction, No: KeepDocbankAction, YesWords: "Switch", NoWords: "Keep"}, true
 	}
 	return Question{}, false
 }

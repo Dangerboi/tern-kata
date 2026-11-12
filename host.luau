@@ -211,6 +211,11 @@ local function ask(binary: string, args: { string }, on_answer: (ProcessResult) 
     return tostring(err)
 end
 
+-- What the question out asked about has changed (the worker ended): its answer is dropped and the next look comes at once.
+local function drop_answer()
+    if out then stale = true end
+end
+
 -- Arms the look that follows an answer: at once when one was asked for while the question was out, else after POLL_MS.
 local function next_look()
     local soon = again
@@ -272,9 +277,8 @@ local function launch(binary: string, config: string)
     local function exited(result: ProcessResult)
         running = false
         clear_summary()
-        -- A question about the worker that just ended may be out: its answer is dropped and the look that follows honours the
-        -- backoff armed below.
-        if out then stale = true end
+        -- The look that follows a dropped answer honours the backoff armed below.
+        drop_answer()
         local ran = tern.now() - started
         if ran >= HEALTHY_MS or result.timed_out then restart_delay = MIN_DELAY end
         local waited = schedule_restart()
@@ -392,7 +396,7 @@ local function worker_ended(ev: any)
         -- The line may come from tern.kv alone (the reloaded VM's first poll has not answered), so forget_held sees it.
         held_line = line
         forget_held()
-        if out then stale = true end
+        drop_answer()
     end
     start()
 end

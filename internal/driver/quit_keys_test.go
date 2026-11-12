@@ -16,8 +16,9 @@ func TestQAsksBeforeQuittingAndYQuits(t *testing.T) {
 	if asked.Quit || !m.AskQuit || m.CurrentMode() != model.ModeQuit {
 		t.Fatalf("q: quit=%v asking=%v mode=%q, want the question", asked.Quit, m.AskQuit, m.CurrentMode())
 	}
-	if !strings.Contains(wireTextOf(t, asked.State), model.QuitQuestion) {
-		t.Errorf("the Pane does not draw %q", model.QuitQuestion)
+	q, _ := m.Question()
+	if !strings.Contains(wireTextOf(t, asked.State), q.Text) {
+		t.Errorf("the Pane does not draw %q", q.Text)
 	}
 	if !driver.Step(asked.State, key("y"), now).Quit {
 		t.Error("y did not quit")

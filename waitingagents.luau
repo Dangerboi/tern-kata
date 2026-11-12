@@ -5,7 +5,6 @@
 -- ones that count (the first is the one to go to), `segment` for the "N waiting" text in the widget bar's Plugin segments
 -- widget, and `widget` for the Waiting kata agents widget a user places in the bar.
 
-export type StatusSegment = { text: string, icon: string?, tone: string?, command: string? }
 export type Agent = { pane: number, command: string?, state: string }
 
 local M = {}

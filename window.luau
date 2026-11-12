@@ -1,6 +1,6 @@
 --!strict
 
-local PLUGIN = "tern-kata"
+local PLUGIN = tern.plugin.id
 
 local placement = require("./placement")
 local releases = require("./releases")
@@ -21,9 +21,6 @@ local owed: { [number]: { OwedAction } } = {}
 local function owe(pane: number, act: string, value: string)
     local list: { OwedAction } = owed[pane] or {}
     owed[pane] = list
-    for _, item in list do
-        if item.act == act and item.value == value then return end
-    end
     table.insert(list, {act = act, value = value})
 end
 -- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
@@ -240,12 +237,16 @@ local function showSessionOf(cx: WindowCx, tab: number?)
     end
 end
 
-local function deliver(cx: WindowCx, pane: number)
+local function sendOwed(cx: WindowCx, pane: number)
     local list = owed[pane]
     if list and cx.session:surface(pane) then
         owed[pane] = nil
         for _, item in list do paneAction(cx, pane, item.act, item.value) end
     end
+end
+
+local function deliver(cx: WindowCx, pane: number)
+    sendOwed(cx, pane)
     if not relayed[pane] then relayAll(cx, true) end
 end
 
@@ -310,7 +311,8 @@ local function openKata(cx: WindowCx, act: string?, value: string)
         local pane = existingPane(cx)
         if pane then
             cx.layout:focus(pane)
-            paneAction(cx, pane, act, value)
+            owe(pane, act, value)
+            sendOwed(cx, pane)
             return
         end
     end
@@ -553,9 +555,11 @@ local workerSummaryText = ""
 
 local function pollWorkerSummary()
     tern.timer(WORKER_POLL_SECONDS * 1000, function(cx)
-        if cx then
-            local ok, saved = pcall(tern.kv.get, workersummary.KEY)
-            local summary = if ok then workersummary.fresh(saved, os.time()) else nil
+        -- A failed read (the host half may be rewriting the file) keeps what was shown; `fresh` hides it once it goes stale.
+        local ok, saved = false, nil
+        if cx then ok, saved = pcall(tern.kv.get, workersummary.KEY) end
+        if ok then
+            local summary = workersummary.fresh(saved, os.time())
             local text = if summary ~= nil then tern.json.encode(summary) else ""
             if text ~= workerSummaryText then
                 workerSummary = summary
@@ -700,7 +704,7 @@ local function relayWhenLive(pane: number, tries: number)
         if not cx or not marked[pane] or relayed[pane] then retrying[pane] = nil; return end
         if cx.session:surface(pane) then
             retrying[pane] = nil
-            relayAll(cx, true)
+            deliver(cx, pane)
         elseif tries > 1 then
             relayWhenLive(pane, tries - 1)
         else
@@ -715,7 +719,7 @@ tern.on("title", function(ev, cx)
         if not marked[ev.pane] then return end
         if ev.title == "tern-kata" then relayed[ev.pane] = nil end
         if relayed[ev.pane] then return end
-        relayAll(cx, true)
+        deliver(cx, ev.pane)
         if not relayed[ev.pane] and not retrying[ev.pane] then relayWhenLive(ev.pane, RELAY_TRIES) end
     end
 end)

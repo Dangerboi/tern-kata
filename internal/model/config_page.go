@@ -477,9 +477,6 @@ func configSetUp(m Model) (Model, []Cmd) {
 	return askSwitchDocbank(m)
 }
 
-// SwitchDocbankQuestion is what s on the old pinned Docbank row asks.
-const SwitchDocbankQuestion = "Switch to kata's local Docbank? kata restarts its daemon. y/n"
-
 // askSwitchDocbank is s on the Docbank row in its old pinned form. It is ignored while a switch is out.
 func askSwitchDocbank(m Model) (Model, []Cmd) {
 	f := m.SelectedConfigFile()

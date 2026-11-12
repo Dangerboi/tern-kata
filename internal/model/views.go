@@ -245,8 +245,6 @@ func askDeleteView(m Model, popup bool) Model {
 	return m
 }
 
-func DeleteViewQuestion(name string) string { return "Delete view " + name + "? y/n" }
-
 // confirmDeleteView is y: it dismisses the question at once and sends the delete; the file's answer follows as ViewDeleted.
 func confirmDeleteView(m Model) (Model, []Cmd) {
 	name := m.Views.Deleting

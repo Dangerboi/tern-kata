@@ -308,7 +308,7 @@ func TestDeleteAsksFirstAndOnlyYDeletes(t *testing.T) {
 		return m
 	}
 	asked := open()
-	if asked.Views.Deleting != "Mine" || asked.CurrentMode() != model.ModeDeleteView || model.DeleteViewQuestion("Mine") != "Delete view Mine? y/n" {
+	if asked.Views.Deleting != "Mine" || asked.CurrentMode() != model.ModeDeleteView || questionText(asked) != "Delete view Mine? y/n" {
 		t.Fatalf("asked: %+v mode %s", asked.Views, asked.CurrentMode())
 	}
 	if kept, cmds := model.Update(asked, model.KeyMsg{Chord: "x", Text: "x"}); len(cmds) != 0 || kept.Views.Deleting != "Mine" {
@@ -468,4 +468,9 @@ func TestDeletingAViewForgetsItWhenALaterDuplicateOfItsNameDiffers(t *testing.T)
 	if strings.Contains(filterLine(done), "A") {
 		t.Fatalf("filter line = %q", filterLine(done))
 	}
+}
+
+func questionText(m model.Model) string {
+	q, _ := m.Question()
+	return q.Text
 }

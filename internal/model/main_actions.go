@@ -365,8 +365,6 @@ func askQuit(m Model) Model {
 	return m
 }
 
-const QuitQuestion = "Quit tern-kata? y/n"
-
 func openInbox(m Model) (Model, []Cmd) {
 	return openEntry(m, PickerEntry{Collection: InboxCollection()}, false)
 }
