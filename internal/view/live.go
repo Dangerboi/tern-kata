@@ -28,19 +28,9 @@ func staleText(m model.Model) string {
 // footerNodes is what the Pane draws under its columns: a question waiting for its answer, then the stale and notice lines.
 func footerNodes(m model.Model) []tern.Element {
 	var nodes []tern.Element
-	if m.AskQuit {
-		nodes = append(nodes, question("quit", model.QuitQuestion,
-			cardButton("yes", model.ModeQuit, model.ConfirmQuitAction, "Quit", true),
-			cardButton("no", model.ModeQuit, model.StayAction, "Stay", false)))
-	}
 	// With the Menu open the question is drawn in the Menu, which is modal: a copy here would sit behind it.
-	if m.Views.Deleting != "" && !m.Picker.Open {
-		nodes = append(nodes, deleteViewQuestion(m))
-	}
-	if m.ConfigPage.AskSwitch {
-		nodes = append(nodes, question("switch-docbank", model.SwitchDocbankQuestion,
-			cardButton("yes", model.ModeSwitchDocbank, model.ConfirmSwitchDocbankAction, "Switch", true),
-			cardButton("no", model.ModeSwitchDocbank, model.KeepDocbankAction, "Keep", false)))
+	if q, ok := m.Question(); ok && !m.Picker.Open {
+		nodes = append(nodes, question(q))
 	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
 		nodes = append(nodes, plainText("stale", ui.TonePending, staleText(m)))
@@ -53,15 +43,13 @@ func footerNodes(m model.Model) []tern.Element {
 
 // question is a y/n question with a button for each answer, so a Pane on a phone, with no keyboard, can answer it. The
 // buttons press the question's own keys, so a click and the key never disagree.
-func question(key, text string, yes, no ui.Button) tern.Element {
-	return ui.Row{Common: ui.Common{Key: key}, Gap: ui.GapMD, Align: ui.AlignCenter, Wrap: true, Children: ui.Nodes(
-		plainText("text", ui.ToneAccent, text), yes, no)}
-}
-
-func deleteViewQuestion(m model.Model) tern.Element {
-	return question("delete-view", model.DeleteViewQuestion(m.Views.Deleting),
-		destructive(cardButton("yes", model.ModeDeleteView, model.ConfirmDeleteViewAction, "Delete", false)),
-		cardButton("no", model.ModeDeleteView, model.KeepViewAction, "Keep", false))
+func question(q model.Question) tern.Element {
+	yes := cardButton("yes", q.Mode, q.Yes, q.YesWords, q.Primary)
+	if q.Danger {
+		yes = destructive(yes)
+	}
+	return ui.Row{Common: ui.Common{Key: q.Key}, Gap: ui.GapMD, Align: ui.AlignCenter, Wrap: true, Children: ui.Nodes(
+		plainText("text", ui.ToneAccent, q.Text), yes, cardButton("no", q.Mode, q.No, q.NoWords, false))}
 }
 
 // toasts is the model's toast, drawn from the step that raised it until ToastExpired for its Seq, so a late client never gets a stale

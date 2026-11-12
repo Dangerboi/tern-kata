@@ -8,8 +8,6 @@
 export type StatusSegment = { text: string, icon: string?, tone: string?, command: string? }
 export type Agent = { pane: number, command: string?, state: string }
 
-local widgets = require("./widgets")
-
 local M = {}
 
 -- The agents kata started that wait for the user, the one that began waiting last first. `order` gives each pane the number
@@ -28,15 +26,17 @@ function M.waiting(agents: { Agent }, order: { [number]: number }, isKata: (stri
     return timed
 end
 
-function M.segment(count: number, command: string): { StatusSegment }?
-    if count <= 0 then return nil end
-    return {{text = count .. " waiting", tone = "warning", command = command}}
-end
-
--- What the widget shows: nothing while no agent waits.
-function M.widget(count: number, tooltip: string, command: string): widgets.WidgetView?
+-- What the Waiting kata agents widget shows: nothing while no agent waits.
+function M.widget(count: number, tooltip: string, command: string): WidgetView?
     if count <= 0 then return nil end
     return {text = count .. " waiting", tone = "warning", title = tooltip, command = command}
+end
+
+-- The "N waiting" text of the Plugin segments widget: the widget's view without its tooltip.
+function M.segment(count: number, command: string): { StatusSegment }?
+    local view = M.widget(count, "", command)
+    if view == nil then return nil end
+    return {{text = view.text, tone = view.tone, command = view.command}}
 end
 
 return M

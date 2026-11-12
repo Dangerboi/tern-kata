@@ -9,19 +9,41 @@ import (
 
 // coverMode is the mode of a card, a question or the help sheet that takes the Pane's keys, "" when none does.
 func (m Model) coverMode() Mode {
-	switch mode := m.cardMode(); {
-	case mode != "":
+	if mode := m.cardMode(); mode != "" {
 		return mode
-	case m.AskQuit:
-		return ModeQuit
-	case m.Views.Deleting != "":
-		return ModeDeleteView
-	case m.ConfigPage.AskSwitch:
-		return ModeSwitchDocbank
-	case m.HelpOpen:
+	}
+	if q, ok := m.Question(); ok {
+		return q.Mode
+	}
+	if m.HelpOpen {
 		return ModeHelp
 	}
 	return ""
+}
+
+// Question is a y/n question waiting for its answer. Key names its node in the view; Yes and No are the actions of its keys, and
+// YesWords and NoWords what the buttons for them say.
+type Question struct {
+	Key               string
+	Mode              Mode
+	Text              string
+	Yes, No           Action
+	YesWords, NoWords string
+	Danger, Primary   bool
+}
+
+// Question is the question to answer, if any. Only one is shown at a time: the quit question wins over the delete-view one,
+// which wins over the Docbank switch.
+func (m Model) Question() (Question, bool) {
+	switch {
+	case m.AskQuit:
+		return Question{Key: "quit", Mode: ModeQuit, Text: QuitQuestion, Yes: ConfirmQuitAction, No: StayAction, YesWords: "Quit", NoWords: "Stay", Primary: true}, true
+	case m.Views.Deleting != "":
+		return Question{Key: "delete-view", Mode: ModeDeleteView, Text: DeleteViewQuestion(m.Views.Deleting), Yes: ConfirmDeleteViewAction, No: KeepViewAction, YesWords: "Delete", NoWords: "Keep", Danger: true}, true
+	case m.ConfigPage.AskSwitch:
+		return Question{Key: "switch-docbank", Mode: ModeSwitchDocbank, Text: SwitchDocbankQuestion, Yes: ConfirmSwitchDocbankAction, No: KeepDocbankAction, YesWords: "Switch", NoWords: "Keep", Primary: true}, true
+	}
+	return Question{}, false
 }
 
 // covered reports whether a card, a question or the help sheet takes the Pane's keys: a context menu pick or a toast's button,

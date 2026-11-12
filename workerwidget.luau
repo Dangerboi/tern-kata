@@ -24,7 +24,7 @@ end
 
 -- What the widget shows: nothing while no worker runs on this machine. Held runs win the text and the warning tone, and a
 -- click shows kata's held runs; otherwise a click opens kata. `heldCommand` and `openCommand` are the action names.
-function M.view(summary: Summary?, heldCommand: string, openCommand: string): widgets.WidgetView?
+function M.view(summary: Summary?, heldCommand: string, openCommand: string): WidgetView?
     if summary == nil then return nil end
     local value = if summary.capacity > 0 then summary.inUse / summary.capacity else 0
     local held = #summary.held

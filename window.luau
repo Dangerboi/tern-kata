@@ -1,5 +1,7 @@
 --!strict
 
+local PLUGIN = "tern-kata"
+
 local placement = require("./placement")
 local releases = require("./releases")
 local panecommands = require("./panecommands")
@@ -12,17 +14,15 @@ local widgets = require("./widgets")
 -- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
 local launched: { [number]: boolean } = {}
 local fresh: { [number]: boolean } = {}
--- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
-local pending: { [number]: string? } = {}
--- The actions owed to a kata Pane still starting, in the order they were asked for: Wrap up and Show held runs can both
--- arrive before the Pane's surface is live, and neither may overwrite the other.
+-- The actions owed to a kata Pane still starting, in the order they were asked for (a link's issue, Wrap up, Show held runs),
+-- sent over TSP once its surface is live so an issue reference never passes through a shell and none overwrites another.
 type OwedAction = { act: string, value: string }
-local pendingActions: { [number]: { OwedAction } } = {}
+local owed: { [number]: { OwedAction } } = {}
 local function owe(pane: number, act: string, value: string)
-    local list: { OwedAction } = pendingActions[pane] or {}
-    pendingActions[pane] = list
-    for _, owed in list do
-        if owed.act == act and owed.value == value then return end
+    local list: { OwedAction } = owed[pane] or {}
+    owed[pane] = list
+    for _, item in list do
+        if item.act == act and item.value == value then return end
     end
     table.insert(list, {act = act, value = value})
 end
@@ -241,15 +241,10 @@ local function showSessionOf(cx: WindowCx, tab: number?)
 end
 
 local function deliver(cx: WindowCx, pane: number)
-    local ref = pending[pane]
-    if ref and cx.session:surface(pane) then
-        pending[pane] = nil
-        paneAction(cx, pane, "select-issue", ref)
-    end
-    local owed = pendingActions[pane]
-    if owed and cx.session:surface(pane) then
-        pendingActions[pane] = nil
-        for _, item in owed do paneAction(cx, pane, item.act, item.value) end
+    local list = owed[pane]
+    if list and cx.session:surface(pane) then
+        owed[pane] = nil
+        for _, item in list do paneAction(cx, pane, item.act, item.value) end
     end
     if not relayed[pane] then relayAll(cx, true) end
 end
@@ -308,26 +303,22 @@ local function launch(cx: WindowCx, command: string): number?
     return cx.layout:new_tab({command = command})
 end
 
--- The focused tab's kata Pane (when `find`) gets focus and `act`; otherwise a new Pane is launched, `queue` records what it does once
--- its surface is up, and it is watched for a failing start.
-local function openKata(cx: WindowCx, find: boolean, act: (number) -> (), queue: (number) -> ())
-    if find then
+-- The focused tab's kata Pane (when `act` is given) gets focus and the action; otherwise a new Pane is launched, owed the action
+-- (a nil `act` owes nothing) once its surface is up, and watched for a failing start.
+local function openKata(cx: WindowCx, act: string?, value: string)
+    if act ~= nil then
         local pane = existingPane(cx)
         if pane then
             cx.layout:focus(pane)
-            act(pane)
+            paneAction(cx, pane, act, value)
             return
         end
     end
     local pane = launch(cx, panecommands.KATA)
     if not pane then return end
     launched[pane] = true
-    queue(pane)
+    if act ~= nil then owe(pane, act, value) end
     watch(pane, 20)
-end
-
-local function open(cx: WindowCx, ref: string?)
-    openKata(cx, ref ~= nil, function(pane) paneAction(cx, pane, "select-issue", ref :: string) end, function(pane) pending[pane] = ref end)
 end
 
 -- `W` starts an agent in a new tab, which Tern appends as the last tab. The agent's prompt file is named
@@ -488,7 +479,7 @@ local waitingCount = 0
 local waitingTooltip = ""
 local GO_WAITING_ID = "go-to-waiting-agent"
 local function commandName(id: string): string
-    return "plugin.tern-kata." .. id
+    return "plugin." .. PLUGIN .. "." .. id
 end
 local GO_WAITING_COMMAND = commandName(GO_WAITING_ID)
 
@@ -530,12 +521,12 @@ local function registerWidget(id: string, spec: WidgetSpec): boolean
         end
         return false
     end
-    local ok, err = (pcall :: any)(tern.chrome.widget, id, spec)
+    local ok, err = pcall(function() tern.chrome.widget(id, spec) end)
     if not ok then
         tern.log.warn("tern-kata: could not register widget " .. id .. ": " .. tostring(err))
         return false
     end
-    table.insert(widgetsOffered, {id = id, name = spec.name})
+    table.insert(widgetsOffered, {id = PLUGIN .. "/" .. id, name = spec.name})
     return true
 end
 
@@ -545,7 +536,7 @@ registerWidget("waiting", {
     icon = "bell",
     styles = {"text"} :: { WidgetStyle },
     render = function(_pane): WidgetView?
-        return waitingagents.widget(waitingCount, waitingTooltip, GO_WAITING_COMMAND) :: WidgetView?
+        return waitingagents.widget(waitingCount, waitingTooltip, GO_WAITING_COMMAND)
     end,
 })
 
@@ -555,20 +546,17 @@ local WORKER_POLL_SECONDS = 5
 -- The Open kata command's id: the worker widget runs it when no run is held.
 local OPEN_ID = "open"
 local SHOW_HELD_ID = "show-held-runs"
--- The Page that lists the runs held for the user.
-local HELD_PAGE = "attention"
 local workerSummary: workersummary.Summary? = nil
--- `workerSummary` as the timer last read it, encoded with `at` masked: the host half restamps the summary every poll, so `at`
--- would differ on every read and redraw every window for nothing. A summary that goes stale is read as nil, which differs. The
--- mask works on the text, so the table `tern.kv` returned is neither copied nor changed.
+-- `workerSummary` as the timer last read it, encoded: it differs when the worker's summary changes or goes stale (read as nil), and
+-- the freshness stamp is not part of the summary, so the host half restamping it every poll redraws nothing.
 local workerSummaryText = ""
 
 local function pollWorkerSummary()
     tern.timer(WORKER_POLL_SECONDS * 1000, function(cx)
         if cx then
             local ok, saved = pcall(tern.kv.get, workersummary.KEY)
-            local summary = if ok and type(saved) == "table" then workersummary.fresh(saved :: workersummary.Summary, os.time()) else nil
-            local text = if summary ~= nil then (tern.json.encode(summary):gsub('"at":[%d.eE+-]+', '"at":0')) else ""
+            local summary = if ok then workersummary.fresh(saved, os.time()) else nil
+            local text = if summary ~= nil then tern.json.encode(summary) else ""
             if text ~= workerSummaryText then
                 workerSummary = summary
                 workerSummaryText = text
@@ -585,18 +573,20 @@ if registerWidget("worker", {
     icon = "server",
     styles = {"text", "ring"} :: { WidgetStyle },
     render = function(_pane): WidgetView?
-        return workerwidget.view(workerSummary, commandName(SHOW_HELD_ID), commandName(OPEN_ID)) :: WidgetView?
+        return workerwidget.view(workerSummary, commandName(SHOW_HELD_ID), commandName(OPEN_ID))
     end,
 }) then
     pollWorkerSummary()
-    tern.command({
-        id = SHOW_HELD_ID,
-        title = "Show kata's held runs",
-        run = function(cx)
-            openKata(cx, true, function(pane) paneAction(cx, pane, "show-page", HELD_PAGE) end, function(pane) owe(pane, "show-page", HELD_PAGE) end)
-        end,
-    })
 end
+
+-- Held runs are shown by kata whatever the widget bar can do, so the command does not wait for the widget.
+tern.command({
+    id = SHOW_HELD_ID,
+    title = "Show kata's held runs",
+    run = function(cx)
+        openKata(cx, "show-held-runs", "")
+    end,
+})
 
 if #widgetsOffered > 0 then
     tern.command({
@@ -664,8 +654,7 @@ tern.on("pane_closed", function(ev, cx)
     if updatePanes[ev.pane] then
         changeUpdatePanes(ev.pane, false)
     end
-    pending[ev.pane] = nil
-    pendingActions[ev.pane] = nil
+    owed[ev.pane] = nil
     waitOrder[ev.pane] = nil
     recountWaiting(cx, ev.pane)
     relayed[ev.pane] = nil
@@ -908,14 +897,14 @@ tern.command({
     id = OPEN_ID,
     title = "Open kata",
     keys = {"f9"},
-    run = function(cx) open(cx, nil) end,
+    run = function(cx) openKata(cx, nil, "") end,
 })
 
 tern.command({
     id = "wrap-up-agents",
     title = "Wrap up every running agent",
     run = function(cx)
-        openKata(cx, true, function(pane) paneAction(cx, pane, "wrap-up-sweep", "") end, function(pane) owe(pane, "wrap-up-sweep", "") end)
+        openKata(cx, "wrap-up-sweep", "")
     end,
 })
 
@@ -1030,6 +1019,6 @@ tern.route.link(function(link, cx)
     -- References are literal URL segments: encoded or ambiguous separators are declined.
     if not project or not shortID or project:find("[?#%%\\]") or shortID:find("[%%\\]")
         or (project .. shortID):find("[%z\r\n]") then return nil end
-    open(cx, project .. "/" .. shortID)
+    openKata(cx, "select-issue", project .. "/" .. shortID)
     return {handled = true}
 end)

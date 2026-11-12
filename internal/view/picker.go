@@ -46,8 +46,8 @@ func pickerLayer(m model.Model) tern.Element {
 		empty = "Loading Menu…"
 	}
 	notes := []tern.Element{}
-	if m.Views.Deleting != "" {
-		notes = append(notes, deleteViewQuestion(m))
+	if q, ok := m.Question(); ok {
+		notes = append(notes, question(q))
 	}
 	if m.Views.Err != nil {
 		notes = append(notes, toneText("views-error", ui.ToneError, "Saved views not read: "+m.Views.Err.Error()))

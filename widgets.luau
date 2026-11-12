@@ -4,9 +4,6 @@
 -- `luau test/widgets_test.luau`. `capped` is the "at most five, then how many more" list of a tooltip; `merge` is what the
 -- palette command writes back to the bar's `widgets` setting.
 
--- What a widget's `render` returns, the part of tern.d.luau's WidgetView these widgets use.
-export type WidgetView = { text: string, tone: string?, title: string?, command: string?, value: number? }
-
 local M = {}
 
 local CAPPED_LINES = 5
@@ -19,9 +16,9 @@ function M.capped(lines: { string }): { string }
     return shown
 end
 
--- The bar's `widgets` list with `tern-kata/<id>` appended for each of `ids` it lacks; every other entry stays where it is,
--- as it is. An entry is a table with an `id` or a plain string, either of which may carry an `@style` suffix. Returns the
--- new list and the ids that were added; the list given is not changed.
+-- The bar's `widgets` list with each of `ids` (full widget ids, `<plugin>/<id>`) appended when it lacks it; every other entry
+-- stays where it is, as it is. An entry is a table with an `id` or a plain string, either of which may carry an `@style`
+-- suffix. Returns the new list and the ids that were added; the list given is not changed.
 function M.merge(list: { any }, ids: { string }): ({ any }, { string })
     local merged: { any } = {}
     local present: { [string]: boolean } = {}
@@ -32,10 +29,9 @@ function M.merge(list: { any }, ids: { string }): ({ any }, { string })
     end
     local added: { string } = {}
     for _, id in ids do
-        local full = "tern-kata/" .. id
-        if not present[full] then
-            present[full] = true
-            table.insert(merged, {id = full})
+        if not present[id] then
+            present[id] = true
+            table.insert(merged, {id = id})
             table.insert(added, id)
         end
     end

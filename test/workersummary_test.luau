@@ -79,21 +79,35 @@ test("a held reason is the worker's HoldLine, or the hold code from a binary tha
     assert(got.held[2].reason == "interrupted", got.held[2].reason)
 end)
 
-test("a summary is fresh until STALE_S seconds after its stamp", function()
-    local summary = workersummary.of(sample)
-    assert(summary ~= nil)
-    summary.at = 1000
-    assert(workersummary.fresh(summary, 1000) == summary)
-    assert(workersummary.fresh(summary, 1000 + workersummary.STALE_S) == summary)
-    assert(workersummary.fresh(summary, 1000 + workersummary.STALE_S + 1) == nil)
+test("a summary has no stamp of its own", function()
+    local got: any = workersummary.of(sample)
+    assert(got ~= nil and got.at == nil)
 end)
 
-test("a summary without a numeric stamp, or none at all, is not fresh", function()
+test("a record holds the summary and the time it was stored", function()
     local summary = workersummary.of(sample)
     assert(summary ~= nil)
-    local loose: any = summary
-    loose.at = nil
-    assert(workersummary.fresh(summary, 1000) == nil)
+    local saved = workersummary.record(summary, 1000)
+    assert(saved.at == 1000 and saved.worker == summary)
+end)
+
+test("a record is fresh until STALE_S seconds after its stamp", function()
+    local summary = workersummary.of(sample)
+    assert(summary ~= nil)
+    local saved = workersummary.record(summary, 1000)
+    assert(workersummary.fresh(saved, 1000) == summary)
+    assert(workersummary.fresh(saved, 1000 + workersummary.STALE_S) == summary)
+    assert(workersummary.fresh(saved, 1000 + workersummary.STALE_S + 1) == nil)
+end)
+
+test("something read back without a numeric stamp or a worker table is not fresh", function()
+    local summary = workersummary.of(sample)
+    assert(summary ~= nil)
+    assert(workersummary.fresh({ worker = summary }, 1000) == nil)
+    assert(workersummary.fresh({ at = "1000", worker = summary }, 1000) == nil)
+    assert(workersummary.fresh({ at = 1000 }, 1000) == nil)
+    assert(workersummary.fresh({ at = 1000, worker = "text" }, 1000) == nil)
+    assert(workersummary.fresh("text", 1000) == nil)
     assert(workersummary.fresh(nil, 1000) == nil)
 end)
 

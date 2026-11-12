@@ -7,12 +7,13 @@
 -- `process_exit` event: the host half then starts one at once and logs how that worker ended. Elsewhere (older Tern, a
 -- worker started by hand, a daemon restart) it starts one within a poll of that worker's end.
 -- While this load's worker runs, or the Supervision rule holds and the poll finds a worker already running, it also asks
--- `tern-kata worker status --json` and keeps a short summary of it (workersummary.luau) under tern.kv's
--- `worker.summary` for the window half's worker widget, stamped with the time of every poll so the widget can drop a summary
+-- `tern-kata worker status --json` and keeps a short summary of it (workersummary.luau) under tern.kv's `worker.summary`
+-- for the window half's worker widget, as a record stamped with the time of every poll so the widget can drop a summary
 -- that no host half refreshes any more. This load's worker is summarized until it exits, even after
 -- worker.manual appears, since nothing asks `worker supervised` while it runs; the key is removed when no worker runs or,
 -- for a worker this load did not start, when the rule does not hold (worker.manual, no worker.toml). A failed read stores
 -- the last summary again with a fresh stamp.
+-- At most one question to the binary is out at a time; see `ask`.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
 -- This file does not decide the rule, find the config folder or see which worker runs: it asks `tern-kata worker
 -- supervised`, whose answer is worker.SupervisionOn and worker.RunningWorker in internal/worker/supervision.go (the one
@@ -37,20 +38,15 @@ local RUN_LIMIT_MS = 7 * 24 * 3600 * 1000
 local running = false
 -- worker.toml's text when the worker was last started: a different text on disk means the wait no longer applies.
 local started_text: string? = nil
--- A `worker supervised` question is out; its answer arms the next look.
-local asking = false
--- The worker named in the held line ended while a question was out: a HELD answer to that question may name the dead worker,
--- so the next look comes at once instead of after POLL_MS.
-local recheck = false
+-- A question (`worker supervised` or `worker status --json`) is out; it is the only one, and its answer arms the next look.
+local out = false
+-- What the question asked about changed while it was out (the worker ended): its answer is dropped and the next look comes at once.
+local stale = false
+-- A look was asked for while the question was out: the answer's next look comes at once instead of after POLL_MS.
+local again = false
 local warned_missing = false
 local warned_status = false
--- A `worker status --json` question is out; like the supervised question it is the only one out, and its answer arms the next look.
-local summarizing = false
--- A look was asked for while the status question was out: the answer arms it at once instead of after POLL_MS.
-local look_again = false
 local warned_summary = false
--- Bumped whenever the summary is cleared, so a status read that was out at that moment drops its answer.
-local summary_epoch = 0
 -- The summary last stored, so a failed read can store it again with a fresh stamp.
 local last_summary: workersummary.Summary? = nil
 local ASK_LIMIT_MS = 10000
@@ -184,70 +180,86 @@ end
 -- No worker runs (or the rule no longer holds): the widget has nothing to show. The key may come from an earlier load of this
 -- file, so tern.kv is asked, not only what this load stored.
 local function clear_summary()
-    summary_epoch += 1
     last_summary = nil
     warned_summary = false
     local ok, stored = pcall(tern.kv.get, workersummary.KEY)
     if ok and stored ~= nil then pcall(tern.kv.set, workersummary.KEY, nil) end
 end
 
+-- Runs `tern-kata <args>` as the one question out. The answer goes to on_answer, unless what the question was about changed
+-- while it was out: then it is dropped and the look comes at once. Returns the error text when the process could not start.
+local function ask(binary: string, args: { string }, on_answer: (ProcessResult) -> ()): string?
+    local command = { binary }
+    for _, arg in args do table.insert(command, arg) end
+    out = true
+    local ok, err = pcall(function()
+        tern.process.run(command, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
+            out = false
+            if stale then
+                stale = false
+                again = false
+                return arm(1)
+            end
+            on_answer(result)
+            -- An answer that armed no look through next_look (a launch arms its own) leaves nothing owed.
+            again = false
+        end)
+    end)
+    if ok then return nil end
+    out = false
+    stale = false
+    return tostring(err)
+end
+
+-- Arms the look that follows an answer: at once when one was asked for while the question was out, else after POLL_MS.
+local function next_look()
+    local soon = again
+    again = false
+    arm(if soon then 1 else POLL_MS)
+end
+
 -- Asks the running worker's status and stores its summary, stamped with the time, on every poll. A failed read (a timeout, an
 -- older binary without --json, output that names no worker) stores the last summary again with a fresh stamp and is logged
 -- once until a read succeeds. The next look comes after it.
 local function summarize(binary: string)
-    summarizing = true
-    local function done()
-        summarizing = false
-        local soon = look_again
-        look_again = false
-        arm(if soon then 1 else POLL_MS)
-    end
     local function failed(why: string)
         if not warned_summary then
             warned_summary = true
             tern.log.warn("tern-kata: could not read the worker's status for the worker widget (" .. why .. "); keeping the last summary")
         end
     end
-    -- Stamps the summary now and stores it; the stamp is what tells the window half that a host half is still polling.
+    -- Stores the summary with the time now; the stamp is what tells the window half that a host half is still polling.
     local function store(summary: workersummary.Summary)
-        summary.at = os.time()
-        local stored, store_err = (pcall :: any)(tern.kv.set, workersummary.KEY, summary)
+        local value = workersummary.record(summary, os.time())
+        local stored, store_err = pcall(function() tern.kv.set(workersummary.KEY, value) end)
         if stored then
             last_summary = summary
         else
             failed("could not store it: " .. tostring(store_err))
         end
     end
-    -- A failed read still proves the host half is alive, so the last summary is stored again with a fresh stamp.
-    local function restamp()
-        if last_summary ~= nil then store(last_summary) end
-    end
-    -- A read that did not give a summary: it is logged, the last summary is stored again, and the next look is scheduled.
+    -- A read that did not give a summary: it is logged, the last summary is stored again with a fresh stamp (a failed read
+    -- still proves the host half is alive), and the next look is scheduled.
     local function failed_read(why: string)
         failed(why)
-        restamp()
-        done()
+        if last_summary ~= nil then store(last_summary) end
+        next_look()
     end
-    local epoch = summary_epoch
-    local ok, err = pcall(function()
-        tern.process.run({binary, "worker", "status", "--json"}, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
-            -- The summary was cleared while this read was out (the worker it asked about has ended): its answer says nothing now.
-            if epoch ~= summary_epoch then return done() end
-            if result.status ~= 0 or result.timed_out then
-                return failed_read(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
-            end
-            local decoded, status = pcall(tern.json.decode, result.stdout)
-            local summary = decoded and workersummary.of(status) or nil
-            if summary == nil then
-                return failed_read("unexpected output")
-            end
-            warned_summary = false
-            store(summary)
-            done()
-        end)
+    local err = ask(binary, {"worker", "status", "--json"}, function(result: ProcessResult)
+        if result.status ~= 0 or result.timed_out then
+            return failed_read(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
+        end
+        local decoded, status = pcall(tern.json.decode, result.stdout)
+        local summary = decoded and workersummary.of(status) or nil
+        if summary == nil then
+            return failed_read("unexpected output")
+        end
+        warned_summary = false
+        store(summary)
+        next_look()
     end)
-    if not ok then
-        failed_read(tostring(err))
+    if err ~= nil then
+        failed_read(err)
     end
 end
 
@@ -260,9 +272,9 @@ local function launch(binary: string, config: string)
     local function exited(result: ProcessResult)
         running = false
         clear_summary()
-        -- A status read about the worker that just ended may be out: its answer must not arm the next look after POLL_MS and
-        -- cancel the restart armed below, so it arms at once and the look that follows honours the backoff.
-        if summarizing then look_again = true end
+        -- A question about the worker that just ended may be out: its answer is dropped and the look that follows honours the
+        -- backoff armed below.
+        if out then stale = true end
         local ran = tern.now() - started
         if ran >= HEALTHY_MS or result.timed_out then restart_delay = MIN_DELAY end
         local waited = schedule_restart()
@@ -297,12 +309,7 @@ end
 -- then the worker never starts until the binary is updated. A question still out when the plugin reloads never reaches
 -- this function: it ends as a `process_exit` event, which worker_ended does not take for the worker's end.
 local function answered(binary: string, result: ProcessResult)
-    asking = false
-    local again = recheck
-    recheck = false
     if result.status == HELD and not result.timed_out then
-        -- The question may have seen the worker that has since ended: ask again at once, logging nothing for it.
-        if again then return arm(1) end
         -- worker.lock would refuse a second worker: start none, and look again next poll.
         local line = last_line(result.stdout)
         if line ~= held_line then
@@ -326,7 +333,7 @@ local function answered(binary: string, result: ProcessResult)
             warned_status = true
             tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
         end
-        return arm(POLL_MS)
+        return next_look()
     end
     forget_held()
     clear_summary()
@@ -339,11 +346,10 @@ local function answered(binary: string, result: ProcessResult)
 end
 
 function start()
-    if summarizing then
-        look_again = true
+    if out then
+        again = true
         return
     end
-    if asking then return end
     local binary = find_binary()
     if running then
         if binary == nil then return arm(POLL_MS) end
@@ -358,15 +364,11 @@ function start()
         return arm(POLL_MS)
     end
     warned_missing = false
-    asking = true
-    local ok, err = pcall(function()
-        tern.process.run({binary, "worker", "supervised"}, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
-            answered(binary, result)
-        end)
+    local err = ask(binary, {"worker", "supervised"}, function(result: ProcessResult)
+        answered(binary, result)
     end)
-    if not ok then
-        asking = false
-        tern.log.warn("tern-kata: could not ask whether the worker is supervised: " .. tostring(err))
+    if err ~= nil then
+        tern.log.warn("tern-kata: could not ask whether the worker is supervised: " .. err)
         arm(POLL_MS)
     end
 end
@@ -390,7 +392,7 @@ local function worker_ended(ev: any)
         -- The line may come from tern.kv alone (the reloaded VM's first poll has not answered), so forget_held sees it.
         held_line = line
         forget_held()
-        recheck = asking
+        if out then stale = true end
     end
     start()
 end

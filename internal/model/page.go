@@ -57,8 +57,7 @@ func (m Model) ListNode() ListNode { return pageDefs[m.Page].list }
 type pageDef struct {
 	page Page
 	// id names the Page bar's node; label is what it reads; chord is the key as the Page bar and help sheet word it, which a click
-	// on the label sends too (press, when set, is the Tern chord that stands for it: "shift+c" for C). The Luau window hook sends
-	// "attention" with show-page, so renaming that id breaks the held-runs click.
+	// on the label sends too (press, when set, is the Tern chord that stands for it: "shift+c" for C).
 	id, label, chord, press string
 	// lettered marks a Lettered Page: it has a letter for its chord and no number, is listed in the Menu, and is drawn in the Page
 	// bar only while shown. It does not act on the Pane's Project and has no reset rule. Its back key returns to the Page shown before.
@@ -322,30 +321,24 @@ func showPage(target Page) func(Model) (Model, []Cmd) {
 	}
 }
 
-// showPageByID shows the Page whose id (the Page bar node's, "attention") is given, as the Page's key would, so entering it runs
-// its enter. It is the show-page Pane action the Luau window hook sends; an id no Page has changes nothing. Like the Page keys it
-// only acts in pageModes, so a window click cannot switch Pages under an open card or a typed field and discard what was typed;
-// a refused click raises a toast saying what to do, as the window shows nothing else for it. On the error screen there is
-// nothing to close and the error already says what is wrong, so the click does nothing there, unless a card or question is
-// drawn over the error. Nor does it toast for the Page already shown, which a card leaves visible beneath it.
-func showPageByID(m Model, id string) (Model, []Cmd) {
-	for _, def := range pageDefs {
-		if def.id != id {
-			continue
-		}
-		if m.Page == def.page {
+// showHeldRuns shows the Attention Page, where held runs are listed, as the Page's key would, so entering it runs its enter. It is
+// the show-held-runs Pane action the Luau window hook sends. Like the Page keys it only acts in pageModes, so a window click
+// cannot switch Pages under an open card or a typed field and discard what was typed; a refused click raises a toast saying what
+// to do, as the window shows nothing else for it. On the error screen there is nothing to close and the error already says what
+// is wrong, so the click does nothing there, unless a card or question is drawn over the error. Nor does it toast for the Page
+// already shown, which a card leaves visible beneath it.
+func showHeldRuns(m Model) (Model, []Cmd) {
+	if m.Page == PageAttention {
+		return m, nil
+	}
+	if !slices.Contains(pageModes, m.CurrentMode()) {
+		if m.OnErrorScreen() && !m.covered() {
 			return m, nil
 		}
-		if !slices.Contains(pageModes, m.CurrentMode()) {
-			if m.OnErrorScreen() && !m.covered() {
-				return m, nil
-			}
-			m, wait := m.raiseToast(Toast{Text: "Close what is open to show the " + def.label + " Page."})
-			return m, []Cmd{wait}
-		}
-		return showPage(def.page)(m)
+		m, wait := m.raiseToast(Toast{Text: "Close what is open to show the " + pageDefs[PageAttention].label + " Page."})
+		return m, []Cmd{wait}
 	}
-	return m, nil
+	return showPage(PageAttention)(m)
 }
 
 // switchPage is the one way onto a Page, the Issues Page included. It leaves the current Page, and for a Page that acts on the

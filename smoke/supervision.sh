@@ -142,7 +142,7 @@ wait_summary() { # $1 present|gone, $2 seconds
   return 1
 }
 wait_summary present 25
-kv_summary | jq -e --argjson pid "$(worker_pid)" '.executor == "smoke-machine" and .pid == $pid and .capacity >= 1 and (.running | type) == "number" and (.held | length) == 0' >/dev/null || { echo "worker.summary is not the running worker's summary: $(kv_summary)" >&2; exit 1; }
+kv_summary | jq -e --argjson pid "$(worker_pid)" '.worker | .executor == "smoke-machine" and .pid == $pid and .capacity >= 1 and (.running | type) == "number" and (.held | length) == 0' >/dev/null || { echo "worker.summary is not the running worker's summary: $(kv_summary)" >&2; exit 1; }
 
 # A crashing worker is restarted, and each quick crash waits longer than the last.
 kill -9 "$first"
