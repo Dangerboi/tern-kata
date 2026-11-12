@@ -10,6 +10,7 @@ local waitingagents = require("./waitingagents")
 local workersummary = require("./workersummary")
 local workerwidget = require("./workerwidget")
 local widgets = require("./widgets")
+local attachmentview = require("./attachmentview")
 
 -- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
 local launched: { [number]: boolean } = {}
@@ -899,6 +900,27 @@ tern.command({
         end)
     end,
 })
+
+-- Tern before 0.9.18's routes and floating view has no `tern.route`: Attachments open in the side panel there, as the Pane asks.
+local KV_ATTACHMENTS_SIDE = "attachments.side_panel"
+if tern.route ~= nil then
+    tern.route.open(function(req)
+        local ok, side = pcall(tern.kv.get, KV_ATTACHMENTS_SIDE)
+        local how = attachmentview.route(req.path, ok and side == true)
+        if how == nil then return nil end
+        return {path = req.path, how = how :: How}
+    end)
+    tern.command({
+        id = "attachments-side-panel",
+        title = "Switch kata Attachments between floating and the side panel",
+        run = function(cx)
+            local ok, side = pcall(tern.kv.get, KV_ATTACHMENTS_SIDE)
+            local nowSide, text = attachmentview.toggle(ok and side == true)
+            tern.kv.set(KV_ATTACHMENTS_SIDE, if nowSide then true else nil)
+            cx:toast("info", text)
+        end,
+    })
+end
 
 tern.command({
     id = OPEN_ID,

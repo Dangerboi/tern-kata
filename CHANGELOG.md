@@ -29,6 +29,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The palette command Show kata's held runs opens the kata Pane on the Attention Page, on every Tern version.
   - While a card, a question, the help sheet or a search is open in the Pane, the command shows a toast asking you to close it instead of switching Pages.
 
+### Changed
+
+#### Attachments
+
+- An Attachment that opens in Tern (images, text, Markdown, JSON) shows in Tern's floating view over the tab instead of the side panel beside the Pane (Tern 0.9.18 and later).
+  - A click outside or `esc` closes it, and dragging its header keeps it.
+  - The palette command Switch kata Attachments between floating and the side panel switches back to the side panel, and again to floating.
+
 ### Fixed
 
 #### Tern window

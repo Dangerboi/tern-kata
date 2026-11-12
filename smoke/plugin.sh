@@ -629,4 +629,28 @@ expect_toast 'tern-kata plugin is linked, left as it is'
 for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
 ctl remote disconnect loop
 jq -Rse 'contains("plugin window halves loaded count=2") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
-printf 'Plugin smoke passed: consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, the go-to-waiting command toasting with no agent waiting and moving nothing, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line, no plugin step and an up-to-date toast when the window plugin is already at the release, no plugin step and a linked toast when the window plugin is linked, and (Tern 0.9.16 and later) a plugin step still running at a plugin reload ending as a process_exit in the reloaded window toasting its success with the pending key gone and its failure with the last stderr line\n'
+# An Attachment the kata Pane opens with `tern open --preview <its download folder>/...` floats over the tab; the palette toggle
+# puts it back in the side panel, and a file outside that folder is left to Tern.
+attachment_dir="$tmp/cache/tern-kata/attachments/issue/1/v"
+mkdir -p "$attachment_dir"
+printf '# Glimpseable\n' >"$attachment_dir/note.md"
+tree_has() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/dev/null; }
+glimpse_shown() { tree_has "drag the header to keep it"; }
+wait_tree() { local k; for ((k = 0; k < 100; k++)); do tree_has "$1" && return 0; sleep 0.1; done; echo "never drawn: $1" >&2; return 1; }
+open_preview() {
+  printf 'run %s\n' "$(jq -rRn --arg command "tern open --preview $1" '$command | @json')" >"$tmp/attachment.ctl"
+  ctl --file "$tmp/attachment.ctl"
+}
+jq -e '.focused.prompt == true' <(ctl state) >/dev/null || { echo "attachment check needs a shell focused" >&2; exit 1; }
+printf 'palette "Switch kata Attachments between floating and the side panel"\nkey Enter\n' >"$tmp/attachment-toggle.ctl"
+ctl --file "$tmp/attachment-toggle.ctl"
+expect_toast "kata Attachments open in the side panel beside the Pane"
+open_preview "$attachment_dir/note.md"
+wait_tree Glimpseable
+! glimpse_shown || { echo "the side panel choice still floated the Attachment" >&2; exit 1; }
+ctl focus left
+ctl --file "$tmp/attachment-toggle.ctl"
+expect_toast "kata Attachments open floating over the tab"
+open_preview "$attachment_dir/note.md"
+wait_tree "drag the header to keep it"
+printf 'Plugin smoke passed: Attachments floating by default and in the side panel by choice, consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, the go-to-waiting command toasting with no agent waiting and moving nothing, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line, no plugin step and an up-to-date toast when the window plugin is already at the release, no plugin step and a linked toast when the window plugin is linked, and (Tern 0.9.16 and later) a plugin step still running at a plugin reload ending as a process_exit in the reloaded window toasting its success with the pending key gone and its failure with the last stderr line\n'

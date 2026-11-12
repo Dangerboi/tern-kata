@@ -202,6 +202,9 @@ func (c *Client) UnlinkAttachment(ctx context.Context, cmd model.UnlinkAttachmen
 	return c.clearMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.AttachmentKey(cmd.ID))
 }
 
+// attachmentCacheDir is where Attachments are downloaded. The window plugin (attachmentview.luau) recognises an open of a file under
+// a "tern-kata/attachments" folder as an Attachment and shows it in Tern's floating view, so the last two parts of this path are
+// shared with it.
 func attachmentCacheDir() (string, error) {
 	base, err := os.UserCacheDir()
 	if err != nil {
