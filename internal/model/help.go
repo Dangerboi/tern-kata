@@ -32,7 +32,7 @@ type Question struct {
 }
 
 // Question is the question to answer, if any. Only one is shown at a time: the quit question wins over the delete-view one,
-// which wins over the Docbank switch.
+// which wins over the Docbank switch, which wins over the unlink one.
 func (m Model) Question() (Question, bool) {
 	switch {
 	case m.AskQuit:
@@ -41,6 +41,9 @@ func (m Model) Question() (Question, bool) {
 		return Question{Mode: ModeDeleteView, Text: "Delete view " + m.Views.Deleting + "? y/n", Yes: ConfirmDeleteViewAction, No: KeepViewAction, YesWords: "Delete", NoWords: "Keep", Danger: true}, true
 	case m.ConfigPage.AskSwitch:
 		return Question{Mode: ModeSwitchDocbank, Text: "Switch to kata's local Docbank? kata restarts its daemon. y/n", Yes: ConfirmSwitchDocbankAction, No: KeepDocbankAction, YesWords: "Switch", NoWords: "Keep"}, true
+	case m.AskUnlink != nil:
+		a := m.AskUnlink
+		return Question{Mode: ModeUnlinkAttachment, Text: "Unlink " + a.Attachment.Name + " from " + a.Ref + "? y/n", Yes: ConfirmUnlinkAttachmentAction, No: KeepAttachmentAction, YesWords: "Unlink", NoWords: "Keep", Danger: true}, true
 	}
 	return Question{}, false
 }
@@ -90,7 +93,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 	if isCard, through := cardLetsThrough(mode, chord); isCard && !through {
 		return Binding{}, false
 	}
-	if inputMode(mode) || mode == ModeQuit || mode == ModeDeleteView || mode == ModeSwitchDocbank {
+	if inputMode(mode) || mode == ModeQuit || mode == ModeDeleteView || mode == ModeSwitchDocbank || mode == ModeUnlinkAttachment {
 		return Binding{}, false
 	}
 	for _, binding := range Keymap {

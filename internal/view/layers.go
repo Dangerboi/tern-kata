@@ -31,6 +31,7 @@ var layerDraws = map[model.Card]func(model.Model, time.Time) tern.Element{
 	model.CardLanes:           func(m model.Model, _ time.Time) tern.Element { return lanesLayer(m) },
 	model.CardWorker:          func(m model.Model, _ time.Time) tern.Element { return workerLayer(m) },
 	model.CardEmbeddings:      func(m model.Model, _ time.Time) tern.Element { return embeddingsLayer(m) },
+	model.CardAttachmentCopy:  func(m model.Model, _ time.Time) tern.Element { return attachmentCopyLayer(m) },
 	model.CardFilter:          func(m model.Model, _ time.Time) tern.Element { return filterLayer(m) },
 	model.CardView:            func(m model.Model, _ time.Time) tern.Element { return viewLayer(m) },
 	model.CardPicker:          func(m model.Model, _ time.Time) tern.Element { return pickerLayer(m) },

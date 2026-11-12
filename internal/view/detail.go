@@ -138,7 +138,8 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 		row := item.Activity
 		action := DetailItemClick(item.Kind.Tab(), row.Key)
 		if item.Kind == model.RowAttachment {
-			activity = append(activity, ui.Text{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Spans: attachmentSpans(row)})
+			menu := attachmentMenu(row.Key, row.File)
+			activity = append(activity, ui.Text{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action, Menu: menu, Hold: menu}}, Spans: attachmentSpans(row)})
 			continue
 		}
 		if item.Kind == model.RowLink {

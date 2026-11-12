@@ -151,3 +151,98 @@ func TestOpenAttachmentRunsTheTernOnThePathWithThePaneEnvironment(t *testing.T) 
 		t.Fatalf("opened %+v, tern ran %q (%v), OS opener %v", got, ran, err, *f.opened)
 	}
 }
+
+func TestOpenAttachmentBesideAsksTernForASplitWhateverThePreviewSettingSays(t *testing.T) {
+	f := newDocbankFixture(t)
+	t.Setenv("TERN_PANE", "7")
+	var asked [][]string
+	f.gateway.runTern = func(_ context.Context, args []string) ([]byte, error) { asked = append(asked, args); return nil, nil }
+
+	cmd := f.openCmd(t, "shot.png")
+	cmd.Way = model.WayBeside
+	got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd))
+	if want := [][]string{{"open", "--split", "right", got.Path}}; got.Err != nil || !slices.EqualFunc(asked, want, slices.Equal) {
+		t.Fatalf("opened %+v, tern was asked %v, want %v", got, asked, want)
+	}
+	if len(*f.opened) != 0 {
+		t.Fatalf("the OS opener ran: %v", *f.opened)
+	}
+}
+
+func TestOpenAttachmentBesideDoesNotFallBackToTheOSOpener(t *testing.T) {
+	for name, tc := range map[string]struct {
+		file string
+		pane bool
+	}{"tern fails": {"shot.png", true}, "not in a Pane": {"shot.png", false}, "a video": {"clip.mp4", true}} {
+		t.Run(name, func(t *testing.T) {
+			f := newDocbankFixture(t)
+			if tc.pane {
+				t.Setenv("TERN_PANE", "7")
+			}
+			f.gateway.runTern = func(context.Context, []string) ([]byte, error) { return nil, errors.New("exit status 1") }
+			cmd := f.openCmd(t, tc.file)
+			cmd.Way = model.WayBeside
+			if got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd)); got.Err == nil || len(*f.opened) != 0 {
+				t.Fatalf("opened %+v, OS opener ran for %v", got, *f.opened)
+			}
+		})
+	}
+}
+
+func TestOpenAttachmentWithTheSystemAppSendsAnyType(t *testing.T) {
+	f := newDocbankFixture(t)
+	cmd := f.openCmd(t, "report.bat")
+	cmd.Way = model.WaySystem
+	got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd))
+	if got.Err != nil || !slices.Equal(*f.opened, []string{got.Path}) {
+		t.Fatalf("opened %+v, OS opener ran for %v", got, *f.opened)
+	}
+}
+
+func TestOpenAttachmentSaveCopiesIntoDownloadsAndNeverOverwrites(t *testing.T) {
+	f := newDocbankFixture(t)
+	downloads := filepath.Join(t.TempDir(), "Downloads")
+	f.gateway.downloadsDir = func() (string, error) { return downloads, nil }
+	cmd := f.openCmd(t, "notes.txt")
+	cmd.Way = model.WaySave
+
+	first := as[model.AttachmentOpened](t, run(t, f.gateway, cmd))
+	second := as[model.AttachmentOpened](t, run(t, f.gateway, cmd))
+	if first.Err != nil || second.Err != nil || first.Path != filepath.Join(downloads, "notes.txt") || second.Path != filepath.Join(downloads, "notes (1).txt") {
+		t.Fatalf("saved %+v then %+v", first, second)
+	}
+	if body, err := os.ReadFile(second.Path); err != nil || string(body) != "content" {
+		t.Fatalf("the copy holds %q (%v)", body, err)
+	}
+	if len(*f.opened) != 0 {
+		t.Fatalf("saving opened %v", *f.opened)
+	}
+}
+
+func TestSaveUniqueTakesTheFirstFreeName(t *testing.T) {
+	src := writeFile(t, t.TempDir(), "report.tar.gz", "new")
+	dir := filepath.Join(t.TempDir(), "nested", "Downloads")
+	for _, existing := range []string{"report.tar.gz", "report.tar (1).gz", "report.tar (3).gz"} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, existing), []byte("old"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path, err := saveUnique(src, dir)
+	if want := filepath.Join(dir, "report.tar (2).gz"); err != nil || path != want {
+		t.Fatalf("saved to %q (%v), want %q", path, err, want)
+	}
+	for name, body := range map[string]string{"report.tar.gz": "old", "report.tar (1).gz": "old", "report.tar (2).gz": "new", "report.tar (3).gz": "old"} {
+		if got, _ := os.ReadFile(filepath.Join(dir, name)); string(got) != body {
+			t.Errorf("%s holds %q, want %q", name, got, body)
+		}
+	}
+	if dotfile, err := saveUnique(writeFile(t, t.TempDir(), ".env", "x"), dir); err != nil || filepath.Base(dotfile) != ".env" {
+		t.Fatalf("dotfile saved to %q (%v)", dotfile, err)
+	}
+	if again, err := saveUnique(writeFile(t, t.TempDir(), ".env", "y"), dir); err != nil || filepath.Base(again) != ".env (1)" {
+		t.Fatalf("second dotfile saved to %q (%v)", again, err)
+	}
+}

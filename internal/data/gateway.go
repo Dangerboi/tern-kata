@@ -64,11 +64,13 @@ type Gateway struct {
 
 	openFile func(path string) error
 	cacheDir func() (string, error)
+	// downloadsDir is where "Save to Downloads" puts a copy.
+	downloadsDir func() (string, error)
 }
 
 func NewGateway(locate Locator) *Gateway {
 	return &Gateway{locate: locate, deadline: connectDeadline, callBudget: callBudget, clients: map[string]*Client{}, connecting: map[string]chan struct{}{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
-		openFile: openFile, cacheDir: attachmentCacheDir}
+		openFile: openFile, cacheDir: attachmentCacheDir, downloadsDir: downloadsDir}
 }
 
 // HostName is this machine's host name, or empty when the OS can't say; the program reads it once and hands it to the model and the Gateway.

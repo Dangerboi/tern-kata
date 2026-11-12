@@ -43,6 +43,9 @@ func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 		},
 		model.CardWorker:     func(t *testing.T) driver.State { return workerCardOpen(t, nil, noWorkerFile) },
 		model.CardEmbeddings: func(t *testing.T) driver.State { return embeddingsCardOpen(t) },
+		model.CardAttachmentCopy: func(t *testing.T) driver.State {
+			return step(t, attachmentsPane(t), model.AttachmentOpened{UID: "a", AttachmentID: "A1", Name: "shot.png", Path: "/cache/shot.png", Way: model.WayCopy}).State
+		},
 	}
 }
 

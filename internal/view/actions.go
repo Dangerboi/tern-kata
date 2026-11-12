@@ -37,6 +37,7 @@ const (
 	agentAct           = "agent"
 	configAct          = "config"
 	contextMenuPickAct = "pick"
+	attachmentPickAct  = "attachment-pick"
 	legendAct          = "legend"
 	toastAct           = "toast"
 )
@@ -72,6 +73,11 @@ func CardClick(uid string) string { return click(cardAct, uid) }
 
 func ContextMenuPickClick(uid string, mode model.Mode, chord string) string {
 	return click(contextMenuPickAct, string(mode)+":"+uid+":"+chord)
+}
+
+// AttachmentMenuPickClick is a pick from the context menu of the Attachment row with rowKey: the row's cursor, then chord.
+func AttachmentMenuPickClick(rowKey, chord string) string {
+	return click(attachmentPickAct, rowKey+":"+chord)
 }
 
 func JobClick(uid string) string { return click(jobAct, uid) }
@@ -172,6 +178,10 @@ func DecodeAction(id, act, value string) model.Msg {
 			if uid, chord, found := strings.Cut(rest, ":"); found {
 				return model.ContextMenuPickMsg{UID: uid, Mode: model.Mode(mode), Chord: chord}
 			}
+		}
+	case attachmentPickAct:
+		if key, chord, found := strings.Cut(value, ":"); found {
+			return model.AttachmentMenuPickMsg{Key: key, Chord: chord}
 		}
 	case configAct:
 		if key, action, found := strings.Cut(value, ":"); found {

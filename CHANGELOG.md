@@ -10,6 +10,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - `tern-kata update` shows Tern's progress bar on the Pane it runs in while it downloads and swaps in the new release (Tern 0.9.18 and later).
 
+#### Attachments
+
+- A right-click menu on an Attachment row of the Issue detail, and the same list on a long press, offers Open, Open beside, Open with the system app, Save to Downloads, Copy… and Unlink…, each with a key (`enter`, `v`, `o`, `s`, `y`, `z`) while the cursor is on the row.
+  - Open beside opens a split whatever the floating or side panel setting says, for the kinds Tern draws, and is greyed out with the reason for the others.
+  - Save to Downloads copies the file to the Downloads folder of the machine the Pane runs on, never overwriting (`name (1).ext`), and the toast names the path.
+  - Copy… shows the downloaded file's path and the `kata docbank attachments get` command, each with a copy button that copies on the window's machine.
+  - Unlink… asks first, with Unlink and Keep buttons.
+
 #### Issues and Pages
 
 - The Pane's yes/no questions (quitting after `q`, deleting a view, switching to kata's local Docbank) have a button for each answer, so they can be answered on a phone or tablet.

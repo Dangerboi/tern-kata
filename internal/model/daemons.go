@@ -148,6 +148,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.FieldForm, m.MoveProject, m.afterMove, m.Moving = FieldFormState{}, MoveProjectState{}, nil, ""
 	m.DeleteForm, m.TokenForm, m.RevokeCard, m.AgentCard, m.AgentMessage = DeleteFormState{}, TokenFormState{}, RevokeState{}, AgentCardState{}, AgentMessageState{}
 	m.Embeddings, m.EmbeddingsCard = m.Embeddings.forDaemon(), EmbeddingsCardState{}
+	m.AskUnlink, m.AttachmentCopy = nil, AttachmentCopyState{}
 	dropped := len(m.Drafts)
 	m.Drafts = nil
 	m.Project, m.Bound, m.Daemon = Project{}, false, msg.Daemon

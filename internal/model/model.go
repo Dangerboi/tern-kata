@@ -163,6 +163,9 @@ type Model struct {
 	// Search by meaning card that shows it.
 	Embeddings     EmbeddingsSetup
 	EmbeddingsCard EmbeddingsCardState
+	// AskUnlink is the question whether to unlink an Attachment, and AttachmentCopy the card with its path and kata command.
+	AskUnlink      *UnlinkAsk
+	AttachmentCopy AttachmentCopyState
 	Dropdown       Dropdown
 	Focus          Column
 	Groups         []IssueGroup
@@ -358,20 +361,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 		return fieldWritten(m, msg.UID, report, msg.Err)
 	case AttachmentUnlinked:
-		report := ""
-		if issue := m.issueByUID(msg.UID); issue != nil {
-			report = fmt.Sprintf("Unlinked %s from %s; its bytes stay in Docbank", msg.Name, issue.ShortID)
-		}
-		return fieldWritten(m, msg.UID, report, msg.Err)
+		return attachmentUnlinked(m, msg)
 	case AttachmentOpened:
-		if msg.Err != nil {
-			m.Notice = fmt.Sprintf("Cannot open %s: %v", msg.Name, msg.Err)
-		} else if msg.OutsideTern {
-			m.Notice = fmt.Sprintf("Opened %s outside Tern (%s)", msg.Name, msg.Path)
-		} else {
-			m.Notice = fmt.Sprintf("Opened %s (%s)", msg.Name, msg.Path)
-		}
-		return m, nil
+		return attachmentOpened(m, msg)
+	case AttachmentMenuPickMsg:
+		return attachmentMenuPick(m, msg)
 	case Start:
 		m.Workspace = msg.Workspace
 		m.nonce = msg.Nonce

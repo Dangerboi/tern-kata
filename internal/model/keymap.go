@@ -429,4 +429,5 @@ var cardBindings = []Binding{
 	{Chord: "y", Key: "y", Action: RestartDaemonConfirm, Help: "restart", Mode: ModeEmbeddingsRestart, ShowInFooter: true},
 	{Chord: "n", Key: "n", Action: RestartDaemonDecline, Help: "not now", Mode: ModeEmbeddingsRestart, ShowInFooter: true},
 	{Chord: "escape", Key: "esc", Action: RestartDaemonDecline, Help: "not now", Mode: ModeEmbeddingsRestart},
+	{Chord: "escape", Key: "esc", Action: AttachmentCopyClose, Help: "close", Mode: ModeAttachmentCopy, ShowInFooter: true},
 }
