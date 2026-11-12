@@ -318,8 +318,9 @@ expect_panes 1
 # another name is identified by title alone, and a longer name containing tern-kata is not a kata Pane at all.
 standin_dir="$tmp/standin"
 mkdir -p "$standin_dir"
-# It prints while it waits for Enter so frames keep coming, or ctl focus would stall.
-printf '#!/bin/bash\nwhile ! read -t 0.2 line; do echo tick; done\n' >"$standin_dir/tern-kata"
+# It prints while it waits for Enter so frames keep coming, or ctl focus would stall. EOF ends it too (status 1; a timeout
+# is above 128), so a stand-in whose stdin closed doesn't spin.
+printf '#!/bin/bash\nuntil read -t 0.2 line; (($? < 128)); do echo tick; done\n' >"$standin_dir/tern-kata"
 # A file name that holds backslashes stands for a Windows path: Linux has no .exe files, but the program name Tern
 # reports is what the plugin splits.
 cp "$standin_dir/tern-kata" "$standin_dir/C:\\Tools\\tern-kata.exe"
@@ -451,7 +452,8 @@ expect_panes 1
 # The stand-in ends only on an empty line (Enter): the plugin sends a link's Issue to a kata Pane it opened as a non-empty line.
 # Update tern-kata on a local session host runs `tern-kata update --pause` in a Pane and no plugin-only step: the binary
 # brings the plugin along itself.
-printf '#!/bin/bash\necho "$@" >%q\nprintf "Press Enter to close "\nwhile :; do read -t 0.2 line && [[ -z $line ]] && break; done\n' "$tmp/update-args.txt" >"$tmp/pane-bin/tern-kata"
+# A blocking read that also ends on EOF: the host half may start this as the supervised worker over pipes.
+printf '#!/bin/bash\necho "$@" >%q\nprintf "Press Enter to close "\nwhile IFS= read -r line && [[ -n $line ]]; do :; done\n' "$tmp/update-args.txt" >"$tmp/pane-bin/tern-kata"
 chmod +x "$tmp/pane-bin/tern-kata"
 # A curl stand-in on the PATH records any plugin-only step (`sh -c "curl … | sh"`), which a local session host never runs.
 printf '#!/bin/sh\necho "$@" >>%q\necho "curl: smoke stand-in refuses" >&2\nexit 1\n' "$tmp/plugin-step.log" >"$tmp/bin/curl"
