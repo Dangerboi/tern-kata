@@ -53,13 +53,19 @@ ctl key c
 expect_tree "[data-id='main.filters']" '.ok and .count == 0'
 grep -q 'name = "openbugs"' "$sv_file"
 
-# Delete asks first; n keeps the view, y removes it.
+# Delete asks first; n or the Keep button keeps the view, y removes it.
 ctl click "[data-id='main.topbar.right.menu']"
 for letter in o p e n b u g s; do ctl key "$letter"; done
 ctl key Ctrl+d
-expect_tree "[data-id='layer.collections.delete-view']" '.ok and (.nodes[0].text == "Delete view openbugs? y/n")'
+expect_tree "[data-id='layer.collections.delete-view.text']" '.ok and (.nodes[0].text == "Delete view openbugs? y/n")'
 ctl key n
 expect_tree "[data-id='layer.collections.delete-view']" '.ok and .count == 0'
+grep -q 'name = "openbugs"' "$sv_file"
+ctl key Ctrl+d
+expect_tree "[data-id='layer.collections.delete-view.no']" '.ok and .count == 1'
+ctl click "[data-id='layer.collections.delete-view.no']"
+expect_tree "[data-id='layer.collections.delete-view']" '.ok and .count == 0'
+expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 grep -q 'name = "openbugs"' "$sv_file"
 ctl key Ctrl+d
 ctl key y

@@ -33,10 +33,9 @@ func footerNodes(m model.Model) []tern.Element {
 			cardButton("yes", model.ModeQuit, model.ConfirmQuitAction, "Quit", true),
 			cardButton("no", model.ModeQuit, model.StayAction, "Stay", false)))
 	}
-	if m.Views.Deleting != "" {
-		nodes = append(nodes, question("delete-view", model.DeleteViewQuestion(m.Views.Deleting),
-			destructive(cardButton("yes", model.ModeDeleteView, model.ConfirmDeleteViewAction, "Delete", false)),
-			cardButton("no", model.ModeDeleteView, model.KeepViewAction, "Keep", false)))
+	// With the Menu open the question is drawn in the Menu, which is modal: a copy here would sit behind it.
+	if m.Views.Deleting != "" && !m.Picker.Open {
+		nodes = append(nodes, deleteViewQuestion(m))
 	}
 	if m.ConfigPage.AskSwitch {
 		nodes = append(nodes, question("switch-docbank", model.SwitchDocbankQuestion,
@@ -57,6 +56,12 @@ func footerNodes(m model.Model) []tern.Element {
 func question(key, text string, yes, no ui.Button) tern.Element {
 	return ui.Row{Common: ui.Common{Key: key}, Gap: ui.GapMD, Align: ui.AlignCenter, Wrap: true, Children: ui.Nodes(
 		plainText("text", ui.ToneAccent, text), yes, no)}
+}
+
+func deleteViewQuestion(m model.Model) tern.Element {
+	return question("delete-view", model.DeleteViewQuestion(m.Views.Deleting),
+		destructive(cardButton("yes", model.ModeDeleteView, model.ConfirmDeleteViewAction, "Delete", false)),
+		cardButton("no", model.ModeDeleteView, model.KeepViewAction, "Keep", false))
 }
 
 // toasts is the model's toast, drawn from the step that raised it until ToastExpired for its Seq, so a late client never gets a stale

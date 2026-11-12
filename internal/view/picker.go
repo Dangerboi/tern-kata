@@ -47,7 +47,7 @@ func pickerLayer(m model.Model) tern.Element {
 	}
 	notes := []tern.Element{}
 	if m.Views.Deleting != "" {
-		notes = append(notes, toneText("delete-view", ui.ToneAccent, model.DeleteViewQuestion(m.Views.Deleting)))
+		notes = append(notes, deleteViewQuestion(m))
 	}
 	if m.Views.Err != nil {
 		notes = append(notes, toneText("views-error", ui.ToneError, "Saved views not read: "+m.Views.Err.Error()))

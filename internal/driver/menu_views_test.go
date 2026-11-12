@@ -322,3 +322,31 @@ func TestMenuViewsRowNamesTheOpenedSavedViewUntilAnotherCollectionIsChosen(t *te
 		t.Errorf("Mine row value = %q after choosing Inbox, want none", got)
 	}
 }
+
+// The Menu is modal, so its delete question carries its own Delete and Keep buttons, which a phone answers it with.
+func TestMenuDeleteQuestionsButtonsDeleteAndKeep(t *testing.T) {
+	asked := step(t, menuCursorOn(t, savedViewsMenu(t), "Mine"), key("ctrl+d")).State
+	buttons := map[string]tern.WireNode{}
+	for _, n := range wireNodes(t, view.Render(asked.Model, now)) {
+		if _, ok := n.P["actions"].(map[string]any); ok && strings.Contains(n.ID, "delete-view.") {
+			buttons[n.ID[strings.LastIndex(n.ID, ".")+1:]] = n
+		}
+	}
+	press := func(answer string) driver.Output {
+		n, ok := buttons[answer]
+		if !ok {
+			t.Fatalf("the Menu draws no %s button for its delete question", answer)
+		}
+		if !strings.HasPrefix(n.ID, view.LayerID(model.CardPicker)+".") {
+			t.Errorf("the %s button %s is not in the Menu", answer, n.ID)
+		}
+		action, _ := n.P["actions"].(map[string]any)["click"].(string)
+		return driver.Step(asked, click(n.ID, action), now)
+	}
+	if yes := press("yes"); len(yes.Cmds) != 1 || yes.Cmds[0] != (model.DeleteView{Name: "Mine", Token: "read-1"}) {
+		t.Errorf("Delete sent %#v", yes.Cmds)
+	}
+	if no := press("no"); no.State.Model.Views.Deleting != "" || len(no.Cmds) != 0 || !no.State.Model.Picker.Open {
+		t.Errorf("Keep: asked %q, cmds %v, menu open %v", no.State.Model.Views.Deleting, no.Cmds, no.State.Model.Picker.Open)
+	}
+}
