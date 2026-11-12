@@ -15,20 +15,22 @@ local function test(name: string, body: () -> ())
     end
 end
 
-test("an Attachment in the download folder floats by default, on any machine's paths", function()
-    assert(attachmentview.route("/home/a/.cache/tern-kata/attachments/01J/x/abc/notes.md", false) == "glimpse")
-    assert(attachmentview.route("/Users/a/Library/Caches/tern-kata/attachments/01J/x/abc/shot.png", false) == "glimpse")
-    assert(attachmentview.route("C:\\Users\\a\\AppData\\Local\\tern-kata\\attachments\\01J\\x\\abc\\notes.md", false) == "glimpse")
+test("the Pane's preview of a file in the download folder is claimed, on any machine's paths", function()
+    assert(attachmentview.claims("/home/a/.cache/tern-kata/attachments/01J/x/abc/notes.md", "preview"))
+    assert(attachmentview.claims("/Users/a/Library/Caches/tern-kata/attachments/01J/x/abc/shot.png", "preview"))
+    assert(attachmentview.claims("C:\\Users\\a\\AppData\\Local\\tern-kata\\attachments\\01J\\x\\abc\\notes.md", "preview"))
 end)
 
-test("the side panel choice leaves every open as Tern does it", function()
-    assert(attachmentview.route("/home/a/.cache/tern-kata/attachments/01J/x/abc/notes.md", true) == nil)
+test("an Attachment opened another way keeps the placement asked for", function()
+    for _, how in {"tab", "split", "beside", "default", "glimpse"} do
+        assert(not attachmentview.claims("/home/a/.cache/tern-kata/attachments/01J/x/abc/notes.md", how), how)
+    end
 end)
 
 test("a file outside the download folder is left alone", function()
-    assert(attachmentview.route("/home/a/Code/tern-kata/GLOSSARY.md", false) == nil)
-    assert(attachmentview.route("/home/a/.cache/tern-kata-attachments/notes.md", false) == nil)
-    assert(attachmentview.route("/home/a/.cache/other/tern-kata/attachmentsx/notes.md", false) == nil)
+    assert(not attachmentview.claims("/home/a/Code/tern-kata/GLOSSARY.md", "preview"))
+    assert(not attachmentview.claims("/home/a/.cache/tern-kata-attachments/notes.md", "preview"))
+    assert(not attachmentview.claims("/home/a/.cache/other/tern-kata/attachmentsx/notes.md", "preview"))
 end)
 
 test("the toggle flips the choice and says where they open now", function()

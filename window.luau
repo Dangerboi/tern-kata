@@ -901,25 +901,31 @@ tern.command({
     end,
 })
 
--- Tern before 0.9.18's routes and floating view has no `tern.route`: Attachments open in the side panel there, as the Pane asks.
+-- A Tern whose routes cannot claim file opens raises here: Attachments then open in the side panel, as the Pane asks, and the
+-- rest of the window half still loads.
 local KV_ATTACHMENTS_SIDE = "attachments.side_panel"
-if tern.route ~= nil then
+local function attachmentsInSidePanel(): boolean
+    local ok, side = pcall(tern.kv.get, KV_ATTACHMENTS_SIDE)
+    return ok and side == true
+end
+local routed, routeErr = pcall(function()
     tern.route.open(function(req)
-        local ok, side = pcall(tern.kv.get, KV_ATTACHMENTS_SIDE)
-        local how = attachmentview.route(req.path, ok and side == true)
-        if how == nil then return nil end
-        return {path = req.path, how = how :: How}
+        if not attachmentview.claims(req.path, req.how) or attachmentsInSidePanel() then return nil end
+        return {path = req.path, how = "glimpse"}
     end)
+end)
+if routed then
     tern.command({
         id = "attachments-side-panel",
         title = "Switch kata Attachments between floating and the side panel",
         run = function(cx)
-            local ok, side = pcall(tern.kv.get, KV_ATTACHMENTS_SIDE)
-            local nowSide, text = attachmentview.toggle(ok and side == true)
+            local nowSide, text = attachmentview.toggle(attachmentsInSidePanel())
             tern.kv.set(KV_ATTACHMENTS_SIDE, if nowSide then true else nil)
             cx:toast("info", text)
         end,
     })
+else
+    tern.log.info("tern-kata: this Tern cannot route file opens, so kata Attachments open in the side panel: " .. tostring(routeErr))
 end
 
 tern.command({

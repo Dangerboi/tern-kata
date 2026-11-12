@@ -33,8 +33,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Attachments
 
-- An Attachment that opens in Tern (images, text, Markdown, JSON) shows in Tern's floating view over the tab instead of the side panel beside the Pane (Tern 0.9.18 and later).
+- An Attachment that opens in Tern (images, text, Markdown, JSON) shows in Tern's floating view over the tab instead of the side panel beside the Pane (Tern 0.9.16 and later).
   - A click outside or `esc` closes it, and dragging its header keeps it.
+  - An Attachment you open another way, such as `tern open --tab` or Tern's Files explorer, opens where you asked.
   - The palette command Switch kata Attachments between floating and the side panel switches back to the side panel, and again to floating.
 
 ### Fixed
