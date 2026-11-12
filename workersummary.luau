@@ -23,7 +23,6 @@ export type Record = { at: number, worker: Summary }
 
 local M = {}
 
--- The `tern.kv` key the host half stores the summary under and the window half reads it from.
 M.KEY = "worker.summary"
 
 -- Seconds after which a summary that no host half has restamped is not shown any more. That is several of the host half's polls (POLL_MS in host.luau).
@@ -48,7 +47,6 @@ local function ended(run: any): boolean
     return at ~= "" and at:sub(1, 4) ~= "0001"
 end
 
--- The summary of a decoded status, or nil when `status` is not a table that names a worker.
 function M.of(status: any): Summary?
     if type(status) ~= "table" or type(status.PID) ~= "number" then return nil end
     local summary: Summary = {
@@ -77,7 +75,6 @@ function M.of(status: any): Summary?
     return summary
 end
 
--- What the host half stores under KEY: the summary and the wall-clock seconds (os.time()) when it last vouched for it.
 function M.record(summary: Summary, now: number): Record
     return { at = now, worker = summary }
 end

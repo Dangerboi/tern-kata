@@ -47,7 +47,6 @@ local again = false
 local warned_missing = false
 local warned_status = false
 local warned_summary = false
--- The summary last stored, so a failed read can store it again with a fresh stamp.
 local last_summary: workersummary.Summary? = nil
 local ASK_LIMIT_MS = 10000
 -- `worker supervised` exits with HELD, printing one line that names the worker, when the rule holds and a worker this
@@ -177,8 +176,7 @@ local function last_line(text: string): string
     return line
 end
 
--- No worker runs (or the rule no longer holds): the widget has nothing to show. The key may come from an earlier load of this
--- file, so tern.kv is asked, not only what this load stored.
+-- The key may come from an earlier load of this file, so tern.kv is asked, not only what this load stored.
 local function clear_summary()
     last_summary = nil
     warned_summary = false
@@ -186,8 +184,6 @@ local function clear_summary()
     if ok and stored ~= nil then pcall(tern.kv.set, workersummary.KEY, nil) end
 end
 
--- Runs `tern-kata <args>` as the one question out. The answer goes to on_answer, unless what the question was about changed
--- while it was out: then it is dropped and the look comes at once. Returns the error text when the process could not start.
 local function ask(binary: string, args: { string }, on_answer: (ProcessResult) -> ()): string?
     local command = { binary }
     for _, arg in args do table.insert(command, arg) end
@@ -201,7 +197,6 @@ local function ask(binary: string, args: { string }, on_answer: (ProcessResult) 
                 return arm(1)
             end
             on_answer(result)
-            -- An answer that armed no look through next_look (a launch arms its own) leaves nothing owed.
             again = false
         end)
     end)
@@ -211,21 +206,16 @@ local function ask(binary: string, args: { string }, on_answer: (ProcessResult) 
     return tostring(err)
 end
 
--- What the question out asked about has changed (the worker ended): its answer is dropped and the next look comes at once.
 local function drop_answer()
     if out then stale = true end
 end
 
--- Arms the look that follows an answer: at once when one was asked for while the question was out, else after POLL_MS.
 local function next_look()
     local soon = again
     again = false
     arm(if soon then 1 else POLL_MS)
 end
 
--- Asks the running worker's status and stores its summary, stamped with the time, on every poll. A failed read (a timeout, an
--- older binary without --json, output that names no worker) stores the last summary again with a fresh stamp and is logged
--- once until a read succeeds. The next look comes after it.
 local function summarize(binary: string)
     local function failed(why: string)
         if not warned_summary then
@@ -233,7 +223,6 @@ local function summarize(binary: string)
             tern.log.warn("tern-kata: could not read the worker's status for the worker widget (" .. why .. "); keeping the last summary")
         end
     end
-    -- Stores the summary with the time now; the stamp is what tells the window half that a host half is still polling.
     local function store(summary: workersummary.Summary)
         local value = workersummary.record(summary, os.time())
         local stored, store_err = pcall(function() tern.kv.set(workersummary.KEY, value) end)
@@ -243,8 +232,6 @@ local function summarize(binary: string)
             failed("could not store it: " .. tostring(store_err))
         end
     end
-    -- A read that did not give a summary: it is logged, the last summary is stored again with a fresh stamp (a failed read
-    -- still proves the host half is alive), and the next look is scheduled.
     local function failed_read(why: string)
         failed(why)
         if last_summary ~= nil then store(last_summary) end
@@ -277,7 +264,6 @@ local function launch(binary: string, config: string)
     local function exited(result: ProcessResult)
         running = false
         clear_summary()
-        -- The look that follows a dropped answer honours the backoff armed below.
         drop_answer()
         local ran = tern.now() - started
         if ran >= HEALTHY_MS or result.timed_out then restart_delay = MIN_DELAY end

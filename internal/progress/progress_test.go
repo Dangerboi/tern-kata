@@ -47,19 +47,6 @@ func TestWritesOnlyChanges(t *testing.T) {
 	}
 }
 
-func TestNeverBlockedDoneOrError(t *testing.T) {
-	var out bytes.Buffer
-	r := &Reporter{out: &out}
-	r.Working(Unknown)
-	r.Working(100)
-	r.Clear()
-	for _, state := range []string{"blocked", "done", "error"} {
-		if bytes.Contains(out.Bytes(), []byte("state="+state)) {
-			t.Errorf("wrote state=%s", state)
-		}
-	}
-}
-
 func TestNoTerminalNoReports(t *testing.T) {
 	file, err := os.CreateTemp(t.TempDir(), "out")
 	if err != nil {

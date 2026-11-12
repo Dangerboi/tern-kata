@@ -1,14 +1,12 @@
 --!strict
 
 -- What the widgets of the widget bar have in common, as plain data: no Tern call is made here, so the rule is tested by
--- `luau test/widgets_test.luau`. `capped` is the "at most five, then how many more" list of a tooltip; `merge` is what the
--- palette command writes back to the bar's `widgets` setting.
+-- `luau test/widgets_test.luau`.
 
 local M = {}
 
 local CAPPED_LINES = 5
 
--- `lines` as they are when there are at most five; otherwise the first five and "and N more".
 function M.capped(lines: { string }): { string }
     local shown: { string } = {}
     for index = 1, math.min(#lines, CAPPED_LINES) do table.insert(shown, lines[index]) end
@@ -18,7 +16,7 @@ end
 
 -- The bar's `widgets` list with each of `ids` (full widget ids, `<plugin>/<id>`) appended when it lacks it; every other entry
 -- stays where it is, as it is. An entry is a table with an `id` or a plain string, either of which may carry an `@style`
--- suffix. Returns the new list and the ids that were added; the list given is not changed.
+-- suffix.
 function M.merge(list: { any }, ids: { string }): ({ any }, { string })
     local merged: { any } = {}
     local present: { [string]: boolean } = {}

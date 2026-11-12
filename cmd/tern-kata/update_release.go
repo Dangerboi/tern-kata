@@ -129,7 +129,7 @@ func downloadFile(ctx context.Context, env updateEnv, url, path string) (err err
 		return err
 	}
 	defer func() { err = errors.Join(err, file.Close()) }()
-	env.Progress.Working(progress.Unknown) // until the server's answer says how big the file is
+	env.Progress.Working(progress.Unknown)
 	return download(ctx, env.Client, url, file, maxDownload, func(done, total int64) {
 		if total > 0 {
 			env.Progress.Working(int(min(done, total) * 100 / total))
@@ -137,7 +137,6 @@ func downloadFile(ctx context.Context, env updateEnv, url, path string) (err err
 	})
 }
 
-// countingWriter tells onBytes how much has been written after every write.
 type countingWriter struct {
 	w           io.Writer
 	done, total int64

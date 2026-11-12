@@ -321,12 +321,9 @@ func showPage(target Page) func(Model) (Model, []Cmd) {
 	}
 }
 
-// showHeldRuns shows the Attention Page, where held runs are listed, as the Page's key would, so entering it runs its enter. It is
-// the show-held-runs Pane action the Luau window hook sends. Like the Page keys it only acts in pageModes, so a window click
-// cannot switch Pages under an open card or a typed field and discard what was typed; a refused click raises a toast saying what
-// to do, as the window shows nothing else for it. On the error screen there is nothing to close and the error already says what
-// is wrong, so the click does nothing there, unless a card or question is drawn over the error. Nor does it toast for the Page
-// already shown, which a card leaves visible beneath it.
+// showHeldRuns is the show-held-runs Pane action the Luau window hook sends: it shows the Attention Page, where held runs are
+// listed. The window shows nothing else for a refused click, so that raises a toast; on the error screen, which already says
+// what is wrong, the click does nothing.
 func showHeldRuns(m Model) (Model, []Cmd) {
 	if m.Page == PageAttention {
 		return m, nil

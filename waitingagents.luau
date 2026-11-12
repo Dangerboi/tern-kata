@@ -25,13 +25,11 @@ function M.waiting(agents: { Agent }, order: { [number]: number }, isKata: (stri
     return timed
 end
 
--- What the Waiting kata agents widget shows: nothing while no agent waits.
 function M.widget(count: number, tooltip: string, command: string): WidgetView?
     if count <= 0 then return nil end
     return {text = count .. " waiting", tone = "warning", title = tooltip, command = command}
 end
 
--- The "N waiting" text of the Plugin segments widget: the widget's view without its tooltip.
 function M.segment(count: number, command: string): { StatusSegment }?
     local view = M.widget(count, "", command)
     if view == nil then return nil end

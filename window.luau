@@ -304,8 +304,6 @@ local function launch(cx: WindowCx, command: string): number?
     return cx.layout:new_tab({command = command})
 end
 
--- The focused tab's kata Pane (when `act` is given) gets focus and the action; otherwise a new Pane is launched, owed the action
--- (a nil `act` owes nothing) once its surface is up, and watched for a failing start.
 local function openKata(cx: WindowCx, act: string?, value: string)
     if act ~= nil then
         local pane = existingPane(cx)
@@ -512,7 +510,7 @@ tern.chrome.status(function(_pane)
 end)
 
 -- Tern before 0.9.17 has no widget bar, so no `tern.chrome.widget`: the widgets are skipped there with one log line and the rest
--- of the window half loads as before. `widgetsOffered` lists what registered, which the command that places them reads.
+-- of the window half loads as before.
 local widgetsOffered: { { id: string, name: string } } = {}
 local widgetsSkipLogged = false
 local function registerWidget(id: string, spec: WidgetSpec): boolean
@@ -543,14 +541,11 @@ registerWidget("waiting", {
 })
 
 -- The worker on this machine, as the host half's poll stores it. `tern.kv` here is this machine's, so a remote window shows its
--- own worker, never the session host's. The timer reads the key and keeps the answer; `render` only reads what was kept.
+-- own worker, never the session host's.
 local WORKER_POLL_SECONDS = 5
--- The Open kata command's id: the worker widget runs it when no run is held.
 local OPEN_ID = "open"
 local SHOW_HELD_ID = "show-held-runs"
 local workerSummary: workersummary.Summary? = nil
--- `workerSummary` as the timer last read it, encoded: it differs when the worker's summary changes or goes stale (read as nil), and
--- the freshness stamp is not part of the summary, so the host half restamping it every poll redraws nothing.
 local workerSummaryText = ""
 
 local function pollWorkerSummary()
@@ -583,7 +578,6 @@ if registerWidget("worker", {
     pollWorkerSummary()
 end
 
--- Held runs are shown by kata whatever the widget bar can do, so the command does not wait for the widget.
 tern.command({
     id = SHOW_HELD_ID,
     title = "Show kata's held runs",

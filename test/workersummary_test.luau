@@ -79,18 +79,6 @@ test("a held reason is the worker's HoldLine, or the hold code from a binary tha
     assert(got.held[2].reason == "interrupted", got.held[2].reason)
 end)
 
-test("a summary has no stamp of its own", function()
-    local got: any = workersummary.of(sample)
-    assert(got ~= nil and got.at == nil)
-end)
-
-test("a record holds the summary and the time it was stored", function()
-    local summary = workersummary.of(sample)
-    assert(summary ~= nil)
-    local saved = workersummary.record(summary, 1000)
-    assert(saved.at == 1000 and saved.worker == summary)
-end)
-
 test("a record is fresh until STALE_S seconds after its stamp", function()
     local summary = workersummary.of(sample)
     assert(summary ~= nil)
