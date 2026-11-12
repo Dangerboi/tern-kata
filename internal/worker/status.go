@@ -75,9 +75,11 @@ type RunStatus struct {
 	// Held is true while the run waits for the user; Hold is its reason (a Hold* constant) and Detail what the
 	// worker knew when it held. Resumable and Abandonable say which verbs would be accepted now, and ResumeRefusal
 	// why a resume would not.
-	Held          bool
-	Hold          string
-	Detail        string
+	Held   bool
+	Hold   string
+	Detail string
+	// HoldLine is the hold as one sentence for people, as the Issue comment and inbox request word it.
+	HoldLine      string
 	Resumable     bool
 	ResumeRefusal string
 	Abandonable   bool
@@ -150,7 +152,7 @@ func runStatus(j *Journal) RunStatus {
 	}
 	r.State = j.stateName()
 	if j.held() {
-		r.Held, r.Hold, r.Detail = true, j.Outcome.Hold, j.Outcome.holdDetail()
+		r.Held, r.Hold, r.Detail, r.HoldLine = true, j.Outcome.Hold, j.Outcome.holdDetail(), j.Outcome.holdLine()
 	}
 	if j.Outcome != nil {
 		r.EndedAt = j.Outcome.At

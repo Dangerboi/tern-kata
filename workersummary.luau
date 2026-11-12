@@ -15,7 +15,7 @@ export type Summary = {
     -- Slots summed over the worker's Projects.
     capacity: number,
     inUse: number,
-    -- The held runs, in the worker's order; each reason is the hold's sentence, "<reason>: <detail>".
+    -- The held runs, in the worker's order; each reason is the worker's one-line sentence for the hold.
     held: { Held },
     -- Wall-clock seconds (os.time()) when the host half last vouched for this summary; `of` leaves it 0 and the host half stamps it.
     at: number,
@@ -67,9 +67,9 @@ function M.of(status: any): Summary?
     for _, run in list(status.Runs) do
         if type(run) ~= "table" then continue end
         if run.Held == true then
-            local reason = text(run.Hold)
-            local detail = text(run.Detail)
-            if detail ~= "" then reason ..= ": " .. detail end
+            -- HoldLine is the worker's own sentence for the hold; a binary from before it existed gives only the code.
+            local reason = text(run.HoldLine)
+            if reason == "" then reason = text(run.Hold) end
             table.insert(summary.held, { ref = text(run.Issue), job = text(run.Job), reason = reason })
         elseif not ended(run) then
             summary.running += 1

@@ -57,7 +57,8 @@ func (m Model) ListNode() ListNode { return pageDefs[m.Page].list }
 type pageDef struct {
 	page Page
 	// id names the Page bar's node; label is what it reads; chord is the key as the Page bar and help sheet word it, which a click
-	// on the label sends too (press, when set, is the Tern chord that stands for it: "shift+c" for C).
+	// on the label sends too (press, when set, is the Tern chord that stands for it: "shift+c" for C). The Luau window hook sends
+	// "attention" with show-page, so renaming that id breaks the held-runs click.
 	id, label, chord, press string
 	// lettered marks a Lettered Page: it has a letter for its chord and no number, is listed in the Menu, and is drawn in the Page
 	// bar only while shown. It does not act on the Pane's Project and has no reset rule. Its back key returns to the Page shown before.
@@ -323,15 +324,18 @@ func showPage(target Page) func(Model) (Model, []Cmd) {
 
 // showPageByID shows the Page whose id (the Page bar node's, "attention") is given, as the Page's key would, so entering it runs
 // its enter. It is the show-page Pane action the Luau window hook sends; an id no Page has changes nothing. Like the Page keys it
-// only acts in pageModes, so a window click cannot switch Pages under an open card or a typed field and discard what was typed.
+// only acts in pageModes, so a window click cannot switch Pages under an open card or a typed field and discard what was typed;
+// a refused click raises a toast saying what to do, as the window shows nothing else for it.
 func showPageByID(m Model, id string) (Model, []Cmd) {
-	if !slices.Contains(pageModes, m.CurrentMode()) {
-		return m, nil
-	}
 	for _, def := range pageDefs {
-		if def.id == id {
-			return showPage(def.page)(m)
+		if def.id != id {
+			continue
 		}
+		if !slices.Contains(pageModes, m.CurrentMode()) {
+			m, wait := m.raiseToast(Toast{Text: "Close what is open to show the " + def.label + " Page."})
+			return m, []Cmd{wait}
+		}
+		return showPage(def.page)(m)
 	}
 	return m, nil
 }

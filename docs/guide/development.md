@@ -29,11 +29,11 @@ A release build sets the version with `-ldflags "-X main.version=vX.Y.Z"`. Witho
 
 ## Type-checking the plugin
 
-`window.luau`, `placement.luau`, `host.luau`, `releases.luau`, `panecommands.luau`, `waitingtext.luau` and `waitingagents.luau` are `--!strict`. To type-check them against the installed Tern's API (needs [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp)):
+`window.luau`, `placement.luau`, `host.luau`, `releases.luau`, `panecommands.luau`, `waitingtext.luau`, `waitingagents.luau`, `widgets.luau`, `workersummary.luau` and `workerwidget.luau` are `--!strict`. To type-check them against the installed Tern's API (needs [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp)):
 
 ```sh
 tern plugin types .  # writes tern.d.luau (gitignored; regenerate per Tern version)
-luau-lsp analyze --platform=standard --definitions=@tern=tern.d.luau --ignore=tern.d.luau window.luau placement.luau host.luau releases.luau panecommands.luau waitingtext.luau waitingagents.luau
+luau-lsp analyze --platform=standard --definitions=@tern=tern.d.luau --ignore=tern.d.luau window.luau placement.luau host.luau releases.luau panecommands.luau waitingtext.luau waitingagents.luau widgets.luau workersummary.luau workerwidget.luau
 ```
 
 `placement.luau` holds the rule that places an agent's tab as plain data, with no Tern call. Its tests run outside Tern with the [Luau](https://luau.org) command line (`brew install luau`; CI installs release 0.745):

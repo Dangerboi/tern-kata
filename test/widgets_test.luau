@@ -26,7 +26,7 @@ test("capped shows five lines then how many more", function()
 end)
 
 test("merge appends the widget after the others, which keep their place and style", function()
-    local list = {{id = "clock", style = "analog"}, "cpu@ring"}
+    local list: { any } = {{id = "clock", style = "analog"}, "cpu@ring"}
     local merged, added = widgets.merge(list, {"waiting"})
     assert(#merged == 3 and #added == 1 and added[1] == "waiting")
     assert(merged[1].id == "clock" and merged[1].style == "analog" and merged[2] == "cpu@ring" and merged[3].id == "tern-kata/waiting")

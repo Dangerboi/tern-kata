@@ -323,6 +323,9 @@ func TestAResumeThatCannotSetTheHeldOutputAsideIsRefusedAndKeepsTheHold(t *testi
 	if !s.Held || !s.Resumable || s.Hold != held.Hold || s.Detail != held.Detail || s.Attempt != held.Attempt {
 		t.Fatalf("the hold changed: %+v (was %+v)", s, held)
 	}
+	if s.HoldLine != s.Hold+": "+s.Detail {
+		t.Fatalf("hold line %q, want %q", s.HoldLine, s.Hold+": "+s.Detail)
+	}
 	after, err := os.ReadFile(outputPath)
 	if err != nil || string(after) != string(before) {
 		t.Fatalf("the held attempt's output changed: %q, %v (was %q)", after, err, before)

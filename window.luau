@@ -18,7 +18,7 @@ local pending: { [number]: string? } = {}
 -- arrive before the Pane's surface is live, and neither may overwrite the other.
 local pendingActions: { [number]: { { act: string, value: string } } } = {}
 local function owe(pane: number, act: string, value: string)
-    local list = pendingActions[pane] or {}
+    local list: { { act: string, value: string } } = pendingActions[pane] or {}
     pendingActions[pane] = list
     for _, owed in list do
         if owed.act == act and owed.value == value then return end
@@ -485,7 +485,6 @@ local waitOrder: { [number]: number } = {}
 local waitStamp = 0
 local waitingCount = 0
 local waitingTooltip = ""
-local OPEN_ID = "open"
 local GO_WAITING_ID = "go-to-waiting-agent"
 local function commandName(id: string): string
     return "plugin.tern-kata." .. id
@@ -530,7 +529,7 @@ local function registerWidget(id: string, spec: WidgetSpec): boolean
         end
         return false
     end
-    local ok, err = pcall(tern.chrome.widget, id, spec)
+    local ok, err = (pcall :: any)(tern.chrome.widget, id, spec)
     if not ok then
         tern.log.warn("tern-kata: could not register widget " .. id .. ": " .. tostring(err))
         return false
@@ -543,20 +542,24 @@ registerWidget("waiting", {
     name = "Waiting kata agents",
     description = "How many agents kata started wait for you; a click goes to the one that began waiting last",
     icon = "bell",
-    styles = {"text"},
-    render = function(_pane)
-        return waitingagents.widget(waitingCount, waitingTooltip, GO_WAITING_COMMAND)
+    styles = {"text"} :: { WidgetStyle },
+    render = function(_pane): WidgetView?
+        return waitingagents.widget(waitingCount, waitingTooltip, GO_WAITING_COMMAND) :: WidgetView?
     end,
 })
 
 -- The worker on this machine, as the host half's poll stores it. `tern.kv` here is this machine's, so a remote window shows its
 -- own worker, never the session host's. The timer reads the key and keeps the answer; `render` only reads what was kept.
 local WORKER_POLL_SECONDS = 5
+-- The Open kata command's id: the worker widget runs it when no run is held.
+local OPEN_ID = "open"
 local SHOW_HELD_ID = "show-held-runs"
 -- The Page that lists the runs held for the user.
 local HELD_PAGE = "attention"
 local workerSummary: workersummary.Summary? = nil
--- What `workerSummary` was read as, to tell whether the next read differs.
+-- `workerSummary` as the timer last read it, encoded with `at` masked: the host half restamps the summary every poll, so `at`
+-- would differ on every read and redraw every window for nothing. A summary that goes stale is read as nil, which differs. The
+-- mask works on the text, so the table `tern.kv` returned is neither copied nor changed.
 local workerSummaryText = ""
 
 local function pollWorkerSummary()
@@ -564,7 +567,7 @@ local function pollWorkerSummary()
         if cx then
             local ok, saved = pcall(tern.kv.get, workersummary.KEY)
             local summary = if ok and type(saved) == "table" then workersummary.fresh(saved :: workersummary.Summary, os.time()) else nil
-            local text = if summary ~= nil then tern.json.encode(summary) else ""
+            local text = if summary ~= nil then (tern.json.encode(summary):gsub('"at":[%d.eE+-]+', '"at":0')) else ""
             if text ~= workerSummaryText then
                 workerSummary = summary
                 workerSummaryText = text
@@ -579,9 +582,9 @@ if registerWidget("worker", {
     name = "kata worker",
     description = "What the kata worker on this machine is running, and the runs held for you; a click opens them",
     icon = "server",
-    styles = {"text", "ring"},
-    render = function(_pane)
-        return workerwidget.view(workerSummary, commandName(SHOW_HELD_ID), commandName(OPEN_ID))
+    styles = {"text", "ring"} :: { WidgetStyle },
+    render = function(_pane): WidgetView?
+        return workerwidget.view(workerSummary, commandName(SHOW_HELD_ID), commandName(OPEN_ID)) :: WidgetView?
     end,
 }) then
     pollWorkerSummary()

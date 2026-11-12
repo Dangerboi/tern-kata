@@ -14,8 +14,8 @@ import (
 // act and value. Every action here decodes to the message its matching key produces, and a chord
 // click is that key: it goes through the key path.
 //
-// The Luau window hook keeps its own copy of the Issue list id and the select-issue, wrap-up-sweep, show-page and agent-states actions;
-// agent-states carries the JSON agent list as its value and is not a click.
+// The Luau window hook keeps its own copy of the Issue list id and the select-issue, wrap-up-sweep, show-page and agent-states actions,
+// and of the Page id it sends with show-page ("attention"); agent-states carries the JSON agent list as its value and is not a click.
 const (
 	keyAct             = "key"
 	buttonAct          = "press"

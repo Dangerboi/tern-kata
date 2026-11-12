@@ -3,6 +3,7 @@
 -- Tests of what the kata worker widget shows, on plain data, outside Tern: `luau test/workerwidget_test.luau`.
 
 local workersummary = require("../workersummary")
+local widgets = require("../widgets")
 local workerwidget = require("../workerwidget")
 
 local failures = 0
@@ -20,7 +21,7 @@ local HELD = "plugin.tern-kata.show-held"
 local OPEN = "plugin.tern-kata.open"
 
 local function summary(running: number, held: { workersummary.Held }?, capacity: number?, inUse: number?): workersummary.Summary
-    return {executor = "box", pid = 42, running = running, capacity = capacity or 4, inUse = inUse or running, held = held or {}}
+    return {executor = "box", pid = 42, at = 0, running = running, capacity = capacity or 4, inUse = inUse or running, held = held or {}}
 end
 
 local function heldRuns(count: number): { workersummary.Held }
@@ -29,7 +30,7 @@ local function heldRuns(count: number): { workersummary.Held }
     return list
 end
 
-local function view(s: workersummary.Summary?): workerwidget.WidgetView
+local function view(s: workersummary.Summary?): widgets.WidgetView
     return assert(workerwidget.view(s, HELD, OPEN))
 end
 

@@ -155,7 +155,7 @@ local function home_dir(): string?
     return env(if windows then "USERPROFILE" else "HOME")
 end
 
-local function process_options(timeout_ms: number, extra_env: { [string]: string }?)
+local function process_options(timeout_ms: number, extra_env: { [string]: string }?): ProcessOptions
     local vars = { PATH = tool_path() }
     if extra_env then
         for name, value in extra_env do vars[name] = value end
@@ -208,9 +208,10 @@ local function summarize(binary: string)
             tern.log.warn("tern-kata: could not read the worker's status for the worker widget (" .. why .. "); keeping the last summary")
         end
     end
-    -- Stores a summary stamped now; the stamp is what tells the window half that a host half is still polling.
+    -- Stamps the summary now and stores it; the stamp is what tells the window half that a host half is still polling.
     local function store(summary: workersummary.Summary)
-        local stored, storeErr = pcall(tern.kv.set, workersummary.KEY, summary)
+        summary.at = os.time()
+        local stored, storeErr = (pcall :: any)(tern.kv.set, workersummary.KEY, summary)
         if stored then
             last_summary = summary
         else
@@ -219,10 +220,13 @@ local function summarize(binary: string)
     end
     -- A failed read still proves the host half is alive, so the last summary is stored again with a fresh stamp.
     local function restamp()
-        if last_summary ~= nil then
-            last_summary.at = os.time()
-            store(last_summary)
-        end
+        if last_summary ~= nil then store(last_summary) end
+    end
+    -- A read that did not give a summary: it is logged, the last summary is stored again, and the next look is scheduled.
+    local function failedRead(why: string)
+        failed(why)
+        restamp()
+        done()
     end
     local epoch = summary_epoch
     local ok, err = pcall(function()
@@ -230,27 +234,20 @@ local function summarize(binary: string)
             -- The summary was cleared while this read was out (the worker it asked about has ended): its answer says nothing now.
             if epoch ~= summary_epoch then return done() end
             if result.status ~= 0 or result.timed_out then
-                failed(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
-                restamp()
-                return done()
+                return failedRead(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
             end
             local decoded, status = pcall(tern.json.decode, result.stdout)
             local summary = decoded and workersummary.of(status) or nil
             if summary == nil then
-                failed("unexpected output")
-                restamp()
-                return done()
+                return failedRead("unexpected output")
             end
             warned_summary = false
-            summary.at = os.time()
             store(summary)
             done()
         end)
     end)
     if not ok then
-        failed(tostring(err))
-        restamp()
-        done()
+        failedRead(tostring(err))
     end
 end
 

@@ -35,7 +35,10 @@ func TestShowPageKeepsAnOpenCardAndItsTypedText(t *testing.T) {
 	}
 	out := step(t, s, view.DecodeAction("", string(model.ShowPageAction), "attention"))
 	m := out.State.Model
-	if m.Page != s.Model.Page || m.TopCard() != model.CardCreate || m.Create.Title != "phone" || len(out.Cmds) != 0 {
-		t.Errorf("show-page under the create card: Page %v, card %v, title %q, cmds %v; want nothing changed", m.Page, m.TopCard(), m.Create.Title, out.Cmds)
+	if m.Page != s.Model.Page || m.TopCard() != model.CardCreate || m.Create.Title != "phone" {
+		t.Errorf("show-page under the create card: Page %v, card %v, title %q; want nothing changed", m.Page, m.TopCard(), m.Create.Title)
+	}
+	if m.Toast == nil || m.Toast.Text != "Close what is open to show the Attention Page." || m.Toast.Label != "" {
+		t.Errorf("show-page under the create card raised toast %+v, want the plain close-it toast", m.Toast)
 	}
 }

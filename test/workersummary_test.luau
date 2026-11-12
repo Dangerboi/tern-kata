@@ -68,11 +68,12 @@ test("something that names no worker has no summary", function()
     assert(workersummary.of({ Executor = "m" }) == nil)
 end)
 
-test("a held reason reads as the hold's sentence, the code then its detail", function()
-    local got = workersummary.of({ PID = 1, Runs = {
-        { Issue = "k#1", Job = "j", Held = true, Hold = "secret_unavailable", Detail = "no token", EndedAt = ZERO },
-        { Issue = "k#2", Job = "j", Held = true, Hold = "interrupted", Detail = "", EndedAt = ZERO },
-    } })
+test("a held reason is the worker's HoldLine, or the hold code from a binary that has none", function()
+    local runs: { any } = {
+        { Issue = "k#1", Job = "j", Held = true, Hold = "secret_unavailable", HoldLine = "secret_unavailable: no token", EndedAt = ZERO },
+        { Issue = "k#2", Job = "j", Held = true, Hold = "interrupted", EndedAt = ZERO },
+    }
+    local got = workersummary.of({ PID = 1, Runs = runs })
     assert(got ~= nil and #got.held == 2)
     assert(got.held[1].reason == "secret_unavailable: no token", got.held[1].reason)
     assert(got.held[2].reason == "interrupted", got.held[2].reason)
