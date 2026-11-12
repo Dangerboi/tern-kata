@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"time"
 
@@ -36,23 +35,7 @@ func openFile(path string) error {
 	return nil
 }
 
-// openableExtensions are the only extensions tern-kata hands to the OS on its own, when an Attachment is opened with enter or a
-// click: images, video, audio, PDFs and plain text. Everything else is saved and left for the user, because what the OS does with a
-// file it knows (run it, follow a link inside it, launch a handler registered for it) cannot be told from the name alone, and
-// anyone who can write the Project can name an Attachment. "Open with the system app" is the user's explicit choice and sends any type.
-var openableExtensions = []string{
-	".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".tif", ".tiff",
-	".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v",
-	".mp3", ".wav", ".ogg", ".flac", ".m4a",
-	".pdf",
-	".txt", ".md", ".log", ".csv", ".json",
-}
-
-// isOpenable reports whether name ends in one of openableExtensions, lower-cased and otherwise exactly as stored: no trimming, so
-// "x.png." and "x.png " (which Windows would read as other names) are not openable.
-func isOpenable(name string) bool {
-	return slices.Contains(openableExtensions, strings.ToLower(filepath.Ext(name)))
-}
+func isOpenable(name string) bool { return model.OSOpens(name) }
 
 // inTern reports whether this program runs in a Tern Pane or a headless Tern session, the two cases where `tern open` finds the window
 // that shows it.
@@ -82,7 +65,10 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 	failed := func(err error) model.Msg {
 		return model.AttachmentOpened{UID: cmd.UID, AttachmentID: cmd.Attachment.ID, Name: cmd.Attachment.Name, Way: cmd.Way, Err: err}
 	}
-	// Open beside can only end in Tern, so it is refused before the download it would waste.
+	// A refused way is refused before the download it would waste.
+	if cmd.Way == model.WaySystem && !model.OSOpens(cmd.Attachment.Name) {
+		return failed(errors.New(model.AttachmentRefusal(cmd.Attachment, model.OpenAttachmentSystemAction)))
+	}
 	if cmd.Way == model.WayBeside {
 		if !model.TernDraws(cmd.Attachment.Name) {
 			return failed(errors.New(model.AttachmentRefusal(cmd.Attachment, model.OpenAttachmentBesideAction)))

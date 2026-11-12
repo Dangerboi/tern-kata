@@ -39,7 +39,7 @@ const (
 	WayOpen AttachmentWay = iota
 	// WayBeside opens the file in a split beside the Pane, whatever the floating or side panel setting says.
 	WayBeside
-	// WaySystem hands the file, of any type, to the OS opener of the machine the Pane runs on.
+	// WaySystem hands the file to the OS opener of the machine the Pane runs on, for the types OSOpens names.
 	WaySystem
 	// WaySave copies the file into the Downloads folder of the machine the Pane runs on, under a name no file there has.
 	WaySave
@@ -57,11 +57,31 @@ func TernDraws(name string) bool {
 	return slices.Contains(ternDrawnExtensions, strings.ToLower(filepath.Ext(name)))
 }
 
+// osOpenedExtensions are the only extensions tern-kata hands to the OS opener, by enter, a click or Open with the system app: images,
+// video, audio, PDFs and plain text. Anything else is only saved, because what the OS does with a file it knows (run it, follow a
+// link inside it, launch a handler registered for it) cannot be told from the name alone, and anyone who can write the Project,
+// agents included, can name an Attachment.
+var osOpenedExtensions = []string{
+	".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".tif", ".tiff",
+	".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v",
+	".mp3", ".wav", ".ogg", ".flac", ".m4a",
+	".pdf",
+	".txt", ".md", ".log", ".csv", ".json",
+}
+
+// OSOpens reports whether tern-kata hands a file called name to the OS opener.
+func OSOpens(name string) bool {
+	return slices.Contains(osOpenedExtensions, strings.ToLower(filepath.Ext(name)))
+}
+
 // AttachmentRefusal is why action cannot run on the Attachment a, or "" when it can: the context menu disables its row with it and
 // the key says it as a Notice.
 func AttachmentRefusal(a Attachment, action Action) string {
 	if action == OpenAttachmentBesideAction && !TernDraws(a.Name) {
 		return "Tern draws only images, text, Markdown and JSON beside the Pane; open this one another way."
+	}
+	if action == OpenAttachmentSystemAction && !OSOpens(a.Name) {
+		return "tern-kata hands only images, video, audio, PDFs and text to the system app, since the OS may run anything else; save it (s) and open it yourself."
 	}
 	return ""
 }

@@ -189,12 +189,17 @@ func TestOpenAttachmentBesideDoesNotFallBackToTheOSOpener(t *testing.T) {
 	}
 }
 
-func TestOpenAttachmentWithTheSystemAppSendsAnyType(t *testing.T) {
+func TestOpenAttachmentWithTheSystemAppRefusesATypeTheOSMayRun(t *testing.T) {
 	f := newDocbankFixture(t)
 	cmd := f.openCmd(t, "report.bat")
 	cmd.Way = model.WaySystem
-	got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd))
-	if got.Err != nil || !slices.Equal(*f.opened, []string{got.Path}) {
+	if got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd)); got.Err == nil || len(*f.opened) != 0 {
+		t.Fatalf("opened %+v, OS opener ran for %v", got, *f.opened)
+	}
+	f = newDocbankFixture(t)
+	pdf := f.openCmd(t, "report.pdf")
+	pdf.Way = model.WaySystem
+	if got := as[model.AttachmentOpened](t, run(t, f.gateway, pdf)); got.Err != nil || !slices.Equal(*f.opened, []string{got.Path}) {
 		t.Fatalf("opened %+v, OS opener ran for %v", got, *f.opened)
 	}
 }
