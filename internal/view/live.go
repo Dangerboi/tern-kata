@@ -65,11 +65,16 @@ func deleteViewQuestion(m model.Model) tern.Element {
 }
 
 // toasts is the model's toast, drawn from the step that raised it until ToastExpired for its Seq, so a late client never gets a stale
-// button. The node is keyed on Seq so each one shows once; Tern ignores the button before it learned them.
+// button. The node is keyed on Seq so each one shows once; Tern ignores the button before it learned them. A toast without a
+// label has no button: Tern would name one after its action.
 func toasts(m model.Model) []tern.Element {
 	t := m.Toast
 	if t == nil {
 		return nil
 	}
-	return []tern.Element{ui.Toast{Common: ui.Common{Key: "toast-" + strconv.Itoa(t.Seq), Tone: ui.ToneAccent}, Text: t.Text, Action: ToastClick(t.Seq), Label: t.Label}}
+	toast := ui.Toast{Common: ui.Common{Key: "toast-" + strconv.Itoa(t.Seq), Tone: ui.ToneAccent}, Text: t.Text}
+	if t.Label != "" {
+		toast.Action, toast.Label = ToastClick(t.Seq), t.Label
+	}
+	return []tern.Element{toast}
 }

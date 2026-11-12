@@ -26,7 +26,7 @@ local M = {}
 -- The `tern.kv` key the host half stores the summary under and the window half reads it from.
 M.KEY = "worker.summary"
 
--- Seconds after which a summary that no host half has restamped is not shown any more. The host half polls every ten seconds.
+-- Seconds after which a summary that no host half has restamped is not shown any more. That is several of the host half's polls (POLL_MS in host.luau).
 M.STALE_S = 60
 
 local function list(value: any): { any }

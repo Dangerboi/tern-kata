@@ -1,6 +1,8 @@
 package driver_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -40,5 +42,20 @@ func TestShowPageKeepsAnOpenCardAndItsTypedText(t *testing.T) {
 	}
 	if m.Toast == nil || m.Toast.Text != "Close what is open to show the Attention Page." || m.Toast.Label != "" {
 		t.Errorf("show-page under the create card raised toast %+v, want the plain close-it toast", m.Toast)
+	}
+	// A toast with no label draws no button: Tern would name one after its action, which says nothing.
+	for _, n := range wireNodes(t, view.Render(m, now)) {
+		if strings.Contains(n.ID, "toast-") && n.P["action"] != nil {
+			t.Errorf("the close-it toast %s draws a button: %v", n.ID, n.P)
+		}
+	}
+}
+
+// On the error screen nothing is open to close, and the error already says what is wrong: the click only focuses the Pane.
+func TestShowPageDoesNothingOnTheErrorScreen(t *testing.T) {
+	s := feed(t, browsing(t, 160), model.Failed{Err: errors.New("kata server not responding")}).State
+	out := step(t, s, view.DecodeAction("", string(model.ShowPageAction), "attention"))
+	if out.State.Model.Page != s.Model.Page || out.State.Model.Toast != nil || len(out.Cmds) != 0 {
+		t.Errorf("show-page on the error screen: Page %v, toast %+v, cmds %v; want nothing", out.State.Model.Page, out.State.Model.Toast, out.Cmds)
 	}
 }

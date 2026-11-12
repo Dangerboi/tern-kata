@@ -15,10 +15,10 @@ import (
 const Unknown = -1
 
 const (
-	prefix = "\x1b]7501;state="
-	suffix = "\x1b\\"
-	app    = "app=tern-kata"
-	clear  = prefix + "clear" + suffix
+	prefix      = "\x1b]7501;state="
+	suffix      = "\x1b\\"
+	app         = "app=tern-kata"
+	clearReport = prefix + "clear" + suffix
 )
 
 // Reporter writes a report only when it differs from the last one written. The zero value and a nil Reporter write nothing.
@@ -56,7 +56,7 @@ func (r *Reporter) Clear() {
 	if r != nil && r.last == "" {
 		return
 	}
-	r.write(clear)
+	r.write(clearReport)
 }
 
 func (r *Reporter) write(report string) {
@@ -66,7 +66,7 @@ func (r *Reporter) write(report string) {
 	// A failed write leaves last as it was, so the next change tries again; the report is decoration and never fails the work.
 	if _, err := io.WriteString(r.out, report); err == nil {
 		r.last = report
-		if report == clear {
+		if report == clearReport {
 			r.last = ""
 		}
 	}

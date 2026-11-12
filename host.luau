@@ -211,11 +211,11 @@ local function summarize(binary: string)
     -- Stamps the summary now and stores it; the stamp is what tells the window half that a host half is still polling.
     local function store(summary: workersummary.Summary)
         summary.at = os.time()
-        local stored, storeErr = (pcall :: any)(tern.kv.set, workersummary.KEY, summary)
+        local stored, store_err = (pcall :: any)(tern.kv.set, workersummary.KEY, summary)
         if stored then
             last_summary = summary
         else
-            failed("could not store it: " .. tostring(storeErr))
+            failed("could not store it: " .. tostring(store_err))
         end
     end
     -- A failed read still proves the host half is alive, so the last summary is stored again with a fresh stamp.
@@ -223,7 +223,7 @@ local function summarize(binary: string)
         if last_summary ~= nil then store(last_summary) end
     end
     -- A read that did not give a summary: it is logged, the last summary is stored again, and the next look is scheduled.
-    local function failedRead(why: string)
+    local function failed_read(why: string)
         failed(why)
         restamp()
         done()
@@ -234,12 +234,12 @@ local function summarize(binary: string)
             -- The summary was cleared while this read was out (the worker it asked about has ended): its answer says nothing now.
             if epoch ~= summary_epoch then return done() end
             if result.status ~= 0 or result.timed_out then
-                return failedRead(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
+                return failed_read(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
             end
             local decoded, status = pcall(tern.json.decode, result.stdout)
             local summary = decoded and workersummary.of(status) or nil
             if summary == nil then
-                return failedRead("unexpected output")
+                return failed_read("unexpected output")
             end
             warned_summary = false
             store(summary)
@@ -247,7 +247,7 @@ local function summarize(binary: string)
         end)
     end)
     if not ok then
-        failedRead(tostring(err))
+        failed_read(tostring(err))
     end
 end
 

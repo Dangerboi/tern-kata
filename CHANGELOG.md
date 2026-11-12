@@ -26,6 +26,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The "N waiting" segment stays in the widget bar's Plugin segments widget, where Tern 0.9.17 moved the status line.
 - The palette command Add kata widgets to the widget bar places the kata widgets the bar lacks after the widgets already there.
 - The palette command Show kata's held runs opens the kata Pane on the Attention Page.
+  - While a card, a question, the help sheet or a search is open in the Pane, it shows a toast asking to close it instead of switching Pages.
 
 ## [0.12.0] - 2026-11-12
 

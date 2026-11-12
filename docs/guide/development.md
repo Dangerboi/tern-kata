@@ -23,7 +23,7 @@ scripts/release-notes.sh vX.Y.Z   # prints the notes; fails unless CHANGELOG.md 
 scripts/release.sh vX.Y.Z         # writes dist/ (gitignored); fails unless plugin.toml's version is X.Y.Z and the notes exist; publishes nothing
 ```
 
-It builds `tern-kata_<os>_<arch>.tar.gz` (`.zip` for `windows`) for `linux`, `darwin` and `windows` on `amd64` and `arm64`, each also holding `LICENSE` and a `plugin/` folder (`plugin.toml`, `window.luau`, `host.luau`, `placement.luau`, `releases.luau`, `panecommands.luau`, `waitingtext.luau`, `waitingagents.luau`) that `install.sh` and `install.ps1` hand to `tern plugin install`, plus `checksums.txt` in `sha256sum` format (archives only) and `version.txt`, the plugin's version as `plugin.toml` spells it, then a newline. The script refuses to build when a `require("./name")` in those files names a file `plugin/` lacks: add a new plugin file to `plugin_files` in `scripts/release.sh`. `smoke/steps/81-install-from-release.sh` builds `dist/` at the current version, serves it locally and runs the install scripts' Linux path against it, plugin-only mode included; `install.ps1` is checked by hand on Windows against a locally served `dist/` (`TERN_KATA_BASE_URL`).
+It builds `tern-kata_<os>_<arch>.tar.gz` (`.zip` for `windows`) for `linux`, `darwin` and `windows` on `amd64` and `arm64`, each also holding `LICENSE` and a `plugin/` folder (`plugin.toml`, `window.luau`, `host.luau`, `placement.luau`, `releases.luau`, `panecommands.luau`, `waitingtext.luau`, `waitingagents.luau`, `widgets.luau`, `workersummary.luau`, `workerwidget.luau`) that `install.sh` and `install.ps1` hand to `tern plugin install`, plus `checksums.txt` in `sha256sum` format (archives only) and `version.txt`, the plugin's version as `plugin.toml` spells it, then a newline. The script refuses to build when a `require("./name")` in those files names a file `plugin/` lacks: add a new plugin file to `plugin_files` in `scripts/release.sh`. `smoke/steps/81-install-from-release.sh` builds `dist/` at the current version, serves it locally and runs the install scripts' Linux path against it, plugin-only mode included; `install.ps1` is checked by hand on Windows against a locally served `dist/` (`TERN_KATA_BASE_URL`).
 
 A release build sets the version with `-ldflags "-X main.version=vX.Y.Z"`. Without it, `tern-kata --version` reports the Go module version (`go install …@vX.Y.Z`), or `dev` for an untagged build.
 
@@ -44,6 +44,9 @@ luau test/releases_test.luau
 luau test/panecommands_test.luau
 luau test/waitingtext_test.luau
 luau test/waitingagents_test.luau
+luau test/widgets_test.luau
+luau test/workersummary_test.luau
+luau test/workerwidget_test.luau
 ```
 
 ## Design records
