@@ -11,13 +11,15 @@ import (
 var attachmentMenuRows = []struct {
 	action model.Action
 	label  string
+	// way is what the row does with the file, which says whether it is refused; Unlink has none, and WayOpen is never refused.
+	way model.AttachmentWay
 }{
-	{model.DrillIn, "Open"},
-	{model.OpenAttachmentBesideAction, "Open beside"},
-	{model.OpenAttachmentSystemAction, "Open with the system app"},
-	{model.SaveAttachmentAction, "Save to Downloads"},
-	{model.CopyAttachmentAction, "Copy…"},
-	{model.UnlinkAttachmentAction, "Unlink…"},
+	{model.DrillIn, "Open", model.WayOpen},
+	{model.OpenAttachmentBesideAction, "Open beside", model.WayBeside},
+	{model.OpenAttachmentSystemAction, "Open with the system app", model.WaySystem},
+	{model.SaveAttachmentAction, "Save to Downloads", model.WaySave},
+	{model.CopyAttachmentAction, "Copy…", model.WayCopy},
+	{model.UnlinkAttachmentAction, "Unlink…", model.WayOpen},
 }
 
 // attachmentMenu is the right-click menu and the long-press list of the Attachment row with rowKey.
@@ -29,7 +31,7 @@ func attachmentMenu(rowKey string, a model.Attachment) []ui.MenuEntry {
 			continue
 		}
 		item := ui.MenuItem{ID: AttachmentMenuPickClick(rowKey, chord), Label: row.label, Keys: keys}
-		if reason := model.AttachmentRefusal(a, row.action); reason != "" {
+		if reason := model.AttachmentRefusal(a, row.way); reason != "" {
 			item.Disabled = ui.Because(reason)
 		}
 		menu = append(menu, item)

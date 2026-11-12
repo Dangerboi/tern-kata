@@ -184,6 +184,7 @@ local function clear_summary()
     if ok and stored ~= nil then pcall(tern.kv.set, workersummary.KEY, nil) end
 end
 
+-- Runs one question; a stale answer (drop_answer was called while it was out) is dropped and the next look comes at once.
 local function ask(binary: string, args: { string }, on_answer: (ProcessResult) -> ()): string?
     local command = { binary }
     for _, arg in args do table.insert(command, arg) end

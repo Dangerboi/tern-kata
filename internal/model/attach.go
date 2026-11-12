@@ -22,17 +22,20 @@ type FileAttached struct {
 func (FileAttached) msg() {}
 
 // UnlinkAttachment unlinks the Attachment ID from the Issue UID of ProjectID by clearing its meta key. The file's bytes stay in Docbank:
-// kata has no call that deletes them. Name is for the report.
+// kata has no call that deletes them. Name is for the report. FromQuestion is set when the unlink question sent it rather than the U
+// card, and the answer repeats it.
 type UnlinkAttachment struct {
 	Workspace, UID, Actor, ID, Name string
 	ProjectID                       int64
+	FromQuestion                    bool
 }
 
 func (UnlinkAttachment) cmd() {}
 
 type AttachmentUnlinked struct {
-	UID, Name string
-	Err       error
+	UID, Name    string
+	FromQuestion bool
+	Err          error
 }
 
 func (AttachmentUnlinked) msg() {}

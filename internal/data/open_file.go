@@ -35,8 +35,6 @@ func openFile(path string) error {
 	return nil
 }
 
-func isOpenable(name string) bool { return model.OSOpens(name) }
-
 // inTern reports whether this program runs in a Tern Pane or a headless Tern session, the two cases where `tern open` finds the window
 // that shows it.
 func inTern() bool {
@@ -67,11 +65,11 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 	}
 	// A refused way is refused before the download it would waste.
 	if cmd.Way == model.WaySystem && !model.OSOpens(cmd.Attachment.Name) {
-		return failed(errors.New(model.AttachmentRefusal(cmd.Attachment, model.OpenAttachmentSystemAction)))
+		return failed(errors.New(model.AttachmentRefusal(cmd.Attachment, cmd.Way)))
 	}
 	if cmd.Way == model.WayBeside {
 		if !model.TernDraws(cmd.Attachment.Name) {
-			return failed(errors.New(model.AttachmentRefusal(cmd.Attachment, model.OpenAttachmentBesideAction)))
+			return failed(errors.New(model.AttachmentRefusal(cmd.Attachment, cmd.Way)))
 		}
 		if !inTern() {
 			return failed(errors.New("this Pane does not run in a Tern window"))
@@ -109,7 +107,7 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 		}
 		return opened
 	}
-	if !isOpenable(cmd.Attachment.Name) {
+	if !model.OSOpens(cmd.Attachment.Name) {
 		opened.Err = fmt.Errorf("saved at %s and not opened: tern-kata opens only images, video, audio, PDFs and text", opened.Path)
 		return opened
 	}

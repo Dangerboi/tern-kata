@@ -143,7 +143,7 @@ func unlinkAsked(t *testing.T) driver.State {
 
 func TestTheUnlinkQuestionsYUnlinksAndNKeeps(t *testing.T) {
 	out := step(t, unlinkAsked(t), key("y"))
-	want := model.UnlinkAttachment{Workspace: "/repo", UID: "a", ProjectID: 7, ID: "A1", Name: "shot.png"}
+	want := model.UnlinkAttachment{Workspace: "/repo", UID: "a", ProjectID: 7, ID: "A1", Name: "shot.png", FromQuestion: true}
 	if len(out.Cmds) != 1 || out.Cmds[0] != model.Cmd(want) {
 		t.Fatalf("y sent %#v, want %#v", out.Cmds, want)
 	}
@@ -183,11 +183,11 @@ func TestTheUnlinkQuestionsButtonsAnswerItToo(t *testing.T) {
 
 func TestAnUnlinkTheQuestionSentIsReportedAndReadsTheIssueAgain(t *testing.T) {
 	s := step(t, unlinkAsked(t), key("y")).State
-	out := step(t, s, model.AttachmentUnlinked{UID: "a", Name: "shot.png"})
+	out := step(t, s, model.AttachmentUnlinked{UID: "a", Name: "shot.png", FromQuestion: true})
 	if !strings.HasPrefix(out.State.Model.Notice, "Unlinked shot.png from a;") || !hasCmd[model.ReadSnapshot](out.Cmds) {
 		t.Fatalf("notice %q, cmds %#v", out.State.Model.Notice, out.Cmds)
 	}
-	failed := step(t, s, model.AttachmentUnlinked{UID: "a", Name: "shot.png", Err: errors.New("kata said no")})
+	failed := step(t, s, model.AttachmentUnlinked{UID: "a", Name: "shot.png", FromQuestion: true, Err: errors.New("kata said no")})
 	if !strings.Contains(failed.State.Model.Notice, "Cannot unlink shot.png: kata said no") {
 		t.Fatalf("notice %q", failed.State.Model.Notice)
 	}
@@ -225,5 +225,32 @@ func TestASavedAttachmentIsToastedWithItsPath(t *testing.T) {
 	out := step(t, s, model.AttachmentOpened{UID: "a", AttachmentID: "A1", Name: "shot.png", Path: "/home/me/Downloads/shot (1).png", Way: model.WaySave})
 	if toast := out.State.Model.Toast; toast == nil || toast.Text != "Saved /home/me/Downloads/shot (1).png" || toast.Label != "" {
 		t.Fatalf("toast %+v", toast)
+	}
+}
+
+func TestTwoUnlinksInFlightAreEachReportedAgainstTheirOwnRequest(t *testing.T) {
+	// z+y unlinks shot.png, then U unlinks clip.mp4 before the first answer comes back.
+	s := step(t, unlinkAsked(t), key("y")).State
+	s = step(t, s, key("shift+u")).State
+	if !s.Model.FieldForm.Open {
+		t.Fatal("U did not open its card")
+	}
+	out := step(t, s, key("enter"))
+	if len(out.Cmds) != 1 || out.Cmds[0].(model.UnlinkAttachment).Name != "clip.mp4" || out.Cmds[0].(model.UnlinkAttachment).FromQuestion {
+		t.Fatalf("U sent %#v", out.Cmds)
+	}
+	s = out.State
+
+	// The question's answer reports its own failure and leaves the saving U form alone.
+	failed := step(t, s, model.AttachmentUnlinked{UID: "a", Name: "shot.png", FromQuestion: true, Err: errors.New("kata said no")})
+	f := failed.State.Model.FieldForm
+	if !f.Open || !f.Saving || f.Err != nil || failed.State.Model.Notice != "Cannot unlink shot.png: kata said no" {
+		t.Fatalf("form %+v, notice %q", f, failed.State.Model.Notice)
+	}
+
+	// Only the U path's answer closes the form.
+	done := step(t, failed.State, model.AttachmentUnlinked{UID: "a", Name: "clip.mp4"})
+	if done.State.Model.FieldForm.Open || !strings.HasPrefix(done.State.Model.Notice, "Unlinked clip.mp4 from a;") {
+		t.Fatalf("form %+v, notice %q", done.State.Model.FieldForm, done.State.Model.Notice)
 	}
 }

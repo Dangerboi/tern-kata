@@ -69,18 +69,30 @@ var osOpenedExtensions = []string{
 	".txt", ".md", ".log", ".csv", ".json",
 }
 
-// OSOpens reports whether tern-kata hands a file called name to the OS opener.
+// OSOpens reports whether tern-kata hands a file called name to the OS opener. The name is not trimmed: Windows reads `x.png.` and
+// `x.png ` as other names than x.png, so they must not count as images.
 func OSOpens(name string) bool {
 	return slices.Contains(osOpenedExtensions, strings.ToLower(filepath.Ext(name)))
 }
 
-// AttachmentRefusal is why action cannot run on the Attachment a, or "" when it can: the context menu disables its row with it and
-// the key says it as a Notice.
-func AttachmentRefusal(a Attachment, action Action) string {
-	if action == OpenAttachmentBesideAction && !TernDraws(a.Name) {
+// verb is how a failure of way names what it was doing.
+func (w AttachmentWay) verb() string {
+	switch w {
+	case WaySave:
+		return "save"
+	case WayCopy:
+		return "copy"
+	}
+	return "open"
+}
+
+// AttachmentRefusal is why way cannot run on the Attachment a, or "" when it can: the context menu disables its row with it and
+// the key says it as a Notice. Only WayBeside and WaySystem refuse.
+func AttachmentRefusal(a Attachment, way AttachmentWay) string {
+	if way == WayBeside && !TernDraws(a.Name) {
 		return "Tern draws only images, text, Markdown and JSON beside the Pane; open this one another way."
 	}
-	if action == OpenAttachmentSystemAction && !OSOpens(a.Name) {
+	if way == WaySystem && !OSOpens(a.Name) {
 		return "tern-kata hands only images, video, audio, PDFs and text to the system app, since the OS may run anything else; save it (s) and open it yourself."
 	}
 	return ""
@@ -122,10 +134,10 @@ func (m Model) attachmentOnCursor() bool {
 }
 
 // openAttachmentAs is the key of an open way: it downloads the Attachment under the cursor and then acts as way says.
-func openAttachmentAs(action Action, way AttachmentWay) func(Model) (Model, []Cmd) {
+func openAttachmentAs(way AttachmentWay) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
 		issue, a, _ := m.attachmentUnderCursor()
-		if reason := AttachmentRefusal(a, action); reason != "" {
+		if reason := AttachmentRefusal(a, way); reason != "" {
 			m.Notice = reason
 			return m, nil
 		}
@@ -149,7 +161,7 @@ func confirmUnlinkAttachment(m Model) (Model, []Cmd) {
 	if ask == nil {
 		return m, nil
 	}
-	return m, []Cmd{UnlinkAttachment{Workspace: m.Workspace, UID: ask.UID, ProjectID: ask.ProjectID, Actor: m.Actor, ID: ask.Attachment.ID, Name: ask.Attachment.Name}}
+	return m, []Cmd{UnlinkAttachment{Workspace: m.Workspace, UID: ask.UID, ProjectID: ask.ProjectID, Actor: m.Actor, ID: ask.Attachment.ID, Name: ask.Attachment.Name, FromQuestion: true}}
 }
 
 // attachmentMenuPick moves the cursor to the Attachment row the menu was built for and presses its key.
@@ -175,11 +187,7 @@ func AttachmentCopyCommand(issueRef, attachmentID string) string {
 // or the Copy card.
 func attachmentOpened(m Model, msg AttachmentOpened) (Model, []Cmd) {
 	if msg.Err != nil {
-		verb := map[AttachmentWay]string{WaySave: "save", WayCopy: "copy"}[msg.Way]
-		if verb == "" {
-			verb = "open"
-		}
-		m.Notice = fmt.Sprintf("Cannot %s %s: %v", verb, msg.Name, msg.Err)
+		m.Notice = fmt.Sprintf("Cannot %s %s: %v", msg.Way.verb(), msg.Name, msg.Err)
 		return m, nil
 	}
 	switch msg.Way {
@@ -221,13 +229,13 @@ func attachmentCopyKey(m Model, msg KeyMsg) (Model, []Cmd) {
 }
 
 // attachmentUnlinked takes the answer of an unlink. The U card's own write goes through its form; one the question sent has no form,
-// so it reports and reads the Issue again itself.
+// so it reports and reads the Issue again itself. The two can be in flight together, so the answer says which one it is.
 func attachmentUnlinked(m Model, msg AttachmentUnlinked) (Model, []Cmd) {
 	report := ""
 	if issue := m.issueByUID(msg.UID); issue != nil {
 		report = fmt.Sprintf("Unlinked %s from %s; its bytes stay in Docbank", msg.Name, issue.ShortID)
 	}
-	if m.FieldForm.UID == msg.UID && m.FieldForm.Action == DetachFileAction && m.FieldForm.Saving {
+	if !msg.FromQuestion {
 		return fieldWritten(m, msg.UID, report, msg.Err)
 	}
 	if msg.Err != nil {

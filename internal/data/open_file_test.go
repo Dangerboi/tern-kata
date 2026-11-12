@@ -46,8 +46,8 @@ func TestIsOpenableAllowsOnlyViewingTypes(t *testing.T) {
 		{".png", true},
 		{"", false},
 	} {
-		if got := isOpenable(tc.name); got != tc.want {
-			t.Errorf("isOpenable(%q) = %v, want %v", tc.name, got, tc.want)
+		if got := model.OSOpens(tc.name); got != tc.want {
+			t.Errorf("OSOpens(%q) = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }

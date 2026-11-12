@@ -345,10 +345,10 @@ func init() {
 
 	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.UnlinkAttachment) (model.AttachmentUnlinked, error) {
-			return model.AttachmentUnlinked{UID: cmd.UID, Name: cmd.Name}, c.UnlinkAttachment(ctx, cmd)
+			return model.AttachmentUnlinked{UID: cmd.UID, Name: cmd.Name, FromQuestion: cmd.FromQuestion}, c.UnlinkAttachment(ctx, cmd)
 		},
 		func(cmd model.UnlinkAttachment, err error) model.Msg {
-			return model.AttachmentUnlinked{UID: cmd.UID, Name: cmd.Name, Err: err}
+			return model.AttachmentUnlinked{UID: cmd.UID, Name: cmd.Name, FromQuestion: cmd.FromQuestion, Err: err}
 		})
 
 	local((*Gateway).openAttachment)

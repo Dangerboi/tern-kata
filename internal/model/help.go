@@ -31,19 +31,46 @@ type Question struct {
 	Danger            bool
 }
 
-// Question is the question to answer, if any. Only one is shown at a time: the quit question wins over the delete-view one,
-// which wins over the Docbank switch, which wins over the unlink one.
-func (m Model) Question() (Question, bool) {
-	switch {
-	case m.AskQuit:
-		return Question{Mode: ModeQuit, Text: "Quit tern-kata? y/n", Yes: ConfirmQuitAction, No: StayAction, YesWords: "Quit", NoWords: "Stay"}, true
-	case m.Views.Deleting != "":
-		return Question{Mode: ModeDeleteView, Text: "Delete view " + m.Views.Deleting + "? y/n", Yes: ConfirmDeleteViewAction, No: KeepViewAction, YesWords: "Delete", NoWords: "Keep", Danger: true}, true
-	case m.ConfigPage.AskSwitch:
-		return Question{Mode: ModeSwitchDocbank, Text: "Switch to kata's local Docbank? kata restarts its daemon. y/n", Yes: ConfirmSwitchDocbankAction, No: KeepDocbankAction, YesWords: "Switch", NoWords: "Keep"}, true
-	case m.AskUnlink != nil:
+type questionEntry struct {
+	mode  Mode
+	asked func(Model) (Question, bool)
+}
+
+// questions lists the y/n questions in the order they win when several are open: the quit question wins over the delete-view one,
+// which wins over the Docbank switch, which wins over the unlink one. A new question is added here and nowhere else.
+var questions = []questionEntry{
+	{ModeQuit, func(m Model) (Question, bool) {
+		return Question{Text: "Quit tern-kata? y/n", Yes: ConfirmQuitAction, No: StayAction, YesWords: "Quit", NoWords: "Stay"}, m.AskQuit
+	}},
+	{ModeDeleteView, func(m Model) (Question, bool) {
+		return Question{Text: "Delete view " + m.Views.Deleting + "? y/n", Yes: ConfirmDeleteViewAction, No: KeepViewAction, YesWords: "Delete", NoWords: "Keep", Danger: true}, m.Views.Deleting != ""
+	}},
+	{ModeSwitchDocbank, func(m Model) (Question, bool) {
+		return Question{Text: "Switch to kata's local Docbank? kata restarts its daemon. y/n", Yes: ConfirmSwitchDocbankAction, No: KeepDocbankAction, YesWords: "Switch", NoWords: "Keep"}, m.ConfigPage.AskSwitch
+	}},
+	{ModeUnlinkAttachment, func(m Model) (Question, bool) {
 		a := m.AskUnlink
-		return Question{Mode: ModeUnlinkAttachment, Text: "Unlink " + a.Attachment.Name + " from " + a.Ref + "? y/n", Yes: ConfirmUnlinkAttachmentAction, No: KeepAttachmentAction, YesWords: "Unlink", NoWords: "Keep", Danger: true}, true
+		if a == nil {
+			return Question{}, false
+		}
+		return Question{Text: "Unlink " + a.Attachment.Name + " from " + a.Ref + "? y/n", Yes: ConfirmUnlinkAttachmentAction, No: KeepAttachmentAction, YesWords: "Unlink", NoWords: "Keep", Danger: true}, true
+	}},
+}
+
+// isQuestionMode reports whether mode is the mode of a question, which takes every key for itself.
+func isQuestionMode(mode Mode) bool {
+	return slices.ContainsFunc(questions, func(q questionEntry) bool {
+		return q.mode == mode
+	})
+}
+
+// Question is the question to answer, if any. Only one is shown at a time, the first of questions.
+func (m Model) Question() (Question, bool) {
+	for _, q := range questions {
+		if question, asked := q.asked(m); asked {
+			question.Mode = q.mode
+			return question, true
+		}
 	}
 	return Question{}, false
 }
@@ -93,7 +120,7 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 	if isCard, through := cardLetsThrough(mode, chord); isCard && !through {
 		return Binding{}, false
 	}
-	if inputMode(mode) || mode == ModeQuit || mode == ModeDeleteView || mode == ModeSwitchDocbank || mode == ModeUnlinkAttachment {
+	if inputMode(mode) || isQuestionMode(mode) {
 		return Binding{}, false
 	}
 	for _, binding := range Keymap {
