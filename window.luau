@@ -556,8 +556,9 @@ local workerSummaryText = ""
 -- The record last read: a failed read (the host half may be rewriting the file) keeps it, and `fresh` still ages it out.
 local workerRecord: any = nil
 
-local function pollWorkerSummary()
-    tern.timer(WORKER_POLL_SECONDS * 1000, function(cx)
+-- The first read comes at once, so a plugin reload does not leave the widget empty until the first poll.
+local function pollWorkerSummary(delay: number)
+    tern.timer(delay, function(cx)
         if cx then
             local ok, saved = pcall(tern.kv.get, workersummary.KEY)
             if ok then workerRecord = saved end
@@ -569,7 +570,7 @@ local function pollWorkerSummary()
                 tern.chrome.refresh()
             end
         end
-        pollWorkerSummary()
+        pollWorkerSummary(WORKER_POLL_SECONDS * 1000)
     end)
 end
 
@@ -582,7 +583,7 @@ if registerWidget("worker", {
         return workerwidget.view(workerSummary, commandName(SHOW_HELD_ID), commandName(OPEN_ID))
     end,
 }) then
-    pollWorkerSummary()
+    pollWorkerSummary(1)
 end
 
 tern.command({
