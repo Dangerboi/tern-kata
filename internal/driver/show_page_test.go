@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 )
@@ -52,10 +53,16 @@ func TestShowPageKeepsAnOpenCardAndItsTypedText(t *testing.T) {
 }
 
 // On the error screen nothing is open to close, and the error already says what is wrong: the click only focuses the Pane.
+// A search left open when the error came is not drawn on the error screen, so it does not count as something to close.
 func TestShowPageDoesNothingOnTheErrorScreen(t *testing.T) {
-	s := feed(t, browsing(t, 160), model.Failed{Err: errors.New("kata server not responding")}).State
-	out := step(t, s, view.DecodeAction("", string(model.ShowPageAction), "attention"))
-	if out.State.Model.Page != s.Model.Page || out.State.Model.Toast != nil || len(out.Cmds) != 0 {
-		t.Errorf("show-page on the error screen: Page %v, toast %+v, cmds %v; want nothing", out.State.Model.Page, out.State.Model.Toast, out.Cmds)
+	failed := model.Failed{Err: errors.New("kata server not responding")}
+	for name, s := range map[string]driver.State{
+		"browsing":         feed(t, browsing(t, 160), failed).State,
+		"search left open": feed(t, browsing(t, 160), key("/"), failed).State,
+	} {
+		out := step(t, s, view.DecodeAction("", string(model.ShowPageAction), "attention"))
+		if out.State.Model.Page != s.Model.Page || out.State.Model.Toast != nil || len(out.Cmds) != 0 {
+			t.Errorf("%s: show-page on the error screen: Page %v, toast %+v, cmds %v; want nothing", name, out.State.Model.Page, out.State.Model.Toast, out.Cmds)
+		}
 	}
 }

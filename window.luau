@@ -16,9 +16,10 @@ local fresh: { [number]: boolean } = {}
 local pending: { [number]: string? } = {}
 -- The actions owed to a kata Pane still starting, in the order they were asked for: Wrap up and Show held runs can both
 -- arrive before the Pane's surface is live, and neither may overwrite the other.
-local pendingActions: { [number]: { { act: string, value: string } } } = {}
+type OwedAction = { act: string, value: string }
+local pendingActions: { [number]: { OwedAction } } = {}
 local function owe(pane: number, act: string, value: string)
-    local list: { { act: string, value: string } } = pendingActions[pane] or {}
+    local list: { OwedAction } = pendingActions[pane] or {}
     pendingActions[pane] = list
     for _, owed in list do
         if owed.act == act and owed.value == value then return end
