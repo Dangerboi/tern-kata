@@ -28,6 +28,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The palette command Show kata's held runs opens the kata Pane on the Attention Page.
   - While a card, a question, the help sheet or a search is open in the Pane, the command shows a toast asking you to close it instead of switching Pages.
 
+### Fixed
+
+#### Tern window
+
+- A kata link or Wrap up every running agent clicked while the kata Pane the plugin just opened is still starting now reaches that Pane once it is up, instead of being lost.
+
 ## [0.12.0] - 2026-11-12
 
 ### Added

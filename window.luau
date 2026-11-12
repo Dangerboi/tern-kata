@@ -309,8 +309,14 @@ local function openKata(cx: WindowCx, act: string?, value: string)
         local pane = existingPane(cx)
         if pane then
             cx.layout:focus(pane)
-            owe(pane, act, value)
-            sendOwed(cx, pane)
+            -- Only a Pane the plugin is waiting on to go live is owed the action. Another Pane found by its title alone may be
+            -- a shell where kata has quit, and an owed action would fire whenever kata next starts there.
+            if launched[pane] or retrying[pane] then
+                owe(pane, act, value)
+                sendOwed(cx, pane)
+            else
+                paneAction(cx, pane, act, value)
+            end
             return
         end
     end
@@ -696,15 +702,16 @@ local RELAY_TRIES = 50
 local function relayWhenLive(pane: number, tries: number)
     retrying[pane] = true
     tern.timer(200, function(cx)
-        if not cx or not marked[pane] or relayed[pane] then retrying[pane] = nil; return end
-        if cx.session:surface(pane) then
+        if not cx then retrying[pane] = nil; return end
+        local live = marked[pane] and cx.session:surface(pane)
+        if live or not marked[pane] or relayed[pane] or tries <= 1 then
             retrying[pane] = nil
-            deliver(cx, pane)
-        elseif tries > 1 then
-            relayWhenLive(pane, tries - 1)
-        else
-            retrying[pane] = nil
+            -- Given up on, a Pane the plugin did not launch is owed nothing: a later kata in it must not run an old click. A
+            -- launched one is still watched until it closes.
+            if live then deliver(cx, pane) elseif not launched[pane] then owed[pane] = nil end
+            return
         end
+        relayWhenLive(pane, tries - 1)
     end)
 end
 
