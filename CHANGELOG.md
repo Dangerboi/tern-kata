@@ -19,6 +19,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A kata worker widget for Tern's widget bar shows how many runs the worker on this machine is running or, in the warning tone while runs are held for you, how many are held (Tern 0.9.17 and later).
   - Its tooltip names the worker and lists the held runs with their reasons; a click while a run is held shows the Attention Page.
   - A remote window shows the worker of the machine it runs on, not the session host's.
+- `tern-kata worker status --json` gives each held run a `HoldLine`: the hold as one sentence, as the Issue comment and the Attention request word it.
 
 #### Tern window
 
