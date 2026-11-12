@@ -547,14 +547,15 @@ local OPEN_ID = "open"
 local SHOW_HELD_ID = "show-held-runs"
 local workerSummary: workersummary.Summary? = nil
 local workerSummaryText = ""
+-- The record last read: a failed read (the host half may be rewriting the file) keeps it, and `fresh` still ages it out.
+local workerRecord: any = nil
 
 local function pollWorkerSummary()
     tern.timer(WORKER_POLL_SECONDS * 1000, function(cx)
-        -- A failed read (the host half may be rewriting the file) keeps what was shown; `fresh` hides it once it goes stale.
-        local ok, saved = false, nil
-        if cx then ok, saved = pcall(tern.kv.get, workersummary.KEY) end
-        if ok then
-            local summary = workersummary.fresh(saved, os.time())
+        if cx then
+            local ok, saved = pcall(tern.kv.get, workersummary.KEY)
+            if ok then workerRecord = saved end
+            local summary = workersummary.fresh(workerRecord, os.time())
             local text = if summary ~= nil then tern.json.encode(summary) else ""
             if text ~= workerSummaryText then
                 workerSummary = summary
