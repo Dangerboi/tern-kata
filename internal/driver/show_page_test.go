@@ -27,3 +27,15 @@ func TestShowPageIgnoresAnIdNoPageHas(t *testing.T) {
 		}
 	}
 }
+
+func TestShowPageKeepsAnOpenCardAndItsTypedText(t *testing.T) {
+	s := typed(t, step(t, browsing(t, 160), key("n")).State, "phone")
+	if s.Model.TopCard() != model.CardCreate || s.Model.Create.Title != "phone" {
+		t.Fatalf("fixture: card %v, title %q", s.Model.TopCard(), s.Model.Create.Title)
+	}
+	out := step(t, s, view.DecodeAction("", string(model.ShowPageAction), "attention"))
+	m := out.State.Model
+	if m.Page != s.Model.Page || m.TopCard() != model.CardCreate || m.Create.Title != "phone" || len(out.Cmds) != 0 {
+		t.Errorf("show-page under the create card: Page %v, card %v, title %q, cmds %v; want nothing changed", m.Page, m.TopCard(), m.Create.Title, out.Cmds)
+	}
+}

@@ -8,7 +8,6 @@ local workersummary = require("./workersummary")
 local widgets = require("./widgets")
 
 type Summary = workersummary.Summary
-export type WidgetView = { text: string, tone: string?, title: string?, command: string?, value: number? }
 
 local M = {}
 
@@ -25,7 +24,7 @@ end
 
 -- What the widget shows: nothing while no worker runs on this machine. Held runs win the text and the warning tone, and a
 -- click shows kata's held runs; otherwise a click opens kata. `heldCommand` and `openCommand` are the action names.
-function M.view(summary: Summary?, heldCommand: string, openCommand: string): WidgetView?
+function M.view(summary: Summary?, heldCommand: string, openCommand: string): widgets.WidgetView?
     if summary == nil then return nil end
     local value = if summary.capacity > 0 then summary.inUse / summary.capacity else 0
     local held = #summary.held

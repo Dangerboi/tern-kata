@@ -1,8 +1,10 @@
 --!strict
 
--- What the worker widget shows, as plain data: no Tern call is made here, so the rule is tested by
--- `luau test/workersummary_test.luau`. host.luau decodes the output of `tern-kata worker status --json` (internal/worker/status.go's
--- Status, whose JSON keys are its Go field names) and stores `of`'s answer in tern.kv for the window half to read.
+-- The summary the host half stores in tern.kv for the worker widget, built as plain data: no Tern call is made here, so the
+-- rule is tested by `luau test/workersummary_test.luau`. host.luau decodes the output of `tern-kata worker status --json`
+-- (internal/worker/status.go's Status, whose JSON keys are its Go field names), stamps `of`'s answer with `at` on every poll
+-- and stores it; the window half reads it back through `fresh`, which drops a summary no host half has restamped for a minute,
+-- so a worker stopped while no daemon runs on that machine does not stay on the widget.
 
 export type Held = { ref: string, job: string, reason: string }
 export type Summary = {
@@ -13,14 +15,19 @@ export type Summary = {
     -- Slots summed over the worker's Projects.
     capacity: number,
     inUse: number,
-    -- The held runs, in the worker's order.
+    -- The held runs, in the worker's order; each reason is the hold's sentence, "<reason>: <detail>".
     held: { Held },
+    -- Wall-clock seconds (os.time()) when the host half last vouched for this summary; `of` leaves it 0 and the host half stamps it.
+    at: number,
 }
 
 local M = {}
 
 -- The `tern.kv` key the host half stores the summary under and the window half reads it from.
 M.KEY = "worker.summary"
+
+-- Seconds after which a summary that no host half has restamped is not shown any more. The host half polls every ten seconds.
+M.STALE_S = 60
 
 local function list(value: any): { any }
     return if type(value) == "table" then value else {}
@@ -47,6 +54,7 @@ function M.of(status: any): Summary?
     local summary: Summary = {
         executor = text(status.Executor),
         pid = status.PID,
+        at = 0,
         running = 0,
         capacity = 0,
         inUse = 0,
@@ -59,12 +67,22 @@ function M.of(status: any): Summary?
     for _, run in list(status.Runs) do
         if type(run) ~= "table" then continue end
         if run.Held == true then
-            table.insert(summary.held, { ref = text(run.Issue), job = text(run.Job), reason = text(run.Hold) })
+            local reason = text(run.Hold)
+            local detail = text(run.Detail)
+            if detail ~= "" then reason ..= ": " .. detail end
+            table.insert(summary.held, { ref = text(run.Issue), job = text(run.Job), reason = reason })
         elseif not ended(run) then
             summary.running += 1
         end
     end
     return summary
+end
+
+-- The summary when it is still vouched for at `now`, else nil: a summary whose `at` is missing or older than STALE_S seconds
+-- was left by a host half that no longer polls (no Tern daemon runs on that machine), so its worker may be long gone.
+function M.fresh(summary: Summary?, now: number): Summary?
+    if summary ~= nil and type(summary.at) == "number" and now - summary.at <= M.STALE_S then return summary end
+    return nil
 end
 
 return M

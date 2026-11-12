@@ -322,8 +322,12 @@ func showPage(target Page) func(Model) (Model, []Cmd) {
 }
 
 // showPageByID shows the Page whose id (the Page bar node's, "attention") is given, as the Page's key would, so entering it runs
-// its enter. It is the show-page Pane action the Luau window hook sends; an id no Page has changes nothing.
+// its enter. It is the show-page Pane action the Luau window hook sends; an id no Page has changes nothing. Like the Page keys it
+// only acts in pageModes, so a window click cannot switch Pages under an open card or a typed field and discard what was typed.
 func showPageByID(m Model, id string) (Model, []Cmd) {
+	if !slices.Contains(pageModes, m.CurrentMode()) {
+		return m, nil
+	}
 	for _, def := range pageDefs {
 		if def.id == id {
 			return showPage(def.page)(m)

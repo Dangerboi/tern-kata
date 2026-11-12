@@ -103,7 +103,7 @@ A saved view is a base Collection (a fixed one or a Project) with the Filter car
 
   ![The Payments open saved view: filter chips for status open and label payments, "view Payments open", and the Issues it matches](../images/saved-view-open.png)
 
-- On a saved view's row `f2` edits it in the View card (a rename keeps its place in the file) and `ctrl+d` asks "Delete view <name>? y/n"; both are in the footer and on the help sheet (`?`). Letters and `ctrl+a`/`ctrl+e` stay with the Menu's filter box.
+- On a saved view's row `f2` edits it in the View card (a rename keeps its place in the file) and `ctrl+d` asks "Delete view <name>? y/n", with **Delete** and **Keep** buttons; both are in the footer and on the help sheet (`?`). Letters and `ctrl+a`/`ctrl+e` stay with the Menu's filter box.
 - A view whose base Project is gone or archived stays listed with "(Project gone)" or "(archived)"; opening it says so and changes nothing.
 - The Pane reads `views.toml` when it starts and each time the Menu opens, so a view saved by another Pane or by `tern-kata views add` appears without a restart. A file that cannot be read is reported and left untouched, and the fixed Collections still work.
 

@@ -76,15 +76,4 @@ test("widget shows nothing at 0", function()
     assert(waitingagents.widget(0, "", GO) == nil)
 end)
 
-test("tooltip names the agents in the order given", function()
-    assert(waitingagents.tooltip({"kata#b", "kata#a"}) == "kata#b\nkata#a")
-    assert(waitingagents.tooltip({}) == "")
-end)
-
-test("tooltip names five agents and counts the rest", function()
-    assert(waitingagents.tooltip({"1", "2", "3", "4", "5"}) == "1\n2\n3\n4\n5")
-    assert(waitingagents.tooltip({"1", "2", "3", "4", "5", "6"}) == "1\n2\n3\n4\n5\nand 1 more")
-    assert(waitingagents.tooltip({"1", "2", "3", "4", "5", "6", "7", "8"}) == "1\n2\n3\n4\n5\nand 3 more")
-end)
-
 if failures > 0 then error(failures .. " test(s) failed") end

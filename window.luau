@@ -14,8 +14,17 @@ local launched: { [number]: boolean } = {}
 local fresh: { [number]: boolean } = {}
 -- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
 local pending: { [number]: string? } = {}
-local pendingSweep: { [number]: boolean } = {}
-local pendingHeld: { [number]: boolean } = {}
+-- The actions owed to a kata Pane still starting, in the order they were asked for: Wrap up and Show held runs can both
+-- arrive before the Pane's surface is live, and neither may overwrite the other.
+local pendingActions: { [number]: { { act: string, value: string } } } = {}
+local function owe(pane: number, act: string, value: string)
+    local list = pendingActions[pane] or {}
+    pendingActions[pane] = list
+    for _, owed in list do
+        if owed.act == act and owed.value == value then return end
+    end
+    table.insert(list, {act = act, value = value})
+end
 -- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
 -- Kept in `tern.kv` too, because a plugin reload (a local update brings the plugin along) empties this table while the
 -- Pane is still open; `pane_closed` removes the id from both.
@@ -236,13 +245,10 @@ local function deliver(cx: WindowCx, pane: number)
         pending[pane] = nil
         paneAction(cx, pane, "select-issue", ref)
     end
-    if pendingSweep[pane] and cx.session:surface(pane) then
-        pendingSweep[pane] = nil
-        paneAction(cx, pane, "wrap-up-sweep", "")
-    end
-    if pendingHeld[pane] and cx.session:surface(pane) then
-        pendingHeld[pane] = nil
-        paneAction(cx, pane, "show-page", "attention")
+    local owed = pendingActions[pane]
+    if owed and cx.session:surface(pane) then
+        pendingActions[pane] = nil
+        for _, item in owed do paneAction(cx, pane, item.act, item.value) end
     end
     if not relayed[pane] then relayAll(cx, true) end
 end
@@ -479,6 +485,7 @@ local waitOrder: { [number]: number } = {}
 local waitStamp = 0
 local waitingCount = 0
 local waitingTooltip = ""
+local OPEN_ID = "open"
 local GO_WAITING_ID = "go-to-waiting-agent"
 local function commandName(id: string): string
     return "plugin.tern-kata." .. id
@@ -500,7 +507,7 @@ local function recountWaiting(cx: WindowCx, skip: number?)
         local info = cx.session:pane(pane)
         table.insert(titles, if info ~= nil and info.title ~= "" then info.title else "Pane " .. pane)
     end
-    local tooltip = waitingagents.tooltip(titles)
+    local tooltip = table.concat(widgets.capped(titles), "\n")
     if #panes == waitingCount and tooltip == waitingTooltip then return end
     waitingCount = #panes
     waitingTooltip = tooltip
@@ -546,15 +553,17 @@ registerWidget("waiting", {
 -- own worker, never the session host's. The timer reads the key and keeps the answer; `render` only reads what was kept.
 local WORKER_POLL_SECONDS = 5
 local SHOW_HELD_ID = "show-held-runs"
+-- The Page that lists the runs held for the user.
+local HELD_PAGE = "attention"
 local workerSummary: workersummary.Summary? = nil
--- What `workerSummary` was read as, to tell whether the next read differs (the host half compares the same way).
+-- What `workerSummary` was read as, to tell whether the next read differs.
 local workerSummaryText = ""
 
 local function pollWorkerSummary()
     tern.timer(WORKER_POLL_SECONDS * 1000, function(cx)
         if cx then
             local ok, saved = pcall(tern.kv.get, workersummary.KEY)
-            local summary = if ok and type(saved) == "table" then saved :: workersummary.Summary else nil
+            local summary = if ok and type(saved) == "table" then workersummary.fresh(saved :: workersummary.Summary, os.time()) else nil
             local text = if summary ~= nil then tern.json.encode(summary) else ""
             if text ~= workerSummaryText then
                 workerSummary = summary
@@ -572,7 +581,7 @@ if registerWidget("worker", {
     icon = "server",
     styles = {"text", "ring"},
     render = function(_pane)
-        return workerwidget.view(workerSummary, commandName(SHOW_HELD_ID), commandName("open"))
+        return workerwidget.view(workerSummary, commandName(SHOW_HELD_ID), commandName(OPEN_ID))
     end,
 }) then
     pollWorkerSummary()
@@ -580,7 +589,7 @@ if registerWidget("worker", {
         id = SHOW_HELD_ID,
         title = "Show kata's held runs",
         run = function(cx)
-            openKata(cx, true, function(pane) paneAction(cx, pane, "show-page", "attention") end, function(pane) pendingHeld[pane] = true end)
+            openKata(cx, true, function(pane) paneAction(cx, pane, "show-page", HELD_PAGE) end, function(pane) owe(pane, "show-page", HELD_PAGE) end)
         end,
     })
 end
@@ -597,7 +606,7 @@ if #widgetsOffered > 0 then
                 table.insert(ids, widget.id)
                 names[widget.id] = widget.name
             end
-            local merged, added = widgets.mergeWidgets(if type(list) == "table" then list else {}, ids)
+            local merged, added = widgets.merge(if type(list) == "table" then list else {}, ids)
             if #added == 0 then
                 cx:toast("info", "The kata widgets are already in the widget bar")
                 return
@@ -652,8 +661,7 @@ tern.on("pane_closed", function(ev, cx)
         changeUpdatePanes(ev.pane, false)
     end
     pending[ev.pane] = nil
-    pendingSweep[ev.pane] = nil
-    pendingHeld[ev.pane] = nil
+    pendingActions[ev.pane] = nil
     waitOrder[ev.pane] = nil
     recountWaiting(cx, ev.pane)
     relayed[ev.pane] = nil
@@ -893,7 +901,7 @@ tern.command({
 })
 
 tern.command({
-    id = "open",
+    id = OPEN_ID,
     title = "Open kata",
     keys = {"f9"},
     run = function(cx) open(cx, nil) end,
@@ -903,7 +911,7 @@ tern.command({
     id = "wrap-up-agents",
     title = "Wrap up every running agent",
     run = function(cx)
-        openKata(cx, true, function(pane) paneAction(cx, pane, "wrap-up-sweep", "") end, function(pane) pendingSweep[pane] = true end)
+        openKata(cx, true, function(pane) paneAction(cx, pane, "wrap-up-sweep", "") end, function(pane) owe(pane, "wrap-up-sweep", "") end)
     end,
 })
 

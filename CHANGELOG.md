@@ -8,7 +8,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Install and update
 
-- `tern-kata update` shows Tern's progress bar on the Tern pane it runs in while it downloads and swaps in the new release (Tern 0.9.18 and later).
+- `tern-kata update` shows Tern's progress bar on the Pane it runs in while it downloads and swaps in the new release (Tern 0.9.18 and later).
 
 #### Issues and Pages
 

@@ -1,8 +1,11 @@
 --!strict
 
 -- What the widgets of the widget bar have in common, as plain data: no Tern call is made here, so the rule is tested by
--- `luau test/widgets_test.luau`. `capped` is the "at most five, then how many more" list of a tooltip; `mergeWidgets` is what the
+-- `luau test/widgets_test.luau`. `capped` is the "at most five, then how many more" list of a tooltip; `merge` is what the
 -- palette command writes back to the bar's `widgets` setting.
+
+-- What a widget's `render` returns, the part of tern.d.luau's WidgetView these widgets use.
+export type WidgetView = { text: string, tone: string?, title: string?, command: string?, value: number? }
 
 local M = {}
 
@@ -19,7 +22,7 @@ end
 -- The bar's `widgets` list with `tern-kata/<id>` appended for each of `ids` it lacks; every other entry stays where it is,
 -- as it is. An entry is a table with an `id` or a plain string, either of which may carry an `@style` suffix. Returns the
 -- new list and the ids that were added; the list given is not changed.
-function M.mergeWidgets(list: { any }, ids: { string }): ({ any }, { string })
+function M.merge(list: { any }, ids: { string }): ({ any }, { string })
     local merged: { any } = {}
     local present: { [string]: boolean } = {}
     for _, entry in list do

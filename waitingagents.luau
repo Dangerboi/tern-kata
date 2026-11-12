@@ -6,7 +6,6 @@
 -- widget, and `widget` for the Waiting kata agents widget a user places in the bar.
 
 export type StatusSegment = { text: string, icon: string?, tone: string?, command: string? }
-export type WidgetView = { text: string, tone: string?, title: string?, command: string? }
 export type Agent = { pane: number, command: string?, state: string }
 
 local widgets = require("./widgets")
@@ -34,14 +33,8 @@ function M.segment(count: number, command: string): { StatusSegment }?
     return {{text = count .. " waiting", tone = "warning", command = command}}
 end
 
--- The tooltip of the widget: the waiting agents, newest first, at most five, then how many more. `titles` is every waiting
--- agent's block title in that order.
-function M.tooltip(titles: { string }): string
-    return table.concat(widgets.capped(titles), "\n")
-end
-
 -- What the widget shows: nothing while no agent waits.
-function M.widget(count: number, tooltip: string, command: string): WidgetView?
+function M.widget(count: number, tooltip: string, command: string): widgets.WidgetView?
     if count <= 0 then return nil end
     return {text = count .. " waiting", tone = "warning", title = tooltip, command = command}
 end

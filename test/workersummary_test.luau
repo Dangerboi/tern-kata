@@ -68,4 +68,32 @@ test("something that names no worker has no summary", function()
     assert(workersummary.of({ Executor = "m" }) == nil)
 end)
 
+test("a held reason reads as the hold's sentence, the code then its detail", function()
+    local got = workersummary.of({ PID = 1, Runs = {
+        { Issue = "k#1", Job = "j", Held = true, Hold = "secret_unavailable", Detail = "no token", EndedAt = ZERO },
+        { Issue = "k#2", Job = "j", Held = true, Hold = "interrupted", Detail = "", EndedAt = ZERO },
+    } })
+    assert(got ~= nil and #got.held == 2)
+    assert(got.held[1].reason == "secret_unavailable: no token", got.held[1].reason)
+    assert(got.held[2].reason == "interrupted", got.held[2].reason)
+end)
+
+test("a summary is fresh until STALE_S seconds after its stamp", function()
+    local summary = workersummary.of(sample)
+    assert(summary ~= nil)
+    summary.at = 1000
+    assert(workersummary.fresh(summary, 1000) == summary)
+    assert(workersummary.fresh(summary, 1000 + workersummary.STALE_S) == summary)
+    assert(workersummary.fresh(summary, 1000 + workersummary.STALE_S + 1) == nil)
+end)
+
+test("a summary without a numeric stamp, or none at all, is not fresh", function()
+    local summary = workersummary.of(sample)
+    assert(summary ~= nil)
+    local loose: any = summary
+    loose.at = nil
+    assert(workersummary.fresh(summary, 1000) == nil)
+    assert(workersummary.fresh(nil, 1000) == nil)
+end)
+
 if failures > 0 then error(failures .. " failed") end

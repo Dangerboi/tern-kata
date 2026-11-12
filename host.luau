@@ -8,10 +8,11 @@
 -- worker started by hand, a daemon restart) it starts one within a poll of that worker's end.
 -- While this load's worker runs, or the Supervision rule holds and the poll finds a worker already running, it also asks
 -- `tern-kata worker status --json` and keeps a short summary of it (workersummary.luau) under tern.kv's
--- `worker.summary` for the window half's worker widget. This load's worker is summarized until it exits, even after
+-- `worker.summary` for the window half's worker widget, stamped with the time of every poll so the widget can drop a summary
+-- that no host half refreshes any more. This load's worker is summarized until it exits, even after
 -- worker.manual appears, since nothing asks `worker supervised` while it runs; the key is removed when no worker runs or,
--- for a worker this load did not start, when the rule does not hold (worker.manual, no worker.toml). A failed read leaves
--- the last summary in place.
+-- for a worker this load did not start, when the rule does not hold (worker.manual, no worker.toml). A failed read stores
+-- the last summary again with a fresh stamp.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
 -- This file does not decide the rule, find the config folder or see which worker runs: it asks `tern-kata worker
 -- supervised`, whose answer is worker.SupervisionOn and worker.RunningWorker in internal/worker/supervision.go (the one
@@ -50,8 +51,8 @@ local look_again = false
 local warned_summary = false
 -- Bumped whenever the summary is cleared, so a status read that was out at that moment drops its answer.
 local summary_epoch = 0
--- The summary last stored, as JSON, so an unchanged one is not written again every poll.
-local summary_text: string? = nil
+-- The summary last stored, so a failed read can store it again with a fresh stamp.
+local last_summary: workersummary.Summary? = nil
 local ASK_LIMIT_MS = 10000
 -- `worker supervised` exits with HELD, printing one line that names the worker, when the rule holds and a worker this
 -- load did not start already runs. The line is logged once per worker: a reload (a file saved in a checkout linked with
@@ -184,14 +185,15 @@ end
 -- file, so tern.kv is asked, not only what this load stored.
 local function clear_summary()
     summary_epoch += 1
-    summary_text = nil
+    last_summary = nil
     warned_summary = false
     local ok, stored = pcall(tern.kv.get, workersummary.KEY)
     if ok and stored ~= nil then pcall(tern.kv.set, workersummary.KEY, nil) end
 end
 
--- Asks the running worker's status and stores its summary; a failed read (a timeout, an older binary without --json, output
--- that names no worker) keeps the last summary and is logged once until a read succeeds. The next look comes after it.
+-- Asks the running worker's status and stores its summary, stamped with the time, on every poll. A failed read (a timeout, an
+-- older binary without --json, output that names no worker) stores the last summary again with a fresh stamp and is logged
+-- once until a read succeeds. The next look comes after it.
 local function summarize(binary: string)
     summarizing = true
     local function done()
@@ -206,6 +208,22 @@ local function summarize(binary: string)
             tern.log.warn("tern-kata: could not read the worker's status for the worker widget (" .. why .. "); keeping the last summary")
         end
     end
+    -- Stores a summary stamped now; the stamp is what tells the window half that a host half is still polling.
+    local function store(summary: workersummary.Summary)
+        local stored, storeErr = pcall(tern.kv.set, workersummary.KEY, summary)
+        if stored then
+            last_summary = summary
+        else
+            failed("could not store it: " .. tostring(storeErr))
+        end
+    end
+    -- A failed read still proves the host half is alive, so the last summary is stored again with a fresh stamp.
+    local function restamp()
+        if last_summary ~= nil then
+            last_summary.at = os.time()
+            store(last_summary)
+        end
+    end
     local epoch = summary_epoch
     local ok, err = pcall(function()
         tern.process.run({binary, "worker", "status", "--json"}, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
@@ -213,29 +231,25 @@ local function summarize(binary: string)
             if epoch ~= summary_epoch then return done() end
             if result.status ~= 0 or result.timed_out then
                 failed(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
+                restamp()
                 return done()
             end
             local decoded, status = pcall(tern.json.decode, result.stdout)
             local summary = decoded and workersummary.of(status) or nil
             if summary == nil then
                 failed("unexpected output")
+                restamp()
                 return done()
             end
             warned_summary = false
-            local text = tern.json.encode(summary)
-            if text ~= summary_text then
-                local stored, storeErr = pcall(tern.kv.set, workersummary.KEY, summary)
-                if stored then
-                    summary_text = text
-                else
-                    failed("could not store it: " .. tostring(storeErr))
-                end
-            end
+            summary.at = os.time()
+            store(summary)
             done()
         end)
     end)
     if not ok then
         failed(tostring(err))
+        restamp()
         done()
     end
 end
