@@ -64,16 +64,11 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 		return model.AttachmentOpened{UID: cmd.UID, AttachmentID: cmd.Attachment.ID, Name: cmd.Attachment.Name, Way: cmd.Way, Err: err}
 	}
 	// A refused way is refused before the download it would waste.
-	if cmd.Way == model.WaySystem && !model.OSOpens(cmd.Attachment.Name) {
-		return failed(errors.New(model.AttachmentRefusal(cmd.Attachment, cmd.Way)))
+	if reason := model.AttachmentRefusal(cmd.Attachment, cmd.Way); reason != "" {
+		return failed(errors.New(reason))
 	}
-	if cmd.Way == model.WayBeside {
-		if !model.TernDraws(cmd.Attachment.Name) {
-			return failed(errors.New(model.AttachmentRefusal(cmd.Attachment, cmd.Way)))
-		}
-		if !inTern() {
-			return failed(errors.New("this Pane does not run in a Tern window"))
-		}
+	if cmd.Way == model.WayBeside && !inTern() {
+		return failed(errors.New("this Pane does not run in a Tern window"))
 	}
 	dir, err := g.cacheDir()
 	if err != nil {

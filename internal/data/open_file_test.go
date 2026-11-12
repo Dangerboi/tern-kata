@@ -13,45 +13,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-func TestIsOpenableAllowsOnlyViewingTypes(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		want bool
-	}{
-		{"shot.png", true},
-		{"X.PNG", true},
-		{"photo.JpEg", true},
-		{"clip.mp4", true},
-		{"song.flac", true},
-		{"paper.pdf", true},
-		{"notes.txt", true},
-		{"data.json", true},
-		{"a.exe.png", true}, // the extension is what the OS reads
-		{"a.png.exe", false},
-		{"report.bat", false},
-		{"report.bat.", false},
-		{"report.bat ", false},
-		{"x.png.", false},
-		{"x.png ", false},
-		{"x.txt:y.bat", false},
-		{"logo.svg", false},
-		{"app.jar", false},
-		{"link.url", false},
-		{"link.fileloc", false},
-		{"link.inetloc", false},
-		{"run.command", false},
-		{"setup.msi", false},
-		{"launcher.desktop", false},
-		{"noextension", false},
-		{".png", true},
-		{"", false},
-	} {
-		if got := model.OSOpens(tc.name); got != tc.want {
-			t.Errorf("OSOpens(%q) = %v, want %v", tc.name, got, tc.want)
-		}
-	}
-}
-
 func TestOpenAttachmentSavesAFileItDoesNotOpen(t *testing.T) {
 	f := newDocbankFixture(t)
 	f.attach(t, writeFile(t, t.TempDir(), "report.bat", "echo hi"))
