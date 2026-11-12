@@ -180,6 +180,22 @@ ctl --file "$tmp/waiting.ctl"
 expect_toast "No agent is waiting for you"
 ctl state >"$tmp/waiting-after.json"
 jq -e --slurpfile before "$tmp/waiting-before.json" '.tabs[0].panes == $before[0].tabs[0].panes and .focused.id == $before[0].focused.id' "$tmp/waiting-after.json" >/dev/null
+# The palette command that places the plugin's widgets keeps the bar's other widgets first and in place, and a second run adds nothing.
+ctl widgets set clock
+printf 'palette "Add kata widgets to the widget bar"\nkey Enter\n' >"$tmp/widgets.ctl"
+ctl --file "$tmp/widgets.ctl"
+expect_toast "Added Waiting kata agents and kata worker to the widget bar"
+ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/waiting", "tern-kata/worker"]' >/dev/null
+ctl --file "$tmp/widgets.ctl"
+expect_toast "already in the widget bar"
+ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/waiting", "tern-kata/worker"]' >/dev/null
+# Placed on their own, the widgets draw nothing while no agent waits and no worker runs, and Tern reports no failure for the
+# plugin: their registration (the icons included) and the commands raised nothing.
+ctl widgets set tern-kata/waiting tern-kata/worker
+ctl state | jq -e '.widgets.ids == ["tern-kata/waiting", "tern-kata/worker"]' >/dev/null
+[[ $(tern plugin list --json | jq '[.problems[] | select(tostring | contains("tern-kata"))] | length') == 0 ]]
+! grep -E 'could not register widget|hook="command add-widgets"' "$tmp/tern.log"
+ctl widgets set
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
 show_issue_link() {
   command="printf '\\033[2J\\033[H\\033]8;;$1\\007Plugin link\\033]8;;\\007\\n'"

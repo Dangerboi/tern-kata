@@ -14,6 +14,7 @@ import (
 	"golang.org/x/mod/semver"
 
 	"github.com/Dangerboi/tern-kata/internal/filelock"
+	"github.com/Dangerboi/tern-kata/internal/progress"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
@@ -37,6 +38,8 @@ type updateEnv struct {
 	Stdin   io.Reader
 	// PreflightTimeout is how long the new binary may take to check this machine; zero is preflightTimeout.
 	PreflightTimeout time.Duration
+	// Progress reports the download and swap to Tern's progress bar; nil (and any Reporter off a terminal) writes nothing.
+	Progress *progress.Reporter
 }
 
 func newUpdateEnv() (updateEnv, error) {
@@ -47,7 +50,7 @@ func newUpdateEnv() (updateEnv, error) {
 	return updateEnv{
 		Dirs: dirs, Release: version, Build: buildVersion(), Executable: os.Executable,
 		BaseURL: os.Getenv("TERN_KATA_BASE_URL"), Client: &http.Client{Timeout: 10 * time.Minute},
-		Stdin: os.Stdin,
+		Stdin: os.Stdin, Progress: progress.New(os.Stdout),
 	}, nil
 }
 
@@ -98,6 +101,9 @@ func updateRelease(ctx context.Context, env updateEnv, force bool, out io.Writer
 		return nil
 	}
 
+	// The bar shows from the start of the download to the end of the swap, and goes on any failure too.
+	env.Progress.Working(progress.Unknown)
+	defer env.Progress.Clear()
 	release, cleanup, err := downloadBesideBinary(ctx, env, target, latest) // beside the binary: the swap's renames stay on one volume
 	if err != nil {
 		return fmt.Errorf("%w; nothing was installed", err)
@@ -113,6 +119,7 @@ func updateRelease(ctx context.Context, env updateEnv, force bool, out io.Writer
 	if err := swapBinary(target, release.Binary); err != nil {
 		return fmt.Errorf("cannot replace %s: %w; nothing was installed", target, err)
 	}
+	env.Progress.Clear()
 
 	fmt.Fprintf(out, "Updated tern-kata from %s to %s\n", current, latest)
 	updatePlugin(ctx, latest, func() (unpackedRelease, func(), error) { return release, func() {}, nil }, out)

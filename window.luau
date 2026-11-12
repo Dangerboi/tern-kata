@@ -5,6 +5,7 @@ local releases = require("./releases")
 local panecommands = require("./panecommands")
 local waitingtext = require("./waitingtext")
 local waitingagents = require("./waitingagents")
+local workerwidget = require("./workerwidget")
 
 -- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
 local launched: { [number]: boolean } = {}
@@ -12,6 +13,7 @@ local fresh: { [number]: boolean } = {}
 -- Issue reference per new kata Pane, sent over TSP once its surface is live, so it never passes through a shell.
 local pending: { [number]: string? } = {}
 local pendingSweep: { [number]: boolean } = {}
+local pendingHeld: { [number]: boolean } = {}
 -- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
 -- Kept in `tern.kv` too, because a plugin reload (a local update brings the plugin along) empties this table while the
 -- Pane is still open; `pane_closed` removes the id from both.
@@ -235,6 +237,10 @@ local function deliver(cx: WindowCx, pane: number)
     if pendingSweep[pane] and cx.session:surface(pane) then
         pendingSweep[pane] = nil
         paneAction(cx, pane, "wrap-up-sweep", "")
+    end
+    if pendingHeld[pane] and cx.session:surface(pane) then
+        pendingHeld[pane] = nil
+        paneAction(cx, pane, "show-page", "attention")
     end
     if not relayed[pane] then relayAll(cx, true) end
 end
@@ -464,11 +470,15 @@ end)
 
 -- The kata agents that wait for you. `waitOrder` numbers each agent's move into waiting (a later move, a larger number); it
 -- is empty after a plugin reload, which leaves the agents already waiting last, in Tern's order. `waitingCount` is what the
--- status segment draws: the formatter only reads it, and it is refreshed when the count changes.
+-- "N waiting" segment draws in the widget bar's Plugin segments widget, and with `waitingTooltip` (the waiting agents' block
+-- titles) what the Waiting kata agents widget draws: the formatters only read them, and they are refreshed when either
+-- changes. Place the widget with the Add kata widgets to the widget bar command, or from the palette's Edit widgets....
 local waitOrder: { [number]: number } = {}
 local waitStamp = 0
 local waitingCount = 0
+local waitingTooltip = ""
 local GO_WAITING_ID = "go-to-waiting-agent"
+local GO_WAITING_COMMAND = "plugin.tern-kata." .. GO_WAITING_ID
 
 local function waitingPanes(cx: WindowCx, skip: number?): { number }
     local agents: { waitingagents.Agent } = {}
@@ -479,15 +489,119 @@ local function waitingPanes(cx: WindowCx, skip: number?): { number }
 end
 
 local function recountWaiting(cx: WindowCx, skip: number?)
-    local count = #waitingPanes(cx, skip)
-    if count == waitingCount then return end
-    waitingCount = count
+    local panes = waitingPanes(cx, skip)
+    local titles: { string } = {}
+    for _, pane in panes do
+        local info = cx.session:pane(pane)
+        table.insert(titles, if info ~= nil and info.title ~= "" then info.title else "Pane " .. pane)
+    end
+    local tooltip = waitingagents.tooltip(titles)
+    if #panes == waitingCount and tooltip == waitingTooltip then return end
+    waitingCount = #panes
+    waitingTooltip = tooltip
     tern.chrome.refresh()
 end
 
 tern.chrome.status(function(_pane)
-    return waitingagents.segment(waitingCount, "plugin.tern-kata." .. GO_WAITING_ID)
+    return waitingagents.segment(waitingCount, GO_WAITING_COMMAND)
 end)
+
+-- Tern before 0.9.17 has no widget bar, so no `tern.chrome.widget`: the widgets are skipped there with one log line and the rest
+-- of the window half loads as before. `widgetsOffered` lists what registered, which the command that places them reads.
+local widgetsOffered: { { id: string, name: string } } = {}
+local widgetsSkipLogged = false
+local function registerWidget(id: string, spec: WidgetSpec): boolean
+    if tern.chrome.widget == nil then
+        if not widgetsSkipLogged then
+            widgetsSkipLogged = true
+            tern.log.info("tern-kata: this Tern has no widget bar (before 0.9.17), so the tern-kata widgets are not offered")
+        end
+        return false
+    end
+    local ok, err = pcall(tern.chrome.widget, id, spec)
+    if not ok then
+        tern.log.warn("tern-kata: could not register widget " .. id .. ": " .. tostring(err))
+        return false
+    end
+    table.insert(widgetsOffered, {id = id, name = spec.name})
+    return true
+end
+
+registerWidget("waiting", {
+    name = "Waiting kata agents",
+    description = "How many agents kata started wait for you; a click goes to the one that began waiting last",
+    icon = "bell",
+    styles = {"text"},
+    render = function(_pane)
+        return waitingagents.widget(waitingCount, waitingTooltip, GO_WAITING_COMMAND)
+    end,
+})
+
+-- The worker on this machine, as the host half's poll stores it. `tern.kv` here is this machine's, so a remote window shows its
+-- own worker, never the session host's. The timer reads the key and keeps the answer; `render` only reads what was kept.
+local WORKER_SUMMARY_KEY = "worker.summary"
+local WORKER_POLL_SECONDS = 5
+local SHOW_HELD_ID = "show-held-runs"
+local OPEN_COMMAND = "plugin.tern-kata.open"
+local workerSummary: workerwidget.Summary? = nil
+
+local function pollWorkerSummary()
+    tern.timer(WORKER_POLL_SECONDS * 1000, function(cx)
+        if cx then
+            local ok, saved = pcall(tern.kv.get, WORKER_SUMMARY_KEY)
+            local summary = if ok and type(saved) == "table" then saved :: workerwidget.Summary else nil
+            if not workerwidget.same(summary, workerSummary) then
+                workerSummary = summary
+                tern.chrome.refresh()
+            end
+        end
+        pollWorkerSummary()
+    end)
+end
+
+if registerWidget("worker", {
+    name = "kata worker",
+    description = "What the kata worker on this machine is running, and the runs held for you; a click opens them",
+    icon = "server",
+    styles = {"text", "ring"},
+    render = function(_pane)
+        return workerwidget.view(workerSummary, "plugin.tern-kata." .. SHOW_HELD_ID, OPEN_COMMAND)
+    end,
+}) then
+    pollWorkerSummary()
+    tern.command({
+        id = SHOW_HELD_ID,
+        title = "Show kata's held runs",
+        run = function(cx)
+            openKata(cx, true, function(pane) paneAction(cx, pane, "show-page", "attention") end, function(pane) pendingHeld[pane] = true end)
+        end,
+    })
+end
+
+if #widgetsOffered > 0 then
+    tern.command({
+        id = "add-widgets",
+        title = "Add kata widgets to the widget bar",
+        run = function(cx)
+            local list = cx.settings:get("widgets")
+            local ids: { string } = {}
+            local names: { [string]: string } = {}
+            for _, widget in widgetsOffered do
+                table.insert(ids, widget.id)
+                names[widget.id] = widget.name
+            end
+            local merged, added = waitingagents.mergeWidgets(if type(list) == "table" then list else {}, ids, "tern-kata")
+            if #added == 0 then
+                cx:toast("info", "The kata widgets are already in the widget bar")
+                return
+            end
+            cx.settings:set("widgets", merged)
+            local addedNames: { string } = {}
+            for _, id in added do table.insert(addedNames, names[id]) end
+            cx:toast("info", "Added " .. table.concat(addedNames, " and ") .. " to the widget bar")
+        end,
+    })
+end
 
 -- Tern's `cx.layout:focus` does not say that it raises the `focus` event, so the agent is opened here by the handler's own path
 -- (a no-op for an agent outside the hidden session) before it is focused. A parked agent is dealt into the current tab first;
@@ -532,6 +646,7 @@ tern.on("pane_closed", function(ev, cx)
     end
     pending[ev.pane] = nil
     pendingSweep[ev.pane] = nil
+    pendingHeld[ev.pane] = nil
     waitOrder[ev.pane] = nil
     recountWaiting(cx, ev.pane)
     relayed[ev.pane] = nil

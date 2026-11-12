@@ -6,12 +6,16 @@
 -- while the worker runs on) or one started by hand. On Tern 0.9.16+ the end of a worker its earlier load started comes as a
 -- `process_exit` event: the host half then starts one at once and logs how that worker ended. Elsewhere (older Tern, a
 -- worker started by hand, a daemon restart) it starts one within a poll of that worker's end.
+-- While a worker runs, whoever started it, the poll also asks `tern-kata worker status --json` and keeps a short summary
+-- of it (workersummary.luau) under tern.kv's `worker.summary` for the window half's worker widget; the key is removed when
+-- no worker runs, and a failed read leaves the last summary in place.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
 -- This file does not decide the rule, find the config folder or see which worker runs: it asks `tern-kata worker
 -- supervised`, whose answer is worker.SupervisionOn and worker.RunningWorker in internal/worker/supervision.go (the one
 -- place each is held; the Go tests pin them).
 
 local panecommands = require("./panecommands")
+local workersummary = require("./workersummary")
 
 local os_name = tern.runtime.os
 local windows = os_name == "windows"
@@ -36,6 +40,14 @@ local asking = false
 local recheck = false
 local warned_missing = false
 local warned_status = false
+-- A `worker status --json` question is out; like the supervised question it is the only one out, and its answer arms the next look.
+local summarizing = false
+-- A look was asked for while the status question was out: the answer arms it at once instead of after POLL_MS.
+local look_again = false
+local warned_summary = false
+local KV_SUMMARY = "worker.summary"
+-- The summary last stored, as JSON, so an unchanged one is not written again every poll.
+local summary_text: string? = nil
 local ASK_LIMIT_MS = 10000
 -- `worker supervised` exits with HELD, printing one line that names the worker, when the rule holds and a worker this
 -- load did not start already runs. The line is logged once per worker: a reload (a file saved in a checkout linked with
@@ -164,6 +176,62 @@ local function last_line(text: string): string
     return line
 end
 
+-- No worker runs (or the rule no longer holds): the widget has nothing to show. The key may come from an earlier load of this
+-- file, so tern.kv is asked, not only what this load stored.
+local function clear_summary()
+    summary_text = nil
+    warned_summary = false
+    local ok, stored = pcall(tern.kv.get, KV_SUMMARY)
+    if ok and stored ~= nil then pcall(tern.kv.set, KV_SUMMARY, nil) end
+end
+
+-- Asks the running worker's status and stores its summary; a failed read (a timeout, an older binary without --json, output
+-- that names no worker) keeps the last summary and is logged once until a read succeeds. The next look comes after it.
+local function summarize(binary: string)
+    summarizing = true
+    local function done()
+        summarizing = false
+        local soon = look_again
+        look_again = false
+        arm(if soon then 1 else POLL_MS)
+    end
+    local function failed(why: string)
+        if not warned_summary then
+            warned_summary = true
+            tern.log.warn("tern-kata: could not read the worker's status for the worker widget (" .. why .. "); keeping the last summary")
+        end
+    end
+    local ok, err = pcall(function()
+        tern.process.run({binary, "worker", "status", "--json"}, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
+            if result.status ~= 0 or result.timed_out then
+                failed(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
+                return done()
+            end
+            local decoded, status = pcall(tern.json.decode, result.stdout)
+            local summary = decoded and workersummary.of(status) or nil
+            if summary == nil then
+                failed("unexpected output")
+                return done()
+            end
+            warned_summary = false
+            local text = tern.json.encode(summary)
+            if text ~= summary_text then
+                local stored, storeErr = pcall(tern.kv.set, KV_SUMMARY, summary)
+                if stored then
+                    summary_text = text
+                else
+                    failed("could not store it: " .. tostring(storeErr))
+                end
+            end
+            done()
+        end)
+    end)
+    if not ok then
+        failed(tostring(err))
+        done()
+    end
+end
+
 -- Starts the worker if the backoff allows. config is worker.toml's text, which `worker supervised` printed.
 local function launch(binary: string, config: string)
     local wait = next_start - tern.now()
@@ -172,6 +240,7 @@ local function launch(binary: string, config: string)
     local started = tern.now()
     local function exited(result: ProcessResult)
         running = false
+        clear_summary()
         local ran = tern.now() - started
         if ran >= HEALTHY_MS or result.timed_out then restart_delay = MIN_DELAY end
         local waited = schedule_restart()
@@ -223,13 +292,14 @@ local function answered(binary: string, result: ProcessResult)
             end
         end
         reset_backoff()
-        return arm(POLL_MS)
+        return summarize(binary)
     end
     if result.status ~= 0 then
         if result.status == 1 and not result.timed_out then
             reset_backoff()
             started_text = nil
             forget_held()
+            clear_summary()
         elseif not result.timed_out and result.status ~= -1 and not warned_status then
             warned_status = true
             tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
@@ -237,6 +307,7 @@ local function answered(binary: string, result: ProcessResult)
         return arm(POLL_MS)
     end
     forget_held()
+    clear_summary()
     local config = result.stdout
     if started_text ~= nil and config ~= started_text then
         reset_backoff()
@@ -246,10 +317,18 @@ local function answered(binary: string, result: ProcessResult)
 end
 
 function start()
-    if running then return arm(POLL_MS) end
+    if summarizing then
+        look_again = true
+        return
+    end
     if asking then return end
     local binary = find_binary()
+    if running then
+        if binary == nil then return arm(POLL_MS) end
+        return summarize(binary)
+    end
     if binary == nil then
+        clear_summary()
         if not warned_missing then
             warned_missing = true
             tern.log.warn("tern-kata: not installed on the daemon's PATH or in a known folder, so a configured worker cannot be started; looking again every " .. POLL_MS // 1000 .. " s")

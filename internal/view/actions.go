@@ -14,7 +14,7 @@ import (
 // act and value. Every action here decodes to the message its matching key produces, and a chord
 // click is that key: it goes through the key path.
 //
-// The Luau window hook keeps its own copy of the Issue list id and the select-issue, wrap-up-sweep and agent-states actions;
+// The Luau window hook keeps its own copy of the Issue list id and the select-issue, wrap-up-sweep, show-page and agent-states actions;
 // agent-states carries the JSON agent list as its value and is not a click.
 const (
 	keyAct             = "key"
@@ -141,7 +141,7 @@ func DecodeAction(id, act, value string) model.Msg {
 		return model.ButtonPressMsg{Chord: value}
 	case string(model.AgentStatesAction):
 		return decodeAgentStates(value)
-	case string(model.SelectIssueAction), string(model.WrapUpSweepAction), string(model.ToggleExpansion), string(model.OpenRow), MenuClick:
+	case string(model.SelectIssueAction), string(model.WrapUpSweepAction), string(model.ShowPageAction), string(model.ToggleExpansion), string(model.OpenRow), MenuClick:
 		return model.ActionMsg{Action: model.Action(act), Value: value}
 	case FocusDetailClick:
 		return model.FocusColumnMsg{Column: model.ColumnDetail}

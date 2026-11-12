@@ -127,6 +127,22 @@ run_job() {
   return 1
 }
 run_job 1
+# The host half keeps a summary of the running worker in the plugin's tern.kv (the kv.json in the plugin's data folder), which
+# the window half's worker widget reads, and removes it when no worker runs. The poll that stores it comes within 10 s.
+kv_file="$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json"
+kv_summary() { jq -c '.["worker.summary"] // empty' "$kv_file" 2>/dev/null || true; }
+wait_summary() { # $1 present|gone, $2 seconds
+  local k
+  for ((k = 0; k < $2; k++)); do
+    tern plugin list >/dev/null 2>&1 # idle with no worker, the session daemon exits after about 12 s
+    if [[ $1 == present ]]; then [[ -z "$(kv_summary)" ]] || return 0; else [[ -n "$(kv_summary)" ]] || return 0; fi
+    sleep 1
+  done
+  echo "worker.summary did not become $1 within $2 s: $(kv_summary)" >&2
+  return 1
+}
+wait_summary present 25
+kv_summary | jq -e --argjson pid "$(worker_pid)" '.executor == "smoke-machine" and .pid == $pid and .capacity >= 1 and (.running | type) == "number" and (.held | length) == 0' >/dev/null || { echo "worker.summary is not the running worker's summary: $(kv_summary)" >&2; exit 1; }
 
 # A crashing worker is restarted, and each quick crash waits longer than the last.
 kill -9 "$first"
@@ -205,6 +221,7 @@ no_worker_within() {
 : >"$config/worker.manual"
 stop_expecting none
 no_worker_within 13 "worker.manual is present"
+wait_summary gone 15
 # Removing worker.manual: the host half starts a worker within a poll, and stop promises a fresh one, which comes.
 rm "$config/worker.manual"
 wait_started "" 13 || { echo "removing worker.manual did not start a worker within one poll" >&2; exit 1; }

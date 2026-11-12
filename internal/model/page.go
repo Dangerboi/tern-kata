@@ -321,6 +321,17 @@ func showPage(target Page) func(Model) (Model, []Cmd) {
 	}
 }
 
+// showPageByID shows the Page whose id (the Page bar node's, "attention") is given, as the Page's key would, so entering it runs
+// its enter. It is the show-page Pane action the Luau window hook sends; an id no Page has changes nothing.
+func showPageByID(m Model, id string) (Model, []Cmd) {
+	for _, def := range pageDefs {
+		if def.id == id {
+			return showPage(def.page)(m)
+		}
+	}
+	return m, nil
+}
+
 // switchPage is the one way onto a Page, the Issues Page included. It leaves the current Page, and for a Page that acts on the
 // Pane's Project it then resolves the Project (see enterProjectPage), makes the Page current with the detail column's hidden
 // flag remembered, the column hidden and focus on the list, and runs the Page's own enter. With no Project it stops on the Issues

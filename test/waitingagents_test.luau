@@ -1,6 +1,6 @@
 --!strict
 
--- Tests of which kata agent waits for the user and what the status line says, on plain data, outside Tern:
+-- Tests of which kata agent waits for the user and what the widget bar says, on plain data, outside Tern:
 -- `luau test/waitingagents_test.luau`.
 
 local waitingagents = require("../waitingagents")
@@ -62,6 +62,52 @@ end)
 
 test("segment is hidden at 0", function()
     assert(waitingagents.segment(0, "x") == nil)
+end)
+
+local GO = "plugin.tern-kata.go-to-waiting-agent"
+
+test("widget says how many wait, with the tooltip and the click", function()
+    local view = waitingagents.widget(2, "A\nB", GO)
+    assert(view ~= nil)
+    assert(view.text == "2 waiting" and view.tone == "warning" and view.title == "A\nB" and view.command == GO)
+end)
+
+test("widget shows nothing at 0", function()
+    assert(waitingagents.widget(0, "", GO) == nil)
+end)
+
+test("tooltip names the agents in the order given", function()
+    assert(waitingagents.tooltip({"kata#b", "kata#a"}) == "kata#b\nkata#a")
+    assert(waitingagents.tooltip({}) == "")
+end)
+
+test("tooltip names five agents and counts the rest", function()
+    assert(waitingagents.tooltip({"1", "2", "3", "4", "5"}) == "1\n2\n3\n4\n5")
+    assert(waitingagents.tooltip({"1", "2", "3", "4", "5", "6"}) == "1\n2\n3\n4\n5\nand 1 more")
+    assert(waitingagents.tooltip({"1", "2", "3", "4", "5", "6", "7", "8"}) == "1\n2\n3\n4\n5\nand 3 more")
+end)
+
+test("merge appends the widget after the others, which keep their place and style", function()
+    local list = {{id = "clock", style = "analog"}, "cpu@ring"}
+    local merged, added = waitingagents.mergeWidgets(list, {"waiting"}, "tern-kata")
+    assert(#merged == 3 and #added == 1 and added[1] == "waiting")
+    assert(merged[1].id == "clock" and merged[1].style == "analog" and merged[2] == "cpu@ring" and merged[3].id == "tern-kata/waiting")
+    assert(#list == 2)
+end)
+
+test("merge adds nothing twice", function()
+    local first = waitingagents.mergeWidgets({{id = "clock"}}, {"waiting"}, "tern-kata")
+    local merged, added = waitingagents.mergeWidgets(first, {"waiting"}, "tern-kata")
+    assert(#merged == 2 and #added == 0)
+    local _, addedPlain = waitingagents.mergeWidgets({"tern-kata/waiting@text"}, {"waiting"}, "tern-kata")
+    assert(#addedPlain == 0)
+    local _, addedTable = waitingagents.mergeWidgets({{id = "tern-kata/waiting", style = "text"}}, {"waiting"}, "tern-kata")
+    assert(#addedTable == 0)
+end)
+
+test("merge fills an empty bar with every widget once", function()
+    local merged, added = waitingagents.mergeWidgets({}, {"waiting", "worker", "waiting"}, "tern-kata")
+    assert(#merged == 2 and #added == 2 and merged[2].id == "tern-kata/worker")
 end)
 
 if failures > 0 then error(failures .. " test(s) failed") end

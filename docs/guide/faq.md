@@ -44,7 +44,7 @@ Only if you trust everyone who can write jobs in it. They can run prompts on you
 
 ### No worker runs. Why?
 
-The host half starts the worker when `worker.toml` exists, inside Tern's session daemon. With Tern not running, no worker runs. A `worker.manual` file beside `worker.toml` turns supervision off; `s` on the Worker card (`W` on the Jobs Page) shows and changes that. `tern-kata worker doctor` checks the setup, and the Jobs Page says whether this machine's worker serves the Project. See [Supervision](worker.md#supervision).
+The host half starts the worker when `worker.toml` exists, inside Tern's session daemon. With Tern not running, no worker starts; a worker that was already running keeps running after `tern daemon stop`, until `tern-kata worker stop` stops it. A `worker.manual` file beside `worker.toml` turns supervision off; `s` on the Worker card (`W` on the Jobs Page) shows and changes that. `tern-kata worker doctor` checks the setup, and the Jobs Page says whether this machine's worker serves the Project. See [Supervision](worker.md#supervision).
 
 ### A run is stuck as `unknown` or `held`. What do I do?
 

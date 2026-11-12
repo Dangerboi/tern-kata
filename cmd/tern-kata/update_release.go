@@ -17,6 +17,8 @@ import (
 	"strings"
 
 	"golang.org/x/mod/semver"
+
+	"github.com/Dangerboi/tern-kata/internal/progress"
 )
 
 // maxDownload bounds one downloaded file, so a wrong server cannot fill the disk.
@@ -58,7 +60,7 @@ func (e updateEnv) fileURL(version, name string) string {
 
 func fetchLatestVersion(ctx context.Context, env updateEnv) (string, error) {
 	var text strings.Builder
-	if err := download(ctx, env.Client, env.versionURL(), &text, 1<<10); err != nil {
+	if err := download(ctx, env.Client, env.versionURL(), &text, 1<<10, nil); err != nil {
 		return "", fmt.Errorf("cannot read the latest version: %w", err)
 	}
 	latest := "v" + strings.TrimPrefix(strings.TrimSpace(text.String()), "v")
@@ -74,8 +76,9 @@ func downloadRelease(ctx context.Context, env updateEnv, version, work string) (
 	if err := downloadFile(ctx, env, env.fileURL(version, name), archive); err != nil {
 		return unpackedRelease{}, err
 	}
+	env.Progress.Working(progress.Unknown) // the checksum, unpacking and the swap have no size
 	var sums strings.Builder
-	if err := download(ctx, env.Client, env.fileURL(version, "checksums.txt"), &sums, 1<<20); err != nil {
+	if err := download(ctx, env.Client, env.fileURL(version, "checksums.txt"), &sums, 1<<20, nil); err != nil {
 		return unpackedRelease{}, err
 	}
 	if err := verifyChecksum(archive, name, sums.String()); err != nil {
@@ -92,7 +95,9 @@ func downloadRelease(ctx context.Context, env updateEnv, version, work string) (
 	return unpackedRelease{Dir: dir, Binary: binary}, nil
 }
 
-func download(ctx context.Context, client *http.Client, url string, w io.Writer, limit int64) error {
+// download copies url to w, at most limit bytes. onBytes, when not nil, is told the bytes copied so far and the size the server
+// announced (0 when it did not).
+func download(ctx context.Context, client *http.Client, url string, w io.Writer, limit int64, onBytes func(done, total int64)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -104,6 +109,9 @@ func download(ctx context.Context, client *http.Client, url string, w io.Writer,
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s answered %s", url, resp.Status)
+	}
+	if onBytes != nil {
+		w = &countingWriter{w: w, total: max(resp.ContentLength, 0), onBytes: onBytes}
 	}
 	n, err := io.Copy(w, io.LimitReader(resp.Body, limit+1))
 	if err != nil {
@@ -121,7 +129,25 @@ func downloadFile(ctx context.Context, env updateEnv, url, path string) (err err
 		return err
 	}
 	defer func() { err = errors.Join(err, file.Close()) }()
-	return download(ctx, env.Client, url, file, maxDownload)
+	return download(ctx, env.Client, url, file, maxDownload, func(done, total int64) {
+		if total > 0 {
+			env.Progress.Working(int(min(done, total) * 100 / total))
+		}
+	})
+}
+
+// countingWriter tells onBytes how much has been written after every write.
+type countingWriter struct {
+	w           io.Writer
+	done, total int64
+	onBytes     func(done, total int64)
+}
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.done += int64(n)
+	c.onBytes(c.done, c.total)
+	return n, err
 }
 
 func verifyChecksum(file, name, sums string) error {

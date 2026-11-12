@@ -4,6 +4,25 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Install and update
+
+- `tern-kata update` shows Tern's progress bar on the Tern pane it runs in while it downloads and swaps in the new release (Tern 0.9.18 and later).
+
+#### Jobs and worker
+
+- A kata worker widget for Tern's widget bar shows how many runs the worker on this machine is running and, in the warning tone, how many are held for you (Tern 0.9.17 and later).
+  - Its tooltip names the worker and lists the held runs with their reasons; a click while a run is held shows the Attention Page.
+  - A remote window shows the worker of the machine it runs on, not the session host's.
+
+#### Tern window
+
+- A Waiting kata agents widget for Tern's widget bar shows "N waiting" while kata agents wait for you, names them in its tooltip, and goes to the latest on a click (Tern 0.9.17 and later).
+  - The "N waiting" segment stays in the widget bar's Plugin segments widget, where Tern 0.9.17 moved the status line.
+- The palette command Add kata widgets to the widget bar places the kata widgets the bar lacks after the widgets already there.
+- The palette command Show kata's held runs opens the kata Pane on the Attention Page.
+
 ## [0.12.0] - 2026-11-12
 
 ### Added
