@@ -97,4 +97,4 @@ test("a summary without a numeric stamp, or none at all, is not fresh", function
     assert(workersummary.fresh(nil, 1000) == nil)
 end)
 
-if failures > 0 then error(failures .. " failed") end
+if failures > 0 then error(failures .. " test(s) failed") end

@@ -17,7 +17,7 @@ local function test(name: string, body: () -> ())
     end
 end
 
-local HELD = "plugin.tern-kata.show-held"
+local HELD = "plugin.tern-kata.show-held-runs"
 local OPEN = "plugin.tern-kata.open"
 
 local function summary(running: number, held: { workersummary.Held }?, capacity: number?, inUse: number?): workersummary.Summary
@@ -75,5 +75,4 @@ test("five held runs get no more line", function()
     assert(#lines == 7 and lines[7] == "0 running")
 end)
 
-if failures > 0 then error(failures .. " failed") end
-print("all passed")
+if failures > 0 then error(failures .. " test(s) failed") end

@@ -326,15 +326,18 @@ func showPage(target Page) func(Model) (Model, []Cmd) {
 // its enter. It is the show-page Pane action the Luau window hook sends; an id no Page has changes nothing. Like the Page keys it
 // only acts in pageModes, so a window click cannot switch Pages under an open card or a typed field and discard what was typed;
 // a refused click raises a toast saying what to do, as the window shows nothing else for it. On the error screen there is
-// nothing to close and the error already says what is wrong, so the click does nothing there. The error screen is decided as
-// Render decides it (an error with no card, question or help sheet over it): a search left open under it is not drawn.
+// nothing to close and the error already says what is wrong, so the click does nothing there, unless a card or question is
+// drawn over the error. Nor does it toast for the Page already shown, which a card leaves visible beneath it.
 func showPageByID(m Model, id string) (Model, []Cmd) {
 	for _, def := range pageDefs {
 		if def.id != id {
 			continue
 		}
+		if m.Page == def.page {
+			return m, nil
+		}
 		if !slices.Contains(pageModes, m.CurrentMode()) {
-			if m.Err != nil && !m.covered() {
+			if m.OnErrorScreen() && !m.covered() {
 				return m, nil
 			}
 			m, wait := m.raiseToast(Toast{Text: "Close what is open to show the " + def.label + " Page."})

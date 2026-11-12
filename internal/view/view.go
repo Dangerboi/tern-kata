@@ -37,7 +37,7 @@ func Render(m model.Model, now time.Time) tern.View {
 	switch {
 	case m.HelpOpen && (m.Err != nil || m.FirstLoad()):
 		main = help(m)
-	case m.Err != nil:
+	case m.OnErrorScreen():
 		main = failureView(m)
 	case m.FirstLoad():
 		main = ui.Nodes(plainText("loading", ui.TonePending, "Loading "+m.Collection.Title+" Issues…"))

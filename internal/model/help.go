@@ -28,6 +28,10 @@ func (m Model) coverMode() Mode {
 // which would act on the Issue beneath it, does nothing then.
 func (m Model) covered() bool { return m.coverMode() != "" }
 
+// OnErrorScreen reports whether the Pane draws its daemon error in place of the Page: an error with no help sheet over it.
+// Cards and questions are still drawn over it; a search left open is not, as it lives in the list the error replaces.
+func (m Model) OnErrorScreen() bool { return m.Err != nil && !m.HelpOpen }
+
 func (m Model) CurrentMode() Mode {
 	if mode := m.coverMode(); mode != "" {
 		return mode

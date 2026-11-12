@@ -66,3 +66,16 @@ func TestShowPageDoesNothingOnTheErrorScreen(t *testing.T) {
 		}
 	}
 }
+
+// The Page already shown needs nothing closed: the click raises no toast asking to close the help sheet over it.
+func TestShowPageRaisesNoToastForThePageAlreadyShown(t *testing.T) {
+	on := step(t, projectPane(t, 160, boardCard("p")), view.DecodeAction("", string(model.ShowPageAction), "attention")).State
+	helped := step(t, on, key("?")).State
+	if helped.Model.Page != model.PageAttention || !helped.Model.HelpOpen {
+		t.Fatalf("fixture: Page %v, help open %v", helped.Model.Page, helped.Model.HelpOpen)
+	}
+	out := step(t, helped, view.DecodeAction("", string(model.ShowPageAction), "attention"))
+	if out.State.Model.Toast != nil || len(out.Cmds) != 0 || !out.State.Model.HelpOpen {
+		t.Errorf("show-page for the Page shown: toast %+v, cmds %v, help open %v; want nothing", out.State.Model.Toast, out.Cmds, out.State.Model.HelpOpen)
+	}
+}

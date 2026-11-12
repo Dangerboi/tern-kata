@@ -23,7 +23,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Tern window
 
 - A Waiting kata agents widget for Tern's widget bar shows "N waiting" while kata agents wait for you, names them in its tooltip, and goes to the latest on a click (Tern 0.9.17 and later).
-  - The "N waiting" segment stays, in the widget bar's Plugin segments widget on Tern 0.9.17 and later.
+  - The "N waiting" segment is still shown in the widget bar's Plugin segments widget.
 - The palette command Add kata widgets to the widget bar places the kata widgets the bar lacks after the widgets already there.
 - The palette command Show kata's held runs opens the kata Pane on the Attention Page.
   - While a card, a question, the help sheet or a search is open in the Pane, the command shows a toast asking you to close it instead of switching Pages.
