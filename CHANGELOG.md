@@ -16,7 +16,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Jobs and worker
 
-- A kata worker widget for Tern's widget bar shows how many runs the worker on this machine is running and, in the warning tone, how many are held for you (Tern 0.9.17 and later).
+- A kata worker widget for Tern's widget bar shows how many runs the worker on this machine is running or, in the warning tone while runs are held for you, how many are held (Tern 0.9.17 and later).
   - Its tooltip names the worker and lists the held runs with their reasons; a click while a run is held shows the Attention Page.
   - A remote window shows the worker of the machine it runs on, not the session host's.
 
@@ -25,7 +25,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A Waiting kata agents widget for Tern's widget bar shows "N waiting" while kata agents wait for you, names them in its tooltip, and goes to the latest on a click (Tern 0.9.17 and later).
   - The "N waiting" segment is still shown in the widget bar's Plugin segments widget.
 - The palette command Add kata widgets to the widget bar places the kata widgets the bar lacks after the widgets already there.
-- The palette command Show kata's held runs opens the kata Pane on the Attention Page.
+- The palette command Show kata's held runs opens the kata Pane on the Attention Page, on every Tern version.
   - While a card, a question, the help sheet or a search is open in the Pane, the command shows a toast asking you to close it instead of switching Pages.
 
 ### Fixed
