@@ -6,6 +6,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
@@ -212,5 +213,23 @@ func TestCtrlCQuitsAtOnceFromEveryCard(t *testing.T) {
 		if !driver.Step(open(t), key("ctrl+c"), now).Quit {
 			t.Errorf("ctrl+c did not quit while the %q card was open", card.Name())
 		}
+	}
+}
+
+// A phone has no keyboard to answer the quit question with, so it has a button for each answer that does what its key does.
+func TestTheQuitQuestionsButtonsQuitAndStay(t *testing.T) {
+	asked := step(t, browsing(t, 160), key("q")).State
+	buttons := map[string]string{}
+	for _, n := range wireNodes(t, view.Render(asked.Model, now)) {
+		if actions, ok := n.P["actions"].(map[string]any); ok && strings.Contains(n.ID, "quit.") {
+			buttons[n.ID[strings.LastIndex(n.ID, ".")+1:]], _ = actions["click"].(string)
+		}
+	}
+	if !driver.Step(asked, click("quit.yes", buttons["yes"]), now).Quit {
+		t.Errorf("Quit (%q) did not quit", buttons["yes"])
+	}
+	stayed := driver.Step(asked, click("quit.no", buttons["no"]), now)
+	if stayed.Quit || stayed.State.Model.AskQuit {
+		t.Errorf("Stay (%q): quit=%v asking=%v, want the Pane back", buttons["no"], stayed.Quit, stayed.State.Model.AskQuit)
 	}
 }

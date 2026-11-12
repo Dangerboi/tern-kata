@@ -10,6 +10,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - `tern-kata update` shows Tern's progress bar on the Tern pane it runs in while it downloads and swaps in the new release (Tern 0.9.18 and later).
 
+#### Issues and Pages
+
+- The Pane's yes/no questions (quitting after `q`, deleting a view, switching to kata's local Docbank) have a button for each answer, so they can be answered on a phone or tablet.
+
 #### Jobs and worker
 
 - A kata worker widget for Tern's widget bar shows how many runs the worker on this machine is running and, in the warning tone, how many are held for you (Tern 0.9.17 and later).

@@ -90,9 +90,7 @@ func Render(m model.Model, now time.Time) tern.View {
 			main = append(main, help(m)...)
 		}
 	}
-	for _, text := range footerTexts(m) {
-		main = append(main, text)
-	}
+	main = append(main, footerNodes(m)...)
 	main = append(main, toasts(m)...)
 	layer := topLayer(m, now)
 	if m.CloseForm.Err != nil && !m.CloseForm.Open {
