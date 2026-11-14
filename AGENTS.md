@@ -23,7 +23,7 @@ Commands, smoke options and the Windows dev install: `docs/guide/development.md`
 - Before each commit: `scripts/check.sh static` (about 40 s, ends with `CHECKS ok`).
 - Go tests for the packages you changed (cached unless the code changed; full runs without `-count=1`, about 35 s uncached).
 - After a UI change: the smoke steps that cover it, plus every step naming an id, class or text the diff renames or removes (`grep -rl <id> smoke/steps`), each as `./smoke/run.sh smoke/steps/NN-name.sh` (5-15 s).
-- The full `./smoke/run.sh` once per branch (3-6 min; the push gate runs it).
+- The full `./smoke/run.sh` once per branch (about 3 min; the push gate runs it).
 - Stop only the smoke servers you started; other agents run theirs beside yours.
 - Before you ask the user to try a change, merge it and run `scripts/dev-install.sh` from the primary checkout: it installs the build here and on the Windows window machine, which runs its own plugin copy.
 

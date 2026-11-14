@@ -43,13 +43,23 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
     groups[index]+="$step "
   done
   jobs=()
+  # The slowest job sets the suite's time: each records "<seconds> <name>" here, and a passing run names the slowest three.
+  durations="$bin_dir/durations"
+  timed() { # timed <name> <command...>
+    local start=$SECONDS status=0
+    "${@:2}" || status=$?
+    printf '%s %s\n' "$((SECONDS - start))" "$1" >>"$durations"
+    return "$status"
+  }
   export SMOKE_SHARD=1 SMOKE_BIN="$bin_dir/tern-kata" SMOKE_DIST="$bin_dir/dist"
   for group in "${groups[@]}"; do
-    "$0" $group & jobs+=($!)
+    set -- $group
+    first=$(basename "$1") last=$(basename "${!#}")
+    timed "steps ${first:0:2}-${last:0:2}" "$0" "$@" & jobs+=($!)
   done
-  for name in "${slow[@]}"; do "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
+  for name in "${slow[@]}"; do timed "$name" "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
   for extra in plugin.sh supervision.sh release-check.sh; do
-    (run_extra "$repo/smoke/$extra" "$SMOKE_BIN" || { printf '%s; its artifacts are named above\n' "$extra" >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
+    (timed "$extra" run_extra "$repo/smoke/$extra" "$SMOKE_BIN" || { printf '%s; its artifacts are named above\n' "$extra" >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
   done
   failed=0
   for job in "${jobs[@]}"; do wait "$job" || failed=1; done
@@ -58,8 +68,9 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
     rm -rf "$bin_dir"
     exit 1
   fi
+  slowest=$(sort -rn "$durations" | head -3 | awk '{ s = $1; $1 = ""; printf "%s%s %d s", sep, substr($0, 2), s; sep = ", " }')
   rm -rf "$bin_dir"
-  printf '\nSmoke passed\n'
+  printf '\nSmoke passed in %d s; slowest: %s\n' "$SECONDS" "$slowest"
   exit 0
 fi
 

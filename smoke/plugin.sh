@@ -35,6 +35,16 @@ cleanup() {
 trap cleanup EXIT
 source "$(dirname "$0")/ctl.sh"
 ctl() { ctl_call "$@"; }
+# Polls a command every 0.1 s until it succeeds, for up to wait_limit seconds (ctl.sh). Headless Tern runs plugin timers
+# only on frames; the idle zsh prompts below redraw every 0.1 s, so frames, and the timers, keep coming while this sleeps.
+wait_for() {
+  local deadline=$((SECONDS + wait_limit))
+  until "$@"; do
+    (( SECONDS < deadline )) || return 1
+    sleep 0.1
+  done
+}
+panes_are() { [[ $(ctl state | jq -r '.tabs[0].panes') == "$1" ]]; }
 # Waits (real time) until the active tab has $1 Panes: a quit closes the launch-command Pane.
 expect_panes() {
   for ((attempt=0; attempt<100; attempt++)); do
@@ -45,8 +55,7 @@ expect_panes() {
   echo "expected $1 Panes, state: $(ctl state | jq -c '.tabs[0]')" >&2
   return 1
 }
-# Toasts are not terminal text: poll the rendered tree for one. Headless Tern runs plugin timers only on frames, and
-# a Pane that already exited produces none, so each attempt runs a command in the original Pane.
+# Toasts are not terminal text: poll the rendered tree for one.
 toast_shown() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/dev/null; }
 # `! f` under set -e never fails the script, so the negated checks go through this.
 expect_no_toast() {
@@ -65,13 +74,7 @@ expect_no_kata_toast() {
   expect_no_toast "$didnt_start_toast"
 }
 expect_toast() {
-  printf 'run "true"\n' >"$tmp/pump.ctl"
-  for ((attempt=0; attempt<20; attempt++)); do
-    toast_shown "$1" && return 0
-    ctl --file "$tmp/pump.ctl"
-  done
-  echo "toast not shown: $1" >&2
-  return 1
+  wait_for toast_shown "$1" || { echo "toast not shown: $1" >&2; return 1; }
 }
 mkdir -p "$tmp/workspace" "$tmp/bin" "$tmp/pane-bin" "$tmp/app" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
 if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -o "$tmp/app/tern-kata" ./cmd/tern-kata); fi
@@ -154,16 +157,16 @@ ctl plugins expect smoke
 ctl state >"$tmp/palette-state.json"
 jq -e --arg cwd "$tmp/workspace" '.tabs[0].panes == 2 and .focused.cwd == $cwd' "$tmp/palette-state.json" >/dev/null
 palette_pane=$(jq -r '.focused.id' "$tmp/palette-state.json")
-# A normal quit after the 2 s window is not an install failure.
-# Timers run only on frames, so pump the original Pane for the 2.5 s to let the 2 s window really end.
+# A normal quit after the 2 s window is not an install failure. The window is 20 timer ticks of 100 ms, which run on
+# frames: 5 s let it end with room for a loaded machine.
 ctl focus left
-printf 'run "true"\n' >"$tmp/pump.ctl"
-for ((attempt=0; attempt<25; attempt++)); do ctl --file "$tmp/pump.ctl"; sleep 0.1; done
+sleep 5
 ctl focus right
 ctl key q
 expect_panes 1
 ctl focus left
-ctl --file "$tmp/pump.ctl"
+# A second for a toast to show if the plugin read the quit as a failed start.
+sleep 1
 expect_no_kata_toast
 ctl key F9
 ctl plugins expect smoke
@@ -261,13 +264,10 @@ jq -e '(.tabs | length) == 2 and .tabs[1].active and .tabs[1].panes == 2' "$tmp/
 [[ $remote_kata != "$remote_pane" ]]
 # Its tab face carries the kata mark: the face's own id is the one `ctl state` shows, though Lua got it packed, and the mark
 # replaces the face's terminal icon, so the icon is no longer there.
-for ((attempt=0; attempt<100; attempt++)); do
-  ctl --file "$tmp/pump.ctl"
-  [[ $(ctl tree ".tn-face[data-pane='$remote_kata']" | jq '.count') == 1 && $(ctl tree ".tn-face[data-pane='$remote_kata'] > *" | jq '.count') == 0 ]] && break
-  sleep 0.1
-done
-ctl tree ".tn-face[data-pane='$remote_kata']" | jq -e '.count == 1' >/dev/null
-ctl tree ".tn-face[data-pane='$remote_kata'] > *" | jq -e '.count == 0' >/dev/null
+face_marked() {
+  [[ $(ctl tree ".tn-face[data-pane='$remote_kata']" | jq '.count') == 1 && $(ctl tree ".tn-face[data-pane='$remote_kata'] > *" | jq '.count') == 0 ]]
+}
+wait_for face_marked
 ctl focus left
 click_issue_link "https://kata.invalid/smoke/$second"
 ctl plugins expect '"Plugin second body"'
@@ -402,11 +402,11 @@ end_hand_started_pane Enter
 printf '#!/bin/sh\ni=0\nwhile [ $i -lt 30 ]; do echo tick; sleep 0.2; i=$((i+1)); done\nexit 1\n' >"$tmp/pane-bin/tern-kata"
 ctl plugins run plugin.tern-kata.open
 seen=0
-for ((attempt=0; attempt<100; attempt++)); do
+deadline=$((SECONDS + wait_limit))
+while (( SECONDS < deadline )); do
   panes=$(ctl state | jq -r '[.tabs[].panes] | add')
   if [[ $panes == 2 && $seen == 0 ]]; then seen=1; ctl focus left; fi
   [[ $seen == 1 && $panes == 1 ]] && break
-  ctl --file "$tmp/pump.ctl"
   sleep 0.1
 done
 [[ $seen == 1 && $panes == 1 ]] || { echo "failing tern-kata Pane did not close (seen=$seen panes=$panes)" >&2; exit 1; }
@@ -414,14 +414,9 @@ expect_no_kata_toast
 # A launch of tern-kata that fails inside the 2 s window closes its Pane and toasts by exit status: 2 (Go panic) and 3
 # (the binary's own error) are a failed start; 1 can be either (PowerShell's not-found, and Windows reports every failing
 # launch as 1); anything else, such as 127, is "not installed".
+no_kata_toast() { ! toast_shown "$failed_start_toast" && ! toast_shown "$not_installed_toast" && ! toast_shown "$didnt_start_toast"; }
 wait_no_kata_toast() {
-  for ((attempt=0; attempt<100; attempt++)); do
-    if ! toast_shown "$failed_start_toast" && ! toast_shown "$not_installed_toast" && ! toast_shown "$didnt_start_toast"; then return 0; fi
-    ctl --file "$tmp/pump.ctl"
-    sleep 0.1
-  done
-  echo "kata toast did not clear" >&2
-  return 1
+  wait_for no_kata_toast || { echo "kata toast did not clear" >&2; return 1; }
 }
 expect_launch_toast() { # $1 the one startup-failure toast that must show, the rest text it must also carry
   wait_no_kata_toast
@@ -476,35 +471,23 @@ printf '#!/bin/sh\necho "$@" >>%q\necho "curl: smoke stand-in refuses" >&2\nexit
 chmod +x "$tmp/bin/curl"
 printf 'palette "Update tern-kata"\nkey Enter\n' >"$tmp/update.ctl"
 ctl --file "$tmp/update.ctl"
-for ((attempt=0; attempt<100; attempt++)); do
-  [[ -s "$tmp/update-args.txt" ]] && break
-  ctl --file "$tmp/pump.ctl"
-  sleep 0.1
-done
+wait_for test -s "$tmp/update-args.txt"
 [[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
 ctl state | jq -e '.tabs[0].panes == 2' >/dev/null
 ctl expect Press
 # The local update finishes first, so the checks below exercise the watcher with a local session host.
 ctl key Enter
-for ((attempt=0; attempt<100; attempt++)); do
-  [[ $(ctl state | jq -r '.tabs[0].panes') == 1 ]] && break
-  ctl --file "$tmp/pump.ctl"
-  sleep 0.1
-done
+wait_for panes_are 1
 expect_panes 1
-# The watcher polls once a second: give it time to act on the closed Pane.
-for ((attempt=0; attempt<30; attempt++)); do ctl --file "$tmp/pump.ctl"; sleep 0.1; done
+# The watcher polls once a second: 5 s let it act on the closed Pane.
+sleep 5
 [[ ! -e "$tmp/plugin-step.log" ]]
 expect_no_toast 'tern-kata plugin updated'
 # A plugin reload while a second update Pane is open (a local update brings the plugin along) must not turn that Pane into a
 # kata Pane: a link opens a new kata Pane instead of focusing the update Pane.
 rm -f "$tmp/update-args.txt"
 ctl --file "$tmp/update.ctl"
-for ((attempt=0; attempt<100; attempt++)); do
-  [[ -s "$tmp/update-args.txt" ]] && break
-  ctl --file "$tmp/pump.ctl"
-  sleep 0.1
-done
+wait_for test -s "$tmp/update-args.txt"
 ctl expect Press
 # The plugin is linked, and a linked window plugin is left as it is: for the remote plugin step below it must look installed,
 # so `tern plugin dir` names the fixtures folder it loads from. The reload below makes the plugin ask again.
@@ -515,22 +498,14 @@ mv -f "$tmp/stub-tern" "$tmp/bin/tern"
 ctl plugins fixtures
 ctl focus left
 click_issue_link "kata://smoke/$first"
-for ((attempt=0; attempt<100; attempt++)); do
-  ctl --file "$tmp/pump.ctl"
-  [[ $(ctl state | jq -r '.tabs[0].panes') == 3 ]] && break
-  sleep 0.1
-done
+wait_for panes_are 3
 ctl state | jq -e '.tabs[0].panes == 3' >/dev/null
 # The new kata Pane is the stand-in too: Enter ends it, leaving the update Pane to the right.
 ctl key Enter
 expect_panes 2
 ctl focus right
 ctl key Enter
-for ((attempt=0; attempt<100; attempt++)); do
-  [[ $(ctl state | jq -r '.tabs[0].panes') == 1 ]] && break
-  ctl --file "$tmp/pump.ctl"
-  sleep 0.1
-done
+wait_for panes_are 1
 expect_panes 1
 # On a remote session host the update also runs the plugin step on this machine; the curl stand-in makes it fail, which toasts
 # the script's last stderr line and leaves no pending key behind.
@@ -538,11 +513,7 @@ rm -f "$tmp/plugin-step.log" "$tmp/update-args.txt"
 ctl remote loopback loop
 ctl ready
 ctl --file "$tmp/update.ctl"
-for ((attempt=0; attempt<100; attempt++)); do
-  [[ -s "$tmp/update-args.txt" ]] && break
-  ctl --file "$tmp/pump.ctl"
-  sleep 0.1
-done
+wait_for test -s "$tmp/update-args.txt"
 [[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
 ctl expect Press
 ctl key Enter
@@ -560,28 +531,16 @@ if [[ $(printf '%s\n0.9.16\n' "$("$real_tern" --version | sed -n 's/^tern \([0-9
     printf '#!/bin/sh\n: >%q\nsleep 4\n%s\n' "$tmp/step-started" "$1" >"$tmp/bin/curl"
     chmod +x "$tmp/bin/curl"
     ctl --file "$tmp/update.ctl"
-    for ((attempt=0; attempt<100; attempt++)); do
-      [[ -s "$tmp/update-args.txt" ]] && break
-      ctl --file "$tmp/pump.ctl"
-      sleep 0.1
-    done
+    wait_for test -s "$tmp/update-args.txt"
     [[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
     ctl expect Press
     ctl key Enter
-    for ((attempt=0; attempt<100; attempt++)); do
-      [[ -e "$tmp/step-started" ]] && break
-      ctl --file "$tmp/pump.ctl"
-      sleep 0.1
-    done
-    [[ -e "$tmp/step-started" ]] || { echo "the plugin step never started" >&2; exit 1; }
+    wait_for test -e "$tmp/step-started" || { echo "the plugin step never started" >&2; exit 1; }
     grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending not set while the step runs" >&2; exit 1; }
     ctl plugins fixtures
     # The stand-in is still asleep, so only the reloaded VM can see the step end.
-    for ((attempt=0; attempt<100; attempt++)); do
-      ! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" && break
-      ctl --file "$tmp/pump.ctl"
-      sleep 0.1
-    done
+    pending_cleared() { ! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json"; }
+    wait_for pending_cleared
   }
   reload_during_step 'echo "exit 0"'
   expect_toast 'tern-kata plugin updated to v9.9.9'
@@ -601,11 +560,7 @@ own_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$repo/plugin.toml")
 printf '%s\n' "$own_version" >"$tmp/dist/version.txt"
 rm -f "$tmp/plugin-step.log" "$tmp/update-args.txt"
 ctl --file "$tmp/update.ctl"
-for ((attempt=0; attempt<100; attempt++)); do
-  [[ -s "$tmp/update-args.txt" ]] && break
-  ctl --file "$tmp/pump.ctl"
-  sleep 0.1
-done
+wait_for test -s "$tmp/update-args.txt"
 ctl expect Press
 ctl key Enter
 expect_toast "tern-kata plugin v$own_version is up to date"
@@ -617,11 +572,7 @@ ctl plugins fixtures
 printf '9.9.9\n' >"$tmp/dist/version.txt"
 rm -f "$tmp/plugin-step.log" "$tmp/update-args.txt"
 ctl --file "$tmp/update.ctl"
-for ((attempt=0; attempt<100; attempt++)); do
-  [[ -s "$tmp/update-args.txt" ]] && break
-  ctl --file "$tmp/pump.ctl"
-  sleep 0.1
-done
+wait_for test -s "$tmp/update-args.txt"
 ctl expect Press
 ctl key Enter
 expect_toast 'tern-kata plugin is linked, left as it is'
