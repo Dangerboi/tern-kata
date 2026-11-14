@@ -226,8 +226,9 @@ local function relayAll(cx: WindowCx, onlyNew: boolean)
     local states: string? = nil
     for _, info in panes do
         if isKata(info) and not (onlyNew and relayed[info.pane]) and cx.session:surface(info.pane) then
-            if not states then states = agentStates(cx, tabs) end
-            relayStates(cx, info.pane, states)
+            local current = states or agentStates(cx, tabs)
+            states = current
+            relayStates(cx, info.pane, current)
         end
     end
 end
