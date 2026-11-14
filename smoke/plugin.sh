@@ -46,7 +46,8 @@ wait_for() {
   done
 }
 panes_are() { [[ $(ctl state | jq -r '.tabs[0].panes') == "$1" ]]; }
-panes_ready() { ctl ready >/dev/null && panes_are "$1"; }
+# One `ready` call (at most Tern's 20 s), so wait_for's deadline bounds the whole wait.
+panes_ready() { tern ctl --control "$tmp/control.sock" ready >/dev/null && panes_are "$1"; }
 # Waits (real time) until the active tab has $1 Panes: a quit closes the launch-command Pane.
 expect_panes() {
   wait_for panes_ready "$1" || { echo "state: $(ctl state | jq -c '.tabs[0]')" >&2; return 1; }
@@ -275,14 +276,9 @@ ctl state | jq -e '(.tabs | length) == 1 and .tabs[0].active' >/dev/null
 # A `W` agent's tab lands right of the tab of the Pane that started it; no other tab moves. Tabs are named by their first
 # Pane's program, so the order is read from the program names: a shell tab is `zsh`/`bash`/..., a launched one is `sleep`.
 tab_order() { ctl state | jq -r '[.tabs[] | if .panes == 1 and (.title | test("sleep")) then "agent" else "shell" end] | join(",")'; }
+tab_order_is() { tern ctl --control "$tmp/control.sock" ready >/dev/null && [[ $(tab_order) == "$1" ]]; }
 wait_tab_order() {
-  for ((attempt=0; attempt<100; attempt++)); do
-    ctl ready >/dev/null
-    [[ $(tab_order) == "$1" ]] && return 0
-    sleep 0.1
-  done
-  echo "expected tab order $1, got $(tab_order): $(ctl state | jq -c '.tabs')" >&2
-  return 1
+  wait_for tab_order_is "$1" || { echo "got tab order $(tab_order): $(ctl state | jq -c '.tabs')" >&2; return 1; }
 }
 ctl state | jq -e '.tabs | length == 1' >/dev/null
 ctl tab new
@@ -377,12 +373,7 @@ start_hand_pane "$standin_dir/my-tern-kata"
 ctl click "$x" "$y" cmd
 # expect_panes waits for every Pane to reach its prompt, which the running stand-in never does.
 wait_panes() {
-  for ((attempt=0; attempt<100; attempt++)); do
-    [[ $(ctl state | jq -r '.tabs[0].panes') == "$1" ]] && return 0
-    sleep 0.1
-  done
-  echo "expected $1 Panes, state: $(ctl state | jq -c '.tabs[0]')" >&2
-  return 1
+  wait_for panes_are "$1" || { echo "state: $(ctl state | jq -c '.tabs[0]')" >&2; return 1; }
 }
 wait_panes 3
 ctl key q
