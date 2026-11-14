@@ -12,6 +12,13 @@ set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo"
+# The user's Tern links the plugin from here and runs this build, so only the primary checkout installs: a side checkout
+# (a linked worktree or an ovnfs checkout) would leave the link on a folder that is later removed.
+side=$(command -v ovnfs >/dev/null && ovnfs ls 2>/dev/null | awk 'NR > 1 { print $NF }' | grep -xF "$repo" || true)
+if [[ $(git rev-parse --path-format=absolute --git-dir) != "$(git rev-parse --path-format=absolute --git-common-dir)" || -n $side ]]; then
+  printf 'dev-install.sh: %s is a side checkout; merge the change and run it from the primary checkout\n' "$repo" >&2
+  exit 1
+fi
 export CGO_ENABLED=0
 if [[ -z ${TERN_KATA_WINDOWS_SSH:-} && -f .dev-install.local ]]; then
   # shellcheck disable=SC1091

@@ -49,7 +49,7 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   done
   for name in "${slow[@]}"; do "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
   for extra in plugin.sh supervision.sh release-check.sh; do
-    (run_extra "$repo/smoke/$extra" "$SMOKE_BIN" || { printf '%s\n' "$extra" >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
+    (run_extra "$repo/smoke/$extra" "$SMOKE_BIN" || { printf '%s; its artifacts are named above\n' "$extra" >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
   done
   failed=0
   for job in "${jobs[@]}"; do wait "$job" || failed=1; done
@@ -122,7 +122,7 @@ cleanup() {
     wait "$proxy_pid" 2>/dev/null || true
   fi
   if [[ -n "$server_pid" ]]; then
-    if [[ $status -ne 0 ]]; then
+    if [[ $status -ne 0 && -z $in_extra ]]; then
       tern ctl --control "$tmp/control.sock" tree >"$tmp/tree.json" 2>/dev/null || true
       tern ctl --control "$tmp/control.sock" shot failure >/dev/null 2>&1 || true
     fi
@@ -135,6 +135,7 @@ cleanup() {
   [[ ${DOCBANK_HOME:-} != "$tmp"/* ]] || docbank daemon stop >/dev/null 2>&1 || true
   if [[ $status -ne 0 ]]; then
     if [[ -n $in_extra ]]; then
+      rm -rf "$tmp" # the steps passed; the failed script keeps its own folder
       printf 'Smoke failed at %s; its artifacts are named above\n' "$current" >&2
     else
       [[ ! -f "$tmp/tern.log" ]] || cat "$tmp/tern.log" >&2
