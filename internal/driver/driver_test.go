@@ -253,7 +253,7 @@ func TestScrollAndRevealAreSentForDrawnColumns(t *testing.T) {
 	wantOps(t, step(t, narrow, key("page_up")), tern.OpScroll(view.DetailContentID, "page-up"))
 }
 
-// One reveal only: the SDK may send a step's ops in one frame, and Tern runs a second reveal there against the old offset.
+// One reveal only, for the reason on view.ActivityTabsID.
 func TestActivityTabSwitchSendsOneReveal(t *testing.T) {
 	s := feed(t, browsing(t, 160), click("", view.FocusDetailClick)).State
 	want := []tern.Op{tern.OpReveal(view.ActivityTabsID, "start")}

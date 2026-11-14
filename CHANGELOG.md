@@ -8,7 +8,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
-- Switching the Activity tab of the Issue detail scrolls the new tab into view also while Tern is slow to draw, as on a busy machine; before, the detail could stay where the old tab ended.
+- Switching the Activity tab of the Issue detail scrolls the new tab into view even while Tern is slow to draw, as on a busy machine; before, the detail could stay where the old tab ended.
 
 ## [0.13.0] - 2026-11-12
 
