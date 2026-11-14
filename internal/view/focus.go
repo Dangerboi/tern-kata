@@ -2,7 +2,6 @@ package view
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -134,8 +133,6 @@ func ExpectedUnknownID(id string) bool {
 	if IsIssueID(id) || IsBoardCardID(id) {
 		return true
 	}
-	// The active tab's rows and its empty line go when the tab switches, and the tab names with them when the detail turns
-	// to loading another Issue before Tern runs the reveal.
-	row, ok := strings.CutPrefix(id, DetailActivityID+".")
-	return ok && !strings.Contains(row, ".")
+	// The tab names go when the detail turns to loading another Issue before Tern runs the tab switch's reveal.
+	return id == ActivityTabsID
 }
