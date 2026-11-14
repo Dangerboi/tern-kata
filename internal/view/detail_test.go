@@ -416,7 +416,7 @@ func TestActivityRevealTargetIsDrawnOnEveryTab(t *testing.T) {
 
 // The tab switch's reveal at "start" ends a short tab at the detail's end only while Activity is the detail's last part.
 func TestActivityIsTheLastPartOfTheDetail(t *testing.T) {
-	parts := render(t, detailWithActivity(model.TabComments))[view.DetailContentID].C
+	parts := render(t, parenting(model.TabComments))[view.DetailContentID].C // with the children table, the one part drawn only sometimes
 	if last := parts[len(parts)-1].ID; last != view.DetailActivityID {
 		t.Errorf("last part of the detail is %q, want %q", last, view.DetailActivityID)
 	}
