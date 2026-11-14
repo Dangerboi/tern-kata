@@ -3,6 +3,7 @@
 # luau command line, the build and the release cross-builds), test (go test, and bun test for the omp extension) or smoke
 # (smoke/run.sh); no argument runs all three.
 # The static checks run side by side; each prints "CHECK <name> ok" or "CHECK <name> FAIL" (after its output) when it ends.
+# Every mode ends with one line: "CHECKS ok", or "CHECKS FAIL: <names>" (static: the failed checks; test, smoke, all: the failed group).
 # CHECK_OUT (default: a temporary folder, deleted on exit) receives the go test -json stream as gotest.jsonl, the built
 # binaries under bin/ and each static check's output under log/.
 set -euo pipefail
@@ -27,6 +28,7 @@ check() { # check <name> <command...>: starts the check in the background and ad
     else
       cat "$out/log/$name"
       printf 'CHECK %s FAIL\n' "$name"
+      : >"$out/log/$name.fail"
       exit 1
     fi
   ) &
@@ -83,10 +85,23 @@ tests() {
 
 smoke() { ./smoke/run.sh; }
 
+failed=()
+group() { # group <name> <function>: runs it, recording the group's name when it fails
+  "$2" || { failed+=("$1"); return 1; }
+}
 case ${1:-all} in
-  static) static ;;
-  test) tests ;;
-  smoke) smoke ;;
-  all) static && tests && smoke ;;
+  static) group static static || true ;;
+  test) group test tests || true ;;
+  smoke) group smoke smoke || true ;;
+  all) group static static && group test tests && group smoke smoke || true ;;
   *) printf 'usage: scripts/check.sh [static|test|smoke|all]\n' >&2; exit 2 ;;
 esac
+if (( ${#failed[@]} )); then
+  if [[ ${1:-all} == static ]]; then
+    names=$(cd "$out/log" && ls ./*.fail 2>/dev/null | sed 's|^\./||; s|\.fail$||' | paste -sd' ' -)
+    failed=("${names:-static}")
+  fi
+  printf 'CHECKS FAIL: %s\n' "${failed[*]}"
+  exit 1
+fi
+printf 'CHECKS ok\n'

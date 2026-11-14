@@ -6,10 +6,16 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # With no argument the suite fans out. The steps wait on kata's daemon clocks (a timed claim's sweep, a job's delivery
 # window), so those steps and the two other scripts run beside the rest on their own headless Tern and kata daemon;
 # a shard is one such run (SMOKE_SHARD set, the steps given as arguments, the binary built once in SMOKE_BIN).
+# With arguments the run is only those: step files in the order given on one server, then plugin.sh, supervision.sh and
+# release-check.sh when named (./smoke/run.sh smoke/steps/72-x.sh smoke/supervision.sh), handed the binary built once.
+# A failed run ends with a line naming the failing step or script and the artifacts folder.
 if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   export CGO_ENABLED=0
   bin_dir=$(mktemp -d)
   trap 'rm -rf "$bin_dir"; trap - TERM; kill 0' INT TERM
+  # Each shard appends "<step>; artifacts: <folder>" here when it fails, for the last line.
+  export SMOKE_FAIL_LOG="$bin_dir/failures"
+  : >"$SMOKE_FAIL_LOG"
   (cd "$repo" && go build -o "$bin_dir/tern-kata" ./cmd/tern-kata)
   # Steps 81 and 82 and supervision.sh serve a release built at the current version; one build serves all three.
   release_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$repo/plugin.toml")
@@ -35,18 +41,59 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
     "$0" $group & jobs+=($!)
   done
   for name in "${slow[@]}"; do "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
-  "$repo/smoke/plugin.sh" "$SMOKE_BIN" & jobs+=($!)
-  "$repo/smoke/supervision.sh" "$SMOKE_BIN" & jobs+=($!)
-  "$repo/smoke/release-check.sh" & jobs+=($!)
+  (set +e; "$repo/smoke/plugin.sh" "$SMOKE_BIN" || { printf 'plugin.sh\n' >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
+  (set +e; "$repo/smoke/supervision.sh" "$SMOKE_BIN" || { printf 'supervision.sh\n' >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
+  (set +e; "$repo/smoke/release-check.sh" || { printf 'release-check.sh\n' >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
   failed=0
   for job in "${jobs[@]}"; do wait "$job" || failed=1; done
+  if (( failed )); then
+    printf 'Smoke failed at %s\n' "$(paste -sd, "$SMOKE_FAIL_LOG" | sed 's/,/, /g')" >&2
+    rm -rf "$bin_dir"
+    exit 1
+  fi
   rm -rf "$bin_dir"
-  (( failed == 0 )) || { printf 'Smoke failed\n' >&2; exit 1; }
+  printf '\nSmoke passed\n'
+  exit 0
+fi
+
+# The arguments are step files, plus the three scripts the fan-out runs beside them when named.
+steps=()
+extras=()
+for arg in "$@"; do
+  case $(basename "$arg") in
+    plugin.sh|supervision.sh|release-check.sh) extras+=("$arg") ;;
+    *) steps+=("$arg") ;;
+  esac
+done
+(( $# )) || steps=("$repo"/smoke/steps/*)
+
+run_extra() { # run_extra <script> <binary>
+  case $(basename "$1") in
+    release-check.sh) "$1" ;;
+    *) "$1" "$2" ;;
+  esac
+}
+
+if (( ${#steps[@]} == 0 )); then
+  export CGO_ENABLED=0
+  bin_dir=$(mktemp -d)
+  trap 'rm -rf "$bin_dir"' EXIT
+  if [[ -n ${SMOKE_BIN:-} ]]; then
+    cp "$SMOKE_BIN" "$bin_dir/tern-kata"
+  else
+    (cd "$repo" && go build -o "$bin_dir/tern-kata" ./cmd/tern-kata)
+  fi
+  current=
+  for extra in "${extras[@]}"; do
+    current=$(basename "$extra")
+    run_extra "$extra" "$bin_dir/tern-kata" || { printf '\nSmoke failed at %s\n' "$current" >&2; exit 1; }
+  done
   printf '\nSmoke passed\n'
   exit 0
 fi
 
 tmp=$(mktemp -d)
+current=
 server_pid=
 proxy_pid=
 # HTTP servers the steps start (release dist/ served from a local port): stopped on every exit.
@@ -86,8 +133,9 @@ cleanup() {
   # A step that set up its own Docbank exported DOCBANK_HOME into $tmp; stop that daemon even when the step failed.
   [[ ${DOCBANK_HOME:-} != "$tmp"/* ]] || docbank daemon stop >/dev/null 2>&1 || true
   if [[ $status -ne 0 ]]; then
-    printf 'Smoke failed; artifacts: %s\n' "$tmp" >&2
     [[ ! -f "$tmp/tern.log" ]] || cat "$tmp/tern.log" >&2
+    printf 'Smoke failed at %s; artifacts: %s\n' "${current:-setup}" "$tmp" >&2
+    [[ -z ${SMOKE_FAIL_LOG:-} ]] || [[ -z $current ]] || printf '%s; artifacts: %s\n' "$current" "$tmp" >>"$SMOKE_FAIL_LOG"
   else
     rm -rf "$tmp"
   fi
@@ -201,9 +249,8 @@ stop_live_daemon() {
   return 1
 }
 
-steps=("$repo"/smoke/steps/*)
-if (( $# )); then steps=("$@"); fi
 for step in "${steps[@]}"; do
+  current=$(basename "$step")
   printf '\nRunning %s\n' "$(basename "$step")"
   case "$step" in
     *.ctl) ctl --file "$step" ;;
@@ -211,9 +258,13 @@ for step in "${steps[@]}"; do
   esac
   printf 'Step passed %s\n' "$(basename "$step")"
 done
+current=quit_app
 quit_app
+current=
 [[ -z ${SMOKE_SHARD:-} ]] || exit 0
-"$repo/smoke/plugin.sh" "$tmp/tern-kata"
-"$repo/smoke/supervision.sh" "$tmp/tern-kata"
-"$repo/smoke/release-check.sh"
+for extra in ${extras[@]+"${extras[@]}"}; do
+  current=$(basename "$extra")
+  run_extra "$extra" "$tmp/tern-kata"
+done
+current=
 printf '\nSmoke passed\n'

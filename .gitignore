@@ -10,3 +10,4 @@ tern.d.luau
 .omp/
 __pycache__/
 /cmd/tern-kata/tern-kata
+.dev-install.local
