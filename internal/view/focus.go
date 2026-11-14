@@ -85,11 +85,12 @@ func ScrollTarget(m model.Model, c model.Column) string {
 	return IssueListID
 }
 
-func ActivityReveals(m model.Model) []string {
+// ActivityRevealID is the node to reveal after an Activity tab switch, "" while the detail is not drawn.
+func ActivityRevealID(m model.Model) string {
 	if !m.DetailDrawn() {
-		return nil
+		return ""
 	}
-	return ActivityRevealIDs(m)
+	return ActivityTabsID
 }
 
 // SelectionRevealID is the node to reveal after msg moved the selection from previous, "" when none is. A reveal is sent only when

@@ -25,19 +25,11 @@ const DetailContentID = DetailScrollID + ".content"
 
 const DetailActivityID = DetailContentID + ".activity"
 
-// ActivityRevealIDs are the nodes to reveal, in this order, to bring the active Activity tab into view:
-// the last node of its rows (or its empty line), then the tab names.
-func ActivityRevealIDs(m model.Model) []string {
-	last := itemID(DetailActivityID, "empty")
-	if rows := m.DetailRows(); len(rows) > 0 && rows[len(rows)-1].Kind.InActivity() {
-		row := rows[len(rows)-1]
-		last = itemID(DetailActivityID, row.Key)
-		if len(row.Leaves) > 0 { // the comment's replies from other Issues are drawn after it
-			last = itemID(DetailActivityID, leafKey(row.Key, len(row.Leaves)-1))
-		}
-	}
-	return []string{last, itemID(DetailActivityID, "tabs")}
-}
+// ActivityTabsID is the row of tab names, revealed at "start" after a tab switch: the tab names go to the top of the detail,
+// or, when the tab below them is shorter than the detail, the detail stops at its end with the whole tab in view (Activity
+// is the last part of the detail). It is one reveal on purpose: while every credit is in use the SDK sends the queued ops in
+// one frame, and Tern runs a second reveal of a frame against the scroll offset from before the first.
+const ActivityTabsID = DetailActivityID + ".tabs"
 
 func detail(m model.Model, now time.Time) tern.Element {
 	var children tern.Nodes

@@ -253,9 +253,10 @@ func TestScrollAndRevealAreSentForDrawnColumns(t *testing.T) {
 	wantOps(t, step(t, narrow, key("page_up")), tern.OpScroll(view.DetailContentID, "page-up"))
 }
 
-func TestActivityTabRevealGoesOutInOrder(t *testing.T) {
+// One reveal only: the SDK may send a step's ops in one frame, and Tern runs a second reveal there against the old offset.
+func TestActivityTabSwitchSendsOneReveal(t *testing.T) {
 	s := feed(t, browsing(t, 160), click("", view.FocusDetailClick)).State
-	want := []tern.Op{tern.OpReveal(view.DetailActivityID+".empty", "nearest"), tern.OpReveal(view.DetailActivityID+".tabs", "nearest")}
+	want := []tern.Op{tern.OpReveal(view.ActivityTabsID, "start")}
 	for name, in := range map[string]any{"tab": key("tab"), "shift+tab": key("shift+tab"), "click": click("", view.ActivityTabClick(model.TabEvents))} {
 		t.Run(name, func(t *testing.T) { wantOps(t, step(t, s, in), want...) })
 	}
@@ -277,7 +278,7 @@ func TestColumnsStayMountedWhileHelpIsOpen(t *testing.T) {
 		t.Fatal("fixture: help is closed")
 	}
 	out := step(t, s, click("", view.ActivityTabClick(model.TabEvents)))
-	wantOps(t, out, tern.OpReveal(view.DetailActivityID+".empty", "nearest"), tern.OpReveal(view.DetailActivityID+".tabs", "nearest"))
+	wantOps(t, out, tern.OpReveal(view.ActivityTabsID, "start"))
 	closed := step(t, out.State, key("escape"))
 	if closed.State.Model.HelpOpen {
 		t.Fatal("help did not close")

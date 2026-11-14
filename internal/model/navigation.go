@@ -20,8 +20,8 @@ type Scroll struct {
 func (Scroll) cmd() {}
 
 // RevealActivityTab asks for the active Activity tab to be brought into view in
-// the detail scroller: its last row, then the tab names. The Pane driver sends
-// it only while the tabs are drawn.
+// the detail scroller: the tab names at the top, or the whole tab when it is
+// shorter than the detail. The Pane driver sends it only while the tabs are drawn.
 type RevealActivityTab struct{}
 
 func (RevealActivityTab) cmd() {}

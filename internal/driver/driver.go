@@ -92,8 +92,8 @@ func (out *Output) route(m model.Model, cmds []model.Cmd) {
 				out.Ops = append(out.Ops, tern.OpScroll(target, string(cmd.By)))
 			}
 		case model.RevealActivityTab:
-			for _, id := range view.ActivityReveals(m) {
-				out.Ops = append(out.Ops, tern.OpReveal(id, "nearest"))
+			if id := view.ActivityRevealID(m); id != "" {
+				out.Ops = append(out.Ops, tern.OpReveal(id, "start"))
 			}
 		case model.OpenDraftEditor:
 			out.Editor = &cmd

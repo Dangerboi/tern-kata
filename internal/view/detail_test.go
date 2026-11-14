@@ -400,36 +400,17 @@ func TestParentSectionMatchingAndEmptyBody(t *testing.T) {
 	}
 }
 
-// The app reveals these two nodes after an Activity tab switch; Tern ends the program if either is not drawn.
-func TestActivityRevealTargetsAreTheLastRowAndTheTabNames(t *testing.T) {
+// The app reveals this node after an Activity tab switch; Tern ends the program if it is not drawn.
+func TestActivityRevealTargetIsDrawnOnEveryTab(t *testing.T) {
+	models := map[string]model.Model{"empty Events": apply(browsing(), model.ActivityTabMsg{Tab: model.TabEvents})}
 	for _, tab := range []model.ActivityTab{model.TabComments, model.TabEvents, model.TabLinks} {
-		m := detailWithActivity(tab)
-		nodes := render(t, m)
-		rows := nodes[view.DetailActivityID].C
-		want := []string{rows[len(rows)-1].ID, view.DetailActivityID + ".tabs"}
-		if got := view.ActivityRevealIDs(m); !slices.Equal(got, want) {
-			t.Errorf("tab %v: reveal %v, want %v", tab, got, want)
+		models[fmt.Sprint("tab ", tab)] = detailWithActivity(tab)
+	}
+	for name, m := range models {
+		id := view.ActivityRevealID(m)
+		if _, drawn := render(t, m)[id]; id == "" || !drawn {
+			t.Errorf("%s: reveal %q is not drawn", name, id)
 		}
-	}
-	empty := apply(browsing(), model.ActivityTabMsg{Tab: model.TabEvents})
-	rows := render(t, empty)[view.DetailActivityID].C
-	if got := view.ActivityRevealIDs(empty); got[0] != rows[len(rows)-1].ID {
-		t.Errorf("empty tab: reveal %v, want %s first", got, rows[len(rows)-1].ID)
-	}
-}
-
-// A last comment with replies from other Issues is drawn before its leaves, so the reveal names the last leaf.
-func TestActivityRevealTargetsTheLastLeafOfTheLastComment(t *testing.T) {
-	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
-	foreign := func(uid string) model.CommentLink {
-		return model.CommentLink{UID: &uid, Kind: "confirm", IssueUID: new("beta"), IssueShortID: new("bbbb"), CreatedAt: at}
-	}
-	selected := &model.IssueDetailData{Issue: &alpha, Comments: []model.Comment{{UID: "c1", Author: "dana", CreatedAt: at, Body: "only", Backlinks: []model.CommentLink{foreign("x1"), foreign("x2")}}}}
-	m := apply(withZone(browsing()), model.DetailLoaded{UID: "alpha", Selected: selected}, model.ActivityTabMsg{Tab: model.TabComments})
-	rows := render(t, m)[view.DetailActivityID].C
-	want := []string{rows[len(rows)-1].ID, view.DetailActivityID + ".tabs"}
-	if got := view.ActivityRevealIDs(m); !slices.Equal(got, want) {
-		t.Errorf("reveal %v, want %v", got, want)
 	}
 }
 
