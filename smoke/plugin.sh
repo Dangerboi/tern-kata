@@ -97,14 +97,22 @@ ln -s "$(command -v tern)" "$tmp/bin/tern"
 # zsh is required: headless Tern runs the window plugin's timers only when it draws a frame (stencil-hq/tern-sdk#298),
 # and since Tern 0.9.14 too few frames come for the plugin to hand a new kata Pane its Issue. Each interactive zsh redraws
 # its prompt every 0.1 s while it waits at it, so frames keep coming; nothing is written while a program runs in the Pane.
+# The redraw runs in zle's own read loop, woken by a ticking pipe (`zle -F`): redrawn from a SIGALRM trap instead, zsh
+# 5.9 crashed now and then when the trap landed while it redrew for a resize, such as a split.
 command -v zsh >/dev/null 2>&1 || { echo "plugin.sh needs zsh" >&2; exit 1; }
 export SHELL="$(command -v zsh)"
 # Window process PATH lacks tern-kata; Pane shells resolve it via their shell rc.
 export ZDOTDIR="$tmp" BASH_ENV="$tmp/.bashrc" ENV="$tmp/.bashrc"
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.zshenv"
 cat >"$tmp/.zshrc" <<'ZSHRC'
-TRAPALRM() { zle && zle reset-prompt; }
-{ while kill -0 $$ 2>/dev/null; do sleep 0.1; kill -ALRM $$ 2>/dev/null; done } &!
+exec {tick}< <(while sleep 0.1 && echo; do :; done)
+redraw_prompt() {
+  local line
+  while read -t 0 -r -u $tick line; do :; done
+  zle reset-prompt
+}
+zle -N redraw_prompt
+zle -F -w $tick redraw_prompt
 ZSHRC
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.bashrc"
 export PATH="$tmp/bin:/usr/bin:/bin"

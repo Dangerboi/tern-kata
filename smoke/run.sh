@@ -211,6 +211,8 @@ ctl_typed() {
     tern ctl --control "$tmp/control.sock" tree "[data-id^='main.columns.'], [data-id='main.error']" | jq -e '.count > 0' >/dev/null && return 0
     sleep 0.05
   done
+  printf 'tern-kata drew no columns or error within %s s of %s\n' "$wait_limit" "$1" >&2
+  return 1
 }
 # VISUAL wins over EDITOR in tern-kata, so one inherited from the shell would replace the editor fixture.
 printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP -u VISUAL EDITOR=%s/smoke/editor.sh KATA_HOME=%s %s/tern-kata"\n' "$repo" "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
