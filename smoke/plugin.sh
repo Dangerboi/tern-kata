@@ -35,25 +35,21 @@ cleanup() {
 trap cleanup EXIT
 source "$(dirname "$0")/ctl.sh"
 ctl() { ctl_call "$@"; }
-# Polls a command every 0.1 s until it succeeds, for up to wait_limit seconds (ctl.sh). Headless Tern runs plugin timers
-# only on frames; the idle zsh prompts below redraw every 0.1 s, so frames, and the timers, keep coming while this sleeps.
+# Polls a command every 0.1 s until it succeeds, for up to wait_limit seconds (ctl.sh), and names it when time runs out.
+# Headless Tern runs plugin timers only on frames; the idle zsh prompts below redraw every 0.1 s, so frames, and the
+# timers, keep coming while this sleeps.
 wait_for() {
   local deadline=$((SECONDS + wait_limit))
   until "$@"; do
-    (( SECONDS < deadline )) || return 1
+    (( SECONDS < deadline )) || { echo "timed out after ${wait_limit} s waiting for: $*" >&2; return 1; }
     sleep 0.1
   done
 }
 panes_are() { [[ $(ctl state | jq -r '.tabs[0].panes') == "$1" ]]; }
+panes_ready() { ctl ready >/dev/null && panes_are "$1"; }
 # Waits (real time) until the active tab has $1 Panes: a quit closes the launch-command Pane.
 expect_panes() {
-  for ((attempt=0; attempt<100; attempt++)); do
-    ctl ready
-    [[ $(ctl state | jq -r '.tabs[0].panes') == "$1" ]] && return 0
-    sleep 0.1
-  done
-  echo "expected $1 Panes, state: $(ctl state | jq -c '.tabs[0]')" >&2
-  return 1
+  wait_for panes_ready "$1" || { echo "state: $(ctl state | jq -c '.tabs[0]')" >&2; return 1; }
 }
 # Toasts are not terminal text: poll the rendered tree for one.
 toast_shown() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/dev/null; }
@@ -73,9 +69,7 @@ expect_no_kata_toast() {
   expect_no_toast "$not_installed_toast"
   expect_no_toast "$didnt_start_toast"
 }
-expect_toast() {
-  wait_for toast_shown "$1" || { echo "toast not shown: $1" >&2; return 1; }
-}
+expect_toast() { wait_for toast_shown "$1"; }
 mkdir -p "$tmp/workspace" "$tmp/bin" "$tmp/pane-bin" "$tmp/app" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
 if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -o "$tmp/app/tern-kata" ./cmd/tern-kata); fi
 printf '#!/bin/sh\nexec env KATA_HOME=%q %q "$@"\n' "$KATA_HOME" "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
@@ -415,11 +409,8 @@ expect_no_kata_toast
 # (the binary's own error) are a failed start; 1 can be either (PowerShell's not-found, and Windows reports every failing
 # launch as 1); anything else, such as 127, is "not installed".
 no_kata_toast() { ! toast_shown "$failed_start_toast" && ! toast_shown "$not_installed_toast" && ! toast_shown "$didnt_start_toast"; }
-wait_no_kata_toast() {
-  wait_for no_kata_toast || { echo "kata toast did not clear" >&2; return 1; }
-}
 expect_launch_toast() { # $1 the one startup-failure toast that must show, the rest text it must also carry
-  wait_no_kata_toast
+  wait_for no_kata_toast
   ctl plugins run plugin.tern-kata.open
   ctl focus left
   expect_toast "$1"
@@ -477,7 +468,6 @@ ctl state | jq -e '.tabs[0].panes == 2' >/dev/null
 ctl expect Press
 # The local update finishes first, so the checks below exercise the watcher with a local session host.
 ctl key Enter
-wait_for panes_are 1
 expect_panes 1
 # The watcher polls once a second: 5 s let it act on the closed Pane.
 sleep 5
@@ -499,13 +489,11 @@ ctl plugins fixtures
 ctl focus left
 click_issue_link "kata://smoke/$first"
 wait_for panes_are 3
-ctl state | jq -e '.tabs[0].panes == 3' >/dev/null
 # The new kata Pane is the stand-in too: Enter ends it, leaving the update Pane to the right.
 ctl key Enter
 expect_panes 2
 ctl focus right
 ctl key Enter
-wait_for panes_are 1
 expect_panes 1
 # On a remote session host the update also runs the plugin step on this machine; the curl stand-in makes it fail, which toasts
 # the script's last stderr line and leaves no pending key behind.
@@ -535,7 +523,7 @@ if [[ $(printf '%s\n0.9.16\n' "$("$real_tern" --version | sed -n 's/^tern \([0-9
     [[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
     ctl expect Press
     ctl key Enter
-    wait_for test -e "$tmp/step-started" || { echo "the plugin step never started" >&2; exit 1; }
+    wait_for test -e "$tmp/step-started"
     grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending not set while the step runs" >&2; exit 1; }
     ctl plugins fixtures
     # The stand-in is still asleep, so only the reloaded VM can see the step end.
