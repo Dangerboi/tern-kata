@@ -25,7 +25,7 @@ Commands, smoke options and the Windows dev install: `docs/guide/development.md`
 - After a UI change: the smoke steps that cover it, plus every step naming an id, class or text the diff renames or removes (`grep -rl <id> smoke/steps`), each as `./smoke/run.sh smoke/steps/NN-name.sh` (5-15 s).
 - The full `./smoke/run.sh` once per branch (3-6 min; the push gate runs it).
 - Stop only the smoke servers you started; other agents run theirs beside yours.
-- After an install, run `scripts/dev-install.sh`: the Windows window machine runs its own plugin copy.
+- Before you ask the user to try a change, run `scripts/dev-install.sh`: it installs the build here and on the Windows window machine, which runs its own plugin copy.
 
 ## Changelog
 

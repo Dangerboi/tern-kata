@@ -3,6 +3,13 @@ set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
 
+run_extra() { # run_extra <script> <binary>: plugin.sh and supervision.sh take the binary, release-check.sh builds its own
+  case $(basename "$1") in
+    release-check.sh) "$1" ;;
+    *) "$1" "$2" ;;
+  esac
+}
+
 # With no argument the suite fans out. The steps wait on kata's daemon clocks (a timed claim's sweep, a job's delivery
 # window), so those steps and the two other scripts run beside the rest on their own headless Tern and kata daemon;
 # a shard is one such run (SMOKE_SHARD set, the steps given as arguments, the binary built once in SMOKE_BIN).
@@ -41,9 +48,9 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
     "$0" $group & jobs+=($!)
   done
   for name in "${slow[@]}"; do "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
-  (set +e; "$repo/smoke/plugin.sh" "$SMOKE_BIN" || { printf 'plugin.sh\n' >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
-  (set +e; "$repo/smoke/supervision.sh" "$SMOKE_BIN" || { printf 'supervision.sh\n' >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
-  (set +e; "$repo/smoke/release-check.sh" || { printf 'release-check.sh\n' >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
+  for extra in plugin.sh supervision.sh release-check.sh; do
+    (run_extra "$repo/smoke/$extra" "$SMOKE_BIN" || { printf '%s\n' "$extra" >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
+  done
   failed=0
   for job in "${jobs[@]}"; do wait "$job" || failed=1; done
   if (( failed )); then
@@ -67,13 +74,6 @@ for arg in "$@"; do
 done
 (( $# )) || steps=("$repo"/smoke/steps/*)
 
-run_extra() { # run_extra <script> <binary>
-  case $(basename "$1") in
-    release-check.sh) "$1" ;;
-    *) "$1" "$2" ;;
-  esac
-}
-
 if (( ${#steps[@]} == 0 )); then
   export CGO_ENABLED=0
   bin_dir=$(mktemp -d)
@@ -86,7 +86,7 @@ if (( ${#steps[@]} == 0 )); then
   current=
   for extra in "${extras[@]}"; do
     current=$(basename "$extra")
-    run_extra "$extra" "$bin_dir/tern-kata" || { printf '\nSmoke failed at %s\n' "$current" >&2; exit 1; }
+    run_extra "$extra" "$bin_dir/tern-kata" || { printf '\nSmoke failed at %s; its artifacts are named above\n' "$current" >&2; exit 1; }
   done
   printf '\nSmoke passed\n'
   exit 0
@@ -94,6 +94,7 @@ fi
 
 tmp=$(mktemp -d)
 current=
+in_extra=
 server_pid=
 proxy_pid=
 # HTTP servers the steps start (release dist/ served from a local port): stopped on every exit.
@@ -133,9 +134,13 @@ cleanup() {
   # A step that set up its own Docbank exported DOCBANK_HOME into $tmp; stop that daemon even when the step failed.
   [[ ${DOCBANK_HOME:-} != "$tmp"/* ]] || docbank daemon stop >/dev/null 2>&1 || true
   if [[ $status -ne 0 ]]; then
-    [[ ! -f "$tmp/tern.log" ]] || cat "$tmp/tern.log" >&2
-    printf 'Smoke failed at %s; artifacts: %s\n' "${current:-setup}" "$tmp" >&2
-    [[ -z ${SMOKE_FAIL_LOG:-} ]] || [[ -z $current ]] || printf '%s; artifacts: %s\n' "$current" "$tmp" >>"$SMOKE_FAIL_LOG"
+    if [[ -n $in_extra ]]; then
+      printf 'Smoke failed at %s; its artifacts are named above\n' "$current" >&2
+    else
+      [[ ! -f "$tmp/tern.log" ]] || cat "$tmp/tern.log" >&2
+      printf 'Smoke failed at %s; artifacts: %s\n' "${current:-setup}" "$tmp" >&2
+    fi
+    [[ -z ${SMOKE_FAIL_LOG:-} ]] || printf '%s; artifacts: %s\n' "${current:-setup}" "$tmp" >>"$SMOKE_FAIL_LOG"
   else
     rm -rf "$tmp"
   fi
@@ -262,9 +267,11 @@ current=quit_app
 quit_app
 current=
 [[ -z ${SMOKE_SHARD:-} ]] || exit 0
+in_extra=1
 for extra in ${extras[@]+"${extras[@]}"}; do
   current=$(basename "$extra")
   run_extra "$extra" "$tmp/tern-kata"
 done
+in_extra=
 current=
 printf '\nSmoke passed\n'

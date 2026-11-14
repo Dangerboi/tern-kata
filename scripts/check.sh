@@ -52,6 +52,7 @@ placement_tests() {
 
 static() {
   local status=0 pid pids=()
+  rm -f "$out"/log/*.fail # a kept CHECK_OUT still holds the markers of earlier runs
   check fmt gofmt_clean
   check vet-linux go vet ./...
   check vet-windows env GOOS=windows go vet ./...
@@ -98,7 +99,10 @@ case ${1:-all} in
 esac
 if (( ${#failed[@]} )); then
   if [[ ${1:-all} == static ]]; then
-    names=$(cd "$out/log" && ls ./*.fail 2>/dev/null | sed 's|^\./||; s|\.fail$||' | paste -sd' ' -)
+    names=
+    for marker in "$out"/log/*.fail; do
+      [[ ! -e $marker ]] || names+="${names:+ }$(basename "$marker" .fail)"
+    done
     failed=("${names:-static}")
   fi
   printf 'CHECKS FAIL: %s\n' "${failed[*]}"
