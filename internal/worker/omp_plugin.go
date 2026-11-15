@@ -102,7 +102,11 @@ type lockState struct{ found, disabled bool }
 
 func (e OmpEnv) scan() *pluginScan { return &pluginScan{env: e, locks: map[string]lockState{}} }
 
-// kataPlugin says where kata-plugin's omp extension (npm package kata-omp) is installed for an omp run with the given
+// kataOmpPackages are the npm names of kata-plugin's omp extension. omp registers npm and marketplace installs alike
+// under the package name, which became @dangerboi/kata-omp; an install from before the rename keeps kata-omp.
+var kataOmpPackages = []string{"@dangerboi/kata-omp", "kata-omp"}
+
+// kataPlugin says where kata-plugin's omp extension (kataOmpPackages) is installed for an omp run with the given
 // --profile argument (argProfile, when hasArg), "" when none of the places omp loads from names it. It looks at the
 // plugins' node_modules and lock file, the ambient extensions folder and the settings' extension list. The
 // marketplace registry (installed_plugins.json) alone loads nothing, so it is not read.
@@ -124,8 +128,10 @@ func (s *pluginScan) kataPlugin(argProfile string, hasArg bool) string {
 		if lock.disabled {
 			continue
 		}
-		if path := filepath.Join(root, "node_modules", "kata-omp", "package.json"); fileExists(path) {
-			return path
+		for _, pkg := range kataOmpPackages {
+			if path := filepath.Join(root, "node_modules", filepath.FromSlash(pkg), "package.json"); fileExists(path) {
+				return path
+			}
 		}
 		if lock.found {
 			return filepath.Join(root, "omp-plugins.lock.json")
@@ -160,8 +166,12 @@ func (s *pluginScan) lock(root string) lockState {
 			} `json:"plugins"`
 		}
 		if json.Unmarshal(data, &lock) == nil {
-			entry, found := lock.Plugins["kata-omp"]
-			st = lockState{found, found && entry.Enabled != nil && !*entry.Enabled}
+			for _, pkg := range kataOmpPackages {
+				if entry, found := lock.Plugins[pkg]; found {
+					st = lockState{true, entry.Enabled != nil && !*entry.Enabled}
+					break
+				}
+			}
 		}
 	}
 	s.locks[root] = st
