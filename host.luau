@@ -20,6 +20,7 @@
 -- place each is held; the Go tests pin them).
 
 local panecommands = require("./panecommands")
+local reopen = require("./reopen")
 local workersummary = require("./workersummary")
 
 local os_name = tern.runtime.os
@@ -414,5 +415,20 @@ if windows then
     end)
     if not ok then
         tern.log.warn("tern-kata: could not register the spawn filter, so Pane commands load the PowerShell profile: " .. tostring(err))
+    end
+end
+
+-- A chat Tern opens again (after a restart, or in a fork) runs the command that ran it. For an agent the Pane started that is
+-- the whole wrapper line, prompt file included, so the rule (reopen.luau) hands back the line without its prompt word and
+-- Tern adds the resume flag and the session. A synchronous filter under a 50 ms budget: string work only. A Tern before 0.9.21
+-- raises on the event name, and then a reopened agent runs as Tern puts it back.
+do
+    local ok, err = pcall(function()
+        tern.on("reopen", function(ev: any): string?
+            return reopen.command(ev)
+        end)
+    end)
+    if not ok then
+        tern.log.info("tern-kata: Tern does not offer the reopen hook, so a reopened agent runs without the tern-kata wrapper: " .. tostring(err))
     end
 end

@@ -93,6 +93,14 @@ The agent always runs through `tern-kata agent [--as=<actor>] [--address-prefix=
 - A remote daemon wins over the checkout's `.kata.local.toml` pin.
 - A switch to a local daemon that the checkout's pin or `active_daemon` would override, or to a remote entry without a token while `[auth]` in `config.toml` holds a credential, is refused with the reason in the "Cannot start an agent" Notice.
 
+### Agents after a Tern restart
+
+Tern 0.9.21 and later open an `omp` chat again after a restart of the session daemon (`tern restart`, an update): the Pane's agent comes back in the same block, resumed in the same session, instead of ending with "[Stopped by SIGTERM]". The plugin's host half answers Tern's `reopen` hook so the agent comes back inside `tern-kata agent` and not as a bare `omp`: it keeps its `KATA_REF`, `KATA_AUTHOR`, route flags (a Pane on a remote daemon keeps writing to that daemon), tern-kata's omp extension, and its Agent address, which is built from the block id, and a restart keeps the block id. The task prompt is not sent again: the hook drops the `@<prompt file>` word from the line, so omp starts with `--resume` or `--restore` and the session.
+
+A fork of an agent chat (Tern's `--fork`) runs as `tern-kata agent` on the same Issue, but without the Agent address flags (`--address-prefix`, `--forward-comments`, `--message-from`, `--coordinator`, `--coordinating`): it is not a second owner of the original's address, so messages to the original still reach only the original. The fork has no card on the Agent card, and no messages to its own address.
+
+A chat typed by hand at a shell (`tern-kata agent … -- omp`) is brought back the same way. Any other chat (a plain `omp`, `sandbox -k omp`, `tern acp`) is left to Tern. On a Tern before 0.9.21 the host half logs that the hook is missing and a reopened agent runs as that Tern puts it back, so the agent's wrapper is lost.
+
 ### Agent badge
 
 The Agent badge on an Issue's list row, Lane row, Board card and detail shows "agent working", "agent waiting for you", "agent idle" or "agent exited", with " · N" when the Issue has several agents, remote ones included (see [Agents on other hosts](#agents-on-other-hosts)). While an agent of the Issue has a message at its address that it has not cleared, the badge appends " · message unread" in the warning tone ("agent working · message unread") and the Agent card row ends with "message unread: " and the first line of the message. It goes on the next read after the slot clears (the agent, or `kata notify --clear`) and when the agent exits. On the Board card and in the detail, a click focuses the agent.
