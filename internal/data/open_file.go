@@ -119,12 +119,12 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 
 // saveToDownloads puts a copy of the downloaded file at path into Downloads and returns where it went. In a Tern Pane that is the
 // Downloads folder of the machine whose window shows the Pane, which `tern download` knows and this process does not: remote is set
-// when Tern took the file there. Whenever `tern download` does not deliver, for whatever reason, the copy goes into this machine's
-// Downloads folder instead, so a change in Tern's wording cannot break Save. Tern's two ordinary refusals (no such command in an
-// older Tern, and a window on this very machine) are the plain local save; any other failure comes back as note, which the toast
-// shows beside the path. Only a failure of the local copy is an error.
+// when Tern took the file there. A Tern not known to have `download` is never asked (it would open the file in a window), and
+// whenever `tern download` does not deliver, for whatever reason, the copy goes into this machine's Downloads folder instead, so a
+// change in Tern's wording cannot break Save. A window on this very machine is the plain local save; any other failure comes back
+// as note, which the toast shows beside the path. Only a failure of the local copy is an error.
 func (g *Gateway) saveToDownloads(ctx context.Context, path string) (saved string, remote bool, note string, err error) {
-	if inTern() {
+	if inTern() && g.ternHasSubcommands(ctx) {
 		var there string
 		there, err = g.ternDownload(ctx, path)
 		if err == nil {
@@ -145,22 +145,20 @@ func (g *Gateway) saveToDownloads(ctx context.Context, path string) (saved strin
 	return saved, false, note, nil
 }
 
-// errTernDownloadLocal marks the failures of `tern download` that are expected and need no mention: this Tern predates the command,
-// or the window shows a Pane of the machine the files are on.
+// errTernDownloadLocal marks the one expected refusal of `tern download` that needs no mention: the window shows a Pane of the
+// machine the files are on.
 var errTernDownloadLocal = errors.New("tern download copies nothing here")
 
-// ternDownload runs `tern download path` and returns the path it printed, the last line of its output. An older Tern does not know
-// the command: it tries to run "download" as a program and exits 2 saying "tern: download: No such file or directory", or answers
-// with nothing at all. A Tern whose window is on this machine exits 1 saying "the pane's files are on this computer already". Those
-// come back as errTernDownloadLocal, found by their wording only to keep the toast quiet; every other failure is an error carrying
-// Tern's message.
+// ternDownload runs `tern download path` and returns the path it printed, the last line of its output. A Tern whose window is on
+// this machine exits 1 saying "the pane's files are on this computer already"; that comes back as errTernDownloadLocal, found by
+// its wording only to keep the toast quiet. Every other failure, and an answer of nothing, is an error carrying Tern's message.
 func (g *Gateway) ternDownload(ctx context.Context, path string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, ternDownloadTimeout)
 	defer cancel()
 	out, err := g.runTern(ctx, []string{"download", path})
 	text := strings.TrimSpace(string(out))
 	if err != nil {
-		if strings.Contains(text, "tern: download: No such file or directory") || strings.Contains(text, "files are on this computer already") {
+		if strings.Contains(text, "files are on this computer already") {
 			return "", errTernDownloadLocal
 		}
 		if text != "" {
@@ -169,7 +167,7 @@ func (g *Gateway) ternDownload(ctx context.Context, path string) (string, error)
 		return "", fmt.Errorf("tern download failed: %w", err)
 	}
 	if text == "" {
-		return "", errTernDownloadLocal
+		return "", errors.New("tern download failed: it printed no path")
 	}
 	lines := strings.Split(text, "\n")
 	return strings.TrimSpace(lines[len(lines)-1]), nil

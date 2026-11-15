@@ -15,6 +15,13 @@ import (
 // The fixture clears the Tern environment, so inPane is set after it.
 func saveFixture(t *testing.T, inPane bool, name string, tern func(args []string) ([]byte, error)) (model.AttachmentOpened, string, *[][]string) {
 	t.Helper()
+	return saveFixtureWithVersion(t, inPane, modernTernVersion, nil, name, tern)
+}
+
+// saveFixtureWithVersion is saveFixture on a Tern that answers `--version` with version (an error when versionErr is set).
+// The version question is not among the calls it returns.
+func saveFixtureWithVersion(t *testing.T, inPane bool, version string, versionErr error, name string, tern func(args []string) ([]byte, error)) (model.AttachmentOpened, string, *[][]string) {
+	t.Helper()
 	f := newDocbankFixture(t)
 	if inPane {
 		t.Setenv("TERN_PANE", "7")
@@ -23,6 +30,9 @@ func saveFixture(t *testing.T, inPane bool, name string, tern func(args []string
 	f.gateway.downloadsDir = func() (string, error) { return downloads, nil }
 	var asked [][]string
 	f.gateway.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if args[0] == "--version" {
+			return []byte(version), versionErr
+		}
 		asked = append(asked, args)
 		return tern(args)
 	}
@@ -47,10 +57,7 @@ func TestSaveInTernReportsThePathTernPrintedAndCopiesNothingHere(t *testing.T) {
 
 func TestSaveInTernFallsBackToThisMachineWhenTernCannotDownloadHere(t *testing.T) {
 	cases := map[string]func([]string) ([]byte, error){
-		"an older Tern runs download as a program": func([]string) ([]byte, error) {
-			return []byte("tern: download: No such file or directory (os error 2)\nsee `tern help`\n"), errors.New("exit status 2")
-		},
-		"an older Tern in a pane says nothing": func([]string) ([]byte, error) { return nil, nil },
+		"it prints no path": func([]string) ([]byte, error) { return nil, nil },
 		"the window is on this machine": func([]string) ([]byte, error) {
 			return []byte("tern download: the pane's files are on this computer already\n"), errors.New("exit status 1")
 		},

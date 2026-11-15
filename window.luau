@@ -579,12 +579,18 @@ local workerSpec: WidgetSpec = {
 -- The registration follows the summary: it is registered while a fresh summary is found and taken away when none is, so the
 -- host half's widget shows again. That matters when a reload installs a host half that renders widgets: the host half it
 -- replaced has just stamped the key, this half may read it first, and the host half this load starts deletes it a moment later.
+-- Removing a widget with nil is documented from Tern 0.9.21; on 0.9.17 to 0.9.20 it may raise. A failed removal is logged
+-- once and not tried again in this load: the widget stays registered, and its render returns nil without a summary, so it
+-- draws nothing.
+local workerRemovalFailed = false
 local function setWorkerFallback(wanted: boolean)
     if wanted == workerRegistered then return end
+    if not wanted and workerRemovalFailed then return end
     local ok, err = pcall(function() tern.chrome.widget("worker", if wanted then workerSpec else nil) end)
     if ok then
         workerRegistered = wanted
     else
+        if not wanted then workerRemovalFailed = true end
         tern.log.warn("tern-kata: could not " .. (if wanted then "register" else "remove") .. " widget worker: " .. tostring(err))
     end
 end

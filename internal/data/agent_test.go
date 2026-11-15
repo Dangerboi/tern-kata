@@ -406,8 +406,8 @@ func TestPruningDropsTheEntriesTernNoLongerListsWithTheirPrompts(t *testing.T) {
 		t.Fatal(err)
 	}
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
-		if args[0] == "inspect" {
-			return []byte(`{"clients":[]}`), nil
+		if out, ok := ternProbe(args); ok {
+			return out, nil
 		}
 		if !slices.Equal(args, []string{"ls", "--json"}) {
 			t.Errorf("ran %q", args)
@@ -448,8 +448,8 @@ func TestPruningKeepsAnEntryAddedAfterTheEntriesItChecked(t *testing.T) {
 		t.Fatal(err)
 	}
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
-		if args[0] == "inspect" {
-			return []byte(`{"clients":[]}`), nil
+		if out, ok := ternProbe(args); ok {
+			return out, nil
 		}
 		// Another Pane starts an agent while tern ls is answering.
 		if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry {
@@ -514,8 +514,8 @@ func lsCounter(t *testing.T, g *Gateway, live *[]string) *int {
 	t.Helper()
 	asked := 0
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
-		if args[0] == "inspect" {
-			return []byte(`{"clients":[]}`), nil
+		if out, ok := ternProbe(args); ok {
+			return out, nil
 		}
 		if !slices.Equal(args, []string{"ls", "--json"}) {
 			t.Errorf("ran %q", args)
@@ -734,6 +734,9 @@ const lsWithoutAgents = `{"sessions":[{"id":1,"name":"main","shown":true,"tabs":
 func ternScript(g *Gateway, replies map[string]func() ([]byte, error)) *[][]string {
 	var calls [][]string
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if args[0] == "--version" {
+			return []byte(modernTernVersion), nil
+		}
 		calls = append(calls, args)
 		for n := min(len(args), 3); n > 0; n-- {
 			if reply, ok := replies[strings.Join(args[:n], " ")]; ok {
@@ -1223,8 +1226,8 @@ func TestLiveBlocksConcurrentCallersShareOneAsk(t *testing.T) {
 	t.Cleanup(func() { once.Do(func() { close(release) }) })
 	var asked atomic.Int32
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
-		if args[0] == "inspect" {
-			return []byte(`{"clients":[]}`), nil
+		if out, ok := ternProbe(args); ok {
+			return out, nil
 		}
 		asked.Add(1)
 		<-release

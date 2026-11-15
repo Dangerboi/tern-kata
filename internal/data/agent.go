@@ -158,9 +158,13 @@ func (g *Gateway) ternWindowLs(ctx context.Context, window *string) (ternListing
 
 // ternWindowKeys is the key of every window Tern shows, from `tern inspect --json`: a client of kind "window", or "remote" (a
 // window on another machine attached to this host, with a key of its own). Command-line clients are no window. A key that
-// `tern ls --window` refuses fails the whole answer (windowListings), so nothing is pruned on a guess. Older Tern lists no
-// clients, or has no such command: nil then, and nothing is known of other windows.
+// `tern ls --window` refuses fails the whole answer (windowListings), so nothing is pruned on a guess. A Tern not known to have
+// `inspect` is not asked (it would open "inspect" as a file); it and one that lists no clients give nil, and nothing is known of
+// other windows.
 func (g *Gateway) ternWindowKeys(ctx context.Context) []string {
+	if !g.ternHasSubcommands(ctx) {
+		return nil
+	}
 	out, err := g.ternOutput(ctx, []string{"inspect", "--json"})
 	if err != nil {
 		return nil
@@ -775,7 +779,7 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 		}
 		if err := step(MoveRightOfArgs(cmd.Block, shell)); err != nil {
 			_ = step(CloseBlockArgs(shell))
-			return failed(err)
+			return failed(g.explainPlacement(ctx, cmd.Block, err))
 		}
 		if err := step(CloseBlockArgs(shell)); err != nil {
 			return hidden(err)

@@ -27,7 +27,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Agents
 
-- An agent that Tern opens again after a restart (Tern 0.9.21 and later) keeps running under `tern-kata agent`, with its Issue, daemon and messages, and is no longer sent its task prompt again.
+- An agent that Tern opens again after its session daemon ended, such as after a reboot (Tern 0.9.21 and later), keeps running under `tern-kata agent`, with its Issue, daemon and messages, and is no longer sent its task prompt again.
   - A forked chat never takes the original agent's address.
 - An agent whose block is in another Tern window, or parked, keeps its entry and badge when a kata Pane starts instead of being dropped.
   - Focus, Interrupt and Stop reach it in its window; Open and Send back say it is in another window.
