@@ -242,6 +242,16 @@ hint_expect_mode() {
   printf 'Expected keys in %s, found %s\n' "$1" "$(hint_mode)" >&2
   return 1
 }
+# pick_option <field data-id> <nth>: picks a popup card's select option with clicks, each acknowledged by the Pane before the
+# next: the button click, until the footer offers "pick choice" (the Pane has the menu open), then the option click, until it
+# no longer does. The Pane renders the menu's open state itself, and a render answering an earlier click that reaches Tern
+# after a later one overrides it: the menu opens again after a pick, or closes under the next click.
+pick_option() {
+  ctl click "[data-id='$1.control'] .sf-select-btn"
+  expect_tree "[data-id='dock.hints']" '.ok and .count == 1 and (.nodes[0].text | contains("pick choice"))'
+  ctl click "[data-id='$1.control'] .sf-select-opt:nth-child($2)"
+  expect_tree "[data-id='dock.hints']" '.ok and .count == 1 and (.nodes[0].text | contains("pick choice") | not)'
+}
 quit_app() {
   ctl key q
   expect_tree "[data-id^='main.']" '.ok and .count == 0'

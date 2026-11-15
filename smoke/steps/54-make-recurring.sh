@@ -13,22 +13,17 @@ expect_tree "[data-id='layer.recurrence.frequency']" '.ok and .count == 1 and (.
 expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("Every (weeks): 1"))'
 # Weekly shows no Day or Month field; clicking Monthly shows Day, clicking Weekly hides it again.
 expect_tree "[data-id='layer.recurrence.day']" '.ok and .count == 0'
-ctl click "[data-id='layer.recurrence.frequency.control'] .sf-select-btn"
-ctl click "[data-id='layer.recurrence.frequency.control'] .sf-select-opt:nth-child(3)"
+pick_option layer.recurrence.frequency 3
 expect_tree "[data-id='layer.recurrence.day']" '.ok and .count == 1'
 expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("Every (months): 1"))'
-ctl click "[data-id='layer.recurrence.frequency.control'] .sf-select-btn"
-ctl click "[data-id='layer.recurrence.frequency.control'] .sf-select-opt:nth-child(2)"
+pick_option layer.recurrence.frequency 2
 expect_tree "[data-id='layer.recurrence.day']" '.ok and .count == 0'
 # The end field asks for a count or a date by the end chosen, and goes when the series never ends.
-ctl click "[data-id='layer.recurrence.ends.control'] .sf-select-btn"
-ctl click "[data-id='layer.recurrence.ends.control'] .sf-select-opt:nth-child(3)"
+pick_option layer.recurrence.ends 3
 expect_tree "[data-id='layer.recurrence.end']" '.ok and .count == 1 and (.nodes[0].text | contains("Occurrences:"))'
-ctl click "[data-id='layer.recurrence.ends.control'] .sf-select-btn"
-ctl click "[data-id='layer.recurrence.ends.control'] .sf-select-opt:nth-child(2)"
+pick_option layer.recurrence.ends 2
 expect_tree "[data-id='layer.recurrence.end']" '.ok and .count == 1 and (.nodes[0].text | contains("End date (YYYY-MM-DD):"))'
-ctl click "[data-id='layer.recurrence.ends.control'] .sf-select-btn"
-ctl click "[data-id='layer.recurrence.ends.control'] .sf-select-opt:nth-child(1)"
+pick_option layer.recurrence.ends 1
 expect_tree "[data-id='layer.recurrence.end']" '.ok and .count == 0'
 ctl click "[data-id='layer.recurrence.foot.save']"
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 0'
