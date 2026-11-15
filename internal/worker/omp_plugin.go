@@ -94,13 +94,12 @@ func (e OmpEnv) layout(argProfile string, hasArg bool) (plugins, agent string, o
 }
 
 type pluginScan struct {
-	env   OmpEnv
-	locks map[string]lockState
+	env OmpEnv
+	// locks maps a plugins root to the kataOmpPackages its lock file names, each to whether it is disabled there.
+	locks map[string]map[string]bool
 }
 
-type lockState struct{ found, disabled bool }
-
-func (e OmpEnv) scan() *pluginScan { return &pluginScan{env: e, locks: map[string]lockState{}} }
+func (e OmpEnv) scan() *pluginScan { return &pluginScan{env: e, locks: map[string]map[string]bool{}} }
 
 // kataOmpPackages are the npm names of kata-plugin's omp extension. omp registers npm and marketplace installs alike
 // under the package name, which became @dangerboi/kata-omp; an install from before the rename keeps kata-omp.
@@ -124,17 +123,19 @@ func (s *pluginScan) kataPlugin(argProfile string, hasArg bool) string {
 		roots = append(roots, filepath.Join(dir, ".omp", "plugins"))
 	}
 	for _, root := range slices.Compact(roots) {
+		// omp enables and disables each package name on its own.
 		lock := s.lock(root)
-		if lock.disabled {
-			continue
-		}
 		for _, pkg := range kataOmpPackages {
+			disabled, found := lock[pkg]
+			if disabled {
+				continue
+			}
 			if path := filepath.Join(root, "node_modules", filepath.FromSlash(pkg), "package.json"); fileExists(path) {
 				return path
 			}
-		}
-		if lock.found {
-			return filepath.Join(root, "omp-plugins.lock.json")
+			if found {
+				return filepath.Join(root, "omp-plugins.lock.json")
+			}
 		}
 	}
 	if entries, err := os.ReadDir(filepath.Join(agent, "extensions")); err == nil {
@@ -154,11 +155,11 @@ func (s *pluginScan) kataPlugin(argProfile string, hasArg bool) string {
 	return ""
 }
 
-func (s *pluginScan) lock(root string) lockState {
+func (s *pluginScan) lock(root string) map[string]bool {
 	if st, ok := s.locks[root]; ok {
 		return st
 	}
-	var st lockState
+	st := map[string]bool{}
 	if data, err := os.ReadFile(filepath.Join(root, "omp-plugins.lock.json")); err == nil {
 		var lock struct {
 			Plugins map[string]struct {
@@ -168,8 +169,7 @@ func (s *pluginScan) lock(root string) lockState {
 		if json.Unmarshal(data, &lock) == nil {
 			for _, pkg := range kataOmpPackages {
 				if entry, found := lock.Plugins[pkg]; found {
-					st = lockState{true, entry.Enabled != nil && !*entry.Enabled}
-					break
+					st[pkg] = entry.Enabled != nil && !*entry.Enabled
 				}
 			}
 		}
