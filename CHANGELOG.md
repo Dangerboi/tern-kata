@@ -13,6 +13,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Jobs and worker
 
 - `worker doctor` finds kata-plugin's omp extension installed under its npm name `@dangerboi/kata-omp`, from npm or an upgraded marketplace install, and warns of a profile that loads omp's extensions as it does for `kata-omp`.
+
 ## [0.14.1] - 2026-11-15
 
 ### Changed
