@@ -102,11 +102,12 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 		}
 		return opened
 	}
-	if !model.OSOpens(cmd.Attachment.Name) {
-		opened.Err = fmt.Errorf("saved at %s and not opened: tern-kata opens only images, video, audio, PDFs and text", opened.Path)
+	if inTern() && model.TernDraws(cmd.Attachment.Name) && g.ternOpen(ctx, "--preview", opened.Path) == nil {
 		return opened
 	}
-	if inTern() && model.TernDraws(cmd.Attachment.Name) && g.ternOpen(ctx, "--preview", opened.Path) == nil {
+	// Only Tern shows a kind the OS must not open, so when Tern cannot, the file is just saved.
+	if !model.OSOpens(cmd.Attachment.Name) {
+		opened.Err = fmt.Errorf("saved at %s and not opened: tern-kata opens only images, video, audio, PDFs and text", opened.Path)
 		return opened
 	}
 	opened.OutsideTern = true

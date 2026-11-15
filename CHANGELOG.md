@@ -4,6 +4,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Attachments
+
+- A `.docx` Attachment opens as a document in Tern (Tern 0.9.21 and later), in the floating view, the side panel or beside the Pane.
+  - It is never handed to the system app: outside Tern it is only saved.
+
 ### Fixed
 
 #### Issues and Pages

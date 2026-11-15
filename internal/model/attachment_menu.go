@@ -47,12 +47,13 @@ const (
 	WayCopy
 )
 
-// ternDrawnExtensions are the extensions Tern's own file block draws in place beside the Pane: images, plain text, Markdown and JSON.
+// ternDrawnExtensions are the extensions Tern's own file block draws in place beside the Pane: images, plain text, Markdown, JSON and Word documents.
 // Video, audio and PDFs open in a block that only hands them to the OS of the machine showing the window, and a CSV opens a table
 // block that takes the focus, so those go to the OS opener of the session host.
-var ternDrawnExtensions = []string{".png", ".jpg", ".jpeg", ".gif", ".txt", ".md", ".json"}
+var ternDrawnExtensions = []string{".png", ".jpg", ".jpeg", ".gif", ".txt", ".md", ".json", ".docx"}
 
-// TernDraws reports whether Tern's file block draws a file called name itself.
+// TernDraws reports whether Tern's file block draws a file called name itself. A kind listed here but not in osOpenedExtensions (a
+// Word document) is shown only by Tern and is never handed to the OS.
 func TernDraws(name string) bool {
 	return slices.Contains(ternDrawnExtensions, strings.ToLower(filepath.Ext(name)))
 }
@@ -90,7 +91,7 @@ func (w AttachmentWay) verb() string {
 // the key says it as a Notice. Only WayBeside and WaySystem refuse.
 func AttachmentRefusal(a Attachment, way AttachmentWay) string {
 	if way == WayBeside && !TernDraws(a.Name) {
-		return "Tern draws only images, text, Markdown and JSON beside the Pane; open this one another way."
+		return "Tern draws only images, text, Markdown, JSON and Word documents beside the Pane; open this one another way."
 	}
 	if way == WaySystem && !OSOpens(a.Name) {
 		return "tern-kata hands only images, video, audio, PDFs and text to the system app, since the OS may run anything else; save it (s) and open it yourself."
