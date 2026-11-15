@@ -7,15 +7,18 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 daemon_pid=
 up_server=
+keepalive=
 tern_bin=$(command -v tern)
 export CGO_ENABLED=0 KATA_HOME="$tmp/kata" TERN_CONFIG_DIR="$tmp/config" TERN_DAEMON_SOCKET="$tmp/daemon.sock"
 export STENCIL_LOG_DIR="$tmp/logs" XDG_CONFIG_HOME="$tmp/xdg-config" XDG_STATE_HOME="$tmp/xdg-state"
-export STENCIL_LOG=warn,tern::plugin=warn
+# stencil_tern=info logs the daemon's own stop ("daemon stopped kind=\"idle\""), which explains a host half that went quiet.
+export STENCIL_LOG=warn,tern::plugin=warn,stencil_tern=info
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP TERN_PANE_SOCKET TERN_WINDOW_SOCKET
 state="$XDG_STATE_HOME/tern-kata"
 cleanup() {
   status=$?
   trap - EXIT
+  [[ -z "$keepalive" ]] || { kill "$keepalive" 2>/dev/null || true; wait "$keepalive" 2>/dev/null || true; }
   stop_daemon
   [[ -z "$up_server" ]] || { kill "$up_server" 2>/dev/null || true; wait "$up_server" 2>/dev/null || true; }
   # A worker the daemon's death left behind is the smoke's own: end it.
@@ -250,8 +253,14 @@ wait_started "" 13 || { echo "restoring worker.toml did not start a worker withi
 # A plugin reload gives the host half fresh state while its worker runs on, as a Tern update's handoff does. The reloaded
 # host half starts no second worker for worker.lock to refuse and knows the held answer (an older host.luau would log it
 # as an unknown status); it names the running worker once, over two reloads and three looks, and starts a worker within a
-# poll of its end. The reloads are clients, so the daemon is kept busy from here on (see wait_started).
+# poll of its end.
+# The reloads are the daemon's first clients, and a daemon with no panes stops about 12 s after its last client leaves,
+# taking the host half under test with it, worker or no worker. The stages from here on have stretches with no client of
+# their own (the release cross-builds before the update take that long on a busy machine), so a client asks the daemon
+# something every 2 s until the end.
 adopted=$(worker_pid)
+(while sleep 2; do tern plugin list >/dev/null 2>&1; done) &
+keepalive=$!
 log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
 tern plugin reload tern-kata >/dev/null
 for ((k = 0; k < 15; k++)); do # looks at 0.5 s (first load), then 3.5 s and 13.5 s (the load after the second reload)
