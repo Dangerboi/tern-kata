@@ -158,16 +158,21 @@ func (g *Gateway) ternWindowLs(ctx context.Context, window *string) (ternListing
 
 // ternWindowKeys is the key of every window Tern shows, from `tern inspect --json`: a client of kind "window", or "remote" (a
 // window on another machine attached to this host, with a key of its own). Command-line clients are no window. A key that
-// `tern ls --window` refuses fails the whole answer (windowListings), so nothing is pruned on a guess. A Tern not known to have
-// `inspect` is not asked (it would open "inspect" as a file); it and one that lists no clients give nil, and nothing is known of
-// other windows.
-func (g *Gateway) ternWindowKeys(ctx context.Context) []string {
-	if !g.ternHasSubcommands(ctx) {
-		return nil
+// `tern ls --window` refuses fails the whole answer (windowListings), so nothing is pruned on a guess; so does a failed
+// `tern --version`, and so does a failed or unreadable `tern inspect` on a Tern known to have it, for then it is unknown whether
+// other windows exist. A Tern that answered as not having `inspect` is not asked (it would open "inspect" as a file); it and one
+// whose inspect parses but lists no clients give nil, and nothing is known of other windows.
+func (g *Gateway) ternWindowKeys(ctx context.Context) ([]string, error) {
+	has, err := g.ternHasSubcommands(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !has {
+		return nil, nil
 	}
 	out, err := g.ternOutput(ctx, []string{"inspect", "--json"})
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("tern inspect: %w", err)
 	}
 	var inspected struct {
 		Clients []struct {
@@ -175,8 +180,8 @@ func (g *Gateway) ternWindowKeys(ctx context.Context) []string {
 			Kind   string `json:"kind"`
 		} `json:"clients"`
 	}
-	if json.Unmarshal(out, &inspected) != nil {
-		return nil
+	if err := json.Unmarshal(out, &inspected); err != nil {
+		return nil, fmt.Errorf("tern inspect: %w", err)
 	}
 	var keys []string
 	for _, c := range inspected.Clients {
@@ -184,7 +189,7 @@ func (g *Gateway) ternWindowKeys(ctx context.Context) []string {
 			keys = append(keys, c.Window)
 		}
 	}
-	return keys
+	return keys, nil
 }
 
 // windowListing is one window's ls. own marks the one Tern gives a command that names no window: the Pane's.
@@ -202,7 +207,11 @@ func (g *Gateway) windowListings(ctx context.Context) ([]windowListing, error) {
 		return nil, err
 	}
 	all := []windowListing{{own: true, ternListing: own}}
-	for _, key := range g.ternWindowKeys(ctx) {
+	keys, err := g.ternWindowKeys(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not tell which Tern windows exist: %w", err)
+	}
+	for _, key := range keys {
 		listing, err := g.ternWindowLs(ctx, &key)
 		if err != nil {
 			return nil, fmt.Errorf("window %q: %w", key, err)

@@ -51,8 +51,8 @@ func TestOnlyATernAtLeastThe0921ReleaseIsKnownToHaveTheSubcommands(t *testing.T)
 			return []byte(c.out), nil
 		}
 		for range 3 {
-			if got := g.ternHasSubcommands(context.Background()); got != c.want {
-				t.Errorf("%q: %v, want %v", c.out, got, c.want)
+			if got, err := g.ternHasSubcommands(context.Background()); err != nil || got != c.want {
+				t.Errorf("%q: %v (%v), want %v", c.out, got, err, c.want)
 			}
 		}
 		if asked != 1 {
@@ -77,16 +77,61 @@ func TestAFailedVersionAskIsAskedAgainAndTheProbeOutlivesTheCallersContext(t *te
 		}
 		return []byte(modernTernVersion), nil
 	}
-	if g.ternHasSubcommands(context.Background()) {
-		t.Fatal("a failed ask counted as known")
+	if has, err := g.ternHasSubcommands(context.Background()); has || err == nil {
+		t.Fatalf("a failed ask gave %v, %v, want an error", has, err)
 	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if !g.ternHasSubcommands(cancelled) {
-		t.Fatal("the second ask did not allow a current Tern")
+	if has, err := g.ternHasSubcommands(cancelled); !has || err != nil {
+		t.Fatalf("the second ask gave %v, %v, want a current Tern allowed", has, err)
 	}
-	if !g.ternHasSubcommands(context.Background()) || asked != 2 {
+	if has, err := g.ternHasSubcommands(context.Background()); !has || err != nil || asked != 2 {
 		t.Fatalf("asked %d times, want 2 with the answer then kept", asked)
+	}
+}
+
+func TestAFailingVersionAskPrunesNothingButAnOldAnswerFallsBackToTheOwnWindow(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "9007199254740993"})
+	putAgents(t, file, model.AgentEntry{Block: "7"})
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		switch args[0] {
+		case "--version":
+			return []byte("tern: no such thing\n"), errors.New("exit status 2")
+		case "ls":
+			return lsOf("7"), nil
+		}
+		return nil, errors.New("unscripted " + strings.Join(args, " "))
+	}
+	got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{}))
+	if got.Err == nil || len(got.Agents) != 2 {
+		t.Fatalf("%+v, want both entries kept and the failure reported", got)
+	}
+
+	g, dirs = agentGateway(t)
+	file = seedAgent(t, dirs, model.AgentEntry{Block: "7"})
+	putAgents(t, file, model.AgentEntry{Block: "31"})
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		switch args[0] {
+		case "--version":
+			return []byte("tern 0.9.20 (x)"), nil
+		case "ls":
+			return lsOf("7"), nil
+		}
+		return nil, errors.New("unscripted " + strings.Join(args, " "))
+	}
+	got = as[model.AgentsPruned](t, run(t, g, model.PruneAgents{}))
+	if got.Err != nil || len(got.Agents) != 1 || got.Agents[0].Block != "7" {
+		t.Fatalf("%+v, want only block 7 left", got)
+	}
+}
+
+func TestSaveOnATernWhoseVersionFailsSavesHereWithoutAskingDownload(t *testing.T) {
+	got, downloads, asked := saveFixtureWithVersion(t, true, "", errors.New("exit status 2"), "notes.txt", func([]string) ([]byte, error) {
+		return []byte("/elsewhere/notes.txt\n"), nil
+	})
+	if want := filepath.Join(downloads, "notes.txt"); got.Err != nil || got.Path != want || got.Remote || len(*asked) != 0 {
+		t.Fatalf("saved %+v, tern asked %v, want %s here and no download", got, *asked, want)
 	}
 }
 

@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,23 +24,30 @@ type ternVersionCache struct {
 const ternVersionTimeout = 5 * time.Second
 
 // ternHasSubcommands reports whether this Tern is known to have `tern download` and `tern inspect`. A version that cannot be
-// asked is not known, for this call only; one that comes back unreadable or old is not known, and that answer is kept.
-func (g *Gateway) ternHasSubcommands(ctx context.Context) bool {
+// asked is an error, not kept: the next call asks again. One that comes back unreadable or old is (false, nil), and that answer
+// is kept.
+func (g *Gateway) ternHasSubcommands(ctx context.Context) (bool, error) {
 	c := &g.ternVersion
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.answered {
-		return c.known
+		return c.known, nil
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ternVersionTimeout)
 	defer cancel()
 	out, err := g.runTern(ctx, []string{"--version"})
 	if err != nil {
-		return false
+		return false, fmt.Errorf("tern --version: %w", err)
 	}
 	v, ok := parseTernVersion(string(out))
 	c.answered, c.known = true, ok && !versionBefore(v, ternSubcommandsVersion)
-	return c.known
+	return c.known, nil
+}
+
+// ternKnownToHaveSubcommands is ternHasSubcommands for a caller that treats a failed ask as not known.
+func (g *Gateway) ternKnownToHaveSubcommands(ctx context.Context) bool {
+	has, err := g.ternHasSubcommands(ctx)
+	return has && err == nil
 }
 
 // parseTernVersion reads the numbers of `tern X.Y.Z (commit)`.

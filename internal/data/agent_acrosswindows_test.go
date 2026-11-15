@@ -59,12 +59,10 @@ func TestAWindowThatCannotBeListedPrunesNothing(t *testing.T) {
 	}
 }
 
-func TestATernWithoutWindowKeysFallsBackToTheOwnWindowsListing(t *testing.T) {
+func TestATernWhoseInspectListsNoClientsFallsBackToTheOwnWindowsListing(t *testing.T) {
 	for name, inspect := range map[string]func() ([]byte, error){
-		"no inspect command": func() ([]byte, error) {
-			return []byte("tern: unknown command inspect\n"), errors.New("exit status 2")
-		},
 		"no clients field": ternOut(`{"sessions":[],"detached":[]}`),
+		"no clients":       ternOut(`{"clients":[]}`),
 	} {
 		g, dirs := agentGateway(t)
 		file := seedAgent(t, dirs, model.AgentEntry{Block: "7"})
@@ -78,6 +76,24 @@ func TestATernWithoutWindowKeysFallsBackToTheOwnWindowsListing(t *testing.T) {
 			if slices.Contains(c, "--window") {
 				t.Errorf("%s: ran %q, want no window named", name, c)
 			}
+		}
+	}
+}
+
+func TestAFailedOrUnreadableInspectPrunesNothing(t *testing.T) {
+	for name, inspect := range map[string]func() ([]byte, error){
+		"inspect fails": func() ([]byte, error) {
+			return []byte("tern inspect: the daemon is busy\n"), errors.New("exit status 1")
+		},
+		"unreadable output": ternOut(`not json`),
+	} {
+		g, dirs := agentGateway(t)
+		file := seedAgent(t, dirs, model.AgentEntry{Block: "9007199254740993"})
+		putAgents(t, file, model.AgentEntry{Block: "31"})
+		calls := ternScript(g, map[string]func() ([]byte, error){"inspect": inspect, "ls": func() ([]byte, error) { return lsOf("7"), nil }})
+		got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{}))
+		if got.Err == nil || !strings.Contains(got.Err.Error(), "tern inspect") || len(got.Agents) != 2 {
+			t.Errorf("%s: %+v, want both entries kept and the failure reported; ran %q", name, got, *calls)
 		}
 	}
 }

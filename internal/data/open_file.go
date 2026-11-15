@@ -124,7 +124,7 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 // change in Tern's wording cannot break Save. A window on this very machine is the plain local save; any other failure comes back
 // as note, which the toast shows beside the path. Only a failure of the local copy is an error.
 func (g *Gateway) saveToDownloads(ctx context.Context, path string) (saved string, remote bool, note string, err error) {
-	if inTern() && g.ternHasSubcommands(ctx) {
+	if inTern() && g.ternKnownToHaveSubcommands(ctx) {
 		var there string
 		there, err = g.ternDownload(ctx, path)
 		if err == nil {

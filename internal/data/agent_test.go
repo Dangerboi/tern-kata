@@ -730,19 +730,25 @@ const lsWithAgents = `{"sessions":[{"id":1,"name":"main","shown":true,"tabs":[{"
 
 const lsWithoutAgents = `{"sessions":[{"id":1,"name":"main","shown":true,"tabs":[{"id":2,"blocks":[{"id":7}]}]}]}`
 
-// ternScript answers each tern call from replies keyed by the first words of the command, and records the calls.
+// ternScript answers each tern call from replies keyed by the first words of the command, and records the calls. A Tern it
+// scripts nothing else for is a current one: `--version` and an unscripted `inspect --json` (one window) are answered without
+// being recorded.
 func ternScript(g *Gateway, replies map[string]func() ([]byte, error)) *[][]string {
 	var calls [][]string
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
 		if args[0] == "--version" {
 			return []byte(modernTernVersion), nil
 		}
-		calls = append(calls, args)
 		for n := min(len(args), 3); n > 0; n-- {
 			if reply, ok := replies[strings.Join(args[:n], " ")]; ok {
+				calls = append(calls, args)
 				return reply()
 			}
 		}
+		if out, ok := ternProbe(args); ok {
+			return out, nil
+		}
+		calls = append(calls, args)
 		return nil, fmt.Errorf("unscripted %q", args)
 	}
 	return &calls
@@ -1189,7 +1195,10 @@ func TestLiveBlocksCallerReturnsAtItsOwnDeadlineWhileAnotherAskRuns(t *testing.T
 	g, _ := agentGateway(t)
 	release := make(chan struct{})
 	started := make(chan struct{}, 1)
-	g.runTern = func(ctx context.Context, _ []string) ([]byte, error) {
+	g.runTern = func(ctx context.Context, args []string) ([]byte, error) {
+		if out, ok := ternProbe(args); ok {
+			return out, nil
+		}
 		started <- struct{}{}
 		select {
 		case <-release:
@@ -1259,7 +1268,10 @@ func TestACallerJoiningARunningAskIsToldItsAnswerMayBeOlderThanItsCall(t *testin
 	reads := watchClock(g)
 	release := make(chan struct{})
 	started := make(chan struct{}, 1)
-	g.runTern = func(context.Context, []string) ([]byte, error) {
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if out, ok := ternProbe(args); ok {
+			return out, nil
+		}
 		started <- struct{}{}
 		<-release
 		return lsOf("1"), nil
@@ -1289,7 +1301,10 @@ func TestAnAskThatBeganBeforeAnotherAndEndsAfterItDoesNotReplaceItsListing(t *te
 	release := make(chan struct{})
 	started := make(chan struct{}, 1)
 	var asks atomic.Int32
-	g.runTern = func(context.Context, []string) ([]byte, error) {
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if out, ok := ternProbe(args); ok {
+			return out, nil
+		}
 		if asks.Add(1) == 1 {
 			started <- struct{}{}
 			<-release
@@ -1320,7 +1335,10 @@ func TestRefreshingDoesNotAdoptAnAgentFromAListingThatBeganBeforeItsPaneOpened(t
 	release := make(chan struct{})
 	started := make(chan struct{}, 1)
 	var asks atomic.Int32
-	g.runTern = func(context.Context, []string) ([]byte, error) {
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if out, ok := ternProbe(args); ok {
+			return out, nil
+		}
 		if asks.Add(1) == 1 {
 			started <- struct{}{}
 			<-release
