@@ -96,6 +96,13 @@ func TestDoctorWarnsOfKataPluginOnlyForAnAmbientProfile(t *testing.T) {
 		"the lock file": func() {
 			writeFile(filepath.Join(home, ".omp", "plugins", "omp-plugins.lock.json"), `{"plugins":{"kata-omp":{"version":"1","enabled":true}}}`)
 		},
+		// npm and marketplace installs register under the scoped name since kata-plugin published the package.
+		"the scoped runtime registration": func() {
+			writeFile(filepath.Join(home, ".omp", "plugins", "node_modules", "@dangerboi", "kata-omp", "package.json"), `{"name":"@dangerboi/kata-omp"}`)
+		},
+		"the scoped lock file": func() {
+			writeFile(filepath.Join(home, ".omp", "plugins", "omp-plugins.lock.json"), `{"plugins":{"@dangerboi/kata-omp":{"version":"2","enabled":true}}}`)
+		},
 		"the ambient extensions folder": func() { writeFile(filepath.Join(agent, "extensions", "kata.ts"), "export default {}") },
 		"a moved agent folder": func() {
 			omp.AgentDir = filepath.Join(home, "elsewhere")
