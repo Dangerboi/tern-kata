@@ -15,18 +15,13 @@ import (
 // this key.
 const choiceControlKey = "control"
 
-// SelectControlID is the node of the select of card's field called name: the control inside the field.
-func SelectControlID(card model.Card, name model.Field) string {
-	return itemID(FieldID(card, name), choiceControlKey)
-}
-
-// CloseSelectTarget is the select node a CloseSelectMenu goes to, "" when m draws no such select (a key closed the card with
-// the menu), so no op names a node Tern no longer has.
+// CloseSelectTarget is the select node a CloseSelectMenu goes to (the control inside the field), "" when m draws no such
+// select (a key closed the card with the menu), so no op names a node Tern no longer has.
 func CloseSelectTarget(m model.Model, card model.Card, name model.Field) string {
 	if !m.SelectDrawn(card, name) {
 		return ""
 	}
-	return SelectControlID(card, name)
+	return itemID(FieldID(card, name), choiceControlKey)
 }
 
 // The control never takes focus: the model owns the keys, and the select draws the menu, highlight and search text the model holds.

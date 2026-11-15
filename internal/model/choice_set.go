@@ -172,11 +172,7 @@ func (CloseSelectMenu) cmd() {}
 // shows it), and so does one the pointer closed or picked from. When the Pane itself closes a menu the pointer opened (a key
 // picks, escape, tab, a field the keys leave), it asks for CloseSelectMenu.
 func (m Model) showSelect(prev Model, msg Msg, cmds []Cmd) (Model, []Cmd) {
-	var pointer bool
-	switch msg.(type) {
-	case DropdownToggleMsg, ChooseMsg, FocusFieldMsg:
-		pointer = true
-	}
+	pointer := selectPointerMsg(msg)
 	open, was := m.openSelect(), prev.openSelect()
 	switch {
 	case open != (selectRef{}) && open == was:
@@ -190,6 +186,16 @@ func (m Model) showSelect(prev Model, msg Msg, cmds []Cmd) (Model, []Cmd) {
 		cmds = append(cmds, CloseSelectMenu(was))
 	}
 	return m, cmds
+}
+
+// selectPointerMsg is whether msg is the pointer acting on a popup card's select, so Tern already shows what it did: opening or
+// closing the menu, picking from it, or focusing another field (a click elsewhere closes Tern's menu itself).
+func selectPointerMsg(msg Msg) bool {
+	switch msg.(type) {
+	case DropdownToggleMsg, ChooseMsg, FocusFieldMsg:
+		return true
+	}
+	return false
 }
 
 func (m Model) openSelect() selectRef {

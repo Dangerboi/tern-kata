@@ -9,7 +9,6 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - A choice in a Popup card's select picked with the pointer right after opening it is no longer lost, and the menu no longer opens again after the pick, when the Pane answers slowly (a loaded machine, a remote window).
-  - The Pane leaves a menu the pointer opened to Tern, and draws open only a menu the keys opened.
 
 ## [0.14.1] - 2026-11-15
 
