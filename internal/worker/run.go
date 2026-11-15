@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -409,7 +410,10 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	cmd.Stdin = nil // /dev/null: omp reads an open stdin to EOF as prompt text
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)
+	// omp may name its session before the start record is saved; the start record then takes it from seen (supervise).
+	var seen sessionSeen
 	parser := &agentParser{onSession: func(id string) {
+		seen.set(id)
 		_, err := w.store.Update(j.RunUID, "session", func(j *Journal) error {
 			if j.Launch != nil {
 				j.Launch.SessionID = id
@@ -424,7 +428,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	defer stderr.close()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
-	exit, err := w.supervise(ctx, j, cmd, sessionFolder(sp.dir), resumeID)
+	exit, err := w.supervise(ctx, j, cmd, sessionFolder(sp.dir), resumeID, &seen)
 	if se, ok := errors.AsType[startError](err); ok {
 		return w.failAttempt(j, "cannot start the agent: "+se.Error())
 	}
@@ -461,10 +465,33 @@ func (w *Worker) timeLeft(j *Journal) time.Duration {
 	return time.Duration(j.TimeoutSeconds) * time.Second
 }
 
+// sessionSeen is the session an agent's output named, read from the goroutine that saves its start record.
+type sessionSeen struct {
+	mu sync.Mutex
+	id string
+}
+
+func (s *sessionSeen) set(id string) {
+	s.mu.Lock()
+	s.id = id
+	s.mu.Unlock()
+}
+
+// get is the session named so far, "" when none (or s is nil).
+func (s *sessionSeen) get() string {
+	if s == nil {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.id
+}
+
 // supervise starts cmd and waits for it: the `launching` mark, the start record, the wait with the run's expiry (SIGTERM,
 // then SIGKILL after 10 s, ADR-0006) and the exit record's contents. A worker stop kills the group and leaves the journal
-// `started`, which the next start finds interrupted. The caller saves the returned exit record.
-func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessionDir, resumeID string) (*ExitRecord, error) {
+// `started`, which the next start finds interrupted. The caller saves the returned exit record. The start record's session is
+// resumeID, or the one an agent named in seen before the record was saved; nil for a command.
+func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessionDir, resumeID string, seen *sessionSeen) (*ExitRecord, error) {
 	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
 	defer runtime.UnlockOSThread()
 	// The expiry counts from before the agent is launched, not from when its start record is saved: starting a process
@@ -485,6 +512,10 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	}
 	launch.SessionDir, launch.SessionID, launch.At = sessionDir, resumeID, w.clock.Now().UTC()
 	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
+		// Read under the journal's lock: a session named before this save is set here, one named after it by its own save.
+		if id := seen.get(); id != "" {
+			launch.SessionID = id
+		}
 		return j.markStarted(launch)
 	}); err != nil {
 		stopped, stop := context.WithCancel(ctx)

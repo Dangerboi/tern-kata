@@ -11,6 +11,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A fork of an agent chat on a route with a token, a DSN or `token_env` values starts again when Tern reopens it after the original agent is gone.
   - The fork copies those private files on its first start and reads its own copies from then on; a kata Pane deletes them when it starts and the fork's block is gone.
 
+#### Jobs and worker
+
+- A held run's detail shows the omp session of its prompt step also when omp named the session before the worker had recorded the agent's start.
+
 ## [0.14.0] - 2026-11-15
 
 ### Added

@@ -32,6 +32,8 @@ func TestADaemonThatStopsAdvertisingCronAdmitsNothingOnceTheStreamReconnectsUnti
 	job := h.kata.CreateJob(t, h.proj, workertest.Job{Name: "review", Prompt: "Do it.", Checkout: "repo"})
 	r := h.start(worker.Hooks{})
 	h.admitting(r)
+	// Admission does not wait for the event stream: a stream that opens after the drop below would never reconnect.
+	h.eventually("the event stream to open", func() bool { return r.w.Status().Projects[0].Following })
 
 	restore := h.withoutCron()
 	h.kata.Server.CloseClientConnections() // the event stream drops and reconnects
