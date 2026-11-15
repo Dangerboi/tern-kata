@@ -14,6 +14,8 @@
 
 ## Releasing vX.Y.Z
 
+A release moves entries; it adds none. Push the work and its `[Unreleased]` entries first, then the release commit: the push gate refuses a release section holding an entry that `origin/main`'s `[Unreleased]` lacks.
+
 1. Rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and put a new empty `## [Unreleased]` above it. At the end of the file, point `[Unreleased]` at `compare/vX.Y.Z...HEAD` and add `[X.Y.Z]` comparing the previous tag with `vX.Y.Z`.
 2. Set `version = "X.Y.Z"` in `plugin.toml`.
 3. Run `scripts/release-notes.sh vX.Y.Z` to read the notes and `scripts/release.sh vX.Y.Z` to build; both fail when the changelog or `plugin.toml` does not match the tag.
