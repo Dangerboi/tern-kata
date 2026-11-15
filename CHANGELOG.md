@@ -20,6 +20,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+#### Agents
+
+- An agent whose block is in another Tern window, or parked, keeps its entry and badge when a kata Pane starts instead of being dropped.
+  - Focus, Interrupt and Stop reach it in its window; Open and Send back say it is in another window.
+
 #### Issues and Pages
 
 - Switching the Activity tab of the Issue detail scrolls the new tab into view even while Tern is slow to draw, as on a busy machine; before, the detail could stay where the old tab ended.

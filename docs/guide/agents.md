@@ -107,6 +107,10 @@ A Background agent's block goes in a tab of a hidden Tern session called "kata a
 - An agent that goes idle or exits while open stays open. An agent in a split or tab is closed this way only once a kata Pane has sent it to the background.
 - Sending an agent back records it as a Background agent even when a later move step fails, and the Notice still shows Tern's error.
 
+### Agents in another Tern window
+
+Tern shows each command one window's sessions, so a block you moved to another window (Move pane to window…) is missing from the Pane's own `tern ls`. The Pane lists every open window, on this machine or another one attached to this host, and the panes parked in each, to tell which agents are alive: an agent in another window keeps its entry, its prompt file and its badge, and one whose block is in no open window is dropped. Focus (`enter`, `b`), interrupt (`i`) and stop (`x`) reach the block through the window that holds it. Opening a Background agent beside the Pane, or sending one back, places a block next to another and Tern does that inside one window only: the Notice says the agent is in another window, and you open it from there or move it with Move pane to window. A window you closed whose sessions Tern kept is not listed, so an agent in it is dropped on the next check.
+
 ### Attention requests and Work attention
 
 While an agent you started waits for you, the Issue holds an Attention request for your Inbox address with the agent's last message, also when the Pane finds the agent already waiting. It clears when no agent on the Issue waits and when the Pane quits; a newer request someone else wrote stays.

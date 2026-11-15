@@ -99,11 +99,30 @@ type ternSession struct {
 	blocks []string
 }
 
-// ternLs reads `tern ls --json`. Block ids are kept as written, for they carry a host tag and can pass 2^53.
+// ternListing is what one window's `tern ls --json` shows: its sessions' blocks, and the ids of its parked panes, which no
+// session holds but whose programs run on.
+type ternListing struct {
+	sessions []ternSession
+	parked   []string
+}
+
+// ternLs reads `tern ls --json` for the window the command runs in. Block ids are kept as written, for they carry a host tag
+// and can pass 2^53.
 func (g *Gateway) ternLs(ctx context.Context) ([]ternSession, error) {
-	out, err := g.ternOutput(ctx, []string{"ls", "--json"})
+	listing, err := g.ternWindowLs(ctx, nil)
+	return listing.sessions, err
+}
+
+// ternWindowLs reads `tern ls --json`, for window key when window is not nil: Tern shows one window's sessions to each ask,
+// and a block moved to another window is not in this window's.
+func (g *Gateway) ternWindowLs(ctx context.Context, window *string) (ternListing, error) {
+	args := []string{"ls", "--json"}
+	if window != nil {
+		args = []string{"ls", "--window", *window, "--json"}
+	}
+	out, err := g.ternOutput(ctx, args)
 	if err != nil {
-		return nil, err
+		return ternListing{}, err
 	}
 	var ls struct {
 		Sessions []struct {
@@ -114,11 +133,14 @@ func (g *Gateway) ternLs(ctx context.Context) ([]ternSession, error) {
 				} `json:"blocks"`
 			} `json:"tabs"`
 		} `json:"sessions"`
+		Detached []struct {
+			ID json.Number `json:"id"`
+		} `json:"detached"`
 	}
 	if err := json.Unmarshal(out, &ls); err != nil {
-		return nil, fmt.Errorf("tern ls --json: %w", err)
+		return ternListing{}, fmt.Errorf("tern ls --json: %w", err)
 	}
-	sessions := make([]ternSession, 0, len(ls.Sessions))
+	listing := ternListing{sessions: make([]ternSession, 0, len(ls.Sessions))}
 	for _, s := range ls.Sessions {
 		session := ternSession{name: s.Name}
 		for _, t := range s.Tabs {
@@ -126,9 +148,110 @@ func (g *Gateway) ternLs(ctx context.Context) ([]ternSession, error) {
 				session.blocks = append(session.blocks, b.ID.String())
 			}
 		}
-		sessions = append(sessions, session)
+		listing.sessions = append(listing.sessions, session)
 	}
-	return sessions, nil
+	for _, d := range ls.Detached {
+		listing.parked = append(listing.parked, d.ID.String())
+	}
+	return listing, nil
+}
+
+// ternWindowKeys is the key of every window Tern shows, from `tern inspect --json`: a client of kind "window", or "remote" (a
+// window on another machine attached to this host, with a key of its own). Command-line clients are no window. A key that
+// `tern ls --window` refuses fails the whole answer (windowListings), so nothing is pruned on a guess. Older Tern lists no
+// clients, or has no such command: nil then, and nothing is known of other windows.
+func (g *Gateway) ternWindowKeys(ctx context.Context) []string {
+	out, err := g.ternOutput(ctx, []string{"inspect", "--json"})
+	if err != nil {
+		return nil
+	}
+	var inspected struct {
+		Clients []struct {
+			Window string `json:"window"`
+			Kind   string `json:"kind"`
+		} `json:"clients"`
+	}
+	if json.Unmarshal(out, &inspected) != nil {
+		return nil
+	}
+	var keys []string
+	for _, c := range inspected.Clients {
+		if (c.Kind == "window" || c.Kind == "remote") && !slices.Contains(keys, c.Window) {
+			keys = append(keys, c.Window)
+		}
+	}
+	return keys
+}
+
+// windowListing is one window's ls. own marks the one Tern gives a command that names no window: the Pane's.
+type windowListing struct {
+	window string
+	own    bool
+	ternListing
+}
+
+// windowListings lists the Pane's own window first, then every open window by key, the Pane's again among them. A window that
+// cannot be listed fails the whole answer: a block missing from it would look closed.
+func (g *Gateway) windowListings(ctx context.Context) ([]windowListing, error) {
+	own, err := g.ternWindowLs(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	all := []windowListing{{own: true, ternListing: own}}
+	for _, key := range g.ternWindowKeys(ctx) {
+		listing, err := g.ternWindowLs(ctx, &key)
+		if err != nil {
+			return nil, fmt.Errorf("window %q: %w", key, err)
+		}
+		all = append(all, windowListing{window: key, ternListing: listing})
+	}
+	return all, nil
+}
+
+func (l ternListing) holds(block string) bool {
+	return slices.Contains(l.parked, block) || slices.ContainsFunc(l.sessions, func(s ternSession) bool { return slices.Contains(s.blocks, block) })
+}
+
+// ternOnBlock runs a command that names block. Tern looks for the block in the Pane's window only, so when that fails and
+// another window holds the block, the command runs again naming that window. When no other window holds it the first error stands.
+func (g *Gateway) ternOnBlock(ctx context.Context, block string, args []string) ([]byte, error) {
+	out, err := g.ternOutput(ctx, args)
+	if err == nil {
+		return out, nil
+	}
+	listings, listErr := g.windowListings(ctx)
+	if listErr != nil {
+		return out, err
+	}
+	for _, l := range listings {
+		if l.holds(block) && l.own {
+			return out, err
+		}
+	}
+	for _, l := range listings {
+		if !l.own && l.holds(block) {
+			return g.ternOutput(ctx, append(slices.Clone(args), "--window", l.window))
+		}
+	}
+	return out, err
+}
+
+// inOtherWindow tells whether block is held by a window other than the Pane's, which no placing command can reach.
+func (g *Gateway) inOtherWindow(ctx context.Context, block string) bool {
+	listings, err := g.windowListings(ctx)
+	if err != nil {
+		return false
+	}
+	other := false
+	for _, l := range listings {
+		if l.holds(block) {
+			if l.own {
+				return false
+			}
+			other = true
+		}
+	}
+	return other
 }
 
 func hiddenSession(sessions []ternSession) (exists bool, blocks []string) {
@@ -242,7 +365,7 @@ type lsFlight struct {
 	err   error
 }
 
-// liveBlocks is the set of blocks `tern ls --json` lists. It is cached for liveBlocksMaxAge, read by g.now; fresh asks tern
+// liveBlocks is the set of blocks `tern ls --json` lists in every open window (askLiveBlocks). It is cached for liveBlocksMaxAge, read by g.now; fresh asks tern
 // again and replaces the cache. cached says the answer may be older than the call: it came from the cache, or from a `tern ls`
 // another caller started before this one asked. Callers that need an answer while one `tern ls` runs share it, each waiting
 // only until its own ctx ends; a fresh caller never joins a run that began before it asked.
@@ -286,15 +409,22 @@ func (g *Gateway) runLiveBlocks(ctx context.Context, f *lsFlight) {
 	close(f.done)
 }
 
+// askLiveBlocks is every block Tern holds in any open window: in a session, or parked. A block that exited but still shows
+// (kept open) counts, as it did in `tern ls`, for its entry and badge are the agent's record until the block closes.
 func (g *Gateway) askLiveBlocks(ctx context.Context) (map[string]bool, error) {
-	listing, err := g.ternLs(ctx)
+	listings, err := g.windowListings(ctx)
 	if err != nil {
 		return nil, err
 	}
 	live := map[string]bool{}
-	for _, s := range listing {
-		for _, b := range s.blocks {
+	for _, l := range listings {
+		for _, b := range l.parked {
 			live[b] = true
+		}
+		for _, s := range l.sessions {
+			for _, b := range s.blocks {
+				live[b] = true
+			}
 		}
 	}
 	return live, nil
@@ -563,6 +693,15 @@ func (g *Gateway) startBackground(ctx context.Context, dir string, line []string
 	return out, err
 }
 
+// explainPlacement adds to a failed placement that the agent is in another Tern window, when it is: `tern move` places a block
+// beside another of its own window only, so the Pane cannot do it from here, and Tern's words alone say no block is called so.
+func (g *Gateway) explainPlacement(ctx context.Context, block string, err error) error {
+	if g.inOtherWindow(ctx, block) {
+		return fmt.Errorf("the agent is in another Tern window, so it cannot be placed from this one (focus it there, or use Move pane to window): %w", err)
+	}
+	return err
+}
+
 // The open flag is read from agents.json as it stands now.
 func (g *Gateway) setAgentOpenFlag(cmd model.SetAgentOpen) model.AgentOpenSet {
 	out := model.AgentOpenSet{Block: cmd.Block, Open: cmd.Open, Background: cmd.Background}
@@ -585,7 +724,7 @@ func (g *Gateway) setAgentOpenFlag(cmd model.SetAgentOpen) model.AgentOpenSet {
 
 func (g *Gateway) openAgent(ctx context.Context, cmd model.OpenAgent) model.AgentPlaced {
 	if _, err := g.ternOutput(ctx, MoveRightOfArgs(cmd.Block, cmd.PaneBlock)); err != nil {
-		return model.AgentPlaced{Block: cmd.Block, Err: err}
+		return model.AgentPlaced{Block: cmd.Block, Err: g.explainPlacement(ctx, cmd.Block, err)}
 	}
 	if err := g.setAgentOpenFlag(model.SetAgentOpen{Block: cmd.Block, Open: true}).Err; err != nil {
 		return model.AgentPlaced{Block: cmd.Block, Err: fmt.Errorf("the agent moved but agents.json could not be written: %w", err)}
@@ -619,7 +758,7 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 	}
 	if len(blocks) > 0 {
 		if err := step(MoveRightOfArgs(cmd.Block, blocks[0])); err != nil {
-			return failed(err)
+			return failed(g.explainPlacement(ctx, cmd.Block, err))
 		}
 		if err := step(MoveNewTabArgs(cmd.Block)); err != nil {
 			return hidden(err)
@@ -675,7 +814,7 @@ func (g *Gateway) closeAgent(ctx context.Context, cmd model.CloseAgent) model.Ag
 }
 
 func (g *Gateway) closeAndForget(ctx context.Context, file, block string) ([]model.AgentEntry, error) {
-	if _, err := g.ternOutput(ctx, CloseBlockArgs(block)); err != nil {
+	if _, err := g.ternOnBlock(ctx, block, CloseBlockArgs(block)); err != nil {
 		return nil, err
 	}
 	var gone []model.AgentEntry
@@ -724,7 +863,7 @@ const PaneTitle = "tern-kata"
 // interruptAgent types Escape into the agent's block, through the same tern the Pane closes blocks with: it ends a working omp
 // turn and keeps the block and its conversation. Ctrl-C, which Tern's own agent interrupt sends, leaves an omp turn running.
 func (g *Gateway) interruptAgent(ctx context.Context, cmd model.InterruptAgent) model.AgentInterrupted {
-	_, err := g.ternOutput(ctx, []string{"send", cmd.Block, "keys", "escape", "--json"})
+	_, err := g.ternOnBlock(ctx, cmd.Block, []string{"send", cmd.Block, "keys", "escape", "--json"})
 	return model.AgentInterrupted{Block: cmd.Block, Err: err}
 }
 
@@ -775,6 +914,6 @@ func (g *Gateway) refreshAgents(ctx context.Context, cmd model.RefreshAgents) mo
 }
 
 func (g *Gateway) focusAgent(ctx context.Context, cmd model.FocusAgent) model.AgentFocused {
-	_, err := g.ternOutput(ctx, []string{"focus", cmd.Block})
+	_, err := g.ternOnBlock(ctx, cmd.Block, []string{"focus", cmd.Block})
 	return model.AgentFocused{Err: err}
 }

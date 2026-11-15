@@ -406,6 +406,9 @@ func TestPruningDropsTheEntriesTernNoLongerListsWithTheirPrompts(t *testing.T) {
 		t.Fatal(err)
 	}
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if args[0] == "inspect" {
+			return []byte(`{"clients":[]}`), nil
+		}
 		if !slices.Equal(args, []string{"ls", "--json"}) {
 			t.Errorf("ran %q", args)
 		}
@@ -444,7 +447,10 @@ func TestPruningKeepsAnEntryAddedAfterTheEntriesItChecked(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	g.runTern = func(context.Context, []string) ([]byte, error) {
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if args[0] == "inspect" {
+			return []byte(`{"clients":[]}`), nil
+		}
 		// Another Pane starts an agent while tern ls is answering.
 		if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry {
 			return append(l, model.AgentEntry{Block: "123", PromptFile: prompt})
@@ -508,6 +514,9 @@ func lsCounter(t *testing.T, g *Gateway, live *[]string) *int {
 	t.Helper()
 	asked := 0
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if args[0] == "inspect" {
+			return []byte(`{"clients":[]}`), nil
+		}
 		if !slices.Equal(args, []string{"ls", "--json"}) {
 			t.Errorf("ran %q", args)
 		}
@@ -913,7 +922,7 @@ func TestAFailedStepGoingBackShowsTernsWordsAndKeepsTheAgentOpen(t *testing.T) {
 		"move": func() ([]byte, error) { return []byte("tern move: no block\n"), errors.New("exit status 1") },
 	})
 	got := as[model.AgentPlaced](t, run(t, g, model.SendAgentBack{Block: "31", IssueRef: "demo#ab12"}))
-	if got.Err == nil || got.Err.Error() != "exit status 1: tern move: no block" || got.Moved || len(*calls) != 2 {
+	if got.Err == nil || got.Err.Error() != "exit status 1: tern move: no block" || got.Moved || moveCalls(*calls) != 1 {
 		t.Fatalf("%+v, ran %q", got, *calls)
 	}
 	if stored, _ := ReadAgents(file); !stored[0].Open {
@@ -1213,7 +1222,10 @@ func TestLiveBlocksConcurrentCallersShareOneAsk(t *testing.T) {
 	var once sync.Once
 	t.Cleanup(func() { once.Do(func() { close(release) }) })
 	var asked atomic.Int32
-	g.runTern = func(context.Context, []string) ([]byte, error) {
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if args[0] == "inspect" {
+			return []byte(`{"clients":[]}`), nil
+		}
 		asked.Add(1)
 		<-release
 		return lsOf("1"), nil
