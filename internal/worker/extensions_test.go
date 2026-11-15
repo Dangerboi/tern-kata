@@ -182,6 +182,19 @@ func TestDoctorIgnoresADisabledKataPlugin(t *testing.T) {
 	}
 }
 
+func TestDoctorWarnsOfAnEnabledKataPluginBesideADisabledName(t *testing.T) {
+	home := t.TempDir()
+	plugins := filepath.Join(home, ".omp", "plugins")
+	// The npm package is turned off beside an install from before the rename, which omp still loads.
+	writeTestFile(t, filepath.Join(plugins, "omp-plugins.lock.json"), `{"plugins":{"@dangerboi/kata-omp":{"enabled":false},"kata-omp":{"enabled":true}}}`)
+	writeTestFile(t, filepath.Join(plugins, "node_modules", "@dangerboi", "kata-omp", "package.json"), `{}`)
+	writeTestFile(t, filepath.Join(plugins, "node_modules", "kata-omp", "package.json"), `{}`)
+	out := doctorFor(t, "", OmpEnv{Home: home, AgentDir: filepath.Join(home, ".omp", "agent")})
+	if !strings.Contains(out, "todo takeover") || !strings.Contains(out, filepath.Join("node_modules", "kata-omp", "package.json")) {
+		t.Fatalf("no warning naming the enabled kata-omp:\n%s", out)
+	}
+}
+
 // doctorFor runs the doctor on a worker.toml with a default profile plus profiles, in the given omp environment.
 func doctorFor(t *testing.T, profiles string, omp OmpEnv) string {
 	t.Helper()
