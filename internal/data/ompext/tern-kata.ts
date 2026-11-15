@@ -693,6 +693,9 @@ export function exportTranscriptSession(env: Record<string, string | undefined>,
 /** The suffix of the file beside an agent's prompt file that holds its session file's path; the Pane reads it (data.AgentSessionSuffix). */
 export const SESSION_PATH_SUFFIX = ".session";
 
+/** The prompt file the wrapper names when the command line has none (ompext.PromptFileEnv): a chat Tern reopened. */
+export const PROMPT_FILE_ENV = "TERN_KATA_PROMPT_FILE";
+
 export function promptFileFromArgv(argv: readonly string[]): string | undefined {
   for (let i = argv.length - 1; i >= 0; i--) {
     const arg = argv[i];
@@ -778,7 +781,8 @@ export function createExtension(
 ): (pi: ExtensionApi) => void {
   return (pi) => {
     const config = readConfig(env);
-    const promptFile = promptFileFromArgv(argv);
+    // A reopened agent's command line has lost its @<prompt> word; the wrapper names the file instead (ompext.PromptFileEnv).
+    const promptFile = promptFileFromArgv(argv) ?? optionalText(env[PROMPT_FILE_ENV]);
     let ctx: ExtensionContext = {};
     let follower: Follower | undefined;
 

@@ -71,6 +71,9 @@ type LaunchPlan struct {
 	// AgentForkedFrom is `agent --forked-from`: the block of the chat Tern forked this one from, which the host half's reopen hook
 	// adds to a fork's line. The wrapper then reads its own copies of the Pane's secret files (data.AgentRoute.Forked).
 	AgentForkedFrom string
+	// AgentPromptFile is the prompt file agents.json records for the wrapper's block, found when the command has no `@<prompt>`
+	// word (a reopened chat); the wrapper names it to the omp extension in ompext.PromptFileEnv.
+	AgentPromptFile string
 	AgentRoute      data.AgentRoute
 	fallbackAuthor  string
 }

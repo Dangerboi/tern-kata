@@ -80,8 +80,9 @@ func closeTranscriptEnv(environ []string, caseInsensitive bool) []string {
 // and plan.AgentVerifiedSenders (asked of the daemon only when there is a --message-from) TERN_KATA_VERIFIED_SENDERS=1, which the extension reads for whose messages it acts on; inherited values
 // of both are dropped, so a person's shell cannot widen what the agent trusts. plan.AgentCoordinator sets TERN_KATA_COORDINATOR and
 // plan.AgentCoordinating TERN_KATA_COORDINATING=1, with an address prefix only, which also drops inherited values of both.
+// plan.AgentPromptFile sets ompext.PromptFileEnv; an inherited value is always dropped, so only the wrapper's own block names one.
 func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string {
-	dropped := []string{"KATA_REF", "KATA_INBOX_USER", "KATA_TEAMMATE", "TERN_KATA_MESSAGE_FROM", "TERN_KATA_VERIFIED_SENDERS"}
+	dropped := []string{"KATA_REF", "KATA_INBOX_USER", "KATA_TEAMMATE", "TERN_KATA_MESSAGE_FROM", "TERN_KATA_VERIFIED_SENDERS", ompext.PromptFileEnv}
 	if plan.Actor != "" {
 		dropped = append(dropped, "KATA_AUTHOR")
 	}
@@ -96,6 +97,9 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 	}
 	if plan.AgentRef != "" {
 		env = append(env, "KATA_REF="+plan.AgentRef)
+	}
+	if plan.AgentPromptFile != "" {
+		env = append(env, ompext.PromptFileEnv+"="+plan.AgentPromptFile)
 	}
 	if plan.AgentAddressPrefix != "" {
 		env = append(env, "KATA_OMP_LIVE_INBOX=0")

@@ -97,16 +97,16 @@ test("a quote the shell escapes does not end a word early", function()
     })), "tern-kata agent --ref=p#1 -- omp --append-system-prompt \"say \\\"hi\\\" @now\"")
 end)
 
-test("a fork drops the flags that give the chat an Agent address", function()
+test("a fork keeps its address flags but does not coordinate", function()
     same(reopen.command(event({
         how = "fork",
         command = "tern-kata agent --as=me --address-prefix=me/omp --forward-comments --message-from=bot --message-from boss --coordinator=me/lead-3 --coordinating '--ref=p#1' --home=/h -- omp -e /x.ts @/state/prompt.md",
-    })), "tern-kata agent --as=me '--ref=p#1' --home=/h -- omp -e /x.ts")
+    })), "tern-kata agent --as=me --address-prefix=me/omp --forward-comments --message-from=bot --message-from boss --coordinator=me/lead-3 '--ref=p#1' --home=/h -- omp -e /x.ts")
     same(reopen.command(event({
         how = "fork",
         command = "omp",
-        line = "tern-kata agent --address-prefix me/omp --ref=p#1 -- omp",
-    })), "tern-kata agent --ref=p#1 -- omp")
+        line = "tern-kata agent --address-prefix me/omp --coordinating --ref=p#1 -- omp",
+    })), "tern-kata agent --address-prefix me/omp --ref=p#1 -- omp")
 end)
 
 test("a fork of a line naming a secret file names the block it copies", function()
@@ -114,7 +114,7 @@ test("a fork of a line naming a secret file names the block it copies", function
         same(reopen.command(event({
             how = "fork",
             command = "tern-kata agent --address-prefix=me/omp --ref=p#1 " .. flag .. " -- omp @/x.md",
-        })), "tern-kata agent --forked-from=4 --ref=p#1 " .. flag .. " -- omp")
+        })), "tern-kata agent --forked-from=4 --address-prefix=me/omp --ref=p#1 " .. flag .. " -- omp")
     end
 end)
 
@@ -127,9 +127,9 @@ test("a fork of a fork names its own parent, and a reopened fork keeps its mark"
     same(reopen.command(event({ how = "restore", pane = 12, command = fork })), nil)
 end)
 
-test("a fork Tern names no pane for still loses the address flags", function()
+test("a fork Tern names no pane for gets no mark", function()
     same(reopen.command(event({ how = "fork", pane = "x", command = "tern-kata agent --address-prefix=me/omp --ref=p#1 --token-file=/t -- omp @/x.md" })),
-        "tern-kata agent --ref=p#1 --token-file=/t -- omp")
+        "tern-kata agent --address-prefix=me/omp --ref=p#1 --token-file=/t -- omp")
 end)
 
 test("PowerShell: a fork's mark goes after the agent word of a called path", function()
@@ -137,15 +137,15 @@ test("PowerShell: a fork's mark goes after the agent word of a called path", fun
         how = "fork",
         shell = "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
         command = "& 'C:\\Users\\me\\bin\\tern-kata.exe' agent --address-prefix=me/omp '--ref=p#1' --token-file C:\\s\\prompt-1.md.token -- omp '@C:\\Users\\me\\prompt.md'",
-    })), "& 'C:\\Users\\me\\bin\\tern-kata.exe' agent --forked-from=4 '--ref=p#1' --token-file C:\\s\\prompt-1.md.token -- omp")
+    })), "& 'C:\\Users\\me\\bin\\tern-kata.exe' agent --forked-from=4 --address-prefix=me/omp '--ref=p#1' --token-file C:\\s\\prompt-1.md.token -- omp")
 end)
 
-test("a resume keeps the address flags", function()
+test("a resume keeps every flag", function()
     for _, how in { "resume", "restore" } do
         same(reopen.command(event({
             how = how,
-            command = "tern-kata agent --address-prefix=me/omp --ref=p#1 -- omp @/x.md",
-        })), "tern-kata agent --address-prefix=me/omp --ref=p#1 -- omp")
+            command = "tern-kata agent --address-prefix=me/omp --coordinating --ref=p#1 -- omp @/x.md",
+        })), "tern-kata agent --address-prefix=me/omp --coordinating --ref=p#1 -- omp")
     end
 end)
 
@@ -153,7 +153,7 @@ test("a fork's flags after the -- belong to omp and stay", function()
     same(reopen.command(event({
         how = "fork",
         command = "tern-kata agent --address-prefix=me/omp --ref=p#1 -- omp --coordinating --forked-from=9 --token-file=/t @/x.md",
-    })), "tern-kata agent --ref=p#1 -- omp --coordinating --forked-from=9 --token-file=/t")
+    })), "tern-kata agent --address-prefix=me/omp --ref=p#1 -- omp --coordinating --forked-from=9 --token-file=/t")
 end)
 
 if failures > 0 then

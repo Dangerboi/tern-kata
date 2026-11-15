@@ -10,6 +10,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - A fork of an agent chat on a route with a token, a DSN or `token_env` values starts again when Tern reopens it after the original agent is gone.
   - The fork copies those private files on its first start and reads its own copies from then on; a kata Pane deletes them when it starts and the fork's block is gone.
+- A fork of an agent chat has an Agent address of its own, `<actor>/<name>-<fork block>`, so its comments read as an agent's, not yours, and it gets blocker closes and forwarded comments like the original.
+  - Only the original coordinates a team: the fork's line drops `--coordinating`.
+- An agent Tern reopened after a restart keeps the Agent card's model, tool and cost following its session after a `/new`, a session switch or a `/move`.
 
 #### Jobs and worker
 

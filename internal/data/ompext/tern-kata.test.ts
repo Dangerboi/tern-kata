@@ -1285,7 +1285,7 @@ describe("extension factory", () => {
 describe("session path file", () => {
   type Handler = (event: unknown, ctx: { agent?: { kind?: string }; sessionManager?: { getSessionFile?(): string | undefined } }) => void;
 
-  function wired(argv: string[]) {
+  function wired(argv: string[], env: Record<string, string | undefined> = {}) {
     const handlers = new Map<string, Handler>();
     const io: KataIo = {
       spawn: (args) => fakeChild(args),
@@ -1297,7 +1297,7 @@ describe("session path file", () => {
       on: (event: string, handler: Handler) => void handlers.set(event, handler),
       sendUserMessage: () => {},
     };
-    createExtension({}, io, argv)(pi);
+    createExtension(env, io, argv)(pi);
     return handlers;
   }
 
@@ -1356,6 +1356,16 @@ describe("session path file", () => {
       wired(["omp"]).get("session_start")?.({}, session("/s/one.jsonl"));
       wired([`@${prompt}`]).get("session_start")?.({}, session(undefined));
       expect(readdirSync(dir)).toEqual([]);
+    });
+  });
+
+  test("a reopened agent without a prompt word writes beside the prompt file the wrapper names", () => {
+    withFolder((dir) => {
+      const prompt = join(dir, "prompt-abc.md");
+      const handlers = wired(["omp", "-e", "x.ts", "--restore", "/s/one.jsonl"], { TERN_KATA_PROMPT_FILE: prompt });
+      handlers.get("session_start")?.({}, session("/s/one.jsonl"));
+      handlers.get("session_switch")?.({}, session("/s/two.jsonl"));
+      expect(readFileSync(`${prompt}.session`, "utf8").trim()).toBe("/s/two.jsonl");
     });
   });
 

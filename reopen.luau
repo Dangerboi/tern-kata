@@ -11,14 +11,11 @@ local M = {}
 
 type Word = { s: number, e: number, text: string }
 
--- The flags a fork's line loses. Without the first five the wrapper does not make the chat an Agent with its own address, so a
--- fork never takes the original's Agent address; `--forked-from` names the chat a fork was made from, and a fork of a fork gets
--- its own in place of its parent's. A flag that takes a value may give it as the next word.
+-- The flags a fork's line loses. A fork runs in a block of its own, so the Agent address the wrapper builds from TERN_PANE is
+-- the fork's own and the address flags stay; `--coordinating` goes, so a team keeps one coordinator. `--forked-from` names the
+-- chat a fork was made from, and a fork of a fork gets its own in place of its parent's. A flag that takes a value may give it
+-- as the next word.
 local FORK_DROPS: { [string]: boolean } = {
-    ["address-prefix"] = true,
-    ["forward-comments"] = false,
-    ["message-from"] = true,
-    ["coordinator"] = true,
     ["coordinating"] = false,
     ["forked-from"] = true,
 }
@@ -102,7 +99,7 @@ end
 -- The flags that name a private file the Pane wrote; a fork reads its own copy of each (`--forked-from`).
 local SECRET_FILE_FLAGS: { [string]: boolean } = { ["token-file"] = true, ["dsn-file"] = true, ["env-file"] = true }
 
--- The line without its trailing `@<prompt file>` word and, for a fork, without the flags that give the chat an Agent address and,
+-- The line without its trailing `@<prompt file>` word and, for a fork, without `--coordinating` and,
 -- when the line names a secret file, with `--forked-from=<forkedFrom>` (the block the fork copies, when Tern names it) after
 -- `agent`, so the wrapper reads its own copies of the Pane's secret files. Nil when the line is not the wrapper's.
 local function rewrite(line: string, shell: string, fork: boolean, forkedFrom: string?): string?

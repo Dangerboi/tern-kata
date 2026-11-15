@@ -61,6 +61,10 @@ func Install(folder string) (string, error) {
 	return path, nil
 }
 
+// PromptFileEnv names the agent's prompt file for the extension, which writes the session path beside it, when the agent's
+// command line has no `@<prompt file>` word: a chat Tern reopened, whose line the reopen hook gave back without it.
+const PromptFileEnv = "TERN_KATA_PROMPT_FILE"
+
 // CloseTranscriptEnv is the variable that turns the extension's close-transcript switch on. kata records the session an
 // agent names (KATA_TRANSCRIPT_AGENT, KATA_TRANSCRIPT_SESSION_ID) only when [close.transcript] enabled is true in its
 // config.toml, or KATA_CLOSE_TRANSCRIPT_ENABLED says so for one process; the extension sets that switch with the names when

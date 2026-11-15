@@ -339,6 +339,21 @@ func ReadAgents(path string) ([]model.AgentEntry, error) {
 	return doc.Agents, err
 }
 
+// AgentPromptFileOf is the prompt file of the agent agents.json in stateDir records for block, "" when it records none (a fork,
+// a line typed by hand) or the file cannot be read.
+func AgentPromptFileOf(stateDir, block string) string {
+	if stateDir == "" || block == "" {
+		return ""
+	}
+	list, _ := ReadAgents(filepath.Join(stateDir, AgentsFile))
+	for _, e := range list {
+		if e.Block == block {
+			return e.PromptFile
+		}
+	}
+	return ""
+}
+
 // UpdateAgents reads agents.json again, lets change return the new list, and writes it only while the file is still what was
 // read. When another Pane changed the file in between, the whole change runs again on the new list, so change must tolerate
 // being called more than once and must start its own results afresh. A file that keeps changing is an error wrapping
