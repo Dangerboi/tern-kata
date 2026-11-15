@@ -136,10 +136,8 @@ func TestControlEventsSetTheChoice(t *testing.T) {
 		if len(out.Ops) < 3 || !reflect.DeepEqual(out.Ops[:2], want) || out.Ops[2][0] != "focus" {
 			t.Fatalf("ops %v: want the open prop set and deleted on %s, then the focus", out.Ops, id)
 		}
-		for _, cmd := range out.Cmds {
-			if _, ok := cmd.(model.CloseSelectMenu); ok {
-				t.Fatal("the close went to the gateway")
-			}
+		if len(out.Cmds) != 0 {
+			t.Fatalf("cmds %+v went to the gateway; the close is ops only", out.Cmds)
 		}
 	})
 	t.Run("a key that closes the card with the pointer's dropdown names no select", func(t *testing.T) {

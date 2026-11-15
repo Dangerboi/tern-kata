@@ -144,24 +144,21 @@ func (m Model) SelectShown(card Card, name Field) bool {
 	return m.shownSelect == selectRef{card, name}
 }
 
-// SelectDrawn is whether the select of field name in card is drawn: card is the card on top and name a select field of it the
-// card does not hide.
+// SelectDrawn is whether the select of field name in card is drawn: card is the card on top, which does not hide name, and
+// name is a select of it (CardChoices).
 func (m Model) SelectDrawn(card Card, name Field) bool {
 	entry, ok := m.topEntry()
-	if !ok || entry.card != card || entry.choices == nil || (entry.hidden != nil && entry.hidden(m, name)) {
+	if !ok || entry.card != card || (entry.hidden != nil && entry.hidden(m, name)) {
 		return false
 	}
-	set, ok := entry.choices(m, name)
+	set, ok := m.CardChoices(card, name)
 	return ok && set.Control == ControlSelect
 }
 
 // CloseSelectMenu closes the menu of the select of Field in Card in Tern, where the pointer opened it and the Pane closed it
 // (showSelect). The Pane never drew that menu open, so drawing it closed is no change Tern would apply; the driver sends the
 // change as ops on the select instead.
-type CloseSelectMenu struct {
-	Card  Card
-	Field Field
-}
+type CloseSelectMenu selectRef
 
 func (CloseSelectMenu) cmd() {}
 

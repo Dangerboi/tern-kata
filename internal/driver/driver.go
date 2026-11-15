@@ -110,7 +110,7 @@ func (out *Output) route(m model.Model, cmds []model.Cmd) {
 			}
 		case model.OpenDraftEditor:
 			out.Editor = &cmd
-		case model.CloseSelectMenu: // closeSelectMenus sent it
+		case model.CloseSelectMenu: // already sent as ops on the select by closeSelectMenus, ahead of the focus op
 		default:
 			out.Cmds = append(out.Cmds, cmd)
 		}
