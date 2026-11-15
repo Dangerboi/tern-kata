@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
+const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--forked-from <block>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
 
 // tableFlag is one flag of a subcommand with a flag table (`agent`, `agents`): its parser and the completion scripts read the
 // table, so a flag is one row there; the usage constant and the help text are prose and name it by hand.
@@ -39,6 +39,7 @@ var agentFlags = slices.Concat([]tableFlag{
 	{"coordinator", true, "the Agent address of this child's coordinator", func(p *LaunchPlan, v string) { p.AgentCoordinator = v }},
 	{"coordinating", false, "mark this agent as the coordinator of a team", func(p *LaunchPlan, _ string) { p.AgentCoordinating = true }},
 	{"address-prefix", true, "an Agent address up to its block id", func(p *LaunchPlan, v string) { p.AgentAddressPrefix = v }},
+	{"forked-from", true, "the block of the chat Tern forked this one from", func(p *LaunchPlan, v string) { p.AgentForkedFrom = v }},
 }, routeFlags)
 
 func flagNames(table []tableFlag) []string {

@@ -1760,6 +1760,88 @@ func TestAgentRouteEnvLeavesTheTokenFileForAReopenAndRetiringTheAgentRemovesIt(t
 	}
 }
 
+// agentSecret writes a secret file as startAgent does, beside a prompt file in an agent-prompts folder.
+func agentSecret(t *testing.T, file, secret string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePrivateFile(file, secret); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAForkOfAnAgentOnATokenRouteStillStartsAfterTheOriginalIsRetired(t *testing.T) {
+	prompts := filepath.Join(t.TempDir(), AgentPromptsFolder)
+	prompt := filepath.Join(prompts, "prompt-7-1.md")
+	agentSecret(t, prompt+agentTokenSuffix, "pane-token")
+	agentSecret(t, prompt+agentEnvSuffix, "WORK_TOKEN=w")
+	// The fork's line, as the reopen hook gives it: the original's files, run in block 12, forked from block 7.
+	line := AgentRoute{Server: "https://s", TokenFile: prompt + agentTokenSuffix, EnvFile: prompt + agentEnvSuffix}
+	start := func(block, from string) ([]string, error) {
+		route, err := line.Forked(block, from)
+		if err != nil {
+			return nil, err
+		}
+		set, _, err := route.Env("")
+		return set, err
+	}
+	if set, err := start("12", "7"); err != nil || !slices.Contains(set, "KATA_AUTH_TOKEN=pane-token") || !slices.Contains(set, "WORK_TOKEN=w") {
+		t.Fatalf("the fork's first start: set %q, err %v", set, err)
+	}
+	removePrompt(prompt) // the original agent's entry is retired
+	if set, err := start("12", "7"); err != nil || !slices.Contains(set, "KATA_AUTH_TOKEN=pane-token") || !slices.Contains(set, "WORK_TOKEN=w") {
+		t.Fatalf("the fork reopened after the original is gone: set %q, err %v", set, err)
+	}
+	if set, err := start("13", "12"); err != nil || !slices.Contains(set, "KATA_AUTH_TOKEN=pane-token") {
+		t.Fatalf("a fork of the fork: set %q, err %v", set, err)
+	}
+	if _, err := start("14", "7"); err == nil || !strings.Contains(err.Error(), "cannot read credential file") {
+		t.Errorf("a fork of a retired agent with no copy to read: err %v", err)
+	}
+}
+
+func TestAForkReadsAFileThePaneDidNotWriteWhereItIs(t *testing.T) {
+	typed := tokenFile(t, "own-token\n")
+	for _, block := range []string{"12", ""} {
+		route, err := AgentRoute{Server: "https://s", TokenFile: typed}.Forked(block, "7")
+		if err != nil || route.TokenFile != typed {
+			t.Errorf("block %q: token file %q, err %v; want %q", block, route.TokenFile, err, typed)
+		}
+	}
+	if left, _ := filepath.Glob(filepath.Join(filepath.Dir(typed), forkFilePrefix+"*")); len(left) != 0 {
+		t.Errorf("a typed token file was copied: %q", left)
+	}
+}
+
+func TestThePruneAtStartRemovesTheCopiesOfForksTernNoLongerLists(t *testing.T) {
+	g, dirs := agentGateway(t)
+	prompts := filepath.Join(dirs.State, AgentPromptsFolder)
+	kept := []string{"prompt-7-1.md.token", forkFilePrefix + "12-prompt-7-1.md.token", forkFilePrefix + "12-prompt-7-1.md.env"}
+	gone := []string{forkFilePrefix + "31-prompt-7-1.md.token", forkFilePrefix + "31-prompt-7-1.md.dsn"}
+	for _, name := range slices.Concat(kept, gone) {
+		agentSecret(t, filepath.Join(prompts, name), "secret")
+	}
+	live := []string{"12"}
+	asked := lsCounter(t, g, &live)
+	if got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	for _, name := range kept {
+		if _, err := os.Stat(filepath.Join(prompts, name)); err != nil {
+			t.Errorf("%s was removed: %v", name, err)
+		}
+	}
+	for _, name := range gone {
+		if _, err := os.Stat(filepath.Join(prompts, name)); err == nil {
+			t.Errorf("%s outlived its fork's block", name)
+		}
+	}
+	if *asked != 1 {
+		t.Errorf("tern ls asked %d times, want 1", *asked)
+	}
+}
+
 func TestAgentStartIsRefusedBeforeAnythingIsWrittenWhenTheRouteCannotWork(t *testing.T) {
 	home := catalogHome(t, "active_daemon = \"work\"\n[[daemon]]\nname = \"mine\"\nlocal = true\n[[daemon]]\nname = \"work\"\nurl = \"https://kata.example\"\n")
 	routeEnv(t, map[string]string{"KATA_HOME": home})

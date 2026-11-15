@@ -84,7 +84,14 @@ func run() error {
 		return err
 	}
 	if plan.Subcommand == "agent" {
-		environ, err := routedEnv(os.Environ(), plan.AgentRoute, runtime.GOOS == "windows")
+		windows := runtime.GOOS == "windows"
+		route := plan.AgentRoute
+		if plan.AgentForkedFrom != "" {
+			if route, err = route.Forked(strings.TrimSpace(envValue(os.Environ(), "TERN_PANE", windows)), plan.AgentForkedFrom); err != nil {
+				return subcommandError{fmt.Errorf("agent: %w", err)}
+			}
+		}
+		environ, err := routedEnv(os.Environ(), route, windows)
 		if err != nil {
 			return err
 		}

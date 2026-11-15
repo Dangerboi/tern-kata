@@ -97,16 +97,38 @@ test("a quote the shell escapes does not end a word early", function()
     })), "tern-kata agent --ref=p#1 -- omp --append-system-prompt \"say \\\"hi\\\" @now\"")
 end)
 
-test("a fork drops the flags that give the chat an Agent address", function()
+test("a fork drops the flags that give the chat an Agent address and names the block it copies", function()
     same(reopen.command(event({
         how = "fork",
         command = "tern-kata agent --as=me --address-prefix=me/omp --forward-comments --message-from=bot --message-from boss --coordinator=me/lead-3 --coordinating '--ref=p#1' --home=/h -- omp -e /x.ts @/state/prompt.md",
-    })), "tern-kata agent --as=me '--ref=p#1' --home=/h -- omp -e /x.ts")
+    })), "tern-kata agent --forked-from=4 --as=me '--ref=p#1' --home=/h -- omp -e /x.ts")
     same(reopen.command(event({
         how = "fork",
         command = "omp",
         line = "tern-kata agent --address-prefix me/omp --ref=p#1 -- omp",
-    })), "tern-kata agent --ref=p#1 -- omp")
+    })), "tern-kata agent --forked-from=4 --ref=p#1 -- omp")
+end)
+
+test("a fork of a fork names its own parent, and a reopened fork keeps its mark", function()
+    local fork = "tern-kata agent --forked-from=4 --ref=p#1 --token-file=/state/agent-prompts/prompt-1.md.token -- omp -e /x.ts"
+    same(reopen.command(event({ how = "fork", pane = 12, command = fork })),
+        "tern-kata agent --forked-from=12 --ref=p#1 --token-file=/state/agent-prompts/prompt-1.md.token -- omp -e /x.ts")
+    same(reopen.command(event({ how = "fork", pane = 12, command = "tern-kata agent --forked-from 4 --ref=p#1 -- omp" })),
+        "tern-kata agent --forked-from=12 --ref=p#1 -- omp")
+    same(reopen.command(event({ how = "restore", pane = 12, command = fork })), nil)
+end)
+
+test("a fork Tern names no pane for still loses the address flags", function()
+    same(reopen.command(event({ how = "fork", pane = "x", command = "tern-kata agent --address-prefix=me/omp --ref=p#1 -- omp @/x.md" })),
+        "tern-kata agent --ref=p#1 -- omp")
+end)
+
+test("PowerShell: a fork's mark goes after the agent word of a called path", function()
+    same(reopen.command(event({
+        how = "fork",
+        shell = "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+        command = "& 'C:\\Users\\me\\bin\\tern-kata.exe' agent --address-prefix=me/omp '--ref=p#1' -- omp '@C:\\Users\\me\\prompt.md'",
+    })), "& 'C:\\Users\\me\\bin\\tern-kata.exe' agent --forked-from=4 '--ref=p#1' -- omp")
 end)
 
 test("a resume keeps the address flags", function()
@@ -121,8 +143,8 @@ end)
 test("a fork's flags after the -- belong to omp and stay", function()
     same(reopen.command(event({
         how = "fork",
-        command = "tern-kata agent --address-prefix=me/omp --ref=p#1 -- omp --coordinating @/x.md",
-    })), "tern-kata agent --ref=p#1 -- omp --coordinating")
+        command = "tern-kata agent --address-prefix=me/omp --ref=p#1 -- omp --coordinating --forked-from=9 @/x.md",
+    })), "tern-kata agent --forked-from=4 --ref=p#1 -- omp --coordinating --forked-from=9")
 end)
 
 if failures > 0 then

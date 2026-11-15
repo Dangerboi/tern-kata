@@ -68,6 +68,9 @@ type LaunchPlan struct {
 	// Both are read only with an address prefix, and an inherited value of either variable is dropped then.
 	AgentCoordinator  string
 	AgentCoordinating bool
+	// AgentForkedFrom is `agent --forked-from`: the block of the chat Tern forked this one from, which the host half's reopen hook
+	// adds to a fork's line. The wrapper then reads its own copies of the Pane's secret files (data.AgentRoute.Forked).
+	AgentForkedFrom string
 	AgentRoute        data.AgentRoute
 	fallbackAuthor    string
 }
@@ -533,7 +536,7 @@ Usage:
   tern-kata agents [--issue <ref>]
   tern-kata team <ref>
   tern-kata message <address|ref> -m <text> [--re <comment>] [--as <actor>]
-  tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
+  tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--forked-from <block>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
@@ -677,7 +680,7 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 open Issues of KATA_REF's Project or the workspace's Project.
                                 Unknown address or ref, or no agent that can receive it, is
                                 refused
-  agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
+  agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--forked-from <block>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
                                 run the command with KATA_AUTHOR set to the actor (replacing
                                 any value; without --as it is left as inherited) and KATA_REF
                                 to the qualified Issue ref, with no KATA_INBOX_USER unless
@@ -709,6 +712,10 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 ignored for a remote --daemon entry or a switched profile with its own
                                 home. The files are read, not deleted, so a chat Tern reopens can read
                                 them again; the Pane deletes the ones it wrote when the agent is gone.
+                                --forked-from <block> (Tern's fork of the chat in that block) reads
+                                the fork's own copies of the files the Pane wrote, made on its first
+                                start, so the fork outlives the agent; the Pane deletes them with the
+                                fork's block.
                                 Any of them first drops
                                 the inherited KATA_SERVER, KATA_AUTH_TOKEN, KATA_AUTH_TOKEN_FILE,
                                 KATA_ALLOW_INSECURE, KATA_TRUST_PRIVATE_NETWORK, KATA_DSN, KATA_DB and

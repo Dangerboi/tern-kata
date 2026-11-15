@@ -520,6 +520,7 @@ func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.
 	agents, askErr, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, true, func(string) bool { return true })
 	if askErr == nil && err == nil {
 		g.syncAgentRecordsAtStart(ctx, cmd.Workspace, file)
+		g.retireForkFiles(ctx)
 	}
 	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
 }
@@ -532,6 +533,29 @@ func (g *Gateway) syncAgentRecordsAtStart(ctx context.Context, workspace, file s
 		return
 	}
 	_ = g.syncAgentRecords(ctx, workspace, agentDirs{config: dirs.Config, state: dirs.State}, file)
+}
+
+// retireForkFiles removes the copies forked chats made of the Pane's secret files (AgentRoute.Forked) whose block a fresh
+// `tern ls` no longer lists: a fork has no agents.json entry, so its copies go with its block. Nothing is removed when Tern cannot
+// be asked, and Tern is not asked when no copy exists.
+func (g *Gateway) retireForkFiles(ctx context.Context) {
+	dirs, err := g.workerDirs()
+	if err != nil || dirs.State == "" {
+		return
+	}
+	files, _ := filepath.Glob(filepath.Join(dirs.State, AgentPromptsFolder, forkFilePrefix+"*"))
+	if len(files) == 0 {
+		return
+	}
+	live, _, err := g.liveBlocks(ctx, true)
+	if err != nil {
+		return
+	}
+	for _, file := range files {
+		if block, _, ok := strings.Cut(strings.TrimPrefix(filepath.Base(file), forkFilePrefix), "-"); ok && blockID(block) && !live[block] {
+			_ = os.Remove(file)
+		}
+	}
 }
 
 // removePrompt removes a prompt file and the token, DSN, env and session path files beside it, if the agent was started with them.

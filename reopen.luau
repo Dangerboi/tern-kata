@@ -11,14 +11,16 @@ local M = {}
 
 type Word = { s: number, e: number, text: string }
 
--- What the wrapper reads to make a chat an Agent with its own address; a fork starts without them, so it never takes the
--- original's Agent address. A flag that takes a value may give it as the next word.
-local ADDRESS_FLAGS: { [string]: boolean } = {
+-- The flags a fork's line loses. Without the first five the wrapper does not make the chat an Agent with its own address, so a
+-- fork never takes the original's Agent address; `--forked-from` names the chat a fork was made from, and a fork of a fork gets
+-- its own in place of its parent's. A flag that takes a value may give it as the next word.
+local FORK_DROPS: { [string]: boolean } = {
     ["address-prefix"] = true,
     ["forward-comments"] = false,
     ["message-from"] = true,
     ["coordinator"] = true,
     ["coordinating"] = false,
+    ["forked-from"] = true,
 }
 
 -- "C:\...\pwsh.exe" and "/usr/bin/zsh" alike: the file name without its folder or ".exe", lower-cased.
@@ -84,25 +86,26 @@ local function words(line: string, escape: string?): { Word }?
     return out
 end
 
--- Where the wrapper's `--` is when the line is `[&] tern-kata agent ... -- <command>`, else nil.
-local function wrapperSeparator(ws: { Word }): number?
+-- Where the wrapper's `--` and its `agent` word are when the line is `[&] tern-kata agent ... -- <command>`, else nil.
+local function wrapperSeparator(ws: { Word }): (number?, number)
     local at = 1
     if ws[1] ~= nil and ws[1].text == "&" then at = 2 end
     local program, subcommand = ws[at], ws[at + 1]
-    if program == nil or subcommand == nil then return nil end
-    if baseName(program.text) ~= "tern-kata" or subcommand.text ~= "agent" then return nil end
+    if program == nil or subcommand == nil then return nil, 0 end
+    if baseName(program.text) ~= "tern-kata" or subcommand.text ~= "agent" then return nil, 0 end
     for k = at + 2, #ws - 1 do
-        if ws[k].text == "--" then return k end
+        if ws[k].text == "--" then return k, at + 1 end
     end
-    return nil
+    return nil, 0
 end
 
--- The line without its trailing `@<prompt file>` word and, for a fork, without the flags that give the chat an Agent address.
--- Nil when the line is not the wrapper's.
-local function rewrite(line: string, shell: string, fork: boolean): string?
+-- The line without its trailing `@<prompt file>` word and, for a fork, without the flags that give the chat an Agent address and
+-- with `--forked-from=<forkedFrom>` (the block the fork copies, when Tern names it) after `agent`, so the wrapper reads its own
+-- copies of the Pane's secret files. Nil when the line is not the wrapper's.
+local function rewrite(line: string, shell: string, fork: boolean, forkedFrom: string?): string?
     local ws = words(line, escapeOf(shell))
     if ws == nil then return nil end
-    local sep = wrapperSeparator(ws)
+    local sep, agentWord = wrapperSeparator(ws)
     if sep == nil then return nil end
     local dropped: { [number]: boolean } = {}
     local last = ws[#ws]
@@ -111,7 +114,7 @@ local function rewrite(line: string, shell: string, fork: boolean): string?
         local k = 1
         while k < sep do
             local name = ws[k].text:match("^%-%-([^=]+)")
-            local takesValue = name ~= nil and ADDRESS_FLAGS[name]
+            local takesValue = name ~= nil and FORK_DROPS[name]
             if name ~= nil and takesValue ~= nil then
                 dropped[k] = true
                 if takesValue and not ws[k].text:find("=", 1, true) and k + 1 < sep then
@@ -126,6 +129,7 @@ local function rewrite(line: string, shell: string, fork: boolean): string?
     local previousEnd = 0
     for k, word in ws do
         if not dropped[k] then out ..= line:sub(previousEnd + 1, word.e) end
+        if k == agentWord and forkedFrom ~= nil then out ..= " --forked-from=" .. forkedFrom end
         previousEnd = word.e
     end
     return (out:gsub("^%s+", ""))
@@ -138,9 +142,13 @@ function M.command(ev: any): string?
     local ok, result = pcall(function(): string?
         if type(ev) ~= "table" or type(ev.shell) ~= "string" then return nil end
         local fork = ev.how == "fork"
+        local forkedFrom: string? = nil
+        if fork and type(ev.pane) == "number" and ev.pane >= 0 and ev.pane == math.floor(ev.pane) then
+            forkedFrom = string.format("%d", ev.pane)
+        end
         for _, source in { ev.command, ev.line } do
             if type(source) == "string" then
-                local line = rewrite(source, ev.shell, fork)
+                local line = rewrite(source, ev.shell, fork, forkedFrom)
                 if line ~= nil then
                     if line == ev.command then return nil end
                     return line

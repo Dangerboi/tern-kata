@@ -249,39 +249,93 @@ const (
 // are, so they pass its checks on every OS) and names them in route.TokenFile, route.DSNFile and route.EnvFile. Nothing else changes.
 func (r AgentRoute) withSecretFiles(promptFile string) (AgentRoute, error) {
 	var written []string
-	put := func(secret, suffix string, name *string) error {
-		if secret == "" {
-			return nil
-		}
-		file := promptFile + suffix
-		f, err := safefileio.CreatePrivateFile(file)
-		if err != nil {
-			return fmt.Errorf("create the agent's private file: %w", err)
-		}
-		written = append(written, file)
-		_, err = f.WriteString(secret + "\n")
-		if closeErr := f.Close(); err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			return fmt.Errorf("write the agent's private file: %w", err)
-		}
-		*name = file
-		return nil
-	}
 	for _, s := range []struct {
 		secret, suffix string
 		name           *string
 	}{{r.Token, agentTokenSuffix, &r.TokenFile}, {r.DSN, agentDSNSuffix, &r.DSNFile}, {r.Creds, agentEnvSuffix, &r.EnvFile}} {
-		if err := put(s.secret, s.suffix, s.name); err != nil {
+		if s.secret == "" {
+			continue
+		}
+		file := promptFile + s.suffix
+		if err := writePrivateFile(file, s.secret); err != nil {
 			for _, file := range written {
 				_ = os.Remove(file)
 			}
 			return r, err
 		}
+		written = append(written, file)
+		*s.name = file
 	}
 	r.Token, r.DSN, r.Creds = "", "", ""
 	return r, nil
+}
+
+// writePrivateFile creates file as kata creates its own credential files and writes secret to it; a failed write leaves no file.
+func writePrivateFile(file, secret string) error {
+	f, err := safefileio.CreatePrivateFile(file)
+	if err != nil {
+		return fmt.Errorf("create the agent's private file: %w", err)
+	}
+	_, err = f.WriteString(secret + "\n")
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = os.Remove(file)
+		return fmt.Errorf("write the agent's private file: %w", err)
+	}
+	return nil
+}
+
+// forkFilePrefix begins the name of a forked chat's own copy of a secret file: fork-<its block>-<the copied file's name>, in the
+// copied file's folder. The Pane removes the copies of blocks Tern no longer lists (retireForkFiles).
+const forkFilePrefix = "fork-"
+
+// Forked is the route of a chat Tern forked from another one (`tern-kata agent --forked-from <block>`, which the host half's reopen
+// hook adds), block being the fork's own block id (TERN_PANE) and from the block it was forked from. Each secret file the Pane wrote
+// (TokenFile, DSNFile, EnvFile) is swapped for the fork's own copy beside it, made on the fork's first start from that file, or, once
+// the Pane has removed it with the original agent's entry, from the copy of the fork it was forked from (fork-<from>-<name>). Tern
+// runs the line its hook returned for the fork again when it reopens the fork, and that start finds the copy, so the fork no longer
+// depends on the original agent's files. A fork reopened soon after it was made comes back as a fork of its own block (Tern 0.9.21),
+// so from may equal block; the copy is found first all the same. A file the Pane did not write (a line typed by hand) and a start
+// outside a block keep the route as it is.
+func (r AgentRoute) Forked(block, from string) (AgentRoute, error) {
+	if !blockID(block) {
+		return r, nil
+	}
+	for _, s := range []struct {
+		suffix string
+		name   *string
+	}{{agentTokenSuffix, &r.TokenFile}, {agentDSNSuffix, &r.DSNFile}, {agentEnvSuffix, &r.EnvFile}} {
+		named := *s.name
+		dir, base := filepath.Split(named)
+		if !strings.HasPrefix(base, "prompt-") || !strings.HasSuffix(base, s.suffix) || filepath.Base(dir) != AgentPromptsFolder {
+			continue
+		}
+		own := filepath.Join(dir, forkFilePrefix+block+"-"+base)
+		if _, err := os.Lstat(own); err != nil {
+			secret, err := readTokenFile(named)
+			if err != nil && blockID(from) {
+				var parentErr error
+				if secret, parentErr = readTokenFile(filepath.Join(dir, forkFilePrefix+from+"-"+base)); parentErr == nil {
+					err = nil
+				}
+			}
+			if err != nil {
+				return r, err
+			}
+			if err := writePrivateFile(own, secret); err != nil {
+				return r, err
+			}
+		}
+		*s.name = own
+	}
+	return r, nil
+}
+
+// blockID is whether s is a Tern block id: decimal digits only.
+func blockID(s string) bool {
+	return s != "" && strings.Trim(s, "0123456789") == ""
 }
 
 // Env resolves the route into what the agent's environment must say: set holds NAME=value entries, and unset the names to drop first.
@@ -319,8 +373,9 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 		set = append(set, "KATA_HOME="+r.Home)
 	}
 	// take is a secret the route holds: in the wrapper it is read from its file. The file stays: Tern runs the same line again when it
-	// reopens the chat after its daemon died, or forks it, and that wrapper must read it too. The agent's environment holds the secret
-	// for as long as it runs anyway, and the Pane removes the file with the prompt file when it retires the agent's entry.
+	// reopens the chat after its daemon died, and that wrapper must read it too; a fork reads its own copy (Forked). The agent's
+	// environment holds the secret for as long as it runs anyway, and the Pane removes the file with the prompt file when it retires
+	// the agent's entry.
 	take := func(inline, file string) (string, error) {
 		if file == "" || !wrapper {
 			return inline, nil
