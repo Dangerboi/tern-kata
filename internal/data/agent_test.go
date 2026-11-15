@@ -1672,7 +1672,7 @@ func TestAgentRouteEnvironment(t *testing.T) {
 			"[[daemon]]\nname = \"profile\"\nlocal = true\nhome = \"/profiles/p\"\ninstance_uid = \"01HZZZZZZZZZZZZZZZZZZZZZZZ\"\n")
 	}
 	local, remote, authed := catalog("mine", ""), catalog("work", ""), catalog("mine", "[auth]\ntoken_file = \"/etc/kata-token\"\n")
-	const pane = "PANE" // replaced by a new token file per case: the wrapper deletes the one it reads
+	const pane = "PANE" // replaced by a new token file per case, so no case reads another's
 	// Whatever the block inherited is dropped first, so none of it reaches the Pane's daemon.
 	allCreds := []string{"KATA_SERVER", "KATA_AUTH_TOKEN", "KATA_AUTH_TOKEN_FILE", "KATA_ALLOW_INSECURE", "KATA_TRUST_PRIVATE_NETWORK", "KATA_DSN", "KATA_DB", "KATA_POSTGRES_SCHEMA"}
 	for name, tc := range map[string]struct {

@@ -40,11 +40,11 @@ type AgentRoute struct {
 	// DB, Schema and DSN are the Pane's KATA_DB (made absolute), KATA_POSTGRES_SCHEMA and KATA_DSN, carried only to a route that keeps the
 	// Pane's own home: kata hashes them into <KATA_HOME>/runtime/<hash> and starts a daemon when none runs there, so the block's own
 	// values must never mix with another home. A DSN may hold a password, so it travels like the token: DSN is the Pane's copy, which
-	// startAgent moves into DSNFile, a private file the wrapper reads into KATA_DSN and deletes.
+	// startAgent moves into DSNFile, a private file the wrapper reads into KATA_DSN and leaves for a reopen; removePrompt removes it.
 	DB, Schema, DSN, DSNFile string
 	// Creds are the Pane's values of the variables the home's config.toml names as credential sources (each [[daemon]] token_env and
-	// [auth].token_env), as NAME=value lines; startAgent moves them into EnvFile, a private file the wrapper reads, sets under their own
-	// names and deletes. kata then scopes each token to its entry for the agent exactly as for the Pane, in whatever checkout the agent
+	// [auth].token_env), as NAME=value lines; startAgent moves them into EnvFile, a private file the wrapper reads and sets under their own
+	// names, and leaves for a reopen; removePrompt removes it. kata then scopes each token to its entry for the agent exactly as for the Pane, in whatever checkout the agent
 	// runs, which a single KATA_AUTH_TOKEN (kata sends it to every remote target) could not do.
 	Creds, EnvFile string
 }
@@ -304,7 +304,7 @@ func (r AgentRoute) Env(dir string) (set, unset []string, err error) {
 	return r.resolve(dir, true)
 }
 
-// Preflight runs the refusals Env makes, for the Pane to report before it starts a block, without reading or deleting a token file.
+// Preflight runs the refusals Env makes, for the Pane to report before it starts a block, without reading a token file.
 func (r AgentRoute) Preflight(dir string) error {
 	_, _, err := r.resolve(dir, false)
 	return err

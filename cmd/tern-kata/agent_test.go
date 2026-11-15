@@ -263,7 +263,7 @@ func TestAgentWrapperRoutesKataToThePanesDaemon(t *testing.T) {
 			}
 		})
 	}
-	t.Run("the Pane-written token file is gone once read, the Pane's own is not", func(t *testing.T) {
+	t.Run("the Pane-written token file stays for a reopen, the Pane's own is untouched", func(t *testing.T) {
 		written, own := home+"/written-token", home+"/own-token"
 		for _, f := range []string{written, own} {
 			if err := os.WriteFile(f, []byte("tok\n"), 0o600); err != nil {
