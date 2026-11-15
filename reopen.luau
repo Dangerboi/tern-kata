@@ -99,9 +99,12 @@ local function wrapperSeparator(ws: { Word }): (number?, number)
     return nil, 0
 end
 
--- The line without its trailing `@<prompt file>` word and, for a fork, without the flags that give the chat an Agent address and
--- with `--forked-from=<forkedFrom>` (the block the fork copies, when Tern names it) after `agent`, so the wrapper reads its own
--- copies of the Pane's secret files. Nil when the line is not the wrapper's.
+-- The flags that name a private file the Pane wrote; a fork reads its own copy of each (`--forked-from`).
+local SECRET_FILE_FLAGS: { [string]: boolean } = { ["token-file"] = true, ["dsn-file"] = true, ["env-file"] = true }
+
+-- The line without its trailing `@<prompt file>` word and, for a fork, without the flags that give the chat an Agent address and,
+-- when the line names a secret file, with `--forked-from=<forkedFrom>` (the block the fork copies, when Tern names it) after
+-- `agent`, so the wrapper reads its own copies of the Pane's secret files. Nil when the line is not the wrapper's.
 local function rewrite(line: string, shell: string, fork: boolean, forkedFrom: string?): string?
     local ws = words(line, escapeOf(shell))
     if ws == nil then return nil end
@@ -110,11 +113,13 @@ local function rewrite(line: string, shell: string, fork: boolean, forkedFrom: s
     local dropped: { [number]: boolean } = {}
     local last = ws[#ws]
     if #ws > sep + 1 and #last.text > 1 and last.text:sub(1, 1) == "@" then dropped[#ws] = true end
+    local secrets = false
     if fork then
         local k = 1
         while k < sep do
             local name = ws[k].text:match("^%-%-([^=]+)")
             local takesValue = name ~= nil and FORK_DROPS[name]
+            if name ~= nil and SECRET_FILE_FLAGS[name] then secrets = true end
             if name ~= nil and takesValue ~= nil then
                 dropped[k] = true
                 if takesValue and not ws[k].text:find("=", 1, true) and k + 1 < sep then
@@ -125,6 +130,7 @@ local function rewrite(line: string, shell: string, fork: boolean, forkedFrom: s
             k += 1
         end
     end
+    if not secrets then forkedFrom = nil end
     local out = ""
     local previousEnd = 0
     for k, word in ws do
