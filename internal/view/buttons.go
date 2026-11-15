@@ -15,6 +15,20 @@ import (
 // this key.
 const choiceControlKey = "control"
 
+// SelectControlID is the node of the select of card's field called name: the control inside the field.
+func SelectControlID(card model.Card, name model.Field) string {
+	return itemID(FieldID(card, name), choiceControlKey)
+}
+
+// CloseSelectTarget is the select node a CloseSelectMenu goes to, "" when m draws no such select (a key closed the card with
+// the menu), so no op names a node Tern no longer has.
+func CloseSelectTarget(m model.Model, card model.Card, name model.Field) string {
+	if !m.SelectDrawn(card, name) {
+		return ""
+	}
+	return SelectControlID(card, name)
+}
+
 // The control never takes focus: the model owns the keys, and the select draws the menu, highlight and search text the model holds.
 func choiceControl(m model.Model, card model.Card, name model.Field, title string, focused bool, hint, warning string) tern.Element {
 	set, ok := m.CardChoices(card, name)
@@ -45,7 +59,7 @@ func choiceControl(m model.Model, card model.Card, name model.Field, title strin
 		field.Children = ui.Nodes(ui.Switch{Common: common, On: set.Chosen == set.OnIndex, Variant: ui.SwitchSegment, Labels: [2]string{"No", "Yes"}})
 	default:
 		menu := m.OpenDropdown(card, name)
-		sel := ui.Select{Common: common, Value: choiceValue(set.Chosen), Open: menu.Open, Search: set.Search()}
+		sel := ui.Select{Common: common, Value: choiceValue(set.Chosen), Open: m.SelectShown(card, name), Search: set.Search()}
 		shown := make([]int, len(set.Labels))
 		for i := range shown {
 			shown[i] = i
@@ -58,7 +72,9 @@ func choiceControl(m model.Model, card model.Card, name model.Field, title strin
 				sel.Total = &total
 			}
 		}
-		if menu.Open {
+		// The highlight of a menu the pointer opened is Tern's until a key moves it: any change to the select right after the
+		// click (as an active prop) lost the option click that followed it now and then.
+		if menu.Open && (sel.Open || menu.Keyed) {
 			sel.Active = choiceValue(menu.Active)
 		}
 		sel.Options = make([]ui.SelectOption, len(shown))

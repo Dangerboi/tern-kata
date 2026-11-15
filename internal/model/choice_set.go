@@ -67,6 +67,9 @@ type Dropdown struct {
 	Open   bool
 	Active int
 	Query  string
+	// Keyed is whether a key has moved the highlight or the search text since the dropdown opened: until then the Pane leaves
+	// the highlight of a menu the pointer opened to Tern (the view draws Active only for a drawn-open or keyed menu).
+	Keyed bool
 	// activeLabel is the label the highlight is on, so a refresh that reorders the choices keeps it on the same one.
 	activeLabel string
 }
@@ -128,6 +131,72 @@ func (m Model) settleDropdown() Model {
 	}
 	m.Dropdown = Dropdown{}
 	return m
+}
+
+// selectRef names one select: the card and the field it is the control of.
+type selectRef struct {
+	Card  Card
+	Field Field
+}
+
+// SelectShown is whether the Pane draws the select of field name in card open.
+func (m Model) SelectShown(card Card, name Field) bool {
+	return m.shownSelect == selectRef{card, name}
+}
+
+// SelectDrawn is whether the select of field name in card is drawn: card is the card on top and name a select field of it the
+// card does not hide.
+func (m Model) SelectDrawn(card Card, name Field) bool {
+	entry, ok := m.topEntry()
+	if !ok || entry.card != card || entry.choices == nil || (entry.hidden != nil && entry.hidden(m, name)) {
+		return false
+	}
+	set, ok := entry.choices(m, name)
+	return ok && set.Control == ControlSelect
+}
+
+// CloseSelectMenu closes the menu of the select of Field in Card in Tern, where the pointer opened it and the Pane closed it
+// (showSelect). The Pane never drew that menu open, so drawing it closed is no change Tern would apply; the driver sends the
+// change as ops on the select instead.
+type CloseSelectMenu struct {
+	Card  Card
+	Field Field
+}
+
+func (CloseSelectMenu) cmd() {}
+
+// showSelect decides which select the Pane draws open after msg took prev to m. Tern opens and closes a select's menu at the
+// pointer by itself and lets a change of the drawn open state win over it, so a drawing that answers an earlier click and
+// reaches Tern after a later one would undo that click: open the menu again after a pick, or close it under the next click.
+// The Pane therefore draws open only a menu the keys opened. A menu the pointer opened stays drawn closed while it is open (Tern
+// shows it), and so does one the pointer closed or picked from. When the Pane itself closes a menu the pointer opened (a key
+// picks, escape, tab, a field the keys leave), it asks for CloseSelectMenu.
+func (m Model) showSelect(prev Model, msg Msg, cmds []Cmd) (Model, []Cmd) {
+	var pointer bool
+	switch msg.(type) {
+	case DropdownToggleMsg, ChooseMsg, FocusFieldMsg:
+		pointer = true
+	}
+	open, was := m.openSelect(), prev.openSelect()
+	switch {
+	case open != (selectRef{}) && open == was:
+	case open != (selectRef{}) && !pointer:
+		m.shownSelect = open
+	case open != (selectRef{}):
+		m.shownSelect = selectRef{}
+	case m.shownSelect != (selectRef{}):
+		m.shownSelect = selectRef{}
+	case was != (selectRef{}) && !pointer:
+		cmds = append(cmds, CloseSelectMenu(was))
+	}
+	return m, cmds
+}
+
+func (m Model) openSelect() selectRef {
+	if !m.Dropdown.Open {
+		return selectRef{}
+	}
+	return selectRef{m.Dropdown.Card, m.Dropdown.Field}
 }
 
 // SwitchMsg is the pointer flipping the switch called Field of the open popup card. The field takes focus and holds On.
@@ -215,6 +284,7 @@ func (e cardEntry) dropdownKey(m Model, msg KeyMsg) (Model, bool) {
 	matches := set.Matches(dropdown.Query)
 	at := slices.Index(matches, dropdown.Active)
 	binding, bound := LookupBindingForMode(msg.Chord, ModeDropdown)
+	dropdown.Keyed = true // a key that closes the dropdown resets it below
 	switch {
 	case bound && (binding.Action == DropdownNext || binding.Action == DropdownPrevious):
 		if len(matches) > 0 {

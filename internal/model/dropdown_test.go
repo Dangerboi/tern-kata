@@ -145,6 +145,52 @@ func TestPointerPickAndToggleDriveTheSameState(t *testing.T) {
 	}
 }
 
+func asksClose(cmds []model.Cmd) bool {
+	for _, cmd := range cmds {
+		if _, ok := cmd.(model.CloseSelectMenu); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// The Pane draws open only a menu the keys opened: a drawing answering the pointer's open could reach Tern after the pick that
+// followed it and open the menu again. A menu the pointer opened that the keys close is closed by a command, not by drawing.
+func TestTheMenuIsDrawnOpenOnlyWhenTheKeysOpenedIt(t *testing.T) {
+	shown := func(m model.Model) bool { return m.SelectShown(model.CardFilter, model.FilterRelationship) }
+	keys := cardKeys(filterCardOn(0, model.FilterRelationship), "down")
+	if !shown(keys) {
+		t.Fatal("a menu the keys opened is not drawn open")
+	}
+	if keys, cmds := model.Update(keys, model.KeyMsg{Chord: "escape"}); shown(keys) || asksClose(cmds) {
+		t.Fatalf("escape on the keys' menu: drawn open %v, close asked %v; drawing it closed closes it", shown(keys), asksClose(cmds))
+	}
+
+	pointer, cmds := model.Update(filterCardOn(0, model.FilterRelationship), model.DropdownToggleMsg{Field: model.FilterRelationship, Open: true})
+	if !pointer.Dropdown.Open || shown(pointer) || asksClose(cmds) {
+		t.Fatalf("the pointer's open: dropdown open %v, drawn open %v", pointer.Dropdown.Open, shown(pointer))
+	}
+	if pointer = cardKeys(pointer, "down"); shown(pointer) {
+		t.Fatal("moving the highlight drew the pointer's menu open")
+	}
+	for _, key := range []string{"enter", "escape", "tab"} {
+		closed, cmds := model.Update(pointer, model.KeyMsg{Chord: key})
+		want := model.CloseSelectMenu{Card: model.CardFilter, Field: model.FilterRelationship}
+		if closed.Dropdown.Open || shown(closed) || len(cmds) == 0 || cmds[len(cmds)-1] != model.Cmd(want) {
+			t.Errorf("%s in the pointer's menu: dropdown open %v, drawn open %v, cmds %+v; want %+v", key, closed.Dropdown.Open, shown(closed), cmds, want)
+		}
+	}
+
+	for name, close := range map[string]model.Msg{
+		"pick":  model.ChooseMsg{Field: model.FilterRelationship, Index: 3},
+		"close": model.DropdownToggleMsg{Field: model.FilterRelationship, Open: false},
+	} {
+		if closed, cmds := model.Update(pointer, close); closed.Dropdown.Open || shown(closed) || asksClose(cmds) {
+			t.Errorf("the pointer's %s: dropdown open %v, drawn open %v, close asked %v; Tern closed it already", name, closed.Dropdown.Open, shown(closed), asksClose(cmds))
+		}
+	}
+}
+
 func TestMenuClosesWhenFocusMovesOrTheCardGoes(t *testing.T) {
 	m := cardKeys(filterCardOn(0, model.FilterRelationship), "down")
 	m, _ = model.Update(m, model.FocusFieldMsg{Field: model.FilterOwner})

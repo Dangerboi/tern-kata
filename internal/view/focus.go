@@ -124,10 +124,13 @@ func rowClick(msg model.Msg) bool {
 	return false
 }
 
-// ExpectedUnknownID reports whether id is a node that can disappear between a queued focus, reveal or scroll op and the next
-// render, so that Tern's "unknown id" answer for it is expected.
+// ExpectedUnknownID reports whether id is a node that can disappear between a queued focus, reveal, scroll or set op and the
+// next render, so that Tern's "unknown id" answer for it is expected. A select's control (CloseSelectMenu) goes with its card.
 func ExpectedUnknownID(id string) bool {
 	if _, _, ok := FieldFromID(id); ok || id == SearchID {
+		return true
+	}
+	if _, ok := controlField(id); ok {
 		return true
 	}
 	if IsIssueID(id) || IsBoardCardID(id) {

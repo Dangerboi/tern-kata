@@ -167,6 +167,8 @@ type Model struct {
 	AskUnlink      *UnlinkAsk
 	AttachmentCopy AttachmentCopyState
 	Dropdown       Dropdown
+	// shownSelect is the select the Pane draws open (showSelect); zero when it draws none open.
+	shownSelect    selectRef
 	Focus          Column
 	Groups         []IssueGroup
 	Calendar       PaneCalendar
@@ -238,7 +240,9 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		cmds = append(append(cmds, raised...), ended...)
 	}
 	next = next.recordWrite(msg).noteWrites(cmds)
-	return foldLegend(msg, next.cancelPending(m, msg).settleDropdown().settleCalendar().withCollectionRows()), cmds
+	next = next.cancelPending(m, msg).settleDropdown()
+	next, cmds = next.showSelect(m, msg, cmds)
+	return foldLegend(msg, next.settleCalendar().withCollectionRows()), cmds
 }
 
 // staleConnection reports an answer asked of a daemon the Pane has since switched away from: it changes nothing.

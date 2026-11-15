@@ -3,6 +3,7 @@ package driver_test
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -124,6 +125,56 @@ func TestControlEventsSetTheChoice(t *testing.T) {
 		}
 		if !reflect.DeepEqual(step(t, s, &tern.Toggle{ID: "main.columns", Open: true}).State.Model, s.Model) {
 			t.Fatal("a toggle on another node changed the model")
+		}
+	})
+	t.Run("a key that closes the pointer's dropdown closes it in Tern ahead of the focus", func(t *testing.T) {
+		c := cards["Recurrence"]
+		opened := step(t, c.open(t), &tern.Toggle{ID: node(c, model.RecurrenceEnds), Open: true}).State
+		out := step(t, opened, key("tab"))
+		id := node(c, model.RecurrenceEnds)
+		want := []tern.Op{tern.OpSet(id, map[string]any{"open": true}), tern.OpSet(id, map[string]any{"open": nil})}
+		if len(out.Ops) < 3 || !reflect.DeepEqual(out.Ops[:2], want) || out.Ops[2][0] != "focus" {
+			t.Fatalf("ops %v: want the open prop set and deleted on %s, then the focus", out.Ops, id)
+		}
+		for _, cmd := range out.Cmds {
+			if _, ok := cmd.(model.CloseSelectMenu); ok {
+				t.Fatal("the close went to the gateway")
+			}
+		}
+	})
+	t.Run("a key that closes the card with the pointer's dropdown names no select", func(t *testing.T) {
+		c := cards["Filter"]
+		opened := step(t, c.open(t), &tern.Toggle{ID: node(c, model.FilterRelationship), Open: true}).State
+		out := step(t, opened, key("ctrl+o"))
+		if out.State.Model.FilterForm.Open {
+			t.Fatal("ctrl+o left the Filter card open")
+		}
+		for _, op := range out.Ops {
+			if op[0] == "set" {
+				t.Fatalf("ops %v: a set on the select of a card that is gone", out.Ops)
+			}
+		}
+	})
+	t.Run("the answer to the pointer's open leaves the select as drawn until a key moves the highlight", func(t *testing.T) {
+		c := cards["Recurrence"]
+		id := node(c, model.RecurrenceEnds)
+		props := func(v *tern.View) map[string]any {
+			for _, n := range wireNodes(t, *v) {
+				if n.ID == id {
+					return n.P
+				}
+			}
+			t.Fatalf("no node %s", id)
+			return nil
+		}
+		s := c.open(t)
+		before := view.Render(s.Model, time.Now())
+		opened := step(t, s, &tern.Toggle{ID: id, Open: true})
+		if got, want := props(opened.View), props(&before); !reflect.DeepEqual(got, want) {
+			t.Fatalf("the select after the pointer's open is %v, want it as drawn before %v: a change there lost the next click", got, want)
+		}
+		if moved := step(t, opened.State, key("down")); props(moved.View)["active"] == nil {
+			t.Fatalf("after down the select is %v, want the highlight drawn", props(moved.View))
 		}
 	})
 }

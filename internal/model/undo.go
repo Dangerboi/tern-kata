@@ -165,7 +165,7 @@ func undoBoundary(cmd Cmd) (string, bool) {
 		LoadTeamKids, ResolveComment,
 		ForgetAgentRecord,
 		LoadRemoteAgents,
-		SetTeamPaused,
+		SetTeamPaused, CloseSelectMenu,
 		CloseIssueCmd, ReopenIssueCmd, MoveIssueCmd, SetDatesCmd, DeleteIssueCmd, UndoChange:
 		return "", false
 	case RestoreIssueCmd:

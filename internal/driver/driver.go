@@ -72,7 +72,7 @@ func Step(s State, in any, now time.Time) Output {
 	}
 	v := view.Render(m, now)
 	out := Output{State: s, View: &v}
-
+	out.closeSelectMenus(m, cmds)
 	if target := view.TextFocusID(m); target != s.Focus {
 		out.Ops = append(out.Ops, tern.OpFocus(target))
 		out.State.Focus = target
@@ -82,6 +82,19 @@ func Step(s State, in any, now time.Time) Output {
 	}
 	out.route(m, cmds)
 	return out
+}
+
+// closeSelectMenus sends a CloseSelectMenu as ops on the select. The Pane drew that menu closed (no open prop) while the pointer
+// had it open, so drawing it closed again changes nothing Tern would apply: setting the prop and deleting it again is a close
+// Tern applies. They go ahead of the step's focus op: behind one (tab moving to the next field) they left the menu open.
+func (out *Output) closeSelectMenus(m model.Model, cmds []model.Cmd) {
+	for _, cmd := range cmds {
+		if cmd, ok := cmd.(model.CloseSelectMenu); ok {
+			if id := view.CloseSelectTarget(m, cmd.Card, cmd.Field); id != "" {
+				out.Ops = append(out.Ops, tern.OpSet(id, map[string]any{"open": true}), tern.OpSet(id, map[string]any{"open": nil}))
+			}
+		}
+	}
 }
 
 func (out *Output) route(m model.Model, cmds []model.Cmd) {
@@ -97,6 +110,7 @@ func (out *Output) route(m model.Model, cmds []model.Cmd) {
 			}
 		case model.OpenDraftEditor:
 			out.Editor = &cmd
+		case model.CloseSelectMenu: // closeSelectMenus sent it
 		default:
 			out.Cmds = append(out.Cmds, cmd)
 		}
