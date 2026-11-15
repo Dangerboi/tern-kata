@@ -245,28 +245,37 @@ const (
 	agentEnvSuffix = ".env"
 )
 
+// secretFile is a secret the route can hold inline, the suffix (after the prompt file's name) of the private file it moves into,
+// and the route field naming that file.
+type secretFile struct {
+	secret *string
+	suffix string
+	file   *string
+}
+
+// secretFiles is the route's secrets that travel in private files: the Pane's token, its DSN and its token_env values.
+func (r *AgentRoute) secretFiles() []secretFile {
+	return []secretFile{{&r.Token, agentTokenSuffix, &r.TokenFile}, {&r.DSN, agentDSNSuffix, &r.DSNFile}, {&r.Creds, agentEnvSuffix, &r.EnvFile}}
+}
+
 // withSecretFiles moves route.Token, route.DSN and route.Creds into new private files beside promptFile (created as kata's own credential files
 // are, so they pass its checks on every OS) and names them in route.TokenFile, route.DSNFile and route.EnvFile. Nothing else changes.
 func (r AgentRoute) withSecretFiles(promptFile string) (AgentRoute, error) {
 	var written []string
-	for _, s := range []struct {
-		secret, suffix string
-		name           *string
-	}{{r.Token, agentTokenSuffix, &r.TokenFile}, {r.DSN, agentDSNSuffix, &r.DSNFile}, {r.Creds, agentEnvSuffix, &r.EnvFile}} {
-		if s.secret == "" {
+	for _, s := range r.secretFiles() {
+		if *s.secret == "" {
 			continue
 		}
 		file := promptFile + s.suffix
-		if err := writePrivateFile(file, s.secret); err != nil {
+		if err := writePrivateFile(file, *s.secret); err != nil {
 			for _, file := range written {
 				_ = os.Remove(file)
 			}
 			return r, err
 		}
 		written = append(written, file)
-		*s.name = file
+		*s.file, *s.secret = file, ""
 	}
-	r.Token, r.DSN, r.Creds = "", "", ""
 	return r, nil
 }
 
@@ -291,6 +300,11 @@ func writePrivateFile(file, secret string) error {
 // copied file's folder. The Pane removes the copies of blocks Tern no longer lists (retireForkFiles).
 const forkFilePrefix = "fork-"
 
+// forkCopy is the path of the copy the fork in block makes of the secret file base in dir.
+func forkCopy(dir, block, base string) string {
+	return filepath.Join(dir, forkFilePrefix+block+"-"+base)
+}
+
 // Forked is the route of a chat Tern forked from another one (`tern-kata agent --forked-from <block>`, which the host half's reopen
 // hook adds), block being the fork's own block id (TERN_PANE) and from the block it was forked from. Each secret file the Pane wrote
 // (TokenFile, DSNFile, EnvFile) is swapped for the fork's own copy beside it, made on the fork's first start from that file, or, once
@@ -303,21 +317,18 @@ func (r AgentRoute) Forked(block, from string) (AgentRoute, error) {
 	if !blockID(block) {
 		return r, nil
 	}
-	for _, s := range []struct {
-		suffix string
-		name   *string
-	}{{agentTokenSuffix, &r.TokenFile}, {agentDSNSuffix, &r.DSNFile}, {agentEnvSuffix, &r.EnvFile}} {
-		named := *s.name
+	for _, s := range r.secretFiles() {
+		named := *s.file
 		dir, base := filepath.Split(named)
 		if !strings.HasPrefix(base, "prompt-") || !strings.HasSuffix(base, s.suffix) || filepath.Base(dir) != AgentPromptsFolder {
 			continue
 		}
-		own := filepath.Join(dir, forkFilePrefix+block+"-"+base)
+		own := forkCopy(dir, block, base)
 		if _, err := os.Lstat(own); err != nil {
 			secret, err := readTokenFile(named)
 			if err != nil && blockID(from) {
 				var parentErr error
-				if secret, parentErr = readTokenFile(filepath.Join(dir, forkFilePrefix+from+"-"+base)); parentErr == nil {
+				if secret, parentErr = readTokenFile(forkCopy(dir, from, base)); parentErr == nil {
 					err = nil
 				}
 			}
@@ -328,7 +339,7 @@ func (r AgentRoute) Forked(block, from string) (AgentRoute, error) {
 				return r, err
 			}
 		}
-		*s.name = own
+		*s.file = own
 	}
 	return r, nil
 }
