@@ -83,8 +83,9 @@ local function words(line: string, escape: string?): { Word }?
     return out
 end
 
--- Where the wrapper's `--` and its `agent` word are when the line is `[&] tern-kata agent ... -- <command>`, else nil.
-local function wrapperSeparator(ws: { Word }): (number?, number)
+-- The indexes of the wrapper's `--` and of its `agent` word when the line is `[&] tern-kata agent ... -- <command>`; nil (and 0)
+-- when it is not.
+local function wrapperWords(ws: { Word }): (number?, number)
     local at = 1
     if ws[1] ~= nil and ws[1].text == "&" then at = 2 end
     local program, subcommand = ws[at], ws[at + 1]
@@ -105,7 +106,7 @@ local SECRET_FILE_FLAGS: { [string]: boolean } = { ["token-file"] = true, ["dsn-
 local function rewrite(line: string, shell: string, fork: boolean, forkedFrom: string?): string?
     local ws = words(line, escapeOf(shell))
     if ws == nil then return nil end
-    local sep, agentWord = wrapperSeparator(ws)
+    local sep, agentWord = wrapperWords(ws)
     if sep == nil then return nil end
     local dropped: { [number]: boolean } = {}
     local last = ws[#ws]

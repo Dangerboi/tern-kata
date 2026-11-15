@@ -215,6 +215,15 @@ func TestAgentEnv(t *testing.T) {
 	if got, want := agentEnv([]string{"Kata_Teammate=me", "Tern_Pane=42"}, plan("", "", "ann/omp"), true), []string{"Tern_Pane=42", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("teammate on Windows: %q, want %q", got, want)
 	}
+	// Only the wrapper names a prompt file: an inherited one (a shell inside an agent's block) would point at another agent's.
+	reopened := plan("", "", "ann/omp")
+	reopened.AgentPromptFile = "/state/agent-prompts/prompt-7-a.md"
+	if got, want := agentEnv([]string{"TERN_KATA_PROMPT_FILE=/other.md", "TERN_PANE=42"}, reopened, false), []string{"TERN_PANE=42", "TERN_KATA_PROMPT_FILE=/state/agent-prompts/prompt-7-a.md", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-42", "KATA_TEAMMATE=omp-42"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("reopened agent's prompt file: %q, want %q", got, want)
+	}
+	if got, want := agentEnv([]string{"TERN_KATA_PROMPT_FILE=/other.md", "TERN_PANE=43"}, plan("", "", "ann/omp"), false), []string{"TERN_PANE=43", "KATA_OMP_LIVE_INBOX=0", "KATA_INBOX_USER=ann/omp-43", "KATA_TEAMMATE=omp-43"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("inherited prompt file: %q, want %q", got, want)
+	}
 }
 
 type stubSession struct{}
