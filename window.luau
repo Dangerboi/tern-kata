@@ -548,15 +548,46 @@ registerWidget("waiting", {
     end,
 })
 
--- The worker on this machine, as the host half's poll stores it. `tern.kv` here is this machine's, so a remote window shows its
--- own worker, never the session host's.
+-- On Tern 0.9.21 and later the host half draws the worker widget (host.luau): it shows the session host's worker in every
+-- window attached to that host, a remote one included. A widget of the same id registered here would win in this window and
+-- hide it, so this half registers its own only while it finds a fresh host-half summary in its `tern.kv`, which a host half
+-- stores only while Tern gives it no widget to render, and takes it away when none is found.
+-- The window cannot ask which Tern its session host runs, so a window
+-- and a host on different Tern versions fare as follows. A window on 0.9.21+ with an older remote host finds no summary here
+-- and shows no worker widget. A window older than 0.9.21 cannot draw the host's widget at all, whatever the host runs. Only
+-- where this machine's own host half cannot render, window and host being one Tern, is the summary found; `tern.kv` here is
+-- this machine's, so the tooltip says "on this machine". The widget is offered to the add-widgets command whenever this
+-- Tern has a widget bar, since the host half may be the one drawing it.
 local WORKER_POLL_SECONDS = 5
-local OPEN_ID = "open"
-local SHOW_HELD_ID = "show-held-runs"
+local OPEN_ID = workerwidget.OPEN_ID
+local SHOW_HELD_ID = workerwidget.SHOW_HELD_ID
 local workerSummary: workersummary.Summary? = nil
 local workerSummaryText = ""
+local workerRegistered = false
 -- The record last read: a failed read (the host half may be rewriting the file) keeps it, and `fresh` still ages it out.
 local workerRecord: any = nil
+local workerSpec: WidgetSpec = {
+    name = "kata worker",
+    description = "What the kata worker on this machine is running, and the runs held for you; a click opens them",
+    icon = "server",
+    styles = {"text", "ring"} :: { WidgetStyle },
+    render = function(_pane): WidgetView?
+        return workerwidget.view(workerSummary, false, commandName(SHOW_HELD_ID), commandName(OPEN_ID))
+    end,
+}
+
+-- The registration follows the summary: it is registered while a fresh summary is found and taken away when none is, so the
+-- host half's widget shows again. That matters when a reload installs a host half that renders widgets: the host half it
+-- replaced has just stamped the key, this half may read it first, and the host half this load starts deletes it a moment later.
+local function setWorkerFallback(wanted: boolean)
+    if wanted == workerRegistered then return end
+    local ok, err = pcall(function() tern.chrome.widget("worker", if wanted then workerSpec else nil) end)
+    if ok then
+        workerRegistered = wanted
+    else
+        tern.log.warn("tern-kata: could not " .. (if wanted then "register" else "remove") .. " widget worker: " .. tostring(err))
+    end
+end
 
 -- The first read comes at once, so a plugin reload does not leave the widget empty until the first poll.
 local function pollWorkerSummary(delay: number)
@@ -565,6 +596,7 @@ local function pollWorkerSummary(delay: number)
             local ok, saved = pcall(tern.kv.get, workersummary.KEY)
             if ok then workerRecord = saved end
             local summary = workersummary.fresh(workerRecord, os.time())
+            setWorkerFallback(summary ~= nil)
             local text = if summary ~= nil then tern.json.encode(summary) else ""
             if text ~= workerSummaryText then
                 workerSummary = summary
@@ -576,15 +608,8 @@ local function pollWorkerSummary(delay: number)
     end)
 end
 
-if registerWidget("worker", {
-    name = "kata worker",
-    description = "What the kata worker on this machine is running, and the runs held for you; a click opens them",
-    icon = "server",
-    styles = {"text", "ring"} :: { WidgetStyle },
-    render = function(_pane): WidgetView?
-        return workerwidget.view(workerSummary, commandName(SHOW_HELD_ID), commandName(OPEN_ID))
-    end,
-}) then
+if tern.chrome.widget ~= nil then
+    table.insert(widgetsOffered, {id = PLUGIN .. "/worker", name = workerSpec.name})
     pollWorkerSummary(1)
 end
 

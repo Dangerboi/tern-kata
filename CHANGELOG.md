@@ -18,6 +18,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Save to Downloads in a Tern Pane copies the file into the Downloads folder of the computer that shows the window, not the Pane's host, and the toast says so (Tern 0.9.21 and later).
   - With the window on the Pane's own computer, on an older Tern, or when Tern cannot copy it, the file goes into the Pane's own Downloads folder as before; after a failure the toast adds what Tern said.
 
+#### Jobs and worker
+
+- The kata worker widget is drawn by the session host on Tern 0.9.21 and later, so a window on another machine shows the session host's worker, and its tooltip says "on the session host".
+  - On an older Tern it still shows the worker of the machine the window runs on.
+
 ### Fixed
 
 #### Agents

@@ -1,10 +1,11 @@
 --!strict
 
--- The summary the host half stores in tern.kv for the worker widget, built as plain data: no Tern call is made here, so the
--- rule is tested by `luau test/workersummary_test.luau`. host.luau decodes the output of `tern-kata worker status --json`
--- (internal/worker/status.go's Status, whose JSON keys are its Go field names), turns `of`'s answer into a `record` stamped
--- with the time on every poll and stores it; the window half reads it back through `fresh`, which drops a record no host
--- half has restamped for a minute, so a worker stopped while no daemon runs on that machine does not stay on the widget.
+-- The summary of the kata worker that the worker widget shows, built as plain data: no Tern call is made here, so the rule is
+-- tested by `luau test/workersummary_test.luau`. host.luau decodes the output of `tern-kata worker status --json`
+-- (internal/worker/status.go's Status, whose JSON keys are its Go field names) with `of` and renders the widget from it. On a
+-- Tern whose host half cannot render widgets it also turns the answer into a `record` stamped with the time of every poll and
+-- stores it in tern.kv for the window half's widget, which reads it back through `fresh`: that drops a record no host half has
+-- restamped for a minute, so a worker stopped while no daemon runs on that machine does not stay on the widget.
 
 export type Held = { ref: string, job: string, reason: string }
 export type Summary = {

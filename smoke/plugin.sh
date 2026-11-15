@@ -6,7 +6,7 @@ pid=
 server_pid=
 export CGO_ENABLED=0 KATA_HOME="$tmp/kata" TERN_CONFIG_DIR="$tmp/config"
 export TERN_DAEMON_SOCKET="$tmp/daemon.sock" STENCIL_LOG_DIR="$tmp/logs"
-# The linked plugin's host half reads worker.toml from the config folder: point it at an empty one.
+# The linked plugin's host half reads worker.toml from the config folder: point it at one the worker widget check fills in.
 export XDG_CONFIG_HOME="$tmp/xdg-config" XDG_STATE_HOME="$tmp/xdg-state"
 export STENCIL_FIXTURE_ROOT="$tmp/crates/tern"
 export STENCIL_LOG=warn,stencil_plugins=debug,stencil_tern=debug
@@ -22,6 +22,11 @@ cleanup() {
     ctl quit >/dev/null 2>&1 || true
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
+  fi
+  # The worker the widget check started must not outlive the smoke: with worker.manual in place nothing starts another.
+  if [[ -f "$XDG_CONFIG_HOME/tern-kata/worker.toml" ]]; then
+    : >"$XDG_CONFIG_HOME/tern-kata/worker.manual"
+    "$tmp/app/tern-kata" worker stop >/dev/null 2>&1 || true
   fi
   if [[ -f "$TERN_CONFIG_DIR/plugins/tern-kata.path" ]]; then
     tern plugin unlink tern-kata --json || status=1
@@ -73,6 +78,7 @@ expect_no_kata_toast() {
 expect_toast() { wait_for toast_shown "$1"; }
 mkdir -p "$tmp/workspace" "$tmp/bin" "$tmp/pane-bin" "$tmp/app" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
 if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -o "$tmp/app/tern-kata" ./cmd/tern-kata); fi
+(cd "$repo" && go build -o "$tmp/app/omp" ./internal/worker/workertest/stub)
 printf '#!/bin/sh\nexec env KATA_HOME=%q %q "$@"\n' "$KATA_HOME" "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
 chmod +x "$tmp/pane-bin/tern-kata"
 ln -s "$repo" "$tmp/crates/plugins/fixtures/tern-kata"
@@ -124,6 +130,8 @@ python3 -m http.server "$update_port" --bind 127.0.0.1 --directory "$tmp/dist" >
 server_pid=$!
 for ((attempt=0; attempt<100; attempt++)); do curl -sf "http://127.0.0.1:$update_port/version.txt" >/dev/null && break; sleep 0.1; done
 export TERN_KATA_BASE_URL="http://127.0.0.1:$update_port" TERN_KATA_NO_UPDATE_CHECK=1
+# The host half finds the worker's binary and the omp stub in this folder, not on PATH (the window half must not find tern-kata there).
+export TERN_KATA_INSTALL_DIR="$tmp/app"
 # q asks "Quit tern-kata? y/n" unless kata's [tui] confirm_quit is false: the steps quit with one key.
 mkdir -p "$KATA_HOME"
 printf '[tui]\nconfirm_quit = false\n' >"$KATA_HOME/config.toml"
@@ -200,7 +208,20 @@ ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/waiting", "tern-kata/wor
 ctl widgets set tern-kata/waiting tern-kata/worker
 ctl state | jq -e '.widgets.ids == ["tern-kata/waiting", "tern-kata/worker"]' >/dev/null
 [[ $(tern plugin list --json | jq '[.problems[] | select(tostring | contains("tern-kata"))] | length') == 0 ]]
-! grep -qE 'could not register widget|hook="command add-widgets"' "$tmp/tern.log" || { echo "tern-kata widget registration failed" >&2; exit 1; }
+! grep -qE 'could not register (the worker )?widget|hook="command add-widgets"' "$tmp/tern.log" || { echo "tern-kata widget registration failed" >&2; exit 1; }
+# The host half draws the worker widget: with a worker running (the host half starts one within a poll of worker.toml
+# appearing), the bar shows it with a tooltip naming the session host's worker, and it goes again when the worker stops
+# and nothing starts another. This fails if the host half stopped rendering it, or the window half's own widget (which
+# says "on this machine") won instead.
+worker_widget_shown() { ctl tree '#widgetbar .wg' | jq -e '[.nodes[] | select((.title // "") | contains("on the session host"))] | length == 1' >/dev/null; }
+mkdir -p "$XDG_CONFIG_HOME/tern-kata"
+printf 'executor = "plugin-smoke"\nactor = "smoke"\n[[projects]]\nname = "smoke"\n[checkouts]\nrepo = "%s"\n[profiles.default]\ncommand = "omp"\n' "$tmp/workspace" >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
+wait_for worker_widget_shown
+ctl tree '#widgetbar .wg' | jq -e '[.nodes[] | select((.title // "") | contains("Worker plugin-smoke on the session host"))] | length == 1' >/dev/null
+: >"$XDG_CONFIG_HOME/tern-kata/worker.manual"
+"$tmp/app/tern-kata" worker stop >/dev/null
+worker_widget_gone() { ! worker_widget_shown; }
+wait_for worker_widget_gone
 ctl widgets set
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
 show_issue_link() {

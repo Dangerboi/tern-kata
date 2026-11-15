@@ -7,12 +7,13 @@
 -- `process_exit` event: the host half then starts one at once and logs how that worker ended. Elsewhere (older Tern, a
 -- worker started by hand, a daemon restart) it starts one within a poll of that worker's end.
 -- While this load's worker runs, or the Supervision rule holds and the poll finds a worker already running, it also asks
--- `tern-kata worker status --json` and keeps a short summary of it (workersummary.luau) under tern.kv's `worker.summary`
--- for the window half's worker widget, as a record stamped with the time of every poll so the widget can drop a summary
--- that no host half refreshes any more. This load's worker is summarized until it exits, even after
--- worker.manual appears, since nothing asks `worker supervised` while it runs; the key is removed when no worker runs or,
--- for a worker this load did not start, when the rule does not hold (worker.manual, no worker.toml). A failed read stores
--- the last summary again with a fresh stamp.
+-- `tern-kata worker status --json` and keeps a short summary of it (workersummary.luau). On Tern 0.9.21+ the summary feeds
+-- the `worker` widget this half offers the widget bar, drawn again whenever the summary changes or goes. Before that, the
+-- summary goes under tern.kv's `worker.summary` for the window half's own worker widget, as a record stamped with the time
+-- of every poll so the widget can drop a summary that no host half refreshes any more. This load's worker is summarized
+-- until it exits, even after worker.manual appears, since nothing asks `worker supervised` while it runs; the summary is
+-- dropped when no worker runs or, for a worker this load did not start, when the rule does not hold (worker.manual, no
+-- worker.toml). A failed read keeps the last summary (with a fresh stamp in the tern.kv case).
 -- At most one question to the binary is out at a time; see `ask`.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
 -- This file does not decide the rule, find the config folder or see which worker runs: it asks `tern-kata worker
@@ -22,6 +23,7 @@
 local panecommands = require("./panecommands")
 local reopen = require("./reopen")
 local workersummary = require("./workersummary")
+local workerwidget = require("./workerwidget")
 
 local os_name = tern.runtime.os
 local windows = os_name == "windows"
@@ -49,6 +51,9 @@ local warned_missing = false
 local warned_status = false
 local warned_summary = false
 local last_summary: workersummary.Summary? = nil
+-- The worker widget is registered in this half (see the end of the file), and the encoded summary it last showed.
+local worker_widget = false
+local shown_text = ""
 local ASK_LIMIT_MS = 10000
 -- `worker supervised` exits with HELD, printing one line that names the worker, when the rule holds and a worker this
 -- load did not start already runs. The line is logged once per worker: a reload (a file saved in a checkout linked with
@@ -177,10 +182,20 @@ local function last_line(text: string): string
     return line
 end
 
+-- The widget rendered here shows `last_summary`; Tern draws it again, in every window attached to this host, only when the
+-- summary changed (a poll that finds the same worker makes no refresh).
+local function show_worker()
+    local text = if last_summary ~= nil then tern.json.encode(last_summary) else ""
+    if text == shown_text then return end
+    shown_text = text
+    pcall(function() tern.chrome.refresh() end)
+end
+
 -- The key may come from an earlier load of this file, so tern.kv is asked, not only what this load stored.
 local function clear_summary()
     last_summary = nil
     warned_summary = false
+    if worker_widget then show_worker() end
     local ok, stored = pcall(tern.kv.get, workersummary.KEY)
     if ok and stored ~= nil then pcall(tern.kv.set, workersummary.KEY, nil) end
 end
@@ -226,6 +241,11 @@ local function summarize(binary: string)
         end
     end
     local function store(summary: workersummary.Summary)
+        if worker_widget then
+            last_summary = summary
+            show_worker()
+            return
+        end
         local value = workersummary.record(summary, os.time())
         local stored, store_err = pcall(function() tern.kv.set(workersummary.KEY, value) end)
         if stored then
@@ -387,6 +407,37 @@ local function worker_ended(ev: any)
         drop_answer()
     end
     start()
+end
+
+-- The worker widget is offered from this half where Tern can (0.9.21+): `render` runs here, with the summary the poll
+-- keeps, and the view reaches every window attached to this host, a remote one included. A window half's widget of the same
+-- id wins in its window, so the window half draws its own only when it finds the summary in its tern.kv, which this half
+-- stores only while it has no widget to render it. A registration that raises is logged and leaves the rest as it was.
+-- Tern before 0.9.21 may have no `tern.chrome` in the host half at all, so the lookup itself must not raise.
+local chrome = (tern :: any).chrome
+if chrome == nil or chrome.widget == nil then
+    tern.log.info("tern-kata: this Tern cannot offer widgets from the host half (before 0.9.21), so the worker widget is the window half's")
+else
+    local plugin = tern.plugin.id
+    local ok, err = pcall(function()
+        tern.chrome.widget("worker", {
+            name = "kata worker",
+            description = "What the kata worker on the session host is running, and the runs held for you; a click opens them",
+            icon = "server",
+            styles = {"text", "ring"} :: { WidgetStyle },
+            render = function(_pane): WidgetView?
+                return workerwidget.view(last_summary, true, workerwidget.heldCommand(plugin), workerwidget.openCommand(plugin))
+            end,
+        })
+    end)
+    if ok then
+        worker_widget = true
+        -- An earlier load, or an older tern-kata, may have left a summary the window half would read as a reason to draw its own.
+        local read, stored = pcall(tern.kv.get, workersummary.KEY)
+        if read and stored ~= nil then pcall(tern.kv.set, workersummary.KEY, nil) end
+    else
+        tern.log.warn("tern-kata: could not register the worker widget: " .. tostring(err))
+    end
 end
 
 -- The first look waits a moment so loading stays well inside the 2 s budget. A daemon restart or a plugin reload loads this

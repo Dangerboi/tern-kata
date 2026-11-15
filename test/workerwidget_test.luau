@@ -16,8 +16,8 @@ local function test(name: string, body: () -> ())
     end
 end
 
-local HELD = "plugin.tern-kata.show-held-runs"
-local OPEN = "plugin.tern-kata.open"
+local HELD = workerwidget.heldCommand("tern-kata")
+local OPEN = workerwidget.openCommand("tern-kata")
 
 local function summary(running: number, held: { workersummary.Held }?, capacity: number?, inUse: number?): workersummary.Summary
     return {executor = "box", pid = 42, running = running, capacity = capacity or 4, inUse = inUse or running, held = held or {}}
@@ -29,12 +29,12 @@ local function heldRuns(count: number): { workersummary.Held }
     return list
 end
 
-local function view(s: workersummary.Summary?): WidgetView
-    return assert(workerwidget.view(s, HELD, OPEN))
+local function view(s: workersummary.Summary?, onHost: boolean?): WidgetView
+    return assert(workerwidget.view(s, if onHost == nil then true else onHost, HELD, OPEN))
 end
 
 test("no summary shows nothing", function()
-    assert(workerwidget.view(nil, HELD, OPEN) == nil)
+    assert(workerwidget.view(nil, true, HELD, OPEN) == nil)
 end)
 
 test("nothing running is idle, muted, and opens kata", function()
@@ -57,9 +57,20 @@ test("value is in use over capacity, and 0 for no capacity", function()
     assert(view(summary(0, nil, 0, 0)).value == 0)
 end)
 
-test("the title starts with the worker", function()
-    local first = (view(summary(0)).title :: string):match("^[^\n]*")
+test("the host-drawn title names the session host's worker, not this machine", function()
+    local first = (view(summary(0), true).title :: string):match("^[^\n]*")
+    assert(first == "Worker box on the session host (process 42)", tostring(first))
+end)
+
+test("the window half's fallback title says the worker is on this machine", function()
+    local first = (view(summary(0), false).title :: string):match("^[^\n]*")
     assert(first == "Worker box on this machine (process 42)", tostring(first))
+end)
+
+test("host and fallback views differ only in the title's place", function()
+    local host, fallback = view(summary(1, heldRuns(1)), true), view(summary(1, heldRuns(1)), false)
+    assert(host.text == fallback.text and host.tone == fallback.tone and host.command == fallback.command and host.value == fallback.value)
+    assert(host.title ~= fallback.title)
 end)
 
 test("the title lists up to five held runs then how many more, then the running count", function()

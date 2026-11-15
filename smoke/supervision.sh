@@ -127,8 +127,9 @@ run_job() {
   return 1
 }
 run_job 1
-# The host half keeps a summary of the running worker in the plugin's tern.kv (the kv.json in the plugin's data folder), which
-# the window half's worker widget reads, and removes it when no worker runs. The poll that stores it comes within 10 s.
+# On a Tern whose host half cannot render widgets, the host half keeps a summary of the running worker in the plugin's tern.kv
+# (the kv.json in the plugin's data folder), which the window half's own worker widget reads, and removes it when no worker
+# runs. The poll that stores it comes within 10 s.
 kv_file="$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json"
 kv_summary() { jq -c '.["worker.summary"] // empty' "$kv_file" 2>/dev/null || true; }
 wait_summary() { # $1 present|gone, $2 seconds
@@ -141,8 +142,20 @@ wait_summary() { # $1 present|gone, $2 seconds
   echo "worker.summary did not become $1 within $2 s: $(kv_summary)" >&2
   return 1
 }
-wait_summary present 25
-kv_summary | jq -e --argjson pid "$(worker_pid)" '.worker | .executor == "smoke-machine" and .pid == $pid and .capacity >= 1 and (.running | type) == "number" and (.held | length) == 0' >/dev/null || { echo "worker.summary is not the running worker's summary: $(kv_summary)" >&2; exit 1; }
+tern_version=$("$tern_bin" --version | sed -n 's/^tern \([0-9.]*\).*/\1/p')
+if [[ $(printf '%s\n0.9.21\n' "$tern_version" | sort -V | sed -n 1p) == 0.9.21 ]]; then
+  # Tern 0.9.21+ renders the worker widget in the host half, so no summary goes to tern.kv (plugin.sh reads the widget itself);
+  # the poll that would have stored one comes within 10 s. The host half logs a failed registration at warn level.
+  for ((k = 0; k < 13; k++)); do
+    tern plugin list >/dev/null 2>&1
+    [[ -z "$(kv_summary)" ]] || { echo "worker.summary was stored although the host half renders the widget: $(kv_summary)" >&2; exit 1; }
+    sleep 1
+  done
+  ! grep -q 'could not register the worker widget' "$STENCIL_LOG_DIR/tern-daemon.log" || { echo "the host half could not register the worker widget" >&2; exit 1; }
+else
+  wait_summary present 25
+  kv_summary | jq -e --argjson pid "$(worker_pid)" '.worker | .executor == "smoke-machine" and .pid == $pid and .capacity >= 1 and (.running | type) == "number" and (.held | length) == 0' >/dev/null || { echo "worker.summary is not the running worker's summary: $(kv_summary)" >&2; exit 1; }
+fi
 
 # A crashing worker is restarted, and each quick crash waits longer than the last.
 kill -9 "$first"
