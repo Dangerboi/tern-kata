@@ -85,11 +85,11 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 	case model.WayCopy:
 		return opened
 	case model.WaySave:
-		saved, err := g.saveToDownloads(opened.Path)
+		saved, remote, note, err := g.saveToDownloads(ctx, opened.Path)
 		if err != nil {
 			return failed(err)
 		}
-		opened.Path = saved
+		opened.Path, opened.Remote, opened.Note = saved, remote, note
 		return opened
 	case model.WaySystem:
 		if err := g.openFile(opened.Path); err != nil {
@@ -117,14 +117,65 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 	return opened
 }
 
-// saveToDownloads copies the downloaded file at path into the Downloads folder and returns the copy's path.
-func (g *Gateway) saveToDownloads(path string) (string, error) {
+// saveToDownloads puts a copy of the downloaded file at path into Downloads and returns where it went. In a Tern Pane that is the
+// Downloads folder of the machine whose window shows the Pane, which `tern download` knows and this process does not: remote is set
+// when Tern took the file there. Whenever `tern download` does not deliver, for whatever reason, the copy goes into this machine's
+// Downloads folder instead, so a change in Tern's wording cannot break Save. Tern's two ordinary refusals (no such command in an
+// older Tern, and a window on this very machine) are the plain local save; any other failure comes back as note, which the toast
+// shows beside the path. Only a failure of the local copy is an error.
+func (g *Gateway) saveToDownloads(ctx context.Context, path string) (saved string, remote bool, note string, err error) {
+	if inTern() {
+		var there string
+		there, err = g.ternDownload(ctx, path)
+		if err == nil {
+			return there, true, "", nil
+		}
+		if !errors.Is(err, errTernDownloadLocal) {
+			note = err.Error()
+		}
+	}
 	dir, err := g.downloadsDir()
 	if err != nil {
-		return "", err
+		return "", false, "", err
 	}
-	return saveUnique(path, dir)
+	saved, err = saveUnique(path, dir)
+	if err != nil {
+		return "", false, "", err
+	}
+	return saved, false, note, nil
 }
+
+// errTernDownloadLocal marks the failures of `tern download` that are expected and need no mention: this Tern predates the command,
+// or the window shows a Pane of the machine the files are on.
+var errTernDownloadLocal = errors.New("tern download copies nothing here")
+
+// ternDownload runs `tern download path` and returns the path it printed, the last line of its output. An older Tern does not know
+// the command: it tries to run "download" as a program and exits 2 saying "tern: download: No such file or directory", or answers
+// with nothing at all. A Tern whose window is on this machine exits 1 saying "the pane's files are on this computer already". Those
+// come back as errTernDownloadLocal, found by their wording only to keep the toast quiet; every other failure is an error carrying
+// Tern's message.
+func (g *Gateway) ternDownload(ctx context.Context, path string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, ternDownloadTimeout)
+	defer cancel()
+	out, err := g.runTern(ctx, []string{"download", path})
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		if strings.Contains(text, "tern: download: No such file or directory") || strings.Contains(text, "files are on this computer already") {
+			return "", errTernDownloadLocal
+		}
+		if text != "" {
+			return "", fmt.Errorf("tern download failed: %s", text)
+		}
+		return "", fmt.Errorf("tern download failed: %w", err)
+	}
+	if text == "" {
+		return "", errTernDownloadLocal
+	}
+	lines := strings.Split(text, "\n")
+	return strings.TrimSpace(lines[len(lines)-1]), nil
+}
+
+const ternDownloadTimeout = 60 * time.Second
 
 // downloadsDir is the Downloads folder of the machine the Pane runs on: $XDG_DOWNLOAD_DIR or what `xdg-user-dir DOWNLOAD` says on
 // Linux and the BSDs, else Downloads in the home folder, which is also where macOS and Windows keep it.

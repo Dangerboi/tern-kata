@@ -15,11 +15,11 @@ This needs a kata daemon with Docbank configured (see [Setting Docbank up](#sett
   - **Open** (`enter`) does what a click does.
   - **Open beside** (`v`) opens a split beside the Pane whatever the floating or side panel setting says. It is for the kinds Tern draws (`.png`, `.jpg`, `.jpeg`, `.gif`, `.txt`, `.md`, `.json` and `.docx`) and is greyed out, with the reason, for any other; it needs the Pane to run in Tern.
   - **Open with the system app** (`o`) hands the file to the OS opener, for the same types `enter` sends there (images, video, audio, PDFs and text). Any other type is refused, because the OS may run it and anyone who can write the Project, agents included, can name an Attachment: save it (`s`) and open it yourself.
-  - **Save to Downloads** (`s`) copies the file into the Downloads folder (`$XDG_DOWNLOAD_DIR` or `xdg-user-dir DOWNLOAD` on Linux, else `Downloads` in your home folder; `%USERPROFILE%\Downloads` on Windows) and says where in a toast. A file that is already there is never overwritten: the copy is `name (1).ext`, then `name (2).ext`.
+  - **Save to Downloads** (`s`) in a Pane that runs in Tern runs `tern download`, which copies the file into the Downloads folder of the machine whose window shows the Pane: for a Pane on a remote host, the machine you sit at. The toast says it is on the computer showing the window. Without Tern, with a Tern that has no `tern download`, when the window is on the Pane's own machine, or when `tern download` fails (the toast then adds what Tern said), it copies the file into the Downloads folder (`$XDG_DOWNLOAD_DIR` or `xdg-user-dir DOWNLOAD` on Linux, else `Downloads` in your home folder; `%USERPROFILE%\Downloads` on Windows) and says where in a toast. A file that is already there is never overwritten: the copy is `name (1).ext`, then `name (2).ext`.
   - **Copy…** (`y`) opens a card with the downloaded file's path and the command `kata docbank attachments get <Project>#<Issue id> <attachment id>`, each in a read-only field with a copy button. `esc` closes the card.
   - **Unlink…** (`z`) asks "Unlink <name> from <Issue>? y/n", with **Unlink** and **Keep** buttons, and unlinks as `U` does when you answer `y`.
 
-  Open with the system app and Save to Downloads act on the machine the Pane runs on, which for a remote window is the session host, not the machine you are sitting at. The copy buttons of the Copy card copy on the machine that shows the window.
+  Open with the system app acts on the machine the Pane runs on, which for a remote window is the session host, not the machine you are sitting at. The copy buttons of the Copy card copy on the machine that shows the window.
 
 ## Citing an attachment when closing
 

@@ -11,6 +11,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A `.docx` Attachment opens as a document in Tern (Tern 0.9.21 and later), in the floating view, the side panel or beside the Pane.
   - It is never handed to the system app: outside Tern it is only saved.
 
+### Changed
+
+#### Attachments
+
+- Save to Downloads in a Tern Pane copies the file into the Downloads folder of the computer that shows the window, not the Pane's host, and the toast says so (Tern 0.9.21 and later).
+  - With the window on the Pane's own computer, on an older Tern, or when Tern cannot copy it, the file goes into the Pane's own Downloads folder as before; after a failure the toast adds what Tern said.
+
 ### Fixed
 
 #### Issues and Pages

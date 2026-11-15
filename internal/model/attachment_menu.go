@@ -41,7 +41,8 @@ const (
 	WayBeside
 	// WaySystem hands the file to the OS opener of the machine the Pane runs on, for the types OSOpens names.
 	WaySystem
-	// WaySave copies the file into the Downloads folder of the machine the Pane runs on, under a name no file there has.
+	// WaySave copies the file into the Downloads folder, under a name no file there has: the folder of the machine that shows the
+	// window when the Pane runs in Tern, else of the machine the Pane runs on.
 	WaySave
 	// WayCopy only downloads, for the Copy card.
 	WayCopy
@@ -193,7 +194,14 @@ func attachmentOpened(m Model, msg AttachmentOpened) (Model, []Cmd) {
 	}
 	switch msg.Way {
 	case WaySave:
-		m, wait := m.raiseToast(Toast{Text: "Saved " + msg.Path})
+		text := "Saved " + msg.Path
+		if msg.Remote {
+			text += " on the computer showing this window"
+		}
+		if msg.Note != "" {
+			text += " on the Pane's computer: " + msg.Note
+		}
+		m, wait := m.raiseToast(Toast{Text: text})
 		return m, []Cmd{wait}
 	case WayCopy:
 		issue := m.issueByUID(msg.UID)

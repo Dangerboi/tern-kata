@@ -56,6 +56,10 @@ type AttachmentOpened struct {
 	UID, AttachmentID, Name string
 	// Path is where the file is: in the cache folder, or for WaySave the copy in Downloads.
 	Path string
+	// Remote is set when a WaySave copy went to the Downloads folder of the machine that shows the window, not this one.
+	Remote bool
+	// Note says why a WaySave copy is on the Pane's machine although `tern download` was tried: what Tern said when it failed.
+	Note string
 	Way  AttachmentWay
 	Err  error
 	// OutsideTern is set when the file went to the OS opener rather than Tern's preview block.
