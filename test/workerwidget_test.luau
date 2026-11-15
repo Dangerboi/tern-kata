@@ -25,7 +25,7 @@ end
 
 local function heldRuns(count: number): { workersummary.Held }
     local list: { workersummary.Held } = {}
-    for index = 1, count do table.insert(list, {ref = "r" .. index, job = "job" .. index, reason = "why" .. index}) end
+    for index = 1, count do table.insert(list, {ref = "r" .. index, reason = "why" .. index}) end
     return list
 end
 
@@ -59,12 +59,12 @@ end)
 
 test("the host-drawn title names the session host's worker, not this machine", function()
     local first = (view(summary(0), true).title :: string):match("^[^\n]*")
-    assert(first == "Worker box on the session host (process 42)", tostring(first))
+    assert(first == "Worker box on the session host", tostring(first))
 end)
 
 test("the window half's fallback title says the worker is on this machine", function()
     local first = (view(summary(0), false).title :: string):match("^[^\n]*")
-    assert(first == "Worker box on this machine (process 42)", tostring(first))
+    assert(first == "Worker box on this machine", tostring(first))
 end)
 
 test("host and fallback views differ only in the title's place", function()
@@ -76,13 +76,13 @@ end)
 test("the title lists up to five held runs then how many more, then the running count", function()
     local lines = (view(summary(2, heldRuns(7))).title :: string):split("\n")
     assert(#lines == 8, #lines)
-    assert(lines[2] == "r1 job1: why1" and lines[6] == "r5 job5: why5")
-    assert(lines[7] == "and 2 more" and lines[8] == "2 running")
+    assert(lines[2] == "r1 why1" and lines[6] == "r5 why5")
+    assert(lines[7] == "and 2 more" and lines[8] == "2 running, process 42")
 end)
 
 test("five held runs get no more line", function()
     local lines = (view(summary(0, heldRuns(5))).title :: string):split("\n")
-    assert(#lines == 7 and lines[7] == "0 running")
+    assert(#lines == 7 and lines[7] == "0 running, process 42")
 end)
 
 if failures > 0 then error(failures .. " test(s) failed") end

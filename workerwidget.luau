@@ -26,14 +26,16 @@ end
 
 -- The executor and pid are named, and the tooltip says whose machine the worker is on: the widget the host half draws shows
 -- the session host's worker in every window attached to it, while the window half's fallback widget reads the worker of the
--- machine the window itself runs on, which on a remote window is not the session host.
+-- machine the window itself runs on, which on a remote window is not the session host. Tern cuts each tooltip line at about
+-- 45 characters, so the first line keeps only where the worker is, the pid goes on the last line, and a held run is its
+-- Issue and then its hold, whose code comes first ("agent_quota: ..."); the job is left out, the Issue names it.
 local function title(summary: Summary, onHost: boolean): string
     local held: { string } = {}
-    for _, run in summary.held do table.insert(held, run.ref .. " " .. run.job .. ": " .. run.reason) end
+    for _, run in summary.held do table.insert(held, run.ref .. " " .. run.reason) end
     local where = if onHost then "on the session host" else "on this machine"
-    local lines = {"Worker " .. summary.executor .. " " .. where .. " (process " .. summary.pid .. ")"}
+    local lines = {"Worker " .. summary.executor .. " " .. where}
     for _, line in widgets.capped(held) do table.insert(lines, line) end
-    table.insert(lines, summary.running .. " running")
+    table.insert(lines, summary.running .. " running, process " .. summary.pid)
     return table.concat(lines, "\n")
 end
 

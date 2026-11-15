@@ -7,7 +7,7 @@
 -- stores it in tern.kv for the window half's widget, which reads it back through `fresh`: that drops a record no host half has
 -- restamped for a minute, so a worker stopped while no daemon runs on that machine does not stay on the widget.
 
-export type Held = { ref: string, job: string, reason: string }
+export type Held = { ref: string, reason: string }
 export type Summary = {
     executor: string,
     pid: number,
@@ -68,7 +68,7 @@ function M.of(status: any): Summary?
             -- HoldLine is the worker's own sentence for the hold; a binary from before it existed gives only the code.
             local reason = text(run.HoldLine)
             if reason == "" then reason = text(run.Hold) end
-            table.insert(summary.held, { ref = text(run.Issue), job = text(run.Job), reason = reason })
+            table.insert(summary.held, { ref = text(run.Issue), reason = reason })
         elseif not ended(run) then
             summary.running += 1
         end
