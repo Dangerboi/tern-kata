@@ -30,7 +30,8 @@ type AgentRoute struct {
 	AllowInsecure bool
 	TrustPrivate  bool
 	// TokenFile is the private file startAgent writes for the bearer token the Pane uses (a copy: the Pane's KATA_AUTH_TOKEN, or a switched
-	// entry's token). The wrapper reads it into the agent's KATA_AUTH_TOKEN and deletes it.
+	// entry's token). The wrapper reads it into the agent's KATA_AUTH_TOKEN and leaves it, so a chat Tern reopens can read it again; it goes
+	// with the prompt file when the agent's entry is retired (removePrompt).
 	TokenFile string
 	// AuthFile is the Pane's own KATA_AUTH_TOKEN_FILE, passed on as it is (a path, never read or deleted here).
 	AuthFile string
@@ -288,7 +289,7 @@ func (r AgentRoute) withSecretFiles(promptFile string) (AgentRoute, error) {
 // A route that is not zero always drops the block's own KATA_SERVER, KATA_AUTH_TOKEN, KATA_AUTH_TOKEN_FILE, KATA_ALLOW_INSECURE and
 // KATA_TRUST_PRIVATE_NETWORK, so what the block inherited (the Tern daemon's default remote, its credential, its trust settings) neither
 // picks the daemon nor is sent to the Pane's. The Pane's token goes to the agent as KATA_AUTH_TOKEN, which kata ranks above every other
-// credential source ([auth] in config.toml included), read from the route's token file, which Env deletes once it has read it.
+// credential source ([auth] in config.toml included), read from the route's token file.
 // The Pane's own KATA_AUTH_TOKEN_FILE goes on as KATA_AUTH_TOKEN_FILE, so kata ranks it as it ranks it for the Pane.
 //
 // KATA_SERVER outranks a checkout's .kata.local.toml pin in kata's resolution (`kata --help`: "KATA_SERVER, workspace,
@@ -317,17 +318,14 @@ func (r AgentRoute) resolve(dir string, wrapper bool) (set, unset []string, err 
 	if r.Home != "" {
 		set = append(set, "KATA_HOME="+r.Home)
 	}
-	// take is a secret the route holds: in the wrapper it is read from its file, which must not outlive the agent's start, so it is
-	// deleted; the Pane holds its own copy.
+	// take is a secret the route holds: in the wrapper it is read from its file. The file stays: Tern runs the same line again when it
+	// reopens the chat after its daemon died, or forks it, and that wrapper must read it too. The agent's environment holds the secret
+	// for as long as it runs anyway, and the Pane removes the file with the prompt file when it retires the agent's entry.
 	take := func(inline, file string) (string, error) {
 		if file == "" || !wrapper {
 			return inline, nil
 		}
-		text, err := readTokenFile(file)
-		if err == nil {
-			_ = os.Remove(file)
-		}
-		return text, err
+		return readTokenFile(file)
 	}
 	token, err := take(r.Token, r.TokenFile)
 	if err != nil {

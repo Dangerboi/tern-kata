@@ -21,7 +21,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Jobs and worker
 
 - The kata worker widget is drawn by the session host on Tern 0.9.21 and later, so a window on another machine shows the session host's worker, and its tooltip says "on the session host".
-  - On an older Tern it still shows the worker of the machine the window runs on.
+  - Where window and session host both run an older Tern, the window still draws it from the worker of its own machine, and lists it in Edit widgets… only once a worker runs; a window and a remote host on different Tern versions may show no worker widget.
+  - Its tooltip names each held run by its Issue and hold, and the worker's process on its last line, so no line is cut short.
 
 ### Fixed
 
@@ -29,6 +30,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - An agent that Tern opens again after its session daemon ended, such as after a reboot (Tern 0.9.21 and later), keeps running under `tern-kata agent`, with its Issue, daemon and messages, and is no longer sent its task prompt again.
   - A forked chat never takes the original agent's address.
+  - An agent whose Pane passes it a token, a DSN or `token_env` values comes back too: the wrapper reads those private files and leaves them, and the Pane deletes them when the agent is gone.
 - An agent whose block is in another Tern window, or parked, keeps its entry and badge when a kata Pane starts instead of being dropped.
   - Focus, Interrupt and Stop reach it in its window; Open and Send back say it is in another window.
 

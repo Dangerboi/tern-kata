@@ -223,7 +223,7 @@ func TestAgentWrapperRoutesKataToThePanesDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 	dsnFile := home + "/pane-dsn"
-	paneToken := home + "/pane-token" // the wrapper deletes it once read, so each case writes it again
+	paneToken := home + "/pane-token"
 	// The block's own environment, as Tern's daemon gave it: the default remote, its token (also as a file) and a plaintext opt-in.
 	block := []string{agentBlockEnv + "=KATA_HOME=/default\nKATA_SERVER=https://default.example\nKATA_AUTH_TOKEN=default-token\nKATA_AUTH_TOKEN_FILE=/default/token\nKATA_ALLOW_INSECURE=1\nKATA_TRUST_PRIVATE_NETWORK=1\nKATA_DB=/block/main.db\nKATA_DSN=postgres://block@h/db\nKATA_POSTGRES_SCHEMA=block_schema", "WORK_TOKEN=block-work-token"}
 	want := func(home, server, token, file, insecure, trust string) string {
@@ -273,8 +273,8 @@ func TestAgentWrapperRoutesKataToThePanesDaemon(t *testing.T) {
 		if _, status, stderr := agentEnvOutput(t, block, "--server", "https://pane.example", "--token-file", written, "--auth-file", own); status != 0 {
 			t.Fatalf("status %d, stderr %q", status, stderr)
 		}
-		if _, err := os.Stat(written); err == nil {
-			t.Error("the token file outlived the agent's start")
+		if _, err := os.Stat(written); err != nil {
+			t.Errorf("the token file a reopened chat reads again was removed: %v", err)
 		}
 		if _, err := os.Stat(own); err != nil {
 			t.Errorf("the Pane's own token file was removed: %v", err)
@@ -303,7 +303,7 @@ func TestPlanAgentRouteFlagsRefuseBadCombinations(t *testing.T) {
 	}
 }
 
-func TestAgentWrapperSetsTheCredentialVariablesUnderTheirOwnNamesAndDeletesTheFile(t *testing.T) {
+func TestAgentWrapperSetsTheCredentialVariablesUnderTheirOwnNamesAndKeepsTheFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses sh")
 	}
@@ -317,8 +317,8 @@ func TestAgentWrapperSetsTheCredentialVariablesUnderTheirOwnNamesAndDeletesTheFi
 	if status != 0 || out != "work-value|auth-value|unset" {
 		t.Errorf("status %d, output %q, stderr %q", status, out, stderr)
 	}
-	if _, err := os.Stat(envFile); err == nil {
-		t.Error("the env file outlived the agent's start")
+	if _, err := os.Stat(envFile); err != nil {
+		t.Errorf("the env file a reopened chat reads again was removed: %v", err)
 	}
 }
 

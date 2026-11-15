@@ -1733,23 +1733,30 @@ func TestAgentRouteEnvironment(t *testing.T) {
 	}
 }
 
-func TestAgentRouteEnvDeletesThePaneWrittenTokenFileButNotThePanesOwn(t *testing.T) {
-	written, own := tokenFile(t, "pane-token\n"), tokenFile(t, "own-token\n")
-	if _, _, err := (AgentRoute{Server: "https://s", TokenFile: written, AuthFile: own}).Env(""); err != nil {
+func TestAgentRouteEnvLeavesTheTokenFileForAReopenAndRetiringTheAgentRemovesIt(t *testing.T) {
+	prompt := filepath.Join(t.TempDir(), "prompt-1-2.md")
+	written := prompt + agentTokenSuffix
+	if err := os.WriteFile(written, []byte("pane-token\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(written); err == nil {
-		t.Error("the Pane-written token file outlived the wrapper's read")
+	own := tokenFile(t, "own-token\n")
+	route := AgentRoute{Server: "https://s", TokenFile: written, AuthFile: own}
+	// The wrapper's first start, then the same line again as Tern runs it when it reopens or forks the chat.
+	for _, start := range []string{"first start", "reopen"} {
+		set, _, err := route.Env("")
+		if err != nil || !slices.Contains(set, "KATA_AUTH_TOKEN=pane-token") {
+			t.Fatalf("%s: set %q, err %v", start, set, err)
+		}
 	}
 	if _, err := os.Stat(own); err != nil {
 		t.Errorf("the Pane's own KATA_AUTH_TOKEN_FILE was touched: %v", err)
 	}
-	kept := tokenFile(t, "pane-token\n")
-	if err := (AgentRoute{Server: "https://s", TokenFile: kept}).Preflight(""); err != nil {
-		t.Fatal(err)
+	removePrompt(prompt)
+	if _, err := os.Stat(written); err == nil {
+		t.Error("the token file outlived the retired agent")
 	}
-	if _, err := os.Stat(kept); err != nil {
-		t.Errorf("Preflight removed the token file: %v", err)
+	if _, err := os.Stat(own); err != nil {
+		t.Errorf("retiring the agent removed the Pane's own token file: %v", err)
 	}
 }
 
@@ -1872,9 +1879,6 @@ func TestRoutedAgentCarriesTheCredentialVariablesTheHomeNamesNotAGlobalToken(t *
 	if err != nil || slices.Contains(set, "KATA_AUTH_TOKEN=work-value") || !slices.Contains(set, "WORK_TOKEN=work-value") || slices.Contains(set, "KATA_SERVER=evil") {
 		t.Errorf("set %q, err %v", set, err)
 	}
-	if _, err := os.Stat(envFile); err == nil {
-		t.Error("the env file outlived the wrapper's read")
-	}
 }
 
 func TestAgentRouteEnvFileFollowsTheRoute(t *testing.T) {
@@ -1923,8 +1927,8 @@ func TestAgentRouteStorageEnvironment(t *testing.T) {
 				t.Errorf("set %q, unset %q, err %v; want %q and the storage variables unset", set, unset, err, tc.set)
 			}
 			if tc.route.DSNFile != "" {
-				if _, err := os.Stat(tc.route.DSNFile); err == nil {
-					t.Error("the DSN file outlived the wrapper's read")
+				if _, err := os.Stat(tc.route.DSNFile); err != nil {
+					t.Errorf("the DSN file a reopened chat reads again was removed: %v", err)
 				}
 			}
 		})
@@ -1958,9 +1962,6 @@ func TestSwitchedProfileWithItsOwnHomeGetsNoneOfThePanesCredentialVariables(t *t
 	set, _, err := (AgentRoute{Home: home, Daemon: "p", EnvFile: envFile}).Env("")
 	if err != nil || !slices.Equal(set, []string{"KATA_HOME=" + profileHome}) {
 		t.Errorf("set %q, err %v", set, err)
-	}
-	if _, err := os.Stat(envFile); err == nil {
-		t.Error("the env file was not deleted")
 	}
 	// A pin naming the profile keeps the Pane's home, and with it the Pane's variables.
 	checkout(t, "version = 1\n[server]\ndaemon = \"p\"\n")

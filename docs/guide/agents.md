@@ -89,7 +89,7 @@ The agent always runs through `tern-kata agent [--as=<actor>] [--address-prefix=
 
 - The Pane's `KATA_DB`, `KATA_POSTGRES_SCHEMA` and `KATA_DSN` are carried only when the route keeps the Pane's home and is not a `KATA_SERVER` or switched-remote route.
 - The `token_env` values of `config.toml` are carried under their own names, never as one global token: every `[[daemon]]` and `[auth]` one for a home-only or plain local route, only `[auth]`'s for a `KATA_SERVER` route, none for a switched remote entry (it gets its own token) or a profile with its own home. Each reaches only the daemon kata scopes it to.
-- Tokens, a DSN (it may hold a password) and these values travel in private files beside the prompt file, deleted once read, never on the command line.
+- Tokens, a DSN (it may hold a password) and these values travel in private files beside the prompt file, never on the command line. The wrapper reads them and leaves them, so a chat Tern reopens after its daemon died, or forks, reads them again; the Pane deletes them with the prompt file when the agent is gone.
 - A remote daemon wins over the checkout's `.kata.local.toml` pin.
 - A switch to a local daemon that the checkout's pin or `active_daemon` would override, or to a remote entry without a token while `[auth]` in `config.toml` holds a credential, is refused with the reason in the "Cannot start an agent" Notice.
 
