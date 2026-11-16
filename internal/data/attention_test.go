@@ -1,11 +1,14 @@
 package data
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -445,15 +448,44 @@ func TestAnExitedAgentsAddressIsClearedWhoeverWroteToIt(t *testing.T) {
 	}
 }
 
+// recordWrites notes the method and path of every write the daemon receives from now on, and the body of each, without answering any.
+func (f attentionFixture) recordWrites() (writes *[]string, bodies *[]string) {
+	var mu sync.Mutex
+	writes, bodies = new([]string), new([]string)
+	hook := func(_ http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodGet {
+			return false
+		}
+		raw, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(raw))
+		mu.Lock()
+		defer mu.Unlock()
+		*writes, *bodies = append(*writes, r.Method+" "+r.URL.Path), append(*bodies, string(raw))
+		return false
+	}
+	f.kata.intercept.Store(&hook)
+	return writes, bodies
+}
+
 func TestHandOffAgentWritesTheAttentionMetadataAndSwapsTheReadyLabel(t *testing.T) {
 	f := newAttentionFixture(t)
 	uid := createIssue(t, f.gateway, f.work, f.workP, "Stopped")
 	if w := as[model.FieldWritten](t, run(t, f.gateway, model.WriteField{Workspace: f.work, UID: uid, ProjectID: f.workP.ID, Actor: "tester", Action: model.AddLabelAction, Value: "ready-for-agent"})); w.Err != nil {
 		t.Fatal(w.Err)
 	}
+	writes, bodies := f.recordWrites()
 	got := as[model.AgentHandedOff](t, run(t, f.gateway, model.HandOffAgent{
 		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana", Message: model.AgentStopHandOffMessage, SwapLabels: true,
 	}))
+	var metadata []string
+	for i, w := range *writes {
+		if strings.HasSuffix(strings.Fields(w)[1], "/metadata") {
+			metadata = append(metadata, (*bodies)[i])
+		}
+	}
+	if len(metadata) != 1 || !strings.Contains(metadata[0], `"work.attention":"needs-human"`) || !strings.Contains(metadata[0], `"work.attention_msg"`) {
+		t.Errorf("metadata requests %q, want one carrying work.attention and work.attention_msg", metadata)
+	}
 	if got.Err != nil || got.UID != uid {
 		t.Fatalf("hand-off: %+v", got)
 	}
@@ -499,5 +531,27 @@ func TestAnAgentsMessageToAnAgentCarriesItsTeammateAndNeverReplacesAnUnreadOne(t
 	}
 	if got := f.read(t, agent).Requests; len(got) != 1 || got[0].Slot.Teammate != "builder-12" {
 		t.Fatalf("the unread message was replaced: %+v", got)
+	}
+}
+
+func TestRaiseAgentAttentionGoesThroughKatasNotifyRouteAndTheSlotReadsBack(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Waiting")
+	writes, bodies := f.recordWrites()
+	got := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.RaiseAgentAttention{
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Teammate: "omp-31", Address: "dana/omp-31", Message: "which table?",
+	}))
+	if got.Err != nil {
+		t.Fatalf("raise: %+v", got)
+	}
+	if len(*writes) != 1 || !strings.HasSuffix((*writes)[0], "/notifications") {
+		t.Fatalf("writes %q, want one POST to the notify route", *writes)
+	}
+	if body := (*bodies)[0]; !strings.Contains(body, `"to":"dana/omp-31"`) || !strings.Contains(body, `"teammate":"omp-31"`) || !strings.Contains(body, `"actor":"dana-agent"`) {
+		t.Errorf("notify body %s, want actor, teammate and to", body)
+	}
+	slots := f.read(t, "dana/omp-31").Requests
+	if len(slots) != 1 || slots[0].Slot.From != "dana-agent" || slots[0].Slot.Teammate != "omp-31" || slots[0].Slot.Message != "which table?" {
+		t.Fatalf("slot %+v, want {from dana-agent, teammate omp-31, message}", slots)
 	}
 }

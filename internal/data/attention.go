@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -68,21 +69,32 @@ func (c *Client) ClearAttention(ctx context.Context, cmd model.ClearAttention) (
 	return model.AttentionCleared{UID: cmd.UID, Changed: changed}, err
 }
 
-// RaiseAgentAttention writes the request for cmd.Address on an Issue as `kata notify` does, as the Pane's actor, naming the waiting agent as teammate when it has a name, and without a
-// guard: it replaces an earlier request, which is how a newly waiting agent's message lands.
+// RaiseAgentAttention sends the request for cmd.Address on an Issue through kata's notify route, as the Pane's actor, naming the
+// waiting agent as teammate when it has a name. The route writes the slot without a guard: it replaces an earlier request, which is
+// how a newly waiting agent's message lands.
 func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAttention) error {
-	value := notifyValue(cmd.Actor, cmd.Message, "", cmd.Teammate)
-	return daemonError(c.writeMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, model.NotificationKey(cmd.Address), value))
+	body := &g.NotifyIssueBody{Actor: &cmd.Actor, To: &cmd.Address, Message: cmd.Message}
+	if cmd.Teammate != "" {
+		body.Teammate = &cmd.Teammate
+	}
+	_, err := c.NotifyIssueWithResponse(ctx, &g.NotifyIssueRequestOptions{
+		PathParams: &g.NotifyIssuePath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: body,
+	})
+	return daemonError(err)
 }
 
 // HandOffAgent writes what an agent that stops without closing its Issue writes: work.attention = needs-human and work.attention_msg
-// = the reason, then, when asked, the label ready-for-agent removed and ready-for-human added, as the Pane's actor. It stops at the
-// first write that fails.
+// = the reason in one metadata patch, then, when asked, the label ready-for-agent removed and ready-for-human added, as the Pane's
+// actor. It stops at the first write that fails.
 func (c *Client) HandOffAgent(ctx context.Context, cmd model.HandOffAgent) error {
-	for _, kv := range [][2]string{{model.WorkAttentionKey, model.WorkAttentionNeedsHuman}, {model.WorkAttentionMsgKey, cmd.Message}} {
-		if err := c.writeMetadataKey(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, kv[0], kv[1]); err != nil {
-			return daemonError(err)
-		}
+	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
+		PathParams: &g.PatchIssueMetadataPath{ProjectID: cmd.ProjectID, Ref: cmd.UID},
+		Body: &g.PatchIssueMetadataBody{Actor: &cmd.Actor, Patch: map[string]any{
+			model.WorkAttentionKey: model.WorkAttentionNeedsHuman, model.WorkAttentionMsgKey: cmd.Message,
+		}},
+	})
+	if err != nil {
+		return daemonError(err)
 	}
 	if !cmd.SwapLabels {
 		return nil
