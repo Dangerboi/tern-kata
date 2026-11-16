@@ -151,7 +151,7 @@ func TestUpdateWarnsWhenThePluginInstallFailsAndStillSucceeds(t *testing.T) {
 	if err := f.run(LaunchPlan{Subcommand: "update"}); err != nil {
 		t.Fatalf("a plugin failure failed the update: %v", err)
 	}
-	if want := "warning: this machine's tern-kata plugin was not updated: `tern plugin install "; !strings.Contains(f.out.String(), want) || !strings.Contains(f.out.String(), "tern said no") {
+	if want := "warning: this machine's tern-kata plugin was not updated: `tern plugin install` failed: "; !strings.Contains(f.out.String(), want) || !strings.Contains(f.out.String(), "tern said no") {
 		t.Errorf("output:\n%s", f.out.String())
 	}
 	if !strings.Contains(f.out.String(), "Updated tern-kata from v0.1.0 to v0.2.0") {

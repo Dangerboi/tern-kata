@@ -4,12 +4,7 @@
 # TERN_CONFIG_DIR, which moves `tern plugin dir`, so the real plugins folder is never touched; the daemon socket points
 # at a socket nobody listens on, so the installs reload no running window.
 in_version=$(plugin_version "$repo/plugin.toml")
-if [[ -n ${SMOKE_DIST:-} ]]; then
-  in_dist=$SMOKE_DIST
-else
-  in_dist="$tmp/install-dist"
-  "$repo/scripts/release.sh" "v$in_version" "$in_dist"
-fi
+release_dist in_dist "$tmp/install-dist"
 [[ $(<"$in_dist/version.txt") == "$in_version" ]]
 for in_archive in "$in_dist"/tern-kata_*; do
   case "$in_archive" in

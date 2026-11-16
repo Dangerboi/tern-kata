@@ -6,7 +6,7 @@
 //	--stub-text-bytes N    repeat the final message until it is at least N bytes (a message too long for an argument)
 //	--stub-stop REASON     stopReason of that message (default "stop")
 //	--stub-no-end          print no agent_end
-//	--stub-hang            print the session line (once the run's start record is saved), then wait for a signal
+//	--stub-hang            print the session line, then wait for a signal
 //	--stub-log FILE        append one JSON line describing this launch
 //	--stub-hang-first      like --stub-hang, but only when not started with --resume (so a resumed attempt finishes)
 //	--stub-wait-for FILE   after the final assistant message, wait until FILE exists before ending the turn (a run that has said something and runs on until the test releases it)
@@ -160,7 +160,6 @@ func main() {
 			_ = os.WriteFile(filepath.Join(sessionIn, name), append(header, '\n'), 0o644)
 		}
 	}
-	awaitStartRecord(sessionIn)
 	fmt.Printf(`{"type":"session","version":3,"id":%q,"timestamp":"2026-10-22T00:00:00.000Z","cwd":"/tmp"}`+"\n", id)
 	fmt.Println(`{"type":"agent_start"}`)
 	fmt.Println(`{"type":"surprise","unknown":true}`)
@@ -205,21 +204,4 @@ func main() {
 		fmt.Fprintln(os.Stderr, strings.Repeat("x", stderrBytes)+"\nREAL-END-OF-STDERR")
 	}
 	os.Exit(exit)
-}
-
-// awaitStartRecord waits, for at most five seconds, until the run journal above the agent's session folder has left the
-// `launching` phase, so a session line never beats the start record it belongs in.
-func awaitStartRecord(sessionDir string) {
-	var journal string
-	for dir := sessionDir; sessionDir != "" && dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
-		if _, err := os.Stat(filepath.Join(dir, "run.json")); err == nil {
-			journal = filepath.Join(dir, "run.json")
-			break
-		}
-	}
-	for deadline := time.Now().Add(5 * time.Second); journal != "" && time.Now().Before(deadline); time.Sleep(2 * time.Millisecond) {
-		if raw, err := os.ReadFile(journal); err == nil && !strings.Contains(string(raw), `"phase": "launching"`) {
-			return
-		}
-	}
 }

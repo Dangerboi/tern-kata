@@ -26,12 +26,11 @@ const (
 const searchOver = 12
 
 // ChoiceSet is a choice field as the card shows it: the control, the labels in the order ChooseMsg indexes them and the index of
-// the chosen one, -1 when none is. A switch is on at OnIndex.
+// the chosen one, -1 when none is. A switch's labels are No, then Yes.
 type ChoiceSet struct {
 	Control Control
 	Labels  []string
 	Chosen  int
-	OnIndex int
 }
 
 func (s ChoiceSet) Search() bool { return s.Control == ControlSelect && len(s.Labels) > searchOver }
@@ -49,20 +48,10 @@ func (s ChoiceSet) Matches(query string) []int {
 }
 
 // On is whether a switch is on.
-func (s ChoiceSet) On() bool { return s.Chosen == s.OnIndex }
-
-// switchIndex is the index a switch set to on holds.
-func (s ChoiceSet) switchIndex(on bool) int {
-	if on {
-		return s.OnIndex
-	}
-	return 1 - s.OnIndex
-}
+func (s ChoiceSet) On() bool { return s.Chosen == 1 }
 
 // SwitchLabels is the label of a switch turned off and turned on.
-func (s ChoiceSet) SwitchLabels() [2]string {
-	return [2]string{s.Labels[1-s.OnIndex], s.Labels[s.OnIndex]}
-}
+func (s ChoiceSet) SwitchLabels() [2]string { return [2]string{s.Labels[0], s.Labels[1]} }
 
 // boolIndex is the index of a choice of "no" (0) and "yes" (1).
 func boolIndex(yes bool) int {
@@ -79,7 +68,7 @@ func indexBool(index int) (yes, ok bool) {
 
 // yesNoSwitch is a switch of "No" and "Yes" that is on at "Yes".
 func yesNoSwitch(yes bool) ChoiceSet {
-	return ChoiceSet{Control: ControlSwitch, Labels: []string{"No", "Yes"}, Chosen: boolIndex(yes), OnIndex: 1}
+	return ChoiceSet{Control: ControlSwitch, Labels: []string{"No", "Yes"}, Chosen: boolIndex(yes)}
 }
 
 func newChoices(control Control, labels []string, chosen int) ChoiceSet {
@@ -196,8 +185,9 @@ type CloseSelectMenu selectRef
 
 func (CloseSelectMenu) cmd() {}
 
-// showSelect decides which select the Pane draws open after a message, pointer when it is selectPointerMsg, took prev to m. Tern opens and closes a select's menu at the
-// pointer by itself and lets a change of the drawn open state win over it, so a drawing that answers an earlier click and
+// showSelect decides which select the Pane draws open after a message. pointer is whether the message was a selectPointerMsg and
+// prev is the model before it. Tern opens and closes a select's menu at the pointer by itself and lets a change of the drawn
+// open state win over it, so a drawing that answers an earlier click and
 // reaches Tern after a later one would undo that click: open the menu again after a pick, or close it under the next click.
 // The Pane therefore draws open only a menu the keys opened. A menu the pointer opened stays drawn closed while it is open (Tern
 // shows it), and so does one the pointer closed or picked from. When the Pane itself closes a menu the pointer opened (a key
@@ -266,7 +256,7 @@ func switchField(m Model, name Field, on bool) (Model, []Cmd) {
 	if entry.flip != nil {
 		return entry.flip(m, on)
 	}
-	return chooseField(m, name, set.switchIndex(on)), nil
+	return chooseField(m, name, boolIndex(on)), nil
 }
 
 func toggleDropdown(m Model, name Field, open bool) Model {

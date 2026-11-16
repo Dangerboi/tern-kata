@@ -15,6 +15,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/Dangerboi/tern-kata/internal/atomicfile"
+	"github.com/Dangerboi/tern-kata/internal/envname"
 )
 
 // Source is tern-kata.ts: in an omp agent it names the session to `kata close` (KATA_TRANSCRIPT_AGENT and
@@ -90,9 +91,7 @@ func CloseTranscriptOn(environ []string, caseInsensitive bool) bool {
 	home := ""
 	for _, kv := range environ {
 		name, value, _ := strings.Cut(kv, "=")
-		if caseInsensitive {
-			name = strings.ToUpper(name)
-		}
+		name = envname.Key(name, caseInsensitive)
 		switch name {
 		case KataSwitch:
 			if strings.TrimSpace(value) != "" {
@@ -134,10 +133,7 @@ func CloseTranscriptOn(environ []string, caseInsensitive bool) bool {
 func WithCloseTranscript(env, decideFrom []string, caseInsensitive bool) []string {
 	out := slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
-		if caseInsensitive {
-			name = strings.ToUpper(name)
-		}
-		return name == CloseTranscriptEnv
+		return envname.Key(name, caseInsensitive) == CloseTranscriptEnv
 	})
 	if CloseTranscriptOn(decideFrom, caseInsensitive) {
 		out = append(out, CloseTranscriptEnv+"="+CloseTranscriptOnValue)

@@ -18,6 +18,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/data/ompext"
+	"github.com/Dangerboi/tern-kata/internal/envname"
 )
 
 // noteHook halts the worker's run machinery when a test's save hook "killed" it, as a crash would: nothing after the
@@ -312,9 +313,7 @@ const envCaseInsensitive = runtime.GOOS == "windows"
 // reservedEnvName reports whether name is one the worker keeps for itself: TERN_KATA_* and KATA_*. Names compare
 // case-insensitively when caseInsensitive (Windows).
 func reservedEnvName(name string, caseInsensitive bool) bool {
-	if caseInsensitive {
-		name = strings.ToUpper(name)
-	}
+	name = envname.Key(name, caseInsensitive)
 	return strings.HasPrefix(name, "TERN_KATA_") || strings.HasPrefix(name, "KATA_")
 }
 
@@ -322,9 +321,7 @@ func promptEnv(environ []string, actor string, secrets map[string]string, hidden
 	var env []string
 	for _, kv := range environ {
 		name, _, _ := strings.Cut(kv, "=")
-		if caseInsensitive {
-			name = strings.ToUpper(name)
-		}
+		name = envname.Key(name, caseInsensitive)
 		if hidden[name] || reservedEnvName(name, caseInsensitive) && !promptKeptKata[name] {
 			continue
 		}
@@ -408,18 +405,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)
 	session := &promptSession{dir: sessionFolder(sp.dir), resumeID: resumeID}
-	parser := &agentParser{onSession: func(id string) {
-		if !session.latch.name(id) {
-			return // the start record, not yet saved, takes it
-		}
-		_, err := w.store.Update(j.RunUID, "session", func(j *Journal) error {
-			j.Launch.SessionID = id
-			return nil
-		})
-		if w.noteHook(err); err != nil && !errors.Is(err, ErrKilled) {
-			w.opt.Log("run %s: the session %s could not be saved: %v", j.RunUID, id, err)
-		}
-	}}
+	parser := &agentParser{onSession: func(id string) { w.recordSession(session, j.RunUID, id) }}
 	stdout := &lineSink{parser: parser, file: openCapped(w.store.hooks, filepath.Join(sp.dir, "output.jsonl"), 8<<20)}
 	stderr := newTailSink(w.store.hooks, filepath.Join(sp.dir, "stderr.log"))
 	defer stdout.close()
@@ -463,37 +449,43 @@ func (w *Worker) timeLeft(j *Journal) time.Duration {
 	return time.Duration(j.TimeoutSeconds) * time.Second
 }
 
-// startLatch orders an agent's session id against the start record that holds it: omp may name its session before that
-// record is saved, and a save of the id before it would find no launch to put it in.
-type startLatch struct {
-	mu    sync.Mutex
-	id    string
-	saved bool
-}
-
-// name records the session id the agent printed and reports whether the start record is already saved, so the id
-// needs a save of its own.
-func (l *startLatch) name(id string) (saved bool) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.id = id
-	return l.saved
-}
-
-// start marks the start record saved and returns the id named before it, "" when none. Called under the journal's lock,
-// so an id named after it is saved by its own update, which waits for that lock.
-func (l *startLatch) start() string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.saved = true
-	return l.id
-}
-
 // promptSession is what only an agent step has: the folder omp keeps its session in, the session a resumed attempt asks
-// for and the latch for the one it names.
+// for and the one the agent names. omp may name it before the start record is saved: the start record then takes the
+// held id (it reads it under the journal's lock), and a save of the id on its own finds no launch record and does
+// nothing. Either order leaves the id in the record, and a failed start save leaves nothing to write to.
 type promptSession struct {
 	dir, resumeID string
-	latch         startLatch
+	mu            sync.Mutex
+	id            string
+}
+
+func (s *promptSession) name(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.id = id
+}
+
+// named is the id the agent printed, "" when it has not.
+func (s *promptSession) named() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.id
+}
+
+// recordSession holds the session id the agent named and saves it into the start record when there is one. Before the
+// start record is saved there is no launch record, and the save is skipped (see promptSession).
+func (w *Worker) recordSession(s *promptSession, runUID, id string) {
+	s.name(id)
+	_, err := w.store.Update(runUID, "session", func(j *Journal) error {
+		if j.Launch == nil {
+			return errUnchanged
+		}
+		j.Launch.SessionID = id
+		return nil
+	})
+	if w.noteHook(err); err != nil && !errors.Is(err, ErrKilled) {
+		w.opt.Log("run %s: the session %s could not be saved: %v", runUID, id, err)
+	}
 }
 
 // supervise starts cmd and waits for it: the `launching` mark, the start record, the wait with the run's expiry (SIGTERM,
@@ -526,7 +518,7 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 	}
 	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
 		if session != nil {
-			if id := session.latch.start(); id != "" {
+			if id := session.named(); id != "" {
 				launch.SessionID = id
 			}
 		}

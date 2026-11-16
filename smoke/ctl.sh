@@ -7,17 +7,24 @@ wait_limit=${SMOKE_WAIT_LIMIT:-120}
 source "$repo/scripts/plugin-info.sh"
 # Microseconds since the epoch; EPOCHREALTIME's radix character follows the locale.
 epoch_us() { printf -v "$1" '%s' "${EPOCHREALTIME//[.,]/}"; }
-# wait_for [-t seconds] <command...>: polls every 0.1 s until the command succeeds, for up to wait_limit seconds, and names
-# the command when time runs out. Headless Tern runs plugin timers only on frames, so a caller waiting on one keeps frames coming.
+# wait_for [-t seconds] [-i interval] <command...>: polls (every 0.1 s unless -i gives the seconds) until the command succeeds,
+# for up to wait_limit seconds, and names the command when time runs out. Headless Tern runs plugin timers only on frames, so a
+# caller waiting on one keeps frames coming.
 wait_for() {
-  local limit=$wait_limit now deadline
-  if [[ ${1:-} == -t ]]; then limit=$2; shift 2; fi
+  local limit=$wait_limit interval=0.1 now deadline
+  while :; do
+    case ${1:-} in
+      -t) limit=$2; shift 2 ;;
+      -i) interval=$2; shift 2 ;;
+      *) break ;;
+    esac
+  done
   epoch_us deadline
   deadline=$((deadline + limit * 1000000))
   until "$@"; do
     epoch_us now
     (( now < deadline )) || { printf 'timed out after %s s waiting for: %s\n' "$limit" "$*" >&2; return 1; }
-    sleep 0.1
+    sleep "$interval"
   done
 }
 # socket_ready <pid> <socket>: the process has made its socket; a process that exited ends the smoke at once.
@@ -51,6 +58,19 @@ copy_plugin() {
   local f
   for f in $plugin_files; do cp "$repo/$f" "$1/"; done
 }
+# release_dist <var> <dir>: sets the variable to the release folder to serve: SMOKE_DIST when the run has one, else one built
+# in <dir> at the plugin's current version.
+release_dist() {
+  if [[ -n ${SMOKE_DIST:-} ]]; then
+    printf -v "$1" '%s' "$SMOKE_DIST"
+  else
+    build_release_dist "$2"
+    printf -v "$1" '%s' "$2"
+  fi
+}
+build_release_dist() { "$repo/scripts/release.sh" "v$(plugin_version "$repo/plugin.toml")" "$1" >/dev/null; }
+# build_old_release <out>: the binary built with a release version older than any real one.
+build_old_release() { (cd "$repo" && go build -ldflags "-X main.version=v0.0.1" -o "$1" ./cmd/tern-kata); }
 ctl_call() {
   case "${1:-}" in
     ready | expect | git-read | link-read | completing) ctl_waiting "$@" ;;

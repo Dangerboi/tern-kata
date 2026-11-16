@@ -105,6 +105,8 @@ else
     want=$(sha256sum "$tmp/tern-kata.exe" | cut -d ' ' -f 1)
     have=$(remote '(Get-FileHash (Get-Command tern-kata).Source -Algorithm SHA256).Hash.ToLower()' | tr -d '\r')
     bin_args=("$want" "$have")
+    # As on this machine: the running worker keeps the old build until it stops, and the plugin starts a fresh one.
+    if stopped=$(remote 'tern-kata worker stop 2>&1' | tr -d '\r'); then printf 'Windows: %s\n' "$stopped"; fi
   else
     bin_args=()
   fi

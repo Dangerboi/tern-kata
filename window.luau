@@ -134,22 +134,6 @@ local function markIf(cx: WindowCx, pane: number)
     restyleMarks()
 end
 
--- Links reuse a kata Pane only in the focused Pane's tab; a parked Pane has no tab.
-local function existingPane(cx: WindowCx): PaneInfo?
-    local focused = cx.session:focused()
-    local tab = focused and cx.session:tab_of(focused)
-    if not tab then return nil end
-    for _, info in cx.session:panes() do
-        if info.tab == tab and isKata(info) then return info end
-    end
-    return nil
-end
-
--- An action the kata Pane's issue list takes over TSP, so a value never passes through a shell.
-local function paneAction(cx: WindowCx, pane: number, act: string, value: string)
-    cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = act, value = value})
-end
-
 -- Everything the plugin knows of one kata Pane while it is open, dropped together by `pane_closed`.
 -- The actions owed to a kata Pane still starting, in the order they were asked for (a link's issue, Wrap up, Show held runs),
 -- are sent over TSP once its surface is live so an issue reference never passes through a shell and none overwrites another.
@@ -178,19 +162,32 @@ local function owe(pane: number, act: string, value: string)
     table.insert(paneState(pane).owed, {act = act, value = value})
 end
 
--- The mode of the Pane's surface, read down to the root node only: nil when it has none yet. `surface` also gives the newest
--- retained surface of a Pane whose kata has quit, and that one is inline, while kata's own is a screen; `at_prompt` cannot tell
--- them apart, it is true for a running kata Pane too.
-local function surfaceMode(cx: WindowCx, pane: number): string?
-    local tree = cx.session:surface(pane, {depth = 1, nodes = 1})
-    return if type(tree) == "table" then tree.surface.mode else nil
-end
-
--- Kata runs in the Pane with a surface that takes events.
+-- Whether kata runs in the Pane: it has not quit, and either its own surface is there (a screen: kata opens `Mode: Screen,
+-- Discard: true`, so once it quits Tern keeps no surface and a shell where it quit has none) or its program is still the foreground
+-- command with no surface yet (a kata started by hand before it opens one, or suspended for $EDITOR). `at_prompt` cannot tell: it
+-- is true for a running kata Pane too.
 local function live(cx: WindowCx, info: PaneInfo?): boolean
     if info == nil or info.exited ~= nil then return false end
-    local mode = surfaceMode(cx, info.pane)
-    return mode ~= nil and mode ~= "inline"
+    local tree = cx.session:surface(info.pane, {depth = 1, nodes = 1})
+    if type(tree) == "table" then return tree.surface.mode == "screen" end
+    return info.running ~= nil and isKataProgram(info.program)
+end
+
+local function waiting(pane: number): boolean
+    local st = paneStates[pane]
+    return st ~= nil and (st.launched or st.pumping)
+end
+
+-- Links reuse the first kata Pane of the focused Pane's tab that `owedaction.route` takes; a parked Pane has no tab. A Pane where
+-- kata quit (its title still says tern-kata) is not taken, and another kata Pane beside it still is.
+local function existingPane(cx: WindowCx): PaneInfo?
+    local focused = cx.session:focused()
+    local tab = focused and cx.session:tab_of(focused)
+    if not tab then return nil end
+    for _, info in cx.session:panes() do
+        if info.tab == tab and isKata(info) and owedaction.route(waiting(info.pane), live(cx, info)) == "queue" then return info end
+    end
+    return nil
 end
 
 -- Background agents live in a session of this name (internal/model AgentSession), kept out of sight.
@@ -240,6 +237,20 @@ local function agentStates(cx: WindowCx, tabs: { TabInfo }): string
     return tern.json.encode(list)
 end
 
+-- Every delivery to a kata Pane goes through here: queued with `owe`, then sent over TSP (so an issue reference never passes
+-- through a shell) once kata runs in the Pane. One failing action toasts and the rest still go.
+local function sendOwed(cx: WindowCx, pane: number)
+    local st = paneStates[pane]
+    if not st or #st.owed == 0 or not live(cx, cx.session:pane(pane)) then return end
+    while #st.owed > 0 do
+        local item = table.remove(st.owed, 1) :: OwedAction
+        local ok, err = pcall(function()
+            cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = item.act, value = item.value})
+        end)
+        if not ok then cx:toast("error", "tern-kata did not take the action", tostring(err)) end
+    end
+end
+
 -- Places new agent tabs; defined with the tab placement below, and run on every relay pass.
 local placeAgents: (WindowCx, { TabInfo }, { PaneInfo }) -> ()
 
@@ -255,7 +266,8 @@ local function relayAll(cx: WindowCx, onlyNew: boolean)
                 local current = json or agentStates(cx, tabs)
                 json = current
                 st.relayed = true
-                paneAction(cx, info.pane, "agent-states", current)
+                owe(info.pane, "agent-states", current)
+                sendOwed(cx, info.pane)
             end
         end
     end
@@ -264,16 +276,6 @@ end
 local function showSessionOf(cx: WindowCx, tab: number?)
     for _, info in cx.session:tabs() do
         if info.id == tab then cx.sessions:switch(info.session) end
-    end
-end
-
-local function sendOwed(cx: WindowCx, pane: number)
-    local st = paneStates[pane]
-    if not st or #st.owed == 0 or not live(cx, cx.session:pane(pane)) then return end
-    while #st.owed > 0 do
-        local item = table.remove(st.owed, 1) :: OwedAction
-        local ok, err = pcall(function() paneAction(cx, pane, item.act, item.value) end)
-        if not ok then cx:toast("error", "tern-kata did not take the action", tostring(err)) end
     end
 end
 
@@ -320,7 +322,11 @@ local function pump(pane: number)
         if not cx or paneStates[pane] ~= st then return end
         st.ticks += 1
         local info = cx.session:pane(pane)
-        if not info then st.pumping = false; return end
+        if not info then
+            st.pumping = false
+            dropOwed(cx, st)
+            return
+        end
         if st.launched then
             if info.exited ~= nil then
                 if st.ticks <= FRESH_TICKS then exitedRightAway(cx, pane, info.exited) end
@@ -352,18 +358,10 @@ local function openKata(cx: WindowCx, act: string?, value: string)
     if act ~= nil then
         local existing = existingPane(cx)
         if existing then
-            local st = paneStates[existing.pane]
-            local route = owedaction.route(st ~= nil and (st.launched or st.pumping), surfaceMode(cx, existing.pane) ~= "inline")
-            if route ~= "launch" then
-                cx.layout:focus(existing.pane)
-                if route == "owe" then
-                    owe(existing.pane, act, value)
-                    sendOwed(cx, existing.pane)
-                else
-                    paneAction(cx, existing.pane, act, value)
-                end
-                return
-            end
+            cx.layout:focus(existing.pane)
+            owe(existing.pane, act, value)
+            sendOwed(cx, existing.pane)
+            return
         end
     end
     local pane = launch(cx, panecommands.KATA)
@@ -525,10 +523,7 @@ local waitStamp = 0
 local waitingCount = 0
 local waitingTooltip = ""
 local GO_WAITING_ID = "go-to-waiting-agent"
-local function commandName(id: string): string
-    return "plugin." .. PLUGIN .. "." .. id
-end
-local GO_WAITING_COMMAND = commandName(GO_WAITING_ID)
+local GO_WAITING_COMMAND = widgets.commandId(PLUGIN, GO_WAITING_ID)
 
 local function waitingPanes(cx: WindowCx, skip: number?): { number }
     local agents: { waitingagents.Agent } = {}

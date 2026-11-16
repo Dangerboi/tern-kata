@@ -7,3 +7,7 @@ plugin_files="plugin.toml window.luau host.luau placement.luau owedaction.luau r
 plugin_version() { # plugin_version <path to a plugin.toml>
 	sed -n 's/^version *= *"\(.*\)"/\1/p' "$1"
 }
+
+set_plugin_version() { # set_plugin_version <path to a plugin.toml> <version>
+	sed -i "s/^version *=.*/version = \"$2\"/" "$1"
+}

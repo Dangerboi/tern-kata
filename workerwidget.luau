@@ -18,10 +18,6 @@ M.NAME = "kata worker"
 M.OPEN_ID = "open"
 M.SHOW_HELD_ID = "show-held-runs"
 
-local function commandId(plugin: string, id: string): string
-    return "plugin." .. plugin .. "." .. id
-end
-
 -- The tooltip's lines are written so that what each line is for survives Tern's cut at LINE_CHARS (widgets.fit): the first line
 -- is where the worker is, a held run is its hold (whose code comes first, "agent_quota: ...") and then its Issue, and the
 -- executor, which can be a long host name, is last on the last line. The job is left out; the Issue names it. The host half's
@@ -41,10 +37,10 @@ local function view(summary: Summary?, onHost: boolean, plugin: string): WidgetV
     local value = if summary.capacity > 0 then summary.inUse / summary.capacity else 0
     local held = #summary.held
     if held > 0 then
-        return {text = held .. " held", tone = "warning", title = title(summary, onHost), command = commandId(plugin, M.SHOW_HELD_ID), value = value}
+        return {text = held .. " held", tone = "warning", title = title(summary, onHost), command = widgets.commandId(plugin, M.SHOW_HELD_ID), value = value}
     end
     local text = if summary.running > 0 then summary.running .. " running" else "idle"
-    return {text = text, tone = "muted", title = title(summary, onHost), command = commandId(plugin, M.OPEN_ID), value = value}
+    return {text = text, tone = "muted", title = title(summary, onHost), command = widgets.commandId(plugin, M.OPEN_ID), value = value}
 end
 
 -- What `tern.chrome.widget(M.ID, ...)` takes, for the half that draws the session host's worker (`onHost`) or this machine's;

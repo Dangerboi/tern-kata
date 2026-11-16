@@ -95,3 +95,5 @@ expect_tree "[data-id^='layer.agent']" '.ok and .count == 0'
 ba_wait_tabs 'length == 1'
 jq -e --arg block "$ba_block" '.agents | length == 2 and all(.[]; .background == true) and ([.[] | select(.open)] | length == 1 and .[0].block == $block)' \
   "$ba_state/tern-kata/agents.json" >/dev/null
+ba_stop
+trap cleanup EXIT

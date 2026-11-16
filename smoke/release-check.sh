@@ -30,7 +30,7 @@ ctl() { ctl_call "$@"; }
 # A staged plugin/ folder as a release carries it, with a version older than any release.
 mkdir -p "$tmp/plugin" "$tmp/dist" "$tmp/workspace" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
 copy_plugin "$tmp/plugin"
-sed 's/^version = .*/version = "0.0.1"/' "$repo/plugin.toml" >"$tmp/plugin/plugin.toml"
+set_plugin_version "$tmp/plugin/plugin.toml" 0.0.1
 printf '9.9.9\n' >"$tmp/dist/version.txt"
 export STENCIL_FIXTURE_ROOT="$tmp/crates/tern"
 

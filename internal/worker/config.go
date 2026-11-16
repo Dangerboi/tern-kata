@@ -16,6 +16,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/data/ompext"
+	"github.com/Dangerboi/tern-kata/internal/envname"
 )
 
 // Dirs are the two folders the worker uses: Config holds worker.toml beside lanes.toml, State holds the lock, the
@@ -51,6 +52,12 @@ func DefaultDirs() (Dirs, error) {
 		state = filepath.Join(home, ".local", "state")
 	}
 	return Dirs{Config: config, State: filepath.Join(state, "tern-kata")}, nil
+}
+
+// fileExists reports whether path exists, whatever it is; the Dirs helpers and the pin scan use it.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func (d Dirs) ConfigPath() string { return filepath.Join(d.Config, ConfigFileName) }
@@ -521,11 +528,7 @@ func (c Config) secretEnvNames(caseInsensitive bool) map[string]bool {
 		if src.Env == "" {
 			continue
 		}
-		name := src.Env
-		if caseInsensitive {
-			name = strings.ToUpper(name)
-		}
-		hidden[name] = true
+		hidden[envname.Key(src.Env, caseInsensitive)] = true
 	}
 	return hidden
 }

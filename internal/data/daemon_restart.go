@@ -13,6 +13,7 @@ import (
 
 	"go.kenn.io/kit/consolewindow"
 
+	"github.com/Dangerboi/tern-kata/internal/envname"
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
@@ -65,7 +66,7 @@ func (g *Gateway) restartKataDaemon(ctx context.Context, cmd model.RestartKataDa
 func profileEnv() []string {
 	return slices.DeleteFunc(os.Environ(), func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
-		return slices.ContainsFunc(routeNames, func(r string) bool { return strings.EqualFold(name, r) })
+		return slices.ContainsFunc(routeNames, func(r string) bool { return envname.Equal(name, r, true) })
 	})
 }
 

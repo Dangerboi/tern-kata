@@ -27,16 +27,16 @@ oa_open_row() {
   ctl click "[data-id='main.columns.detail.viewport.content.activity.attachment-$(printf %s "$id" | od -An -tx1 | tr -d ' \n')']"
 }
 # The tab's one preview block shows file $2 (of kind $1) from the cache, and the focus is where it was.
+oa_preview_shown() {
+  ctl state >"$tmp/oa-state.json"
+  jq -e --arg kind "$1" --arg name "$2" --argjson focus "$oa_focus" '(.file_blocks | length) == 1 and (.file_blocks[0] | .preview == true and .load == "ready" and .kind == $kind and (.path | test("/tern-kata/attachments/.+/" + $name + "$"))) and .focused.id == $focus' "$tmp/oa-state.json" >/dev/null 2>&1
+}
 oa_expect_preview() {
-  local deadline=$((SECONDS + wait_limit))
-  while (( SECONDS < deadline )); do
-    ctl state >"$tmp/oa-state.json"
-    if jq -e --arg kind "$1" --arg name "$2" --argjson focus "$oa_focus" '(.file_blocks | length) == 1 and (.file_blocks[0] | .preview == true and .load == "ready" and .kind == $kind and (.path | test("/tern-kata/attachments/.+/" + $name + "$"))) and .focused.id == $focus' "$tmp/oa-state.json" >/dev/null 2>&1; then return 0; fi
-    sleep 0.1
-  done
-  cat "$tmp/oa-state.json" >&2
-  printf 'No preview block of %s for %s\n' "$1" "$2" >&2
-  return 1
+  wait_for oa_preview_shown "$@" || {
+    cat "$tmp/oa-state.json" >&2
+    printf 'No preview block of %s for %s\n' "$1" "$2" >&2
+    return 1
+  }
 }
 oa_open_row shot.png
 oa_expect_preview image shot.png

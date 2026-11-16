@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
+	"github.com/Dangerboi/tern-kata/internal/envname"
 )
 
 // Step states, as the journal records them. A step nobody has started is pending (the empty string).
@@ -413,9 +414,7 @@ func commandEnv(environ []string, j *Journal, runDir string, secrets map[string]
 	var env []string
 	for _, kv := range environ {
 		name, _, _ := strings.Cut(kv, "=")
-		if caseInsensitive {
-			name = strings.ToUpper(name)
-		}
+		name = envname.Key(name, caseInsensitive)
 		if hidden[name] || reservedEnvName(name, caseInsensitive) {
 			continue
 		}

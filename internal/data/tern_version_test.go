@@ -212,10 +212,11 @@ func TestSaveOnATernWithoutDownloadNeverAsksForOneAndSavesHere(t *testing.T) {
 	for name, c := range map[string]struct {
 		version string
 		err     error
+		note    string
 	}{
-		"an older Tern":        {"tern 0.9.20 (x)", nil},
-		"an unreadable one":    {"garbage", nil},
-		"a version that fails": {"", errors.New("exit status 2")},
+		"an older Tern":        {"tern 0.9.20 (x)", nil, ""},
+		"an unreadable one":    {"garbage", nil, `tern --version printed "garbage"`},
+		"a version that fails": {"", errors.New("exit status 2"), "tern --version: exit status 2"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, downloads, asked := saveFixtureWithVersion(t, true, c.version, c.err, "notes.txt", func([]string) ([]byte, error) {
@@ -225,8 +226,8 @@ func TestSaveOnATernWithoutDownloadNeverAsksForOneAndSavesHere(t *testing.T) {
 				t.Fatalf("tern was asked %v", *asked)
 			}
 			want := filepath.Join(downloads, "notes.txt")
-			if got.Err != nil || got.Path != want || got.Remote || got.Note != "" {
-				t.Fatalf("saved %+v, want %s here", got, want)
+			if got.Err != nil || got.Path != want || got.Remote || !strings.Contains(got.Note, c.note) || (c.note == "" && got.Note != "") {
+				t.Fatalf("saved %+v, want %s here with note %q", got, want, c.note)
 			}
 			if body, err := os.ReadFile(want); err != nil || string(body) != "content" {
 				t.Fatalf("the copy holds %q (%v)", body, err)

@@ -52,6 +52,8 @@ const (
 type fileKind struct {
 	name string
 	exts []string
+	// since is the first Tern release that draws the kind; "" for a kind every Tern draws. Only ternDrawnKinds sets it.
+	since string
 }
 
 func hasKind(kinds []fileKind, name string) bool {
@@ -75,26 +77,38 @@ func kindNames(kinds []fileKind) string {
 // only hands them to the OS of the machine showing the window, and a CSV opens a table block that takes the focus, so those go to
 // the OS opener of the session host.
 var ternDrawnKinds = []fileKind{
-	{"images", []string{".png", ".jpg", ".jpeg", ".gif"}},
-	{"text", []string{".txt"}},
-	{"Markdown", []string{".md"}},
-	{"JSON", []string{".json"}},
-	{"Word documents", []string{".docx"}},
+	{name: "images", exts: []string{".png", ".jpg", ".jpeg", ".gif"}},
+	{name: "text", exts: []string{".txt"}},
+	{name: "Markdown", exts: []string{".md"}},
+	{name: "JSON", exts: []string{".json"}},
+	{name: "Word documents", exts: []string{".docx"}, since: "v0.9.21"},
 }
 
 // TernDraws reports whether Tern's file block draws a file called name itself. A kind listed here but not in osOpenedKinds (a
 // Word document) is shown only by Tern and is never handed to the OS.
 func TernDraws(name string) bool { return hasKind(ternDrawnKinds, name) }
 
+// TernNeeds says which Tern release first draws a file called name: the name of its kind, as the text of a refusal says it, and
+// the release (a semver with a leading v). since is "" when every Tern that draws files draws it, or name is no drawn kind.
+func TernNeeds(name string) (kind, since string) {
+	ext := strings.ToLower(filepath.Ext(name))
+	for _, k := range ternDrawnKinds {
+		if slices.Contains(k.exts, ext) {
+			return k.name, k.since
+		}
+	}
+	return "", ""
+}
+
 // osOpenedKinds are the only kinds tern-kata hands to the OS opener, by enter, a click or Open with the system app. Anything else
 // is only saved, because what the OS does with a file it knows (run it, follow a link inside it, launch a handler registered for
 // it) cannot be told from the name alone, and anyone who can write the Project, agents included, can name an Attachment.
 var osOpenedKinds = []fileKind{
-	{"images", []string{".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".tif", ".tiff"}},
-	{"video", []string{".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"}},
-	{"audio", []string{".mp3", ".wav", ".ogg", ".flac", ".m4a"}},
-	{"PDFs", []string{".pdf"}},
-	{"text", []string{".txt", ".md", ".log", ".csv", ".json"}},
+	{name: "images", exts: []string{".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".tif", ".tiff"}},
+	{name: "video", exts: []string{".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"}},
+	{name: "audio", exts: []string{".mp3", ".wav", ".ogg", ".flac", ".m4a"}},
+	{name: "PDFs", exts: []string{".pdf"}},
+	{name: "text", exts: []string{".txt", ".md", ".log", ".csv", ".json"}},
 }
 
 // OSOpens reports whether tern-kata hands a file called name to the OS opener. The name is not trimmed: Windows reads `x.png.` and
@@ -239,7 +253,7 @@ func confirmUnlinkAttachment(m Model) (Model, []Cmd) {
 }
 
 // attachmentMenuPick is a ContextMenuPickMsg from the menu of the Attachment row with msg.Row: the detail's cursor moves to that
-// row of the shown Issue and the key is pressed there. The focus stays where it is.
+// row of the shown Issue, which gives the detail the focus as a click on the row does, and the key is pressed there.
 func attachmentMenuPick(m Model, msg ContextMenuPickMsg) (Model, []Cmd) {
 	if issue := m.shownIssue(); m.covered() || issue == nil || issue.UID != msg.UID {
 		return m, nil

@@ -296,7 +296,7 @@ func TestNothingIsAskedWhenTheJobWouldStayPausedOrDoesNotRun(t *testing.T) {
 func TestEnablingAPausedJobThroughTheJobCardAsksAboutTheBackfillAndSendsTheCardsDraft(t *testing.T) {
 	s := step(t, jobsPane(t, 160, disabled(owing("J1", "open", "all"))), key("e")).State
 	s = set(t, s, model.JobFieldName, "Renamed")
-	s = choose(t, s, model.JobFieldEnabled, 0)
+	s = choose(t, s, model.JobFieldEnabled, 1)
 	out := step(t, s, key("ctrl+o"))
 	if len(out.Cmds) != 0 || !backfillOpen(out.State) || !out.State.Model.JobForm.Open {
 		t.Fatalf("saving sent %#v, Backfill card on top %v", out.Cmds, backfillOpen(out.State))
@@ -328,7 +328,7 @@ func TestSavingAPausedJobThatStaysPausedOrCatchesUpWithLatestAsksNothing(t *test
 	if _, ok := savedJob(step(t, s, key("ctrl+o")).Cmds); !ok {
 		t.Fatal("a rename that leaves the job paused asked about a Backfill")
 	}
-	s = choose(t, choose(t, s, model.JobFieldEnabled, 0), model.JobFieldCatchup, 0)
+	s = choose(t, choose(t, s, model.JobFieldEnabled, 1), model.JobFieldCatchup, 0)
 	if backfillOpen(step(t, s, key("ctrl+o")).State) {
 		t.Fatal("a catch-up of latest asked about a Backfill")
 	}

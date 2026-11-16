@@ -432,6 +432,11 @@ func (s *Store) Create(j *Journal, point string) error {
 	return s.write(j, point)
 }
 
+// errUnchanged is what a change returns when it has nothing to save: Update then writes nothing and fires no save point.
+var errUnchanged = errors.New("journal unchanged")
+
+// Update loads the journal, applies change under the run's lock and saves it at the named point. A change that returns
+// errUnchanged leaves the file as it is, and Update returns the journal and no error.
 func (s *Store) Update(uid, point string, change func(*Journal) error) (*Journal, error) {
 	l := s.lock(uid)
 	l.Lock()
@@ -440,7 +445,9 @@ func (s *Store) Update(uid, point string, change func(*Journal) error) (*Journal
 	if err != nil {
 		return nil, err
 	}
-	if err := change(j); err != nil {
+	if err := change(j); errors.Is(err, errUnchanged) {
+		return j, nil
+	} else if err != nil {
 		return nil, err
 	}
 	return j, s.write(j, point)

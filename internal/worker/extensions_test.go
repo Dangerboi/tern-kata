@@ -147,6 +147,48 @@ func TestDoctorFindsKataPluginInACheckoutsPlugins(t *testing.T) {
 	}
 }
 
+func TestDoctorFindsTheProjectPluginsOmpWouldReadForACheckout(t *testing.T) {
+	const scoped = "@dangerboi/kata-omp"
+	run := func(t *testing.T, project, checkout string, vars map[string]string) bool {
+		t.Helper()
+		dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
+		writeTestFile(t, dirs.ConfigPath(), "executor = \"laptop\"\n[checkouts]\nrepo = '"+checkout+"'\n[profiles.default]\ncommand = \"go\"\nextensions = \"ambient\"\n")
+		out := Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: OmpEnv{Home: t.TempDir(), Lookup: envOf(vars)}}).String()
+		return strings.Contains(out, "todo takeover")
+	}
+	t.Run("a checkout inside a folder with a config folder", func(t *testing.T) {
+		project := t.TempDir()
+		installKataPackage(t, filepath.Join(project, ".omp", "plugins"), scoped)
+		sub := filepath.Join(project, "packages", "app")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if !run(t, project, sub, nil) {
+			t.Fatal("the plugins of the project holding the checkout were not found")
+		}
+	})
+	t.Run("PI_CONFIG_DIR names the project's config folder too", func(t *testing.T) {
+		project := t.TempDir()
+		installKataPackage(t, filepath.Join(project, ".custom", "plugins"), scoped)
+		sub := filepath.Join(project, "app")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if !run(t, project, sub, map[string]string{"PI_CONFIG_DIR": ".custom"}) {
+			t.Fatal("the project's PI_CONFIG_DIR plugins were not found")
+		}
+		if run(t, project, sub, nil) {
+			t.Fatal("a .custom folder was read without PI_CONFIG_DIR")
+		}
+	})
+	t.Run("a checkout with no project around it", func(t *testing.T) {
+		checkout := t.TempDir()
+		if run(t, checkout, checkout, nil) {
+			t.Fatal("a plugin was found with none installed")
+		}
+	})
+}
+
 func TestDoctorFollowsOmpsRuleForWhichKataPluginsLoad(t *testing.T) {
 	const scoped, legacy = "@dangerboi/kata-omp", "kata-omp"
 	cases := []struct {
@@ -194,9 +236,25 @@ func TestDoctorFollowsOmpsRuleForWhichKataPluginsLoad(t *testing.T) {
 			installKataPackage(t, plugins, legacy)
 			writeTestFile(t, filepath.Join(plugins, "omp-plugins.lock.json"), `{`)
 		}, false},
-		{"a project override that disables it", func(home, checkout string) {
+		{"a project override that disables the project's copy", func(_, checkout string) {
+			installKataPackage(t, filepath.Join(checkout, ".omp", "plugins"), scoped)
+			writeTestFile(t, filepath.Join(checkout, ".omp", "plugin-overrides.json"), `{"disabled":["@dangerboi/kata-omp"]}`)
+		}, false},
+		{"a project override in .claude, which omp reads", func(_, checkout string) {
+			installKataPackage(t, filepath.Join(checkout, ".omp", "plugins"), scoped)
+			writeTestFile(t, filepath.Join(checkout, ".claude", "plugin-overrides.json"), `{"disabled":["@dangerboi/kata-omp"]}`)
+		}, false},
+		{"a project override in .pi, which omp does not read", func(_, checkout string) {
+			installKataPackage(t, filepath.Join(checkout, ".omp", "plugins"), scoped)
+			writeTestFile(t, filepath.Join(checkout, ".pi", "plugin-overrides.json"), `{"disabled":["@dangerboi/kata-omp"]}`)
+		}, true},
+		{"a checkout's override while a run with no checkout still loads the user's copy", func(home, checkout string) {
 			installKataPackage(t, filepath.Join(home, ".omp", "plugins"), scoped)
 			writeTestFile(t, filepath.Join(checkout, ".omp", "plugin-overrides.json"), `{"disabled":["@dangerboi/kata-omp"]}`)
+		}, true},
+		{"the settings disabling the extension beside an installed plugin", func(home, _ string) {
+			installKataPackage(t, filepath.Join(home, ".omp", "plugins"), scoped)
+			writeTestFile(t, filepath.Join(home, ".omp", "agent", "config.yml"), "disabledExtensions:\n  - extension-module:kata\n")
 		}, false},
 		{"the settings listing it as disabled", func(home, _ string) {
 			writeTestFile(t, filepath.Join(home, ".omp", "agent", "config.yml"), "extensions:\n  - /src/kata-plugin/plugins/oh-my-pi/kata.ts\ndisabledExtensions:\n  - extension-module:kata\n")

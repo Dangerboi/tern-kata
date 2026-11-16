@@ -438,6 +438,45 @@ func TestPruningDropsTheEntriesTernNoLongerListsWithTheirPrompts(t *testing.T) {
 	}
 }
 
+func TestPruningRetiresOnlyForkCopiesThatExistedBeforeTernWasAsked(t *testing.T) {
+	for name, withEntry := range map[string]bool{"with entries": true, "without entries": false} {
+		t.Run(name, func(t *testing.T) {
+			g, dirs := agentGateway(t)
+			prompts := filepath.Join(dirs.State, AgentPromptsFolder)
+			if err := os.MkdirAll(prompts, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if withEntry {
+				if _, err := UpdateAgents(filepath.Join(dirs.State, AgentsFile), func(l []model.AgentEntry) []model.AgentEntry {
+					return append(l, model.AgentEntry{Block: "18494129176578"})
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			closed := forkCopy(prompts, "99", "prompt-1.md.token")
+			started := forkCopy(prompts, "77", "prompt-1.md.token")
+			writeAgentFile(t, closed, "x")
+			g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+				if out, ok := ternProbe(args); ok {
+					return out, nil
+				}
+				// A fork starts, and copies its secrets, while tern ls is answering.
+				writeAgentFile(t, started, "x")
+				return []byte(`{"sessions":[{"id":1,"tabs":[{"id":5,"blocks":[{"id":18494129176578}]}]}]}`), nil
+			}
+			if got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); got.Err != nil {
+				t.Fatalf("pruned %+v", got)
+			}
+			if _, err := os.Stat(closed); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("the copy of a block Tern does not list stayed: %v", err)
+			}
+			if _, err := os.Stat(started); err != nil {
+				t.Errorf("a copy made after the listing began went: %v", err)
+			}
+		})
+	}
+}
+
 func TestPruningKeepsAnEntryAddedAfterTheEntriesItChecked(t *testing.T) {
 	g, dirs := agentGateway(t)
 	file := filepath.Join(dirs.State, AgentsFile)

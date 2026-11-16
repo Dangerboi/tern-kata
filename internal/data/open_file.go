@@ -72,17 +72,18 @@ func (g *Gateway) ternOpen(ctx context.Context, args ...string) error {
 
 const ternOpenTimeout = 15 * time.Second
 
-// ternCannotDraw says why Tern cannot draw name, a kind TernDraws names: "" when it can. A Word document is drawn only from
-// ternDocxFloor, and a Tern whose version cannot be read is not known to draw it.
+// ternCannotDraw says why Tern cannot draw name, a kind TernDraws names: "" when it can. A kind that needs a newer Tern
+// (model.TernNeeds) is not drawn by an older one, nor by one whose version cannot be read.
 func (g *Gateway) ternCannotDraw(ctx context.Context, name string) string {
-	if !strings.EqualFold(filepath.Ext(name), ".docx") {
+	kind, since := model.TernNeeds(name)
+	if since == "" {
 		return ""
 	}
-	switch ok, err := g.ternAtLeast(ctx, ternDocxFloor); {
+	switch ok, err := g.ternAtLeast(ctx, since); {
 	case err != nil:
-		return "could not tell whether this Tern draws Word documents: " + err.Error()
+		return "could not tell whether this Tern draws " + kind + ": " + err.Error()
 	case !ok:
-		return "Word documents need Tern " + strings.TrimPrefix(ternDocxFloor, "v") + " or newer"
+		return kind + " need Tern " + strings.TrimPrefix(since, "v") + " or newer"
 	}
 	return ""
 }
@@ -180,7 +181,11 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 // as note, which the toast shows beside the path. Only a failure of the local copy is an error.
 func (g *Gateway) saveToDownloads(ctx context.Context, path string) (saved string, remote bool, note string, err error) {
 	if inTern() {
-		if has, _ := g.ternAtLeast(ctx, ternSubcommandsFloor); has {
+		has, verr := g.ternAtLeast(ctx, ternSubcommandsFloor)
+		switch {
+		case verr != nil:
+			note = verr.Error()
+		case has:
 			var there string
 			there, err = g.ternDownload(ctx, path)
 			if err == nil {

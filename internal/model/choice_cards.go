@@ -97,11 +97,7 @@ func jobChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 			chosen = i
 		}
 	}
-	set := newChoices(jobControl(name, len(choices)), labels, chosen)
-	if name == JobFieldEnabled {
-		set.OnIndex = 0 // the choices are Yes, then No
-	}
-	return set, true
+	return newChoices(jobControl(name, len(choices)), labels, chosen), true
 }
 
 func recurrenceChoiceSet(m Model, name Field) (ChoiceSet, bool) {

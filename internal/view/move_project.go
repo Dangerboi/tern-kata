@@ -1,6 +1,8 @@
 package view
 
 import (
+	"strings"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
@@ -60,7 +62,11 @@ func moveConfirming(m model.Model) []tern.Element {
 	if f.Sending {
 		return children
 	}
-	children = append(children, choiceControl(m, model.CardMove, model.MoveFieldSingle, "Only this Issue", false, "Leave its descendants where they are. Key: o", ""))
+	hint := "Leave its descendants where they are."
+	if keys, _ := cardKeys(model.ModeMoveConfirm, model.MoveProjectSingle); len(keys) > 0 {
+		hint += " Key: " + strings.Join(keys, ", ")
+	}
+	children = append(children, choiceControl(m, model.CardMove, model.MoveFieldSingle, "Only this Issue", false, hint, ""))
 	words := "Move"
 	if f.Conflict || !f.Previewed {
 		words = "Preview again"

@@ -3,12 +3,8 @@ set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
 
-run_extra() { # run_extra <script> <binary>: plugin.sh and supervision.sh take the binary, release-check.sh builds its own
-  case $(basename "$1") in
-    release-check.sh) "$1" ;;
-    *) "$1" "$2" ;;
-  esac
-}
+# The scripts that run beside the steps, each given the binary.
+extra_scripts=(plugin.sh supervision.sh release-check.sh)
 
 # With no argument the suite fans out. The steps wait on kata's daemon clocks (a timed claim's sweep, a job's delivery
 # window), so those steps and the two other scripts run beside the rest on their own headless Tern and kata daemon;
@@ -18,15 +14,14 @@ run_extra() { # run_extra <script> <binary>: plugin.sh and supervision.sh take t
 # A failed run ends with a line naming the failing step or script and the artifacts folder.
 if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   export CGO_ENABLED=0
-  source "$repo/scripts/plugin-info.sh"
+  source "$repo/smoke/ctl.sh"
   bin_dir=$(mktemp -d)
-  # The jobs are subshells that wait for a shard or script, so the signal goes to each job's own child as well; each
-  # of those runs its cleanup on TERM.
+  # The jobs are subshells that wait for a shard or script, so the signal goes to each job's own child; each of those
+  # runs its cleanup on TERM, and the subshell ends with it, so `wait` returns once every cleanup is done.
   stop_jobs() {
     local job
     for job in $(jobs -p); do
       pkill -TERM -P "$job" 2>/dev/null || true
-      kill "$job" 2>/dev/null || true
     done
     wait 2>/dev/null || true
   }
@@ -35,8 +30,7 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   trap 'exit 143' TERM
   (cd "$repo" && go build -o "$bin_dir/tern-kata" ./cmd/tern-kata)
   # Steps 81 and 82 and supervision.sh serve a release built at the current version; one build serves all three.
-  release_version=$(plugin_version "$repo/plugin.toml")
-  "$repo/scripts/release.sh" "v$release_version" "$bin_dir/dist" >/dev/null
+  build_release_dist "$bin_dir/dist"
   slow=(51-claim-expiry.sh 60-cron-made-issue.sh 62-job-card.sh 81-install-from-release.sh 82-update-from-release.sh)
   # The rest is cut at steps that start from the freshly launched Pane (each shard has its own seeded Project), so the
   # five groups run side by side: steps 01-21, 22-31, 32-44, 45-57 and 58 on.
@@ -72,8 +66,8 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
     timed "steps ${first:0:2}-${last:0:2}" "$0" "$@" & jobs+=($!)
   done
   for name in "${slow[@]}"; do timed "$name" "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
-  for extra in plugin.sh supervision.sh release-check.sh; do
-    timed "$extra" run_extra "$repo/smoke/$extra" "$SMOKE_BIN" & jobs+=($!)
+  for extra in "${extra_scripts[@]}"; do
+    timed "$extra" "$repo/smoke/$extra" "$SMOKE_BIN" & jobs+=($!)
   done
   failed=0
   for job in "${jobs[@]}"; do wait "$job" || failed=1; done
@@ -90,10 +84,7 @@ fi
 steps=()
 extras=()
 for arg in "$@"; do
-  case $(basename "$arg") in
-    plugin.sh|supervision.sh|release-check.sh) extras+=("$arg") ;;
-    *) steps+=("$arg") ;;
-  esac
+  if [[ " ${extra_scripts[*]} " == *" $(basename "$arg") "* ]]; then extras+=("$arg"); else steps+=("$arg"); fi
 done
 (( $# )) || steps=("$repo"/smoke/steps/*)
 
@@ -109,7 +100,7 @@ if (( ${#steps[@]} == 0 )); then
   current=
   for extra in "${extras[@]}"; do
     current=$(basename "$extra")
-    run_extra "$extra" "$bin_dir/tern-kata" || { printf '\nSmoke failed at %s; its artifacts are named above\n' "$current" >&2; exit 1; }
+    "$extra" "$bin_dir/tern-kata" || { printf '\nSmoke failed at %s; its artifacts are named above\n' "$current" >&2; exit 1; }
   done
   printf '\nSmoke passed\n'
   exit 0
@@ -240,14 +231,9 @@ expect_tree() {
 hint_mode() {
   ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("open Collection") then "collections" elif contains("j/k row") then "detail" elif contains("↑↓ move") then "list" else "other" end'
 }
+hint_in_mode() { [[ $(hint_mode) == "$1" ]]; }
 hint_expect_mode() {
-  local deadline=$((SECONDS + wait_limit))
-  while (( SECONDS < deadline )); do
-    [[ $(hint_mode) != "$1" ]] || return 0
-    sleep 0.02
-  done
-  printf 'Expected keys in %s, found %s\n' "$1" "$(hint_mode)" >&2
-  return 1
+  wait_for -i 0.02 hint_in_mode "$1" || { printf 'Expected keys in %s, found %s\n' "$1" "$(hint_mode)" >&2; return 1; }
 }
 # pick_option <field data-id> <nth>: picks a popup card's select option with clicks, each acknowledged by the Pane before the
 # next: the button click, until the footer offers "pick choice" (the Pane has the menu open), then the option click, until it
@@ -261,16 +247,11 @@ pick_option() {
 quit_app() {
   ctl key q
   expect_tree "[data-id^='main.']" '.ok and .count == 0'
-  local deadline=$((SECONDS + wait_limit))
-  while (( SECONDS < deadline )); do
-    ctl state >"$tmp/state.json" 2>/dev/null || true
-    if jq -e '.focused.prompt == true and .focused.running == null and .focused.busy == false' "$tmp/state.json" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 0.05
-  done
-  printf 'Timed out waiting for shell to become idle after quitting app\n' >&2
-  return 1
+  wait_for -i 0.05 shell_idle
+}
+shell_idle() {
+  ctl state >"$tmp/state.json" 2>/dev/null || true
+  jq -e '.focused.prompt == true and .focused.running == null and .focused.busy == false' "$tmp/state.json" >/dev/null 2>&1
 }
 
 
@@ -297,7 +278,7 @@ current=
 in_extra=1
 for extra in ${extras[@]+"${extras[@]}"}; do
   current=$(basename "$extra")
-  run_extra "$extra" "$tmp/tern-kata"
+  "$extra" "$tmp/tern-kata"
 done
 in_extra=
 current=

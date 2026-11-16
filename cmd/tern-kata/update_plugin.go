@@ -11,11 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"go.kenn.io/kit/consolewindow"
 	"golang.org/x/mod/semver"
+
+	"github.com/Dangerboi/tern-kata/internal/data"
 )
 
-const ternTimeout = time.Minute
+// pluginTernTimeout bounds one `tern plugin` command: an install unpacks the release.
+const pluginTernTimeout = time.Minute
 
 var pluginTOMLVersion = regexp.MustCompile(`(?m)^version\s*=\s*"([^"\n]+)"`)
 
@@ -25,20 +27,19 @@ var pluginTOMLVersion = regexp.MustCompile(`(?m)^version\s*=\s*"([^"\n]+)"`)
 // archive of version (downloading it, or handing over the one the update already holds) and is called only when the step
 // needs it. A failure is a warning on out: the binary is current whatever happens here.
 func updatePlugin(ctx context.Context, version string, fetch func() (unpackedRelease, func(), error), out io.Writer) {
-	ternPath, err := exec.LookPath("tern")
-	if err != nil {
+	if _, err := exec.LookPath("tern"); err != nil {
 		fmt.Fprintln(out, "This machine's tern-kata plugin was not updated: tern is not on PATH. Update it with `tern plugin install <folder> --force`, or run the plugin-only install script.")
 		return
 	}
 	warn := func(format string, args ...any) {
 		fmt.Fprintf(out, "warning: this machine's tern-kata plugin was not updated: "+format+"\n", args...)
 	}
-	dirOut, err := runTern(ctx, ternPath, "plugin", "dir")
+	dirOut, err := data.RunTern(ctx, pluginTernTimeout, []string{"plugin", "dir"})
 	if err != nil {
-		warn("%v", err)
+		warn("`tern plugin dir` failed: %v", err)
 		return
 	}
-	pluginDir := strings.TrimSpace(dirOut)
+	pluginDir := strings.TrimSpace(string(dirOut))
 	if pluginDir == "" {
 		warn("`tern plugin dir` printed nothing")
 		return
@@ -71,26 +72,9 @@ func updatePlugin(ctx context.Context, version string, fetch func() (unpackedRel
 		return
 	}
 	defer cleanup()
-	if _, err := runTern(ctx, ternPath, "plugin", "install", filepath.Join(release.Dir, "plugin"), "--force"); err != nil {
-		warn("%v", err)
+	if _, err := data.RunTern(ctx, pluginTernTimeout, []string{"plugin", "install", filepath.Join(release.Dir, "plugin"), "--force"}); err != nil {
+		warn("`tern plugin install` failed: %v", err)
 		return
 	}
 	fmt.Fprintf(out, "Updated this machine's tern-kata plugin from %s to %s\n", have, want)
-}
-
-func runTern(ctx context.Context, ternPath string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, ternTimeout)
-	defer cancel()
-	var stdout, stderr strings.Builder
-	cmd := exec.CommandContext(ctx, ternPath, args...)
-	consolewindow.Hide(cmd)
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		detail := strings.TrimSpace(stderr.String() + " " + stdout.String())
-		if detail == "" {
-			detail = err.Error()
-		}
-		return "", fmt.Errorf("`tern %s` failed: %s", strings.Join(args, " "), detail)
-	}
-	return stdout.String(), nil
 }

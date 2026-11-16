@@ -510,7 +510,7 @@ func (f JobFormState) JobChoices(name Field) []JobChoice {
 			choices = append(choices, JobChoice{jobTriggerOf(id).label, id == f.Trigger})
 		}
 	case JobFieldEnabled:
-		choices = []JobChoice{{"Yes", f.Enabled}, {"No", !f.Enabled}}
+		choices = []JobChoice{{"No", !f.Enabled}, {"Yes", f.Enabled}}
 	default:
 		held := f.optionValue(name)
 		for _, o := range f.options(name) {
@@ -546,7 +546,7 @@ func jobPick(f *JobFormState, name Field, i int) bool {
 	case JobFieldTrigger:
 		f.Trigger = f.kind().triggers[i]
 	case JobFieldEnabled:
-		f.Enabled = i == 0
+		f.Enabled = i == 1
 	default:
 		if held := f.optionValue(name); held != nil {
 			*held = f.options(name)[i].value

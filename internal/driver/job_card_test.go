@@ -316,7 +316,7 @@ func TestAnEveryMinuteIntervalAndAnAddressedRecipientSaveAsTyped(t *testing.T) {
 	s = set(t, s, model.JobFieldMessage, "Time for the report")
 	s = choose(t, s, model.JobFieldCatchup, 2)
 	s = set(t, s, model.JobFieldGrace, "300")
-	s = choose(t, s, model.JobFieldEnabled, 1)
+	s = choose(t, s, model.JobFieldEnabled, 0)
 	save, ok := savedJob(step(t, s, key("ctrl+o")).Cmds)
 	if !ok {
 		t.Fatal("a valid card sent nothing")

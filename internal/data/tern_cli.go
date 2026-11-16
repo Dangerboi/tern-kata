@@ -25,19 +25,26 @@ const (
 	// ternSubcommandsFloor is the first Tern known to have `tern download` and `tern inspect`. A Tern without a subcommand reads
 	// its first word as a file to open and hands it to the running window, so these are asked only of a Tern at least this new.
 	ternSubcommandsFloor = "v0.9.21"
-	// ternDocxFloor is the first Tern whose file block draws a `.docx`.
-	ternDocxFloor = "v0.9.21"
 )
 
-// ternOutput runs one tern command and returns its stdout. A failure carries what the command printed, stderr first: Tern's own words
-// say why. timeout bounds the command when it is above zero.
+// RunTern runs the tern on the PATH and returns its stdout (ternCommand with no Gateway).
+func RunTern(ctx context.Context, timeout time.Duration, args []string) ([]byte, error) {
+	return ternCommand(ctx, execTern, timeout, args)
+}
+
 func (g *Gateway) ternOutput(ctx context.Context, timeout time.Duration, args []string) ([]byte, error) {
+	return ternCommand(ctx, g.runTern, timeout, args)
+}
+
+// ternCommand runs one tern command with run and returns its stdout. A failure carries what the command printed, stderr first:
+// Tern's own words say why. timeout bounds the command when it is above zero.
+func ternCommand(ctx context.Context, run func(context.Context, []string) ([]byte, error), timeout time.Duration, args []string) ([]byte, error) {
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	out, err := g.runTern(ctx, args)
+	out, err := run(ctx, args)
 	if err == nil {
 		return out, nil
 	}
@@ -267,14 +274,19 @@ func (g *Gateway) windowListings(ctx context.Context) ([]windowListing, error) {
 	return all, nil
 }
 
-// holder is the listing that holds block. The Pane's own window comes first in listings, so a block it holds is never placed in
-// another window.
-func holder(listings []windowListing, block string) (windowListing, bool) {
-	i := slices.IndexFunc(listings, func(l windowListing) bool { return l.holds(block) })
-	if i < 0 {
-		return windowListing{}, false
+// otherWindowOf is the key of the window other than the Pane's that holds block, and false when the Pane's own window holds it,
+// no window does, or the windows cannot be listed. The Pane's own window comes first in the listings, so a block it holds is never
+// placed in another window.
+func (g *Gateway) otherWindowOf(ctx context.Context, block string) (string, bool) {
+	listings, err := g.windowListings(ctx)
+	if err != nil {
+		return "", false
 	}
-	return listings[i], true
+	i := slices.IndexFunc(listings, func(l windowListing) bool { return l.holds(block) })
+	if i < 0 || listings[i].own {
+		return "", false
+	}
+	return listings[i].window, true
 }
 
 // ternOnBlock runs a command that names block. Tern looks for the block in the Pane's window only, so when that fails and
@@ -284,24 +296,16 @@ func (g *Gateway) ternOnBlock(ctx context.Context, block string, args []string) 
 	if err == nil {
 		return out, nil
 	}
-	listings, listErr := g.windowListings(ctx)
-	if listErr != nil {
-		return out, err
-	}
-	if l, ok := holder(listings, block); ok && !l.own {
-		return g.ternOutput(ctx, ternTimeout, append(slices.Clone(args), "--window", l.window))
+	if window, ok := g.otherWindowOf(ctx, block); ok {
+		return g.ternOutput(ctx, ternTimeout, append(slices.Clone(args), "--window", window))
 	}
 	return out, err
 }
 
 // inOtherWindow tells whether block is held by a window other than the Pane's, which no placing command can reach.
 func (g *Gateway) inOtherWindow(ctx context.Context, block string) bool {
-	listings, err := g.windowListings(ctx)
-	if err != nil {
-		return false
-	}
-	l, ok := holder(listings, block)
-	return ok && !l.own
+	_, ok := g.otherWindowOf(ctx, block)
+	return ok
 }
 
 // ParseTernBlock is the block id in what `tern split|new tab --json` printed: {"session": 1, "tab": 2, "block": 3}. Ids carry a

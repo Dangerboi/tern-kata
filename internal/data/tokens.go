@@ -58,7 +58,7 @@ func (c *Client) CreateToken(ctx context.Context, cmd model.CreateTokenCmd) (don
 	}
 	id, secret := response.JSON200.Token.ID, response.JSON200.Plaintext
 	if err = checkIssued(response.JSON200, cmd, scope); err == nil {
-		err = writeSecret(path, secret)
+		err = writePrivateFile(path, secret)
 	}
 	if err != nil {
 		return model.TokenCreated{}, c.withdraw(ctx, id, err)
@@ -88,14 +88,6 @@ func reserveTokenFile(path string) (string, error) {
 		return "", fmt.Errorf("create token file %s: %w", abs, err)
 	}
 	return abs, nil
-}
-
-// writeSecret replaces the reserved file at path with one holding secret.
-func writeSecret(path, secret string) error {
-	if strings.TrimSpace(secret) == "" {
-		return errors.New("kata daemon returned an empty token secret")
-	}
-	return writePrivateFile(path, secret)
 }
 
 // checkIssued confirms kata did not omit or widen what was asked for, as kata's own CLI does for an Issue-subtree token.

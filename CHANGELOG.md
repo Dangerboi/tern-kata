@@ -36,7 +36,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A fork of an agent chat no longer shows its state on the original agent's badge and Agent card.
 - A fork of a fork that Tern reopens keeps its fork mark, and a block number above 2^53 is kept exactly.
 - A kill while tern-kata writes an agent's private token, DSN or env file, or a fork's copy of one, no longer leaves an empty file that a later start trusts.
-- A kata Pane that starts removes forks' copies of the private files also when the state folder's path holds `[`, `*` or `?`.
+- A kata Pane that starts removes forks' copies of the private files also when the state folder's path holds `[`, `*` or `?`, and never removes the copies of a fork that starts while the Pane asks Tern which agents still run.
 
 #### Attachments
 
@@ -46,6 +46,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - An Attachment whose name holds `:` is never handed to the system app.
 - A Copy answer that arrives while a card, a question or the help covers the Pane shows as a toast with the path and the command, instead of opening over them.
 - A pick in an Attachment's menu does nothing once the detail shows another Issue.
+- Save to Downloads says why it saved on the Pane's computer when Tern's version cannot be read.
 
 #### Issues and Pages
 
@@ -58,13 +59,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Jobs and worker
 
 - `worker doctor` finds kata-plugin's omp extension installed under its npm name `@dangerboi/kata-omp`, from npm or an upgraded marketplace install, and warns of a profile that loads omp's extensions as it does for `kata-omp`.
-  - It warns only when omp would load the extension: a lock entry without its package or without `enabled: true`, a package that is neither a dependency nor carries an omp manifest, and one that a project's `plugin-overrides.json` or omp's settings disable no longer count.
+  - It warns only when omp would load the extension: a lock entry without its package or without `enabled: true`, a package that is neither a dependency nor carries an omp manifest, and one that a project's `plugin-overrides.json` (in `.omp`, `.claude`, `.codex` or `.gemini`, found from the checkout as omp finds it) or omp's `disabledExtensions` setting disables no longer count.
+  - Runs without a checkout are checked too when the worker has checkouts.
 - The kata worker widget goes away when the running worker's `tern-kata` binary can no longer be found, and shows a worker's status about 2 s after it starts instead of up to 10 s.
 - A worker status answer the plugin cannot read is logged and no longer stops the worker supervision until the plugin reloads.
 
 #### Tern window
 
-- A kata link clicked in a tab whose kata quit back to the shell opens a new kata Pane instead of doing nothing.
+- A kata link clicked in a tab whose kata quit back to the shell opens a new kata Pane, also when another kata Pane in that tab still runs, instead of sending the action nowhere.
 - A kata link waiting for a Pane where kata never started shows an error toast instead of being dropped silently.
 - An action for a kata Pane that fails to send no longer drops the actions queued after it.
 

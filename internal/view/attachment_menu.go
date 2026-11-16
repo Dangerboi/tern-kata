@@ -1,6 +1,7 @@
 package view
 
 import (
+	"slices"
 	"sync"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -20,11 +21,12 @@ var attachmentKeys = sync.OnceValue(func() contextMenuKeys {
 
 // attachmentMenu is the right-click menu and the long-press list of the Attachment row with rowKey, on the detail of Issue uid.
 func attachmentMenu(uid, rowKey string, a model.Attachment) []ui.MenuEntry {
-	byAction := map[model.Action]model.AttachmentAction{}
-	for _, row := range model.AttachmentActions() {
-		byAction[row.Action] = row
+	table := model.AttachmentActions()
+	refusal := func(action model.Action) string {
+		i := slices.IndexFunc(table, func(row model.AttachmentAction) bool { return row.Action == action })
+		return table[i].Refusal(a)
 	}
-	return attachmentKeys().entries(uid, rowKey, func(action model.Action) string { return byAction[action].Refusal(a) }, nil)
+	return attachmentKeys().entries(uid, rowKey, refusal, nil)
 }
 
 // attachmentCopyLayer is the Copy card: the downloaded file's path and the kata command that fetches it, each read-only with a

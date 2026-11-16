@@ -17,7 +17,7 @@ import (
 type OmpEnv struct {
 	// Home is the user's home folder: omp's config root lives in <Home>/.omp.
 	Home string
-	// Checkouts are folders whose own .omp/plugins omp reads for a run started there.
+	// Checkouts are folders a run starts in; omp reads their project overrides and the plugins of the project holding them.
 	Checkouts []string
 	// Lookup reads the environment variables omp's folders depend on (OMP_PROFILE, PI_PROFILE, PI_CONFIG_DIR,
 	// PI_CODING_AGENT_DIR, XDG_DATA_HOME); nil reads none.
@@ -66,11 +66,7 @@ func (e OmpEnv) layout(argProfile string, hasArg bool) (plugins, agent string, o
 	if !ok {
 		return "", "", false
 	}
-	configDir, _ := e.env("PI_CONFIG_DIR")
-	if configDir == "" {
-		configDir = ".omp"
-	}
-	root := filepath.Join(e.Home, configDir)
+	root := filepath.Join(e.Home, e.configDirName())
 	if profile != "" {
 		root = filepath.Join(root, "profiles", profile)
 	}
@@ -128,8 +124,9 @@ func quoteAll(names []string) []string {
 
 // kataPlugin says where kata-plugin's omp extension is installed for an omp run with the given --profile argument
 // (argProfile, when hasArg), "" when none of the places omp loads from names it. A plugin counts when omp would load it
-// (loadedPackage), an extension file or settings mention when the settings do not disable it. The marketplace registry
-// (installed_plugins.json) alone loads nothing, so it is not read.
+// (loadedPackage) and the settings do not disable the extension (omp's addPaths skips a path whose extension-module name
+// is in disabledExtensions, installed plugins included); an extension file or settings mention counts likewise. The
+// marketplace registry (installed_plugins.json) alone loads nothing, so it is not read.
 func (e OmpEnv) kataPlugin(argProfile string, hasArg bool) string {
 	if e.Home == "" {
 		return ""
@@ -138,17 +135,25 @@ func (e OmpEnv) kataPlugin(argProfile string, hasArg bool) string {
 	if !ok {
 		return ""
 	}
-	// A run starts in a checkout, whose project overrides apply to the user's plugins too.
-	checkouts := e.Checkouts
-	if len(checkouts) == 0 {
-		checkouts = []string{""}
+	settings := map[string]string{}
+	for _, name := range []string{"config.yml", "config.yaml", "settings.json"} {
+		if data, err := os.ReadFile(filepath.Join(agent, name)); err == nil {
+			if kataDisabled.Match(data) {
+				return ""
+			}
+			settings[filepath.Join(agent, name)] = string(data)
+		}
 	}
-	for _, checkout := range checkouts {
+	// A job with no checkout runs in the run folder, so that case is always there beside the configured checkouts. A run
+	// in a checkout reads its project overrides, which apply to the user's plugins too, and its project's plugins.
+	for _, checkout := range slices.Concat([]string{""}, e.Checkouts) {
 		roots := []string{plugins}
 		if checkout != "" {
-			roots = append(roots, filepath.Join(checkout, ".omp", "plugins"))
+			if root, ok := e.projectRoot(checkout, plugins); ok {
+				roots = append(roots, root)
+			}
 		}
-		disabled := projectDisabled(checkout)
+		disabled := e.projectDisabled(checkout)
 		for _, root := range roots {
 			for _, pkg := range kataOmpPackages {
 				if !slices.Contains(disabled, pkg) {
@@ -157,15 +162,6 @@ func (e OmpEnv) kataPlugin(argProfile string, hasArg bool) string {
 					}
 				}
 			}
-		}
-	}
-	settings := map[string]string{}
-	for _, name := range []string{"config.yml", "config.yaml", "settings.json"} {
-		if data, err := os.ReadFile(filepath.Join(agent, name)); err == nil {
-			if kataDisabled.Match(data) {
-				return ""
-			}
-			settings[filepath.Join(agent, name)] = string(data)
 		}
 	}
 	if entries, err := os.ReadDir(filepath.Join(agent, "extensions")); err == nil {
@@ -232,13 +228,49 @@ func loadedPackage(root, pkg string) string {
 	return filepath.Join(dir, "package.json")
 }
 
-// projectDisabled are the plugin names the checkout's plugin-overrides.json disables: omp reads the first of its .omp
-// and .pi folders that has one.
-func projectDisabled(checkout string) []string {
+// ompConfigBases are the folders omp reads project config from, in its priority order (config.ts priorityList): its own
+// config folder name, then the three it reads for other tools.
+func (e OmpEnv) ompConfigBases() []string {
+	return []string{e.configDirName(), ".claude", ".codex", ".gemini"}
+}
+
+// configDirName is omp's config folder name (getConfigDirName): PI_CONFIG_DIR, else .omp. It names both the user's root
+// under Home and a project's.
+func (e OmpEnv) configDirName() string {
+	if name, _ := e.env("PI_CONFIG_DIR"); name != "" {
+		return name
+	}
+	return ".omp"
+}
+
+// projectRoot is the plugins folder omp reads for a run in checkout (resolveActiveProjectRegistryPath): the nearest
+// ancestor with a config folder, else the nearest with a .git, below Home and never the user's own config root. ok is
+// false when the checkout is in no project or its root is the user's plugins folder.
+func (e OmpEnv) projectRoot(checkout, userPlugins string) (root string, ok bool) {
+	name := e.configDirName()
+	userConfig := []string{filepath.Join(e.Home, name), filepath.Dir(userPlugins)}
+	for _, marker := range []string{name, ".git"} {
+		for dir := filepath.Clean(checkout); dir != filepath.Clean(e.Home); dir = filepath.Dir(dir) {
+			info, err := os.Stat(filepath.Join(dir, marker))
+			if err == nil && (marker == ".git" || info.IsDir()) && !slices.Contains(userConfig, filepath.Join(dir, name)) {
+				root = filepath.Join(dir, name, "plugins")
+				return root, root != userPlugins
+			}
+			if filepath.Dir(dir) == dir {
+				break
+			}
+		}
+	}
+	return "", false
+}
+
+// projectDisabled are the plugin names the checkout's plugin-overrides.json disables: omp reads the first readable one of
+// its config folders (getConfigDirPaths with user: false, so folders of the checkout itself, not of its ancestors).
+func (e OmpEnv) projectDisabled(checkout string) []string {
 	if checkout == "" {
 		return nil
 	}
-	for _, dir := range []string{".omp", ".pi"} {
+	for _, dir := range e.ompConfigBases() {
 		data, err := os.ReadFile(filepath.Join(checkout, dir, "plugin-overrides.json"))
 		if err != nil {
 			continue
@@ -251,9 +283,4 @@ func projectDisabled(checkout string) []string {
 		}
 	}
 	return nil
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the project's checks: static (gofmt, go vet and golangci-lint for Linux and Windows, the placement tests with the
+# Runs the project's checks: static (gofmt, go vet and golangci-lint for Linux and Windows, every Luau test (test/*_test.luau) with the
 # luau command line, the build and the release cross-builds), test (go test, and bun test for the omp extension) or smoke
 # (smoke/run.sh); no argument runs all three.
 # The static checks run side by side; each prints "CHECK <name> ok" or "CHECK <name> FAIL" (after its output) when it ends.
@@ -40,7 +40,7 @@ gofmt_clean() {
   [[ -z $unformatted ]] || { printf '%s\n' "$unformatted" >&2; return 1; }
 }
 
-placement_tests() {
+luau_tests() {
   local t
   for t in test/*_test.luau; do luau "$t" || return 1; done
 }
@@ -54,7 +54,7 @@ static() {
   # The two lints share golangci-lint's cache, which takes concurrent writers; the flag lifts the one-run-at-a-time lock.
   check lint-linux golangci-lint run --allow-parallel-runners ./...
   check lint-windows env GOOS=windows golangci-lint run --allow-parallel-runners ./...
-  check placement placement_tests
+  check luau-tests luau_tests
   check build go build -o /dev/null ./cmd/tern-kata
   for os in linux darwin windows; do
     for arch in amd64 arm64; do

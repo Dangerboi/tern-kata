@@ -9,6 +9,11 @@ local CAPPED_LINES = 5
 -- Tern cuts a tooltip line at about this many characters, whatever follows.
 local LINE_CHARS = 45
 
+-- The id Tern gives a command a plugin registers under `name`.
+function M.commandId(plugin: string, name: string): string
+    return "plugin." .. plugin .. "." .. name
+end
+
 -- The line itself when it fits a tooltip line, else its first characters and an ellipsis.
 function M.fit(line: string): string
     local length = utf8.len(line)

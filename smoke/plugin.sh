@@ -384,6 +384,26 @@ start_hand_pane "$tmp/pane-bin/tern-kata --issue smoke/$second" '"Plugin second 
 link_focuses_pane
 ctl plugins expect '"Plugin first body"'
 end_hand_started_pane q
+# A real kata that quit back to its shell has no surface any more (kata's is discarded on quit), and a shell that keeps the title
+# kata set is still taken for a kata Pane: a link opens a new kata Pane that shows the Issue, and the shell gets nothing. Tern's zsh
+# integration resets the title at the prompt, so here the shell is told apart from a running kata by its missing surface alone.
+start_hand_pane "$tmp/pane-bin/tern-kata --issue smoke/$second" '"Plugin second body"'
+quit_shell=$started
+ctl key q
+shell_back() { ctl state | jq -e '.focused.running == null' >/dev/null; }
+wait_for shell_back
+ctl ready
+ctl click "$x" "$y" cmd
+ctl plugins expect '"Plugin first body"'
+wait_for panes_are 3
+ctl state | jq -e --argjson id "$quit_shell" '.focused.id != $id' >/dev/null
+expect_no_toast "did not take the action"
+expect_no_toast "tern-kata did not start"
+ctl key q
+wait_for panes_are 2
+read -r x y < <(ctl tree '.tv-grid' | jq -r '.nodes[1].rect | "\(.[0]+4) \(.[1]+8)"')
+ctl click "$x" "$y"
+end_hand_started_pane Enter
 start_hand_pane "$standin_dir/my-tern-kata"
 ctl click "$x" "$y" cmd
 # expect_panes waits for every Pane to reach its prompt, which the running stand-in never does.
@@ -402,14 +422,12 @@ end_hand_started_pane Enter
 printf '#!/bin/sh\ni=0\nwhile [ $i -lt 30 ]; do echo tick; sleep 0.2; i=$((i+1)); done\nexit 1\n' >"$tmp/pane-bin/tern-kata"
 ctl plugins run plugin.tern-kata.open
 seen=0
-deadline=$((SECONDS + wait_limit))
-while (( SECONDS < deadline )); do
+failing_pane_closed() {
   panes=$(ctl state | jq -r '[.tabs[].panes] | add')
   if [[ $panes == 2 && $seen == 0 ]]; then seen=1; ctl focus left; fi
-  [[ $seen == 1 && $panes == 1 ]] && break
-  sleep 0.1
-done
-[[ $seen == 1 && $panes == 1 ]] || { echo "failing tern-kata Pane did not close (seen=$seen panes=$panes)" >&2; exit 1; }
+  [[ $seen == 1 && $panes == 1 ]]
+}
+wait_for failing_pane_closed || { echo "failing tern-kata Pane did not close (seen=$seen panes=$panes)" >&2; exit 1; }
 expect_no_kata_toast
 # A launch of tern-kata that fails inside the 2 s window closes its Pane and toasts by exit status: 2 (Go panic) and 3
 # (the binary's own error) are a failed start; 1 can be either (PowerShell's not-found, and Windows reports every failing

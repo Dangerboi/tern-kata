@@ -60,6 +60,8 @@ stop_daemon() {
 }
 worker_pid() { [[ -f "$state/worker.lock" ]] && cat "$state/worker.lock" || true; }
 alive() { [[ -n "${1:-}" ]] && kill -0 "$1" 2>/dev/null; }
+worker_gone() { ! alive "$1"; }
+wait_gone() { wait_for -t 30 worker_gone "$1"; } # $1 the pid
 # The worker answers on its control socket: `worker status` works.
 worker_answers() { "$tmp/bin/tern-kata" worker status >"$tmp/status.txt" 2>&1; }
 wait_worker() { # $1 seconds
@@ -170,7 +172,7 @@ run_job 2
 # A daemon restart: the host half loads again and the worker runs again.
 stop_daemon
 # The worker may outlive the daemon (the next stage ends it): give it a moment to go with it.
-wait_for -t 10 worker_gone "$third" 2>/dev/null || true
+wait_for -t 10 worker_gone "$third" || true
 start_daemon
 wait_worker 40
 fourth=$(worker_pid)
@@ -195,8 +197,6 @@ wait_new_worker "$fifth" 13 || { echo "fixing worker.toml did not start a worker
 # ("a fresh worker" or "nothing will start it again") and the host half asks it through `worker supervised`; the host half
 # either starts a worker within a poll (10 s) or does not. This end-to-end step checks the host half acts on the answer.
 config="$XDG_CONFIG_HOME/tern-kata"
-worker_gone() { ! alive "$1"; }
-wait_gone() { wait_for -t 30 worker_gone "$1"; } # $1 the pid
 # stop_expecting <fresh|none>: `worker stop` the running worker and check what it promises.
 stop_expecting() {
   local pid out
@@ -273,14 +273,9 @@ run_job 5
 # `update` against the local dist/ swaps it and stops the worker when idle, and the fresh worker the host half starts
 # reports the new version. The plugin is linked here, so the update leaves it and says so.
 up_version=$(plugin_version "$repo/plugin.toml")
-if [[ -n ${SMOKE_DIST:-} ]]; then
-  up_dist=$SMOKE_DIST
-else
-  up_dist="$tmp/update-dist"
-  "$repo/scripts/release.sh" "v$up_version" "$up_dist" >/dev/null
-fi
+release_dist up_dist "$tmp/update-dist"
 serve_dir "$up_dist" "$tmp/update-server.log"
-(cd "$repo" && go build -ldflags "-X main.version=v0.0.1" -o "$tmp/bin/tern-kata.old" ./cmd/tern-kata)
+build_old_release "$tmp/bin/tern-kata.old"
 mv "$tmp/bin/tern-kata.old" "$tmp/bin/tern-kata"
 old_worker=$(worker_pid)
 stop_expecting fresh

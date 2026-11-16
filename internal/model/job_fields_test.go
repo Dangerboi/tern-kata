@@ -29,7 +29,7 @@ func TestJobCardTabSkipsTheFieldsThatDoNotApplyAndStepsItsChoices(t *testing.T) 
 	if m.JobForm.Enabled {
 		t.Fatalf("space on Enabled left it on")
 	}
-	m, _ = model.Update(m, model.ChooseMsg{Field: model.JobFieldEnabled, Index: 0})
+	m, _ = model.Update(m, model.ChooseMsg{Field: model.JobFieldEnabled, Index: 1})
 	if !m.JobForm.Enabled {
 		t.Fatalf("choosing Yes left Enabled off")
 	}

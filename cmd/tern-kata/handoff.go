@@ -11,6 +11,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/data/ompext"
+	"github.com/Dangerboi/tern-kata/internal/envname"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -20,15 +21,11 @@ func envWithout(environ []string, caseInsensitive bool, names ...string) []strin
 	env := make([]string, 0, len(environ)+2)
 	for _, entry := range environ {
 		name, _, _ := strings.Cut(entry, "=")
-		if !slices.ContainsFunc(names, func(dropped string) bool { return envNamed(name, dropped, caseInsensitive) }) {
+		if !slices.ContainsFunc(names, func(dropped string) bool { return envname.Equal(name, dropped, caseInsensitive) }) {
 			env = append(env, entry)
 		}
 	}
 	return env
-}
-
-func envNamed(name, want string, caseInsensitive bool) bool {
-	return name == want || caseInsensitive && strings.EqualFold(name, want)
 }
 
 func childEnv(environ []string, actor string, caseInsensitive bool) []string {
@@ -127,7 +124,7 @@ func agentEnv(environ []string, plan LaunchPlan, caseInsensitive bool) []string 
 func envValue(environ []string, name string, caseInsensitive bool) string {
 	value := ""
 	for _, entry := range environ {
-		if key, v, ok := strings.Cut(entry, "="); ok && envNamed(key, name, caseInsensitive) {
+		if key, v, ok := strings.Cut(entry, "="); ok && envname.Equal(key, name, caseInsensitive) {
 			value = v
 		}
 	}

@@ -247,10 +247,11 @@ func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.
 	if err != nil {
 		return model.AgentsPruned{Seq: cmd.Seq, Err: err}
 	}
+	forks := g.forkFilesNow()
 	agents, live, askErr, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, true, func(string) bool { return true })
 	if askErr == nil && err == nil {
 		g.syncAgentRecordsAtStart(ctx, cmd.Workspace, file)
-		g.retireForkFiles(ctx, live)
+		g.retireForkFiles(ctx, forks, live)
 	}
 	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
 }
@@ -265,33 +266,47 @@ func (g *Gateway) syncAgentRecordsAtStart(ctx context.Context, workspace, file s
 	_ = g.syncAgentRecords(ctx, workspace, agentDirs{config: dirs.Config, state: dirs.State}, file)
 }
 
-// retireForkFiles removes the copies forked chats made of the Pane's secret files (AgentRoute.Forked) whose block Tern no longer
-// lists: a fork has no agents.json entry, so its copies go with its block. live is the set of blocks the prune's reconcile asked
-// for, nil when it asked none (no entries): Tern is then asked here, and only when a copy exists. Nothing is removed when Tern
-// cannot be asked. Prompt and secret files that no entry owns stay: another Pane's start writes them before it records its entry
-// (startAgent), with no lock held in between, so a file with no entry may be one that is about to have it.
-func (g *Gateway) retireForkFiles(ctx context.Context, live map[string]bool) {
+// forkFilesNow lists, by full path, the fork copies (forkFilePrefix) that exist now. A prune reads it before it asks Tern which
+// blocks live, so a copy a fork makes after that listing is never in the list, and the fork's block missing from the answer cannot
+// retire it.
+func (g *Gateway) forkFilesNow() []string {
 	dirs, err := g.workerDirs()
 	if err != nil || dirs.State == "" {
-		return
+		return nil
 	}
 	folder := filepath.Join(dirs.State, AgentPromptsFolder)
-	files, err := os.ReadDir(folder)
+	entries, err := os.ReadDir(folder)
 	if err != nil {
-		return
+		return nil
 	}
-	files = slices.DeleteFunc(files, func(f os.DirEntry) bool { return !strings.HasPrefix(f.Name(), forkFilePrefix) })
+	var files []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), forkFilePrefix) {
+			files = append(files, filepath.Join(folder, e.Name()))
+		}
+	}
+	return files
+}
+
+// retireForkFiles removes those of files, the copies forked chats made of the Pane's secret files (AgentRoute.Forked), whose block
+// Tern no longer lists: a fork has no agents.json entry, so its copies go with its block. files were read before Tern was asked.
+// live is the set of blocks the prune's reconcile asked for, nil when it asked none (no entries): Tern is then asked here, and
+// only when a copy exists. Nothing is removed when Tern cannot be asked. Prompt and secret files that no entry owns stay: another
+// Pane's start writes them before it records its entry (startAgent), with no lock held in between, so a file with no entry may
+// be one that is about to have it.
+func (g *Gateway) retireForkFiles(ctx context.Context, files []string, live map[string]bool) {
 	if len(files) == 0 {
 		return
 	}
 	if live == nil {
+		var err error
 		if live, _, err = g.liveBlocks(ctx, true); err != nil {
 			return
 		}
 	}
 	for _, file := range files {
-		if block, _, ok := strings.Cut(strings.TrimPrefix(file.Name(), forkFilePrefix), "-"); ok && blockID(block) && !live[block] {
-			_ = os.Remove(filepath.Join(folder, file.Name()))
+		if block, _, ok := strings.Cut(strings.TrimPrefix(filepath.Base(file), forkFilePrefix), "-"); ok && blockID(block) && !live[block] {
+			_ = os.Remove(file)
 		}
 	}
 }

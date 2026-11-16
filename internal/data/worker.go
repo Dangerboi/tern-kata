@@ -74,9 +74,9 @@ func (g *Gateway) resumeJob(ctx context.Context, cmd model.ResumeJob) model.JobR
 	return model.JobResumed{JobUID: cmd.JobUID, JobName: cmd.JobName, Err: err}
 }
 
-func (g *Gateway) moveRun(ctx context.Context, op, uid string) model.LocalRunMoved {
+func (g *Gateway) moveRun(ctx context.Context, op string, uid string) model.LocalRunMoved {
 	resp, err := g.ask(ctx, worker.Request{Op: op, Run: uid, Actor: "tern-kata pane"})
-	moved := model.LocalRunMoved{UID: uid, Resumed: op == "resume", Err: err}
+	moved := model.LocalRunMoved{UID: uid, Resumed: op == worker.OpResume, Err: err}
 	if err == nil && resp.Transition != nil {
 		moved.State = resp.Transition.State
 	}

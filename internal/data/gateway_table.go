@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/worker"
 )
 
 // The Daemon gateway's command table declares, per command type, how the gateway handles it: the handler and the named
@@ -172,10 +173,10 @@ func init() {
 	local((*Gateway).runJobNow)
 	local((*Gateway).resumeJob)
 	local(func(g *Gateway, ctx context.Context, cmd model.ResumeLocalRun) model.Msg {
-		return g.moveRun(ctx, "resume", cmd.UID)
+		return g.moveRun(ctx, worker.OpResume, cmd.UID)
 	})
 	local(func(g *Gateway, ctx context.Context, cmd model.AbandonLocalRun) model.Msg {
-		return g.moveRun(ctx, "abandon", cmd.UID)
+		return g.moveRun(ctx, worker.OpAbandon, cmd.UID)
 	})
 	local((*Gateway).openRunSession)
 
