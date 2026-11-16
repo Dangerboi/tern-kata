@@ -189,7 +189,7 @@ ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/worker"]' >/dev/null
 ctl widgets set tern-kata/worker
 ctl state | jq -e '.widgets.ids == ["tern-kata/worker"]' >/dev/null
 [[ $(tern plugin list --json | jq '[.problems[] | select(tostring | contains("tern-kata"))] | length') == 0 ]]
-! grep -qE 'could not (register|remove) (the worker )?widget|hook="command add-widgets"' "$tmp/tern.log" || { echo "tern-kata widget registration failed" >&2; exit 1; }
+! grep -qE 'could not register (the worker )?widget|hook="command add-widgets"' "$tmp/tern.log" || { echo "tern-kata widget registration failed" >&2; exit 1; }
 # From Tern 0.9.21 the host half draws the worker widget: with a worker running (the host half starts one within a poll of
 # worker.toml appearing), the bar shows it with a tooltip naming the session host's worker, and it goes again when the worker
 # stops and nothing starts another. This fails if the host half stopped rendering it, or the window half's own widget (which

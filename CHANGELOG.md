@@ -14,7 +14,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Tern window
 
-- The Waiting kata agents widget and the "N waiting" entry in the Plugin segments widget are gone: Tern's own Agents widget lists the waiting agents, with each one's question, how long it has waited and its tab.
+- **Breaking:** The Waiting kata agents widget and the "N waiting" entry in the Plugin segments widget are gone: Tern's own Agents widget (on Tern 0.9.23) lists the waiting agents, with each one's question, how long it has waited and its tab.
   - If you placed the widget, remove `tern-kata/waiting` from the bar with the palette's Edit widgets….
   - **Go to the agent waiting for you** (`shift+F9`) still goes to the kata agent that began waiting last.
 

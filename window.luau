@@ -515,7 +515,7 @@ end)
 
 -- The kata agents that wait for you, for the Go to the agent waiting for you command. `waitOrder` numbers each agent's move into
 -- waiting (a later move, a larger number); it is empty after a plugin reload, which leaves the agents already waiting last, in
--- Tern's order. Tern's own Agents widget shows the waiting agents in the widget bar.
+-- Tern's order. Tern's own Agents widget (on Tern 0.9.23) shows the waiting agents in the widget bar.
 local waitOrder: { [number]: number } = {}
 local waitStamp = 0
 local GO_WAITING_ID = "go-to-waiting-agent"
@@ -531,8 +531,8 @@ end
 -- The kata worker widget (workerwidget.luau): on Tern 0.9.21 and later the host half draws it (host.luau header says why and
 -- what the window can and cannot tell), so this half registers its own, labelled as this machine's worker, only while it finds
 -- a fresh summary in its `tern.kv`, and takes it away when none is found: a widget of the same id registered here would win in
--- this window and hide the host's. The widget is offered to the add-widgets command whenever this Tern has a widget bar,
--- since the host half may be the one drawing it.
+-- this window and hide the host's. The add-widgets command places it whenever this Tern has a widget bar, since the host half
+-- may be the one drawing it.
 local WORKER_POLL_SECONDS = 5
 local workerSummary: workersummary.Summary? = nil
 local workerSummaryText = ""
@@ -589,17 +589,6 @@ end
 if tern.chrome.widget ~= nil then
     tern.on("window_start", tryReadWorkerSummary)
     tern.timer(1, pollWorkerSummary)
-end
-
-tern.command({
-    id = workerwidget.SHOW_HELD_ID,
-    title = "Show kata's held runs",
-    run = function(cx)
-        openKata(cx, "show-held-runs", "")
-    end,
-})
-
-if tern.chrome.widget ~= nil then
     tern.command({
         id = "add-widgets",
         title = "Add the kata worker widget to the widget bar",
@@ -615,6 +604,14 @@ if tern.chrome.widget ~= nil then
         end,
     })
 end
+
+tern.command({
+    id = workerwidget.SHOW_HELD_ID,
+    title = "Show kata's held runs",
+    run = function(cx)
+        openKata(cx, "show-held-runs", "")
+    end,
+})
 
 -- Tern's `cx.layout:focus` does not say that it raises the `focus` event, so the agent is opened here by the handler's own path
 -- (a no-op for an agent outside the hidden session) before it is focused. A parked agent is dealt into the current tab first;
