@@ -66,7 +66,7 @@ func (g *Gateway) restartKataDaemon(ctx context.Context, cmd model.RestartKataDa
 func profileEnv() []string {
 	return slices.DeleteFunc(os.Environ(), func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
-		return slices.ContainsFunc(routeNames, func(r string) bool { return envname.Equal(name, r, true) })
+		return slices.ContainsFunc(routeNames, func(r string) bool { return envname.Equal(name, r, envname.CaseInsensitive) })
 	})
 }
 

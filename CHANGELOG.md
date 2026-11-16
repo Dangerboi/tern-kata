@@ -47,6 +47,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - A Copy answer that arrives while a card, a question or the help covers the Pane shows as a toast with the path and the command, instead of opening over them.
 - A pick in an Attachment's menu does nothing once the detail shows another Issue.
 - Save to Downloads says why it saved on the Pane's computer when Tern's version cannot be read.
+- A `tern` command that does not answer in time, when opening, saving or checking an agent's window, is reported as not answering within its time limit instead of as `signal: killed`.
 
 #### Issues and Pages
 
@@ -67,6 +68,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Tern window
 
 - A kata link clicked in a tab whose kata quit back to the shell opens a new kata Pane, also when another kata Pane in that tab still runs, instead of sending the action nowhere.
+- A kata link clicked in a tab where a `tern-kata` command other than the Pane runs, such as `tern-kata worker` typed by hand, opens a kata Pane instead of sending the action to that command.
 - A kata link waiting for a Pane where kata never started shows an error toast instead of being dropped silently.
 - An action for a kata Pane that fails to send no longer drops the actions queued after it.
 

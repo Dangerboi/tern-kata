@@ -2,7 +2,13 @@
 // upper-cased where it is not (Windows).
 package envname
 
-import "strings"
+import (
+	"runtime"
+	"strings"
+)
+
+// CaseInsensitive is whether this system compares environment variable names without case (Windows).
+const CaseInsensitive = runtime.GOOS == "windows"
 
 // Key is name as it is compared: upper-cased when caseInsensitive.
 func Key(name string, caseInsensitive bool) string {

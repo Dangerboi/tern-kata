@@ -416,7 +416,7 @@ var jobTable = fieldTable[JobFormState]{
 		textField(JobFieldTimeout, func(f *JobFormState) *string { return &f.Timeout }),
 		jobChoiceField(JobFieldCatchup),
 		textField(JobFieldGrace, func(f *JobFormState) *string { return &f.Grace }),
-		jobChoiceField(JobFieldEnabled),
+		yesNoField(JobFieldEnabled, func(f *JobFormState) *bool { return &f.Enabled }),
 	},
 }
 
@@ -509,8 +509,6 @@ func (f JobFormState) JobChoices(name Field) []JobChoice {
 		for _, id := range f.kind().triggers {
 			choices = append(choices, JobChoice{jobTriggerOf(id).label, id == f.Trigger})
 		}
-	case JobFieldEnabled:
-		choices = []JobChoice{{"No", !f.Enabled}, {"Yes", f.Enabled}}
 	default:
 		held := f.optionValue(name)
 		for _, o := range f.options(name) {
@@ -545,8 +543,6 @@ func jobPick(f *JobFormState, name Field, i int) bool {
 		}
 	case JobFieldTrigger:
 		f.Trigger = f.kind().triggers[i]
-	case JobFieldEnabled:
-		f.Enabled = i == 1
 	default:
 		if held := f.optionValue(name); held != nil {
 			*held = f.options(name)[i].value

@@ -48,7 +48,7 @@ func (s ChoiceSet) Matches(query string) []int {
 }
 
 // On is whether a switch is on.
-func (s ChoiceSet) On() bool { return s.Chosen == 1 }
+func (s ChoiceSet) On() bool { return s.Chosen == boolIndex(true) }
 
 // SwitchLabels is the label of a switch turned off and turned on.
 func (s ChoiceSet) SwitchLabels() [2]string { return [2]string{s.Labels[0], s.Labels[1]} }
@@ -226,7 +226,8 @@ func (m Model) openSelect() selectRef {
 	return selectRef{m.Dropdown.Card, m.Dropdown.Field}
 }
 
-// SwitchMsg is the pointer flipping the switch called Field of the open popup card. The field takes focus and holds On.
+// SwitchMsg is the pointer flipping the switch called Field of the open popup card. A card with a flip hook asks for its write;
+// on any other the field takes focus and holds On.
 type SwitchMsg struct {
 	Field Field
 	On    bool

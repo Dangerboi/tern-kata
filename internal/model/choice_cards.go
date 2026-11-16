@@ -78,13 +78,14 @@ func jobControl(name Field, n int) Control {
 	switch name {
 	case JobFieldKind, JobFieldTrigger, JobFieldPolicy, JobFieldOverlap, JobFieldCatchup:
 		return ControlSelect
-	case JobFieldEnabled:
-		return ControlSwitch
 	}
 	return segmentedOrSelect(n)
 }
 
 func jobChoiceSet(m Model, name Field) (ChoiceSet, bool) {
+	if name == JobFieldEnabled {
+		return yesNoSwitch(m.JobForm.Enabled), true
+	}
 	choices := m.JobForm.JobChoices(name)
 	if len(choices) == 0 && !slices.ContainsFunc(JobFields, func(f FieldSpec) bool { return f.Name == name && !f.Text }) {
 		return ChoiceSet{}, false

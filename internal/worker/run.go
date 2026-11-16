@@ -277,7 +277,7 @@ func (w *Worker) secrets(j *Journal) (map[string]string, error) {
 	out := map[string]string{}
 	pc, served := w.opt.Config.project(j.ProjectName)
 	for env, name := range j.SecretRefs {
-		if reservedEnvName(env, envCaseInsensitive) {
+		if reservedEnvName(env, envname.CaseInsensitive) {
 			return nil, fmt.Errorf("secret %q would set %s, a reserved name", name, env)
 		}
 		if !served || !pc.allowsSecret(name) {
@@ -305,10 +305,8 @@ var promptKeptKata = map[string]bool{
 // step's secrets.
 func childEnv(actor string, secrets map[string]string, hidden map[string]bool) []string {
 	environ := os.Environ()
-	return ompext.WithCloseTranscript(promptEnv(environ, actor, secrets, hidden, envCaseInsensitive), environ, envCaseInsensitive)
+	return ompext.WithCloseTranscript(promptEnv(environ, actor, secrets, hidden, envname.CaseInsensitive), environ, envname.CaseInsensitive)
 }
-
-const envCaseInsensitive = runtime.GOOS == "windows"
 
 // reservedEnvName reports whether name is one the worker keeps for itself: TERN_KATA_* and KATA_*. Names compare
 // case-insensitively when caseInsensitive (Windows).
@@ -318,18 +316,24 @@ func reservedEnvName(name string, caseInsensitive bool) bool {
 }
 
 func promptEnv(environ []string, actor string, secrets map[string]string, hidden map[string]bool, caseInsensitive bool) []string {
+	env := append(scrubbedEnv(environ, hidden, promptKeptKata, caseInsensitive), "KATA_AUTHOR="+actor)
+	for k, v := range secrets {
+		env = append(env, k+"="+v)
+	}
+	return env
+}
+
+// scrubbedEnv is environ without the hidden names (already keyed for caseInsensitive) and the reserved ones except
+// those in keep. Every child the worker starts gets its environment from here.
+func scrubbedEnv(environ []string, hidden, keep map[string]bool, caseInsensitive bool) []string {
 	var env []string
 	for _, kv := range environ {
 		name, _, _ := strings.Cut(kv, "=")
 		name = envname.Key(name, caseInsensitive)
-		if hidden[name] || reservedEnvName(name, caseInsensitive) && !promptKeptKata[name] {
+		if hidden[name] || reservedEnvName(name, caseInsensitive) && !keep[name] {
 			continue
 		}
 		env = append(env, kv)
-	}
-	env = append(env, "KATA_AUTHOR="+actor)
-	for k, v := range secrets {
-		env = append(env, k+"="+v)
 	}
 	return env
 }
@@ -400,7 +404,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	}
 	cmd := exec.Command(program, agentArgs(sp.profile, sp.dir, promptFile, resumeID, extension)...)
 	cmd.Dir = cwd
-	cmd.Env = childEnv(j.Actor, secrets, w.opt.Config.secretEnvNames(envCaseInsensitive))
+	cmd.Env = childEnv(j.Actor, secrets, w.opt.Config.secretEnvNames(envname.CaseInsensitive))
 	cmd.Stdin = nil // /dev/null: omp reads an open stdin to EOF as prompt text
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)
@@ -450,9 +454,8 @@ func (w *Worker) timeLeft(j *Journal) time.Duration {
 }
 
 // promptSession is what only an agent step has: the folder omp keeps its session in, the session a resumed attempt asks
-// for and the one the agent names. omp may name it before the start record is saved: the start record then takes the
-// held id (it reads it under the journal's lock), and a save of the id on its own finds no launch record and does
-// nothing. Either order leaves the id in the record, and a failed start save leaves nothing to write to.
+// for and the one the agent names. omp may name it before the start record is saved: a save of the id then finds no launch record and does
+// nothing, and supervise saves the held id right after the start record. A failed start save leaves nothing to write to.
 type promptSession struct {
 	dir, resumeID string
 	mu            sync.Mutex
@@ -491,8 +494,8 @@ func (w *Worker) recordSession(s *promptSession, runUID, id string) {
 // supervise starts cmd and waits for it: the `launching` mark, the start record, the wait with the run's expiry (SIGTERM,
 // then SIGKILL after 10 s, ADR-0006) and the exit record's contents. A worker stop kills the group and leaves the journal
 // `started`, which the next start finds interrupted. The caller saves the returned exit record. For an agent step (session
-// not nil) the start record carries its session folder and its session: the one named before the record was saved, else
-// the one a resumed attempt asks for.
+// not nil) the start record carries its session folder and the session a resumed attempt asks for; a session the agent
+// named before that record was saved follows it as its own save.
 func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, session *promptSession) (*ExitRecord, error) {
 	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
 	defer runtime.UnlockOSThread()
@@ -517,11 +520,6 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 		launch.SessionDir, launch.SessionID = session.dir, session.resumeID
 	}
 	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
-		if session != nil {
-			if id := session.named(); id != "" {
-				launch.SessionID = id
-			}
-		}
 		return j.markStarted(launch)
 	}); err != nil {
 		stopped, stop := context.WithCancel(ctx)
@@ -529,6 +527,11 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 		_, _ = w.terminateGroup(stopped, launch)
 		_ = cmd.Wait()
 		return nil, err
+	}
+	if session != nil {
+		if id := session.named(); id != "" {
+			w.recordSession(session, j.RunUID, id)
+		}
 	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()

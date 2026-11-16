@@ -12,7 +12,6 @@ local workerwidget = require("./workerwidget")
 local widgets = require("./widgets")
 local attachmentview = require("./attachmentview")
 local promptfile = require("./promptfile")
-local owedaction = require("./owedaction")
 
 -- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
 -- Kept in `tern.kv` too, because a plugin reload (a local update brings the plugin along) empties this table while the
@@ -162,15 +161,13 @@ local function owe(pane: number, act: string, value: string)
     table.insert(paneState(pane).owed, {act = act, value = value})
 end
 
--- Whether kata runs in the Pane: it has not quit, and either its own surface is there (a screen: kata opens `Mode: Screen,
--- Discard: true`, so once it quits Tern keeps no surface and a shell where it quit has none) or its program is still the foreground
--- command with no surface yet (a kata started by hand before it opens one, or suspended for $EDITOR). `at_prompt` cannot tell: it
--- is true for a running kata Pane too.
+-- Whether kata runs in the Pane: it has not quit and its own surface is up, a screen (kata opens `Mode: Screen, Discard: true`, so
+-- once it quits Tern keeps no surface and a shell where it quit has none). The program name is no evidence: a `tern-kata worker`
+-- typed by hand has that name and no surface, and a kata not yet showing its surface is covered by `waiting` (the title pump).
 local function live(cx: WindowCx, info: PaneInfo?): boolean
     if info == nil or info.exited ~= nil then return false end
     local tree = cx.session:surface(info.pane, {depth = 1, nodes = 1})
-    if type(tree) == "table" then return tree.surface.mode == "screen" end
-    return info.running ~= nil and isKataProgram(info.program)
+    return type(tree) == "table" and tree.surface.mode == "screen"
 end
 
 local function waiting(pane: number): boolean
@@ -178,14 +175,17 @@ local function waiting(pane: number): boolean
     return st ~= nil and (st.launched or st.pumping)
 end
 
--- Links reuse the first kata Pane of the focused Pane's tab that `owedaction.route` takes; a parked Pane has no tab. A Pane where
--- kata quit (its title still says tern-kata) is not taken, and another kata Pane beside it still is.
+-- Links reuse the first kata Pane of the focused Pane's tab that is waited on or live; a parked Pane has no tab. The action is
+-- queued on that Pane and sent as soon as kata runs there: at once for a live Pane, when the Pane starts for one the plugin
+-- waits on (`waiting`: it launched the Pane, or is pumping its title). Any other Pane found by its title alone may be a shell
+-- where kata has quit, and a queued action would run whenever kata next started there, so such a Pane is not reused: a new
+-- Pane is launched.
 local function existingPane(cx: WindowCx): PaneInfo?
     local focused = cx.session:focused()
     local tab = focused and cx.session:tab_of(focused)
     if not tab then return nil end
     for _, info in cx.session:panes() do
-        if info.tab == tab and isKata(info) and owedaction.route(waiting(info.pane), live(cx, info)) == "queue" then return info end
+        if info.tab == tab and isKata(info) and (waiting(info.pane) or live(cx, info)) then return info end
     end
     return nil
 end

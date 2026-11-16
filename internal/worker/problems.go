@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
+	"github.com/Dangerboi/tern-kata/internal/envname"
 )
 
 // What the worker says about the definitions it was given (ADR-0011): a job it sets aside is listed with its reason, and a
@@ -96,7 +97,7 @@ func jobProblem(cfg Config, pc ProjectConfig, job cronjob.Job, wf *Workflow, wfE
 	}
 	for env, name := range d.SecretRefs {
 		switch _, ok := cfg.Secrets[name]; {
-		case reservedEnvName(env, envCaseInsensitive):
+		case reservedEnvName(env, envname.CaseInsensitive):
 			return fmt.Sprintf("secret %q would set %s, a reserved name", name, env), false
 		case !ok:
 			return fmt.Sprintf("it names secret %q, which is not defined in worker.toml", name), false

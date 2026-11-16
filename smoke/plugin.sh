@@ -333,10 +333,11 @@ while [[ $(ctl state | jq '.tabs | length') -gt 1 ]]; do
 done
 ctl tab 1
 expect_panes 1
-# A Pane started by hand is a kata Pane when its title is `tern-kata` or its program's file name is tern-kata or
-# tern-kata.exe, whatever the path: a link then focuses it and opens no second Pane. The stand-in never sets the title, so
-# only its program name can identify it; the real binary (through its wrapper script) sets the title. The wrapper under
-# another name is identified by title alone, and a longer name containing tern-kata is not a kata Pane at all.
+# A Pane started by hand is marked as a kata Pane when its title is `tern-kata` or its program's file name is tern-kata or
+# tern-kata.exe, whatever the path, but a link is delivered only to one that is waited on or shows kata's screen. The real
+# binary (through its wrapper script) sets the title and draws the screen, so a link focuses it and opens no second Pane. A
+# stand-in with the program name draws no surface, so nothing can be delivered to it: the link opens a new Pane. The wrapper
+# under another name is identified by title alone, and a longer name containing tern-kata is not a kata Pane at all.
 standin_dir="$tmp/standin"
 mkdir -p "$standin_dir"
 # It prints while it waits for Enter so frames keep coming, or ctl focus would stall. EOF ends it too (status 1; a timeout
@@ -370,11 +371,24 @@ end_hand_started_pane() { # $1 the key that ends the program
   ctl close
   expect_panes 1
 }
+# expect_panes waits for every Pane to reach its prompt, which a running stand-in never does.
+wait_panes() {
+  wait_for panes_are "$1" || { echo "state: $(ctl state | jq -c '.tabs[0]')" >&2; return 1; }
+}
+link_opens_new_pane() { # the click opened a third Pane (the new kata) beside the stand-in
+  ctl click "$x" "$y" cmd
+  wait_panes 3
+  ctl key q
+  wait_panes 2
+  # Focus went back to the left Pane; ctl focus would stall, so a click on the stand-in's Pane focuses it.
+  read -r x y < <(ctl tree '.tv-grid' | jq -r '.nodes[1].rect | "\(.[0]+4) \(.[1]+8)"')
+  ctl click "$x" "$y"
+}
 start_hand_pane "$standin_dir/tern-kata"
-link_focuses_pane
+link_opens_new_pane
 end_hand_started_pane Enter
 start_hand_pane "$standin_dir/C:\\\\Tools\\\\tern-kata.exe"
-link_focuses_pane
+link_opens_new_pane
 end_hand_started_pane Enter
 start_hand_pane "$standin_dir/kata-pane" Daemon
 link_focuses_pane
@@ -384,15 +398,26 @@ start_hand_pane "$tmp/pane-bin/tern-kata --issue smoke/$second" '"Plugin second 
 link_focuses_pane
 ctl plugins expect '"Plugin first body"'
 end_hand_started_pane q
-# A real kata that quit back to its shell has no surface any more (kata's is discarded on quit), and a shell that keeps the title
-# kata set is still taken for a kata Pane: a link opens a new kata Pane that shows the Issue, and the shell gets nothing. Tern's zsh
-# integration resets the title at the prompt, so here the shell is told apart from a running kata by its missing surface alone.
+# A real kata that quit back to its shell has no surface any more (kata's is discarded on quit). A shell that keeps the title
+# kata set is still taken for a kata Pane, so only the missing surface keeps a link from going to it: the click opens a new
+# kata Pane that shows the Issue, and the shell gets nothing. Tern's zsh integration resets the title at the prompt, so the
+# shell is put in that state: it sets the title itself and runs a program that is not tern-kata.
 start_hand_pane "$tmp/pane-bin/tern-kata --issue smoke/$second" '"Plugin second body"'
 quit_shell=$started
 ctl key q
 shell_back() { ctl state | jq -e '.focused.running == null' >/dev/null; }
 wait_for shell_back
 ctl ready
+printf 'run %s\n' "$(jq -rRn --arg command "printf '\\033]0;tern-kata\\007'; sleep 60" '$command | @json')" >"$tmp/start.ctl"
+ctl --file "$tmp/start.ctl"
+shell_is_kata() {
+  ctl state | jq -e --argjson id "$quit_shell" '.focused.id == $id and (.focused.running // "" | tostring | test("sleep"))' >/dev/null &&
+    [[ $(ctl tree ".tn-face[data-pane='$quit_shell']" | jq '.count') == 1 && $(ctl tree ".tn-face[data-pane='$quit_shell'] > *" | jq '.count') == 0 ]]
+}
+wait_for shell_is_kata || { echo "shell not taken for kata: $(ctl state | jq -c '.focused')" >&2; exit 1; }
+# The title also starts the plugin's title pump, which waits up to 10 s for a surface and reuses the Pane meanwhile; once it
+# gives up, only a surface would make the Pane live.
+sleep 12
 ctl click "$x" "$y" cmd
 ctl plugins expect '"Plugin first body"'
 wait_for panes_are 3
@@ -406,10 +431,6 @@ ctl click "$x" "$y"
 end_hand_started_pane Enter
 start_hand_pane "$standin_dir/my-tern-kata"
 ctl click "$x" "$y" cmd
-# expect_panes waits for every Pane to reach its prompt, which the running stand-in never does.
-wait_panes() {
-  wait_for panes_are "$1" || { echo "state: $(ctl state | jq -c '.tabs[0]')" >&2; return 1; }
-}
 wait_panes 3
 ctl key q
 wait_panes 2

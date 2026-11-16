@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/driver"
+	"github.com/Dangerboi/tern-kata/internal/envname"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"go.kenn.io/kit/consolewindow"
@@ -84,7 +84,7 @@ func run() error {
 		return err
 	}
 	if plan.Subcommand == "agent" {
-		windows := runtime.GOOS == "windows"
+		windows := envname.CaseInsensitive
 		block := strings.TrimSpace(envValue(os.Environ(), "TERN_PANE", windows))
 		route := plan.AgentRoute
 		if plan.AgentForkedFrom != "" {

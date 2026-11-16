@@ -7,10 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+
+	"github.com/Dangerboi/tern-kata/internal/envname"
 )
 
 func execAgent(plan LaunchPlan, environ []string) error {
-	return subcommandError{runChild(plan.Operands[0], plan.Operands[1:], agentEnv(closeTranscriptEnv(environ, true), plan, true))}
+	return subcommandError{runChild(plan.Operands[0], plan.Operands[1:], agentEnv(closeTranscriptEnv(environ, envname.CaseInsensitive), plan, envname.CaseInsensitive))}
 }
 
 // runChild runs name with stdio attached and exits with its status; it returns only when the child could not be run.

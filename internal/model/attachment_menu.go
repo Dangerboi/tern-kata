@@ -157,17 +157,14 @@ var attachmentActions = []AttachmentAction{
 	}},
 	{Action: SaveAttachmentAction, Label: "Save to Downloads", way: WaySave, verb: "save"},
 	{Action: CopyAttachmentAction, Label: "Copy…", way: WayCopy, verb: "copy"},
-	{Action: UnlinkAttachmentAction, Label: "Unlink…", way: wayUnlink, verb: "unlink"},
+	{Action: UnlinkAttachmentAction, Label: "Unlink…", way: wayUnlink},
 }
 
 // AttachmentActions are the Attachment row's actions in menu order. The slice is shared: callers do not change it.
 func AttachmentActions() []AttachmentAction { return attachmentActions }
 
 func attachmentActionOf(way AttachmentWay) AttachmentAction {
-	if i := slices.IndexFunc(attachmentActions, func(r AttachmentAction) bool { return r.way == way }); i >= 0 {
-		return attachmentActions[i]
-	}
-	return AttachmentAction{verb: "open"}
+	return attachmentActions[slices.IndexFunc(attachmentActions, func(r AttachmentAction) bool { return r.way == way })]
 }
 
 // attachmentHandler is the key handler of the table's row for action.
@@ -258,10 +255,11 @@ func attachmentMenuPick(m Model, msg ContextMenuPickMsg) (Model, []Cmd) {
 	if issue := m.shownIssue(); m.covered() || issue == nil || issue.UID != msg.UID {
 		return m, nil
 	}
-	m = m.chooseRow(TabAttachments, msg.Row)
-	if row, ok := m.cursorRow(); !ok || row.Kind != RowAttachment || row.Key != msg.Row {
+	next := m.chooseRow(TabAttachments, msg.Row)
+	if row, ok := next.cursorRow(); !ok || row.Kind != RowAttachment || row.Key != msg.Row {
 		return m, nil
 	}
+	m = next
 	m.Notice = ""
 	next, cmds, _ := runChord(m, msg.Chord, msg.Mode)
 	return next, cmds

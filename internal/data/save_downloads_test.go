@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -111,5 +112,16 @@ func TestSaveOutsideTernNeverRunsTern(t *testing.T) {
 	got, downloads, asked := saveFixture(t, false, "notes.txt", func([]string) ([]byte, error) { return []byte("/elsewhere/notes.txt\n"), nil })
 	if want := filepath.Join(downloads, "notes.txt"); got.Err != nil || got.Path != want || got.Remote || len(*asked) != 0 {
 		t.Fatalf("saved %+v, tern asked %v", got, *asked)
+	}
+}
+
+func TestATernCallKilledByItsOwnTimeoutSaysTernDidNotAnswer(t *testing.T) {
+	run := func(ctx context.Context, _ []string) ([]byte, error) {
+		<-ctx.Done()
+		return nil, errors.New("signal: killed")
+	}
+	_, err := ternCommand(context.Background(), run, 10*time.Millisecond, []string{"ls"})
+	if err == nil || !strings.Contains(err.Error(), "tern command did not answer within 10ms") || strings.Contains(err.Error(), "signal: killed") || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("got %v", err)
 	}
 }

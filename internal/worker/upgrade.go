@@ -12,6 +12,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
+	"github.com/Dangerboi/tern-kata/internal/envname"
 )
 
 var projectsHeader = regexp.MustCompile(`^\s*\[\[\s*projects\s*\]\]\s*(#.*)?$`)
@@ -40,7 +41,7 @@ func projectNeeds(ctx context.Context, k *Kata, p Project) (jobNeeds, error) {
 		}
 		d := job.Definition
 		for env, name := range d.SecretRefs {
-			if !reservedEnvName(env, envCaseInsensitive) {
+			if !reservedEnvName(env, envname.CaseInsensitive) {
 				needs.secrets[name] = true
 			}
 		}

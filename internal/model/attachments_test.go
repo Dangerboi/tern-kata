@@ -43,6 +43,16 @@ func TestAMenuPickOnTheSelectedRowLeavesTheDetailCursorAlone(t *testing.T) {
 	}
 }
 
+// A menu pick on a row that a refresh has dropped changes nothing: it does not move the detail's tab or take its focus.
+func TestAMenuPickOnAGoneAttachmentRowChangesNothing(t *testing.T) {
+	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5)})
+	m.Focus = model.ColumnList
+	next, cmds := model.Update(m, model.ContextMenuPickMsg{UID: "a", Row: "attachment.gone", Mode: model.ModeList, Chord: "enter"})
+	if next.Focus != model.ColumnList || len(cmds) != 0 {
+		t.Errorf("focus %v, cmds %#v; want the list still focused and nothing sent", next.Focus, cmds)
+	}
+}
+
 func TestAttachmentsIsTheFourthTabAndCycles(t *testing.T) {
 	m := attached(nil)
 	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabLinks})

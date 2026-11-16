@@ -19,7 +19,8 @@ func newSessionTestWorker(t *testing.T, hooks Hooks) (*Worker, *Journal) {
 }
 
 // omp may print its session line before the start record is saved. The line's own save finds no launch record and is
-// skipped; the start record takes the held id. One named after the record is saved by its own update.
+// skipped; supervise saves the held id right after the start record, so the "session" save point follows it. One named
+// after the record is saved by its own update.
 func TestTheStartRecordTakesASessionNamedBeforeItWasSaved(t *testing.T) {
 	var mu sync.Mutex
 	var points []string
@@ -40,6 +41,12 @@ func TestTheStartRecordTakesASessionNamedBeforeItWasSaved(t *testing.T) {
 	isolate(cmd)
 	if _, err := w.supervise(context.Background(), j, cmd, session); err != nil {
 		t.Fatal(err)
+	}
+	mu.Lock()
+	order := slices.Clone(points)
+	mu.Unlock()
+	if started, session := slices.Index(order, "started"), slices.Index(order, "session"); started < 0 || session < started {
+		t.Fatalf("save points %v, want session after started", order)
 	}
 	saved, err := w.store.Load(j.RunUID)
 	if err != nil {

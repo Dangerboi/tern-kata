@@ -411,15 +411,7 @@ func stepStateText(j *Journal, i int) string {
 // selectors, its own internals or the variables the [secrets] env sources read, plus the job's secrets and the run's
 // identity. Names compare case-insensitively when caseInsensitive (Windows).
 func commandEnv(environ []string, j *Journal, runDir string, secrets map[string]string, hidden map[string]bool, caseInsensitive bool) []string {
-	var env []string
-	for _, kv := range environ {
-		name, _, _ := strings.Cut(kv, "=")
-		name = envname.Key(name, caseInsensitive)
-		if hidden[name] || reservedEnvName(name, caseInsensitive) {
-			continue
-		}
-		env = append(env, kv)
-	}
+	env := scrubbedEnv(environ, hidden, nil, caseInsensitive)
 	for k, v := range secrets {
 		env = append(env, k+"="+v)
 	}
@@ -447,7 +439,7 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 	out := openHeadTail(w.store.hooks, filepath.Join(sp.dir, "output.log"), commandHead, commandTail)
 	cmd := exec.Command(program, "-c", sp.task)
 	cmd.Dir = cwd
-	cmd.Env = commandEnv(os.Environ(), j, runDir, secrets, w.opt.Config.secretEnvNames(envCaseInsensitive), envCaseInsensitive)
+	cmd.Env = commandEnv(os.Environ(), j, runDir, secrets, w.opt.Config.secretEnvNames(envname.CaseInsensitive), envname.CaseInsensitive)
 	cmd.Stdin = nil
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)
