@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -96,5 +97,75 @@ func TestSetDatesLeavesAHeldTimeAloneWhenGuardedOnIt(t *testing.T) {
 	}
 	if got := f.issue(t, f.uid).Metadata["deadline_on"]; got != "2026-11-05" {
 		t.Fatalf("deadline %v", got)
+	}
+}
+
+// metadataPatches counts the metadata writes the daemon sees. rival, when set, runs once before the first of them reaches kata.
+func (f issueFixture) metadataPatches(rival func()) (count *int, stop func()) {
+	patches := 0
+	ran := false
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/metadata") {
+			if rival != nil && !ran {
+				ran = true
+				rival()
+			}
+			patches++
+		}
+		return false
+	}
+	f.kata.intercept.Store(&hook)
+	return &patches, func() { f.kata.intercept.Store(nil) }
+}
+
+func TestSetDatesWritesBothDatesInOneRequest(t *testing.T) {
+	f := newIssueFixture(t)
+	patches, stop := f.metadataPatches(nil)
+	defer stop()
+	scheduled := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-12"}
+	deadline := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
+	got := f.setDates(t, scheduled, deadline)
+	if got.Err != nil || len(got.Applied) != 2 || *patches != 1 {
+		t.Fatalf("got %+v after %d writes, want both in one", got, *patches)
+	}
+	if got.Record.Entry == nil || len(got.Record.Entry.Dates) != 2 {
+		t.Fatalf("record %+v, want one entry for both dates", got.Record)
+	}
+}
+
+func TestSetDatesRetriesWhenAnotherChangeMovedTheRevision(t *testing.T) {
+	f := newIssueFixture(t)
+	patches, stop := f.metadataPatches(func() { f.patchKey(t, "unrelated", "x") })
+	defer stop()
+	scheduled := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-12"}
+	deadline := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
+	got := f.setDates(t, scheduled, deadline)
+	if got.Err != nil || len(got.Applied) != 2 {
+		t.Fatalf("got %+v", got)
+	}
+	meta := f.issue(t, f.uid).Metadata
+	if meta["scheduled_on"] != "2026-10-12" || meta["deadline_on"] != "2026-10-30" || meta["unrelated"] != "x" {
+		t.Fatalf("metadata %v", meta)
+	}
+	if *patches != 3 {
+		t.Fatalf("%d metadata writes, want the rival, the refused one and the retry", *patches)
+	}
+}
+
+func TestSetDatesRefusesWhenADateChangedDuringTheSave(t *testing.T) {
+	f := newIssueFixture(t)
+	f.patchKey(t, "deadline_on", "2026-11-01")
+	_, stop := f.metadataPatches(func() { f.patchKey(t, "deadline_on", "2026-11-09") })
+	defer stop()
+	scheduled := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-12"}
+	deadline := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30", Was: "2026-11-01"}
+	got := f.setDates(t, scheduled, deadline)
+	var conflict model.DatesConflict
+	if !errors.As(got.Err, &conflict) || conflict.Key != "deadline_on" || conflict.Held != "2026-11-09" || len(got.Applied) != 0 {
+		t.Fatalf("got %+v, want the Deadline refused with the date now held", got)
+	}
+	meta := f.issue(t, f.uid).Metadata
+	if _, wrote := meta["scheduled_on"]; wrote || meta["deadline_on"] != "2026-11-09" {
+		t.Fatalf("metadata %v, want nothing saved", meta)
 	}
 }

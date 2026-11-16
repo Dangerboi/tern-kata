@@ -390,7 +390,7 @@ func TestUndoOfALaneMoveFromNoLaneRefusesWhenAnotherActorMovedTheCardOn(t *testi
 	}
 }
 
-func TestUndoOfDatesCompletesAfterTheSecondWriteFailed(t *testing.T) {
+func TestUndoOfATwoDateSaveIsOneWriteRecord(t *testing.T) {
 	f := newUndoFixture(t)
 	uid := f.issue("Calendar entry")
 	set := func(changes ...model.DateChange) model.DatesResultMsg {
@@ -399,30 +399,23 @@ func TestUndoOfDatesCompletesAfterTheSecondWriteFailed(t *testing.T) {
 	scheduled := model.DateChange{Key: model.ScheduledKey, Label: "Scheduled", Value: "2026-10-12"}
 	deadline := model.DateChange{Key: model.DeadlineKey, Label: "Deadline", Value: "2026-10-30"}
 	e := f.entry(set(scheduled, deadline).Record)
+	if len(e.Dates) != 2 {
+		t.Fatalf("entry %+v, want both dates in one record", e)
+	}
 
 	patches := 0
 	hook := func(w http.ResponseWriter, r *http.Request) bool {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/metadata") {
-			return false
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/metadata") {
+			patches++
 		}
-		if patches++; patches != 2 {
-			return false
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		_, _ = w.Write([]byte(`{"status":422,"error":{"code":"x","message":"no"}}`))
-		return true
+		return false
 	}
 	f.kata.intercept.Store(&hook)
-	if got := f.undo(e); got.Err == nil {
-		t.Fatalf("undo %+v, want the second date write to fail", got)
-	}
-	f.kata.intercept.Store(nil)
-	meta := f.detail(uid).Issue.Metadata
-	if _, still := meta[model.ScheduledKey]; still || meta[model.DeadlineKey] != "2026-10-30" {
-		t.Fatalf("dates %v, want only the first one restored", meta)
-	}
 	f.restores(e)
+	f.kata.intercept.Store(nil)
+	if patches != 1 {
+		t.Fatalf("%d metadata writes, want the undo in one", patches)
+	}
 	if meta := f.detail(uid).Issue.Metadata; meta[model.ScheduledKey] != nil || meta[model.DeadlineKey] != nil {
 		t.Fatalf("dates %v, want both cleared", meta)
 	}

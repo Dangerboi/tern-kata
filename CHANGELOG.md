@@ -18,6 +18,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - If you placed the widget, remove `tern-kata/waiting` from the bar with the palette's Edit widgets….
   - **Go to the agent waiting for you** (`shift+F9`) still goes to the kata agent that began waiting last.
 
+### Fixed
+
+#### Issues and Pages
+
+- A refused Dates save no longer keeps half of it: both dates go in one write guarded on the Issue's revision, so when one date changed elsewhere nothing is saved, and Undo takes the save back as one write.
+
 ## [0.15.0] - 2026-11-16
 
 ### Added
