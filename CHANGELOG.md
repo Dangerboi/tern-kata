@@ -8,7 +8,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Command line
 
-- `tern-kata agent --prompt-file <file>` names the agent's prompt file, which tern-kata keeps writing the agent's session path beside; Tern's reopen of an agent chat writes it in place of the `@<prompt>` word.
+- `tern-kata agent --prompt-file <file>` names the agent's prompt file, beside which tern-kata writes the agent's session path; the plugin puts it in place of the `@<prompt>` word when Tern reopens an agent chat that is not a fork.
 
 ### Changed
 
@@ -29,25 +29,26 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Agents
 
-- A dev or pre-release Tern, such as `0.9.22-dev` or `v0.9.21`, no longer counts as older than 0.9.21, so a kata Pane that starts no longer drops the agents in other Tern windows and deletes their private files.
+- A Tern whose version reads `0.9.22-dev` or `v0.9.21` no longer counts as older than 0.9.21, so a kata Pane that starts no longer drops the agents in other Tern windows and deletes their private files.
   - When `tern --version` cannot be read, the Pane keeps every agent and says why.
 - An agent Tern reopened after a restart on a route with no token, DSN or `token_env` values is still recognised: its badge, Agent card and tab placement follow it.
-  - The reopened line names the prompt file with `--prompt-file` in place of the `@<prompt>` word; an `@<file>` word that is not a tern-kata prompt file stays on the line.
+  - An `@<file>` word on a reopened line stays unless it names a tern-kata prompt file.
 - A fork of an agent chat no longer shows its state on the original agent's badge and Agent card.
-- A fork of a fork that Tern reopens keeps its fork mark, and a block number above 2^53 is kept exactly.
+- A fork of a fork that Tern reopens starts again after the original agent is gone.
 - A kill while tern-kata writes an agent's private token, DSN or env file, or a fork's copy of one, no longer leaves an empty file that a later start trusts.
-- A kata Pane that starts removes forks' copies of the private files also when the state folder's path holds `[`, `*` or `?`, and never removes the copies of a fork that starts while the Pane asks Tern which agents still run.
+- A kata Pane that starts removes forks' copies of the private files also when the state folder's path holds `[`, `*` or `?`.
+- A kata Pane that starts no longer removes the private files of a fork that starts at the same moment.
 
 #### Attachments
 
 - Opening an Attachment with the system app reports an opener that fails, such as `xdg-open` with no display, and where the file is, instead of saying it opened.
 - When Tern cannot preview an Attachment and the system app opens it instead, the message adds what Tern said.
-- A `.docx` goes to Tern only on Tern 0.9.21 and later; an older Tern saves it with a note naming the version it needs.
+- A `.docx` goes to Tern only on Tern 0.9.21 and later; on an older Tern, or one whose version cannot be read, it is saved and the message says why.
 - An Attachment whose name holds `:` is never handed to the system app.
 - A Copy answer that arrives while a card, a question or the help covers the Pane shows as a toast with the path and the command, instead of opening over them.
 - A pick in an Attachment's menu does nothing once the detail shows another Issue.
 - Save to Downloads says why it saved on the Pane's computer when Tern's version cannot be read.
-- A `tern` command that does not answer in time, when opening, saving or checking an agent's window, is reported as not answering within its time limit instead of as `signal: killed`.
+- Opening or saving an Attachment through a `tern` that does not answer in time says so, instead of `signal: killed`.
 
 #### Issues and Pages
 
@@ -60,9 +61,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Jobs and worker
 
 - `worker doctor` finds kata-plugin's omp extension installed under its npm name `@dangerboi/kata-omp`, from npm or an upgraded marketplace install, and warns of a profile that loads omp's extensions as it does for `kata-omp`.
-  - It warns only when omp would load the extension: a lock entry without its package or without `enabled: true`, a package that is neither a dependency nor carries an omp manifest, and one that a project's `plugin-overrides.json` (in `.omp`, `.claude`, `.codex` or `.gemini`, found from the checkout as omp finds it) or omp's `disabledExtensions` setting disables no longer count.
-  - Runs without a checkout are checked too when the worker has checkouts.
-- The kata worker widget goes away when the running worker's `tern-kata` binary can no longer be found, and shows a worker's status about 2 s after it starts instead of up to 10 s.
+  - It stays quiet when omp would not load the extension: switched off, not fully installed, or disabled by omp's `disabledExtensions` setting or a checkout's `plugin-overrides.json`.
+  - It checks runs without a checkout as well as each checkout's own plugins.
+- The kata worker widget goes away when the running worker's `tern-kata` binary can no longer be found.
+- The kata worker widget shows a worker's status about 2 s after the plugin starts it, instead of up to 10 s.
 - A worker status answer the plugin cannot read is logged and no longer stops the worker supervision until the plugin reloads.
 
 #### Tern window

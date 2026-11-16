@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -250,6 +251,24 @@ func TestOpenFileReportsAnOpenerThatExitsNonZeroAndAcceptsOneThatSucceeds(t *tes
 	}
 	if err := openFile("x.png"); err != nil {
 		t.Fatalf("a succeeding opener gave %v", err)
+	}
+}
+
+func TestOpenFileReturnsAtOnceWhenAnOpenerThatSucceededLeavesAChildHoldingStderr(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the stand-in replaces xdg-open")
+	}
+	dir := t.TempDir()
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := os.WriteFile(filepath.Join(dir, "xdg-open"), []byte("#!/bin/sh\nsleep 5 &\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := openFile("x.png"); err != nil {
+		t.Fatalf("a succeeding opener whose child keeps stderr gave %v", err)
+	}
+	if took := time.Since(start); took >= openerWait/2 {
+		t.Fatalf("openFile took %v, want it to return well under %v", took, openerWait)
 	}
 }
 

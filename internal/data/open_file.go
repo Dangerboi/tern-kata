@@ -22,6 +22,9 @@ import (
 // as long as the viewer does) and is reaped when it exits.
 const openerWait = 2 * time.Second
 
+// openerWaitDelay is how long openFile waits for an exited opener's stderr to close: a viewer it started may keep the pipe.
+const openerWaitDelay = 100 * time.Millisecond
+
 // openFile hands path to the OS opener and reports an opener that cannot start or exits non-zero within openerWait.
 func openFile(path string) error {
 	var cmd *exec.Cmd
@@ -36,6 +39,7 @@ func openFile(path string) error {
 	consolewindow.Hide(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
+	cmd.WaitDelay = openerWaitDelay
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("could not start %s: %w", cmd.Args[0], err)
 	}
@@ -43,7 +47,7 @@ func openFile(path string) error {
 	go func() { exited <- cmd.Wait() }()
 	select {
 	case err := <-exited:
-		if err == nil {
+		if err == nil || errors.Is(err, exec.ErrWaitDelay) {
 			return nil
 		}
 		if text := strings.TrimSpace(stderr.String()); text != "" {

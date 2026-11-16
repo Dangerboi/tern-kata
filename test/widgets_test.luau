@@ -29,6 +29,10 @@ test("fit counts characters, not bytes", function()
     assert(widgets.fit(fits .. "é") == string.rep("é", 44) .. "…")
 end)
 
+test("fit puts a title with line breaks on one line, so it stays one tooltip line", function()
+    assert(widgets.fit("agent\nwaiting\r\nfor you") == "agent waiting for you")
+end)
+
 test("capped fits every line it shows", function()
     local long = string.rep("x", 100)
     local shown = widgets.capped({long, "short", long, long, long, long, long})

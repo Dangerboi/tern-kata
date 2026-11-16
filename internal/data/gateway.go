@@ -59,11 +59,7 @@ type Gateway struct {
 	// ternVersion is what `tern --version` said: one ask at a time, kept only when it succeeded.
 	ternVersion ternVersionCache
 
-	// lsMu guards lsLive, the blocks the last `tern ls --json` listed, lsAt, when it was asked, and lsFlight, the ask now running.
-	lsMu     sync.Mutex
-	lsLive   map[string]bool
-	lsAt     time.Time
-	lsFlight *lsFlight
+	liveCache liveBlocksCache
 
 	openFile func(path string) error
 	cacheDir func() (string, error)

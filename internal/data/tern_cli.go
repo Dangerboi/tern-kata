@@ -335,6 +335,14 @@ const liveBlocksMaxAge = 10 * time.Second
 
 const liveBlocksTimeout = 30 * time.Second
 
+// liveBlocksCache guards live, the blocks the last `tern ls --json` listed, at, when it was asked, and flight, the ask now running.
+type liveBlocksCache struct {
+	mu     sync.Mutex
+	live   map[string]bool
+	at     time.Time
+	flight *lsFlight
+}
+
 type lsFlight struct {
 	done  chan struct{}
 	begun time.Time
@@ -347,20 +355,21 @@ type lsFlight struct {
 // another caller started before this one asked. Callers that need an answer while one `tern ls` runs share it, each waiting
 // only until its own ctx ends; a fresh caller never joins a run that began before it asked.
 func (g *Gateway) liveBlocks(ctx context.Context, fresh bool) (live map[string]bool, cached bool, err error) {
-	g.lsMu.Lock()
-	if !fresh && g.lsLive != nil && g.now().Sub(g.lsAt) < liveBlocksMaxAge {
-		live = g.lsLive
-		g.lsMu.Unlock()
+	c := &g.liveCache
+	c.mu.Lock()
+	if !fresh && c.live != nil && g.now().Sub(c.at) < liveBlocksMaxAge {
+		live = c.live
+		c.mu.Unlock()
 		return live, true, nil
 	}
-	f := g.lsFlight
+	f := c.flight
 	joined := f != nil && !fresh
 	if !joined {
 		f = &lsFlight{done: make(chan struct{}), begun: g.now()}
-		g.lsFlight = f
+		c.flight = f
 		go g.runLiveBlocks(context.WithoutCancel(ctx), f)
 	}
-	g.lsMu.Unlock()
+	c.mu.Unlock()
 	select {
 	case <-f.done:
 		return f.live, joined, f.err
@@ -375,14 +384,15 @@ func (g *Gateway) runLiveBlocks(ctx context.Context, f *lsFlight) {
 	ctx, cancel := context.WithTimeout(ctx, liveBlocksTimeout)
 	defer cancel()
 	f.live, f.err = g.askLiveBlocks(ctx)
-	g.lsMu.Lock()
-	if f.err == nil && !f.begun.Before(g.lsAt) {
-		g.lsLive, g.lsAt = f.live, f.begun
+	c := &g.liveCache
+	c.mu.Lock()
+	if f.err == nil && !f.begun.Before(c.at) {
+		c.live, c.at = f.live, f.begun
 	}
-	if g.lsFlight == f {
-		g.lsFlight = nil
+	if c.flight == f {
+		c.flight = nil
 	}
-	g.lsMu.Unlock()
+	c.mu.Unlock()
 	close(f.done)
 }
 

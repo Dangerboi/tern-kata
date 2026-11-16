@@ -708,7 +708,7 @@ func TestAPaneAdoptsTheAgentsOfAPaneThatIsGoneAtStartAndOnRefresh(t *testing.T) 
 	}
 	// On refresh: Pane 7 goes away, and Pane 9 takes its agent.
 	live = []string{"1", "2", "3", "9"}
-	g.lsLive = nil
+	g.liveCache.live = nil
 	refreshed := as[model.AgentsRefreshed](t, run(t, g, model.RefreshAgents{PaneBlock: "9"}))
 	if refreshed.Err != nil || refreshed.Agents[1].PaneBlock != "9" {
 		t.Fatalf("refreshed %+v", refreshed)
@@ -1210,7 +1210,7 @@ func watchClock(g *Gateway) <-chan struct{} {
 	reads := make(chan struct{}, 64)
 	var n atomic.Int64
 	base := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
-	g.lsLive = map[string]bool{"stale": true}
+	g.liveCache.live = map[string]bool{"stale": true}
 	g.now = func() time.Time {
 		reads <- struct{}{}
 		return base.Add(time.Duration(n.Add(1)) * 11 * time.Second)
@@ -1359,10 +1359,10 @@ func TestAnAskThatBeganBeforeAnotherAndEndsAfterItDoesNotReplaceItsListing(t *te
 	}
 	close(release)
 	<-older
-	g.lsMu.Lock()
-	defer g.lsMu.Unlock()
-	if !g.lsLive["2"] || g.lsLive["1"] {
-		t.Errorf("the cached listing is %v, want the one from the ask that began later", g.lsLive)
+	g.liveCache.mu.Lock()
+	defer g.liveCache.mu.Unlock()
+	if !g.liveCache.live["2"] || g.liveCache.live["1"] {
+		t.Errorf("the cached listing is %v, want the one from the ask that began later", g.liveCache.live)
 	}
 }
 
