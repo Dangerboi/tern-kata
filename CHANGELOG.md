@@ -6,6 +6,12 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+#### Jobs and worker
+
+- On Tern 0.9.24 the plugin starts the supervised worker without a time limit, so Tern no longer ends it after 7 days, and the worker's own log lines (a job paused after repeated failures, Project lease changes, a quarantined journal) appear in Tern's daemon log as `tern-kata worker: ...` within a second.
+  - A worker left running by a plugin reload is still drained by Tern but its lines are no longer logged; its exit message shows the last one.
+  - Earlier Tern versions behave as before.
+
 #### Tern window
 
 - The palette command that places tern-kata's widget is now **Add the kata worker widget to the widget bar**, as the worker widget is the only one left.

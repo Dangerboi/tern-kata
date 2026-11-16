@@ -107,7 +107,7 @@ name = "smoke"
 repo = "$tmp/checkout"
 [profiles.default]
 command = "omp"
-args = ["--stub-text", "supervised ok"]
+args = ["--stub-text", "supervised ok", "--stub-fail-when", "FAILME"]
 TOML
 # Every window is closed (none was ever opened); the worker comes up from the daemon alone.
 wait_worker 30
@@ -116,8 +116,8 @@ first=$(worker_pid)
 
 # The job forbids overlap: a fresh worker may still be settling the last run (it shows succeeded before kata holds it
 # settled), so a refusal saying so is retried for a while; so is a fresh worker that has not resolved its Project yet.
-job_accepted() {
-  run_out=$("$tmp/bin/tern-kata" run "$job" 2>&1) && return 0
+job_accepted() { # $1 the job's uid, default the main job
+  run_out=$("$tmp/bin/tern-kata" run "${1:-$job}" 2>&1) && return 0
   grep -Eq 'is not settled|no job .* in a Project this worker serves' <<<"$run_out" || { echo "$run_out" >&2; exit 1; }
   return 1
 }
@@ -269,6 +269,20 @@ if tern_at_least 0.9.16; then
   [[ $(tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log" | grep -c "worker $adopted exited with status") -eq 1 ]] || { echo "the reloaded host half did not log the old worker's exit once" >&2; exit 1; }
 fi
 run_job 5
+# Tern 0.9.24 gives the worker no time limit and streams its stderr to the daemon log as it comes. A job that fails three
+# times in a row makes the worker write "job ... is paused after 3 failed runs" to stderr: that line must reach the daemon
+# log, as the worker wrote it ("tern-kata worker: " is its own prefix, so a doubled one is a bug), while the worker runs (before 0.9.24 only its last line is logged, when it exits).
+if tern_at_least 0.9.24; then
+  sed 's/"Supervised smoke job"/"Failing smoke job"/; s/say done/FAILME/; s/Supervised run/Failing run/' "$tmp/job.json" >"$tmp/failjob.json"
+  failjob=$(kata --workspace "$tmp/workspace" cron job create --file "$tmp/failjob.json" --json | jq -r '.job.uid')
+  for attempt in 1 2 3; do
+    wait_for -t 20 job_accepted "$failjob"
+    grep -q accepted <<<"$run_out" || { echo "$run_out" >&2; exit 1; }
+  done
+  worker_line_logged() { grep -Eq 'tern-kata worker: .*is paused after 3 failed runs' "$STENCIL_LOG_DIR/tern-daemon.log"; }
+  wait_for -t 20 worker_line_logged || { echo "a line the worker wrote to stderr never reached the daemon log" >&2; exit 1; }
+  ! grep -q 'tern-kata worker: tern-kata worker: ' "$STENCIL_LOG_DIR/tern-daemon.log" || { echo "a worker line was logged with a doubled prefix" >&2; exit 1; }
+fi
 # `update` moves a supervised worker to the new binary: a release build older than the dist/ is what the host half starts,
 # `update` against the local dist/ swaps it and stops the worker when idle, and the fresh worker the host half starts
 # reports the new version. The plugin is linked here, so the update leaves it and says so.
