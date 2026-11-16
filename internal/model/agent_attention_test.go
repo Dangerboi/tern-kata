@@ -80,15 +80,20 @@ func TestARaiseAnsweredAfterItsClearIsClearedAsTheSenderKataWrote(t *testing.T) 
 	if want := []model.Cmd{clearOf("u1", 3, "a")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("cmds %v, want the clear as the Pane's actor", cmds)
 	}
-	late := model.AgentAttentionWritten{UID: "u1", ProjectID: 3, Address: "dana", Message: "a", From: "account"}
+	late := model.AgentAttentionWritten{UID: "u1", Raise: raise("u1", 3, "a"), From: "account"}
 	want := clearOf("u1", 3, "a")
 	want.From = "account"
 	if _, cmds = model.Update(m, late); !reflect.DeepEqual(cmds, []model.Cmd{want}) {
 		t.Fatalf("cmds %v, want %v", cmds, want)
 	}
 	late.From = "dana"
+	want.From = "dana"
+	if _, cmds = model.Update(m, late); !reflect.DeepEqual(cmds, []model.Cmd{want}) {
+		t.Fatalf("an answer naming the Pane's actor queued %v, want %v", cmds, want)
+	}
+	late.From = ""
 	if _, cmds = model.Update(m, late); len(cmds) != 0 {
-		t.Fatalf("an answer naming the Pane's actor queued %v", cmds)
+		t.Fatalf("an answer with no slot queued %v", cmds)
 	}
 }
 

@@ -72,16 +72,14 @@ type ClearAgentAttention struct {
 func (ClearAgentAttention) cmd() {}
 
 // AgentAttentionWritten is the answer to a raise or a clear. From, on a raise, is the sender kata wrote on the request, "" when
-// its answer held no readable one or kata refused the request because the Issue is closed. ProjectID, Address and Message are
-// the raise's, for a clear that has to follow it.
+// its answer held no readable one or kata refused the request because the Issue is closed. Raise is the raise answered, for a
+// clear that has to follow it.
 type AgentAttentionWritten struct {
-	UID       string
-	ProjectID int64
-	Address   string
-	Message   string
-	From      string
-	Clear     bool
-	Err       error
+	UID   string
+	Raise RaiseAgentAttention
+	From  string
+	Clear bool
+	Err   error
 }
 
 func (AgentAttentionWritten) msg() {}
@@ -343,8 +341,8 @@ func (m Model) agentWaitingOnOthers(uid string) bool {
 }
 
 // agentAttentionWritten notes kata's answer. A raise answered with a sender sets it on the Pane's record; when the record is gone
-// by then (the clear went out before the answer, as the Pane's actor) and kata wrote someone else, the request it left is cleared
-// again as that sender.
+// by then (the clear went out before the answer and may have reached kata first) the request it left is cleared again as the
+// sender kata wrote. The clear is guarded on sender and message, so a redundant one costs a write.
 func agentAttentionWritten(m Model, msg AgentAttentionWritten) (Model, []Cmd) {
 	if msg.Err != nil {
 		verb := "raise"
@@ -362,8 +360,6 @@ func agentAttentionWritten(m Model, msg AgentAttentionWritten) (Model, []Cmd) {
 		m.AgentAttention[i].From = msg.From
 		return m, nil
 	}
-	if msg.From == m.Actor {
-		return m, nil
-	}
-	return m, []Cmd{ClearAgentAttention{Workspace: m.Workspace, ProjectID: msg.ProjectID, UID: msg.UID, Actor: m.Actor, From: msg.From, Address: msg.Address, Messages: []string{msg.Message}}}
+	r := msg.Raise
+	return m, []Cmd{ClearAgentAttention{Workspace: m.Workspace, ProjectID: r.ProjectID, UID: msg.UID, Actor: m.Actor, From: msg.From, Address: r.Address, Messages: []string{r.Message}}}
 }

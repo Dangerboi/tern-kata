@@ -573,7 +573,7 @@ func init() {
 	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.RaiseAgentAttention) (model.AgentAttentionWritten, error) {
 			from, err := c.RaiseAgentAttention(ctx, cmd)
-			return model.AgentAttentionWritten{UID: cmd.UID, ProjectID: cmd.ProjectID, Address: cmd.Address, Message: cmd.Message, From: from}, err
+			return model.AgentAttentionWritten{UID: cmd.UID, Raise: cmd, From: from}, err
 		},
 		func(cmd model.RaiseAgentAttention, err error) model.Msg {
 			return model.AgentAttentionWritten{UID: cmd.UID, Err: err}
