@@ -86,8 +86,8 @@ type DateChange struct {
 	Key, Label, Value, Was string
 }
 
-// SetDatesCmd describes a save of the Dates card in plain values: one patch of each changed key, each guarded on Was, in order,
-// stopping at the first failure. The Daemon gateway turns it into kata's requests.
+// SetDatesCmd describes a save of the Dates card in plain values: every changed key in one patch, all or nothing, written only
+// while each key still holds its Was. The Daemon gateway turns it into kata's requests.
 type SetDatesCmd struct {
 	Workspace, UID, Actor string
 	ProjectID             int64
@@ -96,8 +96,8 @@ type SetDatesCmd struct {
 
 func (SetDatesCmd) cmd() {}
 
-// DatesResultMsg answers a SetDatesCmd. Applied lists the changes written before Err, if any, so a failed save can still be
-// retried for the rest.
+// DatesResultMsg answers a SetDatesCmd. Applied lists the changes written, all of them; it is empty when Err is set, because a
+// failed save writes nothing.
 type DatesResultMsg struct {
 	UID     string
 	Applied []DateChange
@@ -108,17 +108,12 @@ type DatesResultMsg struct {
 func (DatesResultMsg) msg() {}
 
 // DatesConflict is the refusal for a key whose value moved since the card opened. Held is what kata holds under the key now ("" for
-// none) and Shown what the card shows for it (Held, or the date kata projects when it holds none). Read is false when kata could
-// not be read for the current value, and the card then keeps its own. A refused save writes nothing.
+// none) and Shown what the card shows for it (Held, or the date kata projects when it holds none). A refused save writes nothing.
 type DatesConflict struct {
 	Label, Key, Held, Shown string
-	Read                    bool
 }
 
 func (e DatesConflict) Error() string {
-	if !e.Read {
-		return fmt.Sprintf("%s changed since the card opened; nothing was written. kata could not be read for the current date.", e.Label)
-	}
 	return fmt.Sprintf("The Issue changed since the card opened; nothing was written. The %s field now shows the current date.", e.Label)
 }
 
@@ -222,36 +217,26 @@ func submitDates(m Model) (Model, []Cmd) {
 	return m, []Cmd{SetDatesCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, Changes: changes}}
 }
 
-// updateDates applies the answer to a save. A failure keeps the card open with kata's reason; changes written before it are
-// taken as the new opened values, so saving again guards on what is there now, and the Issue is read again.
+// updateDates applies the answer to a save. A failure keeps the card open with kata's reason, and a refusal for a changed date
+// refills that field with the current value; nothing was written, so the Issue is not read again.
 func updateDates(m Model, msg DatesResultMsg) (Model, []Cmd) {
 	f := &m.DatesForm
 	if !f.Open || f.UID != msg.UID {
 		return m, nil
 	}
 	f.Saving = false
-	for _, c := range msg.Applied {
-		for _, spec := range DatesFields {
-			if datesKey(spec.Name) == c.Key {
-				*f.Held.at(spec.Name), *f.Prefill.at(spec.Name) = c.Value, c.Value
-			}
-		}
-	}
 	if msg.Err != nil {
 		f.Err = msg.Err
 		var conflict DatesConflict
-		if errors.As(msg.Err, &conflict) && conflict.Read {
+		if errors.As(msg.Err, &conflict) {
 			for _, spec := range DatesFields {
 				if datesKey(spec.Name) == conflict.Key {
 					*f.Held.at(spec.Name), *f.Prefill.at(spec.Name), *f.Text.at(spec.Name) = conflict.Held, conflict.Shown, conflict.Shown
 				}
 			}
 		}
-		if len(msg.Applied) == 0 {
-			return m, nil
-		}
-	} else {
-		m.DatesForm = DatesFormState{}
+		return m, nil
 	}
+	m.DatesForm = DatesFormState{}
 	return snapshotChanged(m.issueWritten(msg.UID))
 }

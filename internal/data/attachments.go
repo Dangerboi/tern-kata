@@ -165,13 +165,13 @@ func (c *Client) AttachFile(ctx context.Context, cmd model.AttachFile) (model.Fi
 	return model.FileAttached{UID: cmd.UID, ID: added.AttachmentID, Name: added.Attachment.Name}, nil
 }
 
-func metadataPatch(projectID int64, uid, actor, key string, value any) (*g.PatchIssueMetadataRequestOptions, *g.PatchIssueMetadataBody) {
-	body := &g.PatchIssueMetadataBody{Actor: &actor, Patch: map[string]any{key: value}}
+func metadataPatch(projectID int64, uid, actor string, patch map[string]any) (*g.PatchIssueMetadataRequestOptions, *g.PatchIssueMetadataBody) {
+	body := &g.PatchIssueMetadataBody{Actor: &actor, Patch: patch}
 	return &g.PatchIssueMetadataRequestOptions{PathParams: &g.PatchIssueMetadataPath{ProjectID: projectID, Ref: uid}, Body: body}, body
 }
 
 func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any, ifValue *string) (issueWrite, error) {
-	options, body := metadataPatch(projectID, uid, actor, key, value)
+	options, body := metadataPatch(projectID, uid, actor, map[string]any{key: value})
 	either := runtime.NewEitherFromB[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_1{Key: key, IfAbsent: g.True})
 	if ifValue != nil {
 		either = runtime.NewEitherFromA[g.MetadataPatchGuard_OneOf_0, g.MetadataPatchGuard_OneOf_1](g.MetadataPatchGuard_OneOf_0{Key: key, IfValue: *ifValue})
@@ -185,7 +185,7 @@ func (c *Client) patchMetadataKey(ctx context.Context, projectID int64, uid, act
 }
 
 func (c *Client) writeMetadataKey(ctx context.Context, projectID int64, uid, actor, key string, value any) error {
-	options, _ := metadataPatch(projectID, uid, actor, key, value)
+	options, _ := metadataPatch(projectID, uid, actor, map[string]any{key: value})
 	_, err := c.PatchIssueMetadataWithResponse(ctx, options)
 	return err
 }

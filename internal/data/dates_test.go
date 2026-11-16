@@ -65,7 +65,7 @@ func TestSetDatesWritesNothingWhenAnyKeyChangedMeanwhile(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 	var conflict model.DatesConflict
-	if !errors.As(got.Err, &conflict) || !conflict.Read || conflict.Key != "scheduled_on" || conflict.Held != "2026-10-20" || conflict.Shown != "2026-10-20" {
+	if !errors.As(got.Err, &conflict) || conflict.Key != "scheduled_on" || conflict.Held != "2026-10-20" || conflict.Shown != "2026-10-20" {
 		t.Fatalf("the refusal does not carry the current value: %+v", got.Err)
 	}
 	meta := f.issue(t, f.uid).Metadata

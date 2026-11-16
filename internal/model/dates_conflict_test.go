@@ -8,10 +8,8 @@ import (
 )
 
 func TestADatesRefusalSaysNothingWasWritten(t *testing.T) {
-	for _, read := range []bool{true, false} {
-		got := model.DatesConflict{Label: "Deadline", Key: "deadline_on", Read: read}.Error()
-		if !strings.Contains(got, "nothing was written") {
-			t.Errorf("read %v: refusal %q", read, got)
-		}
+	got := model.DatesConflict{Label: "Deadline", Key: "deadline_on"}.Error()
+	if !strings.Contains(got, "nothing was written") {
+		t.Errorf("refusal %q", got)
 	}
 }

@@ -176,7 +176,7 @@ func TestDatesCardReportsAChangedKeyAndKeepsTheCardOpen(t *testing.T) {
 	s = typed(t, emptied(t, s), "+2d")
 	out := step(t, s, key("enter"))
 	// The Deadline moved meanwhile: the save wrote nothing, not even the Scheduled change.
-	failed := step(t, out.State, model.DatesResultMsg{UID: "a", Err: model.DatesConflict{Label: "Deadline", Key: "deadline_on", Held: "2026-11-09", Shown: "2026-11-09", Read: true}})
+	failed := step(t, out.State, model.DatesResultMsg{UID: "a", Err: model.DatesConflict{Label: "Deadline", Key: "deadline_on", Held: "2026-11-09", Shown: "2026-11-09"}})
 	f := failed.State.Model.DatesForm
 	if !f.Open || f.Saving || f.Err == nil || !strings.Contains(f.Err.Error(), "The Issue changed since the card opened; nothing was written. The Deadline field now shows") {
 		t.Fatalf("open %v saving %v err %v", f.Open, f.Saving, f.Err)

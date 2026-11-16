@@ -40,9 +40,8 @@ func (c *Client) setDates(ctx context.Context, cmd model.SetDatesCmd) (applied, 
 			}
 		}
 		tag := etag(shown.Issue.Revision)
-		options, _ := metadataPatch(cmd.ProjectID, cmd.UID, cmd.Actor, "", nil)
+		options, _ := metadataPatch(cmd.ProjectID, cmd.UID, cmd.Actor, patch)
 		options.Header = &g.PatchIssueMetadataHeaders{IfMatch: &tag}
-		options.Body.Patch = patch
 		r, e := c.PatchIssueMetadataWithResponse(ctx, options)
 		switch {
 		case client.StatusCode(e) == http.StatusPreconditionFailed:
@@ -60,7 +59,7 @@ func (c *Client) setDates(ctx context.Context, cmd model.SetDatesCmd) (applied, 
 }
 
 // SetDatesRecorded writes the Dates card's changes and says what the save did to the Undo history. It returns the changes
-// written, also when a later one failed.
+// written: all of them, or none when the save failed.
 func (c *Client) SetDatesRecorded(ctx context.Context, cmd model.SetDatesCmd) ([]model.DateChange, model.WriteRecord, error) {
 	done := c.recorder(ctx, model.UndoDates, cmd.ProjectID, cmd.UID, cmd.Actor)
 	applied, changed, last, ambiguous, err := c.setDates(ctx, cmd)
@@ -81,6 +80,5 @@ func datesConflict(issue g.ShowIssueOut, change model.DateChange) model.DatesCon
 			conflict.Shown = *projected
 		}
 	}
-	conflict.Read = true
 	return conflict
 }
