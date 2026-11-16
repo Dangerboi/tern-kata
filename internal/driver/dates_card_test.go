@@ -112,7 +112,7 @@ func TestDatesCardSavesOnlyChangedKeysInOneCommand(t *testing.T) {
 		t.Error("the card is not saving")
 	}
 
-	done := step(t, out.State, model.DatesResultMsg{UID: "a", Applied: want.Changes})
+	done := step(t, out.State, model.DatesResultMsg{UID: "a"})
 	if done.State.Model.TopCard() != model.NoCard {
 		t.Errorf("card %v still open after the write", done.State.Model.TopCard())
 	}

@@ -490,7 +490,7 @@ func (c *Client) invert(ctx context.Context, cmd model.UndoChange, account daemo
 				changes = append(changes, model.DateChange{Key: d.Key, Label: d.Label, Value: d.Was, Was: d.Value})
 			}
 		}
-		_, changed, last, ambiguous, err := c.setDates(ctx, model.SetDatesCmd{UID: e.UID, ProjectID: e.ProjectID, Actor: e.Actor, Changes: changes})
+		changed, last, ambiguous, err := c.setDates(ctx, model.SetDatesCmd{UID: e.UID, ProjectID: e.ProjectID, Actor: e.Actor, Changes: changes})
 		last.Changed = len(changed) > 0
 		if err != nil && !ambiguous {
 			err = localFailure{err}

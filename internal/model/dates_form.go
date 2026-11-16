@@ -96,13 +96,12 @@ type SetDatesCmd struct {
 
 func (SetDatesCmd) cmd() {}
 
-// DatesResultMsg answers a SetDatesCmd. Applied lists the changes written, all of them; it is empty when Err is set, because a
-// failed save writes nothing.
+// DatesResultMsg answers a SetDatesCmd. A refused save writes nothing; a save that failed with its outcome unknown may have
+// been written, and Record says so.
 type DatesResultMsg struct {
-	UID     string
-	Applied []DateChange
-	Err     error
-	Record  WriteRecord
+	UID    string
+	Err    error
+	Record WriteRecord
 }
 
 func (DatesResultMsg) msg() {}
@@ -218,7 +217,8 @@ func submitDates(m Model) (Model, []Cmd) {
 }
 
 // updateDates applies the answer to a save. A failure keeps the card open with kata's reason, and a refusal for a changed date
-// refills that field with the current value; nothing was written, so the Issue is not read again.
+// refills that field with the current value; a refused save writes nothing, so the Issue is not read again, and a save whose outcome is unknown is likewise not
+// read again here.
 func updateDates(m Model, msg DatesResultMsg) (Model, []Cmd) {
 	f := &m.DatesForm
 	if !f.Open || f.UID != msg.UID {

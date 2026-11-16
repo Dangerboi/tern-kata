@@ -30,7 +30,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - A refused Dates save no longer keeps one of the two dates: when a date changed elsewhere since the card opened, nothing is saved.
-  - Undo takes a Dates save back as one step.
+  - Undo of a Dates save restores both dates or neither.
 
 ## [0.15.0] - 2026-11-16
 

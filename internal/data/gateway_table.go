@@ -311,9 +311,9 @@ func init() {
 	// A write has landed: the result and its error travel together, and nothing is retried.
 	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.SetDatesCmd) (model.DatesResultMsg, error) {
-			applied, rec, err := c.SetDatesRecorded(ctx, cmd)
-			if len(applied) > 0 || rec.Unknown {
-				return model.DatesResultMsg{UID: cmd.UID, Applied: applied, Err: err, Record: rec}, nil
+			rec, err := c.SetDatesRecorded(ctx, cmd)
+			if err == nil || rec.Unknown {
+				return model.DatesResultMsg{UID: cmd.UID, Err: err, Record: rec}, nil
 			}
 			return model.DatesResultMsg{UID: cmd.UID}, err
 		},

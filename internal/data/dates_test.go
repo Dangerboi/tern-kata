@@ -37,7 +37,7 @@ func TestSetDatesSetsChangesAndClearsEachKey(t *testing.T) {
 	f := newIssueFixture(t)
 	scheduled := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-12"}
 	deadline := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
-	if got := f.setDates(t, scheduled, deadline); got.Err != nil || len(got.Applied) != 2 {
+	if got := f.setDates(t, scheduled, deadline); got.Err != nil {
 		t.Fatalf("set: %+v", got)
 	}
 	meta := f.issue(t, f.uid).Metadata
@@ -46,7 +46,7 @@ func TestSetDatesSetsChangesAndClearsEachKey(t *testing.T) {
 	}
 	scheduled.Was, scheduled.Value = "2026-10-12", "2026-10-15"
 	deadline.Was, deadline.Value = "2026-10-30", ""
-	if got := f.setDates(t, scheduled, deadline); got.Err != nil || len(got.Applied) != 2 {
+	if got := f.setDates(t, scheduled, deadline); got.Err != nil {
 		t.Fatalf("change and clear: %+v", got)
 	}
 	meta = f.issue(t, f.uid).Metadata
@@ -61,7 +61,7 @@ func TestSetDatesWritesNothingWhenAnyKeyChangedMeanwhile(t *testing.T) {
 	first := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-15", Was: "2026-10-12"}
 	second := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
 	got := f.setDates(t, first, second)
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written. The Scheduled field now shows") || len(got.Applied) != 0 {
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written. The Scheduled field now shows") {
 		t.Fatalf("got %+v", got)
 	}
 	var conflict model.DatesConflict
@@ -80,7 +80,7 @@ func TestSetDatesWritesNothingWhenAnyKeyChangedMeanwhile(t *testing.T) {
 	f.patchKey(t, "deadline_on", "2026-11-01")
 	first.Was = "2026-10-20"
 	got = f.setDates(t, first, second)
-	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written. The Deadline field now shows") || len(got.Applied) != 0 {
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "nothing was written. The Deadline field now shows") {
 		t.Fatalf("got %+v", got)
 	}
 	if meta := f.issue(t, f.uid).Metadata; meta["deadline_on"] != "2026-11-01" || meta["scheduled_on"] != "2026-10-20" {
@@ -125,7 +125,7 @@ func TestSetDatesWritesBothDatesInOneRequest(t *testing.T) {
 	scheduled := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-12"}
 	deadline := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
 	got := f.setDates(t, scheduled, deadline)
-	if got.Err != nil || len(got.Applied) != 2 || *patches != 1 {
+	if got.Err != nil || *patches != 1 {
 		t.Fatalf("got %+v after %d writes, want both in one", got, *patches)
 	}
 	if got.Record.Entry == nil || len(got.Record.Entry.Dates) != 2 {
@@ -140,7 +140,7 @@ func TestSetDatesRetriesWhenAnotherChangeMovedTheRevision(t *testing.T) {
 	scheduled := model.DateChange{Key: "scheduled_on", Label: "Scheduled", Value: "2026-10-12"}
 	deadline := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30"}
 	got := f.setDates(t, scheduled, deadline)
-	if got.Err != nil || len(got.Applied) != 2 {
+	if got.Err != nil {
 		t.Fatalf("got %+v", got)
 	}
 	meta := f.issue(t, f.uid).Metadata
@@ -161,7 +161,7 @@ func TestSetDatesRefusesWhenADateChangedDuringTheSave(t *testing.T) {
 	deadline := model.DateChange{Key: "deadline_on", Label: "Deadline", Value: "2026-10-30", Was: "2026-11-01"}
 	got := f.setDates(t, scheduled, deadline)
 	var conflict model.DatesConflict
-	if !errors.As(got.Err, &conflict) || conflict.Key != "deadline_on" || conflict.Held != "2026-11-09" || len(got.Applied) != 0 {
+	if !errors.As(got.Err, &conflict) || conflict.Key != "deadline_on" || conflict.Held != "2026-11-09" {
 		t.Fatalf("got %+v, want the Deadline refused with the date now held", got)
 	}
 	meta := f.issue(t, f.uid).Metadata
