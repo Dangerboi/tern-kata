@@ -594,3 +594,20 @@ func TestAgentAttentionRaisedUnderAnotherAccountIsClearedByTheSenderKataWrote(t 
 		t.Fatalf("requests after the clear as the sender kata wrote: %+v", left)
 	}
 }
+
+func TestRaiseAgentAttentionOnAClosedIssueIsNothingToRaise(t *testing.T) {
+	f := newAttentionFixture(t)
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Closed")
+	if done := as[model.CloseResultMsg](t, run(t, f.gateway, model.CloseIssueCmd{Workspace: f.work, UID: uid, ProjectID: f.workP.ID, Actor: "tester", Quick: true, Key: "k-raise-closed"})); done.Err != nil {
+		t.Fatal(done.Err)
+	}
+	got := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.RaiseAgentAttention{
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Message: "which table?",
+	}))
+	if got.Err != nil || got.From != "" {
+		t.Fatalf("raise on a closed Issue: %+v, want no error and no sender", got)
+	}
+	if left := f.read(t, "dana").Requests; len(left) != 0 {
+		t.Fatalf("requests: %+v", left)
+	}
+}

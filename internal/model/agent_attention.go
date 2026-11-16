@@ -72,12 +72,16 @@ type ClearAgentAttention struct {
 func (ClearAgentAttention) cmd() {}
 
 // AgentAttentionWritten is the answer to a raise or a clear. From, on a raise, is the sender kata wrote on the request, "" when
-// its answer held no readable one.
+// its answer held no readable one or kata refused the request because the Issue is closed. ProjectID, Address and Message are
+// the raise's, for a clear that has to follow it.
 type AgentAttentionWritten struct {
-	UID   string
-	From  string
-	Clear bool
-	Err   error
+	UID       string
+	ProjectID int64
+	Address   string
+	Message   string
+	From      string
+	Clear     bool
+	Err       error
 }
 
 func (AgentAttentionWritten) msg() {}
@@ -124,13 +128,10 @@ func (m Model) projectOf(e AgentEntry) int64 {
 	return 0
 }
 
-func (m Model) raised(uid string) bool {
-	for _, r := range m.AgentAttention {
-		if r.UID == uid {
-			return true
-		}
-	}
-	return false
+func (m Model) raised(uid string) bool { return m.raisedIndex(uid) >= 0 }
+
+func (m Model) raisedIndex(uid string) int {
+	return slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == uid })
 }
 
 // raiseAgentAttention applies the relay just received (relayed) or the mapping just reloaded: an agent this Pane started that
@@ -167,10 +168,7 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 			continue
 		}
 		project := m.projectOf(e)
-		if m.issueStatus(e.IssueUID) == "closed" {
-			continue
-		}
-		if project == 0 {
+		if project == 0 || m.issueStatus(e.IssueUID) == "closed" {
 			continue
 		}
 		var last string
@@ -186,7 +184,7 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 	kept := m.AgentAttention[:0:0]
 	for _, r := range m.AgentAttention {
 		waiting := m.agentWaitingOn(r.UID)
-		if m.issueStatus(r.UID) != "closed" && (waiting || r.Exited) {
+		if waiting || (r.Exited && m.issueStatus(r.UID) != "closed") {
 			if waiting {
 				r.Exited = false
 			}
@@ -204,7 +202,7 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 // write per pass, the last.
 func putRaise(m Model, cmds []Cmd, uid string, project int64, teammate, address, message string, exited bool) (Model, []Cmd) {
 	raised := RaisedAttention{UID: uid, ProjectID: project, Message: message, Exited: exited}
-	if i := slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == uid }); i >= 0 {
+	if i := m.raisedIndex(uid); i >= 0 {
 		raised.Seen, raised.From = m.AgentAttention[i].Seen, m.AgentAttention[i].From
 		m.AgentAttention = slices.Clone(m.AgentAttention)
 		m.AgentAttention[i] = raised
@@ -344,18 +342,28 @@ func (m Model) agentWaitingOnOthers(uid string) bool {
 	return false
 }
 
-func agentAttentionWritten(m Model, msg AgentAttentionWritten) Model {
+// agentAttentionWritten notes kata's answer. A raise answered with a sender sets it on the Pane's record; when the record is gone
+// by then (the clear went out before the answer, as the Pane's actor) and kata wrote someone else, the request it left is cleared
+// again as that sender.
+func agentAttentionWritten(m Model, msg AgentAttentionWritten) (Model, []Cmd) {
 	if msg.Err != nil {
 		verb := "raise"
 		if msg.Clear {
 			verb = "clear"
 		}
 		m.Notice = fmt.Sprintf("Cannot %s the Attention request for an agent: %s", verb, msg.Err)
-		return m
+		return m, nil
 	}
-	if i := slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == msg.UID }); i >= 0 && !msg.Clear && msg.From != "" {
+	if msg.Clear || msg.From == "" {
+		return m, nil
+	}
+	if i := m.raisedIndex(msg.UID); i >= 0 {
 		m.AgentAttention = slices.Clone(m.AgentAttention)
 		m.AgentAttention[i].From = msg.From
+		return m, nil
 	}
-	return m
+	if msg.From == m.Actor {
+		return m, nil
+	}
+	return m, []Cmd{ClearAgentAttention{Workspace: m.Workspace, ProjectID: msg.ProjectID, UID: msg.UID, Actor: m.Actor, From: msg.From, Address: msg.Address, Messages: []string{msg.Message}}}
 }

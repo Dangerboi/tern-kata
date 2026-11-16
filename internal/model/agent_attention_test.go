@@ -48,10 +48,47 @@ func clearOf(uid string, project int64, messages ...string) model.ClearAgentAtte
 	return model.ClearAgentAttention{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", From: "dana", Address: "dana", Messages: messages}
 }
 
+// issueIs is attentionPane with Issue u1 listed as status.
+func issueIs(status string) model.Model {
+	m := attentionPane()
+	m.Issues = []model.Issue{{UID: "u1", Status: status}, {UID: "u2", Status: "open"}}
+	return m
+}
+
 func TestAWaitingAgentOnAClosedIssueRaisesNothing(t *testing.T) {
-	m, cmds := relay(t, exitedPane("closed"), st("11", "waiting_input", "which table?"))
+	m, cmds := relay(t, issueIs("closed"), st("11", "waiting_input", "which table?"))
 	if len(attentionWrites(cmds)) != 0 || len(m.AgentAttention) != 0 {
 		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+}
+
+func TestAnIssueThatClosesAndLeavesTheCollectionDoesNotRaiseAgainForAWaitingAgent(t *testing.T) {
+	m, _ := relay(t, issueIs("open"), st("11", "waiting_input", "which table?"))
+	for _, issues := range [][]model.Issue{{{UID: "u1", Status: "closed"}}, nil} {
+		m.Issues = issues
+		var cmds []model.Cmd
+		m, cmds = relay(t, m, st("11", "waiting_input", "which table?"))
+		if len(cmds) != 0 || len(m.AgentAttention) != 1 || m.Notice != "" {
+			t.Fatalf("Issues %v: cmds %v, raised %v, notice %q; want the record kept and nothing raised", issues, cmds, m.AgentAttention, m.Notice)
+		}
+	}
+}
+
+func TestARaiseAnsweredAfterItsClearIsClearedAsTheSenderKataWrote(t *testing.T) {
+	m, _ := relay(t, attentionPane(), st("11", "waiting_input", "a"))
+	m, cmds := relay(t, m, st("11", "working", ""))
+	if want := []model.Cmd{clearOf("u1", 3, "a")}; !reflect.DeepEqual(cmds, want) {
+		t.Fatalf("cmds %v, want the clear as the Pane's actor", cmds)
+	}
+	late := model.AgentAttentionWritten{UID: "u1", ProjectID: 3, Address: "dana", Message: "a", From: "account"}
+	want := clearOf("u1", 3, "a")
+	want.From = "account"
+	if _, cmds = model.Update(m, late); !reflect.DeepEqual(cmds, []model.Cmd{want}) {
+		t.Fatalf("cmds %v, want %v", cmds, want)
+	}
+	late.From = "dana"
+	if _, cmds = model.Update(m, late); len(cmds) != 0 {
+		t.Fatalf("an answer naming the Pane's actor queued %v", cmds)
 	}
 }
 

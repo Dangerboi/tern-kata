@@ -121,7 +121,7 @@ Tern shows each command one window's sessions, so a block you moved to another w
 
 ### Attention requests and Work attention
 
-While an agent you started waits for you, the Issue holds an Attention request for your Inbox address with the agent's last message, also when the Pane finds the agent already waiting. It clears when no agent on the Issue waits and when the Pane quits; a newer request someone else wrote stays.
+While an agent you started waits for you, the Issue holds an Attention request for your Inbox address with the agent's last message, also when the Pane finds the agent already waiting. An agent waiting on a closed Issue gets none, as kata refuses requests on closed Issues. It clears when no agent on the Issue waits and when the Pane quits; a newer request someone else wrote stays.
 
 - For an omp agent, the message is the question of its pending ask call, else its last message. An omp agent with no text to show gets "agent waiting for you". An agent that is not omp keeps its last message.
 - The request names the agent's `agent.toml` name (by default its program, such as `omp`) as its teammate, so the [Attention Page](pages-and-board.md#attention-page) shows `actor/<name>`. An Issue holds one request for you, so the agent that waited last is the one named.

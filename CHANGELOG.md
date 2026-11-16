@@ -6,6 +6,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+#### Agents
+
+- An agent waiting on a closed Issue no longer raises an Attention request, as kata refuses requests on closed Issues.
+
 #### Jobs and worker
 
 - On Tern 0.9.24 the supervised worker has no time limit: Tern no longer ends it after 7 days, which interrupted whatever it was running.

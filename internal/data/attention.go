@@ -69,11 +69,12 @@ func (c *Client) ClearAttention(ctx context.Context, cmd model.ClearAttention) (
 	return model.AttentionCleared{UID: cmd.UID, Changed: changed}, err
 }
 
-// RaiseAgentAttention sends the request for cmd.Address on an Issue through kata's notify route, sent as the Pane's actor, naming the
-// waiting agent as teammate when it has a name. The route writes the slot without a guard: it replaces an earlier request, which is
-// how a newly waiting agent's message lands. It does not keep the actor sent as the slot's `from`: kata writes the credential's
+// RaiseAgentAttention sends the request for cmd.Address on an Issue through kata's notify route, naming cmd.Actor as the sender and
+// the waiting agent as teammate when it has a name. The route writes the slot without a guard: it replaces an earlier request, which
+// is how a newly waiting agent's message lands. It does not keep the actor sent as the slot's `from`: kata writes the credential's
 // account, or a federated spoke's bound actor, so it returns the `from` the slot holds in the answer ("" when the answer carries no
-// readable slot), which is who the request reads as written by.
+// readable slot), which is who the request reads as written by. An Issue that is closed, which kata refuses (it gives code
+// "validation" and the message "cannot notify on a closed issue", no code of its own), has nothing to raise: no error, no `from`.
 func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAttention) (from string, err error) {
 	body := &g.NotifyIssueBody{Actor: &cmd.Actor, To: &cmd.Address, Message: cmd.Message}
 	if cmd.Teammate != "" {
@@ -83,6 +84,9 @@ func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAt
 		PathParams: &g.NotifyIssuePath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: body,
 	})
 	if err != nil {
+		if envelope, ok := errors.AsType[g.ErrorEnvelope](err); ok && envelope.ErrorData.Code == "validation" && strings.Contains(envelope.ErrorData.Message, "closed issue") {
+			return "", nil
+		}
 		return "", daemonError(err)
 	}
 	if slot, ok := notified.JSON200.Issue.Metadata[model.NotificationKey(cmd.Address)].(map[string]any); ok {

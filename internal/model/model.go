@@ -492,7 +492,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case AgentInterrupted:
 		m = agentInterrupted(m, msg)
 	case AgentAttentionWritten:
-		return agentAttentionWritten(m, msg), nil
+		return agentAttentionWritten(m, msg)
 	case AgentAddressCleared:
 		return agentAddressCleared(m, msg), nil
 	case AgentRecordForgotten:
