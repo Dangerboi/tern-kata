@@ -4,17 +4,9 @@
 -- The tool and message shapes are what Tern 0.9.9 returns for an omp agent waiting on its ask tool.
 
 local waitingtext = require("../waitingtext")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 local function ask(question: string, status: string?): { [string]: any }
     return {name = "ask", role = "omp.tool.ask", status = status or "running", target = question, text = "Waiting for your answer…"}
@@ -76,8 +68,4 @@ test("an empty transcript keeps the last message, as for an agent that is not om
     assert(waitingtext.of({}, "") == "")
 end)
 
-if failures > 0 then
-    print(failures .. " failed")
-    error("failures")
-end
-print("all passed")
+harness.finish()

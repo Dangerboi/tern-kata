@@ -408,16 +408,17 @@ ctl key q
 shell_back() { ctl state | jq -e '.focused.running == null' >/dev/null; }
 wait_for shell_back
 ctl ready
-printf 'run %s\n' "$(jq -rRn --arg command "printf '\\033]0;tern-kata\\007'; sleep 60" '$command | @json')" >"$tmp/start.ctl"
+printf 'run %s\n' "$(jq -rRn --arg command "printf '\\033]0;tern-kata\\007'; sleep 120" '$command | @json')" >"$tmp/start.ctl"
 ctl --file "$tmp/start.ctl"
 shell_is_kata() {
   ctl state | jq -e --argjson id "$quit_shell" '.focused.id == $id and (.focused.running // "" | tostring | test("sleep"))' >/dev/null &&
     [[ $(ctl tree ".tn-face[data-pane='$quit_shell']" | jq '.count') == 1 && $(ctl tree ".tn-face[data-pane='$quit_shell'] > *" | jq '.count') == 0 ]]
 }
 wait_for shell_is_kata || { echo "shell not taken for kata: $(ctl state | jq -c '.focused')" >&2; exit 1; }
-# The title also starts the plugin's title pump, which waits up to 10 s for a surface and reuses the Pane meanwhile; once it
-# gives up, only a surface would make the Pane live.
-sleep 12
+# The title also starts the plugin's title pump, which reuses the Pane while it waits for a surface: 50 ticks of a 200 ms timer
+# (10 s plus the queries between ticks) and nothing observable marks its end, so the wait is three times that; once the pump
+# gives up, only a surface would make the Pane live. The sleep outlasts the wait, so it is ended with Ctrl+c below.
+sleep 30
 ctl click "$x" "$y" cmd
 ctl plugins expect '"Plugin first body"'
 wait_for panes_are 3
@@ -428,7 +429,7 @@ ctl key q
 wait_for panes_are 2
 read -r x y < <(ctl tree '.tv-grid' | jq -r '.nodes[1].rect | "\(.[0]+4) \(.[1]+8)"')
 ctl click "$x" "$y"
-end_hand_started_pane Enter
+end_hand_started_pane Ctrl+c
 start_hand_pane "$standin_dir/my-tern-kata"
 ctl click "$x" "$y" cmd
 wait_panes 3

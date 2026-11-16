@@ -36,18 +36,25 @@ func (f docbankFixture) openCmd(t *testing.T, name string) model.OpenAttachment 
 	return model.OpenAttachment{Workspace: f.repo, UID: f.uid, ProjectID: f.project.ID, Attachment: f.attachments(t)[0]}
 }
 
-func TestOpenAttachmentShowsAnImageInTernWhenRunningInAPane(t *testing.T) {
-	f := newDocbankFixture(t)
+// inPaneRecordingTern puts the test in a Tern Pane whose `tern` answers every call with nothing and records what it was asked.
+func inPaneRecordingTern(t *testing.T, f docbankFixture) *[][]string {
+	t.Helper()
 	t.Setenv("TERN_PANE", "7")
 	var asked [][]string
 	f.gateway.runTern = func(_ context.Context, args []string) ([]byte, error) { asked = append(asked, args); return nil, nil }
+	return &asked
+}
+
+func TestOpenAttachmentShowsAnImageInTernWhenRunningInAPane(t *testing.T) {
+	f := newDocbankFixture(t)
+	asked := inPaneRecordingTern(t, f)
 
 	got := as[model.AttachmentOpened](t, run(t, f.gateway, f.openCmd(t, "shot.PNG")))
 	if got.Err != nil || got.Path == "" {
 		t.Fatalf("opened %+v", got)
 	}
-	if want := [][]string{{"open", "--preview", got.Path}}; !slices.EqualFunc(asked, want, slices.Equal) {
-		t.Fatalf("tern was asked %v, want %v", asked, want)
+	if want := [][]string{{"open", "--preview", got.Path}}; !slices.EqualFunc(*asked, want, slices.Equal) {
+		t.Fatalf("tern was asked %v, want %v", *asked, want)
 	}
 	if len(*f.opened) != 0 || got.OutsideTern {
 		t.Fatalf("the OS opener ran too: %v (outside Tern %v)", *f.opened, got.OutsideTern)
@@ -56,26 +63,24 @@ func TestOpenAttachmentShowsAnImageInTernWhenRunningInAPane(t *testing.T) {
 
 func TestOpenAttachmentUsesTheOSOpenerWhenTernCannotShowIt(t *testing.T) {
 	for name, tc := range map[string]struct {
+		file string
 		env  func(*testing.T)
 		runs func(context.Context, []string) ([]byte, error)
+		note string
 	}{
-		"tern exits non-zero": {func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(context.Context, []string) ([]byte, error) {
+		"tern exits non-zero": {"shot.png", func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(context.Context, []string) ([]byte, error) {
 			return []byte("no window answers"), errors.New("exit status 1")
-		}},
-		"not in a Tern Pane": {func(*testing.T) {}, func(context.Context, []string) ([]byte, error) { t.Error("tern ran outside a Pane"); return nil, nil }},
-		"a video":            {func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(context.Context, []string) ([]byte, error) { t.Error("tern ran for a video"); return nil, nil }},
+		}, "no window answers"},
+		"not in a Tern Pane": {"shot.png", func(*testing.T) {}, func(context.Context, []string) ([]byte, error) { t.Error("tern ran outside a Pane"); return nil, nil }, ""},
+		"a video":            {"clip.mp4", func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(context.Context, []string) ([]byte, error) { t.Error("tern ran for a video"); return nil, nil }, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newDocbankFixture(t)
 			tc.env(t)
 			f.gateway.runTern = tc.runs
-			file := "shot.png"
-			if name == "a video" {
-				file = "clip.mp4"
-			}
-			got := as[model.AttachmentOpened](t, run(t, f.gateway, f.openCmd(t, file)))
-			if got.Err != nil || !got.OutsideTern || !slices.Equal(*f.opened, []string{got.Path}) {
-				t.Fatalf("opened %+v, OS opener ran for %v (outside Tern %v)", got, *f.opened, got.OutsideTern)
+			got := as[model.AttachmentOpened](t, run(t, f.gateway, f.openCmd(t, tc.file)))
+			if got.Err != nil || !got.OutsideTern || !slices.Equal(*f.opened, []string{got.Path}) || !strings.Contains(got.Note, tc.note) || (tc.note == "" && got.Note != "") {
+				t.Fatalf("opened %+v, OS opener ran for %v, want note %q", got, *f.opened, tc.note)
 			}
 		})
 	}
@@ -115,15 +120,13 @@ func TestOpenAttachmentRunsTheTernOnThePathWithThePaneEnvironment(t *testing.T) 
 
 func TestOpenAttachmentBesideAsksTernForASplitWhateverThePreviewSettingSays(t *testing.T) {
 	f := newDocbankFixture(t)
-	t.Setenv("TERN_PANE", "7")
-	var asked [][]string
-	f.gateway.runTern = func(_ context.Context, args []string) ([]byte, error) { asked = append(asked, args); return nil, nil }
+	asked := inPaneRecordingTern(t, f)
 
 	cmd := f.openCmd(t, "shot.png")
 	cmd.Way = model.WayBeside
 	got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd))
-	if want := [][]string{{"open", "--split", "right", got.Path}}; got.Err != nil || !slices.EqualFunc(asked, want, slices.Equal) {
-		t.Fatalf("opened %+v, tern was asked %v, want %v", got, asked, want)
+	if want := [][]string{{"open", "--split", "right", got.Path}}; got.Err != nil || !slices.EqualFunc(*asked, want, slices.Equal) {
+		t.Fatalf("opened %+v, tern was asked %v, want %v", got, *asked, want)
 	}
 	if len(*f.opened) != 0 {
 		t.Fatalf("the OS opener ran: %v", *f.opened)
@@ -210,18 +213,6 @@ func TestSaveUniqueTakesTheFirstFreeName(t *testing.T) {
 	}
 	if again, err := saveUnique(writeFile(t, t.TempDir(), ".env", "y"), dir); err != nil || filepath.Base(again) != ".env (1)" {
 		t.Fatalf("second dotfile saved to %q (%v)", again, err)
-	}
-}
-
-func TestAFailedTernPreviewIsKeptAsTheNoteWhenTheOSOpensTheFileInstead(t *testing.T) {
-	f := newDocbankFixture(t)
-	t.Setenv("TERN_PANE", "7")
-	f.gateway.runTern = func(context.Context, []string) ([]byte, error) {
-		return []byte("no window answers"), errors.New("exit status 1")
-	}
-	got := as[model.AttachmentOpened](t, run(t, f.gateway, f.openCmd(t, "shot.png")))
-	if got.Err != nil || !got.OutsideTern || !strings.Contains(got.Note, "no window answers") || !slices.Equal(*f.opened, []string{got.Path}) {
-		t.Fatalf("opened %+v, OS opener ran for %v", got, *f.opened)
 	}
 }
 

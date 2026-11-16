@@ -4,17 +4,9 @@
 -- The sample is what `tern-kata worker status --json` prints: Go field names, a zero EndedAt for a run that has not ended and a real one for a held run, as the worker's outcome stamps it.
 
 local workersummary = require("../workersummary")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 local ZERO = "0001-01-01T00:00:00Z"
 
@@ -80,7 +72,7 @@ test("a held reason is the worker's HoldLine, or the hold code from a binary tha
 end)
 
 test("a Projects entry that is not a table is skipped", function()
-    local got = workersummary.of({ PID = 1, Projects = { "text", 7, { Capacity = 2, InUse = 1 } } })
+    local got = workersummary.of({ PID = 1, Projects = ({ "text", 7, { Capacity = 2, InUse = 1 } } :: { any }) })
     assert(got ~= nil and got.capacity == 2 and got.inUse == 1)
 end)
 
@@ -120,7 +112,8 @@ end)
 
 test("something read back without a numeric stamp or a worker table loads as nothing", function()
     local worker = { executor = "m", pid = 1, running = 0, capacity = 0, inUse = 0, held = {} }
-    for _, stored in {{ worker = worker }, { at = "1000", worker = worker }, { at = 1000 }, { at = 1000, worker = "text" }, "text"} do
+    local stores: { any } = {{ worker = worker }, { at = "1000", worker = worker }, { at = 1000 }, { at = 1000, worker = "text" }, "text"}
+    for _, stored in stores do
         assert(workersummary.load(fakeKv(stored), nil) == nil)
     end
     assert(workersummary.load(fakeKv(nil), nil) == nil)
@@ -129,7 +122,7 @@ end)
 test("a record whose worker has the wrong shape is not shown as it is", function()
     assert(workersummary.load(fakeKv({ at = 1000, worker = {} }), nil) == nil)
     assert(workersummary.load(fakeKv({ at = 1000, worker = { pid = "1" } }), nil) == nil)
-    local record = workersummary.load(fakeKv({ at = 1000, worker = { pid = 1, held = { "x", { ref = "k#1", reason = 5 } } } }), nil)
+    local record = workersummary.load(fakeKv({ at = 1000, worker = { pid = 1, held = ({ "x", { ref = "k#1", reason = 5 } } :: { any }) } }), nil)
     assert(record ~= nil)
     local worker = record.worker
     assert(worker.executor == "" and worker.running == 0 and worker.capacity == 0 and worker.inUse == 0)
@@ -150,4 +143,4 @@ test("drop removes the record and does nothing when there is none", function()
     workersummary.drop((fakeKv(nil, true)))
 end)
 
-if failures > 0 then error(failures .. " test(s) failed") end
+harness.finish()

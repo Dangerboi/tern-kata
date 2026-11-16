@@ -3,17 +3,9 @@
 -- Tests of the rule that names an agent's prompt file in a command line, outside Tern: `luau test/promptfile_test.luau`.
 
 local promptfile = require("../promptfile")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 test("a tab's or background agent's file names the starting Pane's block", function()
     assert(promptfile.starter("sleep @/state/agent-prompts/prompt-12-345.md") == 12)
@@ -48,7 +40,4 @@ test("a file outside the agent-prompts folder, or not named prompt-*.md, is not 
     assert(not promptfile.isPath("/s/agent-prompts/prompt-1-2.md.token"))
 end)
 
-if failures > 0 then
-    print(failures .. " failed")
-    error("promptfile tests failed")
-end
+harness.finish()

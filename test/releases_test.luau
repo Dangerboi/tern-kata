@@ -3,17 +3,9 @@
 -- Tests of the release check's decisions on plain data, outside Tern: `luau test/releases_test.luau`.
 
 local releases = require("../releases")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 local NOW = 1_000_000
 
@@ -163,8 +155,4 @@ test("the release folder: the user's base when set and not empty, else the versi
     assert(releases.releaseBase("http://x", nil) == "http://x")
 end)
 
-if failures > 0 then
-    print(failures .. " failed")
-    error("failures")
-end
-print("all passed")
+harness.finish()

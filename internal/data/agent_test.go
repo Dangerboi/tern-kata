@@ -778,9 +778,6 @@ const lsWithoutAgents = `{"sessions":[{"id":1,"name":"main","shown":true,"tabs":
 func ternScript(g *Gateway, replies map[string]func() ([]byte, error)) *[][]string {
 	var calls [][]string
 	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
-		if args[0] == "--version" {
-			return []byte(modernTernVersion), nil
-		}
 		for n := min(len(args), 3); n > 0; n-- {
 			if reply, ok := replies[strings.Join(args[:n], " ")]; ok {
 				calls = append(calls, args)

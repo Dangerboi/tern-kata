@@ -3,17 +3,9 @@
 -- Tests of what the widgets of the widget bar have in common, on plain data, outside Tern: `luau test/widgets_test.luau`.
 
 local widgets = require("../widgets")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 test("capped keeps up to five lines as they are", function()
     assert(table.concat(widgets.capped({}), "|") == "")
@@ -68,4 +60,4 @@ test("merge fills an empty bar with every widget once", function()
     assert(#merged == 2 and #added == 2 and merged[2].id == "tern-kata/worker")
 end)
 
-if failures > 0 then error(failures .. " test(s) failed") end
+harness.finish()

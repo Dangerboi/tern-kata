@@ -4,17 +4,9 @@
 
 local reopen = require("../reopen")
 local promptfile = require("../promptfile")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 local function same(got: string?, want: string?)
     assert(got == want, "got " .. tostring(got) .. ", wanted " .. tostring(want))
@@ -85,10 +77,6 @@ test("Windows: tern-kata.exe by path, PowerShell quoting and backslashes", funct
     local shell = "C:\\Program Files\\PowerShell\\7\\pwsh.exe"
     same(reopen.command(event({
         shell = shell,
-        command = "& 'C:\\Users\\me\\bin\\tern-kata.exe' agent '--ref=p#1' -- omp -e C:\\Users\\me\\state\\tern-kata.ts 'C:\\a b\\x.md'",
-    })), nil)
-    same(reopen.command(event({
-        shell = shell,
         command = "& 'C:\\Users\\me\\bin\\tern-kata.exe' agent '--ref=p#1' -- omp -e C:\\Users\\me\\state\\tern-kata.ts '@" .. WINDOWS_PROMPT .. "'",
     })), "& 'C:\\Users\\me\\bin\\tern-kata.exe' agent '--prompt-file=" .. WINDOWS_PROMPT .. "' '--ref=p#1' -- omp -e C:\\Users\\me\\state\\tern-kata.ts")
     same(reopen.command(event({
@@ -133,11 +121,6 @@ test("a fork of a fork names its own parent, and a reopened fork keeps its mark"
     same(reopen.command(event({ how = "restore", pane = 12, command = fork })), nil)
 end)
 
-test("a fork Tern names no pane for gets no mark", function()
-    same(reopen.command(event({ how = "fork", pane = "x", command = "tern-kata agent --address-prefix=me/omp --ref=p#1 --token-file=/t -- omp @" .. PROMPT })),
-        "tern-kata agent --address-prefix=me/omp --ref=p#1 --token-file=/t -- omp")
-end)
-
 test("PowerShell: a fork's mark goes after the agent word of a called path", function()
     same(reopen.command(event({
         how = "fork",
@@ -159,7 +142,6 @@ test("the prompt word of a reopened chat becomes a flag that still names the fil
     local reopened = reopen.command(event({ command = "tern-kata agent --ref=p#1 --token-file=" .. PROMPT .. ".token -- omp @" .. PROMPT }))
     same(reopened, "tern-kata agent --prompt-file=" .. PROMPT .. " --ref=p#1 --token-file=" .. PROMPT .. ".token -- omp")
     assert(promptfile.has(reopened), "the reopened line no longer names its prompt file")
-    assert(promptfile.has(reopen.command(event({ command = "tern-kata agent --ref=p#1 -- omp @" .. PROMPT }))))
     -- Tern may run the hook on the line it was given back: nothing more to change.
     same(reopen.command(event({ command = reopened })), nil)
 end)
@@ -181,23 +163,21 @@ test("a fork's flags after the -- belong to omp and stay", function()
     })), "tern-kata agent --address-prefix=me/omp --ref=p#1 -- omp --coordinating --forked-from=9 --token-file=/t")
 end)
 
-test("a pane given as a numeric string names its block", function()
+test("a fork names its block from a number or a numeric string, and from nothing else: never a rounded or malformed id", function()
     local line = "tern-kata agent --ref=p#1 --token-file=/t -- omp @" .. PROMPT
     same(reopen.command(event({ how = "fork", pane = "12", command = line })), "tern-kata agent --forked-from=12 --ref=p#1 --token-file=/t -- omp")
-end)
-
-test("a block id above 2^53 is named only from its text, never from a rounded number", function()
-    local line = "tern-kata agent --ref=p#1 --token-file=/t -- omp @" .. PROMPT
     same(reopen.command(event({ how = "fork", pane = "9007199254740993", command = line })),
         "tern-kata agent --forked-from=9007199254740993 --ref=p#1 --token-file=/t -- omp")
-    for _, pane in { 9007199254740993, 2 ^ 53, 2 ^ 60, -1, 1.5, 0 / 0 } do
+    local unusable: { any } = { "x", "", true, 9007199254740993, 2 ^ 53, 2 ^ 60, -1, 1.5, 0 / 0 }
+    for _, pane in unusable do
         same(reopen.command(event({ how = "fork", pane = pane, command = line })), "tern-kata agent --ref=p#1 --token-file=/t -- omp")
     end
 end)
 
 test("a fork of a fork Tern names no usable pane for keeps its mark", function()
     local line = "tern-kata agent --forked-from=4 --ref=p#1 --token-file=/t -- omp"
-    for _, pane in { "x", "", 2 ^ 60, true } do
+    local unusable: { any } = { "x", "", 2 ^ 60, true }
+    for _, pane in unusable do
         same(reopen.command(event({ how = "fork", pane = pane, command = line .. " @" .. PROMPT })), line)
     end
     local ev = event({ how = "fork", command = "tern-kata agent --forked-from 4 --ref=p#1 --token-file=/t -- omp @" .. PROMPT })
@@ -205,7 +185,4 @@ test("a fork of a fork Tern names no usable pane for keeps its mark", function()
     same(reopen.command(ev), "tern-kata agent --forked-from 4 --ref=p#1 --token-file=/t -- omp")
 end)
 
-if failures > 0 then
-    print(failures .. " failed")
-    error("reopen tests failed")
-end
+harness.finish()

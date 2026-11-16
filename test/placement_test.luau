@@ -4,17 +4,9 @@
 -- https://luau.org; `brew install luau`).
 
 local placement = require("../placement")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 local function same(got: { placement.Move }, want: { { number } })
     local text = {}
@@ -216,8 +208,4 @@ test("kataPaneFor prefers the exact starter, then the fallback, then the only on
     assert((placement.kataPaneFor({kata(10, 1)}, nil, nil) :: placement.PaneRec).pane == 10)
 end)
 
-if failures > 0 then
-    print(failures .. " failed")
-    error("placement tests failed", 0)
-end
-print("placement tests passed")
+harness.finish()

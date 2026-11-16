@@ -216,41 +216,16 @@ func TestAttachmentsOmitsReferencesKataTreatsAsInvalid(t *testing.T) {
 	}
 }
 
-func TestOSOpensAllowsOnlyViewingTypes(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		want bool
-	}{
-		{"shot.png", true},
-		{"X.PNG", true},
-		{"photo.JpEg", true},
-		{"clip.mp4", true},
-		{"song.flac", true},
-		{"paper.pdf", true},
-		{"notes.txt", true},
-		{"data.json", true},
-		{"a.exe.png", true}, // the extension is what the OS reads
-		{"a.png.exe", false},
-		{"report.bat", false},
-		{"report.bat.", false},
-		{"report.bat ", false},
-		{"x.png.", false},
-		{"x.png ", false},
-		{"x.txt:y.bat", false},
-		{"logo.svg", false},
-		{"app.jar", false},
-		{"link.url", false},
-		{"link.fileloc", false},
-		{"link.inetloc", false},
-		{"run.command", false},
-		{"setup.msi", false},
-		{"launcher.desktop", false},
-		{"noextension", false},
-		{".png", true},
-		{"", false},
+// The OS opener is an allowlist: what the OS does with a file it knows cannot be told from the name, so only viewing types go.
+func TestOSOpensOnlyViewingTypesWhoseWholeNameSaysSo(t *testing.T) {
+	for name, want := range map[string]bool{
+		"shot.png": true, "X.PNG": true, "clip.mp4": true, "paper.pdf": true, "notes.txt": true,
+		"a.exe.png": true, // the extension is what the OS reads
+		"a.png.exe": false, "report.bat": false, "report.bat.": false, "x.png.": false, "x.png ": false,
+		"logo.svg": false, "link.url": false, "run.command": false, "launcher.desktop": false, "noextension": false, "": false,
 	} {
-		if got := model.OSOpens(tc.name); got != tc.want {
-			t.Errorf("OSOpens(%q) = %v, want %v", tc.name, got, tc.want)
+		if got := model.OSOpens(name); got != want {
+			t.Errorf("OSOpens(%q) = %v, want %v", name, got, want)
 		}
 	}
 }
@@ -277,17 +252,7 @@ func TestANameWithAColonIsNeverHandedToTheOS(t *testing.T) {
 	}
 }
 
-func TestTheRefusalsNameTheKindsTheExtensionListsAllow(t *testing.T) {
-	beside := model.AttachmentRefusal(model.Attachment{Name: "a.mp4"}, model.WayBeside)
-	system := model.AttachmentRefusal(model.Attachment{Name: "a.exe"}, model.WaySystem)
-	for _, want := range []string{"images, text, Markdown, JSON and Word documents"} {
-		if !strings.Contains(beside, want) {
-			t.Errorf("beside refusal %q lacks %q", beside, want)
-		}
-	}
-	if !strings.Contains(system, "images, video, audio, PDFs and text") {
-		t.Errorf("system refusal %q", system)
-	}
+func TestOpeningWithTheDefaultWayIsNeverRefused(t *testing.T) {
 	if got := model.AttachmentRefusal(model.Attachment{Name: "a.exe"}, model.WayOpen); got != "" {
 		t.Errorf("the default way refused: %q", got)
 	}

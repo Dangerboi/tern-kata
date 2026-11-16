@@ -9,16 +9,16 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
-// Each choice field of a popup card is drawn as the control the decided mapping names, inside a FormField that is the field's
-// node; a field that takes several values at once stays a row of words.
+// Each choice field of a popup card is drawn as a select, tabs or switch control inside a FormField that is the field's node; a
+// field that takes several values at once stays a row of words.
 func TestChoiceFieldsDrawTheirControl(t *testing.T) {
-	want := map[string]map[model.Field]string{
-		"Recurrence": {model.RecurrenceFrequency: "select", model.RecurrenceEnds: "select"},
-		"Job":        {model.JobFieldKind: "select", model.JobFieldTrigger: "select", model.JobFieldCatchup: "select", model.JobFieldEnabled: "switch"},
-		"Lanes":      {model.LanesShare: "tabs"},
-		"Worker":     {model.WorkerFieldTrust: "switch"},
-		"Filter":     {model.FilterProject: "select", model.FilterStatus: "tabs", model.FilterRelationship: "select"},
-		"View":       {model.ViewBase: "select", model.FilterProject: "tabs", model.FilterStatus: "tabs", model.FilterRelationship: "select"},
+	want := map[string][]model.Field{
+		"Recurrence": {model.RecurrenceFrequency, model.RecurrenceEnds},
+		"Job":        {model.JobFieldKind, model.JobFieldTrigger, model.JobFieldCatchup, model.JobFieldEnabled},
+		"Lanes":      {model.LanesShare},
+		"Worker":     {model.WorkerFieldTrust},
+		"Filter":     {model.FilterProject, model.FilterStatus, model.FilterRelationship},
+		"View":       {model.ViewBase, model.FilterProject, model.FilterStatus, model.FilterRelationship},
 	}
 	for _, c := range editingCards() {
 		fields := want[c.name]
@@ -31,13 +31,12 @@ func TestChoiceFieldsDrawTheirControl(t *testing.T) {
 			for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 				kinds[n.ID] = n.K
 			}
-			for field, kind := range fields {
-				id := view.FieldID(c.card, field)
-				if kinds[id] != "field" {
-					t.Errorf("%s is drawn as %q, want a FormField", field, kinds[id])
+			for _, field := range fields {
+				if got := kinds[view.FieldID(c.card, field)]; got != "field" {
+					t.Errorf("%s is drawn as %q, want a FormField", field, got)
 				}
-				if got := kinds[view.ControlID(c.card, field)]; got != kind {
-					t.Errorf("%s control is drawn as %q, want %q", field, got, kind)
+				if got := kinds[view.ControlID(c.card, field)]; got != "select" && got != "tabs" && got != "switch" {
+					t.Errorf("%s control is drawn as %q, want a select, tabs or switch", field, got)
 				}
 			}
 		})

@@ -4,17 +4,9 @@
 -- `luau test/waitingagents_test.luau`.
 
 local waitingagents = require("../waitingagents")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 local function same(got: { number }, want: { number })
     assert(table.concat(got, ",") == table.concat(want, ","), "got " .. table.concat(got, ",") .. ", want " .. table.concat(want, ","))
@@ -76,4 +68,4 @@ test("widget shows nothing at 0", function()
     assert(waitingagents.widget(0, "", GO) == nil)
 end)
 
-if failures > 0 then error(failures .. " test(s) failed") end
+harness.finish()

@@ -69,8 +69,8 @@ func TestSaveInTernFallsBackToThisMachineWhenTernCannotDownloadHere(t *testing.T
 			if len(*asked) != 1 {
 				t.Fatalf("tern was asked %v, want one download", *asked)
 			}
-			if want := filepath.Join(downloads, "notes.txt"); got.Err != nil || got.Path != want || got.Remote {
-				t.Fatalf("saved %+v, want %s here", got, want)
+			if want := filepath.Join(downloads, "notes.txt"); got.Err != nil || got.Path != want || got.Remote || (name == "the window is on this machine" && got.Note != "") {
+				t.Fatalf("saved %+v, want %s here (and no note for Tern's ordinary refusal)", got, want)
 			}
 			if body, err := os.ReadFile(got.Path); err != nil || string(body) != "content" {
 				t.Fatalf("the copy holds %q (%v)", body, err)
@@ -99,15 +99,6 @@ func TestSaveInTernStillSavesHereWhenTernFailsAndSaysWhy(t *testing.T) {
 	}
 }
 
-func TestSaveInTernSaysNothingExtraForTernsOrdinaryRefusals(t *testing.T) {
-	got, _, _ := saveFixture(t, true, "notes.txt", func([]string) ([]byte, error) {
-		return []byte("tern download: the pane's files are on this computer already\n"), errors.New("exit status 1")
-	})
-	if got.Err != nil || got.Note != "" {
-		t.Fatalf("saved %+v", got)
-	}
-}
-
 func TestSaveOutsideTernNeverRunsTern(t *testing.T) {
 	got, downloads, asked := saveFixture(t, false, "notes.txt", func([]string) ([]byte, error) { return []byte("/elsewhere/notes.txt\n"), nil })
 	if want := filepath.Join(downloads, "notes.txt"); got.Err != nil || got.Path != want || got.Remote || len(*asked) != 0 {
@@ -123,5 +114,22 @@ func TestATernCallKilledByItsOwnTimeoutSaysTernDidNotAnswer(t *testing.T) {
 	_, err := ternCommand(context.Background(), run, 10*time.Millisecond, []string{"ls"})
 	if err == nil || !strings.Contains(err.Error(), "tern command did not answer within 10ms") || strings.Contains(err.Error(), "signal: killed") || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestATernCallEndedByTheCallerOrWithoutATimeoutDoesNotNameTheTimeout(t *testing.T) {
+	run := func(ctx context.Context, _ []string) ([]byte, error) {
+		<-ctx.Done()
+		return nil, errors.New("signal: killed")
+	}
+	short, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	for name, call := range map[string]func() error{
+		"a caller deadline shorter than the timeout": func() error { _, err := ternCommand(short, run, time.Minute, []string{"ls"}); return err },
+		"no timeout and a caller deadline":           func() error { _, err := ternCommand(short, run, 0, []string{"ls"}); return err },
+	} {
+		if err := call(); err == nil || strings.Contains(err.Error(), "did not answer") || !strings.Contains(err.Error(), "signal: killed") {
+			t.Errorf("%s: got %v", name, err)
+		}
 	}
 }

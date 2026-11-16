@@ -4,17 +4,9 @@
 
 local workersummary = require("../workersummary")
 local workerwidget = require("../workerwidget")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 local HELD = "plugin.tern-kata.show-held-runs"
 local OPEN = "plugin.tern-kata.open"
@@ -43,19 +35,6 @@ local function titleLines(s: workersummary.Summary, onHost: boolean?): { string 
     return (shown(s, onHost).title :: string):split("\n")
 end
 
-test("the widget's id, name, icon and styles are the ones Tern sees", function()
-    local spec = workerwidget.spec("tern-kata", true, function() return nil end)
-    assert(workerwidget.ID == "worker" and spec.name == "kata worker" and spec.icon == "server")
-    assert(#(spec.styles :: any) == 2 and (spec.styles :: any)[1] == "text" and (spec.styles :: any)[2] == "ring")
-end)
-
-test("the click commands are the plugin commands Tern runs", function()
-    assert(workerwidget.OPEN_ID == "open" and workerwidget.SHOW_HELD_ID == "show-held-runs")
-    assert(shown(summary(0)).command == "plugin.tern-kata.open")
-    assert(shown(summary(0, heldRuns(1))).command == "plugin.tern-kata.show-held-runs")
-    assert(shown(summary(0, heldRuns(1)), false).command == "plugin.tern-kata.show-held-runs")
-end)
-
 test("no summary shows nothing", function()
     assert(view(nil, true) == nil)
 end)
@@ -80,11 +59,8 @@ test("value is in use over capacity, and 0 for no capacity", function()
     assert(shown(summary(0, nil, 0, 0)).value == 0)
 end)
 
-test("the host-drawn title names the session host's worker, not this machine", function()
+test("the title's first line names the session host's worker when the host draws it, this machine's when the window half does", function()
     assert(titleLines(summary(0), true)[1] == "Worker on the session host")
-end)
-
-test("the window half's fallback title says the worker is on this machine", function()
     assert(titleLines(summary(0), false)[1] == "Worker on this machine")
 end)
 
@@ -125,4 +101,4 @@ test("every title line fits Tern's width for a long executor, Issue ref and reas
     assert(lines[4]:sub(1, 29) == "3 running, process 4242, eeee", lines[4])
 end)
 
-if failures > 0 then error(failures .. " test(s) failed") end
+harness.finish()

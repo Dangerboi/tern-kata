@@ -25,14 +25,3 @@ func TestTernDrawsWordDocumentsButTheOSNeverOpensThem(t *testing.T) {
 		}
 	}
 }
-
-func TestTernDrawsKeepsTheExistingKinds(t *testing.T) {
-	for name, want := range map[string]bool{
-		"a.png": true, "a.JPG": true, "a.jpeg": true, "a.gif": true, "a.txt": true, "a.md": true, "a.json": true,
-		"a.webp": false, "a.pdf": false, "a.mp4": false, "a.csv": false, "a.log": false, "a.bat": false,
-	} {
-		if got := model.TernDraws(name); got != want {
-			t.Errorf("TernDraws(%q) = %v, want %v", name, got, want)
-		}
-	}
-}

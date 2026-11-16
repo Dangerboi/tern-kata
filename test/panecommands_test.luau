@@ -3,17 +3,9 @@
 -- Tests of the host half's rule for dropping the PowerShell profile, on plain data, outside Tern: `luau test/panecommands_test.luau`.
 
 local panecommands = require("../panecommands")
+local harness = require("./harness")
 
-local failures = 0
-local function test(name: string, body: () -> ())
-    local ok, err = (pcall :: any)(body)
-    if ok then
-        print("ok   " .. name)
-    else
-        failures += 1
-        print("FAIL " .. name .. ": " .. tostring(err))
-    end
-end
+local test = harness.test
 
 local function spec(program: string, args: { string }): any
     return {program = program, args = args, cwd = "C:\\Users\\a", env = {TERN_PANE = "7"}}
@@ -96,8 +88,4 @@ test("a malformed spec returns nil and does not raise", function()
     assert(panecommands.withoutProfile({program = "pwsh", args = {"-c", 3}}) == nil)
 end)
 
-if failures > 0 then
-    print(failures .. " failed")
-    error("failures")
-end
-print("all passed")
+harness.finish()

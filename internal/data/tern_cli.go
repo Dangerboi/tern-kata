@@ -39,7 +39,7 @@ func (g *Gateway) ternOutput(ctx context.Context, timeout time.Duration, args []
 // ternCommand runs one tern command with run and returns its stdout. A failure carries what the command printed, stderr first:
 // Tern's own words say why. timeout bounds the command when it is above zero.
 func ternCommand(ctx context.Context, run func(context.Context, []string) ([]byte, error), timeout time.Duration, args []string) ([]byte, error) {
-	callerEnded := ctx.Err() != nil
+	caller := ctx
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -49,7 +49,7 @@ func ternCommand(ctx context.Context, run func(context.Context, []string) ([]byt
 	if err == nil {
 		return out, nil
 	}
-	if !callerEnded && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	if timeout > 0 && caller.Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return out, fmt.Errorf("the tern command did not answer within %s: %w", timeout, context.DeadlineExceeded)
 	}
 	text := string(bytes.TrimSpace(out))

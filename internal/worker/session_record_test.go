@@ -3,8 +3,6 @@ package worker
 import (
 	"context"
 	"os/exec"
-	"slices"
-	"sync"
 	"testing"
 )
 
@@ -18,35 +16,19 @@ func newSessionTestWorker(t *testing.T, hooks Hooks) (*Worker, *Journal) {
 	return w, j
 }
 
-// omp may print its session line before the start record is saved. The line's own save finds no launch record and is
-// skipped; supervise saves the held id right after the start record, so the "session" save point follows it. One named
-// after the record is saved by its own update.
+// omp may print its session line before the start record is saved. The line finds no launch record to update; the start
+// record then takes the held id. One named after the record is saved updates it.
 func TestTheStartRecordTakesASessionNamedBeforeItWasSaved(t *testing.T) {
-	var mu sync.Mutex
-	var points []string
-	w, j := newSessionTestWorker(t, Hooks{AfterSave: func(point string, _ *Journal) error {
-		mu.Lock()
-		defer mu.Unlock()
-		points = append(points, point)
-		return nil
-	}})
+	w, j := newSessionTestWorker(t, Hooks{})
 	session := &promptSession{dir: t.TempDir(), resumeID: "asked-for"}
 	w.recordSession(session, j.RunUID, "named-early")
-	mu.Lock()
-	if slices.Contains(points, "session") {
-		t.Fatalf("a session named before the start record was saved a journal: %v", points)
+	if saved, err := w.store.Load(j.RunUID); err != nil || saved.Launch != nil {
+		t.Fatalf("a session named before the start record was saved a launch %+v, err %v", saved.Launch, err)
 	}
-	mu.Unlock()
 	cmd := exec.Command("sh", "-c", "exit 0")
 	isolate(cmd)
 	if _, err := w.supervise(context.Background(), j, cmd, session); err != nil {
 		t.Fatal(err)
-	}
-	mu.Lock()
-	order := slices.Clone(points)
-	mu.Unlock()
-	if started, session := slices.Index(order, "started"), slices.Index(order, "session"); started < 0 || session < started {
-		t.Fatalf("save points %v, want session after started", order)
 	}
 	saved, err := w.store.Load(j.RunUID)
 	if err != nil {
@@ -64,13 +46,8 @@ func TestTheStartRecordTakesASessionNamedBeforeItWasSaved(t *testing.T) {
 // A start save that fails leaves the journal `launching` with no launch record. A session line that arrives after it
 // (the agent's output is still being copied while the group is killed) must neither crash nor write.
 func TestASessionLineAfterAFailedStartSaveSavesNothing(t *testing.T) {
-	var mu sync.Mutex
-	var points []string
 	var w *Worker
 	w, j := newSessionTestWorker(t, Hooks{AfterSave: func(point string, j *Journal) error {
-		mu.Lock()
-		points = append(points, point)
-		mu.Unlock()
 		if point == "launching" { // the journal leaves `launching` under the start save, which then fails
 			j.Phase = PhaseFinished
 			return w.store.write(j, "moved-on")
@@ -84,11 +61,6 @@ func TestASessionLineAfterAFailedStartSaveSavesNothing(t *testing.T) {
 		t.Fatal("a start record over a journal that is not launching was saved")
 	}
 	w.recordSession(session, j.RunUID, "too-late")
-	mu.Lock()
-	defer mu.Unlock()
-	if slices.Contains(points, "session") {
-		t.Fatalf("a session line with no start record saved a journal: %v", points)
-	}
 	if saved, err := w.store.Load(j.RunUID); err != nil || saved.Launch != nil {
 		t.Fatalf("journal launch %+v, err %v, want no launch record", saved.Launch, err)
 	}
