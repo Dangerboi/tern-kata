@@ -513,74 +513,20 @@ tern.on("focus", function(ev, cx)
     openFocusedAgent(cx, ev.pane, ev.tab)
 end)
 
--- The kata agents that wait for you. `waitOrder` numbers each agent's move into waiting (a later move, a larger number); it
--- is empty after a plugin reload, which leaves the agents already waiting last, in Tern's order. `waitingCount` is what the
--- "N waiting" segment draws in the widget bar's Plugin segments widget, and with `waitingTooltip` (the waiting agents' block
--- titles) what the Waiting kata agents widget draws: the formatters only read them, and they are refreshed when either
--- changes. Place the widget with the Add kata widgets to the widget bar command, or from the palette's Edit widgets....
+-- The kata agents that wait for you, for the Go to the agent waiting for you command. `waitOrder` numbers each agent's move into
+-- waiting (a later move, a larger number); it is empty after a plugin reload, which leaves the agents already waiting last, in
+-- Tern's order. Tern's own Agents widget shows the waiting agents in the widget bar.
 local waitOrder: { [number]: number } = {}
 local waitStamp = 0
-local waitingCount = 0
-local waitingTooltip = ""
 local GO_WAITING_ID = "go-to-waiting-agent"
-local GO_WAITING_COMMAND = widgets.commandId(PLUGIN, GO_WAITING_ID)
 
-local function waitingPanes(cx: WindowCx, skip: number?): { number }
+local function waitingPanes(cx: WindowCx): { number }
     local agents: { waitingagents.Agent } = {}
     for _, agent in cx.agents:list() do
         table.insert(agents, {pane = agent.pane, command = agent.command, state = agent.state :: string})
     end
-    return waitingagents.waiting(agents, waitOrder, isPromptCommand, skip)
+    return waitingagents.waiting(agents, waitOrder, isPromptCommand)
 end
-
-local function recountWaiting(cx: WindowCx, skip: number?)
-    local panes = waitingPanes(cx, skip)
-    local titles: { string } = {}
-    for _, pane in panes do
-        local info = cx.session:pane(pane)
-        table.insert(titles, if info ~= nil and info.title ~= "" then info.title else "Pane " .. pane)
-    end
-    local tooltip = table.concat(widgets.capped(titles), "\n")
-    if #panes == waitingCount and tooltip == waitingTooltip then return end
-    waitingCount = #panes
-    waitingTooltip = tooltip
-    tern.chrome.refresh()
-end
-
-tern.chrome.status(function(_pane)
-    return waitingagents.segment(waitingCount, GO_WAITING_COMMAND)
-end)
-
--- Tern before 0.9.17 has no widget bar, so no `tern.chrome.widget`: the widgets are skipped there with one log line and the rest
--- of the window half loads as before.
-local widgetsOffered: { { id: string, name: string } } = {}
-local widgetsSkipLogged = false
-local function registerWidget(id: string, spec: WidgetSpec): boolean
-    if tern.chrome.widget == nil then
-        if not widgetsSkipLogged then
-            widgetsSkipLogged = true
-            tern.log.info("tern-kata: this Tern has no widget bar (before 0.9.17), so the tern-kata widgets are not offered")
-        end
-        return false
-    end
-    local ok, err = pcall(function() tern.chrome.widget(id, spec) end)
-    if not ok then
-        tern.log.warn("tern-kata: could not register widget " .. id .. ": " .. tostring(err))
-        return false
-    end
-    table.insert(widgetsOffered, {id = PLUGIN .. "/" .. id, name = spec.name})
-    return true
-end
-
-registerWidget("waiting", {
-    name = "Waiting kata agents",
-    description = "How many agents kata started wait for you; a click goes to the one that began waiting last",
-    icon = "bell",
-    styles = {"text"} :: { WidgetStyle },
-    render = function(_pane): WidgetView?
-        return waitingagents.widget(waitingCount, waitingTooltip, GO_WAITING_COMMAND)
-    end,
-})
 
 -- The kata worker widget (workerwidget.luau): on Tern 0.9.21 and later the host half draws it (host.luau header says why and
 -- what the window can and cannot tell), so this half registers its own, labelled as this machine's worker, only while it finds
@@ -639,9 +585,8 @@ local function pollWorkerSummary()
 end
 
 -- The first read comes at window start and at once after a plugin reload (which runs this file again without window_start),
--- as for the kata Panes (markAll), so the widget is not empty until the first poll.
+-- as for the kata Panes (markAll), so the widget is not empty until the first poll. Tern before 0.9.17 has no widget bar.
 if tern.chrome.widget ~= nil then
-    table.insert(widgetsOffered, {id = PLUGIN .. "/" .. workerwidget.ID, name = workerwidget.NAME})
     tern.on("window_start", tryReadWorkerSummary)
     tern.timer(1, pollWorkerSummary)
 end
@@ -654,27 +599,19 @@ tern.command({
     end,
 })
 
-if #widgetsOffered > 0 then
+if tern.chrome.widget ~= nil then
     tern.command({
         id = "add-widgets",
-        title = "Add kata widgets to the widget bar",
+        title = "Add the kata worker widget to the widget bar",
         run = function(cx)
             local list = cx.settings:get("widgets")
-            local ids: { string } = {}
-            local names: { [string]: string } = {}
-            for _, widget in widgetsOffered do
-                table.insert(ids, widget.id)
-                names[widget.id] = widget.name
-            end
-            local merged, added = widgets.merge(if type(list) == "table" then list else {}, ids)
+            local merged, added = widgets.merge(if type(list) == "table" then list else {}, {PLUGIN .. "/" .. workerwidget.ID})
             if #added == 0 then
-                cx:toast("info", "The kata widgets are already in the widget bar")
+                cx:toast("info", "The kata worker widget is already in the widget bar")
                 return
             end
             cx.settings:set("widgets", merged)
-            local addedNames: { string } = {}
-            for _, id in added do table.insert(addedNames, names[id]) end
-            cx:toast("info", "Added " .. table.concat(addedNames, " and ") .. " to the widget bar")
+            cx:toast("info", "Added the kata worker widget to the widget bar")
         end,
     })
 end
@@ -687,7 +624,7 @@ tern.command({
     title = "Go to the agent waiting for you",
     keys = {"shift+f9"},
     run = function(cx)
-        local pane = waitingPanes(cx, nil)[1]
+        local pane = waitingPanes(cx)[1]
         local info = if pane then cx.session:pane(pane) else nil
         if not pane or not info then
             cx:toast("info", "No agent is waiting for you")
@@ -721,7 +658,6 @@ tern.on("pane_closed", function(ev, cx)
         changeUpdatePanes(ev.pane, false)
     end
     waitOrder[ev.pane] = nil
-    recountWaiting(cx, ev.pane)
     placed[ev.pane] = nil
     if lastKata == ev.pane then lastKata = nil end
     if marked[ev.pane] then
@@ -742,7 +678,6 @@ local function markAll(cx: WindowCx)
     restyleMarks()
     -- Agents already there were placed (or put somewhere on purpose) before this run: only later ones are moved.
     for _, agent in cx.agents:list() do placed[agent.pane] = true end
-    recountWaiting(cx, nil)
     relayAll(cx, false)
 end
 
@@ -780,7 +715,6 @@ tern.on("agent_state", function(ev, cx)
     else
         waitOrder[ev.pane] = nil
     end
-    recountWaiting(cx, nil)
     relayAll(cx, false)
 end)
 

@@ -175,21 +175,21 @@ ctl --file "$tmp/waiting.ctl"
 expect_toast "No agent is waiting for you"
 ctl state >"$tmp/waiting-after.json"
 jq -e --slurpfile before "$tmp/waiting-before.json" '.tabs[0].panes == $before[0].tabs[0].panes and .focused.id == $before[0].focused.id' "$tmp/waiting-after.json" >/dev/null
-# The palette command that places the plugin's widgets keeps the bar's other widgets first and in place, and a second run adds nothing.
+# The palette command that places the worker widget keeps the bar's other widgets first and in place, and a second run adds nothing.
 ctl widgets set clock
-printf 'palette "Add kata widgets to the widget bar"\nkey Enter\n' >"$tmp/widgets.ctl"
+printf 'palette "Add the kata worker widget to the widget bar"\nkey Enter\n' >"$tmp/widgets.ctl"
 ctl --file "$tmp/widgets.ctl"
-expect_toast "Added Waiting kata agents and kata worker to the widget bar"
-ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/waiting", "tern-kata/worker"]' >/dev/null
+expect_toast "Added the kata worker widget to the widget bar"
+ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/worker"]' >/dev/null
 ctl --file "$tmp/widgets.ctl"
 expect_toast "already in the widget bar"
-ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/waiting", "tern-kata/worker"]' >/dev/null
-# Placed on their own, the widgets draw nothing while no agent waits and no worker runs, and Tern reports no failure for the
-# plugin: their registration (the icons included) and the commands raised nothing.
-ctl widgets set tern-kata/waiting tern-kata/worker
-ctl state | jq -e '.widgets.ids == ["tern-kata/waiting", "tern-kata/worker"]' >/dev/null
+ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/worker"]' >/dev/null
+# Placed on its own, the widget draws nothing while no worker runs, and Tern reports no failure for the plugin: its
+# registration (the icon included) and the commands raised nothing.
+ctl widgets set tern-kata/worker
+ctl state | jq -e '.widgets.ids == ["tern-kata/worker"]' >/dev/null
 [[ $(tern plugin list --json | jq '[.problems[] | select(tostring | contains("tern-kata"))] | length') == 0 ]]
-! grep -qE 'could not register (the worker )?widget|hook="command add-widgets"' "$tmp/tern.log" || { echo "tern-kata widget registration failed" >&2; exit 1; }
+! grep -qE 'could not (register|remove) (the worker )?widget|hook="command add-widgets"' "$tmp/tern.log" || { echo "tern-kata widget registration failed" >&2; exit 1; }
 # From Tern 0.9.21 the host half draws the worker widget: with a worker running (the host half starts one within a poll of
 # worker.toml appearing), the bar shows it with a tooltip naming the session host's worker, and it goes again when the worker
 # stops and nothing starts another. This fails if the host half stopped rendering it, or the window half's own widget (which

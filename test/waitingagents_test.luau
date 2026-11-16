@@ -1,7 +1,6 @@
 --!strict
 
--- Tests of which kata agent waits for the user and what the widget bar says, on plain data, outside Tern:
--- `luau test/waitingagents_test.luau`.
+-- Tests of which kata agent waits for the user, on plain data, outside Tern: `luau test/waitingagents_test.luau`.
 
 local waitingagents = require("../waitingagents")
 local harness = require("./harness")
@@ -39,33 +38,6 @@ end)
 
 test("agents that do not wait are left out", function()
     same(waitingagents.waiting({agent(1, "working"), agent(2, "idle"), agent(3, "exited"), agent(4, "waiting_input")}, {[1] = 9, [2] = 8, [3] = 7}, isKata), {4})
-end)
-
-test("a closing pane is left out", function()
-    same(waitingagents.waiting({agent(1, "waiting_input"), agent(2, "waiting_input")}, {[1] = 2, [2] = 1}, isKata, 1), {2})
-end)
-
-test("segment says how many wait", function()
-    local segments = waitingagents.segment(3, "plugin.tern-kata.go-to-waiting-agent")
-    assert(segments ~= nil and #segments == 1)
-    local segment = (segments :: any)[1]
-    assert(segment.text == "3 waiting" and segment.tone == "warning" and segment.command == "plugin.tern-kata.go-to-waiting-agent")
-end)
-
-test("segment is hidden at 0", function()
-    assert(waitingagents.segment(0, "x") == nil)
-end)
-
-local GO = "plugin.tern-kata.go-to-waiting-agent"
-
-test("widget says how many wait, with the tooltip and the click", function()
-    local view = waitingagents.widget(2, "A\nB", GO)
-    assert(view ~= nil)
-    assert(view.text == "2 waiting" and view.tone == "warning" and view.title == "A\nB" and view.command == GO)
-end)
-
-test("widget shows nothing at 0", function()
-    assert(waitingagents.widget(0, "", GO) == nil)
 end)
 
 harness.finish()
