@@ -45,7 +45,34 @@ func raise(uid string, project int64, message string) model.RaiseAgentAttention 
 }
 
 func clearOf(uid string, project int64, messages ...string) model.ClearAgentAttention {
-	return model.ClearAgentAttention{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", Address: "dana", Messages: messages}
+	return model.ClearAgentAttention{Workspace: "/w", ProjectID: project, UID: uid, Actor: "dana", From: "dana", Address: "dana", Messages: messages}
+}
+
+func TestAWaitingAgentOnAClosedIssueRaisesNothing(t *testing.T) {
+	m, cmds := relay(t, exitedPane("closed"), st("11", "waiting_input", "which table?"))
+	if len(attentionWrites(cmds)) != 0 || len(m.AgentAttention) != 0 {
+		t.Fatalf("cmds %v, raised %v", cmds, m.AgentAttention)
+	}
+}
+
+func TestTheClearsOfARaiseTakeTheSenderKataWroteAndOtherwiseThePanesActor(t *testing.T) {
+	m, _ := relay(t, attentionPane(), st("11", "waiting_input", "a"))
+	if want := []model.Cmd{clearOf("u1", 3, "a")}; !reflect.DeepEqual(m.QuitAgentAttention(), want) {
+		t.Fatalf("quit cmds %v, want a clear as the Pane's actor before kata's answer", m.QuitAgentAttention())
+	}
+	m, _ = model.Update(m, model.AgentAttentionWritten{UID: "u1", From: "account"})
+	want := clearOf("u1", 3, "a")
+	want.From = "account"
+	if got := m.QuitAgentAttention(); !reflect.DeepEqual(got, []model.Cmd{want}) {
+		t.Fatalf("quit cmds %v, want %v", got, want)
+	}
+	if m, _ = relay(t, m, st("11", "waiting_input", "a"), st("12", "waiting_input", "b")); m.AgentAttention[0].From != "account" {
+		t.Fatalf("a second raise forgot the sender: %+v", m.AgentAttention)
+	}
+	m, _ = model.Update(m, model.AgentAttentionWritten{UID: "u1"})
+	if m.AgentAttention[0].From != "account" {
+		t.Fatalf("an answer without a slot erased the sender: %+v", m.AgentAttention)
+	}
 }
 
 func TestAgentEnteringWaitingRaisesTheRequestOnce(t *testing.T) {

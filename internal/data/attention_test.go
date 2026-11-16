@@ -254,7 +254,7 @@ func TestAgentAttentionReplacesAnEarlierRequestAndClears(t *testing.T) {
 	}
 	raise("which table?") // the same value again changes nothing and is no error
 	cleared := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
-		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Messages: []string{"which table?"},
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", From: "dana-agent", Address: "dana", Messages: []string{"which table?"},
 	}))
 	if cleared.Err != nil || !cleared.Clear || cleared.UID != uid {
 		t.Fatalf("clear: %+v", cleared)
@@ -273,7 +273,7 @@ func TestAgentAttentionClearLeavesARequestSomeoneElseWroteSince(t *testing.T) {
 	f.put(t, f.workP, uid, "dana", map[string]any{"from": "bob", "message": "a newer ask"})
 	clear := func() model.AgentAttentionWritten {
 		return as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
-			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Messages: []string{"which table?"},
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", From: "dana-agent", Address: "dana", Messages: []string{"which table?"},
 		}))
 	}
 	if got := clear(); got.Err != nil || !got.Clear {
@@ -293,7 +293,7 @@ func TestAgentAttentionClearTakesAnyMessageAnAgentRaisedAndKeepsAnyOtherRequest(
 	uid := createIssue(t, f.gateway, f.work, f.workP, "Waiting")
 	clear := func() model.AgentAttentionWritten {
 		return as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
-			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Messages: []string{"msgA", "msgB"},
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", From: "dana-agent", Address: "dana", Messages: []string{"msgA", "msgB"},
 		}))
 	}
 	// Another Pane's agent on the Issue overwrote this Pane's request with msgB: still a request an agent raised.
@@ -345,7 +345,7 @@ func TestAgentAttentionRaisedWithATeammateNamesItAndIsClearedWithoutOne(t *testi
 	}
 	raise("reviewer", "which column?")
 	cleared := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
-		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Messages: []string{"which column?"},
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", From: "dana-agent", Address: "dana", Messages: []string{"which column?"},
 	}))
 	if cleared.Err != nil || !cleared.Clear {
 		t.Fatalf("clear: %+v", cleared)
@@ -448,10 +448,13 @@ func TestAnExitedAgentsAddressIsClearedWhoeverWroteToIt(t *testing.T) {
 	}
 }
 
-// recordWrites notes the method and path of every write the daemon receives from now on, and the body of each, without answering any.
-func (f attentionFixture) recordWrites() (writes *[]string, bodies *[]string) {
+// recordedWrite is a write the daemon received: its method, path and body.
+type recordedWrite struct{ method, path, body string }
+
+// recordWrites notes every write the daemon receives from now on, without answering any.
+func (f attentionFixture) recordWrites() *[]recordedWrite {
 	var mu sync.Mutex
-	writes, bodies = new([]string), new([]string)
+	writes := new([]recordedWrite)
 	hook := func(_ http.ResponseWriter, r *http.Request) bool {
 		if r.Method == http.MethodGet {
 			return false
@@ -460,11 +463,11 @@ func (f attentionFixture) recordWrites() (writes *[]string, bodies *[]string) {
 		r.Body = io.NopCloser(bytes.NewReader(raw))
 		mu.Lock()
 		defer mu.Unlock()
-		*writes, *bodies = append(*writes, r.Method+" "+r.URL.Path), append(*bodies, string(raw))
+		*writes = append(*writes, recordedWrite{r.Method, r.URL.Path, string(raw)})
 		return false
 	}
 	f.kata.intercept.Store(&hook)
-	return writes, bodies
+	return writes
 }
 
 func TestHandOffAgentWritesTheAttentionMetadataAndSwapsTheReadyLabel(t *testing.T) {
@@ -473,14 +476,14 @@ func TestHandOffAgentWritesTheAttentionMetadataAndSwapsTheReadyLabel(t *testing.
 	if w := as[model.FieldWritten](t, run(t, f.gateway, model.WriteField{Workspace: f.work, UID: uid, ProjectID: f.workP.ID, Actor: "tester", Action: model.AddLabelAction, Value: "ready-for-agent"})); w.Err != nil {
 		t.Fatal(w.Err)
 	}
-	writes, bodies := f.recordWrites()
+	writes := f.recordWrites()
 	got := as[model.AgentHandedOff](t, run(t, f.gateway, model.HandOffAgent{
 		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana", Message: model.AgentStopHandOffMessage, SwapLabels: true,
 	}))
 	var metadata []string
-	for i, w := range *writes {
-		if strings.HasSuffix(strings.Fields(w)[1], "/metadata") {
-			metadata = append(metadata, (*bodies)[i])
+	for _, w := range *writes {
+		if strings.HasSuffix(w.path, "/metadata") {
+			metadata = append(metadata, w.body)
 		}
 	}
 	if len(metadata) != 1 || !strings.Contains(metadata[0], `"work.attention":"needs-human"`) || !strings.Contains(metadata[0], `"work.attention_msg"`) {
@@ -537,21 +540,57 @@ func TestAnAgentsMessageToAnAgentCarriesItsTeammateAndNeverReplacesAnUnreadOne(t
 func TestRaiseAgentAttentionGoesThroughKatasNotifyRouteAndTheSlotReadsBack(t *testing.T) {
 	f := newAttentionFixture(t)
 	uid := createIssue(t, f.gateway, f.work, f.workP, "Waiting")
-	writes, bodies := f.recordWrites()
+	writes := f.recordWrites()
 	got := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.RaiseAgentAttention{
 		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Teammate: "omp-31", Address: "dana/omp-31", Message: "which table?",
 	}))
-	if got.Err != nil {
+	if got.Err != nil || got.From != "dana-agent" {
 		t.Fatalf("raise: %+v", got)
 	}
-	if len(*writes) != 1 || !strings.HasSuffix((*writes)[0], "/notifications") {
-		t.Fatalf("writes %q, want one POST to the notify route", *writes)
+	if len(*writes) != 1 || (*writes)[0].method != http.MethodPost || !strings.HasSuffix((*writes)[0].path, "/notifications") {
+		t.Fatalf("writes %v, want one POST to the notify route", *writes)
 	}
-	if body := (*bodies)[0]; !strings.Contains(body, `"to":"dana/omp-31"`) || !strings.Contains(body, `"teammate":"omp-31"`) || !strings.Contains(body, `"actor":"dana-agent"`) {
+	if body := (*writes)[0].body; !strings.Contains(body, `"to":"dana/omp-31"`) || !strings.Contains(body, `"teammate":"omp-31"`) || !strings.Contains(body, `"actor":"dana-agent"`) {
 		t.Errorf("notify body %s, want actor, teammate and to", body)
 	}
 	slots := f.read(t, "dana/omp-31").Requests
 	if len(slots) != 1 || slots[0].Slot.From != "dana-agent" || slots[0].Slot.Teammate != "omp-31" || slots[0].Slot.Message != "which table?" {
 		t.Fatalf("slot %+v, want {from dana-agent, teammate omp-31, message}", slots)
+	}
+}
+
+// A daemon that writes the credential's account as the slot's `from` leaves a request the Pane's actor never wrote: the Pane
+// clears it by the `from` kata answered with, and leaves it alone when it matches only the actor it sent.
+func TestAgentAttentionRaisedUnderAnotherAccountIsClearedByTheSenderKataWrote(t *testing.T) {
+	kata := startKataAsHost(t, "0.21.0")
+	gateway := newGateway(t, newLocator(kata.target()))
+	work, workP := project(t, gateway, "work")
+	f := attentionFixture{kata: kata, gateway: gateway, work: work, workP: workP}
+	uid := createIssue(t, f.gateway, f.work, f.workP, "Waiting")
+	raised := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.RaiseAgentAttention{
+		Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", Address: "dana", Message: "which table?",
+	}))
+	if raised.Err != nil || raised.From != "host-user" {
+		t.Fatalf("raise: %+v, want the slot's from, host-user, in the answer", raised)
+	}
+	if got := f.read(t, "dana").Requests; len(got) != 1 || got[0].Slot.From != "host-user" {
+		t.Fatalf("requests after the raise: %+v, want one written as host-user", got)
+	}
+	clear := func(from string) {
+		t.Helper()
+		got := as[model.AgentAttentionWritten](t, run(t, f.gateway, model.ClearAgentAttention{
+			Workspace: f.work, ProjectID: f.workP.ID, UID: uid, Actor: "dana-agent", From: from, Address: "dana", Messages: []string{"which table?"},
+		}))
+		if got.Err != nil || !got.Clear {
+			t.Fatalf("clear as %s: %+v", from, got)
+		}
+	}
+	clear("dana-agent")
+	if left := f.read(t, "dana").Requests; len(left) != 1 {
+		t.Fatalf("requests after a clear as the actor sent: %+v, want the request kept", left)
+	}
+	clear(raised.From)
+	if left := f.read(t, "dana").Requests; len(left) != 0 {
+		t.Fatalf("requests after the clear as the sender kata wrote: %+v", left)
 	}
 }

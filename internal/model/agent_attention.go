@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -25,6 +26,10 @@ type RaisedAttention struct {
 	// Seen are the messages of the agents on the Issue, this Pane's or another Pane's, seen waiting while this Pane held the
 	// record, in the order seen. Another Pane's request may have replaced Message in the slot, and this Pane's clear takes any.
 	Seen []string
+	// From is the sender kata wrote on the request, taken from its answer to the raise; "" until that answer arrives or when it
+	// held no slot. kata's notify route writes the credential's account (or a federated spoke's bound actor), not the actor the
+	// Pane sent, and the clear only takes a request that reads as this sender, so it must match what kata holds.
+	From string
 }
 
 func (r RaisedAttention) messages() []string {
@@ -37,7 +42,8 @@ func (r RaisedAttention) messages() []string {
 	return out
 }
 
-// RaiseAgentAttention writes the Attention request for Address on an Issue, replacing any earlier one, as Actor.
+// RaiseAgentAttention writes the Attention request for Address on an Issue, replacing any earlier one. Actor is sent as the writer;
+// kata decides who the request reads as written by (see RaisedAttention.From).
 type RaiseAgentAttention struct {
 	Workspace string
 	ProjectID int64
@@ -51,21 +57,25 @@ type RaiseAgentAttention struct {
 
 func (RaiseAgentAttention) cmd() {}
 
-// ClearAgentAttention clears the request for Address on an Issue when it still reads as Actor wrote it with one of Messages; a
-// request someone else wrote since, or one of Actor's with another message, is left alone.
+// ClearAgentAttention clears the request for Address on an Issue when it still reads as From wrote it with one of Messages; a
+// request someone else wrote since, or one of From's with another message, is left alone. Actor writes the clear.
 type ClearAgentAttention struct {
 	Workspace string
 	ProjectID int64
 	UID       string
 	Actor     string
+	From      string
 	Address   string
 	Messages  []string
 }
 
 func (ClearAgentAttention) cmd() {}
 
+// AgentAttentionWritten is the answer to a raise or a clear. From, on a raise, is the sender kata wrote on the request, "" when
+// its answer held no readable one.
 type AgentAttentionWritten struct {
 	UID   string
+	From  string
 	Clear bool
 	Err   error
 }
@@ -157,6 +167,9 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 			continue
 		}
 		project := m.projectOf(e)
+		if m.issueStatus(e.IssueUID) == "closed" {
+			continue
+		}
 		if project == 0 {
 			continue
 		}
@@ -173,7 +186,7 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 	kept := m.AgentAttention[:0:0]
 	for _, r := range m.AgentAttention {
 		waiting := m.agentWaitingOn(r.UID)
-		if waiting || (r.Exited && m.issueStatus(r.UID) != "closed") {
+		if m.issueStatus(r.UID) != "closed" && (waiting || r.Exited) {
 			if waiting {
 				r.Exited = false
 			}
@@ -192,7 +205,7 @@ func attentionPass(m Model, relayed, reread bool) (Model, []Cmd) {
 func putRaise(m Model, cmds []Cmd, uid string, project int64, teammate, address, message string, exited bool) (Model, []Cmd) {
 	raised := RaisedAttention{UID: uid, ProjectID: project, Message: message, Exited: exited}
 	if i := slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == uid }); i >= 0 {
-		raised.Seen = m.AgentAttention[i].Seen
+		raised.Seen, raised.From = m.AgentAttention[i].Seen, m.AgentAttention[i].From
 		m.AgentAttention = slices.Clone(m.AgentAttention)
 		m.AgentAttention[i] = raised
 	} else {
@@ -303,7 +316,7 @@ func (m Model) seenWaiting(r RaisedAttention) []string {
 }
 
 func (m Model) clearOf(r RaisedAttention, address string) ClearAgentAttention {
-	return ClearAgentAttention{Workspace: m.Workspace, ProjectID: r.ProjectID, UID: r.UID, Actor: m.Actor, Address: address, Messages: r.messages()}
+	return ClearAgentAttention{Workspace: m.Workspace, ProjectID: r.ProjectID, UID: r.UID, Actor: m.Actor, From: cmp.Or(r.From, m.Actor), Address: address, Messages: r.messages()}
 }
 
 // QuitAgentAttention is what a quitting Pane still owes: the clears of the requests it raised, except where another Pane's
@@ -338,6 +351,11 @@ func agentAttentionWritten(m Model, msg AgentAttentionWritten) Model {
 			verb = "clear"
 		}
 		m.Notice = fmt.Sprintf("Cannot %s the Attention request for an agent: %s", verb, msg.Err)
+		return m
+	}
+	if i := slices.IndexFunc(m.AgentAttention, func(r RaisedAttention) bool { return r.UID == msg.UID }); i >= 0 && !msg.Clear && msg.From != "" {
+		m.AgentAttention = slices.Clone(m.AgentAttention)
+		m.AgentAttention[i].From = msg.From
 	}
 	return m
 }

@@ -69,30 +69,36 @@ func (c *Client) ClearAttention(ctx context.Context, cmd model.ClearAttention) (
 	return model.AttentionCleared{UID: cmd.UID, Changed: changed}, err
 }
 
-// RaiseAgentAttention sends the request for cmd.Address on an Issue through kata's notify route, as the Pane's actor, naming the
+// RaiseAgentAttention sends the request for cmd.Address on an Issue through kata's notify route, sent as the Pane's actor, naming the
 // waiting agent as teammate when it has a name. The route writes the slot without a guard: it replaces an earlier request, which is
-// how a newly waiting agent's message lands.
-func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAttention) error {
+// how a newly waiting agent's message lands. It does not keep the actor sent as the slot's `from`: kata writes the credential's
+// account, or a federated spoke's bound actor, so it returns the `from` the slot holds in the answer ("" when the answer carries no
+// readable slot), which is who the request reads as written by.
+func (c *Client) RaiseAgentAttention(ctx context.Context, cmd model.RaiseAgentAttention) (from string, err error) {
 	body := &g.NotifyIssueBody{Actor: &cmd.Actor, To: &cmd.Address, Message: cmd.Message}
 	if cmd.Teammate != "" {
 		body.Teammate = &cmd.Teammate
 	}
-	_, err := c.NotifyIssueWithResponse(ctx, &g.NotifyIssueRequestOptions{
+	notified, err := c.NotifyIssueWithResponse(ctx, &g.NotifyIssueRequestOptions{
 		PathParams: &g.NotifyIssuePath{ProjectID: fmt.Sprint(cmd.ProjectID), Ref: cmd.UID}, Body: body,
 	})
-	return daemonError(err)
+	if err != nil {
+		return "", daemonError(err)
+	}
+	if slot, ok := notified.JSON200.Issue.Metadata[model.NotificationKey(cmd.Address)].(map[string]any); ok {
+		from, _ = slot["from"].(string)
+	}
+	return from, nil
 }
 
 // HandOffAgent writes what an agent that stops without closing its Issue writes: work.attention = needs-human and work.attention_msg
 // = the reason in one metadata patch, then, when asked, the label ready-for-agent removed and ready-for-human added, as the Pane's
 // actor. It stops at the first write that fails.
 func (c *Client) HandOffAgent(ctx context.Context, cmd model.HandOffAgent) error {
-	_, err := c.PatchIssueMetadataWithResponse(ctx, &g.PatchIssueMetadataRequestOptions{
-		PathParams: &g.PatchIssueMetadataPath{ProjectID: cmd.ProjectID, Ref: cmd.UID},
-		Body: &g.PatchIssueMetadataBody{Actor: &cmd.Actor, Patch: map[string]any{
-			model.WorkAttentionKey: model.WorkAttentionNeedsHuman, model.WorkAttentionMsgKey: cmd.Message,
-		}},
+	options, _ := metadataPatch(cmd.ProjectID, cmd.UID, cmd.Actor, map[string]any{
+		model.WorkAttentionKey: model.WorkAttentionNeedsHuman, model.WorkAttentionMsgKey: cmd.Message,
 	})
+	_, err := c.PatchIssueMetadataWithResponse(ctx, options)
 	if err != nil {
 		return daemonError(err)
 	}
@@ -111,14 +117,14 @@ func (c *Client) HandOffAgent(ctx context.Context, cmd model.HandOffAgent) error
 }
 
 // ClearAgentAttention removes the request for cmd.Address on an Issue as `kata notify --clear` does, but only while it still
-// reads as cmd.Actor wrote it (whatever its teammate) with one of cmd.Messages, and guarded on the value read, so a request someone else wrote since survives. A
-// slot that is gone, someone else's, or rewritten between the read and the write counts as cleared.
+// reads as cmd.From wrote it (whatever its teammate) with one of cmd.Messages, and guarded on the value read, so a request someone
+// else wrote since survives. A slot that is gone, someone else's, or rewritten between the read and the write counts as cleared.
 func (c *Client) ClearAgentAttention(ctx context.Context, cmd model.ClearAgentAttention) error {
 	key := model.NotificationKey(cmd.Address)
 	// A slot that does not read as a request, or reads as someone else's, is not this Pane's to clear.
 	return c.clearSlotIf(ctx, cmd.ProjectID, cmd.UID, cmd.Actor, key, func(raw string) bool {
 		slot, err := model.ReadNotificationSlot(key, raw)
-		return err == nil && slot.From == cmd.Actor && slices.Contains(cmd.Messages, slot.Message)
+		return err == nil && slot.From == cmd.From && slices.Contains(cmd.Messages, slot.Message)
 	})
 }
 

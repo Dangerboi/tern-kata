@@ -154,7 +154,7 @@ func TestAFinishedAgentIsReadOnceWhenItFinishesNotOnEveryWindowsRelay(t *testing
 
 func TestAnAdoptedAgentGetsAttentionGoingBackAndAutoCloseFromThisPane(t *testing.T) {
 	m := attentionPane()
-	m.Issues = []model.Issue{closed("u1")}
+	m.Issues = []model.Issue{{UID: "u1", Status: "open"}}
 	agent := backgroundEntry("21", "20", true)
 	agent.IssueUID, agent.ProjectID = "u1", 3
 	m.AgentMapping = []model.AgentEntry{agent}
@@ -171,6 +171,7 @@ func TestAnAdoptedAgentGetsAttentionGoingBackAndAutoCloseFromThisPane(t *testing
 	if want := []model.Cmd{raise("u1", 3, "again")}; !reflect.DeepEqual(cmds, want) {
 		t.Fatalf("an adopted agent's attention: %v", cmds)
 	}
+	m.Issues = []model.Issue{closed("u1")}
 	m, cmds = relay(t, m, st("21", "working", ""))
 	if back := sentBack(cmds); len(back) != 1 || back[0].Block != "21" {
 		t.Fatalf("going back %#v", cmds)
