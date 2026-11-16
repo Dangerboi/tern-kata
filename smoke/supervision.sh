@@ -116,8 +116,8 @@ first=$(worker_pid)
 
 # The job forbids overlap: a fresh worker may still be settling the last run (it shows succeeded before kata holds it
 # settled), so a refusal saying so is retried for a while; so is a fresh worker that has not resolved its Project yet.
-job_accepted() { # $1 the job's uid, default the main job
-  run_out=$("$tmp/bin/tern-kata" run "${1:-$job}" 2>&1) && return 0
+job_accepted() { # $1 the job's uid
+  run_out=$("$tmp/bin/tern-kata" run "$1" 2>&1) && return 0
   grep -Eq 'is not settled|no job .* in a Project this worker serves' <<<"$run_out" || { echo "$run_out" >&2; exit 1; }
   return 1
 }
@@ -125,9 +125,12 @@ runs_succeeded() { # $1 how many
   "$tmp/bin/tern-kata" worker status >"$tmp/status.txt"
   [[ $(grep -c '"Supervised smoke job"  succeeded' "$tmp/status.txt") -ge $1 ]]
 }
-run_job() { # $1 how many runs have succeeded when it returns
-  wait_for -t 10 job_accepted
+accept_run() { # $1 the job's uid, $2 seconds
+  wait_for -t "$2" job_accepted "$1"
   grep -q accepted <<<"$run_out" || { echo "$run_out" >&2; return 1; }
+}
+run_job() { # $1 how many runs have succeeded when it returns
+  accept_run "$job" 10
   wait_for -t 10 runs_succeeded "$1" || { cat "$tmp/status.txt" >&2; return 1; }
 }
 run_job 1
@@ -271,13 +274,12 @@ fi
 run_job 5
 # Tern 0.9.24 gives the worker no time limit and streams its stderr to the daemon log as it comes. A job that fails three
 # times in a row makes the worker write "job ... is paused after 3 failed runs" to stderr: that line must reach the daemon
-# log, as the worker wrote it ("tern-kata worker: " is its own prefix, so a doubled one is a bug), while the worker runs (before 0.9.24 only its last line is logged, when it exits).
+# log once prefixed (the worker prefixes its own lines, so a doubled prefix is a bug), while the worker runs.
 if tern_at_least 0.9.24; then
   sed 's/"Supervised smoke job"/"Failing smoke job"/; s/say done/FAILME/; s/Supervised run/Failing run/' "$tmp/job.json" >"$tmp/failjob.json"
   failjob=$(kata --workspace "$tmp/workspace" cron job create --file "$tmp/failjob.json" --json | jq -r '.job.uid')
   for attempt in 1 2 3; do
-    wait_for -t 20 job_accepted "$failjob"
-    grep -q accepted <<<"$run_out" || { echo "$run_out" >&2; exit 1; }
+    accept_run "$failjob" 20
   done
   worker_line_logged() { grep -Eq 'tern-kata worker: .*is paused after 3 failed runs' "$STENCIL_LOG_DIR/tern-daemon.log"; }
   wait_for -t 20 worker_line_logged || { echo "a line the worker wrote to stderr never reached the daemon log" >&2; exit 1; }

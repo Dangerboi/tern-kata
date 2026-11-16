@@ -6,10 +6,10 @@
 -- while the worker runs on) or one started by hand. On Tern 0.9.16+ the end of a worker its earlier load started comes as a
 -- `process_exit` event: the host half then starts one at once and logs how that worker ended. Elsewhere (older Tern, a
 -- worker started by hand, a daemon restart) it starts one within a poll of that worker's end.
--- On Tern 0.9.24+ it starts the worker with `tern.process.spawn`: no time limit, and each stderr line the worker writes goes
--- to Tern's daemon log as it comes (the worker prefixes its own lines `tern-kata worker: `; the default log keeps warn and error only). A worker
--- adopted after a reload has no callback any more: Tern keeps reading its stderr, but only the last 64 KiB reach the
--- `process_exit` event, whose last line is logged with its end. Before 0.9.24 it uses `tern.process.run` with a 7-day limit.
+-- On Tern 0.9.24+ it starts the worker with `tern.process.spawn`: no time limit, and each stderr line goes to Tern's daemon
+-- log as it comes (warn, which the default log keeps). A worker adopted after a reload has no callback any more: Tern keeps
+-- reading its stderr, but only the last 64 KiB reach the `process_exit` event, whose last line is logged with its end.
+-- Before 0.9.24 it uses `tern.process.run` with a 7-day limit and logs only the last stderr line, when the worker exits.
 -- While this load's worker runs, or the Supervision rule holds and the poll finds a worker already running, it also asks
 -- `tern-kata worker status --json` and keeps a short summary of it (workersummary.luau).
 -- Which half draws the kata worker widget (workerwidget.luau is its definition): on Tern 0.9.21+ this half does, on the
@@ -44,8 +44,9 @@ local HEALTHY_MS = 60000
 local POLL_MS = 10000
 -- The first look at a worker just started: its status is ready within moments, and the widget should not wait a whole poll.
 local FIRST_LOOK_MS = 2000
--- Only the `tern.process.run` fallback (Tern before 0.9.24, which has no `tern.process.spawn`) needs it: `run` can only kill
--- by timeout, and an exited-and-restarted worker is safe (its runs are journaled). A spawned worker has no time limit.
+-- The `tern.process.run` fallback (Tern before 0.9.24) can only kill by timeout; an exited-and-restarted worker is safe
+-- (its runs are journaled).
+local WORKER_PREFIX = "tern-kata worker: "
 local RUN_LIMIT_MS = 7 * 24 * 3600 * 1000
 
 local running = false
@@ -166,7 +167,7 @@ local function home_dir(): string?
     return env(if windows then "USERPROFILE" else "HOME")
 end
 
-local function process_options(timeout_ms: number, extra_env: { [string]: string }?): ProcessOptions
+local function process_options(timeout_ms: number?, extra_env: { [string]: string }?): ProcessOptions
     local vars = { PATH = tool_path() }
     if extra_env then
         for name, value in extra_env do vars[name] = value end
@@ -314,23 +315,24 @@ local function launch(binary: string, config: string): number
         tern.log.warn("tern-kata: the worker exited with status " .. status .. " after " .. ran // 1000 .. " s (" .. last .. "); restarting in " .. waited // 1000 .. " s")
         arm(math.min(next_start - tern.now(), POLL_MS))
     end
-    -- Tern 0.9.24+ spawns the worker: no time limit, and its stderr lines go to Tern's daemon log as they come. Spawning
-    -- raises on iOS and in Carly's VM, but so does `run`, and this half lives in the session daemon: a raise here is the
-    -- same start failure as before. An older Tern runs it with a time limit and logs only its last stderr line.
+    -- Spawning raises on iOS and in Carly's VM, but so does `run`, and this half lives in the session daemon: a raise here is
+    -- the same start failure as before.
+    local worker_env = { TERN_KATA_SUPERVISOR = "tern" }
     local ok, err = pcall(function()
-        local options = process_options(RUN_LIMIT_MS, { TERN_KATA_SUPERVISOR = "tern" })
         if tern.process.spawn == nil then
-            tern.process.run({binary, "worker"}, options, function(result: ProcessResult)
+            tern.process.run({binary, "worker"}, process_options(RUN_LIMIT_MS, worker_env), function(result: ProcessResult)
                 exited(result.status, last_line(result.stderr), result.timed_out)
             end)
         else
-            -- The worker prefixes its own log lines with `tern-kata worker: `, so each is logged as it wrote it.
+            local options = process_options(nil, worker_env)
             local last = ""
             tern.process.spawn({binary, "worker"}, {
                 cwd = options.cwd,
                 env = options.env,
                 stderr = function(line: string)
                     if line == "" then return end
+                    -- The worker prefixes its own log lines; a fatal error or a Go trace comes without.
+                    if line:sub(1, #WORKER_PREFIX) ~= WORKER_PREFIX then line = WORKER_PREFIX .. line end
                     last = line
                     tern.log.warn(line)
                 end,
@@ -426,7 +428,7 @@ function start()
     end
 end
 
--- Tern 0.9.16+ reports a `tern.process.run` child that ends after the VM that started it is gone as a `process_exit` event
+-- Tern 0.9.16+ reports a `tern.process.run` or (0.9.24+) `tern.process.spawn` child that ends after the VM that started it is gone as a `process_exit` event
 -- in the new VM: the worker a reload or a Tern update in place left running, or a `worker supervised` question that was
 -- out. The event always asks for a new look now. It is the worker's end only when its pid is the one in the last held
 -- line (`worker <pid> ...`), which the poll logged in this load or an earlier one (tern.kv keeps it): then its status and
