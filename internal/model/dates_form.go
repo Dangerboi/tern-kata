@@ -217,8 +217,8 @@ func submitDates(m Model) (Model, []Cmd) {
 }
 
 // updateDates applies the answer to a save. A failure keeps the card open with kata's reason, and a refusal for a changed date
-// refills that field with the current value; a refused save writes nothing, so the Issue is not read again, and a save whose outcome is unknown is likewise not
-// read again here.
+// refills that field with the current value. A refused save writes nothing, and a save whose outcome is unknown is left to the
+// live updates, so neither reads the Issue again here.
 func updateDates(m Model, msg DatesResultMsg) (Model, []Cmd) {
 	f := &m.DatesForm
 	if !f.Open || f.UID != msg.UID {

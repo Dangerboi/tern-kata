@@ -15,7 +15,8 @@ import (
 // of the Issue it read. The date keys read are compared with what the card opened with first (absent when it held none): a key
 // changed since the card opened writes nothing, and the refusal names it. A refused revision reads the Issue again: when the date
 // keys still hold what the card opened with, the patch goes again at the new revision, up to guardedAttempts times. The patch
-// is all or nothing. It returns the changes that changed the Issue and the Issue after them. ambiguous says the failure leaves the outcome of the write unknown.
+// is all or nothing. It returns the changes that changed the Issue and the Issue after them. ambiguous says the failure leaves
+// the outcome of the write unknown.
 func (c *Client) setDates(ctx context.Context, cmd model.SetDatesCmd) (changed []model.DateChange, last issueWrite, ambiguous bool, err error) {
 	if len(cmd.Changes) == 0 {
 		return nil, last, false, nil
