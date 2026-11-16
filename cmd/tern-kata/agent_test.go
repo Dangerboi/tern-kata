@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -394,5 +396,72 @@ func TestAgentWrapperDoesNotAskTheDaemonItsAuthKindWithoutMessageFrom(t *testing
 	}
 	if len(asked) != 0 {
 		t.Errorf("the wrapper sent the daemon %d requests with no --message-from", len(asked))
+	}
+}
+
+func TestAForkedWrapperCopiesThePanesFileThenReadsItsCopyAfterTheOriginalIsGone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	home := t.TempDir()
+	prompts := filepath.Join(t.TempDir(), "agent-prompts")
+	if err := os.MkdirAll(prompts, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := filepath.Join(prompts, "prompt-7-1.md.token")
+	if err := os.WriteFile(original, []byte("pane-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fork := func(block, from string) (string, int, string) {
+		return agentEnvOutput(t, []string{"TERN_PANE=" + block}, "--home", home, "--server", "https://pane.example", "--token-file", original, "--forked-from", from)
+	}
+	if out, status, stderr := fork("12", "7"); status != 0 || !strings.Contains(out, "TOKEN=pane-token ") {
+		t.Fatalf("the fork's first start: status %d, output %q, stderr %q", status, out, stderr)
+	}
+	copied := filepath.Join(prompts, "fork-12-prompt-7-1.md.token")
+	if info, err := os.Stat(copied); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("the fork's own copy: %v, %v", info, err)
+	}
+	if err := os.Remove(original); err != nil {
+		t.Fatal(err)
+	}
+	if out, status, stderr := fork("12", "7"); status != 0 || !strings.Contains(out, "TOKEN=pane-token ") {
+		t.Errorf("the fork reopened after the original is gone: status %d, output %q, stderr %q", status, out, stderr)
+	}
+	if out, status, stderr := fork("13", "12"); status != 0 || !strings.Contains(out, "TOKEN=pane-token ") {
+		t.Errorf("a fork of the fork: status %d, output %q, stderr %q", status, out, stderr)
+	}
+}
+
+func TestAgentPromptFileFlagIsTheExtensionsPromptFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	prompt := "/state/agent-prompts/prompt-7-1.md"
+	for name, flags := range map[string][]string{"separate": {"--prompt-file", prompt}, "joined": {"--prompt-file=" + prompt}} {
+		t.Run(name, func(t *testing.T) {
+			args := append(append([]string{"agent", "--as", "claude"}, flags...), "--", "sh", "-c", `printf '%s' "$TERN_KATA_PROMPT_FILE"`)
+			out, status, stderr := runAgent(t, []string{"TERN_KATA_PROMPT_FILE=/other.md"}, args...)
+			if status != 0 || out != prompt {
+				t.Errorf("status %d, output %q, stderr %q; want %q", status, out, stderr, prompt)
+			}
+		})
+	}
+	if out, _, _ := runAgent(t, []string{"TERN_KATA_PROMPT_FILE=/other.md"}, "agent", "--as", "claude", "--", "sh", "-c", `printf '%s' "${TERN_KATA_PROMPT_FILE-unset}"`); out != "unset" {
+		t.Errorf("an inherited prompt file reached the agent: %q", out)
+	}
+}
+
+func TestReopenLuauNamesThePromptFileFlagTheWrapperTakes(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "reopen.luau"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`PROMPT_FILE_FLAG = "([^"]+)"`).FindSubmatch(src)
+	if m == nil {
+		t.Fatal("reopen.luau has no PROMPT_FILE_FLAG")
+	}
+	if !slices.Contains(flagNames(agentFlags), string(m[1])) {
+		t.Errorf("reopen.luau writes --%s, which tern-kata agent does not take", m[1])
 	}
 }

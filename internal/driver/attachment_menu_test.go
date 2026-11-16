@@ -254,3 +254,33 @@ func TestTwoUnlinksInFlightAreEachReportedAgainstTheirOwnRequest(t *testing.T) {
 		t.Fatalf("form %+v, notice %q", done.State.Model.FieldForm, done.State.Model.Notice)
 	}
 }
+
+// A Copy answer that comes while a question covers the Pane must not take the keys from it: it is said in a toast.
+func TestACopyAnswerWhileAQuestionIsAskedIsToastedAndLeavesTheQuestion(t *testing.T) {
+	s := unlinkAsked(t)
+	out := step(t, s, model.AttachmentOpened{UID: "a", AttachmentID: "A1", Name: "shot.png", Path: "/cache/shot.png", Way: model.WayCopy})
+	m := out.State.Model
+	if m.AttachmentCopy.Open {
+		t.Fatal("the Copy card opened over the question")
+	}
+	if q, asking := m.Question(); !asking || q.Mode != model.ModeUnlinkAttachment {
+		t.Fatalf("question %+v (%v)", q, asking)
+	}
+	if m.Toast == nil || !strings.Contains(m.Toast.Text, "/cache/shot.png") || !strings.Contains(m.Toast.Text, "kata docbank attachments get work#a A1") {
+		t.Fatalf("toast %+v, want the path and the command", m.Toast)
+	}
+	if kept := step(t, out.State, key("n")).State.Model; kept.AskUnlink != nil {
+		t.Error("n did not answer the question")
+	}
+}
+
+func TestACopyAnswerWhileHelpIsOpenIsToasted(t *testing.T) {
+	s := step(t, attachmentsPane(t), key("?")).State
+	if !s.Model.HelpOpen {
+		t.Fatal("? did not open help")
+	}
+	m := step(t, s, model.AttachmentOpened{UID: "a", AttachmentID: "A1", Name: "shot.png", Path: "/cache/shot.png", Way: model.WayCopy}).State.Model
+	if m.AttachmentCopy.Open || !m.HelpOpen || m.Toast == nil || !strings.Contains(m.Toast.Text, "/cache/shot.png") {
+		t.Fatalf("copy open %v, help %v, toast %+v", m.AttachmentCopy.Open, m.HelpOpen, m.Toast)
+	}
+}

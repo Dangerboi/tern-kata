@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -25,21 +27,22 @@ func ternProbe(args []string) ([]byte, bool) {
 	return nil, false
 }
 
-func TestOnlyATernAtLeastThe0921ReleaseIsKnownToHaveTheSubcommands(t *testing.T) {
+func TestAtLeastTheSubcommandsFloorReadsSemverVersions(t *testing.T) {
 	for _, c := range []struct {
 		out  string
 		want bool
 	}{
 		{"tern 0.9.21 (bde0861)\n", true},
+		{"tern v0.9.21", true},
 		{"tern 0.9.22", true},
+		{"tern 0.9.22-dev", true},
+		{"tern v0.9.22-dev (abc)", true},
 		{"tern 0.10.0 (x)", true},
 		{"tern 1.0.0", true},
+		{"tern 0.9.21-dev", false},
 		{"tern 0.9.20 (x)", false},
 		{"tern 0.8.99", false},
-		{"garbage", false},
-		{"", false},
 		{"tern 0.9", false},
-		{"tern 0.9.x", false},
 	} {
 		g := NewGateway(nil)
 		asked := 0
@@ -51,12 +54,28 @@ func TestOnlyATernAtLeastThe0921ReleaseIsKnownToHaveTheSubcommands(t *testing.T)
 			return []byte(c.out), nil
 		}
 		for range 3 {
-			if got, err := g.ternHasSubcommands(context.Background()); err != nil || got != c.want {
+			if got, err := g.ternAtLeast(context.Background(), ternSubcommandsFloor); err != nil || got != c.want {
 				t.Errorf("%q: %v (%v), want %v", c.out, got, err, c.want)
 			}
 		}
 		if asked != 1 {
 			t.Errorf("%q: asked %d times, want once (an answer is kept, old or not)", c.out, asked)
+		}
+	}
+}
+
+func TestAnUnreadableVersionIsAnErrorAndIsAskedAgain(t *testing.T) {
+	for _, out := range []string{"garbage", "", "tern", "tern 0.9.x", "tern latest"} {
+		g := NewGateway(nil)
+		asked := 0
+		g.runTern = func(context.Context, []string) ([]byte, error) { asked++; return []byte(out), nil }
+		for range 2 {
+			if has, err := g.ternAtLeast(context.Background(), ternSubcommandsFloor); has || err == nil {
+				t.Errorf("%q: %v, %v, want an error", out, has, err)
+			}
+		}
+		if asked != 2 {
+			t.Errorf("%q: asked %d times, want 2 (a failure is not kept)", out, asked)
 		}
 	}
 }
@@ -77,16 +96,70 @@ func TestAFailedVersionAskIsAskedAgainAndTheProbeOutlivesTheCallersContext(t *te
 		}
 		return []byte(modernTernVersion), nil
 	}
-	if has, err := g.ternHasSubcommands(context.Background()); has || err == nil {
+	if has, err := g.ternAtLeast(context.Background(), ternSubcommandsFloor); has || err == nil {
 		t.Fatalf("a failed ask gave %v, %v, want an error", has, err)
 	}
-	cancelled, cancel := context.WithCancel(context.Background())
-	cancel()
-	if has, err := g.ternHasSubcommands(cancelled); !has || err != nil {
-		t.Fatalf("the second ask gave %v, %v, want a current Tern allowed", has, err)
+	if has, err := g.ternAtLeast(context.Background(), ternSubcommandsFloor); !has || err != nil || asked != 2 {
+		t.Fatalf("asked %d times, want 2 with a current Tern allowed (%v, %v)", asked, has, err)
 	}
-	if has, err := g.ternHasSubcommands(context.Background()); !has || err != nil || asked != 2 {
-		t.Fatalf("asked %d times, want 2 with the answer then kept", asked)
+}
+
+func TestACallerWhoseContextEndsStopsWaitingForTheVersionAndOthersShareTheAsk(t *testing.T) {
+	g := NewGateway(nil)
+	release := make(chan struct{})
+	var asked atomic.Int32
+	g.runTern = func(context.Context, []string) ([]byte, error) {
+		asked.Add(1)
+		<-release
+		return []byte(modernTernVersion), nil
+	}
+	short, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if has, err := g.ternAtLeast(short, ternSubcommandsFloor); has || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("the caller whose context ended got %v, %v", has, err)
+	}
+	go func() { time.Sleep(20 * time.Millisecond); close(release) }()
+	if has, err := g.ternAtLeast(context.Background(), ternSubcommandsFloor); !has || err != nil || asked.Load() != 1 {
+		t.Fatalf("the second caller got %v, %v after %d asks, want the one ask's answer", has, err, asked.Load())
+	}
+}
+
+func TestAnUnreadableVersionPrunesNothing(t *testing.T) {
+	g, dirs := agentGateway(t)
+	file := seedAgent(t, dirs, model.AgentEntry{Block: "9007199254740993"})
+	putAgents(t, file, model.AgentEntry{Block: "7"})
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		switch args[0] {
+		case "--version":
+			return []byte("tern 0.9.22-dev (abc)"), nil
+		case "inspect":
+			return []byte(twoWindows), nil
+		case "ls":
+			if slices.Contains(args, "--window") {
+				return []byte(`{"sessions":[{"id":9,"tabs":[{"id":5,"blocks":[{"id":9007199254740993}]}]}]}`), nil
+			}
+			return lsOf("7"), nil
+		}
+		return nil, errors.New("unscripted " + strings.Join(args, " "))
+	}
+	if got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); got.Err != nil || len(got.Agents) != 2 {
+		t.Fatalf("%+v: a dev build must be read as a current Tern and keep both windows' agents", got)
+	}
+	g, dirs = agentGateway(t)
+	file = seedAgent(t, dirs, model.AgentEntry{Block: "9007199254740993"})
+	putAgents(t, file, model.AgentEntry{Block: "7"})
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		switch args[0] {
+		case "--version":
+			return []byte("tern next"), nil
+		case "ls":
+			return lsOf("7"), nil
+		}
+		return nil, errors.New("unscripted " + strings.Join(args, " "))
+	}
+	got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{}))
+	if got.Err == nil || len(got.Agents) != 2 {
+		t.Fatalf("%+v, want both entries kept and the unreadable version reported", got)
 	}
 }
 
@@ -195,7 +268,6 @@ func TestGoingBackToAnEmptySessionNamesAnotherWindowWhenThePlacementFails(t *tes
 		"inspect":       ternOut(twoWindows),
 		"ls":            func() ([]byte, error) { return lsOf("7"), nil },
 		"ls --window 2": ternOut(`{"sessions":[{"id":9,"tabs":[{"id":5,"blocks":[{"id":9007199254740993}]}]}]}`),
-		"ls --window ":  ternOut(string(lsOf("7"))),
 		"new session":   ternOut(`{"session":3,"tab":9,"block":40}`),
 		"close":         ternOut(`{"block":40}`),
 		"move": func() ([]byte, error) {

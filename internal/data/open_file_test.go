@@ -212,3 +212,72 @@ func TestSaveUniqueTakesTheFirstFreeName(t *testing.T) {
 		t.Fatalf("second dotfile saved to %q (%v)", again, err)
 	}
 }
+
+func TestAFailedTernPreviewIsKeptAsTheNoteWhenTheOSOpensTheFileInstead(t *testing.T) {
+	f := newDocbankFixture(t)
+	t.Setenv("TERN_PANE", "7")
+	f.gateway.runTern = func(context.Context, []string) ([]byte, error) {
+		return []byte("no window answers"), errors.New("exit status 1")
+	}
+	got := as[model.AttachmentOpened](t, run(t, f.gateway, f.openCmd(t, "shot.png")))
+	if got.Err != nil || !got.OutsideTern || !strings.Contains(got.Note, "no window answers") || !slices.Equal(*f.opened, []string{got.Path}) {
+		t.Fatalf("opened %+v, OS opener ran for %v", got, *f.opened)
+	}
+}
+
+func TestAnOSOpenerThatFailsIsReportedWithWhereTheFileIs(t *testing.T) {
+	failing := func(string) error { return errors.New("xdg-open: exit status 3") }
+	for name, way := range map[string]model.AttachmentWay{"the system app": model.WaySystem, "the default way": model.WayOpen} {
+		t.Run(name, func(t *testing.T) {
+			f := newDocbankFixture(t)
+			f.gateway.openFile = failing
+			cmd := f.openCmd(t, "shot.png")
+			cmd.Way = way
+			got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd))
+			if got.Err == nil || got.Path == "" || !strings.Contains(got.Err.Error(), "the file is at "+got.Path) || !strings.Contains(got.Err.Error(), "exit status 3") {
+				t.Fatalf("opened %+v, want the failure and the file's path", got)
+			}
+		})
+	}
+}
+
+func TestOpenFileReportsAnOpenerThatExitsNonZeroAndAcceptsOneThatSucceeds(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the stand-in replaces xdg-open")
+	}
+	dir := t.TempDir()
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	opener := filepath.Join(dir, "xdg-open")
+	if err := os.WriteFile(opener, []byte("#!/bin/sh\necho 'no display' >&2\nexit 3\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := openFile("x.png"); err == nil || !strings.Contains(err.Error(), "no display") || !strings.Contains(err.Error(), "exit status 3") {
+		t.Fatalf("a failing opener gave %v", err)
+	}
+	if err := os.WriteFile(opener, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := openFile("x.png"); err != nil {
+		t.Fatalf("a succeeding opener gave %v", err)
+	}
+}
+
+func TestExecTernKeepsStdoutApartFromStderr(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in is a shell script")
+	}
+	dir := t.TempDir()
+	script := "#!/bin/sh\necho 'warning: slow' >&2\ncase \"$1\" in download) echo /saved/here.txt;; *) echo 'tern: no such block' >&2; exit 1;; esac\n"
+	if err := os.WriteFile(filepath.Join(dir, "tern"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	g := NewGateway(nil)
+	if got, err := g.ternDownload(context.Background(), "x.txt"); err != nil || got != "/saved/here.txt" {
+		t.Fatalf("the saved path is %q (%v), want stdout's line only", got, err)
+	}
+	_, err := g.ternOutput(context.Background(), 0, []string{"close", "7"})
+	if err == nil || strings.Count(err.Error(), "no such block") != 1 || !strings.Contains(err.Error(), "exit status 1") {
+		t.Fatalf("failure %v, want the exit status and tern's words once", err)
+	}
+}

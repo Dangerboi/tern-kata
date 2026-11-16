@@ -453,7 +453,7 @@ func (w *Worker) runCommand(ctx context.Context, j *Journal, sp attemptSpec) err
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)
 	cmd.Stdout, cmd.Stderr = out, out
-	exit, err := w.supervise(ctx, j, cmd, "", "", nil)
+	exit, err := w.supervise(ctx, j, cmd, nil)
 	out.Close()
 	if se, ok := errors.AsType[startError](err); ok {
 		return w.failAttempt(j, "cannot start the command: "+se.Error())

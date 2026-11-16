@@ -36,13 +36,18 @@ func IsOmp(program string) bool {
 // trusts paths (args hold --trusted-extension, or the caller's `extensions` list does: trustsPaths) gets one more of those; omp
 // keeps either under --no-extensions. omp refuses a relative trusted path, so path must be absolute.
 func Argv(path string, args []string, trustsPaths bool) []string {
-	if trustsPaths || slices.ContainsFunc(args, func(a string) bool {
-		flag, _, _ := strings.Cut(a, "=")
-		return flag == "--trusted-extension"
-	}) {
+	if trustsPaths || HasFlag(args, "--trusted-extension") {
 		return []string{"--trusted-extension", path}
 	}
 	return []string{"-e", path}
+}
+
+// HasFlag reports whether args hold any of flags, as `--flag` or `--flag=value`.
+func HasFlag(args []string, flags ...string) bool {
+	return slices.ContainsFunc(args, func(a string) bool {
+		flag, _, _ := strings.Cut(a, "=")
+		return slices.Contains(flags, flag)
+	})
 }
 
 // Install puts the extension in folder and returns its absolute path. A file of other content (an older tern-kata's) is
@@ -74,7 +79,8 @@ const CloseTranscriptEnv = "TERN_KATA_CLOSE_TRANSCRIPT"
 // CloseTranscriptOnValue is the value CloseTranscriptEnv carries when the decision is on.
 const CloseTranscriptOnValue = "on"
 
-const kataSwitch = "KATA_CLOSE_TRANSCRIPT_ENABLED"
+// KataSwitch is kata's own variable for the same decision, which a user may set; CloseTranscriptOn leaves the choice to it.
+const KataSwitch = "KATA_CLOSE_TRANSCRIPT_ENABLED"
 
 // CloseTranscriptOn reports whether the agent whose environment is environ gets CloseTranscriptEnv=on: the choice stays with
 // the user when the environment sets KATA_CLOSE_TRANSCRIPT_ENABLED to a non-blank value (kata reads a blank one as unset) or
@@ -88,7 +94,7 @@ func CloseTranscriptOn(environ []string, caseInsensitive bool) bool {
 			name = strings.ToUpper(name)
 		}
 		switch name {
-		case kataSwitch:
+		case KataSwitch:
 			if strings.TrimSpace(value) != "" {
 				return false
 			}
@@ -120,4 +126,21 @@ func CloseTranscriptOn(environ []string, caseInsensitive bool) bool {
 	}
 	_, set := doc.Close.Transcript["enabled"]
 	return !set
+}
+
+// WithCloseTranscript returns env for a child with CloseTranscriptEnv decided afresh: an inherited value is dropped, and
+// CloseTranscriptOnValue is added when CloseTranscriptOn says so for decideFrom, the environment the child's kata commands
+// will read.
+func WithCloseTranscript(env, decideFrom []string, caseInsensitive bool) []string {
+	out := slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		if caseInsensitive {
+			name = strings.ToUpper(name)
+		}
+		return name == CloseTranscriptEnv
+	})
+	if CloseTranscriptOn(decideFrom, caseInsensitive) {
+		out = append(out, CloseTranscriptEnv+"="+CloseTranscriptOnValue)
+	}
+	return out
 }

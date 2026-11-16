@@ -71,8 +71,8 @@ type LaunchPlan struct {
 	// AgentForkedFrom is `agent --forked-from`: the block of the chat Tern forked this one from, which the host half's reopen hook
 	// adds to a fork's line. The wrapper then reads its own copies of the Pane's secret files (data.AgentRoute.Forked).
 	AgentForkedFrom string
-	// AgentPromptFile is the prompt file agents.json records for the wrapper's block, found when the command has no `@<prompt>`
-	// word (a reopened chat); the wrapper names it to the omp extension in ompext.PromptFileEnv.
+	// AgentPromptFile is `agent --prompt-file`: the agent's prompt file, which the host half's reopen hook names where it drops a
+	// reopened chat's `@<prompt>` word. The wrapper names it to the omp extension in ompext.PromptFileEnv.
 	AgentPromptFile string
 	AgentRoute      data.AgentRoute
 	fallbackAuthor  string
@@ -507,7 +507,7 @@ func parseRecurFlag(args []string, i *int, plan *LaunchPlan) (matched bool, err 
 	return parseNamedFlag(args, i, model.RecurFlagNames, &plan.RecurFlags, true)
 }
 
-const usage = `tern-kata: browse and edit kata Issues in a native Tern Pane.
+const usageTemplate = `tern-kata: browse and edit kata Issues in a native Tern Pane.
 
 Usage:
   tern-kata [--issue <project>/<short_id>] [--as <actor>] [kata tui args...]
@@ -539,7 +539,7 @@ Usage:
   tern-kata agents [--issue <ref>]
   tern-kata team <ref>
   tern-kata message <address|ref> -m <text> [--re <comment>] [--as <actor>]
-  tern-kata agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--forked-from <block>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
+  tern-kata agent {agent}
   tern-kata completion bash|zsh|fish
   tern-kata --version
   tern-kata --help
@@ -683,7 +683,7 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 open Issues of KATA_REF's Project or the workspace's Project.
                                 Unknown address or ref, or no agent that can receive it, is
                                 refused
-  agent [--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--forked-from <block>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]
+  agent {agent}
                                 run the command with KATA_AUTHOR set to the actor (replacing
                                 any value; without --as it is left as inherited) and KATA_REF
                                 to the qualified Issue ref, with no KATA_INBOX_USER unless
@@ -723,7 +723,10 @@ Subcommands (only as the first argument; they never open a Pane or need Tern):
                                 the inherited KATA_SERVER, KATA_AUTH_TOKEN, KATA_AUTH_TOKEN_FILE,
                                 KATA_ALLOW_INSECURE, KATA_TRUST_PRIVATE_NETWORK, KATA_DSN, KATA_DB and
                                 KATA_POSTGRES_SCHEMA. The Pane passes them so the agent's kata reaches
-                                the Pane's daemon; a token or DSN is never an argument
+                                the Pane's daemon; a token or DSN is never an argument.
+                                --prompt-file <file> names the agent's prompt file, which the omp
+                                extension writes the session path beside: the host half's reopen
+                                hook sets it where it drops the @<prompt> word of a reopened chat.
   completion <shell>            print the completion script for bash, zsh or fish; load it with
                                 source <(tern-kata completion bash) (or zsh), or
                                 tern-kata completion fish | source
@@ -745,3 +748,7 @@ Environment: KATA_AUTHOR, USER (actor), KATA_INBOX_USER (the Inbox address the A
 
 Docs: https://github.com/Dangerboi/tern-kata#readme
 `
+
+// usage is the help text with the agent subcommand's synopsis (agentSynopsis) filled in, the one spelling the usage line, the help
+// entry and the parser's errors share.
+var usage = strings.ReplaceAll(usageTemplate, "{agent}", agentSynopsis)

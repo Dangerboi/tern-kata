@@ -337,11 +337,11 @@ func TestMoveCardPreviewNamesTheDescendantsAndTheSwitchSendsSingle(t *testing.T)
 	if text := moveText(t, previewed, "preview"); text != want {
 		t.Fatalf("preview %q, want %q", text, want)
 	}
-	if _, drawn := nodeText(t, previewed, view.MoveSingleID); !drawn {
+	if _, drawn := nodeText(t, previewed, view.ControlID(model.CardMove, model.MoveFieldSingle)); !drawn {
 		t.Error("the card draws no Only this Issue switch")
 	}
 
-	for name, in := range map[string]any{"key": key("o"), "pointer": model.MoveSingleMsg{On: true}} {
+	for name, in := range map[string]any{"key": key("o"), "pointer": model.SwitchMsg{Field: model.MoveFieldSingle, On: true}} {
 		t.Run(name, func(t *testing.T) {
 			out := step(t, previewed, in)
 			cmd := theMove(t, out.Cmds)

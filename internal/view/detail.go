@@ -23,13 +23,19 @@ const DetailScrollID = DetailID + ".viewport"
 // inside the scroller, not the scroller itself.
 const DetailContentID = DetailScrollID + ".content"
 
-const DetailActivityID = DetailContentID + ".activity"
+const (
+	activityKey = "activity"
+	tabsKey     = "tabs"
+)
+
+const DetailActivityID = DetailContentID + "." + activityKey
 
 // ActivityTabsID is the row of tab names, revealed at "start" after a tab switch: the tab names go to the top of the detail,
 // or, when the tab below them is shorter than the detail, the detail stops at its end with the whole tab in view (Activity
 // is the last part of the detail). It is one reveal on purpose: while every credit is in use the SDK sends the queued ops in
-// one frame, and Tern runs a second reveal of a frame against the scroll offset from before the first.
-const ActivityTabsID = DetailActivityID + ".tabs"
+// one frame, and Tern runs a second reveal of a frame against the scroll offset from before the first. For the same reason the
+// driver never sends a step more than one op to the detail scroller.
+const ActivityTabsID = DetailActivityID + "." + tabsKey
 
 func detail(m model.Model, now time.Time) tern.Element {
 	var children tern.Nodes
@@ -71,7 +77,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		}
 		parts = append(parts,
 			ui.Spacer{Common: ui.Common{Key: "gap-activity"}, Size: ui.GapMD},
-			ui.Col{Common: ui.Common{Key: "activity"}, Gap: ui.GapSM, Children: append(ui.Nodes(activityTabs(m)), activity...)})
+			ui.Col{Common: ui.Common{Key: activityKey}, Gap: ui.GapSM, Children: append(ui.Nodes(activityTabs(m)), activity...)})
 		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: fillMax, Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})})
 	}
 	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
@@ -111,7 +117,7 @@ func activityTabs(m model.Model) tern.Element {
 	if narrow {
 		gap = ui.GapSM
 	}
-	return ui.Row{Common: ui.Common{Key: "tabs"}, Gap: gap, Children: tabs}
+	return ui.Row{Common: ui.Common{Key: tabsKey}, Gap: gap, Children: tabs}
 }
 
 func detailRows(m model.Model, now time.Time) (children []detailChild, activity tern.Nodes) {
@@ -130,7 +136,7 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 		row := item.Activity
 		action := DetailItemClick(item.Kind.Tab(), row.Key)
 		if item.Kind == model.RowAttachment {
-			menu := attachmentMenu(row.Key, row.File)
+			menu := attachmentMenu(m.SelectedUID, row.Key, row.File)
 			activity = append(activity, ui.Text{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action, Menu: menu, Hold: menu}}, Spans: attachmentSpans(row)})
 			continue
 		}

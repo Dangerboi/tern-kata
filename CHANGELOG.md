@@ -4,15 +4,69 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Command line
+
+- `tern-kata agent --prompt-file <file>` names the agent's prompt file, which tern-kata keeps writing the agent's session path beside; Tern's reopen of an agent chat writes it in place of the `@<prompt>` word.
+
+### Changed
+
+#### Attachments
+
+- The Detail footer names `U` "unlink by name", beside `z` "unlink…".
+
+#### Jobs and worker
+
+- The kata worker widget's tooltip says where the worker runs on its first line, puts each held run's reason before its Issue, and ends with the running count, process and executor.
+  - A line longer than Tern's tooltip ends in an ellipsis, so the location and the hold are never the part cut off.
+
+#### Tern window
+
+- The Waiting kata agents widget's tooltip ends a title longer than Tern's tooltip line in an ellipsis.
+
 ### Fixed
+
+#### Agents
+
+- A dev or pre-release Tern, such as `0.9.22-dev` or `v0.9.21`, no longer counts as older than 0.9.21, so a kata Pane that starts no longer drops the agents in other Tern windows and deletes their private files.
+  - When `tern --version` cannot be read, the Pane keeps every agent and says why.
+- An agent Tern reopened after a restart on a route with no token, DSN or `token_env` values is still recognised: its badge, Agent card and tab placement follow it.
+  - The reopened line names the prompt file with `--prompt-file` in place of the `@<prompt>` word; an `@<file>` word that is not a tern-kata prompt file stays on the line.
+- A fork of an agent chat no longer shows its state on the original agent's badge and Agent card.
+- A fork of a fork that Tern reopens keeps its fork mark, and a block number above 2^53 is kept exactly.
+- A kill while tern-kata writes an agent's private token, DSN or env file, or a fork's copy of one, no longer leaves an empty file that a later start trusts.
+- A kata Pane that starts removes forks' copies of the private files also when the state folder's path holds `[`, `*` or `?`.
+
+#### Attachments
+
+- Opening an Attachment with the system app reports an opener that fails, such as `xdg-open` with no display, and where the file is, instead of saying it opened.
+- When Tern cannot preview an Attachment and the system app opens it instead, the message adds what Tern said.
+- A `.docx` goes to Tern only on Tern 0.9.21 and later; an older Tern saves it with a note naming the version it needs.
+- An Attachment whose name holds `:` is never handed to the system app.
+- A Copy answer that arrives while a card, a question or the help covers the Pane shows as a toast with the path and the command, instead of opening over them.
+- A pick in an Attachment's menu does nothing once the detail shows another Issue.
 
 #### Issues and Pages
 
 - A choice in a Popup card's select picked with the pointer right after opening it is no longer lost, and the menu no longer opens again after the pick, when the Pane answers slowly (a loaded machine, a remote window).
+- Opening a select's menu again keeps the search text typed into it.
+- Picking a choice with the pointer clears the card's error, as picking it with the keys does.
+- A select menu opened with the keys closes when a footer button is clicked.
+- Jumping or going back to an Issue on another Activity tab no longer scrolls the detail against the old Issue's tabs.
 
 #### Jobs and worker
 
 - `worker doctor` finds kata-plugin's omp extension installed under its npm name `@dangerboi/kata-omp`, from npm or an upgraded marketplace install, and warns of a profile that loads omp's extensions as it does for `kata-omp`.
+  - It warns only when omp would load the extension: a lock entry without its package or without `enabled: true`, a package that is neither a dependency nor carries an omp manifest, and one that a project's `plugin-overrides.json` or omp's settings disable no longer count.
+- The kata worker widget goes away when the running worker's `tern-kata` binary can no longer be found, and shows a worker's status about 2 s after it starts instead of up to 10 s.
+- A worker status answer the plugin cannot read is logged and no longer stops the worker supervision until the plugin reloads.
+
+#### Tern window
+
+- A kata link clicked in a tab whose kata quit back to the shell opens a new kata Pane instead of doing nothing.
+- A kata link waiting for a Pane where kata never started shows an error toast instead of being dropped silently.
+- An action for a kata Pane that fails to send no longer drops the actions queued after it.
 
 ## [0.14.1] - 2026-11-15
 

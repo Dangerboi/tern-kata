@@ -272,6 +272,50 @@ func TestActivityTabRevealIsDroppedWhileTheTabsAreNotDrawn(t *testing.T) {
 	wantOps(t, step(t, failed, key("tab")))
 }
 
+func TestActivityRevealHasNoTargetOnTheJobsPage(t *testing.T) {
+	s := jobsPane(t, 160, nativeJob("J1", "Weekly", nil))
+	if !s.Model.OnJobs() || !s.Model.DetailDrawn() {
+		t.Fatalf("fixture: jobs page %v, detail drawn %v", s.Model.OnJobs(), s.Model.DetailDrawn())
+	}
+	if id := view.ActivityRevealID(s.Model); id != "" {
+		t.Errorf("reveal target %q on the Jobs Page, which draws an inspector", id)
+	}
+}
+
+// Tern runs a second op on the detail scroller in one frame against the offset from before the first, so a step sends at most one.
+func TestAStepSendsAtMostOneOpToTheDetailScroller(t *testing.T) {
+	withLink := &model.IssueDetailData{Issue: &alpha, Links: []model.Link{{ID: 1, FromIssueUID: "alpha", ToIssueUID: "beta", ToQualifiedID: "work#bbbb", Type: "related"}}}
+	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: withLink}, click("", view.FocusDetailClick)).State
+	steps := []struct {
+		name string
+		in   any
+	}{
+		{"tab", key("tab")},
+		{"tab to Links", key("tab")},
+		{"jump", key("enter")},
+		{"the jumped Issue loads", model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &beta}}},
+		{"tab away from the landing's tab", key("shift+tab")},
+		{"back", key("escape")},
+		{"the first Issue loads again", model.DetailLoaded{UID: "alpha", Selected: withLink}},
+	}
+	for _, st := range steps {
+		out := step(t, s, st.in)
+		s = out.State
+		var onDetail []tern.Op
+		for _, op := range out.Ops {
+			if (op[0] == "reveal" || op[0] == "scroll") && strings.HasPrefix(op[1].(string), view.DetailID) {
+				onDetail = append(onDetail, op)
+			}
+		}
+		if len(onDetail) > 1 {
+			t.Errorf("%s: %v", st.name, onDetail)
+		}
+		if st.name == "back" && len(onDetail) != 0 {
+			t.Errorf("back lands on another tab and still sent %v", onDetail)
+		}
+	}
+}
+
 func TestColumnsStayMountedWhileHelpIsOpen(t *testing.T) {
 	s := feed(t, browsing(t, 160), click("", view.FocusDetailClick), key("?")).State
 	if !s.Model.HelpOpen {
@@ -287,7 +331,7 @@ func TestColumnsStayMountedWhileHelpIsOpen(t *testing.T) {
 
 func TestUnknownIDOnATransientNodeIsIgnored(t *testing.T) {
 	s := browsing(t, 160)
-	for _, id := range []string{issueRow(t, s.Model, view.IssueListID, beta), view.SearchID, "layer.create.body", "layer.close.pr", view.ActivityTabsID, "layer.project.input", view.BoardID + ".lane1.cards.beta"} {
+	for _, id := range []string{issueRow(t, s.Model, view.IssueListID, beta), view.SearchID, "layer.create.body", "layer.close.pr", view.ActivityTabsID, "layer.project.input", "layer.recurrence.ends.control", view.BoardID + ".lane1.cards.beta"} {
 		out := driver.Step(s, &tern.ErrorEvent{Msg: "unknown id " + id}, now)
 		if out.Err != nil || out.Quit || out.View != nil || len(out.Ops) != 0 {
 			t.Errorf("unknown id %q: %+v", id, out)

@@ -4,8 +4,8 @@
 # (smoke/run.sh); no argument runs all three.
 # The static checks run side by side; each prints "CHECK <name> ok" or "CHECK <name> FAIL" (after its output) when it ends.
 # Every mode ends with one line: "CHECKS ok", or "CHECKS FAIL: <names>" (static: the failed checks; test, smoke, all: the failed group).
-# CHECK_OUT (default: a temporary folder, deleted on exit) receives the go test -json stream as gotest.jsonl, the built
-# binaries under bin/ and each static check's output under log/.
+# CHECK_OUT (default: a temporary folder, deleted on exit) receives the go test -json stream as gotest.jsonl and each static
+# check's output under log/.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -17,7 +17,7 @@ else
   out=$(mktemp -d)
   trap 'rm -rf "$out"' EXIT
 fi
-mkdir -p "$out/bin" "$out/log"
+mkdir -p "$out/log"
 
 check() { # check <name> <command...>: starts the check in the background and adds it to pids
   local name=$1
@@ -39,11 +39,6 @@ gofmt_clean() {
   unformatted=$(gofmt -l cmd internal)
   [[ -z $unformatted ]] || { printf '%s\n' "$unformatted" >&2; return 1; }
 }
-cross() { # cross <os> <arch>
-  local bin=tern-kata
-  [[ $1 != windows ]] || bin=tern-kata.exe
-  GOOS=$1 GOARCH=$2 go build -trimpath -o "$out/bin/$1_$2/$bin" ./cmd/tern-kata
-}
 
 placement_tests() {
   local t
@@ -60,10 +55,10 @@ static() {
   check lint-linux golangci-lint run --allow-parallel-runners ./...
   check lint-windows env GOOS=windows golangci-lint run --allow-parallel-runners ./...
   check placement placement_tests
-  check build go build -o "$out/bin/tern-kata" ./cmd/tern-kata
+  check build go build -o /dev/null ./cmd/tern-kata
   for os in linux darwin windows; do
     for arch in amd64 arm64; do
-      check "cross-$os-$arch" cross "$os" "$arch"
+      check "cross-$os-$arch" env GOOS="$os" GOARCH="$arch" go build -trimpath -o /dev/null ./cmd/tern-kata
     done
   done
   for pid in "${pids[@]}"; do wait "$pid" || status=1; done

@@ -1,42 +1,30 @@
 package view
 
 import (
+	"sync"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// attachmentMenuRows are the items of an Attachment row's context menu, in order. Each is the detail's key for its action, so a pick
-// presses what the footer and the help sheet name.
-var attachmentMenuRows = []struct {
-	action model.Action
-	label  string
-	// way is what the row does with the file, which says whether it is refused; Unlink has none, and WayOpen is never refused.
-	way model.AttachmentWay
-}{
-	{model.DrillIn, "Open", model.WayOpen},
-	{model.OpenAttachmentBesideAction, "Open beside", model.WayBeside},
-	{model.OpenAttachmentSystemAction, "Open with the system app", model.WaySystem},
-	{model.SaveAttachmentAction, "Save to Downloads", model.WaySave},
-	{model.CopyAttachmentAction, "Copy…", model.WayCopy},
-	{model.UnlinkAttachmentAction, "Unlink…", model.WayOpen},
-}
-
-// attachmentMenu is the right-click menu and the long-press list of the Attachment row with rowKey.
-func attachmentMenu(rowKey string, a model.Attachment) []ui.MenuEntry {
-	menu := make([]ui.MenuEntry, 0, len(attachmentMenuRows))
-	for _, row := range attachmentMenuRows {
-		keys, chord := cardKeys(model.ModeDetail, row.action)
-		if chord == "" {
-			continue
-		}
-		item := ui.MenuItem{ID: AttachmentMenuPickClick(rowKey, chord), Label: row.label, Keys: keys}
-		if reason := model.AttachmentRefusal(a, row.way); reason != "" {
-			item.Disabled = ui.Because(reason)
-		}
-		menu = append(menu, item)
+// attachmentKeys is the menu of an Attachment row: each item is the detail's key for the table's action, so a pick presses what the
+// footer and the help sheet name. The bindings do not change while the Pane runs, so the keys are read once.
+var attachmentKeys = sync.OnceValue(func() contextMenuKeys {
+	rows := make([]contextMenuRow, 0, len(model.AttachmentActions()))
+	for _, action := range model.AttachmentActions() {
+		rows = append(rows, contextMenuRow{action: action.Action, label: action.Label})
 	}
-	return menu
+	return newMenuKeys(model.ModeDetail, rows)
+})
+
+// attachmentMenu is the right-click menu and the long-press list of the Attachment row with rowKey, on the detail of Issue uid.
+func attachmentMenu(uid, rowKey string, a model.Attachment) []ui.MenuEntry {
+	byAction := map[model.Action]model.AttachmentAction{}
+	for _, row := range model.AttachmentActions() {
+		byAction[row.Action] = row
+	}
+	return attachmentKeys().entries(uid, rowKey, func(action model.Action) string { return byAction[action].Refusal(a) }, nil)
 }
 
 // attachmentCopyLayer is the Copy card: the downloaded file's path and the kata command that fetches it, each read-only with a

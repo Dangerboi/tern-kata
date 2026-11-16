@@ -20,7 +20,7 @@ ba_sock="$tmp/ba-daemon.sock"
 ba_standin="$tmp/ba-omp"
 mkdir -p "$ba_config/tern-kata" "$ba_state"
 printf 'command = ["%s"]\n' "$ba_standin" >"$ba_config/tern-kata/agent.toml"
-printf '#!/bin/sh\nexec sleep 600\n' >"$ba_standin"
+printf '#!/bin/sh\ntrap "kill \\$!" TERM\nsleep 600 &\nwait\n' >"$ba_standin"
 chmod +x "$ba_standin"
 ba_tern() { TERN_DAEMON_SOCKET="$ba_sock" tern "$@"; }
 ba_daemon_pid=
@@ -32,11 +32,7 @@ ba_stop() {
 trap 'ba_status=$?; ba_stop; set +e; (exit $ba_status); cleanup' EXIT
 tern daemon --socket "$ba_sock" >"$tmp/ba-daemon.log" 2>&1 &
 ba_daemon_pid=$!
-for ((attempt = 0; attempt < 100; attempt++)); do
-  [[ ! -S "$ba_sock" ]] || break
-  sleep 0.1
-done
-[[ -S "$ba_sock" ]]
+wait_for -t 10 socket_ready "$ba_daemon_pid" "$ba_sock"
 # The daemon exits once idle: the block the Pane stands in keeps it up.
 ba_pane=$(ba_tern new session ba-pane --json -- sleep 600 | jq -r '.block')
 
@@ -52,13 +48,9 @@ ctl click "$ba_row"
 
 # The agent's tabs in the hidden session: the tab names and the block ids, from the daemon.
 ba_tabs() { ba_tern ls --json | jq -c '[.sessions[] | select(.name == "kata agents") | .tabs[] | {name, blocks: [.blocks[].id]}]'; }
+ba_tabs_match() { ba_tabs | jq -e "$@" >/dev/null 2>&1; }
 ba_wait_tabs() { # jq arguments: the options, then a predicate on ba_tabs
-  for ((attempt = 0; attempt < 100; attempt++)); do
-    ba_tabs | jq -e "$@" >/dev/null 2>&1 && return 0
-    sleep 0.1
-  done
-  printf 'kata agents never matched %s: %s\n' "${*: -1}" "$(ba_tabs)" >&2
-  return 1
+  wait_for ba_tabs_match "$@" || { printf 'kata agents never matched %s: %s\n' "${*: -1}" "$(ba_tabs)" >&2; return 1; }
 }
 ctl key w
 expect_tree "[data-id^='layer.agent']" '.ok and .count >= 1'
@@ -87,11 +79,8 @@ ctl key Enter
 expect_tree "[data-id^='layer.agent']" '.ok and .count == 0'
 ba_where() { ba_tern ls --json | jq -r --arg b "$1" '[.sessions[] as $s | $s.tabs[] as $t | $t.blocks[] | select(.id == ($b | tonumber)) | "\($s.name)/\($t.id)"][0] // "none"'; }
 ba_pane_tab=$(ba_where "$ba_pane")
-for ((attempt = 0; attempt < 100; attempt++)); do
-  [[ $(ba_where "$ba_block") != "$ba_pane_tab" ]] || break
-  sleep 0.1
-done
-[[ $(ba_where "$ba_block") == "$ba_pane_tab" ]]
+ba_block_beside_pane() { [[ $(ba_where "$ba_block") == "$ba_pane_tab" ]]; }
+wait_for ba_block_beside_pane
 # The tab it left is gone with it, and agents.json says it is open.
 ba_wait_tabs 'length == 0'
 jq -e --arg block "$ba_block" '.agents | length == 1 and .[0].block == $block and .[0].background == true and .[0].open == true' \

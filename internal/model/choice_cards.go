@@ -134,22 +134,12 @@ func lanesChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	if name != LanesShare {
 		return ChoiceSet{}, false
 	}
-	chosen := 0
-	if m.LanesForm.Share {
-		chosen = 1
-	}
-	return newChoices(ControlTabs, []string{"This machine", "The Project"}, chosen), true
+	return newChoices(ControlTabs, []string{"This machine", "The Project"}, boolIndex(m.LanesForm.Share)), true
 }
 
 func workerChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	if name != WorkerFieldTrust {
 		return ChoiceSet{}, false
 	}
-	chosen := 0
-	if m.WorkerCard.Trusted {
-		chosen = 1
-	}
-	set := newChoices(ControlSwitch, []string{"No", "Yes"}, chosen)
-	set.OnIndex = 1
-	return set, true
+	return yesNoSwitch(m.WorkerCard.Trusted), true
 }

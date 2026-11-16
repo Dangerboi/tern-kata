@@ -104,6 +104,9 @@ type cardEntry struct {
 	// choices is the control, labels and held choice of the choice field called name, false for any other field and for a
 	// choice field the card keeps as a row of words; nil for a card without choice fields.
 	choices func(m Model, name Field) (ChoiceSet, bool)
+	// flip flips the card's switch when the pointer does, for the card whose switch asks for a write; nil lets the switch hold its
+	// index like any choice.
+	flip func(m Model, on bool) (Model, []Cmd)
 	// text reaches the text and caret of the focused field for the shared delete and clear actions; the text is nil when the
 	// focused field takes none. Nil for a card whose keys never delete or clear text.
 	text   func(*Model) (*string, *Caret)
@@ -312,7 +315,7 @@ func buildCards() []cardEntry {
 			modes: []Mode{ModeMoveProject, ModeMoveConfirm}, mode: Model.MoveCardMode,
 			key:    moveProjectKey,
 			busy:   func(m Model) bool { return m.MoveProject.Sending || m.MoveProject.Target.UID != "" },
-			fields: []FieldSpec{}, input: true,
+			fields: []FieldSpec{}, input: true, choices: moveChoiceSet, flip: onlyThisIssue,
 			editing: []fieldEditing{{mode: ModeMoveProject, actions: []Action{DeleteInput, ClearInput}, clear: "clear filter"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.MoveProject.Filter, &m.MoveProject.Caret },
 			erased:  func(m Model, _ Action, _ bool) Model { m.MoveProject.Cursor, m.MoveProject.Err = 0, nil; return m },
@@ -771,11 +774,8 @@ func focusField(m Model, name Field) Model {
 // field the card hides or a busy card changes nothing.
 func chooseField(m Model, name Field, index int) Model {
 	m = focusField(m, name)
-	if m.Dropdown.Field == name {
-		m.Dropdown = Dropdown{}
-	}
 	if entry, ok := m.topEntry(); ok && entry.choose != nil && !entry.busy(m) && *entry.focus(&m) == name && !takesText(entry.fields, name) {
-		m = entry.choose(m, index)
+		m = entry.pick(m, index)
 	}
 	return m
 }
@@ -822,8 +822,11 @@ func (e cardEntry) editFields(m Model, msg KeyMsg) (Model, bool) {
 			}
 		}
 	case OpenChoice:
+		if e.focus == nil {
+			return m, false
+		}
 		var opened bool
-		if m, opened = e.openDropdown(m); !opened {
+		if m, opened = e.openDropdown(m, *e.focus(&m)); !opened {
 			return m, false
 		}
 	case NextChoice, PreviousChoice:

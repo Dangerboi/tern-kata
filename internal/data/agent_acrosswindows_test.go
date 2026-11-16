@@ -23,7 +23,6 @@ func windowsTern(g *Gateway) *[][]string {
 		"inspect":       ternOut(twoWindows),
 		"ls":            func() ([]byte, error) { return lsOf("7"), nil },
 		"ls --window 2": ternOut(`{"sessions":[{"id":9,"tabs":[{"id":5,"blocks":[{"id":9007199254740993}]}]}],"detached":[{"id":44}]}`),
-		"ls --window ":  ternOut(string(lsOf("7"))),
 	})
 }
 
@@ -168,7 +167,6 @@ func TestABlockListedOnlyUnderARemoteWindowsKeyIsKept(t *testing.T) {
 	ternScript(g, map[string]func() ([]byte, error){
 		"inspect":       ternOut(`{"clients":[{"window":"","kind":"window"},{"window":"3","kind":"remote"},{"window":"3","kind":"cli"},{"window":"9","kind":"cli"}]}`),
 		"ls":            func() ([]byte, error) { return lsOf("7"), nil },
-		"ls --window ":  ternOut(string(lsOf("7"))),
 		"ls --window 3": ternOut(string(lsOf("55"))),
 	})
 	got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{}))

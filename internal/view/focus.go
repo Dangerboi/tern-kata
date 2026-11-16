@@ -84,9 +84,10 @@ func ScrollTarget(m model.Model, c model.Column) string {
 	return IssueListID
 }
 
-// ActivityRevealID is the node to reveal after an Activity tab switch, "" while the detail is not drawn.
+// ActivityRevealID is the node to reveal after an Activity tab switch, "" unless the Issue detail with its tabs is drawn: the
+// Jobs and Runs Pages draw an inspector in the detail column instead.
 func ActivityRevealID(m model.Model) string {
-	if !m.DetailDrawn() {
+	if m.OnJobs() || m.OnRuns() || !m.DetailDrawn() {
 		return ""
 	}
 	return ActivityTabsID

@@ -8,7 +8,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 pid=
-server_pid=
+serve_pid=
 export TERN_CONFIG_DIR="$tmp/config" TERN_DAEMON_SOCKET="$tmp/daemon.sock" STENCIL_LOG_DIR="$tmp/logs"
 export XDG_CONFIG_HOME="$tmp/xdg-config" XDG_STATE_HOME="$tmp/xdg-state" KATA_HOME="$tmp/kata"
 export STENCIL_LOG=warn,stencil_plugins=debug,stencil_tern=debug
@@ -17,7 +17,7 @@ cleanup() {
   status=$?
   trap - EXIT
   stop_tern
-  [[ -z "$server_pid" ]] || { kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true; }
+  [[ -z "$serve_pid" ]] || { kill "$serve_pid" 2>/dev/null || true; wait "$serve_pid" 2>/dev/null || true; }
   if [[ $status -eq 0 ]]; then rm -rf "$tmp"; else printf 'Release check smoke artifacts: %s\n' "$tmp" >&2; fi
   exit "$status"
 }
@@ -29,21 +29,13 @@ ctl() { ctl_call "$@"; }
 
 # A staged plugin/ folder as a release carries it, with a version older than any release.
 mkdir -p "$tmp/plugin" "$tmp/dist" "$tmp/workspace" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
-# The files come from the plugin_files line of scripts/release.sh, so the smoke stages what a release carries.
-plugin_files=$(sed -n 's/^plugin_files="\(.*\)"$/\1/p' "$repo/scripts/release.sh")
-[[ -n "$plugin_files" ]] || { echo "no plugin_files line in scripts/release.sh" >&2; exit 1; }
-for f in $plugin_files; do
-  [[ "$f" == plugin.toml ]] || cp "$repo/$f" "$tmp/plugin/"
-done
+copy_plugin "$tmp/plugin"
 sed 's/^version = .*/version = "0.0.1"/' "$repo/plugin.toml" >"$tmp/plugin/plugin.toml"
 printf '9.9.9\n' >"$tmp/dist/version.txt"
 export STENCIL_FIXTURE_ROOT="$tmp/crates/tern"
 
-port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
-python3 -m http.server "$port" --bind 127.0.0.1 --directory "$tmp/dist" >"$tmp/http.log" 2>&1 &
-server_pid=$!
-for ((i = 0; i < 100; i++)); do curl -sf "http://127.0.0.1:$port/version.txt" >/dev/null && break; sleep 0.1; done
-export TERN_KATA_BASE_URL="http://127.0.0.1:$port"
+serve_dir "$tmp/dist" "$tmp/http.log"
+export TERN_KATA_BASE_URL="$serve_url"
 fetches() { grep -c 'GET /version.txt' "$tmp/http.log" || true; }
 fetches_before=$(fetches)
 
@@ -65,8 +57,7 @@ start_tern() {
   rm -f "$tmp/control.sock"
   PATH="$tmp/stub-bin:$PATH" STUB_PLUGIN_DIR="$plugin_dir" tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
   pid=$!
-  for ((i = 0; i < 200; i++)); do [[ ! -S "$tmp/control.sock" ]] || break; kill -0 "$pid"; sleep 0.1; done
-  [[ -S "$tmp/control.sock" ]]
+  wait_for socket_ready "$pid" "$tmp/control.sock"
   ctl ready
   # Headless Tern loads plugins only from the fixtures folder: it holds a link to the plugin folder in use.
   ctl plugins fixtures
@@ -75,23 +66,16 @@ stop_tern() {
   [[ -z "$pid" ]] || { ctl quit >/dev/null 2>&1 || true; kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; }
   pid=
 }
-toast_shown() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/dev/null; }
-# Toasts are not terminal text, and timers and fetch callbacks run on frames: pump the Pane while waiting.
-expect_toast() {
-  printf 'run "true"\n' >"$tmp/pump.ctl"
-  for ((attempt = 0; attempt < 40; attempt++)); do
-    toast_shown "$1" && return 0
-    ctl --file "$tmp/pump.ctl"
-    sleep 0.1
-  done
-  echo "toast not shown: $1" >&2
-  return 1
-}
+# Toasts are not terminal text, and timers and fetch callbacks run on frames: each poll pumps the Pane (a `run` line draws one).
+printf 'run "true"\n' >"$tmp/pump.ctl"
+pump() { ctl --file "$tmp/pump.ctl" >/dev/null; }
+toast_after_pump() { tree_has "$1" || { pump; tree_has "$1"; }; }
+expect_toast() { wait_for toast_after_pump "$1"; }
 # No toast, after the check had every chance to run.
 expect_no_toast() {
-  printf 'run "true"\n' >"$tmp/pump.ctl"
-  for ((attempt = 0; attempt < 15; attempt++)); do ctl --file "$tmp/pump.ctl"; sleep 0.1; done
-  if toast_shown "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
+  local round
+  for round in {1..15}; do pump; sleep 0.1; done
+  if tree_has "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
 }
 out_toast='tern-kata v9.9.9 is out (this window'"'"'s plugin is v0.0.1)'
 clear_kv() { find "$TERN_CONFIG_DIR" -name kv.json -delete; }
@@ -114,11 +98,8 @@ stop_tern
 start_tern
 clear_kv
 ctl plugins fixtures
-for ((attempt = 0; attempt < 40; attempt++)); do
-  [[ $(fetches) -eq $((fetches_before + 2)) ]] && break
-  printf 'run "true"\n' >"$tmp/pump.ctl"; ctl --file "$tmp/pump.ctl" >/dev/null; sleep 0.1
-done
-[[ $(fetches) -eq $((fetches_before + 2)) ]]
+fetched_twice() { [[ $(fetches) -eq $((fetches_before + 2)) ]] || { pump; [[ $(fetches) -eq $((fetches_before + 2)) ]]; }; }
+wait_for fetched_twice
 stop_tern
 
 # A pending key naming this plugin's own version, left behind by a plugin step that ended well (done), toasts after a
@@ -133,13 +114,11 @@ stop_tern
 
 # From Tern 0.9.16 a step that outlives the reload ends as an event, which reports it. A key not marked done means the step
 # is still running: the reload alone says nothing and leaves the key for the event.
-if [[ $(printf '%s\n0.9.16\n' "$("$real_tern" --version | sed -n 's/^tern \([0-9.]*\).*/\1/p')" | sort -V | sed -n 1p) == 0.9.16 ]]; then
+if tern_at_least 0.9.16; then
   start_tern
   kv=$(find "$TERN_CONFIG_DIR" -name kv.json)
   jq -n --argjson at "$(date +%s)" '{"update.pending": {version: "0.0.1", at: $at}, "release_check.last": $at}' >"$kv"
   ctl plugins fixtures
-  printf 'run "true"\n' >"$tmp/pump.ctl"
-  for ((attempt = 0; attempt < 10; attempt++)); do ctl --file "$tmp/pump.ctl" >/dev/null; sleep 0.1; done
   expect_no_toast 'tern-kata plugin updated'
   [[ $(jq 'has("update.pending")' "$kv") == true ]]
   stop_tern

@@ -54,16 +54,16 @@ func cycleIndex(i, n int, back bool) int {
 	return ((i+d)%n + n) % n
 }
 
-// yesNoField declares a field of two choices, no (index 0) and yes (index 1), that live in the bool at get; stepping flips it.
+// yesNoField declares a field of two choices, no and yes (boolIndex), that live in the bool at get; stepping flips it.
 func yesNoField[F any](name Field, get func(*F) *bool) formField[F] {
 	return choiceField(name,
 		func(f *F, _ bool) { *get(f) = !*get(f) },
 		func(f *F, i int) bool {
-			if i != 0 && i != 1 {
-				return false
+			yes, ok := indexBool(i)
+			if ok {
+				*get(f) = yes
 			}
-			*get(f) = i == 1
-			return true
+			return ok
 		})
 }
 

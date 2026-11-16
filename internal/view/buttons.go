@@ -15,13 +15,33 @@ import (
 // this key.
 const choiceControlKey = "control"
 
+// ControlID is the node id of the control of the choice field called name of card.
+func ControlID(card model.Card, name model.Field) string {
+	return itemID(FieldID(card, name), choiceControlKey)
+}
+
+// controlField is the field a control's node id belongs to, the inverse of ControlID: any single-segment field of a card's
+// layer, since the field list of a card does not name every choice field (the Move card's switch).
+func controlField(id string) (model.Field, bool) {
+	fieldID, ok := strings.CutSuffix(id, itemID("", choiceControlKey))
+	if !ok {
+		return "", false
+	}
+	for _, card := range model.Cards() {
+		if name, ok := strings.CutPrefix(fieldID, itemID(LayerID(card), "")); ok && name != "" && !strings.Contains(name, ".") {
+			return model.Field(name), true
+		}
+	}
+	return "", false
+}
+
 // CloseSelectTarget is the select node a CloseSelectMenu goes to (the control inside the field), "" when m draws no such
 // select (a key closed the card with the menu), so no op names a node Tern no longer has.
 func CloseSelectTarget(m model.Model, card model.Card, name model.Field) string {
 	if !m.SelectDrawn(card, name) {
 		return ""
 	}
-	return itemID(FieldID(card, name), choiceControlKey)
+	return ControlID(card, name)
 }
 
 // The control never takes focus: the model owns the keys, and the select draws the menu, highlight and search text the model holds.
@@ -51,30 +71,27 @@ func choiceControl(m model.Model, card model.Card, name model.Field, title strin
 		}
 		field.Children = ui.Nodes(ui.Tabs{Common: common, Items: items, Active: choiceValue(set.Chosen), Variant: ui.TabsSegmented})
 	case model.ControlSwitch:
-		field.Children = ui.Nodes(ui.Switch{Common: common, On: set.Chosen == set.OnIndex, Variant: ui.SwitchSegment, Labels: [2]string{"No", "Yes"}})
+		field.Children = ui.Nodes(ui.Switch{Common: common, On: set.On(), Variant: ui.SwitchSegment, Labels: set.SwitchLabels()})
 	default:
 		menu := m.OpenDropdown(card, name)
 		sel := ui.Select{Common: common, Value: choiceValue(set.Chosen), Open: m.SelectShown(card, name), Search: set.Search()}
-		shown := make([]int, len(set.Labels))
-		for i := range shown {
-			shown[i] = i
-		}
-		if sel.Search {
+		sel.Options = make([]ui.SelectOption, 0, len(set.Labels))
+		if sel.Search && menu.Query != "" {
 			sel.Query = menu.Query
-			if menu.Query != "" {
-				shown = set.Matches(menu.Query)
-				total := len(set.Labels)
-				sel.Total = &total
+			total := len(set.Labels)
+			sel.Total = &total
+			for _, at := range set.Matches(menu.Query) {
+				sel.Options = append(sel.Options, ui.SelectOption{Value: strconv.Itoa(at), Label: set.Labels[at]})
+			}
+		} else {
+			for at, label := range set.Labels {
+				sel.Options = append(sel.Options, ui.SelectOption{Value: strconv.Itoa(at), Label: label})
 			}
 		}
 		// The highlight of a menu the pointer opened is Tern's until a key moves it: any change to the select right after the
 		// click (as an active prop) lost the option click that followed it now and then.
 		if menu.Open && (sel.Open || menu.Keyed) {
 			sel.Active = choiceValue(menu.Active)
-		}
-		sel.Options = make([]ui.SelectOption, len(shown))
-		for i, at := range shown {
-			sel.Options[i] = ui.SelectOption{Value: strconv.Itoa(at), Label: set.Labels[at]}
 		}
 		field.Children = ui.Nodes(sel)
 	}

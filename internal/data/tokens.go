@@ -21,13 +21,12 @@ import (
 // failure after the token exists revokes it, so no token is left whose secret nobody holds. The secret goes from kata's answer
 // into the file and nowhere else: the answer the Pane gets names the token and the file.
 func (c *Client) CreateToken(ctx context.Context, cmd model.CreateTokenCmd) (done model.TokenCreated, err error) {
-	file, path, err := reserveTokenFile(cmd.File)
+	path, err := reserveTokenFile(cmd.File)
 	if err != nil {
 		return model.TokenCreated{}, err
 	}
 	defer func() {
 		if err != nil {
-			_ = file.Close()
 			_ = os.Remove(path)
 		}
 	}()
@@ -59,7 +58,7 @@ func (c *Client) CreateToken(ctx context.Context, cmd model.CreateTokenCmd) (don
 	}
 	id, secret := response.JSON200.Token.ID, response.JSON200.Plaintext
 	if err = checkIssued(response.JSON200, cmd, scope); err == nil {
-		err = writeSecret(file, path, secret)
+		err = writeSecret(path, secret)
 	}
 	if err != nil {
 		return model.TokenCreated{}, c.withdraw(ctx, id, err)
@@ -67,40 +66,36 @@ func (c *Client) CreateToken(ctx context.Context, cmd model.CreateTokenCmd) (don
 	return model.TokenCreated{ID: id, File: path}, nil
 }
 
-// reserveTokenFile creates the new, owner-only file for a secret. It refuses a path that exists.
-func reserveTokenFile(path string) (*os.File, string, error) {
+// reserveTokenFile creates the new, owner-only, empty file that claims a path for a secret. It refuses a path that exists.
+func reserveTokenFile(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return nil, "", errors.New("token file is required")
+		return "", errors.New("token file is required")
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return nil, "", fmt.Errorf("resolve token file path: %w", err)
+		return "", fmt.Errorf("resolve token file path: %w", err)
 	}
 	file, err := safefileio.CreatePrivateFile(abs)
 	if err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			return nil, "", fmt.Errorf("token file %s already exists; name a new file", abs)
+			return "", fmt.Errorf("token file %s already exists; name a new file", abs)
 		}
-		return nil, "", fmt.Errorf("create token file %s: %w", abs, err)
+		return "", fmt.Errorf("create token file %s: %w", abs, err)
 	}
-	return file, abs, nil
+	if err := file.Close(); err != nil {
+		_ = os.Remove(abs)
+		return "", fmt.Errorf("create token file %s: %w", abs, err)
+	}
+	return abs, nil
 }
 
-func writeSecret(file *os.File, path, secret string) error {
+// writeSecret replaces the reserved file at path with one holding secret.
+func writeSecret(path, secret string) error {
 	if strings.TrimSpace(secret) == "" {
 		return errors.New("kata daemon returned an empty token secret")
 	}
-	if _, err := file.WriteString(secret + "\n"); err != nil {
-		return fmt.Errorf("write token file %s: %w", path, err)
-	}
-	if err := file.Sync(); err != nil {
-		return fmt.Errorf("sync token file %s: %w", path, err)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close token file %s: %w", path, err)
-	}
-	return nil
+	return writePrivateFile(path, secret)
 }
 
 // checkIssued confirms kata did not omit or widen what was asked for, as kata's own CLI does for an Issue-subtree token.

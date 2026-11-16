@@ -182,7 +182,7 @@ func TestACalendarClosesWhenItsFieldLosesFocus(t *testing.T) {
 		if !s.Model.DateCalendar.Open {
 			t.Fatal("the calendar did not open")
 		}
-		s = step(t, s, &tern.Change{ID: view.FieldID(model.CardRecurrence, model.RecurrenceEnds) + ".control", Value: "0"}).State
+		s = step(t, s, &tern.Change{ID: view.ControlID(model.CardRecurrence, model.RecurrenceEnds), Value: "0"}).State
 		if s.Model.DateCalendar.Open {
 			t.Errorf("the calendar stayed open with the rule ending %v", s.Model.RecurrenceForm.Ends)
 		}

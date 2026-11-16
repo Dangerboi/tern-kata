@@ -38,9 +38,6 @@ func newTerminal(ctx context.Context, session paneSession, surface paneSurface, 
 
 func (t *terminal) Render(v tern.View) error { return t.surface.Render(v) }
 
-// Send queues op for the next frame. While Tern has every credit in use the SDK sends the queued ops together in one frame.
-func (t *terminal) Send(op tern.Op) error { return t.surface.Send(op) }
-
 func (t *terminal) Caps() tern.Caps { return t.session.Caps() }
 
 func (t *terminal) Inputs() <-chan any        { return t.inputs }

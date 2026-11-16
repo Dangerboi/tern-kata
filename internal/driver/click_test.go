@@ -180,12 +180,12 @@ func TestClickingAChoiceIsTheKeysThatReachIt(t *testing.T) {
 	}{
 		{"Recurrence frequency", "shift+o", "Frequency", "Monthly", func(driver.State) []string { return []string{"right"} }, // Weekly to Monthly
 			func(t *testing.T, m model.Model) tern.Event {
-				return &tern.Change{ID: fieldLabeled(t, m, "Frequency") + ".control", Value: optionValue(t, m, "Frequency", "Monthly")}
+				return &tern.Change{ID: controlIDLabeled(t, m, "Frequency"), Value: optionValue(t, m, "Frequency", "Monthly")}
 			}},
 		{"Recurrence weekday", "shift+o", "Weekdays", "Fri", weekdays, nil}, // Friday
 		{"Filter status", "f", "Status", "open", func(driver.State) []string { return []string{"tab", "right"} }, // open
 			func(t *testing.T, m model.Model) tern.Event {
-				return &tern.Select{ID: fieldLabeled(t, m, "Status") + ".control", Item: optionValue(t, m, "Status", "open")}
+				return &tern.Select{ID: controlIDLabeled(t, m, "Status"), Item: optionValue(t, m, "Status", "open")}
 			}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

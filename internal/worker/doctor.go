@@ -106,7 +106,6 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 	}
 	omp := o.Omp
 	omp.Checkouts = slices.Concat(omp.Checkouts, slices.Sorted(maps.Values(cfg.Checkouts)))
-	scan := omp.scan()
 	for _, name := range slices.Sorted(maps.Keys(cfg.Profiles)) {
 		command := cfg.Profiles[name].command()
 		if path, err := exec.LookPath(command); err != nil {
@@ -119,7 +118,7 @@ func Doctor(ctx context.Context, o DoctorOptions) Report {
 			continue
 		}
 		argProfile, hasArg := profile.ompProfile()
-		if kata := scan.kataPlugin(argProfile, hasArg); kata != "" {
+		if kata := omp.kataPlugin(argProfile, hasArg); kata != "" {
 			add("warn", "profile "+name, "kata-plugin's omp extension is installed ("+kata+") and this profile loads omp's extensions, so each headless run gets its todo takeover: an issue for each task and up to 3 extra turns from its stop reminder",
 				"Remove extensions = \"ambient\" from [profiles."+name+"] in worker.toml, or set extensions = \"none\".")
 		}

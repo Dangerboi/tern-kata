@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +18,11 @@ import (
 	"go.kenn.io/kit/consolewindow"
 )
 
+// openerWait is how long openFile waits for the OS opener to fail. An opener still running by then has opened the file (some stay up
+// as long as the viewer does) and is reaped when it exits.
+const openerWait = 2 * time.Second
+
+// openFile hands path to the OS opener and reports an opener that cannot start or exits non-zero within openerWait.
 func openFile(path string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -28,11 +34,25 @@ func openFile(path string) error {
 		cmd = exec.Command("xdg-open", path)
 	}
 	consolewindow.Hide(cmd)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("could not start %s: %w", cmd.Args[0], err)
 	}
-	go func() { _ = cmd.Wait() }()
-	return nil
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	select {
+	case err := <-exited:
+		if err == nil {
+			return nil
+		}
+		if text := strings.TrimSpace(stderr.String()); text != "" {
+			return fmt.Errorf("%s: %w: %s", cmd.Args[0], err, text)
+		}
+		return fmt.Errorf("%s: %w", cmd.Args[0], err)
+	case <-time.After(openerWait):
+		return nil
+	}
 }
 
 // inTern reports whether this program runs in a Tern Pane or a headless Tern session, the two cases where `tern open` finds the window
@@ -41,17 +61,10 @@ func inTern() bool {
 	return os.Getenv("TERN_PANE") != "" || os.Getenv("TERN_WINDOW_SOCKET") != ""
 }
 
-// ternOpen runs `tern open` with args with the Pane's environment, which carries the window it answers to. `--preview` shows a file
-// in the preview block of the Pane's tab, leaving the focus in the Pane and replacing the preview it showed before; `--split right`
-// opens a block of its own beside the Pane.
+// ternOpen runs `tern open` with args. `--preview` shows a file in the preview block of the Pane's tab, leaving the focus in the
+// Pane and replacing the preview it showed before; `--split right` opens a block of its own beside the Pane.
 func (g *Gateway) ternOpen(ctx context.Context, args ...string) error {
-	ctx, cancel := context.WithTimeout(ctx, ternOpenTimeout)
-	defer cancel()
-	out, err := g.runTern(ctx, append([]string{"open"}, args...))
-	if err != nil {
-		if msg := strings.TrimSpace(string(out)); msg != "" {
-			return fmt.Errorf("tern open: %s: %w", msg, err)
-		}
+	if _, err := g.ternOutput(ctx, ternOpenTimeout, append([]string{"open"}, args...)); err != nil {
 		return fmt.Errorf("tern open: %w", err)
 	}
 	return nil
@@ -59,9 +72,39 @@ func (g *Gateway) ternOpen(ctx context.Context, args ...string) error {
 
 const ternOpenTimeout = 15 * time.Second
 
+// ternCannotDraw says why Tern cannot draw name, a kind TernDraws names: "" when it can. A Word document is drawn only from
+// ternDocxFloor, and a Tern whose version cannot be read is not known to draw it.
+func (g *Gateway) ternCannotDraw(ctx context.Context, name string) string {
+	if !strings.EqualFold(filepath.Ext(name), ".docx") {
+		return ""
+	}
+	switch ok, err := g.ternAtLeast(ctx, ternDocxFloor); {
+	case err != nil:
+		return "could not tell whether this Tern draws Word documents: " + err.Error()
+	case !ok:
+		return "Word documents need Tern " + strings.TrimPrefix(ternDocxFloor, "v") + " or newer"
+	}
+	return ""
+}
+
+// noteSuffix is why Tern did not show a file, for the end of a sentence.
+func noteSuffix(note string) string {
+	if note == "" {
+		return ""
+	}
+	return " (Tern: " + note + ")"
+}
+
+// systemOpenError says where the file is when the OS opener could not open it.
+func systemOpenError(path string, err error) error {
+	return fmt.Errorf("the file is at %s but the system app could not open it: %w", path, err)
+}
+
 func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) model.Msg {
+	base := model.AttachmentOpened{UID: cmd.UID, AttachmentID: cmd.Attachment.ID, Name: cmd.Attachment.Name, Way: cmd.Way}
 	failed := func(err error) model.Msg {
-		return model.AttachmentOpened{UID: cmd.UID, AttachmentID: cmd.Attachment.ID, Name: cmd.Attachment.Name, Way: cmd.Way, Err: err}
+		base.Err = err
+		return base
 	}
 	// A refused way is refused before the download it would waste.
 	if reason := model.AttachmentRefusal(cmd.Attachment, cmd.Way); reason != "" {
@@ -70,13 +113,19 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 	if cmd.Way == model.WayBeside && !inTern() {
 		return failed(errors.New("this Pane does not run in a Tern window"))
 	}
+	if cmd.Way == model.WayBeside {
+		if why := g.ternCannotDraw(ctx, cmd.Attachment.Name); why != "" {
+			return failed(errors.New(why))
+		}
+	}
 	dir, err := g.cacheDir()
 	if err != nil {
 		return failed(err)
 	}
 	opened, err := callAsWithin(g, ctx, cmd.Workspace, 0, func(ctx context.Context, c *Client) (model.AttachmentOpened, error) {
 		path, err := c.DownloadAttachment(ctx, dir, cmd)
-		return model.AttachmentOpened{UID: cmd.UID, AttachmentID: cmd.Attachment.ID, Name: cmd.Attachment.Name, Path: path, Way: cmd.Way}, err
+		base.Path = path
+		return base, err
 	})
 	if err != nil {
 		return failed(err)
@@ -93,7 +142,7 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 		return opened
 	case model.WaySystem:
 		if err := g.openFile(opened.Path); err != nil {
-			return failed(fmt.Errorf("Saved %s but could not open it: %w", opened.Path, err))
+			return failed(systemOpenError(opened.Path, err))
 		}
 		return opened
 	case model.WayBeside:
@@ -102,17 +151,23 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 		}
 		return opened
 	}
-	if inTern() && model.TernDraws(cmd.Attachment.Name) && g.ternOpen(ctx, "--preview", opened.Path) == nil {
-		return opened
+	if inTern() && model.TernDraws(cmd.Attachment.Name) {
+		if opened.Note = g.ternCannotDraw(ctx, cmd.Attachment.Name); opened.Note == "" {
+			err := g.ternOpen(ctx, "--preview", opened.Path)
+			if err == nil {
+				return opened
+			}
+			opened.Note = err.Error()
+		}
 	}
 	// Only Tern shows a kind the OS must not open, so when Tern cannot, the file is just saved.
 	if !model.OSOpens(cmd.Attachment.Name) {
-		opened.Err = fmt.Errorf("saved at %s and not opened: tern-kata opens only images, video, audio, PDFs and text", opened.Path)
+		opened.Err = fmt.Errorf("saved at %s and not opened: tern-kata opens only images, video, audio, PDFs and text%s", opened.Path, noteSuffix(opened.Note))
 		return opened
 	}
 	opened.OutsideTern = true
 	if err := g.openFile(opened.Path); err != nil {
-		opened.Err = fmt.Errorf("Saved %s but could not open it: %w", opened.Path, err)
+		opened.Err = systemOpenError(opened.Path, err)
 	}
 	return opened
 }
@@ -124,14 +179,16 @@ func (g *Gateway) openAttachment(ctx context.Context, cmd model.OpenAttachment) 
 // change in Tern's wording cannot break Save. A window on this very machine is the plain local save; any other failure comes back
 // as note, which the toast shows beside the path. Only a failure of the local copy is an error.
 func (g *Gateway) saveToDownloads(ctx context.Context, path string) (saved string, remote bool, note string, err error) {
-	if inTern() && g.ternKnownToHaveSubcommands(ctx) {
-		var there string
-		there, err = g.ternDownload(ctx, path)
-		if err == nil {
-			return there, true, "", nil
-		}
-		if !errors.Is(err, errTernDownloadLocal) {
-			note = err.Error()
+	if inTern() {
+		if has, _ := g.ternAtLeast(ctx, ternSubcommandsFloor); has {
+			var there string
+			there, err = g.ternDownload(ctx, path)
+			if err == nil {
+				return there, true, "", nil
+			}
+			if !errors.Is(err, errTernDownloadLocal) {
+				note = err.Error()
+			}
 		}
 	}
 	dir, err := g.downloadsDir()
@@ -149,28 +206,22 @@ func (g *Gateway) saveToDownloads(ctx context.Context, path string) (saved strin
 // machine the files are on.
 var errTernDownloadLocal = errors.New("tern download copies nothing here")
 
-// ternDownload runs `tern download path` and returns the path it printed, the last line of its output. A Tern whose window is on
+// ternDownload runs `tern download path` and returns the path it printed on stdout, its last line. A Tern whose window is on
 // this machine exits 1 saying "the pane's files are on this computer already"; that comes back as errTernDownloadLocal, found by
 // its wording only to keep the toast quiet. Every other failure, and an answer of nothing, is an error carrying Tern's message.
 func (g *Gateway) ternDownload(ctx context.Context, path string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, ternDownloadTimeout)
-	defer cancel()
-	out, err := g.runTern(ctx, []string{"download", path})
-	text := strings.TrimSpace(string(out))
+	out, err := g.ternOutput(ctx, ternDownloadTimeout, []string{"download", path})
 	if err != nil {
-		if strings.Contains(text, "files are on this computer already") {
+		if strings.Contains(err.Error(), "files are on this computer already") {
 			return "", errTernDownloadLocal
-		}
-		if text != "" {
-			return "", fmt.Errorf("tern download failed: %s", text)
 		}
 		return "", fmt.Errorf("tern download failed: %w", err)
 	}
-	if text == "" {
-		return "", errors.New("tern download failed: it printed no path")
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if last := strings.TrimSpace(lines[len(lines)-1]); last != "" {
+		return last, nil
 	}
-	lines := strings.Split(text, "\n")
-	return strings.TrimSpace(lines[len(lines)-1]), nil
+	return "", errors.New("tern download failed: it printed no path")
 }
 
 const ternDownloadTimeout = 60 * time.Second

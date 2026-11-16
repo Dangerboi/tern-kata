@@ -18,18 +18,28 @@ run_extra() { # run_extra <script> <binary>: plugin.sh and supervision.sh take t
 # A failed run ends with a line naming the failing step or script and the artifacts folder.
 if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   export CGO_ENABLED=0
+  source "$repo/scripts/plugin-info.sh"
   bin_dir=$(mktemp -d)
-  trap 'rm -rf "$bin_dir"; trap - TERM; kill 0' INT TERM
-  # Each shard appends "<step>; artifacts: <folder>" here when it fails, for the last line.
-  export SMOKE_FAIL_LOG="$bin_dir/failures"
-  : >"$SMOKE_FAIL_LOG"
+  # The jobs are subshells that wait for a shard or script, so the signal goes to each job's own child as well; each
+  # of those runs its cleanup on TERM.
+  stop_jobs() {
+    local job
+    for job in $(jobs -p); do
+      pkill -TERM -P "$job" 2>/dev/null || true
+      kill "$job" 2>/dev/null || true
+    done
+    wait 2>/dev/null || true
+  }
+  trap 'stop_jobs; rm -rf "$bin_dir"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   (cd "$repo" && go build -o "$bin_dir/tern-kata" ./cmd/tern-kata)
   # Steps 81 and 82 and supervision.sh serve a release built at the current version; one build serves all three.
-  release_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$repo/plugin.toml")
+  release_version=$(plugin_version "$repo/plugin.toml")
   "$repo/scripts/release.sh" "v$release_version" "$bin_dir/dist" >/dev/null
   slow=(51-claim-expiry.sh 60-cron-made-issue.sh 62-job-card.sh 81-install-from-release.sh 82-update-from-release.sh)
   # The rest is cut at steps that start from the freshly launched Pane (each shard has its own seeded Project), so the
-  # five groups run side by side: steps 01-21, 22-31, 32-44, 45-57 and 58-76.
+  # five groups run side by side: steps 01-21, 22-31, 32-44, 45-57 and 58 on.
   groups=("" "" "" "" "")
   for step in "$repo"/smoke/steps/*; do
     name=$(basename "$step")
@@ -45,10 +55,14 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   jobs=()
   # The slowest job sets the suite's time: each records "<seconds> <name>" here, and a passing run names the slowest three.
   durations="$bin_dir/durations"
+  # Each job gets its own fail log, where its shard appends "<step>; artifacts: <folder>"; a job that fails without a
+  # line there (killed, or a script) is named by this function, so the last line always names every failure.
   timed() { # timed <name> <command...>
-    local start=$SECONDS status=0
-    "${@:2}" || status=$?
+    local start=$SECONDS status=0 log
+    log=$(mktemp "$bin_dir/failure.XXXXXX")
+    SMOKE_FAIL_LOG=$log "${@:2}" || status=$?
     printf '%s %s\n' "$((SECONDS - start))" "$1" >>"$durations"
+    if (( status )) && [[ ! -s $log ]]; then printf '%s; failed without naming a step (see its output above)\n' "$1" >"$log"; fi
     return "$status"
   }
   export SMOKE_SHARD=1 SMOKE_BIN="$bin_dir/tern-kata" SMOKE_DIST="$bin_dir/dist"
@@ -59,17 +73,15 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   done
   for name in "${slow[@]}"; do timed "$name" "$0" "$repo/smoke/steps/$name" & jobs+=($!); done
   for extra in plugin.sh supervision.sh release-check.sh; do
-    (timed "$extra" run_extra "$repo/smoke/$extra" "$SMOKE_BIN" || { printf '%s; its artifacts are named above\n' "$extra" >>"$SMOKE_FAIL_LOG"; exit 1; }) & jobs+=($!)
+    timed "$extra" run_extra "$repo/smoke/$extra" "$SMOKE_BIN" & jobs+=($!)
   done
   failed=0
   for job in "${jobs[@]}"; do wait "$job" || failed=1; done
   if (( failed )); then
-    printf 'Smoke failed at %s\n' "$(paste -sd, "$SMOKE_FAIL_LOG" | sed 's/,/, /g')" >&2
-    rm -rf "$bin_dir"
+    printf 'Smoke failed at %s\n' "$(cat "$bin_dir"/failure.* | paste -sd, | sed 's/,/, /g')" >&2
     exit 1
   fi
   slowest=$(sort -rn "$durations" | head -3 | awk '{ s = $1; $1 = ""; printf "%s%s %d s", sep, substr($0, 2), s; sep = ", " }')
-  rm -rf "$bin_dir"
   printf '\nSmoke passed in %d s; slowest: %s\n' "$SECONDS" "$slowest"
   exit 0
 fi
@@ -176,21 +188,16 @@ else
   (cd "$repo" && go build -o "$tmp/tern-kata" ./cmd/tern-kata)
 fi
 
+source "$repo/smoke/ctl.sh"
 tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
 server_pid=$!
-for ((attempt = 0; attempt < 200; attempt++)); do
-  [[ ! -S "$tmp/control.sock" ]] || break
-  kill -0 "$server_pid"
-  sleep 0.1
-done
-[[ -S "$tmp/control.sock" ]]
+wait_for socket_ready "$server_pid" "$tmp/control.sock"
 
 # Tern 0.7 lays out only the part of a long scroller near the screen, and `ctl tree` lists only laid-out nodes, so
 # steps could not find rows or tabs below the fold. This sheet lays everything out, as Tern 0.6 did.
 printf '* { content-visibility: visible !important; }\n' >"$tmp/visible.css"
 tern ctl --control "$tmp/control.sock" css smoke-visible "$tmp/visible.css"
 
-source "$repo/smoke/ctl.sh"
 ctl() {
   if [[ ${1:-} == --file && $# -eq 2 ]]; then
     # A scenario's own `ready` line has the same 20 s limit: wait for the prompt here first, so the line returns at once.
@@ -267,14 +274,10 @@ quit_app() {
 }
 
 
+kata_daemon_gone() { kata daemon status --json | jq -e '.daemons | length == 0' >/dev/null; }
 stop_live_daemon() {
   kata daemon stop
-  for ((attempt = 0; attempt < 100; attempt++)); do
-    if kata daemon status --json | jq -e '.daemons | length == 0' >/dev/null; then return; fi
-    sleep 0.1
-  done
-  printf 'Daemon did not finish stopping within 10 seconds\n' >&2
-  return 1
+  wait_for -t 10 kata_daemon_gone
 }
 
 for step in "${steps[@]}"; do
@@ -283,6 +286,7 @@ for step in "${steps[@]}"; do
   case "$step" in
     *.ctl) ctl --file "$step" ;;
     *.sh) source "$step" ;;
+    *) printf 'Unknown step %s: a step is a .ctl or .sh file under smoke/steps\n' "$step" >&2; exit 1 ;;
   esac
   printf 'Step passed %s\n' "$(basename "$step")"
 done

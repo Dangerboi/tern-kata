@@ -17,7 +17,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/data"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
-	"github.com/Dangerboi/tern-kata/internal/worker"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"go.kenn.io/kit/consolewindow"
 )
@@ -91,12 +90,6 @@ func run() error {
 		if plan.AgentForkedFrom != "" {
 			if route, err = route.Forked(block, plan.AgentForkedFrom); err != nil {
 				return subcommandError{fmt.Errorf("agent: %w", err)}
-			}
-		}
-		// A reopened agent's line has lost its @<prompt> word; the extension needs the file to keep writing the session path.
-		if plan.AgentAddressPrefix != "" && !strings.HasPrefix(plan.Operands[len(plan.Operands)-1], "@") {
-			if dirs, err := worker.DefaultDirs(); err == nil {
-				plan.AgentPromptFile = data.AgentPromptFileOf(dirs.State, block)
 			}
 		}
 		environ, err := routedEnv(os.Environ(), route, windows)
@@ -178,7 +171,7 @@ func run() error {
 				}
 			}
 			for _, op := range out.Ops {
-				if err := term.Send(op); err != nil {
+				if err := term.surface.Send(op); err != nil {
 					return err
 				}
 			}

@@ -3,7 +3,6 @@ package driver_test
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
@@ -37,7 +36,7 @@ func TestChoiceFieldsDrawTheirControl(t *testing.T) {
 				if kinds[id] != "field" {
 					t.Errorf("%s is drawn as %q, want a FormField", field, kinds[id])
 				}
-				if got := kinds[id+".control"]; got != kind {
+				if got := kinds[view.ControlID(c.card, field)]; got != kind {
 					t.Errorf("%s control is drawn as %q, want %q", field, got, kind)
 				}
 			}
@@ -54,7 +53,7 @@ func TestChoiceFieldsDrawTheirControl(t *testing.T) {
 	drawn := false
 	for _, n := range wireNodes(t, view.Render(weekdays.Model, now)) {
 		drawn = drawn || n.ID == view.FieldID(model.CardRecurrence, model.RecurrenceWeekdays)
-		if n.ID == view.FieldID(model.CardRecurrence, model.RecurrenceWeekdays)+".control" {
+		if n.ID == view.ControlID(model.CardRecurrence, model.RecurrenceWeekdays) {
 			t.Errorf("Weekdays is drawn as a %s control", n.K)
 		}
 	}
@@ -70,7 +69,7 @@ func TestControlEventsSetTheChoice(t *testing.T) {
 	for _, c := range editingCards() {
 		cards[c.name] = c
 	}
-	node := func(c editingCard, field model.Field) string { return view.FieldID(c.card, field) + ".control" }
+	node := func(c editingCard, field model.Field) string { return view.ControlID(c.card, field) }
 	t.Run("select pick", func(t *testing.T) {
 		c := cards["Filter"]
 		s := c.open(t)
@@ -89,9 +88,9 @@ func TestControlEventsSetTheChoice(t *testing.T) {
 		if !out.State.Model.LanesForm.Share {
 			t.Fatal("the Project tab did not set Save to")
 		}
-		out = step(t, out.State, &tern.Select{ID: node(c, model.LanesShare), Item: node(c, model.LanesShare) + ".0"})
+		out = step(t, out.State, &tern.Select{ID: node(c, model.LanesShare), Item: "0"})
 		if out.State.Model.LanesForm.Share {
-			t.Fatal("a tab named by its whole node id did not set Save to")
+			t.Fatal("the This machine tab did not set Save to")
 		}
 	})
 	t.Run("switch flip", func(t *testing.T) {
@@ -166,7 +165,7 @@ func TestControlEventsSetTheChoice(t *testing.T) {
 			return nil
 		}
 		s := c.open(t)
-		before := view.Render(s.Model, time.Now())
+		before := view.Render(s.Model, now)
 		opened := step(t, s, &tern.Toggle{ID: id, Open: true})
 		if got, want := props(opened.View), props(&before); !reflect.DeepEqual(got, want) {
 			t.Fatalf("the select after the pointer's open is %v, want it as drawn before %v: a change there lost the next click", got, want)

@@ -696,10 +696,15 @@ export const SESSION_PATH_SUFFIX = ".session";
 /** The prompt file the wrapper names when the command line has none (ompext.PromptFileEnv): a chat Tern reopened. */
 export const PROMPT_FILE_ENV = "TERN_KATA_PROMPT_FILE";
 
+/**
+ * The prompt file named as the last whole `@<path>` word: `agent-prompts/prompt-<random>.md` or
+ * `agent-prompts/prompt-<starter>-<random>.md`, either slash. The same rule as the Pane's (internal/model promptTails) and the
+ * plugin's (promptfile.luau); `<prompt>.md.token` beside it is another file.
+ */
 export function promptFileFromArgv(argv: readonly string[]): string | undefined {
   for (let i = argv.length - 1; i >= 0; i--) {
     const arg = argv[i];
-    if (arg.startsWith("@") && /(^|[\\/])prompt-[^\\/]*\.md$/.test(arg)) return arg.slice(1);
+    if (arg.startsWith("@") && /(^|[\\/])agent-prompts[\\/]prompt-[\w-]+\.md$/.test(arg)) return arg.slice(1);
   }
   return undefined;
 }

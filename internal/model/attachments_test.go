@@ -244,3 +244,41 @@ func TestOSOpensAllowsOnlyViewingTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestAnAttachmentTernDidNotShowSaysWhyAfterTheOpenedLine(t *testing.T) {
+	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5)})
+	m, _ = model.Update(m, model.AttachmentOpened{UID: "a", Name: "a.png", Path: "/cache/a.png", OutsideTern: true, Note: "tern open: no window"})
+	if m.Notice != "Opened a.png outside Tern (/cache/a.png): tern open: no window" {
+		t.Fatalf("notice %q", m.Notice)
+	}
+}
+
+func TestANameWithAColonIsNeverHandedToTheOS(t *testing.T) {
+	for _, name := range []string{"report.txt:payload.png", "a:b.pdf", "C:x.png"} {
+		if model.OSOpens(name) {
+			t.Errorf("OSOpens(%q) = true", name)
+		}
+		if model.AttachmentRefusal(model.Attachment{Name: name}, model.WaySystem) == "" {
+			t.Errorf("%q was allowed for the system app", name)
+		}
+	}
+	if !model.OSOpens("report.png") {
+		t.Error("a plain image is refused")
+	}
+}
+
+func TestTheRefusalsNameTheKindsTheExtensionListsAllow(t *testing.T) {
+	beside := model.AttachmentRefusal(model.Attachment{Name: "a.mp4"}, model.WayBeside)
+	system := model.AttachmentRefusal(model.Attachment{Name: "a.exe"}, model.WaySystem)
+	for _, want := range []string{"images, text, Markdown, JSON and Word documents"} {
+		if !strings.Contains(beside, want) {
+			t.Errorf("beside refusal %q lacks %q", beside, want)
+		}
+	}
+	if !strings.Contains(system, "images, video, audio, PDFs and text") {
+		t.Errorf("system refusal %q", system)
+	}
+	if got := model.AttachmentRefusal(model.Attachment{Name: "a.exe"}, model.WayOpen); got != "" {
+		t.Errorf("the default way refused: %q", got)
+	}
+}

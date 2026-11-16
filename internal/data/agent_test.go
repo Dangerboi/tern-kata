@@ -697,7 +697,10 @@ func TestAdoptingLeavesAnEntryAnotherPaneTookInTheMeantime(t *testing.T) {
 	g, dirs := agentGateway(t)
 	file := filepath.Join(dirs.State, AgentsFile)
 	putAgents(t, file, model.AgentEntry{Block: "2", PaneBlock: "6"})
-	g.runTern = func(context.Context, []string) ([]byte, error) {
+	g.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if out, ok := ternProbe(args); ok {
+			return out, nil
+		}
 		// Pane 8 adopts the entry while this Pane's tern ls is answering; Pane 8 is not in this answer.
 		if _, err := UpdateAgents(file, func(l []model.AgentEntry) []model.AgentEntry { l[0].PaneBlock = "8"; return l }); err != nil {
 			t.Fatal(err)
@@ -1814,18 +1817,21 @@ func TestAForkReadsAFileThePaneDidNotWriteWhereItIs(t *testing.T) {
 	}
 }
 
-func TestThePruneAtStartRemovesTheCopiesOfForksTernNoLongerLists(t *testing.T) {
+func TestThePruneAtStartRemovesTheCopiesOfForksTernNoLongerListsWithOneAsk(t *testing.T) {
 	g, dirs := agentGateway(t)
 	prompts := filepath.Join(dirs.State, AgentPromptsFolder)
-	kept := []string{"prompt-7-1.md.token", forkFilePrefix + "12-prompt-7-1.md.token", forkFilePrefix + "12-prompt-7-1.md.env"}
+	// prompt-9-4.md is a start another Pane may be part way through: its files stay although no entry names them yet.
+	kept := []string{"prompt-7-1.md.token", forkFilePrefix + "12-prompt-7-1.md.token", forkFilePrefix + "12-prompt-7-1.md.env", "prompt-9-4.md", "prompt-9-4.md.token"}
 	gone := []string{forkFilePrefix + "31-prompt-7-1.md.token", forkFilePrefix + "31-prompt-7-1.md.dsn"}
 	for _, name := range slices.Concat(kept, gone) {
 		agentSecret(t, filepath.Join(prompts, name), "secret")
 	}
-	live := []string{"12"}
+	// An entry makes the reconcile ask Tern for the live blocks; the fork sweep must use that answer.
+	putAgents(t, filepath.Join(dirs.State, AgentsFile), model.AgentEntry{IssueUID: "U1", IssueRef: "demo#ab12", Block: "5", PromptFile: filepath.Join(prompts, "prompt-7-1.md")})
+	live := []string{"5", "12"}
 	asked := lsCounter(t, g, &live)
-	if got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); got.Err != nil {
-		t.Fatal(got.Err)
+	if got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); got.Err != nil || len(got.Agents) != 1 {
+		t.Fatalf("pruned %+v", got)
 	}
 	for _, name := range kept {
 		if _, err := os.Stat(filepath.Join(prompts, name)); err != nil {
@@ -1839,6 +1845,106 @@ func TestThePruneAtStartRemovesTheCopiesOfForksTernNoLongerLists(t *testing.T) {
 	}
 	if *asked != 1 {
 		t.Errorf("tern ls asked %d times, want 1", *asked)
+	}
+}
+
+func TestThePruneAtStartWithNoEntriesAsksTernOnlyWhenAForkCopyExists(t *testing.T) {
+	g, _ := agentGateway(t)
+	state := filepath.Join(t.TempDir(), "st[a]te*")
+	g.workerDirs = func() (worker.Dirs, error) { return worker.Dirs{Config: t.TempDir(), State: state}, nil }
+	live := []string{"12"}
+	asked := lsCounter(t, g, &live)
+	if got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); got.Err != nil || *asked != 0 {
+		t.Fatalf("no folder: %+v, asked %d", got, *asked)
+	}
+	copied := filepath.Join(state, AgentPromptsFolder, forkFilePrefix+"31-prompt-7-1.md.token")
+	agentSecret(t, copied, "secret")
+	if got := as[model.AgentsPruned](t, run(t, g, model.PruneAgents{})); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if _, err := os.Stat(copied); err == nil {
+		t.Error("the copy of a gone fork stays in a state folder whose name holds glob characters")
+	}
+	if *asked != 1 {
+		t.Errorf("tern ls asked %d times, want 1", *asked)
+	}
+}
+
+func TestTheRoutesSecretFilesAreOneTable(t *testing.T) {
+	prompts := filepath.Join(t.TempDir(), AgentPromptsFolder)
+	prompt := filepath.Join(prompts, "prompt-7-1.md")
+	agentSecret(t, prompt, "task")
+	secrets := map[string]string{"token-file": "pane-token", "dsn-file": "postgres://u:pw@h/db", "env-file": "WORK_TOKEN=w"}
+	route := AgentRoute{Server: "https://s"}
+	for _, s := range SecretFiles {
+		*s.Value(&route) = secrets[s.Flag]
+	}
+	written, err := route.withSecretFiles(prompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := written.Args()
+	for _, s := range SecretFiles {
+		file := prompt + s.Suffix
+		if got := *s.File(&written); got != file {
+			t.Errorf("%s names %q, want %q", s.Flag, got, file)
+		}
+		if got := *s.Value(&written); got != "" {
+			t.Errorf("%s left its secret in the route: %q", s.Flag, got)
+		}
+		if i := slices.Index(args, "--"+s.Flag); i < 0 || args[i+1] != file {
+			t.Errorf("Args %q do not carry --%s %s", args, s.Flag, file)
+		}
+		if got, err := os.ReadFile(file); err != nil || strings.TrimSpace(string(got)) != secrets[s.Flag] {
+			t.Errorf("%s holds %q, %v", file, got, err)
+		}
+		if info, err := os.Stat(file); runtime.GOOS != "windows" && (err != nil || info.Mode().Perm() != 0o600) {
+			t.Errorf("%s: %v, %v", file, info, err)
+		}
+	}
+	if left, _ := os.ReadDir(prompts); len(left) != len(SecretFiles)+1 {
+		t.Errorf("the folder holds %d files after the writes, want the prompt and one per secret file: %v", len(left), left)
+	}
+	if strings.Contains(strings.Join(args, " "), "pane-token") {
+		t.Errorf("Args carry a secret: %q", args)
+	}
+	agentSecret(t, prompt+AgentSessionSuffix, "/s/a.jsonl")
+	removePrompt(prompt)
+	if left, _ := os.ReadDir(prompts); len(left) != 0 {
+		t.Errorf("retiring the agent left %v", left)
+	}
+}
+
+func TestAPrivateFileThatCannotBeWrittenLeavesNothing(t *testing.T) {
+	dir := t.TempDir()
+	if err := writePrivateFile(filepath.Join(dir, "missing", "x.token"), "secret"); err == nil {
+		t.Fatal("a write into a missing folder succeeded")
+	}
+	if left, _ := os.ReadDir(dir); len(left) != 0 {
+		t.Errorf("a failed write left %v", left)
+	}
+}
+
+func TestReopenLuauNamesTheSecretFileFlagsOfTheTable(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "reopen.luau"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`SECRET_FILE_FLAGS: \{ \[string\]: boolean \} = \{([^}]*)\}`).FindSubmatch(src)
+	if m == nil {
+		t.Fatal("reopen.luau has no SECRET_FILE_FLAGS table")
+	}
+	var luau, table []string
+	for _, name := range regexp.MustCompile(`\["([^"]+)"\]`).FindAllSubmatch(m[1], -1) {
+		luau = append(luau, string(name[1]))
+	}
+	for _, s := range SecretFiles {
+		table = append(table, s.Flag)
+	}
+	slices.Sort(luau)
+	slices.Sort(table)
+	if !slices.Equal(luau, table) {
+		t.Errorf("reopen.luau names the secret file flags %q, SecretFiles has %q", luau, table)
 	}
 }
 

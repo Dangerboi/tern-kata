@@ -403,7 +403,7 @@ func TestParentSectionMatchingAndEmptyBody(t *testing.T) {
 // The app reveals this node after an Activity tab switch; Tern ends the program if it is not drawn.
 func TestActivityRevealTargetIsDrawnOnEveryTab(t *testing.T) {
 	models := map[string]model.Model{"empty Events": apply(browsing(), model.ActivityTabMsg{Tab: model.TabEvents})}
-	for _, tab := range []model.ActivityTab{model.TabComments, model.TabEvents, model.TabLinks} {
+	for tab := range model.TabCount {
 		models[fmt.Sprint("tab ", tab)] = detailWithActivity(tab)
 	}
 	for name, m := range models {

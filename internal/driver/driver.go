@@ -72,7 +72,7 @@ func Step(s State, in any, now time.Time) Output {
 	}
 	v := view.Render(m, now)
 	out := Output{State: s, View: &v}
-	out.closeSelectMenus(m, cmds)
+	out.route(m, cmds)
 	if target := view.TextFocusID(m); target != s.Focus {
 		out.Ops = append(out.Ops, tern.OpFocus(target))
 		out.State.Focus = target
@@ -80,23 +80,11 @@ func Step(s State, in any, now time.Time) Output {
 	if reveal := view.SelectionRevealID(m, msg, previousSelection); reveal != "" {
 		out.Ops = append(out.Ops, tern.OpReveal(reveal, "nearest"))
 	}
-	out.route(m, cmds)
 	return out
 }
 
-// closeSelectMenus sends a CloseSelectMenu as ops on the select. The Pane drew that menu closed (no open prop) while the pointer
-// had it open, so drawing it closed again changes nothing Tern would apply: setting the prop and deleting it again is a close
-// Tern applies. They go ahead of the step's focus op: behind one (tab moving to the next field) they left the menu open.
-func (out *Output) closeSelectMenus(m model.Model, cmds []model.Cmd) {
-	for _, cmd := range cmds {
-		if cmd, ok := cmd.(model.CloseSelectMenu); ok {
-			if id := view.CloseSelectTarget(m, cmd.Card, cmd.Field); id != "" {
-				out.Ops = append(out.Ops, tern.OpSet(id, map[string]any{"open": true}), tern.OpSet(id, map[string]any{"open": nil}))
-			}
-		}
-	}
-}
-
+// route turns the step's Cmds into ops and the Output's Cmds and Editor. Its ops go ahead of the step's focus op: a menu the
+// pointer opened stayed open when its close came behind a focus op (tab moving to the next field).
 func (out *Output) route(m model.Model, cmds []model.Cmd) {
 	for _, cmd := range cmds {
 		switch cmd := cmd.(type) {
@@ -108,9 +96,14 @@ func (out *Output) route(m model.Model, cmds []model.Cmd) {
 			if id := view.ActivityRevealID(m); id != "" {
 				out.Ops = append(out.Ops, tern.OpReveal(id, "start"))
 			}
+		case model.CloseSelectMenu:
+			// The Pane drew the menu closed (no open prop) while the pointer had it open, so drawing it closed again changes
+			// nothing Tern would apply; setting the prop and deleting it again is a close Tern applies.
+			if id := view.CloseSelectTarget(m, cmd.Card, cmd.Field); id != "" {
+				out.Ops = append(out.Ops, tern.OpSet(id, map[string]any{"open": true}), tern.OpSet(id, map[string]any{"open": nil}))
+			}
 		case model.OpenDraftEditor:
 			out.Editor = &cmd
-		case model.CloseSelectMenu: // already sent as ops on the select by closeSelectMenus, ahead of the focus op
 		default:
 			out.Cmds = append(out.Cmds, cmd)
 		}

@@ -196,13 +196,19 @@ func confirmMove(m Model) (Model, []Cmd) {
 	return sendMoveProject(m, true)
 }
 
-type MoveSingleMsg struct{ On bool }
+// MoveFieldSingle is the Move card's one switch, "Only this Issue".
+const MoveFieldSingle Field = "single"
 
-func (MoveSingleMsg) msg() {}
+func moveChoiceSet(m Model, name Field) (ChoiceSet, bool) {
+	if name != MoveFieldSingle {
+		return ChoiceSet{}, false
+	}
+	return yesNoSwitch(m.MoveProject.Single), true
+}
 
-// setMoveSingle sets "Only this Issue" on the card that has a Project chosen and asks kata for a new preview, since the
+// onlyThisIssue sets "Only this Issue" on the card that has a Project chosen and asks kata for a new preview, since the
 // Issues that move change with it. It does nothing while a request is out.
-func setMoveSingle(m Model, on bool) (Model, []Cmd) {
+func onlyThisIssue(m Model, on bool) (Model, []Cmd) {
 	f := &m.MoveProject
 	if !f.Open || f.Sending || f.Target.UID == "" || f.Single == on {
 		return m, nil
@@ -331,7 +337,7 @@ func moveProjectKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case MoveProjectBack:
 		f.Target, f.Previewed, f.Conflict, f.Err = Project{}, false, false, nil
 	case MoveProjectSingle:
-		return setMoveSingle(m, !f.Single)
+		return onlyThisIssue(m, !f.Single)
 	case MoveProjectChoose:
 		return chooseMoveTarget(m)
 	case MoveProjectSend:

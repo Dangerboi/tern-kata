@@ -37,7 +37,6 @@ const (
 	agentAct           = "agent"
 	configAct          = "config"
 	contextMenuPickAct = "pick"
-	attachmentPickAct  = "attachment-pick"
 	legendAct          = "legend"
 	toastAct           = "toast"
 )
@@ -71,13 +70,10 @@ func AgentClick(block string) string { return click(agentAct, block) }
 
 func CardClick(uid string) string { return click(cardAct, uid) }
 
-func ContextMenuPickClick(uid string, mode model.Mode, chord string) string {
-	return click(contextMenuPickAct, string(mode)+":"+uid+":"+chord)
-}
-
-// AttachmentMenuPickClick is a pick from the context menu of the Attachment row with rowKey: the row's cursor, then chord.
-func AttachmentMenuPickClick(rowKey, chord string) string {
-	return click(attachmentPickAct, rowKey+":"+chord)
+// ContextMenuPickClick is a pick from the context menu of the Issue uid: its chord in mode. row is the detail row the menu is of
+// ("" for an Issue's own row or card).
+func ContextMenuPickClick(uid string, mode model.Mode, row, chord string) string {
+	return click(contextMenuPickAct, string(mode)+":"+uid+":"+row+":"+chord)
 }
 
 func JobClick(uid string) string { return click(jobAct, uid) }
@@ -174,14 +170,9 @@ func DecodeAction(id, act, value string) model.Msg {
 			return model.ChooseMsg{Field: model.Field(name), Index: i}
 		}
 	case contextMenuPickAct:
-		if mode, rest, found := strings.Cut(value, ":"); found {
-			if uid, chord, found := strings.Cut(rest, ":"); found {
-				return model.ContextMenuPickMsg{UID: uid, Mode: model.Mode(mode), Chord: chord}
-			}
-		}
-	case attachmentPickAct:
-		if key, chord, found := strings.Cut(value, ":"); found {
-			return model.AttachmentMenuPickMsg{Key: key, Chord: chord}
+		parts := strings.SplitN(value, ":", 4)
+		if len(parts) == 4 {
+			return model.ContextMenuPickMsg{UID: parts[1], Mode: model.Mode(parts[0]), Row: parts[2], Chord: parts[3]}
 		}
 	case configAct:
 		if key, action, found := strings.Cut(value, ":"); found {
@@ -236,21 +227,9 @@ func DecodeSelect(id, item string) model.Msg {
 	return nil
 }
 
-func controlField(id string) (model.Field, bool) {
-	fieldID, ok := strings.CutSuffix(id, "."+choiceControlKey)
-	if !ok {
-		return "", false
-	}
-	if _, field, found := FieldFromID(fieldID); found && field != "" {
-		return field, true
-	}
-	return "", false
-}
-
-// decodeChoice is the choice a tab or an option sent by its id: the index it names in the order the card shows its choices,
-// which is the last part of an id given as the whole node id.
+// decodeChoice is the choice a tab or an option sent by its id: the index it names in the order the card shows its choices.
 func decodeChoice(field model.Field, item string) model.Msg {
-	if index, err := strconv.Atoi(item[strings.LastIndex(item, ".")+1:]); err == nil {
+	if index, err := strconv.Atoi(item); err == nil {
 		return model.ChooseMsg{Field: field, Index: index}
 	}
 	return nil
@@ -263,9 +242,6 @@ func DecodeChange(id string, value any) model.Msg {
 				return model.CalendarDayMsg{Day: day}
 			}
 		}
-	}
-	if on, ok := value.(bool); ok && id == MoveSingleID {
-		return model.MoveSingleMsg{On: on}
 	}
 	field, ok := controlField(id)
 	if !ok {

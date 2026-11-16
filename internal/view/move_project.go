@@ -8,8 +8,6 @@ import (
 
 var MoveListID = LayerID(model.CardMove) + ".list"
 
-var MoveSingleID = LayerID(model.CardMove) + ".single." + choiceControlKey
-
 func moveLayer(m model.Model) tern.Element {
 	f := m.MoveProject
 	if !f.Open {
@@ -62,9 +60,7 @@ func moveConfirming(m model.Model) []tern.Element {
 	if f.Sending {
 		return children
 	}
-	children = append(children, ui.FormField{Common: ui.Common{Key: "single", Aria: "Only this Issue"}, Label: ui.T("Only this Issue"),
-		Hint:     ui.T("Leave its descendants where they are. Key: o"),
-		Children: ui.Nodes(ui.Switch{Common: ui.Common{Key: choiceControlKey, Aria: "Only this Issue"}, On: f.Single, Variant: ui.SwitchSegment, Labels: [2]string{"No", "Yes"}})})
+	children = append(children, choiceControl(m, model.CardMove, model.MoveFieldSingle, "Only this Issue", false, "Leave its descendants where they are. Key: o", ""))
 	words := "Move"
 	if f.Conflict || !f.Previewed {
 		words = "Preview again"

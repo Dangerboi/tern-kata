@@ -296,7 +296,7 @@ func (w *Worker) secrets(j *Journal) (map[string]string, error) {
 // leaves it to them). Every other KATA_* name (kata-plugin's steering variables among them) is dropped.
 var promptKeptKata = map[string]bool{
 	"KATA_HOME": true, "KATA_SERVER": true, "KATA_DAEMON": true, "KATA_AUTH_TOKEN": true, "KATA_AUTH_TOKEN_FILE": true,
-	"KATA_TRUST_PRIVATE_NETWORK": true, "KATA_ALLOW_INSECURE": true, "KATA_CLOSE_TRANSCRIPT_ENABLED": true,
+	"KATA_TRUST_PRIVATE_NETWORK": true, "KATA_ALLOW_INSECURE": true, ompext.KataSwitch: true,
 }
 
 // childEnv is the worker's environment for a prompt step (ADR-0009): without TERN_KATA_ internals, every KATA_*
@@ -304,11 +304,7 @@ var promptKeptKata = map[string]bool{
 // step's secrets.
 func childEnv(actor string, secrets map[string]string, hidden map[string]bool) []string {
 	environ := os.Environ()
-	env := promptEnv(environ, actor, secrets, hidden, envCaseInsensitive)
-	if ompext.CloseTranscriptOn(environ, envCaseInsensitive) {
-		env = append(env, ompext.CloseTranscriptEnv+"="+ompext.CloseTranscriptOnValue)
-	}
-	return env
+	return ompext.WithCloseTranscript(promptEnv(environ, actor, secrets, hidden, envCaseInsensitive), environ, envCaseInsensitive)
 }
 
 const envCaseInsensitive = runtime.GOOS == "windows"
@@ -397,7 +393,8 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	if err := os.MkdirAll(sessionFolder(sp.dir), 0o700); err != nil {
 		return w.hold(j, HoldExecutionError, err.Error())
 	}
-	// tern-kata's omp extension names the run's session to the agent's `kata close`.
+	// tern-kata's omp extension names the run's session to the agent's `kata close`. It is written per attempt so the
+	// run uses its own binary's extension, which another tern-kata build sharing a folder could rewrite before omp loads it.
 	var extension string
 	if ompext.IsOmp(program) {
 		if extension, err = ompext.Install(sp.dir); err != nil {
@@ -410,17 +407,18 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	cmd.Stdin = nil // /dev/null: omp reads an open stdin to EOF as prompt text
 	cmd.WaitDelay = 5 * time.Second
 	isolate(cmd)
-	// omp may name its session before the start record is saved; the start record then takes it from seen (supervise).
-	var seen sessionSeen
+	session := &promptSession{dir: sessionFolder(sp.dir), resumeID: resumeID}
 	parser := &agentParser{onSession: func(id string) {
-		seen.set(id)
+		if !session.latch.name(id) {
+			return // the start record, not yet saved, takes it
+		}
 		_, err := w.store.Update(j.RunUID, "session", func(j *Journal) error {
-			if j.Launch != nil {
-				j.Launch.SessionID = id
-			}
+			j.Launch.SessionID = id
 			return nil
 		})
-		w.noteHook(err)
+		if w.noteHook(err); err != nil && !errors.Is(err, ErrKilled) {
+			w.opt.Log("run %s: the session %s could not be saved: %v", j.RunUID, id, err)
+		}
 	}}
 	stdout := &lineSink{parser: parser, file: openCapped(w.store.hooks, filepath.Join(sp.dir, "output.jsonl"), 8<<20)}
 	stderr := newTailSink(w.store.hooks, filepath.Join(sp.dir, "stderr.log"))
@@ -428,7 +426,7 @@ func (w *Worker) runPrompt(ctx context.Context, j *Journal, sp attemptSpec) erro
 	defer stderr.close()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
-	exit, err := w.supervise(ctx, j, cmd, sessionFolder(sp.dir), resumeID, &seen)
+	exit, err := w.supervise(ctx, j, cmd, session)
 	if se, ok := errors.AsType[startError](err); ok {
 		return w.failAttempt(j, "cannot start the agent: "+se.Error())
 	}
@@ -465,33 +463,45 @@ func (w *Worker) timeLeft(j *Journal) time.Duration {
 	return time.Duration(j.TimeoutSeconds) * time.Second
 }
 
-// sessionSeen is the session an agent's output named, read from the goroutine that saves its start record.
-type sessionSeen struct {
-	mu sync.Mutex
-	id string
+// startLatch orders an agent's session id against the start record that holds it: omp may name its session before that
+// record is saved, and a save of the id before it would find no launch to put it in.
+type startLatch struct {
+	mu    sync.Mutex
+	id    string
+	saved bool
 }
 
-func (s *sessionSeen) set(id string) {
-	s.mu.Lock()
-	s.id = id
-	s.mu.Unlock()
+// name records the session id the agent printed and reports whether the start record is already saved, so the id
+// needs a save of its own.
+func (l *startLatch) name(id string) (saved bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.id = id
+	return l.saved
 }
 
-// get is the session named so far, "" when none (or s is nil).
-func (s *sessionSeen) get() string {
-	if s == nil {
-		return ""
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.id
+// start marks the start record saved and returns the id named before it, "" when none. Called under the journal's lock,
+// so an id named after it is saved by its own update, which waits for that lock.
+func (l *startLatch) start() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.saved = true
+	return l.id
+}
+
+// promptSession is what only an agent step has: the folder omp keeps its session in, the session a resumed attempt asks
+// for and the latch for the one it names.
+type promptSession struct {
+	dir, resumeID string
+	latch         startLatch
 }
 
 // supervise starts cmd and waits for it: the `launching` mark, the start record, the wait with the run's expiry (SIGTERM,
 // then SIGKILL after 10 s, ADR-0006) and the exit record's contents. A worker stop kills the group and leaves the journal
-// `started`, which the next start finds interrupted. The caller saves the returned exit record. The start record's session is
-// resumeID, or the one an agent named in seen before the record was saved; nil for a command.
-func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessionDir, resumeID string, seen *sessionSeen) (*ExitRecord, error) {
+// `started`, which the next start finds interrupted. The caller saves the returned exit record. For an agent step (session
+// not nil) the start record carries its session folder and its session: the one named before the record was saved, else
+// the one a resumed attempt asks for.
+func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, session *promptSession) (*ExitRecord, error) {
 	runtime.LockOSThread() // the parent-death signal follows the thread that started the child
 	defer runtime.UnlockOSThread()
 	// The expiry counts from before the agent is launched, not from when its start record is saved: starting a process
@@ -510,11 +520,15 @@ func (w *Worker) supervise(ctx context.Context, j *Journal, cmd *exec.Cmd, sessi
 		_ = cmd.Wait()
 		return nil, startError{err}
 	}
-	launch.SessionDir, launch.SessionID, launch.At = sessionDir, resumeID, w.clock.Now().UTC()
+	launch.At = w.clock.Now().UTC()
+	if session != nil {
+		launch.SessionDir, launch.SessionID = session.dir, session.resumeID
+	}
 	if _, err := w.store.Update(j.RunUID, "started", func(j *Journal) error {
-		// Read under the journal's lock: a session named before this save is set here, one named after it by its own save.
-		if id := seen.get(); id != "" {
-			launch.SessionID = id
+		if session != nil {
+			if id := session.latch.start(); id != "" {
+				launch.SessionID = id
+			}
 		}
 		return j.markStarted(launch)
 	}); err != nil {

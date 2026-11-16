@@ -17,14 +17,24 @@ type Scroll struct {
 	By     ScrollBy
 }
 
-func (Scroll) cmd() {}
-
-// RevealActivityTab asks for the active Activity tab to be brought into view in
-// the detail scroller: the tab names at the top, or the whole tab when it is
-// shorter than the detail. The Pane driver sends it only while the tabs are drawn.
+// RevealActivityTab asks for the active Activity tab to be brought into view in the detail scroller: the tab names at the
+// top, or the whole tab when it is shorter than the detail. The model asks only for a tab switch the user made, not for the
+// tab a jump or a back lands on. The Pane driver sends it only while the Issue detail's tabs are drawn.
 type RevealActivityTab struct{}
 
-func (RevealActivityTab) cmd() {}
+// UICmd marks a Cmd the Pane driver carries out on Tern or the terminal itself: it never reaches the gateway and never clears
+// the Undo history.
+type UICmd interface {
+	Cmd
+	uiOnly()
+}
+
+func (Scroll) cmd()               {}
+func (Scroll) uiOnly()            {}
+func (RevealActivityTab) cmd()    {}
+func (RevealActivityTab) uiOnly() {}
+func (OpenDraftEditor) uiOnly()   {}
+func (CloseSelectMenu) uiOnly()   {}
 
 func (m Model) DetailDrawn() bool {
 	if m.OnJobs() {
@@ -39,8 +49,9 @@ func (m Model) DetailDrawn() bool {
 // Shows reports whether the view draws column c. It draws none while the first
 // load or a daemon failure fills the Pane, under MinCols, or for the columns the
 // width folds away. Tern answers an op on an unknown node (scroll, reveal) with
-// an error event, which ends the app, so the Pane driver sends no op naming a column that is not shown.
-// The help sheet only hides the columns (they stay mounted) and Tern accepts scroll and reveal on a hidden node, so HelpOpen does not matter here.
+// an error event that ends the app unless view.ExpectedUnknownID drops it, so the Pane driver sends no op naming a column that
+// is not shown. The help sheet only hides the columns (they stay mounted) and Tern accepts scroll and reveal on a hidden node,
+// so HelpOpen does not matter here.
 func (m Model) Shows(c Column) bool {
 	return m.Err == nil && !m.FirstLoad() && slices.Contains(m.VisibleColumns(), c)
 }

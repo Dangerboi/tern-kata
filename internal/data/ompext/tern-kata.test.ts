@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -1302,11 +1302,13 @@ describe("session path file", () => {
   }
 
   function withFolder(body: (dir: string) => void) {
-    const dir = mkdtempSync(join(tmpdir(), "tern-kata-session-"));
+    const root = mkdtempSync(join(tmpdir(), "tern-kata-session-"));
+    const dir = join(root, "agent-prompts");
+    mkdirSync(dir);
     try {
       body(dir);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
     }
   }
 
@@ -1369,9 +1371,11 @@ describe("session path file", () => {
     });
   });
 
-  test("the prompt file is the last @file named prompt-*.md", () => {
+  test("the prompt file is the last whole @path of a file named agent-prompts/prompt-*.md", () => {
     expect(promptFileFromArgv(["omp", "@notes.txt", "@/state/agent-prompts/prompt-12-ab.md"])).toBe("/state/agent-prompts/prompt-12-ab.md");
-    expect(promptFileFromArgv(["omp", "@C:\\state\\prompt-ab.md"])).toBe("C:\\state\\prompt-ab.md");
+    expect(promptFileFromArgv(["omp", "@C:\\state\\agent-prompts\\prompt-ab.md"])).toBe("C:\\state\\agent-prompts\\prompt-ab.md");
     expect(promptFileFromArgv(["omp", "@notes.md"])).toBeUndefined();
+    expect(promptFileFromArgv(["omp", "@/state/prompt-12-ab.md"])).toBeUndefined();
+    expect(promptFileFromArgv(["omp", "@/state/agent-prompts/prompt-12-ab.md.token"])).toBeUndefined();
   });
 });

@@ -92,7 +92,7 @@ type Model struct {
 	Actor string
 	// InboxUser is KATA_INBOX_USER as read at launch: the Inbox address when not blank, else the actor is.
 	InboxUser string
-	// Host is this machine's host name, which tells an Attachment held here from one held elsewhere.
+	// Host is this machine's host name, which the worker card offers as the Executor name.
 	Host string
 	// HostID is this host's Host id (tern-kata's state folder, ADR-0018): Agent records that carry another one are remote agents. "" when it could not be read, which lists none.
 	HostID    string
@@ -224,6 +224,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	if _, ok := msg.(ToggleLegendMsg); ok {
 		return toggleLegend(m), nil
 	}
+	prev, pointer := m, selectPointerMsg(msg)
 	if press, ok := msg.(ButtonPressMsg); ok {
 		m.DateCalendar, m.Dropdown = CalendarState{}, Dropdown{}
 		msg = KeyMsg{Chord: press.Chord}
@@ -241,7 +242,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	}
 	next = next.recordWrite(msg).noteWrites(cmds)
 	next = next.cancelPending(m, msg).settleDropdown()
-	next, cmds = next.showSelect(m, msg, cmds)
+	next, cmds = next.showSelect(prev, pointer, cmds)
 	return foldLegend(msg, next.settleCalendar().withCollectionRows()), cmds
 }
 
@@ -273,10 +274,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return m, nil
 	case ChooseMsg:
 		return chooseField(m, msg.Field, msg.Index), nil
-	case MoveSingleMsg:
-		return setMoveSingle(m, msg.On)
 	case SwitchMsg:
-		return switchField(m, msg.Field, msg.On), nil
+		return switchField(m, msg.Field, msg.On)
 	case DropdownToggleMsg:
 		return toggleDropdown(m, msg.Field, msg.Open), nil
 	case KeyMsg:
@@ -368,8 +367,6 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return attachmentUnlinked(m, msg)
 	case AttachmentOpened:
 		return attachmentOpened(m, msg)
-	case AttachmentMenuPickMsg:
-		return attachmentMenuPick(m, msg)
 	case Start:
 		m.Workspace = msg.Workspace
 		m.nonce = msg.Nonce
@@ -543,6 +540,9 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 	case SelectMsg:
 		return selectRow(m, msg.UID), nil
 	case ContextMenuPickMsg:
+		if msg.Row != "" {
+			return attachmentMenuPick(m, msg)
+		}
 		// A pick is a click on its row and then the key: the list takes the focus even when the row is already selected, so a key
 		// that depends on the focus (enter) acts on the row, never on the detail's cursor row.
 		if !m.covered() {

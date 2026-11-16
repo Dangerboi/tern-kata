@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/Dangerboi/tern-kata/internal/data"
 )
 
-const agentUsage = "usage: tern-kata agent [--as <actor>] [--ref <qualified ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--forked-from <block>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
+const agentSynopsis = "[--as <actor>] [--ref <ref>] [--address-prefix <actor>/<name> [--forward-comments] [--message-from <actor>]... [--coordinator <address> | --coordinating]] [--forked-from <block>] [--prompt-file <file>] [--home <dir>] [--db <file>] [--schema <name>] [--dsn-file <file>] [--env-file <file>] [--daemon <name> [--token-file <file>] [--auth-file <file>] | --server <url> [--token-file <file>] [--auth-file <file>] [--allow-insecure] [--trust-private-network]] -- <command> [args...]"
+
+const agentUsage = "usage: tern-kata agent " + agentSynopsis
 
 // tableFlag is one flag of a subcommand with a flag table (`agent`, `agents`): its parser and the completion scripts read the
-// table, so a flag is one row there; the usage constant and the help text are prose and name it by hand.
+// table, so a flag is one row there; the usage synopsis and the help text are prose and name it by hand (a test checks they do).
 type tableFlag struct {
 	name       string // without its dashes
 	takesValue bool
@@ -17,18 +21,24 @@ type tableFlag struct {
 	set        func(plan *LaunchPlan, value string)
 }
 
-var routeFlags = []tableFlag{
+var routeFlags = slices.Concat([]tableFlag{
 	{"home", true, "a kata home folder", func(p *LaunchPlan, v string) { p.AgentRoute.Home = v }},
 	{"db", true, "the Pane's KATA_DB path", func(p *LaunchPlan, v string) { p.AgentRoute.DB = v }},
 	{"schema", true, "the Pane's KATA_POSTGRES_SCHEMA", func(p *LaunchPlan, v string) { p.AgentRoute.Schema = v }},
-	{"dsn-file", true, "the private DSN file the Pane wrote", func(p *LaunchPlan, v string) { p.AgentRoute.DSNFile = v }},
-	{"env-file", true, "the private credential env file the Pane wrote", func(p *LaunchPlan, v string) { p.AgentRoute.EnvFile = v }},
 	{"daemon", true, "a daemon catalog name", func(p *LaunchPlan, v string) { p.AgentRoute.Daemon = v }},
 	{"server", true, "a kata server URL", func(p *LaunchPlan, v string) { p.AgentRoute.Server = v }},
-	{"token-file", true, "the private token file the Pane wrote", func(p *LaunchPlan, v string) { p.AgentRoute.TokenFile = v }},
 	{"auth-file", true, "the Pane's KATA_AUTH_TOKEN_FILE path", func(p *LaunchPlan, v string) { p.AgentRoute.AuthFile = v }},
 	{"allow-insecure", false, "reach a server over plain http", func(p *LaunchPlan, _ string) { p.AgentRoute.AllowInsecure = true }},
 	{"trust-private-network", false, "trust a server on a private network", func(p *LaunchPlan, _ string) { p.AgentRoute.TrustPrivate = true }},
+}, secretFileFlags())
+
+// secretFileFlags are the flags that name the private files the Pane wrote: one row per data.SecretFiles entry.
+func secretFileFlags() []tableFlag {
+	flags := make([]tableFlag, len(data.SecretFiles))
+	for i, s := range data.SecretFiles {
+		flags[i] = tableFlag{s.Flag, true, s.What, func(p *LaunchPlan, v string) { *s.File(&p.AgentRoute) = v }}
+	}
+	return flags
 }
 
 var agentFlags = slices.Concat([]tableFlag{
@@ -40,6 +50,7 @@ var agentFlags = slices.Concat([]tableFlag{
 	{"coordinating", false, "mark this agent as the coordinator of a team", func(p *LaunchPlan, _ string) { p.AgentCoordinating = true }},
 	{"address-prefix", true, "an Agent address up to its block id", func(p *LaunchPlan, v string) { p.AgentAddressPrefix = v }},
 	{"forked-from", true, "the block of the chat Tern forked this one from", func(p *LaunchPlan, v string) { p.AgentForkedFrom = v }},
+	{"prompt-file", true, "the agent's prompt file", func(p *LaunchPlan, v string) { p.AgentPromptFile = v }},
 }, routeFlags)
 
 func flagNames(table []tableFlag) []string {

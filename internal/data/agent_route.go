@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"go.kenn.io/kit/safefileio"
+	"github.com/Dangerboi/tern-kata/internal/atomicfile"
 )
 
 // AgentRoute is the kata daemon the Pane talks to, as far as it differs from what a block Tern starts would pick by itself. Tern's
@@ -51,18 +51,17 @@ type AgentRoute struct {
 
 func (r AgentRoute) IsZero() bool { return r == AgentRoute{} }
 
-func (r AgentRoute) zeroWithoutToken() bool {
-	r.Token, r.TokenFile, r.AuthFile, r.TrustPrivate = "", "", "", false
-	r.DB, r.Schema, r.DSN, r.DSNFile, r.Creds, r.EnvFile = "", "", "", "", "", ""
-	return r.IsZero()
-}
-
+// Args is the wrapper's flags for the route, the secret files' last: none for a zero route.
 func (r AgentRoute) Args() []string {
 	var args []string
-	for _, f := range []struct{ flag, value string }{{"--home", r.Home}, {"--daemon", r.Daemon}, {"--server", r.Server}, {"--token-file", r.TokenFile},
-		{"--auth-file", r.AuthFile}, {"--db", r.DB}, {"--schema", r.Schema}, {"--dsn-file", r.DSNFile}, {"--env-file", r.EnvFile}} {
+	for _, f := range []struct{ flag, value string }{{"--home", r.Home}, {"--daemon", r.Daemon}, {"--server", r.Server}, {"--auth-file", r.AuthFile}, {"--db", r.DB}, {"--schema", r.Schema}} {
 		if f.value != "" {
 			args = append(args, f.flag, f.value)
+		}
+	}
+	for _, s := range SecretFiles {
+		if file := *s.File(&r); file != "" {
+			args = append(args, "--"+s.Flag, file)
 		}
 	}
 	if r.AllowInsecure {
@@ -123,7 +122,7 @@ func (g *Gateway) CurrentAgentRoute() (AgentRoute, error) {
 		route.Server = os.Getenv("KATA_SERVER")
 		route.AllowInsecure = envTruthy("KATA_ALLOW_INSECURE")
 	}
-	if route.zeroWithoutToken() {
+	if route.IsZero() {
 		return route, nil
 	}
 	// The route always names the Pane's home, so the block's own KATA_HOME (and the [auth] and catalog of that home) never decides
@@ -178,15 +177,8 @@ func paneCredentialEnv(home string, all bool) string {
 			}
 		}
 	}
-	if raw, err := os.ReadFile(filepath.Join(home, "config.toml")); err == nil {
-		var f struct {
-			Auth struct {
-				TokenEnv string `toml:"token_env"`
-			} `toml:"auth"`
-		}
-		if _, err := toml.Decode(string(raw), &f); err == nil {
-			names = append(names, f.Auth.TokenEnv)
-		}
+	if auth, err := readHomeAuth(home); err == nil {
+		names = append(names, auth.TokenEnv)
 	}
 	var out strings.Builder
 	seen := map[string]bool{}
@@ -238,62 +230,66 @@ func envTruthy(name string) bool {
 	return v == "1" || strings.EqualFold(v, "true")
 }
 
-const agentTokenSuffix = ".token"
-
 const (
-	agentDSNSuffix = ".dsn"
-	agentEnvSuffix = ".env"
+	agentTokenSuffix = ".token"
+	agentDSNSuffix   = ".dsn"
+	agentEnvSuffix   = ".env"
 )
 
-// secretFile is a secret the route can hold inline, the suffix (after the prompt file's name) of the private file it moves into,
-// and the route field naming that file.
-type secretFile struct {
-	secret *string
-	suffix string
-	file   *string
+// SecretFile is a secret the route holds inline in the Pane (Value) and moves into a private file beside the prompt file, named
+// by the prompt file's name and Suffix; File is the route field that names that file, and Flag the wrapper flag that carries it.
+type SecretFile struct {
+	Flag   string // without its dashes
+	What   string // the flag's value, for the flag table
+	Suffix string
+	Value  func(*AgentRoute) *string
+	File   func(*AgentRoute) *string
 }
 
-// secretFiles is the route's secrets that travel in private files: the Pane's token, its DSN and its token_env values.
-func (r *AgentRoute) secretFiles() []secretFile {
-	return []secretFile{{&r.Token, agentTokenSuffix, &r.TokenFile}, {&r.DSN, agentDSNSuffix, &r.DSNFile}, {&r.Creds, agentEnvSuffix, &r.EnvFile}}
+// SecretFiles is the route's secrets that travel in private files: the Pane's token, its DSN and its token_env values. Args, the
+// wrapper's flag table, withSecretFiles, Forked and removePrompt all read it, and reopen.luau's SECRET_FILE_FLAGS names its flags.
+var SecretFiles = []SecretFile{
+	{Flag: "token-file", What: "the private token file the Pane wrote", Suffix: agentTokenSuffix,
+		Value: func(r *AgentRoute) *string { return &r.Token }, File: func(r *AgentRoute) *string { return &r.TokenFile }},
+	{Flag: "dsn-file", What: "the private DSN file the Pane wrote", Suffix: agentDSNSuffix,
+		Value: func(r *AgentRoute) *string { return &r.DSN }, File: func(r *AgentRoute) *string { return &r.DSNFile }},
+	{Flag: "env-file", What: "the private credential env file the Pane wrote", Suffix: agentEnvSuffix,
+		Value: func(r *AgentRoute) *string { return &r.Creds }, File: func(r *AgentRoute) *string { return &r.EnvFile }},
 }
 
-// withSecretFiles moves route.Token, route.DSN and route.Creds into new private files beside promptFile (created as kata's own credential files
-// are, so they pass its checks on every OS) and names them in route.TokenFile, route.DSNFile and route.EnvFile. Nothing else changes.
+// withSecretFiles moves the route's inline secrets into new private files beside promptFile (created as kata's own credential
+// files are, so they pass its checks on every OS) and names them in the route's file fields. Nothing else changes. A failure
+// leaves the files already written to startAgent, which removes everything beside the prompt file when it stops.
 func (r AgentRoute) withSecretFiles(promptFile string) (AgentRoute, error) {
-	var written []string
-	for _, s := range r.secretFiles() {
-		if *s.secret == "" {
+	for _, s := range SecretFiles {
+		secret, file := s.Value(&r), s.File(&r)
+		if *secret == "" {
 			continue
 		}
-		file := promptFile + s.suffix
-		if err := writePrivateFile(file, *s.secret); err != nil {
-			for _, file := range written {
-				_ = os.Remove(file)
-			}
+		path := promptFile + s.Suffix
+		if err := writePrivateFile(path, *secret); err != nil {
 			return r, err
 		}
-		written = append(written, file)
-		*s.file, *s.secret = file, ""
+		*file, *secret = path, ""
 	}
 	return r, nil
 }
 
-// writePrivateFile creates file as kata creates its own credential files and writes secret to it; a failed write leaves no file.
+// writePrivateFile puts secret in file for its owner alone (as kata creates its own credential files), written to a temporary
+// file that is synced and renamed into place: a kill part way leaves no file, never an empty one a reader would take as written.
 func writePrivateFile(file, secret string) error {
-	f, err := safefileio.CreatePrivateFile(file)
-	if err != nil {
-		return fmt.Errorf("create the agent's private file: %w", err)
-	}
-	_, err = f.WriteString(secret + "\n")
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		_ = os.Remove(file)
-		return fmt.Errorf("write the agent's private file: %w", err)
+	if err := atomicfile.Write(file, []byte(secret+"\n"), atomicfile.Options{Mode: 0o600, Private: true, Check: syncFile}); err != nil {
+		return fmt.Errorf("write private file %s: %w", file, err)
 	}
 	return nil
+}
+
+func syncFile(path string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	return errors.Join(f.Sync(), f.Close())
 }
 
 // forkFilePrefix begins the name of a forked chat's own copy of a secret file: fork-<its block>-<the copied file's name>, in the
@@ -317,15 +313,15 @@ func (r AgentRoute) Forked(block, from string) (AgentRoute, error) {
 	if !blockID(block) {
 		return r, nil
 	}
-	for _, s := range r.secretFiles() {
-		named := *s.file
-		dir, base := filepath.Split(named)
-		if !strings.HasPrefix(base, "prompt-") || !strings.HasSuffix(base, s.suffix) || filepath.Base(dir) != AgentPromptsFolder {
+	for _, s := range SecretFiles {
+		file := s.File(&r)
+		dir, base := filepath.Split(*file)
+		if !strings.HasPrefix(base, "prompt-") || !strings.HasSuffix(base, s.Suffix) || filepath.Base(dir) != AgentPromptsFolder {
 			continue
 		}
 		own := forkCopy(dir, block, base)
 		if _, err := os.Lstat(own); err != nil {
-			secret, err := readTokenFile(named)
+			secret, err := readTokenFile(*file)
 			if err != nil && blockID(from) {
 				var parentErr error
 				if secret, parentErr = readTokenFile(forkCopy(dir, from, base)); parentErr == nil {
@@ -339,7 +335,7 @@ func (r AgentRoute) Forked(block, from string) (AgentRoute, error) {
 				return r, err
 			}
 		}
-		*s.file = own
+		*file = own
 	}
 	return r, nil
 }
@@ -517,25 +513,38 @@ func checkLocalRoute(catalog Catalog, entry CatalogEntry, home, dir string) (pin
 	return pinned, nil
 }
 
-func homeAuthCredential(home string) (string, error) {
+// homeAuth is the [auth] section of home's config.toml.
+type homeAuth struct {
+	Token     string `toml:"token"`
+	TokenFile string `toml:"token_file"`
+	TokenEnv  string `toml:"token_env"`
+}
+
+// readHomeAuth is home's [auth] section; a home with no config.toml has none.
+func readHomeAuth(home string) (homeAuth, error) {
 	raw, err := os.ReadFile(filepath.Join(home, "config.toml"))
 	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
+		return homeAuth{}, nil
 	}
+	if err != nil {
+		return homeAuth{}, err
+	}
+	var f struct {
+		Auth homeAuth `toml:"auth"`
+	}
+	if _, err := toml.Decode(string(raw), &f); err != nil {
+		return homeAuth{}, err
+	}
+	return f.Auth, nil
+}
+
+// homeAuthCredential is the key of the credential home's [auth] section holds, "" when it holds none.
+func homeAuthCredential(home string) (string, error) {
+	auth, err := readHomeAuth(home)
 	if err != nil {
 		return "", err
 	}
-	var f struct {
-		Auth struct {
-			Token     string `toml:"token"`
-			TokenFile string `toml:"token_file"`
-			TokenEnv  string `toml:"token_env"`
-		} `toml:"auth"`
-	}
-	if _, err := toml.Decode(string(raw), &f); err != nil {
-		return "", err
-	}
-	for _, key := range []struct{ name, value string }{{"token", f.Auth.Token}, {"token_file", f.Auth.TokenFile}, {"token_env", f.Auth.TokenEnv}} {
+	for _, key := range []struct{ name, value string }{{"token", auth.Token}, {"token_file", auth.TokenFile}, {"token_env", auth.TokenEnv}} {
 		if strings.TrimSpace(key.value) != "" {
 			return key.name, nil
 		}

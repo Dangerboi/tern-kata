@@ -61,12 +61,7 @@ func routedEnv(environ []string, route data.AgentRoute, caseInsensitive bool) ([
 // names of its session. An inherited value is dropped first, so only this launch decides. environ is the route's: its
 // KATA_HOME is the home the agent's kata commands use.
 func closeTranscriptEnv(environ []string, caseInsensitive bool) []string {
-	on := ompext.CloseTranscriptOn(environ, caseInsensitive)
-	env := envWithout(environ, caseInsensitive, ompext.CloseTranscriptEnv)
-	if on {
-		env = append(env, ompext.CloseTranscriptEnv+"="+ompext.CloseTranscriptOnValue)
-	}
-	return env
+	return ompext.WithCloseTranscript(environ, environ, caseInsensitive)
 }
 
 // agentEnv returns environ for the agent plan runs: KATA_AUTHOR set to plan.Actor as childEnv does (left as inherited when it is

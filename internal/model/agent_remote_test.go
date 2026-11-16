@@ -76,3 +76,28 @@ func TestTwoWindowsWithDifferentIdsNeverDisagreeIntoSuspects(t *testing.T) {
 		t.Errorf("by id: %#v %+v", cmds, m.Agents.States)
 	}
 }
+
+func TestAForkWhoseLineStillNamesTheOriginalsSecretFileIsNotTheOriginal(t *testing.T) {
+	m := model.Model{Workspace: "/w", PaneBlock: "9", AgentMapping: []model.AgentEntry{remoteEntry()}}
+	fork := model.AgentState{Block: "31", State: "waiting_input", Command: "tern-kata agent --token-file=" + remotePrompt + ".token -- omp"}
+	original := model.AgentState{Block: "5", State: "idle", Command: "omp @" + remotePrompt}
+	m, _ = relayed(m, fork, original)
+	if got := stateOf(m, "5"); got != "idle" {
+		t.Errorf("the original's state is %q, the fork's overwrote it: %+v", got, m.Agents.States)
+	}
+	if got := stateOf(m, "31"); got != "waiting_input" {
+		t.Errorf("the fork keeps its own block: %q", got)
+	}
+}
+
+func TestAReopenedAgentWhoseLineNamesItsPromptFileByFlagIsStillThatAgent(t *testing.T) {
+	m := model.Model{Workspace: "/w", PaneBlock: "9", AgentMapping: []model.AgentEntry{remoteEntry()}}
+	reopened := model.AgentState{Block: "1052771002302467", State: "working", Command: "tern-kata agent --prompt-file=" + remotePrompt + " --ref=demo#ab12 -- omp"}
+	m, cmds := relayed(m, reopened)
+	if len(cmds) != 0 {
+		t.Fatalf("cmds %#v", cmds)
+	}
+	if got := stateOf(m, "5"); got != "working" {
+		t.Errorf("the reopened agent is not its entry's: %+v", m.Agents.States)
+	}
+}

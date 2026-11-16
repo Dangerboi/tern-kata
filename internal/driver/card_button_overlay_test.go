@@ -79,7 +79,7 @@ func TestCancelButtonCancelsTheCardWhileTheCalendarIsOpen(t *testing.T) {
 
 func TestCancelButtonCancelsTheCardWhileASelectIsOpen(t *testing.T) {
 	c := editingCardNamed(t, "Filter")
-	s := step(t, c.open(t), &tern.Toggle{ID: view.FieldID(c.card, model.FilterRelationship) + ".control", Open: true}).State
+	s := step(t, c.open(t), &tern.Toggle{ID: view.ControlID(c.card, model.FilterRelationship), Open: true}).State
 	if !s.Model.OpenDropdown(c.card, model.FilterRelationship).Open {
 		t.Fatal("the select did not open")
 	}

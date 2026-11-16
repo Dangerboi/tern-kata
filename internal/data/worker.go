@@ -3,14 +3,10 @@ package data
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
-	"go.kenn.io/kit/consolewindow"
 )
 
 // The worker is reached over its control socket, not through kata: one Cmd in, one Msg out, like every gateway command. Nothing
@@ -88,26 +84,14 @@ func (g *Gateway) moveRun(ctx context.Context, op, uid string) model.LocalRunMov
 }
 
 func (g *Gateway) openRunSession(ctx context.Context, cmd model.OpenRunSession) model.RunSessionOpened {
-	out, err := g.runTern(ctx, SessionTabArgs(cmd))
-	if err != nil {
-		if text := strings.TrimSpace(string(out)); text != "" {
-			err = fmt.Errorf("%w: %s", err, text)
-		}
-		return model.RunSessionOpened{Err: err}
-	}
-	return model.RunSessionOpened{}
+	_, err := g.ternOutput(ctx, ternTimeout, SessionTabArgs(cmd))
+	return model.RunSessionOpened{Err: err}
 }
 
 // SessionTabArgs is the tern command line that opens a run's omp session: a new tab in the run's working folder that continues the
 // session. Tern quotes each word after -- for the login shell, so the words go as they are.
 func SessionTabArgs(cmd model.OpenRunSession) []string {
 	return []string{"new", "tab", "--cwd", cmd.Cwd, "--", "omp", "--resume", cmd.SessionID, "--session-dir", cmd.SessionDir}
-}
-
-func execTern(ctx context.Context, args []string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "tern", args...)
-	consolewindow.Hide(cmd)
-	return cmd.CombinedOutput()
 }
 
 func translateWorkerStatus(s worker.Status) model.WorkerStatus {

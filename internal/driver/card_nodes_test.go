@@ -229,10 +229,20 @@ func choiceShowing(t *testing.T, m model.Model, label, choice string) string {
 	return found[0]
 }
 
+// controlIDLabeled is the id of the control inside the field labelled label.
+func controlIDLabeled(t *testing.T, m model.Model, label string) string {
+	t.Helper()
+	card, field, ok := view.FieldFromID(fieldLabeled(t, m, label))
+	if !ok {
+		t.Fatalf("the field labelled %q is no field of a card", label)
+	}
+	return view.ControlID(card, field)
+}
+
 // controlOf is the control node inside the field labelled label.
 func controlOf(t *testing.T, m model.Model, label string) tern.WireNode {
 	t.Helper()
-	id := fieldLabeled(t, m, label) + ".control"
+	id := controlIDLabeled(t, m, label)
 	for _, n := range wireNodes(t, view.Render(m, now)) {
 		if n.ID == id {
 			return n

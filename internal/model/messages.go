@@ -39,10 +39,12 @@ type ButtonPressMsg struct{ Chord string }
 func (ButtonPressMsg) msg() {}
 
 // ContextMenuPickMsg is a pick from the context menu of an Issue's row or card: select the Issue, then run what Chord is bound to in
-// Mode, the mode the menu was built for, whatever mode the Pane is in now.
+// Mode, the mode the menu was built for, whatever mode the Pane is in now. Row is set for the menu of a row of the shown Issue's
+// detail (an Attachment): the detail's cursor moves to that row instead and the focus stays.
 type ContextMenuPickMsg struct {
 	UID   string
 	Mode  Mode
+	Row   string
 	Chord string
 }
 

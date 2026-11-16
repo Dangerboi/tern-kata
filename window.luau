@@ -11,19 +11,9 @@ local workersummary = require("./workersummary")
 local workerwidget = require("./workerwidget")
 local widgets = require("./widgets")
 local attachmentview = require("./attachmentview")
+local promptfile = require("./promptfile")
+local owedaction = require("./owedaction")
 
--- kata Panes this plugin launched, until they close: each is reaped on its own, since every tab may have one.
-local launched: { [number]: boolean } = {}
-local fresh: { [number]: boolean } = {}
--- The actions owed to a kata Pane still starting, in the order they were asked for (a link's issue, Wrap up, Show held runs),
--- sent over TSP once its surface is live so an issue reference never passes through a shell and none overwrites another.
-type OwedAction = { act: string, value: string }
-local owed: { [number]: { OwedAction } } = {}
-local function owe(pane: number, act: string, value: string)
-    local list: { OwedAction } = owed[pane] or {}
-    owed[pane] = list
-    table.insert(list, {act = act, value = value})
-end
 -- The Panes `Update tern-kata` launched: they run the tern-kata program but are not a kata to link or mark.
 -- Kept in `tern.kv` too, because a plugin reload (a local update brings the plugin along) empties this table while the
 -- Pane is still open; `pane_closed` removes the id from both.
@@ -145,12 +135,12 @@ local function markIf(cx: WindowCx, pane: number)
 end
 
 -- Links reuse a kata Pane only in the focused Pane's tab; a parked Pane has no tab.
-local function existingPane(cx: WindowCx): number?
+local function existingPane(cx: WindowCx): PaneInfo?
     local focused = cx.session:focused()
     local tab = focused and cx.session:tab_of(focused)
     if not tab then return nil end
     for _, info in cx.session:panes() do
-        if info.tab == tab and isKata(info) then return info.pane end
+        if info.tab == tab and isKata(info) then return info end
     end
     return nil
 end
@@ -160,8 +150,48 @@ local function paneAction(cx: WindowCx, pane: number, act: string, value: string
     cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = act, value = value})
 end
 
-local relayed: { [number]: boolean } = {}
-local retrying: { [number]: boolean } = {}
+-- Everything the plugin knows of one kata Pane while it is open, dropped together by `pane_closed`.
+-- The actions owed to a kata Pane still starting, in the order they were asked for (a link's issue, Wrap up, Show held runs),
+-- are sent over TSP once its surface is live so an issue reference never passes through a shell and none overwrites another.
+type OwedAction = { act: string, value: string }
+type PaneState = {
+    -- The plugin started this Pane itself.
+    launched: boolean,
+    -- The pump runs: the plugin is waiting on the Pane to go live.
+    pumping: boolean,
+    ticks: number,
+    -- The agent states went to the Pane since its title last said tern-kata.
+    relayed: boolean,
+    owed: { OwedAction },
+}
+local paneStates: { [number]: PaneState } = {}
+
+local function paneState(pane: number): PaneState
+    local st = paneStates[pane]
+    if st then return st end
+    local created: PaneState = {launched = false, pumping = false, ticks = 0, relayed = false, owed = {}}
+    paneStates[pane] = created
+    return created
+end
+
+local function owe(pane: number, act: string, value: string)
+    table.insert(paneState(pane).owed, {act = act, value = value})
+end
+
+-- The mode of the Pane's surface, read down to the root node only: nil when it has none yet. `surface` also gives the newest
+-- retained surface of a Pane whose kata has quit, and that one is inline, while kata's own is a screen; `at_prompt` cannot tell
+-- them apart, it is true for a running kata Pane too.
+local function surfaceMode(cx: WindowCx, pane: number): string?
+    local tree = cx.session:surface(pane, {depth = 1, nodes = 1})
+    return if type(tree) == "table" then tree.surface.mode else nil
+end
+
+-- Kata runs in the Pane with a surface that takes events.
+local function live(cx: WindowCx, info: PaneInfo?): boolean
+    if info == nil or info.exited ~= nil then return false end
+    local mode = surfaceMode(cx, info.pane)
+    return mode ~= nil and mode ~= "inline"
+end
 
 -- Background agents live in a session of this name (internal/model AgentSession), kept out of sight.
 local AGENT_SESSION = "kata agents"
@@ -210,12 +240,6 @@ local function agentStates(cx: WindowCx, tabs: { TabInfo }): string
     return tern.json.encode(list)
 end
 
-local function relayStates(cx: WindowCx, pane: number, states: string)
-    if not cx.session:surface(pane) then return end
-    relayed[pane] = true
-    paneAction(cx, pane, "agent-states", states)
-end
-
 -- Places new agent tabs; defined with the tab placement below, and run on every relay pass.
 local placeAgents: (WindowCx, { TabInfo }, { PaneInfo }) -> ()
 
@@ -223,12 +247,16 @@ local function relayAll(cx: WindowCx, onlyNew: boolean)
     local tabs = cx.session:tabs()
     local panes = cx.session:panes()
     placeAgents(cx, tabs, panes)
-    local states: string? = nil
+    local json: string? = nil
     for _, info in panes do
-        if isKata(info) and not (onlyNew and relayed[info.pane]) and cx.session:surface(info.pane) then
-            local current = states or agentStates(cx, tabs)
-            states = current
-            relayStates(cx, info.pane, current)
+        if isKata(info) then
+            local st = paneState(info.pane)
+            if not (onlyNew and st.relayed) and live(cx, info) then
+                local current = json or agentStates(cx, tabs)
+                json = current
+                st.relayed = true
+                paneAction(cx, info.pane, "agent-states", current)
+            end
         end
     end
 end
@@ -240,16 +268,19 @@ local function showSessionOf(cx: WindowCx, tab: number?)
 end
 
 local function sendOwed(cx: WindowCx, pane: number)
-    local list = owed[pane]
-    if list and cx.session:surface(pane) then
-        owed[pane] = nil
-        for _, item in list do paneAction(cx, pane, item.act, item.value) end
+    local st = paneStates[pane]
+    if not st or #st.owed == 0 or not live(cx, cx.session:pane(pane)) then return end
+    while #st.owed > 0 do
+        local item = table.remove(st.owed, 1) :: OwedAction
+        local ok, err = pcall(function() paneAction(cx, pane, item.act, item.value) end)
+        if not ok then cx:toast("error", "tern-kata did not take the action", tostring(err)) end
     end
 end
 
 local function deliver(cx: WindowCx, pane: number)
     sendOwed(cx, pane)
-    if not relayed[pane] then relayAll(cx, true) end
+    local st = paneStates[pane]
+    if not (st and st.relayed) then relayAll(cx, true) end
 end
 
 -- Startup-failure rule, the plugin's half of the contract with cmd/tern-kata: a kata Pane failing within 2 s with
@@ -257,7 +288,6 @@ end
 -- PowerShell's not-found code, and on Windows Tern reports every failing launch as 1, so tern-kata's 3 never arrives.
 -- Any other failing status is the shell's own not-found code (127, 9009), so it is not installed or not on PATH.
 local function exitedRightAway(cx: WindowCx, pane: number, status: number)
-    fresh[pane] = nil
     if status == 0 then return end
     if status == 2 or status == 3 then
         cx:toast("error", "tern-kata failed to start", "tern-kata may be older than this plugin: run Update tern-kata from the command palette, or run tern-kata in a shell to see why")
@@ -268,34 +298,46 @@ local function exitedRightAway(cx: WindowCx, pane: number, status: number)
     end
 end
 
--- After the window, a failing exit still closes the Pane (spec), silently: poll once a second until it is gone.
-local function reap(pane: number)
-    tern.timer(1000, function(cx)
-        if not cx or not launched[pane] then return end
-        local info = cx.session:pane(pane)
-        if not info then return end
-        if info.exited ~= nil then cx.layout:close(pane); return end
-        deliver(cx, pane)
-        reap(pane)
-    end)
+-- A launched kata Pane is watched until it closes, once every 100 ms for the first 2 s and then once a second. Tern closes the
+-- Pane on a clean exit (a quick quit is fine) but keeps it, marked exited, on a failing one, so it is closed here: a failing exit
+-- within the first 2 s means the binary is missing or failed at startup, and says so; a later one closes silently.
+-- Any other Pane the plugin waits on (a kata started from a shell, found by its title) is polled every 200 ms until its surface is
+-- live, it has been relayed to, or 10 s are up.
+local FRESH_TICKS = 20
+local RELAY_TRIES = 50
+
+local function dropOwed(cx: WindowCx, st: PaneState)
+    if #st.owed == 0 then return end
+    st.owed = {}
+    cx:toast("error", "tern-kata did not start", "The click was dropped: kata is not running in that Pane")
 end
 
--- A kata Pane exited with a failure within the first 2 s (20 ticks of 100 ms) means the binary is missing or failed at
--- startup. Tern closes the Pane on a clean exit (a quick quit is fine) but keeps it, marked exited, on a failing one,
--- so close it here.
-local function watch(pane: number, ticks: number)
-    fresh[pane] = true
-    tern.timer(100, function(cx)
-        if not cx or not fresh[pane] then return end
+local function pump(pane: number)
+    local st = paneState(pane)
+    st.pumping = true
+    local delay = if not st.launched then 200 elseif st.ticks < FRESH_TICKS then 100 else 1000
+    tern.timer(delay, function(cx)
+        if not cx or paneStates[pane] ~= st then return end
+        st.ticks += 1
         local info = cx.session:pane(pane)
-        if not info then fresh[pane] = nil; return end
-        if info.exited ~= nil then
-            exitedRightAway(cx, pane, info.exited)
-            cx.layout:close(pane)
-            return
+        if not info then st.pumping = false; return end
+        if st.launched then
+            if info.exited ~= nil then
+                if st.ticks <= FRESH_TICKS then exitedRightAway(cx, pane, info.exited) end
+                cx.layout:close(pane)
+                return
+            end
+            deliver(cx, pane)
+        else
+            local ready = marked[pane] and live(cx, info)
+            if ready then deliver(cx, pane) end
+            if ready or not marked[pane] or st.relayed or st.ticks >= RELAY_TRIES then
+                st.pumping = false
+                if not ready then dropOwed(cx, st) end
+                return
+            end
         end
-        deliver(cx, pane)
-        if ticks > 1 then watch(pane, ticks - 1) else fresh[pane] = nil; reap(pane) end
+        pump(pane)
     end)
 end
 
@@ -308,25 +350,27 @@ end
 
 local function openKata(cx: WindowCx, act: string?, value: string)
     if act ~= nil then
-        local pane = existingPane(cx)
-        if pane then
-            cx.layout:focus(pane)
-            -- Only a Pane the plugin is waiting on to go live is owed the action. Another Pane found by its title alone may be
-            -- a shell where kata has quit, and an owed action would fire whenever kata next starts there.
-            if launched[pane] or retrying[pane] then
-                owe(pane, act, value)
-                sendOwed(cx, pane)
-            else
-                paneAction(cx, pane, act, value)
+        local existing = existingPane(cx)
+        if existing then
+            local st = paneStates[existing.pane]
+            local route = owedaction.route(st ~= nil and (st.launched or st.pumping), surfaceMode(cx, existing.pane) ~= "inline")
+            if route ~= "launch" then
+                cx.layout:focus(existing.pane)
+                if route == "owe" then
+                    owe(existing.pane, act, value)
+                    sendOwed(cx, existing.pane)
+                else
+                    paneAction(cx, existing.pane, act, value)
+                end
+                return
             end
-            return
         end
     end
     local pane = launch(cx, panecommands.KATA)
     if not pane then return end
-    launched[pane] = true
+    paneState(pane).launched = true
     if act ~= nil then owe(pane, act, value) end
-    watch(pane, 20)
+    pump(pane)
 end
 
 -- `W` starts an agent in a new tab, which Tern appends as the last tab. The agent's prompt file is named
@@ -349,11 +393,8 @@ end
 local PLACE_TRIES = 10
 local placed: { [number]: boolean } = {}
 
--- An agent block's unset command is tern.json.null, not nil, so both readers check for a string.
-local function markerOf(text: string?): number?
-    local block = if type(text) == "string" then text:match("prompt%-(%d+)%-%w+%.md") else nil
-    return block and tonumber(block) or nil
-end
+-- An agent block's unset command is tern.json.null, not nil, so both readers accept any value and check for a string.
+local markerOf = promptfile.starter
 
 local function starterOf(cx: WindowCx, tab: number): number?
     for _, info in cx.session:panes() do
@@ -449,9 +490,7 @@ end
 -- finds nothing to open. The relay that follows tells the Pane at once, so it records the agent as open.
 local lastKata: number? = nil
 
-local function isPromptCommand(command: string?): boolean
-    return type(command) == "string" and command:find("agent%-prompts[/\\]prompt%-") ~= nil
-end
+local isPromptCommand = promptfile.has
 
 local function openFocusedAgent(cx: WindowCx, pane: number, tab: number)
     if not hiddenTabs(cx, cx.session:tabs())[tab] then return end
@@ -548,79 +587,72 @@ registerWidget("waiting", {
     end,
 })
 
--- On Tern 0.9.21 and later the host half draws the worker widget (host.luau): it shows the session host's worker in every
--- window attached to that host, a remote one included. A widget of the same id registered here would win in this window and
--- hide it, so this half registers its own only while it finds a fresh host-half summary in its `tern.kv`, which a host half
--- stores only while Tern gives it no widget to render, and takes it away when none is found.
--- The window cannot ask which Tern its session host runs, so a window
--- and a host on different Tern versions fare as follows. A window on 0.9.21+ with an older remote host finds no summary here
--- and shows no worker widget. A window older than 0.9.21 cannot draw the host's widget at all, whatever the host runs. Only
--- where this machine's own host half cannot render, window and host being one Tern, is the summary found; `tern.kv` here is
--- this machine's, so the tooltip says "on this machine". The widget is offered to the add-widgets command whenever this
--- Tern has a widget bar, since the host half may be the one drawing it.
+-- The kata worker widget (workerwidget.luau): on Tern 0.9.21 and later the host half draws it (host.luau header says why and
+-- what the window can and cannot tell), so this half registers its own, labelled as this machine's worker, only while it finds
+-- a fresh summary in its `tern.kv`, and takes it away when none is found: a widget of the same id registered here would win in
+-- this window and hide the host's. The widget is offered to the add-widgets command whenever this Tern has a widget bar,
+-- since the host half may be the one drawing it.
 local WORKER_POLL_SECONDS = 5
-local OPEN_ID = workerwidget.OPEN_ID
-local SHOW_HELD_ID = workerwidget.SHOW_HELD_ID
 local workerSummary: workersummary.Summary? = nil
 local workerSummaryText = ""
 local workerRegistered = false
--- The record last read: a failed read (the host half may be rewriting the file) keeps it, and `fresh` still ages it out.
-local workerRecord: any = nil
-local workerSpec: WidgetSpec = {
-    name = "kata worker",
-    description = "What the kata worker on this machine is running, and the runs held for you; a click opens them",
-    icon = "server",
-    styles = {"text", "ring"} :: { WidgetStyle },
-    render = function(_pane): WidgetView?
-        return workerwidget.view(workerSummary, false, commandName(SHOW_HELD_ID), commandName(OPEN_ID))
-    end,
-}
+local workerRecord: workersummary.Record? = nil
+local workerSpec = workerwidget.spec(PLUGIN, false, function() return workerSummary end)
 
 -- The registration follows the summary: it is registered while a fresh summary is found and taken away when none is, so the
 -- host half's widget shows again. That matters when a reload installs a host half that renders widgets: the host half it
 -- replaced has just stamped the key, this half may read it first, and the host half this load starts deletes it a moment later.
--- Removing a widget with nil is documented from Tern 0.9.21; on 0.9.17 to 0.9.20 it may raise. A failed removal is logged
--- once and not tried again in this load: the widget stays registered, and its render returns nil without a summary, so it
--- draws nothing.
-local workerRemovalFailed = false
+-- Removing a widget with nil is documented from Tern 0.9.21; on 0.9.17 to 0.9.20 it may raise. A change that failed is logged
+-- once and not tried again in this load: a widget that stays registered renders nothing without a summary.
+local workerChangeFailed: { [boolean]: boolean } = {}
 local function setWorkerFallback(wanted: boolean)
-    if wanted == workerRegistered then return end
-    if not wanted and workerRemovalFailed then return end
-    local ok, err = pcall(function() tern.chrome.widget("worker", if wanted then workerSpec else nil) end)
+    if wanted == workerRegistered or workerChangeFailed[wanted] then return end
+    local ok, err = pcall(function() tern.chrome.widget(workerwidget.ID, if wanted then workerSpec else nil) end)
     if ok then
         workerRegistered = wanted
     else
-        if not wanted then workerRemovalFailed = true end
-        tern.log.warn("tern-kata: could not " .. (if wanted then "register" else "remove") .. " widget worker: " .. tostring(err))
+        workerChangeFailed[wanted] = true
+        tern.log.warn("tern-kata: could not " .. (if wanted then "register" else "remove") .. " widget " .. workerwidget.ID .. ": " .. tostring(err))
     end
 end
 
--- The first read comes at once, so a plugin reload does not leave the widget empty until the first poll.
-local function pollWorkerSummary(delay: number)
-    tern.timer(delay, function(cx)
-        if cx then
-            local ok, saved = pcall(tern.kv.get, workersummary.KEY)
-            if ok then workerRecord = saved end
-            local summary = workersummary.fresh(workerRecord, os.time())
-            setWorkerFallback(summary ~= nil)
-            local text = if summary ~= nil then tern.json.encode(summary) else ""
-            if text ~= workerSummaryText then
-                workerSummary = summary
-                workerSummaryText = text
-                tern.chrome.refresh()
-            end
-        end
-        pollWorkerSummary(WORKER_POLL_SECONDS * 1000)
-    end)
+local function readWorkerSummary()
+    workerRecord = workersummary.load(tern.kv, workerRecord)
+    local summary = workersummary.fresh(workerRecord, os.time())
+    setWorkerFallback(summary ~= nil)
+    local text = if summary ~= nil then tern.json.encode(summary) else ""
+    if text ~= workerSummaryText then
+        workerSummary = summary
+        workerSummaryText = text
+        tern.chrome.refresh()
+    end
 end
 
+-- A read that raises is logged once and the next one still comes.
+local workerReadFailed = false
+local function tryReadWorkerSummary()
+    local ok, err = pcall(function() readWorkerSummary() end)
+    if not ok and not workerReadFailed then
+        workerReadFailed = true
+        tern.log.warn("tern-kata: could not update the worker widget: " .. tostring(err))
+    end
+end
+
+local function pollWorkerSummary()
+    tryReadWorkerSummary()
+    tern.timer(WORKER_POLL_SECONDS * 1000, pollWorkerSummary)
+end
+
+-- The first read comes at window start and at once after a plugin reload (which runs this file again without window_start),
+-- as for the kata Panes (markAll), so the widget is not empty until the first poll.
 if tern.chrome.widget ~= nil then
-    table.insert(widgetsOffered, {id = PLUGIN .. "/worker", name = workerSpec.name})
-    pollWorkerSummary(1)
+    table.insert(widgetsOffered, {id = PLUGIN .. "/" .. workerwidget.ID, name = workerwidget.NAME})
+    tern.on("window_start", tryReadWorkerSummary)
+    tern.timer(1, pollWorkerSummary)
 end
 
 tern.command({
-    id = SHOW_HELD_ID,
+    id = workerwidget.SHOW_HELD_ID,
     title = "Show kata's held runs",
     run = function(cx)
         openKata(cx, "show-held-runs", "")
@@ -689,15 +721,12 @@ tern.on("tab_created", function(ev, cx)
 end)
 
 tern.on("pane_closed", function(ev, cx)
-    launched[ev.pane] = nil
+    paneStates[ev.pane] = nil
     if updatePanes[ev.pane] then
         changeUpdatePanes(ev.pane, false)
     end
-    owed[ev.pane] = nil
     waitOrder[ev.pane] = nil
     recountWaiting(cx, ev.pane)
-    relayed[ev.pane] = nil
-    retrying[ev.pane] = nil
     placed[ev.pane] = nil
     if lastKata == ev.pane then lastKata = nil end
     if marked[ev.pane] then
@@ -731,32 +760,19 @@ end)
 -- tern-kata sets its title as it starts, so a title event finds a kata Pane started from any shell; other titles, such as an
 -- agent's spinner, cost no lookup. The title is also set before the surface opens and again on every run in the same pane, so a
 -- new one clears the sent mark, and a Pane without a surface is retried until it has one (10 s at most).
-local RELAY_TRIES = 50
-
-local function relayWhenLive(pane: number, tries: number)
-    retrying[pane] = true
-    tern.timer(200, function(cx)
-        if not cx then retrying[pane] = nil; return end
-        local live = marked[pane] and cx.session:surface(pane)
-        if live or not marked[pane] or relayed[pane] or tries <= 1 then
-            retrying[pane] = nil
-            -- Given up on, a Pane the plugin did not launch is owed nothing: a later kata in it must not run an old click. A
-            -- launched one is still watched until it closes.
-            if live then deliver(cx, pane) elseif not launched[pane] then owed[pane] = nil end
-            return
-        end
-        relayWhenLive(pane, tries - 1)
-    end)
-end
 
 tern.on("title", function(ev, cx)
     if ev.title == "tern-kata" or marked[ev.pane] then
         markIf(cx, ev.pane)
         if not marked[ev.pane] then return end
-        if ev.title == "tern-kata" then relayed[ev.pane] = nil end
-        if relayed[ev.pane] then return end
+        local st = paneState(ev.pane)
+        if ev.title == "tern-kata" then st.relayed = false end
+        if st.relayed then return end
         deliver(cx, ev.pane)
-        if not relayed[ev.pane] and not retrying[ev.pane] then relayWhenLive(ev.pane, RELAY_TRIES) end
+        if not st.relayed and not st.pumping then
+            st.ticks = 0
+            pump(ev.pane)
+        end
     end
 end)
 
@@ -961,7 +977,7 @@ else
 end
 
 tern.command({
-    id = OPEN_ID,
+    id = workerwidget.OPEN_ID,
     title = "Open kata",
     keys = {"f9"},
     run = function(cx) openKata(cx, nil, "") end,

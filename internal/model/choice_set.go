@@ -23,7 +23,7 @@ const (
 	DropdownClearQuery Action = "dropdown-clear-query"
 )
 
-const SearchOver = 12
+const searchOver = 12
 
 // ChoiceSet is a choice field as the card shows it: the control, the labels in the order ChooseMsg indexes them and the index of
 // the chosen one, -1 when none is. A switch is on at OnIndex.
@@ -34,7 +34,7 @@ type ChoiceSet struct {
 	OnIndex int
 }
 
-func (s ChoiceSet) Search() bool { return s.Control == ControlSelect && len(s.Labels) > SearchOver }
+func (s ChoiceSet) Search() bool { return s.Control == ControlSelect && len(s.Labels) > searchOver }
 
 // Matches is the indexes of the labels that hold query, in order, whatever the case. Every index matches an empty query.
 func (s ChoiceSet) Matches(query string) []int {
@@ -46,6 +46,40 @@ func (s ChoiceSet) Matches(query string) []int {
 		}
 	}
 	return found
+}
+
+// On is whether a switch is on.
+func (s ChoiceSet) On() bool { return s.Chosen == s.OnIndex }
+
+// switchIndex is the index a switch set to on holds.
+func (s ChoiceSet) switchIndex(on bool) int {
+	if on {
+		return s.OnIndex
+	}
+	return 1 - s.OnIndex
+}
+
+// SwitchLabels is the label of a switch turned off and turned on.
+func (s ChoiceSet) SwitchLabels() [2]string {
+	return [2]string{s.Labels[1-s.OnIndex], s.Labels[s.OnIndex]}
+}
+
+// boolIndex is the index of a choice of "no" (0) and "yes" (1).
+func boolIndex(yes bool) int {
+	if yes {
+		return 1
+	}
+	return 0
+}
+
+// indexBool is the "yes" a choice index of a "no" or "yes" choice stands for, false when it is neither.
+func indexBool(index int) (yes, ok bool) {
+	return index == boolIndex(true), index == boolIndex(false) || index == boolIndex(true)
+}
+
+// yesNoSwitch is a switch of "No" and "Yes" that is on at "Yes".
+func yesNoSwitch(yes bool) ChoiceSet {
+	return ChoiceSet{Control: ControlSwitch, Labels: []string{"No", "Yes"}, Chosen: boolIndex(yes), OnIndex: 1}
 }
 
 func newChoices(control Control, labels []string, chosen int) ChoiceSet {
@@ -121,9 +155,9 @@ func (m Model) settleDropdown() Model {
 	if !m.Dropdown.Open {
 		return m
 	}
-	if entry, ok := m.topEntry(); ok && entry.card == m.Dropdown.Card && entry.choices != nil && entry.focus != nil && !entry.busy(m) {
+	if entry, ok := m.topEntry(); ok && entry.card == m.Dropdown.Card && entry.focus != nil && !entry.busy(m) {
 		if field := *entry.focus(&m); field == m.Dropdown.Field {
-			if set, ok := entry.choices(m, field); ok && set.Control == ControlSelect {
+			if set, ok := entry.selectSet(m, field); ok {
 				m.Dropdown.follow(set)
 				return m
 			}
@@ -151,8 +185,8 @@ func (m Model) SelectDrawn(card Card, name Field) bool {
 	if !ok || entry.card != card || (entry.hidden != nil && entry.hidden(m, name)) {
 		return false
 	}
-	set, ok := m.CardChoices(card, name)
-	return ok && set.Control == ControlSelect
+	_, ok = entry.selectSet(m, name)
+	return ok
 }
 
 // CloseSelectMenu closes the menu of the select of Field in Card in Tern, where the pointer opened it and the Pane closed it
@@ -162,14 +196,13 @@ type CloseSelectMenu selectRef
 
 func (CloseSelectMenu) cmd() {}
 
-// showSelect decides which select the Pane draws open after msg took prev to m. Tern opens and closes a select's menu at the
+// showSelect decides which select the Pane draws open after a message, pointer when it is selectPointerMsg, took prev to m. Tern opens and closes a select's menu at the
 // pointer by itself and lets a change of the drawn open state win over it, so a drawing that answers an earlier click and
 // reaches Tern after a later one would undo that click: open the menu again after a pick, or close it under the next click.
 // The Pane therefore draws open only a menu the keys opened. A menu the pointer opened stays drawn closed while it is open (Tern
 // shows it), and so does one the pointer closed or picked from. When the Pane itself closes a menu the pointer opened (a key
 // picks, escape, tab, a field the keys leave), it asks for CloseSelectMenu.
-func (m Model) showSelect(prev Model, msg Msg, cmds []Cmd) (Model, []Cmd) {
-	pointer := selectPointerMsg(msg)
+func (m Model) showSelect(prev Model, pointer bool, cmds []Cmd) (Model, []Cmd) {
 	open, was := m.openSelect(), prev.openSelect()
 	switch {
 	case open != (selectRef{}) && open == was:
@@ -185,11 +218,12 @@ func (m Model) showSelect(prev Model, msg Msg, cmds []Cmd) (Model, []Cmd) {
 	return m, cmds
 }
 
-// selectPointerMsg is whether msg is the pointer acting on a popup card's select, so Tern already shows what it did: opening or
-// closing the menu, picking from it, or focusing another field (a click elsewhere closes Tern's menu itself).
+// selectPointerMsg is whether msg is the pointer acting on a popup card, so Tern already shows what it did: opening or closing
+// a select's menu, picking from it, flipping a switch, pressing a button or focusing another field (a click elsewhere closes
+// Tern's menu itself).
 func selectPointerMsg(msg Msg) bool {
 	switch msg.(type) {
-	case DropdownToggleMsg, ChooseMsg, FocusFieldMsg:
+	case DropdownToggleMsg, ChooseMsg, SwitchMsg, FocusFieldMsg, ButtonPressMsg:
 		return true
 	}
 	return false
@@ -218,16 +252,21 @@ type DropdownToggleMsg struct {
 
 func (DropdownToggleMsg) msg() {}
 
-func switchField(m Model, name Field, on bool) Model {
-	set, ok := m.topChoices(name)
+// switchField flips the switch called name of the open popup card. A card whose switch asks for a write (flip) takes the
+// flip itself; any other card holds the index like a choice.
+func switchField(m Model, name Field, on bool) (Model, []Cmd) {
+	entry, ok := m.topEntry()
+	if !ok || entry.choices == nil {
+		return m, nil
+	}
+	set, ok := entry.choices(m, name)
 	if !ok || set.Control != ControlSwitch {
-		return m
+		return m, nil
 	}
-	index := set.OnIndex
-	if !on {
-		index = 1 - set.OnIndex
+	if entry.flip != nil {
+		return entry.flip(m, on)
 	}
-	return chooseField(m, name, index)
+	return chooseField(m, name, set.switchIndex(on)), nil
 }
 
 func toggleDropdown(m Model, name Field, open bool) Model {
@@ -238,34 +277,45 @@ func toggleDropdown(m Model, name Field, open bool) Model {
 		return m
 	}
 	m = focusField(m, name)
-	entry, ok := m.topEntry()
-	if !ok || entry.choices == nil || entry.busy(m) || *entry.focus(&m) != name {
-		return m
-	}
-	if set, ok := entry.choices(m, name); ok && set.Control == ControlSelect {
-		m.Dropdown = openedDropdown(entry.card, name, set)
+	if entry, ok := m.topEntry(); ok && entry.focus != nil && !entry.busy(m) && *entry.focus(&m) == name {
+		m, _ = entry.openDropdown(m, name)
 	}
 	return m
 }
 
-func (m Model) topChoices(name Field) (ChoiceSet, bool) {
-	if entry, ok := m.topEntry(); ok && entry.choices != nil {
-		return entry.choices(m, name)
+// selectSet is the choice set of the field called name when the card draws it as a select.
+func (e cardEntry) selectSet(m Model, name Field) (ChoiceSet, bool) {
+	if e.choices == nil {
+		return ChoiceSet{}, false
 	}
-	return ChoiceSet{}, false
+	set, ok := e.choices(m, name)
+	return set, ok && set.Control == ControlSelect
 }
 
-func (e cardEntry) openDropdown(m Model) (Model, bool) {
-	if e.choices == nil || e.focus == nil {
+// openDropdown opens the dropdown of the select called name. One already open on that field stays as it is, so the typed
+// search text and the highlight survive a second open.
+func (e cardEntry) openDropdown(m Model, name Field) (Model, bool) {
+	set, ok := e.selectSet(m, name)
+	if !ok {
 		return m, false
 	}
-	field := *e.focus(&m)
-	set, ok := e.choices(m, field)
-	if !ok || set.Control != ControlSelect {
-		return m, false
+	if open := m.Dropdown; !open.Open || open.Card != e.card || open.Field != name {
+		m.Dropdown = openedDropdown(e.card, name, set)
 	}
-	m.Dropdown = openedDropdown(e.card, field, set)
 	return m, true
+}
+
+// pick gives the focused field its choice at index, closes the dropdown and dismisses the card's error, whether the pointer or
+// a key picked.
+func (e cardEntry) pick(m Model, index int) Model {
+	m.Dropdown = Dropdown{}
+	if e.choose != nil {
+		m = e.choose(m, index)
+	}
+	if e.clearErr != nil {
+		m = e.clearErr(m)
+	}
+	return m
 }
 
 // dropdownKey is one key for the open dropdown of the focused select, read through the ModeDropdown bindings: up and down move
@@ -277,8 +327,8 @@ func (e cardEntry) dropdownKey(m Model, msg KeyMsg) (Model, bool) {
 		return m, false
 	}
 	field := *e.focus(&m)
-	set, ok := e.choices(m, field)
-	if !ok || set.Control != ControlSelect || field != m.Dropdown.Field {
+	set, ok := e.selectSet(m, field)
+	if !ok || field != m.Dropdown.Field {
 		m.Dropdown = Dropdown{}
 		return m, false
 	}
@@ -299,13 +349,11 @@ func (e cardEntry) dropdownKey(m Model, msg KeyMsg) (Model, bool) {
 			dropdown.hold(set)
 		}
 	case bound && binding.Action == DropdownPick:
-		if at >= 0 && e.choose != nil {
-			m = e.choose(m, dropdown.Active)
-			if e.clearErr != nil {
-				m = e.clearErr(m)
-			}
+		if at >= 0 {
+			m = e.pick(m, dropdown.Active)
+		} else {
+			m.Dropdown = Dropdown{}
 		}
-		m.Dropdown = Dropdown{}
 	case bound && binding.Action == DropdownClose:
 		m.Dropdown = Dropdown{}
 	case bound && binding.Action == DropdownEraseQuery && set.Search():

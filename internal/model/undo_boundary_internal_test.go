@@ -16,8 +16,8 @@ import (
 	"testing"
 )
 
-// TestUndoBoundaryListsEveryCmd lists each Cmd and whether emitting it clears the Undo history, so a new Cmd must be classified
-// here. Cmds whose boundary depends on a field are listed with their zero value.
+// TestUndoBoundaryListsEveryCmd lists each Cmd, except the UICmds (which never clear the Undo history), and whether emitting it
+// clears the history, so a new Cmd must be classified here. Cmds whose boundary depends on a field are listed with their zero value.
 func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 	table := []struct {
 		cmd    Cmd
@@ -82,7 +82,6 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{MigrateAttachments{}, true},
 		{OpenAgent{}, false},
 		{OpenAttachment{}, false},
-		{OpenDraftEditor{}, false},
 		{OpenIssue{}, false},
 		{OpenRunSession{}, false},
 		{PruneAgents{}, false},
@@ -92,7 +91,6 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{ReadAgentSessions{}, false},
 		{WaitAgentSessions{}, false},
 		{WaitToast{}, false},
-		{CloseSelectMenu{}, false},
 		{HandOffAgent{}, false},
 		{ReadSnapshot{}, false},
 		{ReadWorkflowText{}, false},
@@ -103,7 +101,6 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{RestoreWorkflow{}, true},
 		{ResumeJob{}, false},
 		{ResumeLocalRun{}, false},
-		{RevealActivityTab{}, false},
 		{RevokeTokenCmd{}, true},
 		{RunJobNow{}, false},
 		{SaveAgentConfig{}, false},
@@ -120,7 +117,6 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{SaveWorkerEdit{}, false},
 		{SaveWorkerSetup{}, false},
 		{SaveWorkflow{}, true},
-		{Scroll{}, false},
 		{SendAgentBack{}, false},
 		{SendAgentMessage{}, true},
 		{SetAgentOpen{}, false},
@@ -148,6 +144,11 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		listed[name] = true
 		if _, clears := undoBoundary(row.cmd); clears != row.clears {
 			t.Errorf("%s clears the Undo history = %v, want %v", name, clears, row.clears)
+		}
+	}
+	for _, cmd := range []UICmd{Scroll{}, RevealActivityTab{}, OpenDraftEditor{}, CloseSelectMenu{}} {
+		if _, clears := undoBoundary(cmd); clears {
+			t.Errorf("%T clears the Undo history", cmd)
 		}
 	}
 	declared := cmdTypeNames(t)
@@ -202,10 +203,14 @@ func cmdTypeNames(t *testing.T) []string {
 	if !ok {
 		t.Fatal("Cmd is not an interface")
 	}
+	ui := pkg.Scope().Lookup("UICmd").Type().Underlying().(*types.Interface)
 	var names []string
 	for _, name := range pkg.Scope().Names() {
 		tn, ok := pkg.Scope().Lookup(name).(*types.TypeName)
 		if !ok || tn.Name() == "Cmd" || types.IsInterface(tn.Type()) {
+			continue
+		}
+		if types.Implements(tn.Type(), ui) {
 			continue
 		}
 		if types.Implements(tn.Type(), cmd) || types.Implements(types.NewPointer(tn.Type()), cmd) {

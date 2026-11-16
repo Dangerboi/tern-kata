@@ -9,7 +9,7 @@ import (
 
 // The context menu of an Attachment row of the Issue detail, and the long press that lists the same. Each item is a key of the
 // detail's mode that acts on the row under the cursor; a menu pick moves the cursor to its row and presses that key, so a click and
-// the key never disagree.
+// the key never disagree. attachmentActions is the one table that the keys, the menu rows, the refusals and the failure words read.
 
 const (
 	OpenAttachmentBesideAction Action = "open-attachment-beside"
@@ -48,63 +48,128 @@ const (
 	WayCopy
 )
 
-// ternDrawnExtensions are the extensions Tern's own file block draws in place beside the Pane: images, plain text, Markdown, JSON and Word documents.
-// Video, audio and PDFs open in a block that only hands them to the OS of the machine showing the window, and a CSV opens a table
-// block that takes the focus, so those go to the OS opener of the session host.
-var ternDrawnExtensions = []string{".png", ".jpg", ".jpeg", ".gif", ".txt", ".md", ".json", ".docx"}
-
-// TernDraws reports whether Tern's file block draws a file called name itself. A kind listed here but not in osOpenedExtensions (a
-// Word document) is shown only by Tern and is never handed to the OS.
-func TernDraws(name string) bool {
-	return slices.Contains(ternDrawnExtensions, strings.ToLower(filepath.Ext(name)))
+// fileKind is a named group of extensions, so the text that says what a refusal allows is built from the same lists that decide it.
+type fileKind struct {
+	name string
+	exts []string
 }
 
-// osOpenedExtensions are the only extensions tern-kata hands to the OS opener, by enter, a click or Open with the system app: images,
-// video, audio, PDFs and plain text. Anything else is only saved, because what the OS does with a file it knows (run it, follow a
-// link inside it, launch a handler registered for it) cannot be told from the name alone, and anyone who can write the Project,
-// agents included, can name an Attachment.
-var osOpenedExtensions = []string{
-	".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".tif", ".tiff",
-	".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v",
-	".mp3", ".wav", ".ogg", ".flac", ".m4a",
-	".pdf",
-	".txt", ".md", ".log", ".csv", ".json",
+func hasKind(kinds []fileKind, name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return slices.ContainsFunc(kinds, func(k fileKind) bool { return slices.Contains(k.exts, ext) })
+}
+
+// kindNames says the kinds as a list: "a, b and c".
+func kindNames(kinds []fileKind) string {
+	names := make([]string, len(kinds))
+	for i, k := range kinds {
+		names[i] = k.name
+	}
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+// ternDrawnKinds are the kinds Tern's own file block draws in place beside the Pane. Video, audio and PDFs open in a block that
+// only hands them to the OS of the machine showing the window, and a CSV opens a table block that takes the focus, so those go to
+// the OS opener of the session host.
+var ternDrawnKinds = []fileKind{
+	{"images", []string{".png", ".jpg", ".jpeg", ".gif"}},
+	{"text", []string{".txt"}},
+	{"Markdown", []string{".md"}},
+	{"JSON", []string{".json"}},
+	{"Word documents", []string{".docx"}},
+}
+
+// TernDraws reports whether Tern's file block draws a file called name itself. A kind listed here but not in osOpenedKinds (a
+// Word document) is shown only by Tern and is never handed to the OS.
+func TernDraws(name string) bool { return hasKind(ternDrawnKinds, name) }
+
+// osOpenedKinds are the only kinds tern-kata hands to the OS opener, by enter, a click or Open with the system app. Anything else
+// is only saved, because what the OS does with a file it knows (run it, follow a link inside it, launch a handler registered for
+// it) cannot be told from the name alone, and anyone who can write the Project, agents included, can name an Attachment.
+var osOpenedKinds = []fileKind{
+	{"images", []string{".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".tif", ".tiff"}},
+	{"video", []string{".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"}},
+	{"audio", []string{".mp3", ".wav", ".ogg", ".flac", ".m4a"}},
+	{"PDFs", []string{".pdf"}},
+	{"text", []string{".txt", ".md", ".log", ".csv", ".json"}},
 }
 
 // OSOpens reports whether tern-kata hands a file called name to the OS opener. The name is not trimmed: Windows reads `x.png.` and
-// `x.png ` as other names than x.png, so they must not count as images.
+// `x.png ` as other names than x.png, so they must not count as images. A name with a colon is never handed over: on NTFS
+// `x.txt:name.png` is a stream of x.txt.
 func OSOpens(name string) bool {
-	return slices.Contains(osOpenedExtensions, strings.ToLower(filepath.Ext(name)))
+	return !strings.Contains(name, ":") && hasKind(osOpenedKinds, name)
 }
 
-// verb is how a failure of way names what it was doing.
-func (w AttachmentWay) verb() string {
-	switch w {
-	case WaySave:
-		return "save"
-	case WayCopy:
-		return "copy"
+// wayUnlink is the table row that is no way of OpenAttachment: unlinking asks a question first.
+const wayUnlink AttachmentWay = -1
+
+// AttachmentAction is one thing the Attachment row's keys and context menu do with an Attachment.
+type AttachmentAction struct {
+	// Action is the key of the detail's mode.
+	Action Action
+	// Label is the menu item's text.
+	Label string
+	way   AttachmentWay
+	// verb says what a failure of the way was doing.
+	verb    string
+	refusal func(Attachment) string
+}
+
+// Refusal is why the action cannot run on a, or "".
+func (r AttachmentAction) Refusal(a Attachment) string {
+	if r.refusal == nil {
+		return ""
 	}
-	return "open"
+	return r.refusal(a)
+}
+
+var attachmentActions = []AttachmentAction{
+	{Action: DrillIn, Label: "Open", way: WayOpen, verb: "open"},
+	{Action: OpenAttachmentBesideAction, Label: "Open beside", way: WayBeside, verb: "open", refusal: func(a Attachment) string {
+		if TernDraws(a.Name) {
+			return ""
+		}
+		return "Tern draws only " + kindNames(ternDrawnKinds) + " beside the Pane; open this one another way."
+	}},
+	{Action: OpenAttachmentSystemAction, Label: "Open with the system app", way: WaySystem, verb: "open", refusal: func(a Attachment) string {
+		if OSOpens(a.Name) {
+			return ""
+		}
+		return "tern-kata hands only " + kindNames(osOpenedKinds) + " to the system app, since the OS may run anything else; save it (s) and open it yourself."
+	}},
+	{Action: SaveAttachmentAction, Label: "Save to Downloads", way: WaySave, verb: "save"},
+	{Action: CopyAttachmentAction, Label: "Copy…", way: WayCopy, verb: "copy"},
+	{Action: UnlinkAttachmentAction, Label: "Unlink…", way: wayUnlink, verb: "unlink"},
+}
+
+// AttachmentActions are the Attachment row's actions in menu order. The slice is shared: callers do not change it.
+func AttachmentActions() []AttachmentAction { return attachmentActions }
+
+func attachmentActionOf(way AttachmentWay) AttachmentAction {
+	if i := slices.IndexFunc(attachmentActions, func(r AttachmentAction) bool { return r.way == way }); i >= 0 {
+		return attachmentActions[i]
+	}
+	return AttachmentAction{verb: "open"}
+}
+
+// attachmentHandler is the key handler of the table's row for action.
+func attachmentHandler(action Action) func(Model) (Model, []Cmd) {
+	row := attachmentActions[slices.IndexFunc(attachmentActions, func(r AttachmentAction) bool { return r.Action == action })]
+	if row.way == wayUnlink {
+		return askUnlinkAttachment
+	}
+	return openAttachmentAs(row.way)
 }
 
 // AttachmentRefusal is why way cannot run on the Attachment a, or "" when it can: the context menu disables its row with it and
-// the key says it as a Notice. Only WayBeside and WaySystem refuse.
+// the key says it as a Notice.
 func AttachmentRefusal(a Attachment, way AttachmentWay) string {
-	if way == WayBeside && !TernDraws(a.Name) {
-		return "Tern draws only images, text, Markdown, JSON and Word documents beside the Pane; open this one another way."
-	}
-	if way == WaySystem && !OSOpens(a.Name) {
-		return "tern-kata hands only images, video, audio, PDFs and text to the system app, since the OS may run anything else; save it (s) and open it yourself."
-	}
-	return ""
+	return attachmentActionOf(way).Refusal(a)
 }
-
-// AttachmentMenuPickMsg is a pick from the context menu of the Attachment row with Key: the detail's cursor moves to it, then Chord
-// is pressed in the detail's mode.
-type AttachmentMenuPickMsg struct{ Key, Chord string }
-
-func (AttachmentMenuPickMsg) msg() {}
 
 // UnlinkAsk is the unlink question waiting for its answer: the Attachment and the Issue it leaves, named as the question says.
 type UnlinkAsk struct {
@@ -124,10 +189,11 @@ type AttachmentCopyState struct {
 func (m Model) attachmentUnderCursor() (Issue, Attachment, bool) {
 	m = m.withRows()
 	row, ok := m.cursorRow()
-	if !ok || row.Kind != RowAttachment || m.authority == nil || m.authority.Issue == nil {
+	issue := m.shownIssue()
+	if !ok || row.Kind != RowAttachment || issue == nil {
 		return Issue{}, Attachment{}, false
 	}
-	return *m.authority.Issue, row.Activity.File, true
+	return *issue, row.Activity.File, true
 }
 
 func (m Model) attachmentOnCursor() bool {
@@ -138,7 +204,10 @@ func (m Model) attachmentOnCursor() bool {
 // openAttachmentAs is the key of an open way: it downloads the Attachment under the cursor and then acts as way says.
 func openAttachmentAs(way AttachmentWay) func(Model) (Model, []Cmd) {
 	return func(m Model) (Model, []Cmd) {
-		issue, a, _ := m.attachmentUnderCursor()
+		issue, a, ok := m.attachmentUnderCursor()
+		if !ok {
+			return m, nil
+		}
 		if reason := AttachmentRefusal(a, way); reason != "" {
 			m.Notice = reason
 			return m, nil
@@ -148,7 +217,10 @@ func openAttachmentAs(way AttachmentWay) func(Model) (Model, []Cmd) {
 }
 
 func askUnlinkAttachment(m Model) (Model, []Cmd) {
-	issue, a, _ := m.attachmentUnderCursor()
+	issue, a, ok := m.attachmentUnderCursor()
+	if !ok {
+		return m, nil
+	}
 	if m.Stale {
 		m.Notice = "Daemon disconnected; reconnect before unlinking an attachment."
 		return m, nil
@@ -166,17 +238,18 @@ func confirmUnlinkAttachment(m Model) (Model, []Cmd) {
 	return m, []Cmd{UnlinkAttachment{Workspace: m.Workspace, UID: ask.UID, ProjectID: ask.ProjectID, Actor: m.Actor, ID: ask.Attachment.ID, Name: ask.Attachment.Name, FromQuestion: true}}
 }
 
-// attachmentMenuPick moves the cursor to the Attachment row the menu was built for and presses its key.
-func attachmentMenuPick(m Model, msg AttachmentMenuPickMsg) (Model, []Cmd) {
-	if m.covered() {
+// attachmentMenuPick is a ContextMenuPickMsg from the menu of the Attachment row with msg.Row: the detail's cursor moves to that
+// row of the shown Issue and the key is pressed there. The focus stays where it is.
+func attachmentMenuPick(m Model, msg ContextMenuPickMsg) (Model, []Cmd) {
+	if issue := m.shownIssue(); m.covered() || issue == nil || issue.UID != msg.UID {
 		return m, nil
 	}
-	m = m.chooseRow(TabAttachments, msg.Key)
-	if row, ok := m.cursorRow(); !ok || row.Kind != RowAttachment || row.Key != msg.Key {
+	m = m.chooseRow(TabAttachments, msg.Row)
+	if row, ok := m.cursorRow(); !ok || row.Kind != RowAttachment || row.Key != msg.Row {
 		return m, nil
 	}
 	m.Notice = ""
-	next, cmds, _ := runChord(m, msg.Chord, ModeDetail)
+	next, cmds, _ := runChord(m, msg.Chord, msg.Mode)
 	return next, cmds
 }
 
@@ -189,7 +262,7 @@ func AttachmentCopyCommand(issueRef, attachmentID string) string {
 // or the Copy card.
 func attachmentOpened(m Model, msg AttachmentOpened) (Model, []Cmd) {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot %s %s: %v", msg.Way.verb(), msg.Name, msg.Err)
+		m.Notice = fmt.Sprintf("Cannot %s %s: %v", attachmentActionOf(msg.Way).verb, msg.Name, msg.Err)
 		return m, nil
 	}
 	switch msg.Way {
@@ -205,15 +278,16 @@ func attachmentOpened(m Model, msg AttachmentOpened) (Model, []Cmd) {
 		return m, []Cmd{wait}
 	case WayCopy:
 		issue := m.issueByUID(msg.UID)
-		if m.authority != nil && m.authority.Issue != nil && m.authority.Issue.UID == msg.UID {
-			issue = m.authority.Issue
-		}
 		if issue == nil {
 			m.Notice = "That Issue is no longer listed."
 			return m, nil
 		}
-		m.HelpOpen = false
-		m.AttachmentCopy = AttachmentCopyState{Open: true, Name: msg.Name, Path: msg.Path, Command: AttachmentCopyCommand(issue.Qualified(), msg.AttachmentID)}
+		copied := AttachmentCopyState{Open: true, Name: msg.Name, Path: msg.Path, Command: AttachmentCopyCommand(issue.Qualified(), msg.AttachmentID)}
+		if m.covered() {
+			m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("%s is at %s; fetch it with: %s", msg.Name, copied.Path, copied.Command)})
+			return m, []Cmd{wait}
+		}
+		m.AttachmentCopy = copied
 		return m, nil
 	case WayBeside:
 		m.Notice = fmt.Sprintf("Opened %s beside the Pane (%s)", msg.Name, msg.Path)
@@ -224,6 +298,9 @@ func attachmentOpened(m Model, msg AttachmentOpened) (Model, []Cmd) {
 			m.Notice = fmt.Sprintf("Opened %s outside Tern (%s)", msg.Name, msg.Path)
 		} else {
 			m.Notice = fmt.Sprintf("Opened %s (%s)", msg.Name, msg.Path)
+		}
+		if msg.Note != "" {
+			m.Notice += ": " + msg.Note
 		}
 	}
 	return m, nil

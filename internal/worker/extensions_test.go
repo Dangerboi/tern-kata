@@ -61,65 +61,54 @@ func TestABadExtensionsKeyIsRefusedWithTheProfilesName(t *testing.T) {
 	}
 }
 
+const ompManifest = `{"name":"kata-omp","version":"1","omp":{"extensions":["kata.ts"]}}`
+
+// installKataPackage registers pkg under the plugins root the way npm does: in the root's package.json dependencies, with
+// an omp manifest in node_modules.
+func installKataPackage(t *testing.T, plugins, pkg string) {
+	t.Helper()
+	writeTestFile(t, filepath.Join(plugins, "package.json"), `{"dependencies":{"`+pkg+`":"1"}}`)
+	writeKataModule(t, plugins, pkg, ompManifest)
+}
+
+func writeKataModule(t *testing.T, plugins, pkg, manifest string) {
+	t.Helper()
+	writeTestFile(t, filepath.Join(plugins, "node_modules", filepath.FromSlash(pkg), "package.json"), manifest)
+}
+
 func TestDoctorWarnsOfKataPluginOnlyForAnAmbientProfile(t *testing.T) {
-	home := t.TempDir()
-	agent := filepath.Join(home, ".omp", "agent")
-	writeFile := func(path, body string) {
-		t.Helper()
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	doctor := func(profiles string, omp OmpEnv) string {
-		t.Helper()
-		dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
-		writeFile(dirs.ConfigPath(), "executor = \"laptop\"\n[profiles.default]\ncommand = \"go\"\n"+profiles)
-		return Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: omp}).String()
-	}
-	omp := OmpEnv{Home: home, AgentDir: agent}
-
-	ambient := "extensions = \"ambient\"\n"
-	if out := doctor(ambient, omp); strings.Contains(out, "todo takeover") {
-		t.Fatalf("no plugin installed, yet a warning:\n%s", out)
-	}
-	if out := doctor(ambient, OmpEnv{}); strings.Contains(out, "todo takeover") {
-		t.Fatalf("the zero OmpEnv looked somewhere:\n%s", out)
-	}
-
-	installs := map[string]func(){
-		"the runtime registration": func() {
-			writeFile(filepath.Join(home, ".omp", "plugins", "node_modules", "kata-omp", "package.json"), `{"name":"kata-omp"}`)
+	installs := map[string]func(home string, omp *OmpEnv){
+		"the runtime registration": func(home string, _ *OmpEnv) {
+			installKataPackage(t, filepath.Join(home, ".omp", "plugins"), "kata-omp")
 		},
-		"the lock file": func() {
-			writeFile(filepath.Join(home, ".omp", "plugins", "omp-plugins.lock.json"), `{"plugins":{"kata-omp":{"version":"1","enabled":true}}}`)
+		"the lock file with the package in node_modules": func(home string, _ *OmpEnv) {
+			plugins := filepath.Join(home, ".omp", "plugins")
+			writeTestFile(t, filepath.Join(plugins, "omp-plugins.lock.json"), `{"plugins":{"kata-omp":{"version":"1","enabled":true}}}`)
+			writeKataModule(t, plugins, "kata-omp", ompManifest)
 		},
 		// npm and marketplace installs register under the scoped name since kata-plugin published the package.
-		"the scoped runtime registration": func() {
-			writeFile(filepath.Join(home, ".omp", "plugins", "node_modules", "@dangerboi", "kata-omp", "package.json"), `{"name":"@dangerboi/kata-omp"}`)
+		"the scoped runtime registration": func(home string, _ *OmpEnv) {
+			installKataPackage(t, filepath.Join(home, ".omp", "plugins"), "@dangerboi/kata-omp")
 		},
-		"the scoped lock file": func() {
-			writeFile(filepath.Join(home, ".omp", "plugins", "omp-plugins.lock.json"), `{"plugins":{"@dangerboi/kata-omp":{"version":"2","enabled":true}}}`)
+		"the ambient extensions folder": func(home string, _ *OmpEnv) {
+			writeTestFile(t, filepath.Join(home, ".omp", "agent", "extensions", "kata.ts"), "export default {}")
 		},
-		"the ambient extensions folder": func() { writeFile(filepath.Join(agent, "extensions", "kata.ts"), "export default {}") },
-		"a moved agent folder": func() {
-			omp.AgentDir = filepath.Join(home, "elsewhere")
-			writeFile(filepath.Join(omp.AgentDir, "extensions", "kata.ts"), "export default {}")
+		"a moved agent folder": func(home string, omp *OmpEnv) {
+			elsewhere := filepath.Join(home, "elsewhere")
+			omp.Lookup = envOf(map[string]string{"PI_CODING_AGENT_DIR": elsewhere})
+			writeTestFile(t, filepath.Join(elsewhere, "extensions", "kata.ts"), "export default {}")
 		},
-		"the settings": func() {
-			writeFile(filepath.Join(agent, "config.yml"), "extensions:\n  - /src/kata-plugin/plugins/oh-my-pi/kata.ts\n")
+		"the settings": func(home string, _ *OmpEnv) {
+			writeTestFile(t, filepath.Join(home, ".omp", "agent", "config.yml"), "extensions:\n  - /src/kata-plugin/plugins/oh-my-pi/kata.ts\n")
 		},
 	}
 	for name, install := range installs {
 		t.Run(name, func(t *testing.T) {
-			home = t.TempDir()
-			agent = filepath.Join(home, ".omp", "agent")
-			omp = OmpEnv{Home: home, AgentDir: agent}
-			install()
-			out := doctor(ambient, omp)
-			if bare := doctor("", omp); strings.Contains(bare, "todo takeover") {
+			home := t.TempDir()
+			omp := OmpEnv{Home: home}
+			install(home, &omp)
+			out := doctorFor(t, "", omp)
+			if bare := doctorWith(t, "", omp); strings.Contains(bare, "todo takeover") {
 				t.Fatalf("a profile with no key was warned:\n%s", bare)
 			}
 			for _, want := range []string{"warn", "profile default", "todo takeover", "3 extra turns", `extensions = "ambient"`} {
@@ -127,79 +116,121 @@ func TestDoctorWarnsOfKataPluginOnlyForAnAmbientProfile(t *testing.T) {
 					t.Fatalf("no %q in:\n%s", want, out)
 				}
 			}
-			if out := doctor("extensions = \"none\"\n", omp); strings.Contains(out, "todo takeover") {
+			if out := doctorWith(t, "extensions = \"none\"\n", omp); strings.Contains(out, "todo takeover") {
 				t.Fatalf("a profile with none was warned:\n%s", out)
 			}
-			if out := doctor("extensions = ['"+filepath.Join(home, "x.ts")+"']\n", omp); strings.Contains(out, "todo takeover") {
+			if out := doctorWith(t, "extensions = ['"+filepath.Join(home, "x.ts")+"']\n", omp); strings.Contains(out, "todo takeover") {
 				t.Fatalf("a profile with a path list was warned:\n%s", out)
 			}
 		})
 	}
+	t.Run("nothing installed", func(t *testing.T) {
+		if out := doctorFor(t, "", OmpEnv{Home: t.TempDir()}); strings.Contains(out, "todo takeover") {
+			t.Fatalf("no plugin installed, yet a warning:\n%s", out)
+		}
+	})
+	t.Run("the zero OmpEnv looks nowhere", func(t *testing.T) {
+		if out := doctorFor(t, "", OmpEnv{}); strings.Contains(out, "todo takeover") {
+			t.Fatalf("the zero OmpEnv looked somewhere:\n%s", out)
+		}
+	})
 }
 
 func TestDoctorFindsKataPluginInACheckoutsPlugins(t *testing.T) {
 	checkout := t.TempDir()
-	pkg := filepath.Join(checkout, ".omp", "plugins", "node_modules", "kata-omp", "package.json")
-	if err := os.MkdirAll(filepath.Dir(pkg), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(pkg, []byte(`{"name":"kata-omp"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	installKataPackage(t, filepath.Join(checkout, ".omp", "plugins"), "kata-omp")
 	dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
-	body := "executor = \"laptop\"\n[checkouts]\nrepo = '" + checkout + "'\n[profiles.default]\ncommand = \"go\"\nextensions = \"ambient\"\n"
-	if err := os.WriteFile(dirs.ConfigPath(), []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeTestFile(t, dirs.ConfigPath(), "executor = \"laptop\"\n[checkouts]\nrepo = '"+checkout+"'\n[profiles.default]\ncommand = \"go\"\nextensions = \"ambient\"\n")
 	out := Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: OmpEnv{Home: t.TempDir()}}).String()
 	if !strings.Contains(out, "todo takeover") {
 		t.Fatalf("no warning for a checkout's plugins:\n%s", out)
 	}
 }
 
-func TestDoctorIgnoresADisabledKataPlugin(t *testing.T) {
-	home := t.TempDir()
-	plugins := filepath.Join(home, ".omp", "plugins")
-	files := map[string]string{
-		filepath.Join(plugins, "omp-plugins.lock.json"):                    `{"plugins":{"kata-omp":{"enabled":false}}}`,
-		filepath.Join(plugins, "node_modules", "kata-omp", "package.json"): `{"name":"kata-omp"}`,
+func TestDoctorFollowsOmpsRuleForWhichKataPluginsLoad(t *testing.T) {
+	const scoped, legacy = "@dangerboi/kata-omp", "kata-omp"
+	cases := []struct {
+		name  string
+		setup func(home, checkout string)
+		want  bool
+	}{
+		{"a lock entry whose package is gone", func(home, _ string) {
+			writeTestFile(t, filepath.Join(home, ".omp", "plugins", "omp-plugins.lock.json"), `{"plugins":{"kata-omp":{"enabled":true}}}`)
+		}, false},
+		{"a lock entry with no enabled value", func(home, _ string) {
+			plugins := filepath.Join(home, ".omp", "plugins")
+			writeTestFile(t, filepath.Join(plugins, "omp-plugins.lock.json"), `{"plugins":{"kata-omp":{"version":"1"}}}`)
+			writeKataModule(t, plugins, legacy, ompManifest)
+		}, false},
+		{"a lock entry turned off", func(home, _ string) {
+			plugins := filepath.Join(home, ".omp", "plugins")
+			writeTestFile(t, filepath.Join(plugins, "omp-plugins.lock.json"), `{"plugins":{"kata-omp":{"enabled":false}}}`)
+			writeKataModule(t, plugins, legacy, ompManifest)
+		}, false},
+		{"the scoped name turned off alone", func(home, _ string) {
+			plugins := filepath.Join(home, ".omp", "plugins")
+			writeTestFile(t, filepath.Join(plugins, "omp-plugins.lock.json"), `{"plugins":{"@dangerboi/kata-omp":{"enabled":false}}}`)
+			writeTestFile(t, filepath.Join(plugins, "package.json"), `{"dependencies":{"@dangerboi/kata-omp":"1"}}`)
+			writeKataModule(t, plugins, scoped, ompManifest)
+		}, false},
+		{"the scoped name off beside the legacy name on", func(home, _ string) {
+			plugins := filepath.Join(home, ".omp", "plugins")
+			writeTestFile(t, filepath.Join(plugins, "omp-plugins.lock.json"), `{"plugins":{"@dangerboi/kata-omp":{"enabled":false},"kata-omp":{"enabled":true}}}`)
+			writeKataModule(t, plugins, scoped, ompManifest)
+			writeKataModule(t, plugins, legacy, ompManifest)
+		}, true},
+		{"a package folder nobody registered", func(home, _ string) {
+			plugins := filepath.Join(home, ".omp", "plugins")
+			writeTestFile(t, filepath.Join(plugins, "package.json"), `{}`)
+			writeKataModule(t, plugins, legacy, ompManifest)
+		}, false},
+		{"a package with no omp manifest", func(home, _ string) {
+			plugins := filepath.Join(home, ".omp", "plugins")
+			writeTestFile(t, filepath.Join(plugins, "package.json"), `{"dependencies":{"kata-omp":"1"}}`)
+			writeKataModule(t, plugins, legacy, `{"name":"kata-omp"}`)
+		}, false},
+		{"a malformed lock file", func(home, _ string) {
+			plugins := filepath.Join(home, ".omp", "plugins")
+			installKataPackage(t, plugins, legacy)
+			writeTestFile(t, filepath.Join(plugins, "omp-plugins.lock.json"), `{`)
+		}, false},
+		{"a project override that disables it", func(home, checkout string) {
+			installKataPackage(t, filepath.Join(home, ".omp", "plugins"), scoped)
+			writeTestFile(t, filepath.Join(checkout, ".omp", "plugin-overrides.json"), `{"disabled":["@dangerboi/kata-omp"]}`)
+		}, false},
+		{"the settings listing it as disabled", func(home, _ string) {
+			writeTestFile(t, filepath.Join(home, ".omp", "agent", "config.yml"), "extensions:\n  - /src/kata-plugin/plugins/oh-my-pi/kata.ts\ndisabledExtensions:\n  - extension-module:kata\n")
+		}, false},
+		{"the extensions folder with the settings disabling it", func(home, _ string) {
+			writeTestFile(t, filepath.Join(home, ".omp", "agent", "extensions", "kata.ts"), "export default {}")
+			writeTestFile(t, filepath.Join(home, ".omp", "agent", "config.yml"), "disabledExtensions: ['extension-module:kata']\n")
+		}, false},
 	}
-	for path, body := range files {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
-	if err := os.WriteFile(dirs.ConfigPath(), []byte("executor = \"laptop\"\n[profiles.default]\ncommand = \"go\"\nextensions = \"ambient\"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	out := Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: OmpEnv{Home: home, AgentDir: filepath.Join(home, ".omp", "agent")}}).String()
-	if strings.Contains(out, "todo takeover") {
-		t.Fatalf("a disabled plugin was warned of:\n%s", out)
-	}
-}
-
-func TestDoctorWarnsOfAnEnabledKataPluginBesideADisabledName(t *testing.T) {
-	home := t.TempDir()
-	plugins := filepath.Join(home, ".omp", "plugins")
-	// The npm package is turned off beside an install from before the rename, which omp still loads.
-	writeTestFile(t, filepath.Join(plugins, "omp-plugins.lock.json"), `{"plugins":{"@dangerboi/kata-omp":{"enabled":false},"kata-omp":{"enabled":true}}}`)
-	writeTestFile(t, filepath.Join(plugins, "node_modules", "@dangerboi", "kata-omp", "package.json"), `{}`)
-	writeTestFile(t, filepath.Join(plugins, "node_modules", "kata-omp", "package.json"), `{}`)
-	out := doctorFor(t, "", OmpEnv{Home: home, AgentDir: filepath.Join(home, ".omp", "agent")})
-	if !strings.Contains(out, "todo takeover") || !strings.Contains(out, filepath.Join("node_modules", "kata-omp", "package.json")) {
-		t.Fatalf("no warning naming the enabled kata-omp:\n%s", out)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, checkout := t.TempDir(), t.TempDir()
+			c.setup(home, checkout)
+			dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
+			writeTestFile(t, dirs.ConfigPath(), "executor = \"laptop\"\n[checkouts]\nrepo = '"+checkout+"'\n[profiles.default]\ncommand = \"go\"\nextensions = \"ambient\"\n")
+			out := Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: OmpEnv{Home: home}}).String()
+			if got := strings.Contains(out, "todo takeover"); got != c.want {
+				t.Fatalf("warned %v, want %v:\n%s", got, c.want, out)
+			}
+		})
 	}
 }
 
 // doctorFor runs the doctor on a worker.toml with a default profile plus profiles, in the given omp environment.
 func doctorFor(t *testing.T, profiles string, omp OmpEnv) string {
 	t.Helper()
+	return doctorWith(t, "extensions = \"ambient\"\n"+profiles, omp)
+}
+
+// doctorWith is doctorFor with the default profile's own lines given, so the test can leave out or change `extensions`.
+func doctorWith(t *testing.T, defaultProfile string, omp OmpEnv) string {
+	t.Helper()
 	dirs := Dirs{Config: t.TempDir(), State: t.TempDir()}
-	writeTestFile(t, dirs.ConfigPath(), "executor = \"laptop\"\n[profiles.default]\ncommand = \"go\"\nextensions = \"ambient\"\n"+profiles)
+	writeTestFile(t, dirs.ConfigPath(), "executor = \"laptop\"\n[profiles.default]\ncommand = \"go\"\n"+defaultProfile)
 	return Doctor(context.Background(), DoctorOptions{Dirs: dirs, Omp: omp}).String()
 }
 
@@ -227,7 +258,7 @@ func TestDoctorIgnoresTheMarketplaceRegistryAlone(t *testing.T) {
 
 func TestDoctorFollowsOmpsPluginsFolder(t *testing.T) {
 	install := func(root string) {
-		writeTestFile(t, filepath.Join(root, "plugins", "node_modules", "kata-omp", "package.json"), `{}`)
+		installKataPackage(t, filepath.Join(root, "plugins"), "kata-omp")
 	}
 	cases := []struct {
 		name  string
@@ -263,16 +294,16 @@ func TestDoctorFollowsXDGDataHomeOnlyOnceOmpsFolderExistsThere(t *testing.T) {
 	}
 	home, xdg := t.TempDir(), t.TempDir()
 	omp := OmpEnv{Home: home, Lookup: envOf(map[string]string{"XDG_DATA_HOME": xdg})}
-	writeTestFile(t, filepath.Join(xdg, "omp", "plugins", "node_modules", "kata-omp", "package.json"), `{}`)
+	installKataPackage(t, filepath.Join(xdg, "omp", "plugins"), "kata-omp")
 	if out := doctorFor(t, "", omp); !strings.Contains(out, "todo takeover") {
 		t.Fatalf("no warning for the XDG plugins folder:\n%s", out)
 	}
-	omp.AgentDir = filepath.Join(home, "elsewhere")
+	omp.Lookup = envOf(map[string]string{"XDG_DATA_HOME": xdg, "PI_CODING_AGENT_DIR": filepath.Join(home, "elsewhere")})
 	if out := doctorFor(t, "", omp); strings.Contains(out, "todo takeover") {
 		t.Fatalf("a moved agent folder kept the XDG plugins folder:\n%s", out)
 	}
 	bare := OmpEnv{Home: home, Lookup: envOf(map[string]string{"XDG_DATA_HOME": t.TempDir()})}
-	writeTestFile(t, filepath.Join(home, ".omp", "plugins", "node_modules", "kata-omp", "package.json"), `{}`)
+	installKataPackage(t, filepath.Join(home, ".omp", "plugins"), "kata-omp")
 	if out := doctorFor(t, "", bare); !strings.Contains(out, "todo takeover") {
 		t.Fatalf("without omp's XDG folder the config root's plugins apply:\n%s", out)
 	}
@@ -280,7 +311,7 @@ func TestDoctorFollowsXDGDataHomeOnlyOnceOmpsFolderExistsThere(t *testing.T) {
 
 func TestDoctorDoesNotWarnForAProfileWhoseArgsDisableDiscovery(t *testing.T) {
 	home := t.TempDir()
-	writeTestFile(t, filepath.Join(home, ".omp", "plugins", "node_modules", "kata-omp", "package.json"), `{}`)
+	installKataPackage(t, filepath.Join(home, ".omp", "plugins"), "kata-omp")
 	for _, args := range []string{"['--no-extensions']", "['--trusted-extension', '/x/k.ts']", "['--trusted-extension=/x/k.ts']"} {
 		out := doctorFor(t, "[profiles.quiet]\ncommand = \"go\"\nextensions = \"ambient\"\nargs = "+args+"\n", OmpEnv{Home: home})
 		if strings.Contains(out, "profile quiet: kata-plugin") {

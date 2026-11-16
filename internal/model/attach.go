@@ -58,7 +58,8 @@ type AttachmentOpened struct {
 	Path string
 	// Remote is set when a WaySave copy went to the Downloads folder of the machine that shows the window, not this one.
 	Remote bool
-	// Note says why a WaySave copy is on the Pane's machine although `tern download` was tried: what Tern said when it failed.
+	// Note says what the Pane could not do the way it tried: for WaySave, why the copy is on the Pane's machine although `tern download`
+	// was tried; for the default way, why Tern did not show the file (what `tern open --preview` said) when it went to the OS opener.
 	Note string
 	Way  AttachmentWay
 	Err  error

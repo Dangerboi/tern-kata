@@ -46,7 +46,7 @@ func (d IssueDetail) OpenedIssueUID() string            { return d.openedUID }
 func (d IssueDetail) OpenIssueRef() string              { return d.openRef }
 
 func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
-	shown, tab, boardWasOn := m.DetailIssueUID(), m.tab, m.OnBoard()
+	shown, tab, landing, boardWasOn := m.DetailIssueUID(), m.tab, m.landing, m.OnBoard()
 	m, cmds := update(m, msg)
 	if _, ok := msg.(StreamEvent); ok {
 		switch {
@@ -72,7 +72,8 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	cmds = append(cmds, local...)
 	m, cron := m.settleCronJobs()
 	cmds = append(cmds, cron...)
-	if m.tab != tab {
+	if m.tab != tab && m.landing == landing {
+		// A jump sets the landing; only a tab switch the user made keeps it, so a jump or back never reveals in the old Issue's tabs.
 		cmds = append(cmds, RevealActivityTab{})
 	}
 	if now := m.DetailIssueUID(); shown != "" && now != "" && now != shown {
@@ -366,10 +367,7 @@ func (m Model) openCursorRow() (Model, []Cmd) {
 			return openJob(m, row.JobUID)
 		}
 		if row.Kind == RowAttachment {
-			if issue := m.authority.Issue; issue != nil {
-				return m, []Cmd{OpenAttachment{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Attachment: row.Activity.File}}
-			}
-			return m, nil
+			return openAttachmentAs(WayOpen)(m)
 		}
 		if row.Kind == RowComment {
 			if moved, cmds, ok := m.openCommentLink(row); ok {

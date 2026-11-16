@@ -334,18 +334,34 @@ func agentsRefreshed(m Model, msg AgentsRefreshed) (Model, []Cmd) {
 	return m, append(raised, ask)
 }
 
-// promptTail finds the prompt file of a tern-kata agent in a command line: the part from the agent-prompts folder on, "" when
-// the command names none. A tab or background agent's is `prompt-<starter>-<random>.md`, a split agent's `prompt-<random>.md`.
-var promptTail = regexp.MustCompile(`agent-prompts[/\\]prompt-(?:\d+-)?\w+\.md`)
+// promptFiles finds the prompt files of a tern-kata agent in a command line: each part from the agent-prompts folder on, the same
+// whole-path rule as the plugin's (promptfile.luau) and the omp extension's. The path stands as omp's `@<path>` word or as the
+// wrapper's `--prompt-file=<path>` flag, which a reopened chat's line keeps. A tab or background agent's is
+// `prompt-<starter>-<random>.md`, a split agent's `prompt-<random>.md`. `<prompt>.md.token` is a secret file beside one, not one.
+var promptFiles = regexp.MustCompile(`(agent-prompts[/\\]prompt-[\w-]+\.md)(?:$|[^\w.])`)
+
+func promptTails(command string) []string {
+	var tails []string
+	for _, m := range promptFiles.FindAllStringSubmatch(command, -1) {
+		tails = append(tails, m[1])
+	}
+	return tails
+}
+
+var slashes = strings.NewReplacer(`\`, "/")
 
 // resolveAgent gives a relayed agent the block of the entry it belongs to: the entry whose prompt file its command names, else the
 // entry whose block is its pane id. A window on another machine numbers panes differently from the session host, so only the
 // command is common to all windows. An agent no entry claims keeps its own id.
 func (m Model) resolveAgent(s AgentState) AgentState {
+	tails := promptTails(s.Command)
 	for _, e := range m.AgentMapping {
-		if e.PromptFile != "" && strings.Contains(s.Command, e.PromptFile) {
-			s.Block = e.Block
-			return s
+		file := slashes.Replace(e.PromptFile)
+		for _, tail := range tails {
+			if e.PromptFile != "" && strings.HasSuffix(file, slashes.Replace(tail)) {
+				s.Block = e.Block
+				return s
+			}
 		}
 	}
 	return s
@@ -375,9 +391,11 @@ func relayAgents(m Model, msg AgentStatesMsg) (Model, []Cmd) {
 		if m.agentMapped(s.Block) {
 			continue
 		}
-		if tail := promptTail.FindString(s.Command); tail != "" && !slices.Contains(m.Agents.asked, tail) {
-			m.Agents.asked = append(slices.Clone(m.Agents.asked), tail)
-			unmapped = true
+		for _, tail := range promptTails(s.Command) {
+			if !slices.Contains(m.Agents.asked, tail) {
+				m.Agents.asked = append(slices.Clone(m.Agents.asked), tail)
+				unmapped = true
+			}
 		}
 	}
 	// A split or tab agent of this Pane that was answered or finished may have been sent to the background by another Pane, which

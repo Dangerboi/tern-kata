@@ -223,10 +223,7 @@ func (e Extensions) args() []string {
 }
 
 func (p Profile) hasArg(flags ...string) bool {
-	return slices.ContainsFunc(p.Args, func(a string) bool {
-		flag, _, _ := strings.Cut(a, "=")
-		return slices.Contains(flags, flag)
-	})
+	return ompext.HasFlag(p.Args, flags...)
 }
 
 // LoadsAmbientExtensions is true when a run of the profile lets omp discover its extensions: neither the `extensions`

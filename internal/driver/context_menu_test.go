@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
@@ -33,7 +34,7 @@ func TestContextMenuPickSelectsTheRowThenPressesItsKey(t *testing.T) {
 			if s.Model.SelectedUID != "one" {
 				t.Fatalf("selected %q before the pick, want one", s.Model.SelectedUID)
 			}
-			out := step(t, s, click(tc.node(t, s), view.ContextMenuPickClick("two", tc.mode, "x")))
+			out := step(t, s, click(tc.node(t, s), view.ContextMenuPickClick("two", tc.mode, "", "x")))
 			if got := out.State.Model.SelectedUID; got != "two" {
 				t.Errorf("selected %q after the pick, want two", got)
 			}
@@ -62,7 +63,7 @@ func TestContextMenuPickIgnoresTheModeThePaneHasMovedTo(t *testing.T) {
 			if got := s.Model.CurrentMode(); got != model.ModeSearch {
 				t.Fatalf("mode %q before the pick, want search", got)
 			}
-			out := step(t, s, click("", view.ContextMenuPickClick("two", tc.mode, "x")))
+			out := step(t, s, click("", view.ContextMenuPickClick("two", tc.mode, "", "x")))
 			got := out.State.Model
 			if !got.CloseForm.Open || got.CloseForm.UID != "two" {
 				t.Errorf("Close card = %+v, want open on two", got.CloseForm)
@@ -74,11 +75,18 @@ func TestContextMenuPickIgnoresTheModeThePaneHasMovedTo(t *testing.T) {
 	}
 }
 
-// The menu's ids carry the mode and the chord they run.
+// The menu's ids carry the mode, the Issue, the detail row if any, and the chord they run.
 func TestContextMenuIdsDecodeToTheirModeAndChord(t *testing.T) {
-	got := view.DecodeAction("any", "pick", "list:two:shift+m")
-	if want := (model.ContextMenuPickMsg{UID: "two", Mode: model.ModeList, Chord: "shift+m"}); got != want {
-		t.Errorf("decoded %+v, want %+v", got, want)
+	for _, want := range []model.ContextMenuPickMsg{
+		{UID: "two", Mode: model.ModeList, Chord: "shift+m"},
+		{UID: "01JABC", Mode: model.ModeDetail, Row: model.AttachmentRowKey("A1"), Chord: "s"},
+		{UID: "two", Mode: model.ModeList, Chord: ":"},
+	} {
+		id := view.ContextMenuPickClick(want.UID, want.Mode, want.Row, want.Chord)
+		act, value, _ := strings.Cut(id, "=")
+		if got := view.DecodeAction("any", act, value); got != want {
+			t.Errorf("%q decoded to %+v, want %+v", id, got, want)
+		}
 	}
 	if got := view.DecodeAction("any", "pick", "no-chord"); got != nil {
 		t.Errorf("a pick without a chord decoded to %+v", got)

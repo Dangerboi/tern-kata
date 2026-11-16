@@ -3,7 +3,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 pid=
-server_pid=
+serve_pid=
 export CGO_ENABLED=0 KATA_HOME="$tmp/kata" TERN_CONFIG_DIR="$tmp/config"
 export TERN_DAEMON_SOCKET="$tmp/daemon.sock" STENCIL_LOG_DIR="$tmp/logs"
 # The linked plugin's host half reads worker.toml from the config folder: point it at one the worker widget check fills in.
@@ -23,8 +23,9 @@ cleanup() {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
   fi
-  # The worker the widget check started must not outlive the smoke: with worker.manual in place nothing starts another.
-  if [[ -f "$XDG_CONFIG_HOME/tern-kata/worker.toml" ]]; then
+  # A run that failed before the widget check's own stop must not leave its worker running: with worker.manual in place
+  # nothing starts another.
+  if [[ $status -ne 0 && -f "$XDG_CONFIG_HOME/tern-kata/worker.toml" ]]; then
     : >"$XDG_CONFIG_HOME/tern-kata/worker.manual"
     "$tmp/app/tern-kata" worker stop >/dev/null 2>&1 || true
   fi
@@ -32,7 +33,7 @@ cleanup() {
     tern plugin unlink tern-kata --json || status=1
     [[ ! -f "$TERN_CONFIG_DIR/plugins/tern-kata.path" ]] || status=1
   fi
-  [[ -z "$server_pid" ]] || { kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true; }
+  [[ -z "$serve_pid" ]] || { kill "$serve_pid" 2>/dev/null || true; wait "$serve_pid" 2>/dev/null || true; }
   kata daemon stop >/dev/null 2>&1 || true
   if [[ $status -eq 0 ]]; then rm -rf "$tmp"; else printf 'Plugin smoke artifacts: %s\n' "$tmp" >&2; fi
   exit "$status"
@@ -40,16 +41,6 @@ cleanup() {
 trap cleanup EXIT
 source "$(dirname "$0")/ctl.sh"
 ctl() { ctl_call "$@"; }
-# Polls a command every 0.1 s until it succeeds, for up to wait_limit seconds (ctl.sh), and names it when time runs out.
-# Headless Tern runs plugin timers only on frames; the idle zsh prompts below redraw every 0.1 s, so frames, and the
-# timers, keep coming while this sleeps.
-wait_for() {
-  local deadline=$((SECONDS + wait_limit))
-  until "$@"; do
-    (( SECONDS < deadline )) || { echo "timed out after ${wait_limit} s waiting for: $*" >&2; return 1; }
-    sleep 0.1
-  done
-}
 panes_are() { [[ $(ctl state | jq -r '.tabs[0].panes') == "$1" ]]; }
 # One `ready` call (at most Tern's 20 s), so wait_for's deadline bounds the whole wait.
 panes_ready() { tern ctl --control "$tmp/control.sock" ready >/dev/null && panes_are "$1"; }
@@ -57,11 +48,9 @@ panes_ready() { tern ctl --control "$tmp/control.sock" ready >/dev/null && panes
 expect_panes() {
   wait_for panes_ready "$1" || { echo "state: $(ctl state | jq -c '.tabs[0]')" >&2; return 1; }
 }
-# Toasts are not terminal text: poll the rendered tree for one.
-toast_shown() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/dev/null; }
 # `! f` under set -e never fails the script, so the negated checks go through this.
 expect_no_toast() {
-  if toast_shown "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
+  if tree_has "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
 }
 # The startup-failure toasts, told apart by these fragments: which one shows is the contract with the binary.
 failed_start_toast='tern-kata failed to start'
@@ -75,7 +64,7 @@ expect_no_kata_toast() {
   expect_no_toast "$not_installed_toast"
   expect_no_toast "$didnt_start_toast"
 }
-expect_toast() { wait_for toast_shown "$1"; }
+expect_toast() { wait_for tree_has "$1"; }
 mkdir -p "$tmp/workspace" "$tmp/bin" "$tmp/pane-bin" "$tmp/app" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
 if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -o "$tmp/app/tern-kata" ./cmd/tern-kata); fi
 (cd "$repo" && go build -o "$tmp/app/omp" ./internal/worker/workertest/stub)
@@ -125,11 +114,8 @@ export PATH="$tmp/bin:/usr/bin:/bin"
 # Update tern-kata reads version.txt from here.
 mkdir -p "$tmp/dist"
 printf '9.9.9\n' >"$tmp/dist/version.txt"
-update_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
-python3 -m http.server "$update_port" --bind 127.0.0.1 --directory "$tmp/dist" >"$tmp/http.log" 2>&1 &
-server_pid=$!
-for ((attempt=0; attempt<100; attempt++)); do curl -sf "http://127.0.0.1:$update_port/version.txt" >/dev/null && break; sleep 0.1; done
-export TERN_KATA_BASE_URL="http://127.0.0.1:$update_port" TERN_KATA_NO_UPDATE_CHECK=1
+serve_dir "$tmp/dist" "$tmp/http.log"
+export TERN_KATA_BASE_URL="$serve_url" TERN_KATA_NO_UPDATE_CHECK=1
 # The host half finds the worker's binary and the omp stub in this folder, not on PATH (the window half must not find tern-kata there).
 export TERN_KATA_INSTALL_DIR="$tmp/app"
 # q asks "Quit tern-kata? y/n" unless kata's [tui] confirm_quit is false: the steps quit with one key.
@@ -151,12 +137,7 @@ odd=$(jq -r '.issue.short_id' "$tmp/odd.json")
 ! command -v tern-kata >/dev/null 2>&1 || { echo "tern-kata must not be on window PATH" >&2; exit 1; }
 tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
 pid=$!
-for ((attempt=0; attempt<200; attempt++)); do
-  [[ ! -S "$tmp/control.sock" ]] || break
-  kill -0 "$pid"
-  sleep 0.1
-done
-[[ -S "$tmp/control.sock" ]]
+wait_for socket_ready "$pid" "$tmp/control.sock"
 ctl ready
 # Each split Pane gets half the window, and the checks below expect kata's wide layout (80 columns and up).
 read -r window_height < <(ctl stats | jq -r '.viewport[1]')
@@ -209,19 +190,23 @@ ctl widgets set tern-kata/waiting tern-kata/worker
 ctl state | jq -e '.widgets.ids == ["tern-kata/waiting", "tern-kata/worker"]' >/dev/null
 [[ $(tern plugin list --json | jq '[.problems[] | select(tostring | contains("tern-kata"))] | length') == 0 ]]
 ! grep -qE 'could not register (the worker )?widget|hook="command add-widgets"' "$tmp/tern.log" || { echo "tern-kata widget registration failed" >&2; exit 1; }
-# The host half draws the worker widget: with a worker running (the host half starts one within a poll of worker.toml
-# appearing), the bar shows it with a tooltip naming the session host's worker, and it goes again when the worker stops
-# and nothing starts another. This fails if the host half stopped rendering it, or the window half's own widget (which
-# says "on this machine") won instead.
-worker_widget_shown() { ctl tree '#widgetbar .wg' | jq -e '[.nodes[] | select((.title // "") | contains("on the session host"))] | length == 1' >/dev/null; }
-mkdir -p "$XDG_CONFIG_HOME/tern-kata"
-printf 'executor = "plugin-smoke"\nactor = "smoke"\n[[projects]]\nname = "smoke"\n[checkouts]\nrepo = "%s"\n[profiles.default]\ncommand = "omp"\n' "$tmp/workspace" >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
-wait_for worker_widget_shown
-ctl tree '#widgetbar .wg' | jq -e '[.nodes[] | select((.title // "") | contains("Worker plugin-smoke on the session host"))] | length == 1' >/dev/null
-: >"$XDG_CONFIG_HOME/tern-kata/worker.manual"
-"$tmp/app/tern-kata" worker stop >/dev/null
-worker_widget_gone() { ! worker_widget_shown; }
-wait_for worker_widget_gone
+# From Tern 0.9.21 the host half draws the worker widget: with a worker running (the host half starts one within a poll of
+# worker.toml appearing), the bar shows it with a tooltip naming the session host's worker, and it goes again when the worker
+# stops and nothing starts another. This fails if the host half stopped rendering it, or the window half's own widget (which
+# says "on this machine") won instead. An older Tern has no host-half widget to look for.
+if tern_at_least 0.9.21; then
+  # The widgets whose tooltip holds every fragment given.
+  worker_widgets() { ctl tree '#widgetbar .wg' | jq '[.nodes[] | (.title // "") as $t | select($ARGS.positional | all(. as $f | $t | contains($f)))] | length' --args "$@"; }
+  worker_widget_shown() { [[ $(worker_widgets 'on the session host') == 1 ]]; }
+  worker_widget_gone() { [[ $(worker_widgets 'on the session host') == 0 ]]; }
+  mkdir -p "$XDG_CONFIG_HOME/tern-kata"
+  printf 'executor = "plugin-smoke"\nactor = "smoke"\n[[projects]]\nname = "smoke"\n[checkouts]\nrepo = "%s"\n[profiles.default]\ncommand = "omp"\n' "$tmp/workspace" >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
+  wait_for worker_widget_shown
+  [[ $(worker_widgets 'Worker on the session host' ', plugin-smoke') == 1 ]] || { echo "worker widget tooltip lacks the session host or executor plugin-smoke: $(ctl tree '#widgetbar .wg' | jq -c '[.nodes[].title]')" >&2; exit 1; }
+  : >"$XDG_CONFIG_HOME/tern-kata/worker.manual"
+  "$tmp/app/tern-kata" worker stop >/dev/null
+  wait_for worker_widget_gone
+fi
 ctl widgets set
 # A real OSC-8 terminal link exercises route.link, not a plugin-origin cx:open.
 show_issue_link() {
@@ -260,7 +245,8 @@ ctl plugins expect '"Plugin second body"'
 ctl state >"$tmp/link-tab-focus.json"
 jq -e --argjson id "$tab_kata_pane" '.tabs[1].active and .tabs[0].panes == 2 and .tabs[1].panes == 2 and .focused.id == $id' "$tmp/link-tab-focus.json" >/dev/null
 ctl key q
-for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+second_tab_has_one_pane() { [[ $(ctl state | jq '.tabs[1].panes') == 1 ]]; }
+wait_for second_tab_has_one_pane
 ctl tab close
 ctl ready
 ctl state >"$tmp/link-tab-back.json"
@@ -299,7 +285,7 @@ ctl state >"$tmp/remote-focus.json"
 jq -e '.tabs[1].panes == 2' "$tmp/remote-focus.json" >/dev/null
 [[ $(jq -r '.focused.id' "$tmp/remote-focus.json") == "$remote_kata" ]]
 ctl key q
-for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+wait_for second_tab_has_one_pane
 ctl remote disconnect loop
 ctl state | jq -e '(.tabs | length) == 1 and .tabs[0].active' >/dev/null
 # A `W` agent's tab lands right of the tab of the Pane that started it; no other tab moves. Tabs are named by their first
@@ -428,13 +414,13 @@ expect_no_kata_toast
 # A launch of tern-kata that fails inside the 2 s window closes its Pane and toasts by exit status: 2 (Go panic) and 3
 # (the binary's own error) are a failed start; 1 can be either (PowerShell's not-found, and Windows reports every failing
 # launch as 1); anything else, such as 127, is "not installed".
-no_kata_toast() { ! toast_shown "$failed_start_toast" && ! toast_shown "$not_installed_toast" && ! toast_shown "$didnt_start_toast"; }
+no_kata_toast() { ! tree_has "$failed_start_toast" && ! tree_has "$not_installed_toast" && ! tree_has "$didnt_start_toast"; }
 expect_launch_toast() { # $1 the one startup-failure toast that must show, the rest text it must also carry
   wait_for no_kata_toast
   ctl plugins run plugin.tern-kata.open
   ctl focus left
   expect_toast "$1"
-  for hint in "${@:2}"; do toast_shown "$hint"; done
+  for hint in "${@:2}"; do tree_has "$hint"; done
   for toast in "$failed_start_toast" "$not_installed_toast" "$didnt_start_toast"; do
     [[ $toast == "$1" ]] || expect_no_toast "$toast"
   done
@@ -457,13 +443,13 @@ expect_launch_toast "$not_installed_toast" "$install_hint"
 printf 'palette "Install tern-kata"\nkey Enter\n' >"$tmp/install.ctl"
 ctl --file "$tmp/install.ctl"
 ctl ready
-toast_shown 'Windows (PowerShell)'
-toast_shown 'Linux or macOS'
+tree_has 'Windows (PowerShell)'
+tree_has 'Linux or macOS'
 ctl key Escape
 expect_panes 1
 ctl --file "$tmp/install.ctl"
 ctl ready
-toast_shown 'Linux or macOS'
+tree_has 'Linux or macOS'
 ctl key Enter
 ctl state >"$tmp/install-state.json"
 jq -e '.tabs[0].panes == 2' "$tmp/install-state.json" >/dev/null
@@ -529,11 +515,11 @@ expect_toast 'tern-kata plugin was not updated'
 expect_toast 'curl: smoke stand-in refuses'
 [[ -s "$tmp/plugin-step.log" ]]
 ! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending left behind" >&2; exit 1; }
-for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+wait_for second_tab_has_one_pane
 # From Tern 0.9.16 a plugin reload while the plugin step still runs delivers the step's end to the reloaded window VM as a
 # process_exit event: the toast then comes from the marker match, not from the old VM's callback. The curl stand-in records
 # that it started, sleeps, then answers; the plugin reloads in between.
-if [[ $(printf '%s\n0.9.16\n' "$("$real_tern" --version | sed -n 's/^tern \([0-9.]*\).*/\1/p')" | sort -V | sed -n 1p) == 0.9.16 ]]; then
+if tern_at_least 0.9.16; then
   reload_during_step() {
     rm -f "$tmp/step-started" "$tmp/update-args.txt"
     printf '#!/bin/sh\n: >%q\nsleep 4\n%s\n' "$tmp/step-started" "$1" >"$tmp/bin/curl"
@@ -553,18 +539,18 @@ if [[ $(printf '%s\n0.9.16\n' "$("$real_tern" --version | sed -n 's/^tern \([0-9
   reload_during_step 'echo "exit 0"'
   expect_toast 'tern-kata plugin updated to v9.9.9'
   ! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending left behind after a reloaded success" >&2; exit 1; }
-  for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+  wait_for second_tab_has_one_pane
   reload_during_step 'echo "curl: smoke stand-in refuses after a reload" >&2; exit 1'
   expect_toast 'curl: smoke stand-in refuses after a reload'
   expect_toast 'tern-kata plugin was not updated'
   ! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending left behind after a reloaded failure" >&2; exit 1; }
-  for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+  wait_for second_tab_has_one_pane
   # The original refusing stand-in again, for the checks below.
   printf '#!/bin/sh\necho "$@" >>%q\necho "curl: smoke stand-in refuses" >&2\nexit 1\n' "$tmp/plugin-step.log" >"$tmp/bin/curl"
   chmod +x "$tmp/bin/curl"
 fi
 # A window plugin already at the release's version is left alone: no plugin step, and the toast says it is up to date.
-own_version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$repo/plugin.toml")
+own_version=$(plugin_version "$repo/plugin.toml")
 printf '%s\n' "$own_version" >"$tmp/dist/version.txt"
 rm -f "$tmp/plugin-step.log" "$tmp/update-args.txt"
 ctl --file "$tmp/update.ctl"
@@ -573,7 +559,7 @@ ctl expect Press
 ctl key Enter
 expect_toast "tern-kata plugin v$own_version is up to date"
 [[ ! -e "$tmp/plugin-step.log" ]]
-for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+wait_for second_tab_has_one_pane
 # A linked window plugin is left as it is, as the install script would: no plugin step, and the toast says so.
 ln -sfn "$real_tern" "$tmp/bin/tern"
 ctl plugins fixtures
@@ -585,7 +571,7 @@ ctl expect Press
 ctl key Enter
 expect_toast 'tern-kata plugin is linked, left as it is'
 [[ ! -e "$tmp/plugin-step.log" ]]
-for ((attempt=0; attempt<100; attempt++)); do [[ $(ctl state | jq '.tabs[1].panes') == 1 ]] && break; sleep 0.1; done
+wait_for second_tab_has_one_pane
 ctl remote disconnect loop
 jq -Rse 'contains("plugin window halves loaded count=2") and (contains("plugin bind left out") | not) and (contains("plugin hook exceeded its budget") | not)' "$tmp/tern.log" >/dev/null
 # An Attachment the kata Pane opens with `tern open --preview <its download folder>/...` floats over the tab; the palette toggle
@@ -593,9 +579,7 @@ jq -Rse 'contains("plugin window halves loaded count=2") and (contains("plugin b
 attachment_dir="$tmp/cache/tern-kata/attachments/issue/1/v"
 mkdir -p "$attachment_dir"
 printf '# Glimpseable\n' >"$attachment_dir/note.md"
-tree_has() { ctl tree | jq -e --arg text "$1" 'tostring | contains($text)' >/dev/null; }
 glimpse_shown() { tree_has "drag the header to keep it"; }
-wait_tree() { local k; for ((k = 0; k < 100; k++)); do tree_has "$1" && return 0; sleep 0.1; done; echo "never drawn: $1" >&2; return 1; }
 open_preview() {
   printf 'run %s\n' "$(jq -rRn --arg command "tern open --preview $1" '$command | @json')" >"$tmp/attachment.ctl"
   ctl --file "$tmp/attachment.ctl"
@@ -605,11 +589,11 @@ printf 'palette "Switch kata Attachments between floating and the side panel"\nk
 ctl --file "$tmp/attachment-toggle.ctl"
 expect_toast "kata Attachments open in the side panel beside the Pane"
 open_preview "$attachment_dir/note.md"
-wait_tree Glimpseable
+wait_for tree_has Glimpseable
 ! glimpse_shown || { echo "the side panel choice still floated the Attachment" >&2; exit 1; }
 ctl focus left
 ctl --file "$tmp/attachment-toggle.ctl"
 expect_toast "kata Attachments open floating over the tab"
 open_preview "$attachment_dir/note.md"
-wait_tree "drag the header to keep it"
+wait_for tree_has "drag the header to keep it"
 printf 'Plugin smoke passed: Attachments floating by default and in the side panel by choice, consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, the go-to-waiting command toasting with no agent waiting and moving nothing, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line, no plugin step and an up-to-date toast when the window plugin is already at the release, no plugin step and a linked toast when the window plugin is linked, and (Tern 0.9.16 and later) a plugin step still running at a plugin reload ending as a process_exit in the reloaded window toasting its success with the pending key gone and its failure with the last stderr line\n'

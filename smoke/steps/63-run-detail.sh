@@ -39,21 +39,17 @@ rd_slow=$(rd_job "Smoke slow run" slow)
 rd_hang=$(rd_job "Smoke hang run" hang)
 
 rd_worker_pid=
+rd_hang_stub="$rd_bin/omp .*--stub-hang-first" # a regex for pgrep/pkill -f: the worker puts its own arguments between the binary and the profile's
+rd_worker_admits() { "${rd_env[@]}" "$tmp/tern-kata" worker status 2>/dev/null | grep -q 'admitting'; }
 rd_start_worker() {
   "${rd_env[@]}" "$tmp/tern-kata" worker >>"$tmp/rd-worker.log" 2>&1 &
   rd_worker_pid=$!
-  for ((attempt = 0; attempt < 200; attempt++)); do
-    if "${rd_env[@]}" "$tmp/tern-kata" worker status 2>/dev/null | grep -q 'admitting'; then return 0; fi
-    sleep 0.1
-  done
-  cat "$tmp/rd-worker.log" >&2
-  printf 'The smoke worker never admitted\n' >&2
-  return 1
+  wait_for -t 20 rd_worker_admits || { cat "$tmp/rd-worker.log" >&2; return 1; }
 }
 rd_stop() {
   [[ -z "$rd_worker_pid" ]] || { kill "$rd_worker_pid" 2>/dev/null || true; wait "$rd_worker_pid" 2>/dev/null || true; }
   rd_worker_pid=
-  pkill -9 -f -- '--stub-hang-first' 2>/dev/null || true
+  pkill -9 -f -- "$rd_hang_stub" 2>/dev/null || true
 }
 trap 'rd_status=$?; rd_stop; set +e; (exit $rd_status); cleanup' EXIT
 rd_start_worker
@@ -81,36 +77,28 @@ expect_tree "[data-id^='main.columns.list.runs.']" '.ok and (.nodes[0].text | co
 ctl key escape
 
 # A run whose worker and agent were killed is held; the Pane shows why, and u resumes it.
+# The first run's slot frees a moment after kata shows it succeeded.
 rd_run=
-for ((attempt = 0; attempt < 100; attempt++)); do
-  [[ -z "$rd_run" ]] || break # the first run's slot frees a moment after kata shows it succeeded
-  rd_run=$("${rd_env[@]}" "$tmp/tern-kata" run "$rd_hang" 2>/dev/null | awk '{print $2}') || true
-  [[ -n "$rd_run" ]] || sleep 0.2
-done
-[[ -n "$rd_run" ]]
-for ((attempt = 0; attempt < 200; attempt++)); do
-  pgrep -f -- '--stub-hang-first' >/dev/null && break
-  sleep 0.1
-done
-pgrep -f -- '--stub-hang-first' >/dev/null
+rd_run_started() { rd_run=$("${rd_env[@]}" "$tmp/tern-kata" run "$rd_hang" 2>/dev/null | awk '{print $2}') || true; [[ -n "$rd_run" ]]; }
+wait_for -t 20 rd_run_started
+rd_hang_stub_running() { pgrep -f -- "$rd_hang_stub" >/dev/null; }
+wait_for -t 20 rd_hang_stub_running
 kill -9 "$rd_worker_pid"
 wait "$rd_worker_pid" 2>/dev/null || true
 rd_worker_pid=
-pkill -9 -f -- '--stub-hang-first' || true
+pkill -9 -f -- "$rd_hang_stub" || true
 rd_start_worker
-for ((attempt = 0; attempt < 200; attempt++)); do
-  if "${rd_env[@]}" "$tmp/tern-kata" worker status | grep -q "held"; then break; fi
-  sleep 0.1
-done
+rd_worker_holds() { "${rd_env[@]}" "$tmp/tern-kata" worker status | grep -q "held"; }
+wait_for -t 20 rd_worker_holds
 ctl key ctrl+r
 expect_tree "[data-id='main.columns.list.runs.$rd_run']" '.ok and .count == 1 and (.nodes[0].text | contains("held") and contains("interrupted"))'
 ctl click "[data-id='main.columns.list.runs.$rd_run']"
 ctl key enter
-for ((attempt = 0; attempt < 100; attempt++)); do
+rd_detail_continues() {
   ctl key ctrl+r
-  ctl tree "[data-id^='main.columns.detail']" | jq -e '[.nodes[].text] | any(contains("u continues"))' >/dev/null && break
-  sleep 0.3
-done
+  ctl tree "[data-id^='main.columns.detail']" | jq -e '[.nodes[].text] | any(contains("u continues"))' >/dev/null
+}
+wait_for rd_detail_continues
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("interrupted"))) and ([.nodes[].text] | any(contains("u continues")))'
 ctl key u
 expect_tree "[data-id='main.columns.list.runs.$rd_run']" '.ok and .count == 1 and (.nodes[0].text | contains("succeeded"))'

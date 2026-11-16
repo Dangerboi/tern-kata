@@ -6,10 +6,21 @@
 local M = {}
 
 local CAPPED_LINES = 5
+-- Tern cuts a tooltip line at about this many characters, whatever follows.
+local LINE_CHARS = 45
 
+-- The line itself when it fits a tooltip line, else its first characters and an ellipsis.
+function M.fit(line: string): string
+    local length = utf8.len(line)
+    if length == nil then return if #line <= LINE_CHARS then line else line:sub(1, LINE_CHARS - 1) .. "…" end
+    if length <= LINE_CHARS then return line end
+    return line:sub(1, utf8.offset(line, LINE_CHARS) - 1) .. "…"
+end
+
+-- At most CAPPED_LINES lines, each fitted, then how many more there were.
 function M.capped(lines: { string }): { string }
     local shown: { string } = {}
-    for index = 1, math.min(#lines, CAPPED_LINES) do table.insert(shown, lines[index]) end
+    for index = 1, math.min(#lines, CAPPED_LINES) do table.insert(shown, M.fit(lines[index])) end
     if #lines > CAPPED_LINES then table.insert(shown, "and " .. (#lines - CAPPED_LINES) .. " more") end
     return shown
 end

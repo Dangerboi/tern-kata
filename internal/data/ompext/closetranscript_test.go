@@ -3,6 +3,7 @@ package ompext
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -61,5 +62,42 @@ func TestCloseTranscriptOnReadsTheDefaultHomeWithoutKataHome(t *testing.T) {
 	}
 	if CloseTranscriptOn(nil, false) {
 		t.Error("enabled = false in ~/.kata: want off")
+	}
+}
+
+func TestWithCloseTranscriptDecidesTheVariableAfresh(t *testing.T) {
+	home := t.TempDir() // no config.toml: on
+	on := CloseTranscriptEnv + "=" + CloseTranscriptOnValue
+	cases := []struct {
+		name            string
+		env, decideFrom []string
+		caseInsensitive bool
+		want            []string
+	}{
+		{name: "adds on", env: []string{"A=1"}, want: []string{"A=1", on}},
+		{name: "drops an inherited value", env: []string{CloseTranscriptEnv + "=off", "A=1"}, want: []string{"A=1", on}},
+		{name: "off drops it and adds nothing", env: []string{CloseTranscriptEnv + "=on", "A=1"}, decideFrom: []string{KataSwitch + "=false"}, want: []string{"A=1"}},
+		{name: "a lower-case name is the same one on Windows", env: []string{"tern_kata_close_transcript=on"}, decideFrom: []string{"kata_close_transcript_enabled=1"}, caseInsensitive: true, want: nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			decide := append([]string{"KATA_HOME=" + home}, c.decideFrom...)
+			got := WithCloseTranscript(c.env, decide, c.caseInsensitive)
+			if !slices.Equal(got, c.want) {
+				t.Fatalf("env %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestHasFlagMatchesAFlagWithOrWithoutAValue(t *testing.T) {
+	args := []string{"--profile=work", "--no-extensions", "-p", "x"}
+	for flag, want := range map[string]bool{"--profile": true, "--no-extensions": true, "-p": true, "--trusted-extension": false, "--no": false} {
+		if got := HasFlag(args, flag); got != want {
+			t.Errorf("HasFlag(%s) = %v, want %v", flag, got, want)
+		}
+	}
+	if !HasFlag(args, "--trusted-extension", "--profile") {
+		t.Error("any of several flags should match")
 	}
 }

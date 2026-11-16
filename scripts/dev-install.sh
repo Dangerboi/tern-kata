@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs this checkout as the dev build and checks that every machine runs it: run it before asking the user to try a change.
 #   This machine: `tern plugin link` on the checkout (the link reloads on file changes), and the binary rebuilt over the
-#                 installed tern-kata when one is on the PATH.
+#                 installed tern-kata when one is on the PATH (a running worker is then stopped when idle, as `tern-kata update` does).
 #   Windows window machine (optional): the plugin folder is copied over ssh and installed with `tern plugin install --force`, and
 #                 the Windows binary replaced when tern-kata is installed there (the running exe renamed aside, as install.ps1 does).
 # The ssh target (user@host or an ssh config alias) comes from TERN_KATA_WINDOWS_SSH or, when that is unset, from
@@ -20,23 +20,24 @@ if [[ $(git rev-parse --path-format=absolute --git-dir) != "$(git rev-parse --pa
   exit 1
 fi
 export CGO_ENABLED=0
-if [[ -z ${TERN_KATA_WINDOWS_SSH:-} && -f .dev-install.local ]]; then
-  # shellcheck disable=SC1091
-  source .dev-install.local
-fi
+# One line parsed out, not sourced: the file is the user's, and only this one setting is wanted from it.
 target=${TERN_KATA_WINDOWS_SSH:-}
+if [[ -z $target && -f .dev-install.local ]]; then
+  target=$(sed -n 's/^TERN_KATA_WINDOWS_SSH=//p' .dev-install.local | tail -n 1 | tr -d "\"'")
+fi
 
-version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' plugin.toml)
+# shellcheck source=scripts/plugin-info.sh
+. scripts/plugin-info.sh
+version=$(plugin_version plugin.toml)
 commit=$(git rev-parse --short HEAD)
 [[ -z $(git status --porcelain --untracked-files=no) ]] || commit+="+dirty"
-plugin_files=$(sed -n 's/^plugin_files="\(.*\)"/\1/p' scripts/release.sh)
-[[ -n $plugin_files ]] || { printf 'dev-install.sh: found no plugin_files="..." line in scripts/release.sh\n' >&2; exit 1; }
 # Stamped like the dev builds before this script (v0.13.0-1-gec45caf-dev), so --version names the commit.
-ldflags="-X main.version=$(git describe --tags --dirty)-dev"
+ldflags="-X main.version=$(git describe --tags --dirty --always)-dev"
 status=0
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+new_bin=
+trap 'rm -rf "$tmp" ${new_bin:+"$new_bin"}' EXIT
 
 # "name sha256" lines for each plugin file, the form both machines are compared in.
 local_digest=$(for f in $plugin_files; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d ' ' -f 1)"; done | sort)
@@ -71,10 +72,16 @@ if [[ $linked != "$repo" ]]; then
 fi
 args=("this machine" "$local_installed" "$local_digest")
 if bin=$(command -v tern-kata); then
-  go build -trimpath -ldflags "$ldflags" -o "$tmp/tern-kata" ./cmd/tern-kata
-  want=$(sha256sum "$tmp/tern-kata" | cut -d ' ' -f 1)
-  mv "$tmp/tern-kata" "$bin"
+  # Built beside the installed file, so the final mv is a same-filesystem rename; a symlinked install keeps its link.
+  bin=$(readlink -f "$bin")
+  new_bin=$bin.new
+  go build -trimpath -ldflags "$ldflags" -o "$new_bin" ./cmd/tern-kata
+  want=$(sha256sum "$new_bin" | cut -d ' ' -f 1)
+  mv "$new_bin" "$bin"
+  new_bin=
   args+=("$want" "$(sha256sum "$bin" | cut -d ' ' -f 1)")
+  # As `tern-kata update` does: the worker keeps running the old build until it stops, and the plugin starts a fresh one.
+  if stopped=$("$bin" worker stop 2>&1); then printf 'this machine: %s\n' "$stopped"; fi
 fi
 report "${args[@]}"
 
@@ -94,7 +101,7 @@ else
     GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$ldflags" -o "$tmp/tern-kata.exe" ./cmd/tern-kata
     scp -q -o BatchMode=yes "$tmp/tern-kata.exe" "$target:.tern-kata-dev.exe"
     # As install.ps1 does: a running exe can only be renamed, and an .old still held by a process is renamed aside.
-    remote '$d = (Get-Command tern-kata).Source; Get-ChildItem -LiteralPath (Split-Path $d) -Filter "tern-kata.exe.old-*" -ErrorAction SilentlyContinue | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }; Remove-Item "$d.old" -Force -ErrorAction SilentlyContinue; if (Test-Path "$d.old") { Move-Item "$d.old" "$d.old-$([DateTime]::UtcNow.Ticks)" -Force }; Move-Item -Force $d "$d.old"; Move-Item .tern-kata-dev.exe $d'
+    remote '$d = (Get-Command tern-kata).Source; Get-ChildItem -LiteralPath (Split-Path $d) -Filter "tern-kata.exe.old-*" -ErrorAction SilentlyContinue | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }; Remove-Item -LiteralPath "$d.old" -Force -ErrorAction SilentlyContinue; if (Test-Path -LiteralPath "$d.old") { Move-Item -LiteralPath "$d.old" "$d.old-$([DateTime]::UtcNow.Ticks)" -Force }; Move-Item -LiteralPath $d "$d.old" -Force; try { Move-Item -LiteralPath .tern-kata-dev.exe $d -ErrorAction Stop } catch { Move-Item -LiteralPath "$d.old" $d -Force; throw }'
     want=$(sha256sum "$tmp/tern-kata.exe" | cut -d ' ' -f 1)
     have=$(remote '(Get-FileHash (Get-Command tern-kata).Source -Algorithm SHA256).Hash.ToLower()' | tr -d '\r')
     bin_args=("$want" "$have")

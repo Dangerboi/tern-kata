@@ -181,13 +181,36 @@ func TestTheMenuIsDrawnOpenOnlyWhenTheKeysOpenedIt(t *testing.T) {
 		}
 	}
 
-	for name, close := range map[string]model.Msg{
+	for name, msg := range map[string]model.Msg{
 		"pick":  model.ChooseMsg{Field: model.FilterRelationship, Index: 3},
 		"close": model.DropdownToggleMsg{Field: model.FilterRelationship, Open: false},
 	} {
-		if closed, cmds := model.Update(pointer, close); closed.Dropdown.Open || shown(closed) || asksClose(cmds) {
+		if closed, cmds := model.Update(pointer, msg); closed.Dropdown.Open || shown(closed) || asksClose(cmds) {
 			t.Errorf("the pointer's %s: dropdown open %v, drawn open %v, close asked %v; Tern closed it already", name, closed.Dropdown.Open, shown(closed), asksClose(cmds))
 		}
+	}
+	if picked, _ := model.Update(pointer, model.ChooseMsg{Field: model.FilterRelationship, Index: 3}); picked.FilterForm.Values.Relationship != "blocks" {
+		t.Errorf("the pointer's pick set %q, want blocks", picked.FilterForm.Values.Relationship)
+	}
+}
+
+func TestReopeningAnOpenDropdownKeepsItsQuery(t *testing.T) {
+	m := cardKeys(filterCardOn(13, model.FilterProject), "down")
+	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+p", Text: "P"})
+	m, _ = model.Update(m, model.DropdownToggleMsg{Field: model.FilterProject, Open: true})
+	if got := m.OpenDropdown(model.CardFilter, model.FilterProject); !got.Open || got.Query != "P" {
+		t.Fatalf("a second open left the dropdown %+v, want it open on the query P", got)
+	}
+}
+
+func TestAButtonPressForgetsTheMenuTheKeysDrewOpen(t *testing.T) {
+	m := cardKeys(filterCardOn(0, model.FilterRelationship), "down")
+	if !m.SelectShown(model.CardFilter, model.FilterRelationship) {
+		t.Fatal("a menu the keys opened is not drawn open")
+	}
+	m, cmds := model.Update(m, model.ButtonPressMsg{Chord: "ctrl+o"})
+	if m.SelectShown(model.CardFilter, model.FilterRelationship) || asksClose(cmds) {
+		t.Fatalf("a button press left the menu drawn open %v, close asked %v", m.SelectShown(model.CardFilter, model.FilterRelationship), asksClose(cmds))
 	}
 }
 

@@ -7,14 +7,17 @@
 -- `process_exit` event: the host half then starts one at once and logs how that worker ended. Elsewhere (older Tern, a
 -- worker started by hand, a daemon restart) it starts one within a poll of that worker's end.
 -- While this load's worker runs, or the Supervision rule holds and the poll finds a worker already running, it also asks
--- `tern-kata worker status --json` and keeps a short summary of it (workersummary.luau). On Tern 0.9.21+ the summary feeds
--- the `worker` widget this half offers the widget bar, drawn again whenever the summary changes or goes. Before that, the
--- summary goes under tern.kv's `worker.summary` for the window half's own worker widget, as a record stamped with the time
--- of every poll so the widget can drop a summary that no host half refreshes any more. This load's worker is summarized
--- until it exits, even after worker.manual appears, since nothing asks `worker supervised` while it runs; the summary is
--- dropped when no worker runs or, for a worker this load did not start, when the rule does not hold (worker.manual, no
--- worker.toml). A failed read keeps the last summary (with a fresh stamp in the tern.kv case).
--- At most one question to the binary is out at a time; see `ask`.
+-- `tern-kata worker status --json` and keeps a short summary of it (workersummary.luau).
+-- Which half draws the kata worker widget (workerwidget.luau is its definition): on Tern 0.9.21+ this half does, on the
+-- session host, so every window attached to that host shows the session host's worker, a remote one included; the summary
+-- stays in memory and the widget is drawn again whenever it changes or goes. Before that this half cannot render widgets: it
+-- stores the summary in tern.kv (workersummary.save), stamped with the time of every poll, and the window half draws its own
+-- widget of the same id from it, labelled as this machine's worker (window.luau), dropping a summary no host half refreshes.
+-- This load's worker is summarized until it exits, even after worker.manual appears, since nothing asks `worker supervised`
+-- while it runs; the summary is dropped when no worker runs or, for a worker this load did not start, when the rule does not
+-- hold (worker.manual, no worker.toml), and when a running worker's binary can no longer be found. A failed read keeps the
+-- last summary (with a fresh stamp in the tern.kv case).
+-- At most one question to the binary is out at a time, and every answer arms the next look; see `ask`.
 -- Turning it off: create worker.manual beside worker.toml (see docs/guide/worker.md).
 -- This file does not decide the rule, find the config folder or see which worker runs: it asks `tern-kata worker
 -- supervised`, whose answer is worker.SupervisionOn and worker.RunningWorker in internal/worker/supervision.go (the one
@@ -35,6 +38,8 @@ local MAX_DELAY = 60000
 -- A worker that stayed up this long was healthy: its next restart starts the backoff over.
 local HEALTHY_MS = 60000
 local POLL_MS = 10000
+-- The first look at a worker just started: its status is ready within moments, and the widget should not wait a whole poll.
+local FIRST_LOOK_MS = 2000
 -- tern.process.run can only kill by timeout, and an exited-and-restarted worker is safe (its runs are journaled).
 local RUN_LIMIT_MS = 7 * 24 * 3600 * 1000
 
@@ -188,7 +193,8 @@ local function show_worker()
     local text = if last_summary ~= nil then tern.json.encode(last_summary) else ""
     if text == shown_text then return end
     shown_text = text
-    pcall(function() tern.chrome.refresh() end)
+    local ok, err = pcall(function() tern.chrome.refresh() end)
+    if not ok then tern.log.warn("tern-kata: could not redraw the worker widget: " .. tostring(err)) end
 end
 
 -- The key may come from an earlier load of this file, so tern.kv is asked, not only what this load stored.
@@ -196,12 +202,21 @@ local function clear_summary()
     last_summary = nil
     warned_summary = false
     if worker_widget then show_worker() end
-    local ok, stored = pcall(tern.kv.get, workersummary.KEY)
-    if ok and stored ~= nil then pcall(tern.kv.set, workersummary.KEY, nil) end
+    workersummary.drop(tern.kv)
 end
 
--- Runs one question; a stale answer (drop_answer was called while it was out) is dropped and the next look comes at once.
-local function ask(binary: string, args: { string }, on_answer: (ProcessResult) -> ()): string?
+-- The delay after which the next look comes: at once when one was asked for meanwhile, else `soon` or POLL_MS.
+local function next_look(soon_ms: number?)
+    local asked = again
+    again = false
+    arm(if asked then 1 else soon_ms or POLL_MS)
+end
+
+-- Runs one question and, whatever happens to it, arms the next look (the only place a question's chain is re-armed): an
+-- answer that raises is logged, and a question that cannot start is returned as its error text. `on_answer` returns the delay
+-- of the next look when it is not POLL_MS. A stale answer (drop_answer was called while it was out) is dropped and the next
+-- look comes at once.
+local function ask(binary: string, args: { string }, on_answer: (ProcessResult) -> number?): string?
     local command = { binary }
     for _, arg in args do table.insert(command, arg) end
     out = true
@@ -213,24 +228,24 @@ local function ask(binary: string, args: { string }, on_answer: (ProcessResult) 
                 again = false
                 return arm(1)
             end
-            on_answer(result)
-            again = false
+            local answered_ok, delay = pcall(on_answer, result)
+            if not answered_ok then
+                tern.log.warn("tern-kata: could not handle the answer of `tern-kata " .. table.concat(args, " ") .. "`: " .. tostring(delay))
+                delay = nil
+            end
+            -- An answer may ask a follow-up question, which arms the next look itself.
+            if not out then next_look(delay) end
         end)
     end)
     if ok then return nil end
     out = false
     stale = false
+    next_look()
     return tostring(err)
 end
 
 local function drop_answer()
     if out then stale = true end
-end
-
-local function next_look()
-    local soon = again
-    again = false
-    arm(if soon then 1 else POLL_MS)
 end
 
 local function summarize(binary: string)
@@ -246,41 +261,42 @@ local function summarize(binary: string)
             show_worker()
             return
         end
-        local value = workersummary.record(summary, os.time())
-        local stored, store_err = pcall(function() tern.kv.set(workersummary.KEY, value) end)
-        if stored then
+        local store_err = workersummary.save(tern.kv, summary, os.time())
+        if store_err == nil then
             last_summary = summary
         else
-            failed("could not store it: " .. tostring(store_err))
+            failed("could not store it: " .. store_err)
         end
     end
     local function failed_read(why: string)
         failed(why)
         if last_summary ~= nil then store(last_summary) end
-        next_look()
     end
-    local err = ask(binary, {"worker", "status", "--json"}, function(result: ProcessResult)
+    local err = ask(binary, {"worker", "status", "--json"}, function(result: ProcessResult): number?
         if result.status ~= 0 or result.timed_out then
-            return failed_read(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
+            failed_read(if result.timed_out then "timed out" else "status " .. result.status .. ": " .. last_line(result.stderr))
+            return nil
         end
         local decoded, status = pcall(tern.json.decode, result.stdout)
         local summary = decoded and workersummary.of(status) or nil
         if summary == nil then
-            return failed_read("unexpected output")
+            failed_read("unexpected output")
+            return nil
         end
         warned_summary = false
         store(summary)
-        next_look()
+        return nil
     end)
     if err ~= nil then
         failed_read(err)
     end
 end
 
--- Starts the worker if the backoff allows. config is worker.toml's text, which `worker supervised` printed.
-local function launch(binary: string, config: string)
+-- Starts the worker if the backoff allows; returns the delay of the next look. config is worker.toml's text, which `worker
+-- supervised` printed.
+local function launch(binary: string, config: string): number
     local wait = next_start - tern.now()
-    if wait > 0 then return arm(math.min(wait, POLL_MS)) end
+    if wait > 0 then return math.min(wait, POLL_MS) end
     started_text = config
     local started = tern.now()
     local function exited(result: ProcessResult)
@@ -299,12 +315,11 @@ local function launch(binary: string, config: string)
     if ok then
         running = true
         tern.log.warn("tern-kata: worker started (" .. binary .. ")")
-        arm(POLL_MS)
-    else
-        tern.log.warn("tern-kata: could not start the worker: " .. tostring(err))
-        schedule_restart()
-        arm(math.min(next_start - tern.now(), POLL_MS))
+        return FIRST_LOOK_MS
     end
+    tern.log.warn("tern-kata: could not start the worker: " .. tostring(err))
+    schedule_restart()
+    return math.min(next_start - tern.now(), POLL_MS)
 end
 
 -- The worker named last has gone (or the rule no longer holds): a worker named next is logged again.
@@ -319,8 +334,9 @@ end
 -- timeout, a binary that cannot run) says nothing about the rule, so the state stays; a status that is neither a timeout
 -- nor -1 (killed by a signal) is logged once per daemon: an older tern-kata binary exits 2 on `worker supervised`, and
 -- then the worker never starts until the binary is updated. A question still out when the plugin reloads never reaches
--- this function: it ends as a `process_exit` event, which worker_ended does not take for the worker's end.
-local function answered(binary: string, result: ProcessResult)
+-- this function: it ends as a `process_exit` event, which worker_ended does not take for the worker's end. Returns the delay
+-- of the next look when it is not POLL_MS (`ask`).
+local function answered(binary: string, result: ProcessResult): number?
     if result.status == HELD and not result.timed_out then
         -- worker.lock would refuse a second worker: start none, and look again next poll.
         local line = last_line(result.stdout)
@@ -333,7 +349,8 @@ local function answered(binary: string, result: ProcessResult)
             end
         end
         reset_backoff()
-        return summarize(binary)
+        summarize(binary)
+        return nil
     end
     if result.status ~= 0 then
         if result.status == 1 and not result.timed_out then
@@ -345,7 +362,7 @@ local function answered(binary: string, result: ProcessResult)
             warned_status = true
             tern.log.warn("tern-kata: `worker supervised` exited with status " .. result.status .. " (" .. last_line(result.stderr) .. "), so the worker is not started; the tern-kata binary is probably older than this plugin: run `tern-kata update`")
         end
-        return next_look()
+        return nil
     end
     forget_held()
     clear_summary()
@@ -354,7 +371,7 @@ local function answered(binary: string, result: ProcessResult)
         reset_backoff()
         started_text = nil
     end
-    launch(binary, config)
+    return launch(binary, config)
 end
 
 function start()
@@ -363,25 +380,21 @@ function start()
         return
     end
     local binary = find_binary()
-    if running then
-        if binary == nil then return arm(POLL_MS) end
-        return summarize(binary)
-    end
     if binary == nil then
         clear_summary()
-        if not warned_missing then
+        if not running and not warned_missing then
             warned_missing = true
             tern.log.warn("tern-kata: not installed on the daemon's PATH or in a known folder, so a configured worker cannot be started; looking again every " .. POLL_MS // 1000 .. " s")
         end
         return arm(POLL_MS)
     end
+    if running then return summarize(binary) end
     warned_missing = false
-    local err = ask(binary, {"worker", "supervised"}, function(result: ProcessResult)
-        answered(binary, result)
+    local err = ask(binary, {"worker", "supervised"}, function(result: ProcessResult): number?
+        return answered(binary, result)
     end)
     if err ~= nil then
         tern.log.warn("tern-kata: could not ask whether the worker is supervised: " .. err)
-        arm(POLL_MS)
     end
 end
 
@@ -409,32 +422,22 @@ local function worker_ended(ev: any)
     start()
 end
 
--- The worker widget is offered from this half where Tern can (0.9.21+): `render` runs here, with the summary the poll
--- keeps, and the view reaches every window attached to this host, a remote one included. A window half's widget of the same
--- id wins in its window, so the window half draws its own only when it finds the summary in its tern.kv, which this half
--- stores only while it has no widget to render it. A registration that raises is logged and leaves the rest as it was.
--- Tern before 0.9.21 may have no `tern.chrome` in the host half at all, so the lookup itself must not raise.
+-- The worker widget is offered from this half where Tern can (0.9.21+; see the header): `render` runs here, with the summary
+-- the poll keeps. A window half's widget of the same id wins in its window, so the window half draws its own only when it
+-- finds the summary in its tern.kv, which this half stores only while it has no widget to render it. A registration that
+-- raises is logged and leaves the rest as it was. Tern before 0.9.21 may have no `tern.chrome` in the host half at all, so the
+-- lookup itself must not raise.
 local chrome = (tern :: any).chrome
 if chrome == nil or chrome.widget == nil then
     tern.log.info("tern-kata: this Tern cannot offer widgets from the host half (before 0.9.21), so the worker widget is the window half's")
 else
-    local plugin = tern.plugin.id
     local ok, err = pcall(function()
-        tern.chrome.widget("worker", {
-            name = "kata worker",
-            description = "What the kata worker on the session host is running, and the runs held for you; a click opens them",
-            icon = "server",
-            styles = {"text", "ring"} :: { WidgetStyle },
-            render = function(_pane): WidgetView?
-                return workerwidget.view(last_summary, true, workerwidget.heldCommand(plugin), workerwidget.openCommand(plugin))
-            end,
-        })
+        tern.chrome.widget(workerwidget.ID, workerwidget.spec(tern.plugin.id, true, function() return last_summary end))
     end)
     if ok then
         worker_widget = true
         -- An earlier load, or an older tern-kata, may have left a summary the window half would read as a reason to draw its own.
-        local read, stored = pcall(tern.kv.get, workersummary.KEY)
-        if read and stored ~= nil then pcall(tern.kv.set, workersummary.KEY, nil) end
+        workersummary.drop(tern.kv)
     else
         tern.log.warn("tern-kata: could not register the worker widget: " .. tostring(err))
     end

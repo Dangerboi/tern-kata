@@ -25,6 +25,26 @@ test("capped shows five lines then how many more", function()
     assert(table.concat(widgets.capped({"1", "2", "3", "4", "5", "6", "7", "8"}), "|") == "1|2|3|4|5|and 3 more")
 end)
 
+test("fit keeps a line that fits and cuts a longer one to the width with an ellipsis", function()
+    local exact = string.rep("a", 45)
+    assert(widgets.fit(exact) == exact and widgets.fit("") == "")
+    assert(widgets.fit(exact .. "b") == string.rep("a", 44) .. "…")
+end)
+
+test("fit counts characters, not bytes", function()
+    local fits = string.rep("é", 45)
+    assert(widgets.fit(fits) == fits)
+    assert(widgets.fit(fits .. "é") == string.rep("é", 44) .. "…")
+end)
+
+test("capped fits every line it shows", function()
+    local long = string.rep("x", 100)
+    local shown = widgets.capped({long, "short", long, long, long, long, long})
+    assert(#shown == 6 and shown[6] == "and 2 more")
+    for index = 1, 5 do assert((utf8.len(shown[index]) :: number) <= 45) end
+    assert(shown[2] == "short")
+end)
+
 test("merge appends the widget after the others, which keep their place and style", function()
     local list: { any } = {{id = "clock", style = "analog"}, "cpu@ring"}
     local merged, added = widgets.merge(list, {"tern-kata/waiting"})

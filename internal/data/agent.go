@@ -1,7 +1,6 @@
 package data
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -94,206 +93,14 @@ func MoveNewTabArgs(block string) []string { return []string{"move", block, "new
 
 func CloseBlockArgs(block string) []string { return []string{"close", block, "--json"} }
 
-type ternSession struct {
-	name   string
-	blocks []string
-}
-
-// ternListing is what one window's `tern ls --json` shows: its sessions' blocks, and the ids of its parked panes, which no
-// session holds but whose programs run on.
-type ternListing struct {
-	sessions []ternSession
-	parked   []string
-}
-
-// ternLs reads `tern ls --json` for the window the command runs in. Block ids are kept as written, for they carry a host tag
-// and can pass 2^53.
-func (g *Gateway) ternLs(ctx context.Context) ([]ternSession, error) {
-	listing, err := g.ternWindowLs(ctx, nil)
-	return listing.sessions, err
-}
-
-// ternWindowLs reads `tern ls --json`, for window key when window is not nil: Tern shows one window's sessions to each ask,
-// and a block moved to another window is not in this window's.
-func (g *Gateway) ternWindowLs(ctx context.Context, window *string) (ternListing, error) {
-	args := []string{"ls", "--json"}
-	if window != nil {
-		args = []string{"ls", "--window", *window, "--json"}
-	}
-	out, err := g.ternOutput(ctx, args)
-	if err != nil {
-		return ternListing{}, err
-	}
-	var ls struct {
-		Sessions []struct {
-			Name string `json:"name"`
-			Tabs []struct {
-				Blocks []struct {
-					ID json.Number `json:"id"`
-				} `json:"blocks"`
-			} `json:"tabs"`
-		} `json:"sessions"`
-		Detached []struct {
-			ID json.Number `json:"id"`
-		} `json:"detached"`
-	}
-	if err := json.Unmarshal(out, &ls); err != nil {
-		return ternListing{}, fmt.Errorf("tern ls --json: %w", err)
-	}
-	listing := ternListing{sessions: make([]ternSession, 0, len(ls.Sessions))}
-	for _, s := range ls.Sessions {
-		session := ternSession{name: s.Name}
-		for _, t := range s.Tabs {
-			for _, b := range t.Blocks {
-				session.blocks = append(session.blocks, b.ID.String())
-			}
-		}
-		listing.sessions = append(listing.sessions, session)
-	}
-	for _, d := range ls.Detached {
-		listing.parked = append(listing.parked, d.ID.String())
-	}
-	return listing, nil
-}
-
-// ternWindowKeys is the key of every window Tern shows, from `tern inspect --json`: a client of kind "window", or "remote" (a
-// window on another machine attached to this host, with a key of its own). Command-line clients are no window. A key that
-// `tern ls --window` refuses fails the whole answer (windowListings), so nothing is pruned on a guess; so does a failed
-// `tern --version`, and so does a failed or unreadable `tern inspect` on a Tern known to have it, for then it is unknown whether
-// other windows exist. A Tern that answered as not having `inspect` is not asked (it would open "inspect" as a file); it and one
-// whose inspect parses but lists no clients give nil, and nothing is known of other windows.
-func (g *Gateway) ternWindowKeys(ctx context.Context) ([]string, error) {
-	has, err := g.ternHasSubcommands(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if !has {
-		return nil, nil
-	}
-	out, err := g.ternOutput(ctx, []string{"inspect", "--json"})
-	if err != nil {
-		return nil, fmt.Errorf("tern inspect: %w", err)
-	}
-	var inspected struct {
-		Clients []struct {
-			Window string `json:"window"`
-			Kind   string `json:"kind"`
-		} `json:"clients"`
-	}
-	if err := json.Unmarshal(out, &inspected); err != nil {
-		return nil, fmt.Errorf("tern inspect: %w", err)
-	}
-	var keys []string
-	for _, c := range inspected.Clients {
-		if (c.Kind == "window" || c.Kind == "remote") && !slices.Contains(keys, c.Window) {
-			keys = append(keys, c.Window)
-		}
-	}
-	return keys, nil
-}
-
-// windowListing is one window's ls. own marks the one Tern gives a command that names no window: the Pane's.
-type windowListing struct {
-	window string
-	own    bool
-	ternListing
-}
-
-// windowListings lists the Pane's own window first, then every open window by key, the Pane's again among them. A window that
-// cannot be listed fails the whole answer: a block missing from it would look closed.
-func (g *Gateway) windowListings(ctx context.Context) ([]windowListing, error) {
-	own, err := g.ternWindowLs(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	all := []windowListing{{own: true, ternListing: own}}
-	keys, err := g.ternWindowKeys(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("could not tell which Tern windows exist: %w", err)
-	}
-	for _, key := range keys {
-		listing, err := g.ternWindowLs(ctx, &key)
-		if err != nil {
-			return nil, fmt.Errorf("window %q: %w", key, err)
-		}
-		all = append(all, windowListing{window: key, ternListing: listing})
-	}
-	return all, nil
-}
-
-func (l ternListing) holds(block string) bool {
-	return slices.Contains(l.parked, block) || slices.ContainsFunc(l.sessions, func(s ternSession) bool { return slices.Contains(s.blocks, block) })
-}
-
-// ternOnBlock runs a command that names block. Tern looks for the block in the Pane's window only, so when that fails and
-// another window holds the block, the command runs again naming that window. When no other window holds it the first error stands.
-func (g *Gateway) ternOnBlock(ctx context.Context, block string, args []string) ([]byte, error) {
-	out, err := g.ternOutput(ctx, args)
-	if err == nil {
-		return out, nil
-	}
-	listings, listErr := g.windowListings(ctx)
-	if listErr != nil {
-		return out, err
-	}
-	for _, l := range listings {
-		if l.holds(block) && l.own {
-			return out, err
-		}
-	}
-	for _, l := range listings {
-		if !l.own && l.holds(block) {
-			return g.ternOutput(ctx, append(slices.Clone(args), "--window", l.window))
-		}
-	}
-	return out, err
-}
-
-// inOtherWindow tells whether block is held by a window other than the Pane's, which no placing command can reach.
-func (g *Gateway) inOtherWindow(ctx context.Context, block string) bool {
-	listings, err := g.windowListings(ctx)
-	if err != nil {
-		return false
-	}
-	other := false
-	for _, l := range listings {
-		if l.holds(block) {
-			if l.own {
-				return false
-			}
-			other = true
-		}
-	}
-	return other
-}
-
-func hiddenSession(sessions []ternSession) (exists bool, blocks []string) {
-	for _, s := range sessions {
+func hiddenSession(l ternListing) (exists bool, blocks []string) {
+	for _, s := range l.sessions {
 		if s.name == model.AgentSession {
 			exists = true
 			blocks = append(blocks, s.blocks...)
 		}
 	}
 	return exists, blocks
-}
-
-// ParseTernBlock is the block id in what `tern split|new tab --json` printed: {"session": 1, "tab": 2, "block": 3}. Ids carry a
-// host tag and can pass 2^53, so the digits are kept as written.
-func ParseTernBlock(out []byte) (string, error) {
-	start := bytes.IndexByte(out, '{')
-	if start < 0 {
-		return "", fmt.Errorf("tern printed no JSON: %q", strings.TrimSpace(string(out)))
-	}
-	var found struct {
-		Block json.Number `json:"block"`
-	}
-	if err := json.NewDecoder(bytes.NewReader(out[start:])).Decode(&found); err != nil {
-		return "", fmt.Errorf("tern's JSON: %w", err)
-	}
-	if found.Block == "" {
-		return "", errors.New("tern's JSON names no block")
-	}
-	return found.Block.String(), nil
 }
 
 type agentsDoc struct {
@@ -339,21 +146,6 @@ func ReadAgents(path string) ([]model.AgentEntry, error) {
 	return doc.Agents, err
 }
 
-// AgentPromptFileOf is the prompt file of the agent agents.json in stateDir records for block, "" when it records none (a fork,
-// a line typed by hand) or the file cannot be read.
-func AgentPromptFileOf(stateDir, block string) string {
-	if stateDir == "" || block == "" {
-		return ""
-	}
-	list, _ := ReadAgents(filepath.Join(stateDir, AgentsFile))
-	for _, e := range list {
-		if e.Block == block {
-			return e.PromptFile
-		}
-	}
-	return ""
-}
-
 // UpdateAgents reads agents.json again, lets change return the new list, and writes it only while the file is still what was
 // read. When another Pane changed the file in between, the whole change runs again on the new list, so change must tolerate
 // being called more than once and must start its own results afresh. A file that keeps changing is an error wrapping
@@ -382,102 +174,25 @@ func (g *Gateway) agentsFile() (string, error) {
 	return filepath.Join(state, AgentsFile), nil
 }
 
-const liveBlocksMaxAge = 10 * time.Second
-
-const liveBlocksTimeout = 30 * time.Second
-
-type lsFlight struct {
-	done  chan struct{}
-	begun time.Time
-	live  map[string]bool
-	err   error
-}
-
-// liveBlocks is the set of blocks `tern ls --json` lists in every open window (askLiveBlocks). It is cached for liveBlocksMaxAge, read by g.now; fresh asks tern
-// again and replaces the cache. cached says the answer may be older than the call: it came from the cache, or from a `tern ls`
-// another caller started before this one asked. Callers that need an answer while one `tern ls` runs share it, each waiting
-// only until its own ctx ends; a fresh caller never joins a run that began before it asked.
-func (g *Gateway) liveBlocks(ctx context.Context, fresh bool) (live map[string]bool, cached bool, err error) {
-	g.lsMu.Lock()
-	if !fresh && g.lsLive != nil && g.now().Sub(g.lsAt) < liveBlocksMaxAge {
-		live = g.lsLive
-		g.lsMu.Unlock()
-		return live, true, nil
-	}
-	f := g.lsFlight
-	joined := f != nil && !fresh
-	if !joined {
-		f = &lsFlight{done: make(chan struct{}), begun: g.now()}
-		g.lsFlight = f
-		go g.runLiveBlocks(context.WithoutCancel(ctx), f)
-	}
-	g.lsMu.Unlock()
-	select {
-	case <-f.done:
-		return f.live, joined, f.err
-	case <-ctx.Done():
-		return nil, false, ctx.Err()
-	}
-}
-
-// runLiveBlocks asks tern for the blocks, caches a good answer, stamped with when the run began, unless a later run's answer
-// is cached already, and wakes the callers waiting on f.
-func (g *Gateway) runLiveBlocks(ctx context.Context, f *lsFlight) {
-	ctx, cancel := context.WithTimeout(ctx, liveBlocksTimeout)
-	defer cancel()
-	f.live, f.err = g.askLiveBlocks(ctx)
-	g.lsMu.Lock()
-	if f.err == nil && !f.begun.Before(g.lsAt) {
-		g.lsLive, g.lsAt = f.live, f.begun
-	}
-	if g.lsFlight == f {
-		g.lsFlight = nil
-	}
-	g.lsMu.Unlock()
-	close(f.done)
-}
-
-// askLiveBlocks is every block Tern holds in any open window: in a session, or parked. A block that exited but still shows
-// (kept open) counts, as it did in `tern ls`, for its entry and badge are the agent's record until the block closes.
-func (g *Gateway) askLiveBlocks(ctx context.Context) (map[string]bool, error) {
-	listings, err := g.windowListings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	live := map[string]bool{}
-	for _, l := range listings {
-		for _, b := range l.parked {
-			live[b] = true
-		}
-		for _, s := range l.sessions {
-			for _, b := range s.blocks {
-				live[b] = true
-			}
-		}
-	}
-	return live, nil
-}
-
 // reconcileAgents is what the Pane does to agents.json once Tern has said which blocks are alive. An entry goes, with its prompt
 // file, when suspect names its block and Tern does not list it; an entry whose starting Pane is not a live block is adopted by
 // paneBlock (never when it is ""). Only entries that were in the file before tern was asked can change: one another Pane wrote
 // since was never checked, and the write adopts an entry only if it still names the Pane it named when read, so two Panes
 // do not both take it. A decision that rests on a cached block set is confirmed with a fresh one first, for a Pane or an agent
-// that started after the cache would look gone. When tern cannot be asked nothing changes: current is the file as read and askErr
-// says why.
-func (g *Gateway) reconcileAgents(ctx context.Context, file, paneBlock string, fresh bool, suspect func(block string) bool) (current []model.AgentEntry, askErr, err error) {
+// that started after the cache would look gone. live is the set of blocks Tern listed, nil when it was not asked (no entries, or
+// nothing to decide). When tern cannot be asked nothing changes: current is the file as read and askErr says why.
+func (g *Gateway) reconcileAgents(ctx context.Context, file, paneBlock string, fresh bool, suspect func(block string) bool) (current []model.AgentEntry, live map[string]bool, askErr, err error) {
 	current, err = ReadAgents(file)
 	if err != nil || len(current) == 0 {
-		return current, nil, err
+		return current, nil, nil, err
 	}
 	if !fresh && paneBlock == "" && !slices.ContainsFunc(current, func(e model.AgentEntry) bool { return suspect(e.Block) }) {
-		return current, nil, nil
+		return current, nil, nil, nil
 	}
 	read := make(map[string]string, len(current))
 	for _, e := range current {
 		read[e.Block] = e.PaneBlock
 	}
-	var live map[string]bool
 	var cached bool
 	verdict := func(e model.AgentEntry) (drop, adopt bool) {
 		if starter, ok := read[e.Block]; !ok || starter != e.PaneBlock {
@@ -492,16 +207,16 @@ func (g *Gateway) reconcileAgents(ctx context.Context, file, paneBlock string, f
 		return slices.ContainsFunc(current, func(e model.AgentEntry) bool { drop, adopt := verdict(e); return drop || adopt })
 	}
 	if live, cached, err = g.liveBlocks(ctx, fresh); err != nil {
-		return current, err, nil
+		return current, nil, err, nil
 	}
 	// A suspect block still in a cached answer may have closed since it: only a fresh answer can say.
 	if cached && (changes() || slices.ContainsFunc(current, func(e model.AgentEntry) bool { return suspect(e.Block) })) {
 		if live, _, err = g.liveBlocks(ctx, true); err != nil {
-			return current, err, nil
+			return current, nil, err, nil
 		}
 	}
 	if !changes() {
-		return current, nil, nil
+		return current, live, nil, nil
 	}
 	var gone []model.AgentEntry
 	kept, err := UpdateAgents(file, func(list []model.AgentEntry) []model.AgentEntry {
@@ -521,10 +236,10 @@ func (g *Gateway) reconcileAgents(ctx context.Context, file, paneBlock string, f
 		return list
 	})
 	if err != nil {
-		return current, nil, err
+		return current, nil, nil, err
 	}
 	g.retireAgents(ctx, gone)
-	return kept, nil, nil
+	return kept, live, nil, nil
 }
 
 func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.AgentsPruned {
@@ -532,10 +247,10 @@ func (g *Gateway) pruneAgents(ctx context.Context, cmd model.PruneAgents) model.
 	if err != nil {
 		return model.AgentsPruned{Seq: cmd.Seq, Err: err}
 	}
-	agents, askErr, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, true, func(string) bool { return true })
+	agents, live, askErr, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, true, func(string) bool { return true })
 	if askErr == nil && err == nil {
 		g.syncAgentRecordsAtStart(ctx, cmd.Workspace, file)
-		g.retireForkFiles(ctx)
+		g.retireForkFiles(ctx, live)
 	}
 	return model.AgentsPruned{Seq: cmd.Seq, Agents: agents, Err: cmp.Or(askErr, err)}
 }
@@ -550,46 +265,47 @@ func (g *Gateway) syncAgentRecordsAtStart(ctx context.Context, workspace, file s
 	_ = g.syncAgentRecords(ctx, workspace, agentDirs{config: dirs.Config, state: dirs.State}, file)
 }
 
-// retireForkFiles removes the copies forked chats made of the Pane's secret files (AgentRoute.Forked) whose block a fresh
-// `tern ls` no longer lists: a fork has no agents.json entry, so its copies go with its block. Nothing is removed when Tern cannot
-// be asked, and Tern is not asked when no copy exists.
-func (g *Gateway) retireForkFiles(ctx context.Context) {
+// retireForkFiles removes the copies forked chats made of the Pane's secret files (AgentRoute.Forked) whose block Tern no longer
+// lists: a fork has no agents.json entry, so its copies go with its block. live is the set of blocks the prune's reconcile asked
+// for, nil when it asked none (no entries): Tern is then asked here, and only when a copy exists. Nothing is removed when Tern
+// cannot be asked. Prompt and secret files that no entry owns stay: another Pane's start writes them before it records its entry
+// (startAgent), with no lock held in between, so a file with no entry may be one that is about to have it.
+func (g *Gateway) retireForkFiles(ctx context.Context, live map[string]bool) {
 	dirs, err := g.workerDirs()
 	if err != nil || dirs.State == "" {
 		return
 	}
-	files, _ := filepath.Glob(filepath.Join(dirs.State, AgentPromptsFolder, forkFilePrefix+"*"))
-	if len(files) == 0 {
-		return
-	}
-	live, _, err := g.liveBlocks(ctx, true)
+	folder := filepath.Join(dirs.State, AgentPromptsFolder)
+	files, err := os.ReadDir(folder)
 	if err != nil {
 		return
 	}
+	files = slices.DeleteFunc(files, func(f os.DirEntry) bool { return !strings.HasPrefix(f.Name(), forkFilePrefix) })
+	if len(files) == 0 {
+		return
+	}
+	if live == nil {
+		if live, _, err = g.liveBlocks(ctx, true); err != nil {
+			return
+		}
+	}
 	for _, file := range files {
-		if block, _, ok := strings.Cut(strings.TrimPrefix(filepath.Base(file), forkFilePrefix), "-"); ok && blockID(block) && !live[block] {
-			_ = os.Remove(file)
+		if block, _, ok := strings.Cut(strings.TrimPrefix(file.Name(), forkFilePrefix), "-"); ok && blockID(block) && !live[block] {
+			_ = os.Remove(filepath.Join(folder, file.Name()))
 		}
 	}
 }
 
-// removePrompt removes a prompt file and the token, DSN, env and session path files beside it, if the agent was started with them.
+// removePrompt removes a prompt file and the secret files and session path file beside it, if the agent was started with them.
 func removePrompt(path string) {
-	if path != "" {
-		_ = os.Remove(path)
-		_ = os.Remove(path + agentTokenSuffix)
-		_ = os.Remove(path + agentDSNSuffix)
-		_ = os.Remove(path + agentEnvSuffix)
-		_ = os.Remove(path + AgentSessionSuffix)
+	if path == "" {
+		return
 	}
-}
-
-func (g *Gateway) ternOutput(ctx context.Context, args []string) ([]byte, error) {
-	out, err := g.runTern(ctx, args)
-	if text := strings.TrimSpace(string(out)); err != nil && text != "" {
-		return out, fmt.Errorf("%w: %s", err, text)
+	_ = os.Remove(path)
+	for _, s := range SecretFiles {
+		_ = os.Remove(path + s.Suffix)
 	}
-	return out, err
+	_ = os.Remove(path + AgentSessionSuffix)
 }
 
 func teamRole(cmd model.StartAgent) model.TeamRole {
@@ -667,7 +383,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		return append(slices.DeleteFunc(list, func(e model.AgentEntry) bool { return e.Block == block }), entry)
 	}); err != nil {
 		// An agent without a mapping entry cannot be messaged, focused or closed from the Pane.
-		_, closeErr := g.ternOutput(ctx, CloseBlockArgs(block))
+		_, closeErr := g.ternOutput(ctx, ternTimeout, CloseBlockArgs(block))
 		return abort(closeStartError("agent", block, "agents.json could not be written", err, closeErr))
 	}
 	started := model.AgentStarted{Placement: cmd.Placement, IssueRef: cmd.IssueRef, Entry: entry}
@@ -677,7 +393,7 @@ func (g *Gateway) startAgent(ctx context.Context, cmd model.StartAgent) model.Ag
 		started.Entry = published
 	}
 	if entry.Background {
-		if _, err := g.ternOutput(ctx, RenameAgentArgs(block, cmd.IssueRef)); err != nil {
+		if _, err := g.ternOutput(ctx, ternTimeout, RenameAgentArgs(block, cmd.IssueRef)); err != nil {
 			started.Note = strings.TrimSpace(started.Note + " cannot name its tab: " + err.Error())
 		}
 	}
@@ -689,11 +405,11 @@ func (g *Gateway) launchAgent(ctx context.Context, cmd model.StartAgent, dir str
 	var err error
 	switch cmd.Placement {
 	case model.AgentTab:
-		out, err = g.ternOutput(ctx, AgentTabArgs(dir, line))
+		out, err = g.ternOutput(ctx, ternTimeout, AgentTabArgs(dir, line))
 	case model.AgentBackground:
 		out, err = g.startBackground(ctx, dir, line)
 	default:
-		out, err = g.ternOutput(ctx, AgentSplitArgs(cmd.PaneBlock, dir, line))
+		out, err = g.ternOutput(ctx, ternTimeout, AgentSplitArgs(cmd.PaneBlock, dir, line))
 	}
 	if err != nil {
 		return "", err
@@ -723,21 +439,21 @@ func (g *Gateway) retireAgents(ctx context.Context, gone []model.AgentEntry) {
 // startBackground starts the agent in the hidden session: a new tab when `tern ls --json` lists the session, a new session when
 // not, and a new tab after all when a failed new session leaves `tern ls --json` listing it (another Pane made it in between).
 func (g *Gateway) startBackground(ctx context.Context, dir string, line []string) ([]byte, error) {
-	sessions, err := g.ternLs(ctx)
+	listing, err := g.ternWindowLs(ctx, "")
 	if err != nil {
 		return nil, err
 	}
 	launch := func(exists bool) ([]byte, error) {
-		return g.ternOutput(ctx, agentNewArgs(exists, launchArgs(dir, line)...))
+		return g.ternOutput(ctx, ternTimeout, agentNewArgs(exists, launchArgs(dir, line)...))
 	}
-	if exists, _ := hiddenSession(sessions); exists {
+	if exists, _ := hiddenSession(listing); exists {
 		return launch(true)
 	}
 	out, err := launch(false)
 	if err == nil {
 		return out, nil
 	}
-	if again, lsErr := g.ternLs(ctx); lsErr == nil {
+	if again, lsErr := g.ternWindowLs(ctx, ""); lsErr == nil {
 		if exists, _ := hiddenSession(again); exists {
 			return launch(true)
 		}
@@ -775,7 +491,7 @@ func (g *Gateway) setAgentOpenFlag(cmd model.SetAgentOpen) model.AgentOpenSet {
 }
 
 func (g *Gateway) openAgent(ctx context.Context, cmd model.OpenAgent) model.AgentPlaced {
-	if _, err := g.ternOutput(ctx, MoveRightOfArgs(cmd.Block, cmd.PaneBlock)); err != nil {
+	if _, err := g.ternOutput(ctx, ternTimeout, MoveRightOfArgs(cmd.Block, cmd.PaneBlock)); err != nil {
 		return model.AgentPlaced{Block: cmd.Block, Err: g.explainPlacement(ctx, cmd.Block, err)}
 	}
 	if err := g.setAgentOpenFlag(model.SetAgentOpen{Block: cmd.Block, Open: true}).Err; err != nil {
@@ -789,14 +505,14 @@ func (g *Gateway) openAgent(ctx context.Context, cmd model.OpenAgent) model.Agen
 // closed again. The tab is named last, for Tern drops a tab's name when its block moves.
 func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) model.AgentPlaced {
 	failed := func(err error) model.AgentPlaced { return model.AgentPlaced{Block: cmd.Block, Back: true, Err: err} }
-	sessions, err := g.ternLs(ctx)
+	listing, err := g.ternWindowLs(ctx, "")
 	if err != nil {
 		return failed(err)
 	}
-	exists, blocks := hiddenSession(sessions)
+	exists, blocks := hiddenSession(listing)
 	blocks = slices.DeleteFunc(blocks, func(b string) bool { return b == cmd.Block })
 	step := func(args []string) error {
-		_, err := g.ternOutput(ctx, args)
+		_, err := g.ternOutput(ctx, ternTimeout, args)
 		return err
 	}
 	// hidden answers for a block that has left the view and sits in the hidden session, whatever step failed after: the entry is
@@ -817,7 +533,7 @@ func (g *Gateway) sendAgentBack(ctx context.Context, cmd model.SendAgentBack) mo
 		}
 	} else {
 		// A shell (no command) holds the place of an agent that goes back to a session with no block left.
-		out, err := g.ternOutput(ctx, agentNewArgs(exists, "--json"))
+		out, err := g.ternOutput(ctx, ternTimeout, agentNewArgs(exists, "--json"))
 		if err != nil {
 			return failed(err)
 		}
@@ -924,7 +640,7 @@ func (g *Gateway) interruptAgent(ctx context.Context, cmd model.InterruptAgent) 
 // the tab right of the Pane's, or to open a background agent beside it; a split agent, or a Pane that cannot name its block, gets `prompt-<random>.md`. A block that
 // is not all digits is left out, so the name stays one the window half parses.
 func AgentPromptName(starter string) string {
-	if starter == "" || strings.Trim(starter, "0123456789") != "" {
+	if !blockID(starter) {
 		return "prompt-*.md"
 	}
 	return "prompt-" + starter + "-*.md"
@@ -961,7 +677,7 @@ func (g *Gateway) refreshAgents(ctx context.Context, cmd model.RefreshAgents) mo
 	if err != nil {
 		return model.AgentsRefreshed{Seq: cmd.Seq, Err: err}
 	}
-	agents, _, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, false, func(block string) bool { return slices.Contains(cmd.Suspects, block) })
+	agents, _, _, err := g.reconcileAgents(ctx, file, cmd.PaneBlock, false, func(block string) bool { return slices.Contains(cmd.Suspects, block) })
 	return model.AgentsRefreshed{Seq: cmd.Seq, Agents: agents, Err: err}
 }
 
