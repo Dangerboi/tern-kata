@@ -46,8 +46,9 @@ local POLL_MS = 10000
 local FIRST_LOOK_MS = 2000
 -- The `tern.process.run` fallback (Tern before 0.9.24) can only kill by timeout; an exited-and-restarted worker is safe
 -- (its runs are journaled).
-local WORKER_PREFIX = "tern-kata worker: "
 local RUN_LIMIT_MS = 7 * 24 * 3600 * 1000
+-- The worker starts its own log lines with this; a fatal error or a Go trace comes without it.
+local WORKER_PREFIX = "tern-kata worker: "
 
 local running = false
 -- worker.toml's text when the worker was last started: a different text on disk means the wait no longer applies.
@@ -331,7 +332,6 @@ local function launch(binary: string, config: string): number
                 env = options.env,
                 stderr = function(line: string)
                     if line == "" then return end
-                    -- The worker prefixes its own log lines; a fatal error or a Go trace comes without.
                     if line:sub(1, #WORKER_PREFIX) ~= WORKER_PREFIX then line = WORKER_PREFIX .. line end
                     last = line
                     tern.log.warn(line)
@@ -428,12 +428,12 @@ function start()
     end
 end
 
--- Tern 0.9.16+ reports a `tern.process.run` or (0.9.24+) `tern.process.spawn` child that ends after the VM that started it is gone as a `process_exit` event
--- in the new VM: the worker a reload or a Tern update in place left running, or a `worker supervised` question that was
--- out. The event always asks for a new look now. It is the worker's end only when its pid is the one in the last held
--- line (`worker <pid> ...`), which the poll logged in this load or an earlier one (tern.kv keeps it): then its status and
--- last stderr line are logged as `exited` would have, and the held line is forgotten. Any other pid logs nothing, and
--- start() asks nothing while a question is out or this load's own worker runs.
+-- Tern 0.9.16+ reports a `tern.process.run` or (0.9.24+) `tern.process.spawn` child that ends after the VM that started
+-- it is gone as a `process_exit` event in the new VM: the worker a reload or a Tern update in place left running, or a
+-- `worker supervised` question that was out. The event always asks for a new look now. It is the worker's end only when
+-- its pid is the one in the last held line (`worker <pid> ...`), which the poll logged in this load or an earlier one
+-- (tern.kv keeps it): then its status and last stderr line are logged as `exited` would have, and the held line is
+-- forgotten. Any other pid logs nothing, and start() asks nothing while a question is out or this load's own worker runs.
 local function worker_ended(ev: any)
     local line = held_line
     if line == nil then
