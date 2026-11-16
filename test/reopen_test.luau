@@ -168,7 +168,7 @@ test("a fork names its block from a number or a numeric string, and from nothing
     same(reopen.command(event({ how = "fork", pane = "12", command = line })), "tern-kata agent --forked-from=12 --ref=p#1 --token-file=/t -- omp")
     same(reopen.command(event({ how = "fork", pane = "9007199254740993", command = line })),
         "tern-kata agent --forked-from=9007199254740993 --ref=p#1 --token-file=/t -- omp")
-    local unusable: { any } = { "x", "", true, 9007199254740993, 2 ^ 53, 2 ^ 60, -1, 1.5, 0 / 0 }
+    local unusable: { any } = { "x", "", true, tonumber("9007199254740993"), 2 ^ 53, 2 ^ 60, -1, 1.5, 0 / 0 }
     for _, pane in unusable do
         same(reopen.command(event({ how = "fork", pane = pane, command = line })), "tern-kata agent --ref=p#1 --token-file=/t -- omp")
     end

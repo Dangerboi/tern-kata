@@ -18,7 +18,8 @@ end
 
 for _, program in {"C:\\Program Files\\PowerShell\\7\\pwsh.exe", "pwsh", "/usr/bin/pwsh",
     "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "powershell"} do
-    for label, command in {kata = panecommands.KATA, update = panecommands.UPDATE, install = panecommands.INSTALL_WINDOWS} do
+    local commands: { [string]: string } = {kata = panecommands.KATA, update = panecommands.UPDATE, install = panecommands.INSTALL_WINDOWS}
+    for label, command in commands do
         test("adds -NoProfile: " .. label .. " under " .. program, function()
             local out = panecommands.withoutProfile(spec(program, {"-c", command}))
             assert(out ~= nil)
@@ -85,7 +86,8 @@ test("a malformed spec returns nil and does not raise", function()
     assert(panecommands.withoutProfile({}) == nil)
     assert(panecommands.withoutProfile({program = 5, args = {}}) == nil)
     assert(panecommands.withoutProfile({program = "pwsh", args = "-c"}) == nil)
-    assert(panecommands.withoutProfile({program = "pwsh", args = {"-c", 3}}) == nil)
+    local mixed: { any } = {"-c", 3}
+    assert(panecommands.withoutProfile({program = "pwsh", args = mixed}) == nil)
 end)
 
 harness.finish()
