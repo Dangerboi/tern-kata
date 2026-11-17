@@ -280,4 +280,11 @@ func TestTheNoticesRestartSettlesTheSearchByMeaningCard(t *testing.T) {
 	if _, ok := askedEmbeddings(done.Cmds); !ok {
 		t.Errorf("the restart's success sent %#v, want the search by meaning status read again", done.Cmds)
 	}
+	if strings.Contains(wireTextOf(t, done.State), "wait for it") {
+		t.Error("the card still says the daemon is restarting after the restart ended")
+	}
+	failed := step(t, waited.State, model.KataDaemonRestarted{Err: errors.New("boom"), Connection: restart.Connection})
+	if strings.Contains(wireTextOf(t, failed.State), "wait for it") {
+		t.Error("the card still says the daemon is restarting after the restart failed")
+	}
 }

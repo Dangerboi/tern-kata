@@ -18,8 +18,9 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// The version check answers the Pane's CheckVersions with what its session host holds. It runs no program whose file has not
-// changed since it last ran it: a minute's check is two stats, the release check's small file and one daemon ping.
+// The version check answers the Pane's CheckVersions with what its session host holds. It runs a program again only when its
+// file changed since a run of it worked: a minute's check is two stats, the release check's small file and one daemon ping. A
+// run that failed is tried at every check until one works.
 
 // fileStamp tells a file from its replacement without reading it.
 type fileStamp struct {
@@ -130,19 +131,19 @@ func ternKataVersion(ctx context.Context, exe string) (version string, ran bool)
 }
 
 // kataVersion is the version of the kata at path, read again only when that file changed; a failed run is tried again at the
-// next check, the version read before standing meanwhile.
+// next check, the version read before at the same path standing meanwhile.
 func (w *versionWatch) kataVersion(ctx context.Context, kata string) string {
 	stamp, ok := stampOf(kata)
 	if !ok {
 		return ""
 	}
-	if w.kata.path != kata || w.kata.stamp != stamp {
-		switch version, ran := kataCLIVersion(ctx, kata); {
-		case ran:
-			w.kata = probed{path: kata, stamp: stamp, version: version}
-		case w.kata.path != kata:
-			return ""
-		}
+	if w.kata.path == kata && w.kata.stamp == stamp {
+		return w.kata.version
+	}
+	if version, ran := kataCLIVersion(ctx, kata); ran {
+		w.kata = probed{path: kata, stamp: stamp, version: version}
+	} else if w.kata.path != kata {
+		return ""
 	}
 	return w.kata.version
 }

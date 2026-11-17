@@ -307,7 +307,7 @@ func confirmRestartDaemon(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.Versions.restarting {
-		m.EmbeddingsCard.Err = errors.New(restartOutNotice)
+		m.EmbeddingsCard.Err = errRestartOut
 		return m, nil
 	}
 	if m.Stale {

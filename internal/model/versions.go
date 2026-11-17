@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -162,8 +163,18 @@ func openNotice(m Model, kind NoticeKind) (Model, []Cmd) {
 	return m, nil
 }
 
-// restartOutNotice is the refusal of a second restart while one is out.
+// restartOutNotice is the refusal of a second restart while one is out; errRestartOut is the same on the search by meaning card,
+// which the notice's restart clears when it ends.
 const restartOutNotice = "The kata daemon is restarting; wait for it."
+
+var errRestartOut = errors.New(restartOutNotice)
+
+// forDaemon is what a daemon switch keeps: everything but the daemon notice's question and restart, whose answer the switch
+// drops.
+func (v Versions) forDaemon() Versions {
+	v.askRestart, v.restarting = false, false
+	return v
+}
 
 // confirmNoticeRestart is y to the daemon notice's question: the one restart goes out. One already out, for this notice or for
 // search by meaning, is waited for.
@@ -183,10 +194,13 @@ func confirmNoticeRestart(m Model) (Model, []Cmd) {
 }
 
 // noticeRestartDone takes the answer to the daemon notice's restart. Success checks the versions at once, which reads the new
-// daemon's version and so clears the notice, and reads search by meaning's status again, which a restart may have settled; a
-// failure says why and leaves the notice.
+// daemon's version and so clears the notice, and reads search by meaning's status again, which a restart may have settled, as
+// the card's own restart does; a failure says why and leaves the notice. Either way the card stops saying a restart is out.
 func noticeRestartDone(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
 	m.Versions.restarting = false
+	if errors.Is(m.EmbeddingsCard.Err, errRestartOut) {
+		m.EmbeddingsCard.Err = nil
+	}
 	if msg.Err != nil {
 		m.Notice = "The kata daemon was not restarted: " + oneLine(msg.Err.Error())
 		return m, nil
@@ -194,6 +208,7 @@ func noticeRestartDone(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
 	m.Notice = "The kata daemon restarted."
 	cmds := []Cmd{askVersions(&m, 0)}
 	if m.Embeddings.Read {
+		m.Embeddings.returning = true
 		cmds = append(cmds, askEmbeddings(&m, 0))
 	}
 	return m, cmds

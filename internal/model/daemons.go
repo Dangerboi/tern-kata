@@ -148,7 +148,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.FieldForm, m.MoveProject, m.afterMove, m.Moving = FieldFormState{}, MoveProjectState{}, nil, ""
 	m.DeleteForm, m.TokenForm, m.RevokeCard, m.AgentCard, m.AgentMessage = DeleteFormState{}, TokenFormState{}, RevokeState{}, AgentCardState{}, AgentMessageState{}
 	m.Embeddings, m.EmbeddingsCard = m.Embeddings.forDaemon(), EmbeddingsCardState{}
-	m.Versions.askRestart, m.Versions.restarting = false, false // the old daemon's restart answer is dropped
+	m.Versions = m.Versions.forDaemon()
 	m.AskUnlink, m.AttachmentCopy = nil, AttachmentCopyState{}
 	dropped := len(m.Drafts)
 	m.Drafts = nil
