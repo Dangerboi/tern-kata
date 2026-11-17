@@ -79,7 +79,7 @@ func TestOpenAttachmentUsesTheOSOpenerWhenTernCannotShowIt(t *testing.T) {
 				t.Errorf("tern ran %q on a Tern that does not play video", args)
 			}
 			return []byte("tern 0.9.25 (x)"), nil
-		}, "video need Tern 0.9.26 or newer"},
+		}, "videos need Tern 0.9.26 or newer"},
 		"a PDF on a Tern of unknown version": {"paper.pdf", func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(_ context.Context, args []string) ([]byte, error) {
 			if args[0] != "--version" {
 				t.Errorf("tern ran %q on a Tern of unknown version", args)

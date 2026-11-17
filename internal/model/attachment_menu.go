@@ -85,8 +85,8 @@ var ternDrawnKinds = []fileKind{
 	{name: "Markdown", exts: []string{".md"}},
 	{name: "JSON", exts: []string{".json"}},
 	{name: "Word documents", exts: []string{".docx"}, since: "v0.9.21"},
-	{name: "video", exts: []string{".mp4", ".mov", ".m4v", ".webm"}, since: "v0.9.26"},
-	{name: "audio", exts: []string{".mp3", ".wav", ".ogg", ".flac", ".m4a"}, since: "v0.9.26"},
+	{name: "videos", exts: []string{".mp4", ".mov", ".m4v", ".webm"}, since: "v0.9.26"},
+	{name: "audio files", exts: []string{".mp3", ".wav", ".ogg", ".flac", ".m4a"}, since: "v0.9.26"},
 	{name: "PDFs", exts: []string{".pdf"}, since: "v0.9.26"},
 }
 
