@@ -28,11 +28,10 @@ pc_start() {
 # Tern's close prompt: since Tern 0.9.12 its own dialog in the window, no longer a native one in `ctl system`.
 pc_dialog=".mdl-alert[role='dialog']"
 pc_dialogs() { ctl tree "$pc_dialog" | jq '.count'; }
-# Presses Tern's close chord and prints the milliseconds until its prompt is up; the prompt stays open. It waits up to $1 seconds
-# (default wait_limit). Only the reference passes a short $1: a chord whose prompt misses it is read as the wrong chord for this
-# runner, so the other chord is tried. The close-prompt bound itself is the relative check against that reference, not this wait.
+# Presses Tern's close chord and prints the milliseconds until its prompt is up; the prompt stays open. It waits wait_limit seconds.
+# The close-prompt bound itself is the relative check against the reference, not this wait.
 pc_prompt_ms() {
-  local known start limit=${1:-$wait_limit}
+  local known start limit=$wait_limit
   known=$(pc_dialogs)
   start=$(pc_now)
   ctl key "$pc_chord" >/dev/null
@@ -69,15 +68,14 @@ pc_main_pids=$(pc_pids)
 ctl confirm-close running >/dev/null
 
 # The reference: another full-screen program. The headless Linux runner sends meta for the close chord's ctrl.
-pc_chord=meta+shift+w
+pc_chord=meta+shift+w # headless Tern sends Ctrl+x as meta+x (the key table binds both), so the smoke presses meta
 pc_run "(cd $tmp/workspace && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=$KATA_HOME kata tui)"
 pc_running() { [[ $(ctl state | jq -r '.focused.running') != null ]]; }
 wait_for pc_running
 # Nothing observable marks kata tui having drawn, so no wait is possible; this is not a bound. A slower draw would not fail the
 # step: the sleep only lets it draw before the prompt is timed.
 sleep 1
-# 5 s only picks the chord: a meta prompt missing it means the runner sends ctrl; the ctrl try waits the full deadline.
-pc_reference=$(pc_prompt_ms 5) || { pc_chord=ctrl+shift+w; pc_reference=$(pc_prompt_ms); }
+pc_reference=$(pc_prompt_ms)
 ctl click "$pc_dialog .mdl-go" >/dev/null
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 [[ $(ctl state | jq '.tabs | length') == "$pc_tabs" ]]

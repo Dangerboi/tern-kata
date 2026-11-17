@@ -2,24 +2,16 @@
 # stay scrolled where they were. Own Project and Issues; it cleans up.
 hs_y() { ctl tree "$1" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 hs_title="[data-id='main.columns.detail.viewport.content.heading.title']"
-# hs_wheel <hover id> <delta> <count> <tracked selector>: wheels, then waits until the tracked node's top is the same on three
-# reads in a row, which is when the scroll has ended.
+# hs_wheel <hover id> <delta> <count> <tracked selector>: wheels, waits until the tracked node's top has moved (the wheel's effect
+# can land late under load), then until it is the same on three reads in a row, which is when the scroll has ended.
 hs_wheel() {
-  local prev=. same=0 tracked=$4
+  local before tracked=$4
+  before=$(hs_y "$tracked")
   ctl hover "[data-id='$1']" >/dev/null
   for _ in $(seq "$3"); do ctl wheel 0 "$2" >/dev/null; done
-  hs_still() {
-    local cur
-    cur=$(hs_y "$tracked")
-    if [[ $cur == "$prev" ]]; then
-      (( ++same < 3 )) || return 0
-    else
-      same=0
-    fi
-    prev=$cur
-    return 1
-  }
-  wait_for -i 0.05 hs_still
+  hs_moved() { [[ $(hs_y "$tracked") != "$before" ]]; }
+  wait_for hs_moved || { printf 'The wheel over %s did not move %s (top %s)\n' "$1" "$tracked" "$before" >&2; return 1; }
+  wait_settled hs_y "$tracked"
 }
 
 hs_dir="$tmp/help-workspace"

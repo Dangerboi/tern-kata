@@ -6,22 +6,7 @@
 # app may send is the Pane driver's tests). Own Project and Issues; it cleans up.
 stuck_y() { ctl tree "[data-id='main.columns.detail.viewport.content.heading']" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 stuck_wheel() { for _ in $(seq "$2"); do ctl wheel 0 "$1" >/dev/null; done; }
-# Waits until the detail stops moving: its heading is at the same place on three reads in a row.
-stuck_settle() {
-  local prev=. same=0
-  stuck_still() {
-    local cur
-    cur=$(stuck_y)
-    if [[ $cur == "$prev" ]]; then
-      (( ++same < 3 )) || return 0
-    else
-      same=0
-    fi
-    prev=$cur
-    return 1
-  }
-  wait_for -i 0.05 stuck_still
-}
+stuck_settle() { wait_settled stuck_y; }
 # The wheel moves the detail down from its top and back up, whatever was clicked before.
 stuck_scrolls() {
   local top y

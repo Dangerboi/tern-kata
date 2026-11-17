@@ -33,6 +33,24 @@ wait_for() {
     sleep "$interval"
   done
 }
+# wait_settled <command...>: polls the command (every 0.05 s, through wait_for) until what it prints is the same on three reads in
+# a row, which is when whatever it reads has stopped moving. Callers that expect a change wait for it first, as a late effect
+# would otherwise pass as settled.
+wait_settled() {
+  local prev=. same=0
+  settled_read() {
+    local cur
+    cur=$("$@")
+    if [[ $cur == "$prev" ]]; then
+      (( ++same < 3 )) || return 0
+    else
+      same=0
+    fi
+    prev=$cur
+    return 1
+  }
+  wait_for -i 0.05 settled_read "$@"
+}
 # socket_ready <pid> <socket>: the process has made its socket; a process that exited ends the smoke at once.
 socket_ready() {
   [[ -S $2 ]] && return 0
