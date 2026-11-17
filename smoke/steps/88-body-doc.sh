@@ -17,7 +17,6 @@ else
   quit_app
   printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$bd_dir" "$KATA_HOME" "$tmp" >"$tmp/bd-launch.ctl"
   ctl --file "$tmp/bd-launch.ctl"
-  ctl resize 1200 900
   expect_tree "[data-id\$='.$bd_uid']" '.ok and .count == 1'
   ctl click "[data-id\$='.$bd_uid']"
   expect_tree "$bd_body" '.ok and .count == 1 and (.nodes[0].class | contains("sf-doc")) and (.nodes[0].text | contains("Second paragraph"))'
