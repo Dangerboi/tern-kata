@@ -336,6 +336,24 @@ func TestEditAfterAFailedSaveKeepsTheDocTextSteady(t *testing.T) {
 	}
 }
 
+func TestTheDocKeepsShowingTheDraftWhileARetrySaves(t *testing.T) {
+	s, _ := edited(t, onDoc(t, true), "mine")
+	s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	if n := bodyNode(t, s); n.P["text"] != "mine" {
+		t.Fatalf("doc text %q after the failure, want the Draft", n.P["text"])
+	}
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine, and more"}).State
+	s = feed(t, s, &tern.Editing{ID: id, On: false}).State // the retry is in flight
+	if n := bodyNode(t, s); n.P["text"] != "mine, and more" {
+		t.Fatalf("doc text %q while the retry saves, want the Draft's text, which the doc already holds", n.P["text"])
+	}
+	s = feed(t, s, model.DraftSaved{UID: "alpha"}).State
+	if n := bodyNode(t, s); n.P["text"] != "mine, and more" {
+		t.Fatalf("doc text %q after the save, want the saved text", n.P["text"])
+	}
+}
+
 func TestBodyChangedByOthersAfterTheEditBeganStillConflicts(t *testing.T) {
 	s := onDoc(t, true)
 	id := bodyDocID(t, s)
@@ -390,7 +408,6 @@ func TestTheLineUnderTheDocSaysTheDraftIsKeptOnce(t *testing.T) {
 		name  string
 		stale bool // kata is reconnecting: the leave is refused, with no failed save
 	}{{"reconnecting", true}, {"another failure", false}} {
-		name := c.name
 		s := onDoc(t, true)
 		id := bodyDocID(t, s)
 		s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
@@ -403,10 +420,10 @@ func TestTheLineUnderTheDocSaysTheDraftIsKeptOnce(t *testing.T) {
 		}
 		line := bodyErrorLine(t, s)
 		if strings.Count(line, "kept") != 1 || !strings.Contains(line, "press e or c to open it") && !strings.Contains(line, "Press e or c to open it") {
-			t.Fatalf("%s: line %q, want it to say the Draft is kept once and how to open it", name, line)
+			t.Fatalf("%s: line %q, want it to say the Draft is kept once and how to open it", c.name, line)
 		}
 		if strings.Contains(line, "kept The") {
-			t.Fatalf("%s: line %q runs two sentences together", name, line)
+			t.Fatalf("%s: line %q runs two sentences together", c.name, line)
 		}
 	}
 }
@@ -421,12 +438,20 @@ func TestTheNoticeSaysTheDraftIsKeptOnceWhateverTheError(t *testing.T) {
 	}
 }
 
-func TestADoubleClickBeforeTheReadOnlyDrawTakesNoStaleBase(t *testing.T) {
+// leftAndClickedAgain edits the Issue body to "mine", leaves the doc (the save is in flight) and double clicks it again before the
+// doc draws read-only; the second double click is ignored.
+func leftAndClickedAgain(t *testing.T) (driver.State, string) {
+	t.Helper()
 	s := onDoc(t, true)
 	id := bodyDocID(t, s)
 	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
-	s = feed(t, s, &tern.Editing{ID: id, On: false}).State // the save is in flight
-	s = feed(t, s, &tern.Editing{ID: id, On: true}).State  // a second double click before the read-only draw
+	s = feed(t, s, &tern.Editing{ID: id, On: false}).State
+	s = feed(t, s, &tern.Editing{ID: id, On: true}).State
+	return s, id
+}
+
+func TestADoubleClickBeforeTheReadOnlyDrawTakesNoStaleBase(t *testing.T) {
+	s, id := leftAndClickedAgain(t)
 	s = feed(t, s, model.DraftSaved{UID: "alpha"}).State
 	s = feed(t, s, &tern.Change{ID: id, Text: "mine more"}).State
 	out := step(t, s, &tern.Editing{ID: id, On: false})
@@ -437,11 +462,7 @@ func TestADoubleClickBeforeTheReadOnlyDrawTakesNoStaleBase(t *testing.T) {
 }
 
 func TestAnIgnoredEditingOnDoesNotSendTheFailedDraftAgain(t *testing.T) {
-	s := onDoc(t, true)
-	id := bodyDocID(t, s)
-	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
-	s = feed(t, s, &tern.Editing{ID: id, On: false}).State // the save is in flight
-	s = feed(t, s, &tern.Editing{ID: id, On: true}).State  // a second double click, ignored: the doc is read-only
+	s, id := leftAndClickedAgain(t)
 	s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
 	out := step(t, s, &tern.Editing{ID: id, On: false}) // the edit Tern kept open ends when the doc shows the kept Draft
 	if saves := savedCmds(out.Cmds); len(saves) != 0 {
@@ -453,11 +474,7 @@ func TestAnIgnoredEditingOnDoesNotSendTheFailedDraftAgain(t *testing.T) {
 }
 
 func TestAChangeAfterAnIgnoredEditingOnKeepsTheEditAsTheDraft(t *testing.T) {
-	s := onDoc(t, true)
-	id := bodyDocID(t, s)
-	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
-	s = feed(t, s, &tern.Editing{ID: id, On: false}).State
-	s = feed(t, s, &tern.Editing{ID: id, On: true}).State
+	s, id := leftAndClickedAgain(t)
 	s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
 	s = feed(t, s, &tern.Change{ID: id, Text: "mine more"}).State
 	if d := s.Model.Drafts["alpha"]; !strings.HasSuffix(d.DocText(), "mine more") || d.Err != nil {

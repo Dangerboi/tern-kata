@@ -44,6 +44,8 @@ type DocPart struct {
 	HiddenPrefix string
 	// Ref names the Issue in a message raised when the Issue is no longer the one shown.
 	Ref string
+	// Shown is set once the doc has drawn the Draft's text (its save failed or conflicted), which it keeps drawing while a retry saves.
+	Shown bool
 }
 
 // DraftBase is what a Draft was begun from: the Issue's Project, its body and its revision then. A save is written against it.
@@ -61,6 +63,17 @@ func (d Draft) InPlaceEdit() bool { return d.Doc != nil && !d.Comment }
 
 // DocCanAct reports whether the Issue body's doc can act on the Draft: an in-place edit that is neither being saved nor in conflict.
 func (d Draft) DocCanAct() bool { return d.InPlaceEdit() && !d.Saving && d.Conflict == nil }
+
+// noteShown records that the doc has drawn the Draft's text when it is the failed or conflicted edit that the doc shows, before an
+// edit or a retry clears the failure.
+func (d Draft) noteShown() Draft {
+	if d.Doc != nil && !d.Doc.Shown && (d.Err != nil || d.Conflict != nil) {
+		doc := *d.Doc // Drafts are copied by value: the DocPart they share is not changed
+		doc.Shown = true
+		d.Doc = &doc
+	}
+	return d
+}
 
 // DocText is the text of an in-place edit as the doc holds it.
 func (d Draft) DocText() string { return strings.TrimPrefix(d.Editor.Text, d.Doc.HiddenPrefix) }
@@ -267,6 +280,7 @@ func sendDraftOf(m Model, uid string, force bool) (Model, []Cmd) {
 		draft.Err = err
 		return putDraft(m, uid, draft), nil
 	}
+	draft = draft.noteShown()
 	draft.Saving = true
 	draft.Err = nil
 	text := draft.Editor.Text

@@ -83,16 +83,22 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	if (m.Focus != ColumnDetail && !m.listJump) || m.SelectedUID != m.landedOn {
 		m = m.endJumpHistory()
 	}
-	if draft, held := m.Drafts[m.docEditUID()]; held && draft.Err == nil && m.DetailIssueUID() != m.docEditUID() {
+	if edited := m.docEdit; edited != nil && m.DetailIssueUID() != edited.uid && m.holdsFlushableDraft(edited.uid) {
 		// The doc moved on to another Issue while an edit of the first was open: that edit is saved to its own Issue, as leaving the
 		// doc does. A save that failed is not sent again until the user edits (which clears the error) or leaves the doc.
 		var saved []Cmd
-		m, saved = flushDocEdit(m, m.docEditUID())
+		m, saved = flushDocEdit(m, edited.uid)
 		cmds = append(cmds, saved...)
 	}
 	m = m.settleWantedRecurrence()
 	m, loadIssue := m.loadDetail()
 	return m.withRows(), append(cmds, loadIssue...)
+}
+
+// holdsFlushableDraft reports whether Issue uid holds a Draft whose save has not failed.
+func (m Model) holdsFlushableDraft(uid string) bool {
+	draft, held := m.Drafts[uid]
+	return held && draft.Err == nil
 }
 
 // wantRecurrence is `O` on an Issue that recurs: the Recurrence card opens at once when the shown detail has the Issue's

@@ -107,7 +107,7 @@ type BodyDoc struct {
 func (m Model) BodyDoc(issue Issue) BodyDoc {
 	draft, held := m.Drafts[issue.UID]
 	doc := BodyDoc{Text: m.docText(issue), Editable: !held || draft.DocCanAct()}
-	if m.docEdit != nil && m.docEdit.uid == issue.UID {
+	if m.editsDoc(issue.UID) {
 		doc.Text = m.docEdit.drawn
 	}
 	if held && draft.Doc != nil && m.EditorUID != issue.UID {
@@ -118,7 +118,7 @@ func (m Model) BodyDoc(issue Issue) BodyDoc {
 
 func (m Model) docText(issue Issue) string {
 	body, _ := m.BodyShown(issue)
-	if draft, ok := m.Drafts[issue.UID]; ok && draft.InPlaceEdit() && (draft.Err != nil || draft.Conflict != nil) {
+	if draft, ok := m.Drafts[issue.UID]; ok && draft.InPlaceEdit() && (draft.Err != nil || draft.Conflict != nil || draft.Doc.Shown) {
 		return draft.DocText()
 	}
 	return body
@@ -136,13 +136,13 @@ func (m Model) startDocEdit(issue Issue) Model {
 // opened in the overlay is theirs and stays.
 func bodyEdited(m Model, text string) Model {
 	issue := m.docIssue()
-	if issue == nil || !m.InPlaceBody || (m.docEdit != nil && m.docEdit.uid != issue.UID) { // the latter: the edit began on an Issue the doc no longer shows, and left it
+	if issue == nil || !m.InPlaceBody || (m.docEdit != nil && !m.editsDoc(issue.UID)) { // the latter: the edit began on an Issue the doc no longer shows, and left it
 		return m
 	}
 	if !m.BodyDoc(*issue).Editable {
 		return m
 	}
-	if m.docEdit == nil || m.docEdit.uid != issue.UID {
+	if !m.editsDoc(issue.UID) {
 		m = m.startDocEdit(*issue)
 	}
 	draft, held := m.Drafts[issue.UID]
@@ -160,6 +160,7 @@ func bodyEdited(m Model, text string) Model {
 	if !held {
 		draft = Draft{DraftBase: base, Doc: &DocPart{HiddenPrefix: normalizeLineBreaks(hidden), Ref: issue.QualifiedID}}
 	}
+	draft = draft.noteShown()
 	draft.Editor, draft.Err = NewTextEditor(whole), nil
 	return putDraft(m, issue.UID, draft)
 }
@@ -242,10 +243,5 @@ type docEdit struct {
 	base          DraftBase
 }
 
-// docEditUID is the UID of the Issue whose body is edited in the doc, "" when none.
-func (m Model) docEditUID() string {
-	if m.docEdit == nil {
-		return ""
-	}
-	return m.docEdit.uid
-}
+// editsDoc reports whether an in-place edit of Issue uid is open in the doc.
+func (m Model) editsDoc(uid string) bool { return m.docEdit != nil && m.docEdit.uid == uid }
