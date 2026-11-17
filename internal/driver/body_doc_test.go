@@ -499,3 +499,30 @@ func TestAChangeAfterAnIgnoredEditingOnKeepsTheEditAsTheDraft(t *testing.T) {
 		t.Fatalf("saves %#v, want the edit sent once, on leaving", saves)
 	}
 }
+
+func TestConflictWhileAnotherIssuesCardIsOpenRaisesTheNoticeNamingTheIssue(t *testing.T) {
+	s, _ := edited(t, onDoc(t, true), "mine")
+	s = feed(t, s, key("j")).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}, key("e")).State
+	if s.Model.EditorUID != "beta" {
+		t.Fatalf("editor on %q, want beta's card open", s.Model.EditorUID)
+	}
+	theirs := alpha
+	theirs.Body, theirs.Revision = "theirs", 4
+	s = feed(t, s, model.DraftConflict{UID: "alpha", Issue: theirs}).State
+	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, "conflict") || !strings.Contains(n, "e") {
+		t.Fatalf("notice %q, want it to name the Issue and say it conflicts", n)
+	}
+	if s.Model.EditorUID != "beta" {
+		t.Fatalf("editor on %q, want beta's card left open", s.Model.EditorUID)
+	}
+	s = feed(t, s, key("escape"), key("y"), key("escape"), key("k")).State // beta's card is discarded, and the selection goes back to alpha
+	back := alpha
+	back.Body, back.ProjectID, back.Revision, back.QualifiedID = docBody, 7, 3, "work#aaaa"
+	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &back}}, key("e")).State
+	if s.Model.EditorUID != "alpha" || s.Model.EditorMode() != model.ModeConflict {
+		t.Fatalf("e opened %q in mode %q, want alpha's conflict card", s.Model.EditorUID, s.Model.EditorMode())
+	}
+}

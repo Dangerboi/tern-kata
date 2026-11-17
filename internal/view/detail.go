@@ -383,8 +383,8 @@ func cronProperties(m model.Model) []propertyRow {
 //
 // Tern ends an in-place edit when the program sends the doc a text op, and sends the edit as `change` while the user still types (a
 // second or so after the last key), so the doc keeps the stored body while the Draft is only held or saving: it already holds the
-// edit. Once the save failed or conflicted, the doc shows the Draft, keeps showing it while a retry saves, and a discard then takes
-// it away again.
+// edit. Once the save failed or conflicted, the doc shows the Draft, keeps showing it while a retry or an overwrite saves, and a
+// discard then takes it away again.
 func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 	body, _ := m.BodyShown(issue)
 	if strings.TrimSpace(body) == "" {

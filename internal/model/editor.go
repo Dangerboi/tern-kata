@@ -65,9 +65,10 @@ func (d Draft) InPlaceEdit() bool { return d.Doc != nil && !d.Comment }
 // DocCanAct reports whether the Issue body's doc can act on the Draft: an in-place edit that is neither being saved nor in conflict.
 func (d Draft) DocCanAct() bool { return d.InPlaceEdit() && !d.Saving && d.Conflict == nil }
 
-// shown marks the Draft of the doc as one the doc draws: its save failed or conflicted.
-func (d Draft) shown() Draft {
-	if d.Doc != nil && !d.Doc.Shown {
+// withShown returns the Draft with its doc set to draw it, which an in-place edit does once its save failed or conflicted. Any other
+// Draft comes back as it is.
+func (d Draft) withShown() Draft {
+	if d.InPlaceEdit() && !d.Doc.Shown {
 		doc := *d.Doc // Drafts are copied by value: the DocPart they share is not changed
 		doc.Shown = true
 		d.Doc = &doc
@@ -252,18 +253,23 @@ func startReply(m Model) Model {
 	return m
 }
 
+// draftWhat names the doc Draft for a Notice: "edit of work#aaaa" or "comment on work#aaaa".
+func draftWhat(draft Draft) string {
+	what := "edit of"
+	if draft.Comment {
+		what = "comment on"
+	}
+	return what + " " + cmp.Or(draft.Doc.Ref, "the Issue")
+}
+
 // draftRefused keeps draft of Issue uid with err, which a save failed with. A Draft of the doc has no card showing the error, and the doc
 // may be on another Issue by now, so a Notice names the Issue.
 func draftRefused(m Model, uid string, draft Draft, err error) Model {
 	draft.Err = err
-	m = putDraft(m, uid, draft.shown())
+	m = putDraft(m, uid, draft.withShown())
 	if draft.Doc != nil && m.EditorUID != uid {
-		what := "your edit of"
-		if draft.Comment {
-			what = "your comment on"
-		}
 		kept := DraftKeptHint(err, " on that Issue")
-		m.Notice = fmt.Sprintf("Cannot save %s %s: %s%s", what, cmp.Or(draft.Doc.Ref, "the Issue"), err, kept)
+		m.Notice = fmt.Sprintf("Cannot save your %s: %s%s", draftWhat(draft), err, kept)
 	}
 	return m
 }
@@ -347,11 +353,15 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 			draft.Saving = false
 			draft.Conflict = &msg.Issue
 			draft.Err = nil
-			draft = draft.shown()
+			draft = draft.withShown()
 			m = putDraft(m, msg.UID, draft)
-			if draft.Doc != nil && m.EditorUID == "" { // the card is how a conflict is settled, so it opens over the doc
+			switch {
+			case draft.Doc == nil:
+			case m.EditorUID == "": // the card is how a conflict is settled, so it opens over the doc
 				m.EditorUID = msg.UID
 				m = m.focusDetail()
+			case m.EditorUID != msg.UID: // another Issue's card is open: it stays, and a Notice says where the conflict is
+				m.Notice = fmt.Sprintf("Your %s conflicts with a newer change. Press e or c on that Issue to open the conflict card.", draftWhat(draft))
 			}
 		}
 		return m, nil, true
