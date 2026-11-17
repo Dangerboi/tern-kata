@@ -46,7 +46,11 @@ expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text |
 oa_open_row notes.txt
 oa_expect_preview code notes.txt
 
-# Leave as found: the Issue is deleted and the daemon has no Docbank again for later steps. The cached copies and the vault are in
+# Leave as found: the preview block is closed (it narrows the Pane to half the window for the steps after this one), the Issue is deleted and the daemon has no Docbank again for later steps. The cached copies and the vault are in
 # $tmp, which the run removes.
+oa_no_preview() { [[ $(ctl state | jq '.file_blocks | length') == 0 ]]; }
+ctl click ".tn-pane.file .ed-loc"
+ctl close >/dev/null
+wait_for oa_no_preview
 kata --workspace "$oa_dir" delete "$oa_uid" --force --confirm "DELETE smoke#$oa_short" --json >/dev/null
 docbank daemon stop >/dev/null 2>&1 || true
