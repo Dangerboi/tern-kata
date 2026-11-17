@@ -352,7 +352,7 @@ func TestSaveRefusedWhileReconnectingRaisesTheNoticeNamingTheIssue(t *testing.T)
 	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, "reconnecting") {
 		t.Fatalf("notice %q, want it to name the Issue and say kata is reconnecting", n)
 	}
-	if n := s.Model.Notice; strings.Count(n, "kept") > 1 {
+	if n := s.Model.Notice; strings.Count(n, "kept") != 1 {
 		t.Fatalf("notice %q says the Draft is kept twice", n)
 	}
 }

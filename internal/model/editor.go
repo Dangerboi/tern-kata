@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 )
 
-var errDraftReadOnly = errors.New("Read-only: reconnecting to kata")
+var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
 
 type Draft struct {
 	Editor TextEditor
@@ -239,7 +239,11 @@ func draftRefused(m Model, uid string, draft Draft, err error) Model {
 		if draft.Comment {
 			what = "your comment on"
 		}
-		m.Notice = fmt.Sprintf("Cannot save %s %s: %s. The Draft is kept: press e or c on that Issue to open it.", what, cmp.Or(draft.Doc.Ref, "the Issue"), err)
+		kept := ". The Draft is kept: press e or c on that Issue to open it."
+		if errors.Is(err, errDraftReadOnly) { // its text already says the Draft is kept
+			kept = ". Press e or c on that Issue to open it."
+		}
+		m.Notice = fmt.Sprintf("Cannot save %s %s: %s%s", what, cmp.Or(draft.Doc.Ref, "the Issue"), err, kept)
 	}
 	return m
 }

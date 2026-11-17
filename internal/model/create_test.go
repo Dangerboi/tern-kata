@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"errors"
+	"strings"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"testing"
 	"time"
@@ -181,5 +182,15 @@ func TestCreatePasteNormalisesLineBreaks(t *testing.T) {
 	m, _ = model.Update(m, model.KeyMsg{Text: "x\r\ny\rz"})
 	if m.Create.Title != "a b c" || m.Create.Editor.Text != "x\ny\nz" {
 		t.Fatalf("title %q body %q", m.Create.Title, m.Create.Editor.Text)
+	}
+}
+
+func TestCreateRefusedWhileReconnectingSaysTheDraftIsKept(t *testing.T) {
+	m := model.Model{Workspace: "workspace", Project: model.Project{ID: 7}, SelectedUID: "parent", Issues: []model.Issue{{UID: "parent", ProjectID: 7}}}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+n"})
+	m.Stale = true
+	m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
+	if m.Create.Err == nil || !strings.Contains(m.Create.Err.Error(), "reconnecting") || !strings.Contains(m.Create.Err.Error(), "Draft kept") || len(cmds) != 0 {
+		t.Fatalf("create error %v, cmds %v; want the reconnecting refusal that says the Draft is kept", m.Create.Err, cmds)
 	}
 }
