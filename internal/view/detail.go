@@ -387,19 +387,23 @@ func cronProperties(m model.Model) []propertyRow {
 // discard then takes it away again.
 func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 	body, _ := m.BodyShown(issue)
+	var state model.BodyDoc
+	var line []tern.Element // what explains a held Draft, whatever the body draws as
+	if m.InPlaceBody {
+		state = m.BodyDoc(issue)
+		switch {
+		case state.Conflicted:
+			line = []tern.Element{toneText("body-error", ui.ToneError, model.ConflictSentence("edit", ""))}
+		case state.Err != nil:
+			line = []tern.Element{toneText("body-error", ui.ToneError, state.Err.Error()+model.DraftKeptHint(state.Err, ""))}
+		}
+	}
 	if strings.TrimSpace(body) == "" {
-		return []tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: "No body yet."}}
+		return append([]tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: "No body yet."}}, line...)
 	}
 	if !m.InPlaceBody || model.HasPicture(body) {
-		return []tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: body}}
+		return append([]tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: body}}, line...)
 	}
-	state := m.BodyDoc(issue)
 	doc := ui.Doc{Common: ui.Common{Key: "body"}, Text: state.Text, Edit: state.Editable, Comment: state.Editable}
-	if state.Conflicted {
-		return []tern.Element{doc, toneText("body-error", ui.ToneError, "Your edit conflicts with a newer change. "+model.ConflictHint(""))}
-	}
-	if state.Err != nil {
-		return []tern.Element{doc, toneText("body-error", ui.ToneError, state.Err.Error()+model.DraftKeptHint(state.Err, ""))}
-	}
-	return []tern.Element{doc}
+	return append([]tern.Element{doc}, line...)
 }

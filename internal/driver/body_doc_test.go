@@ -500,7 +500,7 @@ func TestAChangeAfterAnIgnoredEditingOnKeepsTheEditAsTheDraft(t *testing.T) {
 	}
 }
 
-func TestConflictWhileAnotherIssuesCardIsOpenRaisesTheNoticeNamingTheIssue(t *testing.T) {
+func TestConflictWhileAnotherIssuesCardIsOpenRaisesTheNoticeNamingTheIssueAndLeavesALineUnderItsBody(t *testing.T) {
 	s, _ := edited(t, onDoc(t, true), "mine")
 	s = feed(t, s, key("j")).State
 	loaded := beta
@@ -532,5 +532,29 @@ func TestConflictWhileAnotherIssuesCardIsOpenRaisesTheNoticeNamingTheIssue(t *te
 	s = feed(t, s, key("e")).State
 	if s.Model.EditorUID != "alpha" || s.Model.EditorMode() != model.ModeConflict {
 		t.Fatalf("e opened %q in mode %q, want alpha's conflict card", s.Model.EditorUID, s.Model.EditorMode())
+	}
+}
+
+func TestAHeldDraftStaysExplainedWhateverTheShownBodyHolds(t *testing.T) {
+	for _, body := range []string{"", "![shot](shot.png)"} {
+		for _, c := range []struct {
+			name string
+			msg  any
+			want string
+		}{
+			{"conflict", model.DraftConflict{UID: "alpha", Issue: alpha}, "conflicts with a newer change"},
+			{"failure", model.DraftFailed{UID: "alpha", Err: errTest}, "daemon said no"},
+		} {
+			s, _ := edited(t, onDoc(t, true), "mine")
+			s = feed(t, s, key("j")).State
+			loaded := beta
+			loaded.Body, loaded.ProjectID = "beta body", 7
+			s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}, key("e"), c.msg).State
+			s = feed(t, s, key("x"), key("escape"), key("y"), key("escape"), key("k")).State
+			s = detailReloadedWith(t, s, body)
+			if line := bodyErrorLine(t, s); !strings.Contains(line, c.want) {
+				t.Fatalf("%s, body %q: line %q, want it to say %q", c.name, body, line, c.want)
+			}
+		}
 	}
 }
