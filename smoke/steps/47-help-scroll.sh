@@ -2,6 +2,7 @@
 # stay scrolled where they were. Own Project and Issues; it cleans up.
 hs_y() { ctl tree "$1" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 hs_title="[data-id='main.columns.detail.viewport.content.heading.title']"
+# The sleep is a settle after the wheel: nothing observable marks the scroll having ended, and the steps read the position once.
 hs_wheel() { ctl hover "[data-id='$1']" >/dev/null; for _ in $(seq "$3"); do ctl wheel 0 "$2" >/dev/null; done; sleep 0.5; }
 
 hs_dir="$tmp/help-workspace"
@@ -40,14 +41,14 @@ expect_tree '[data-id="main.topbar"],[data-id="main.columns"],[data-id="dock.hin
 ctl key '?'
 expect_tree '[data-id="main.help"]' '.ok and .count == 0'
 expect_tree '[data-id="main.columns"]' '.ok and .count == 1'
-sleep 0.5
+sleep 0.5 # proves a bound: the columns must not scroll within 0.5 s of the sheet closing
 [[ $(hs_y "$hs_title") == "$hs_title_y" && $(hs_y "$hs_row") == "$hs_row_y" ]] || { printf 'Help closed with the columns scrolled elsewhere: detail %s -> %s, list row %s -> %s\n' "$hs_title_y" "$(hs_y "$hs_title")" "$hs_row_y" "$(hs_y "$hs_row")" >&2; return 1; }
 
 # A live update that changes the Issue shown in the detail while the sheet is open must not end the Pane.
 ctl key '?'
 expect_tree '[data-id="main.help"]' '.ok and .count == 1'
 kata --workspace "$hs_dir" delete "$hs_long" --force --confirm "DELETE help-scroll#$(jq -r '.issue.short_id' "$tmp/help-long.json")" --json >/dev/null
-sleep 1
+sleep 1 # proves a bound: the sheet must survive the live update for 1 s
 expect_tree '[data-id="main.help"]' '.ok and .count == 1'
 ctl key '?'
 expect_tree "$hs_row" '.ok and .count == 0'

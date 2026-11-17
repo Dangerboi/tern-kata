@@ -12,7 +12,7 @@ expect_tree "[data-id='main.filters.search']" '.nodes[0].text == "search Search 
 # Rows follow update order: Down opens the results, then lands on Beta whichever row comes first.
 expect_tree "[data-id\$='.$search_alpha']" '.count == 1'
 ctl key Down
-sleep 0.5
+sleep 0.5 # settle: nothing observable marks Down having moved the selection, which the next line reads once
 if [[ $(ctl tree "[data-id\$='.$search_beta']" | jq -r '.nodes[0]["aria-selected"]') != true ]]; then ctl key Up; fi
 expect_tree "[data-id$='.$search_beta']" '.count == 1 and .nodes[0]["aria-selected"] == "true"'
 ctl key enter

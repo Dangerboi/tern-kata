@@ -261,7 +261,7 @@ shell_idle() {
 kata_daemon_gone() { kata daemon status --json | jq -e '.daemons | length == 0' >/dev/null; }
 stop_live_daemon() {
   kata daemon stop
-  wait_for -t 10 kata_daemon_gone
+  wait_for kata_daemon_gone
 }
 
 for step in "${steps[@]}"; do

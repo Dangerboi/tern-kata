@@ -15,12 +15,11 @@ cm_job=$(jq -r '.job.uid' "$tmp/cron-created.json")
 cm_event=$(jq -r '.job.definition_event_uid' "$tmp/cron-created.json")
 
 cm_child=
-for ((attempt = 0; attempt < 240; attempt++)); do
+cm_made_child() {
   cm_child=$(kata --workspace "$cm_dir" list --json | jq -r --arg job "$cm_job" '[.issues[] | select(.metadata["cron.occurrence"].job_uid == $job)][0].uid // empty')
-  [[ -z "$cm_child" ]] || break
-  sleep 1
-done
-[[ -n "$cm_child" ]]
+  [[ -n "$cm_child" ]]
+}
+wait_for -i 1 cm_made_child
 
 # The child is nested under its parent, so expand the parent to see the child's row marked.
 ctl key 1

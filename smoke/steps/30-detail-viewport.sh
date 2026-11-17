@@ -9,11 +9,11 @@ vp_below() { vp_rects | jq -r '(.[1][1] + .[1][3]) - (.[0][1] + .[0][3]) | floor
 vp_bar() { ctl tree "[data-id='main.topbar']" | jq -c '.nodes[0].rect'; }
 vp_wait() { # <label> <jq test on above/below as $a/$b>
   local a b
-  for ((attempt = 0; attempt < 40; attempt++)); do
+  vp_settled() {
     a=$(vp_above); b=$(vp_below)
-    jq -en --argjson a "$a" --argjson b "$b" "$2" >/dev/null && return 0
-    sleep 0.1
-  done
+    jq -en --argjson a "$a" --argjson b "$b" "$2" >/dev/null
+  }
+  wait_for vp_settled "$@" && return 0
   printf '%s: scrolled %s px, %s px left below\n' "$1" "$a" "$b" >&2
   return 1
 }

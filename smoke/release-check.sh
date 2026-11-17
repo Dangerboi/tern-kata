@@ -26,6 +26,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 source "$(dirname "$0")/ctl.sh"
 ctl() { ctl_call "$@"; }
+trace_failures
 
 # A staged plugin/ folder as a release carries it, with a version older than any release.
 mkdir -p "$tmp/plugin" "$tmp/dist" "$tmp/workspace" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
@@ -71,7 +72,7 @@ printf 'run "true"\n' >"$tmp/pump.ctl"
 pump() { ctl --file "$tmp/pump.ctl" >/dev/null; }
 toast_after_pump() { tree_has "$1" || { pump; tree_has "$1"; }; }
 expect_toast() { wait_for toast_after_pump "$1"; }
-# No toast, after the check had every chance to run.
+# No toast, after the check had every chance to run: 15 pumps over about 1.5 s, a bound the step proves.
 expect_no_toast() {
   local round
   for round in {1..15}; do pump; sleep 0.1; done

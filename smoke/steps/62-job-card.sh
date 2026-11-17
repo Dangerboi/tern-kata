@@ -8,11 +8,9 @@ jc_short=$(jq -r '.issue.short_id' "$tmp/jobcard-parent.json")
 jc_children() {
   kata --workspace "$jc_dir" list --json | jq '[.issues[] | select(.title | startswith("Smoke every minute tick"))] | length'
 }
-jc_wait_children() { # wait until the child count satisfies a jq test on the count, up to 150 seconds
-  for ((attempt = 0; attempt < 75; attempt++)); do
-    if [[ $(jc_children | jq "$1") == true ]]; then return 0; fi
-    sleep 2
-  done
+jc_children_satisfy() { [[ $(jc_children | jq "$1") == true ]]; }
+jc_wait_children() { # wait until the child count satisfies a jq test on the count
+  wait_for -i 2 jc_children_satisfy "$1" && return 0
   printf 'Child count never satisfied %s: %s\n' "$1" "$(jc_children)" >&2
   return 1
 }
@@ -58,7 +56,7 @@ jc_wait_children '. >= 1'
 ctl key p
 expect_tree "[data-id='main.columns.list.jobs.$jc_job']" '.ok and .count == 1 and (.nodes[0].text | contains("disabled"))'
 jc_paused=$(jc_children)
-sleep 75
+sleep 75 # proves a bound: no further child may be made in 75 s (more than a minute) while the job is paused
 [[ $(jc_children) == "$jc_paused" ]]
 
 # p resumes: the row reads active and the next sweep delivers again.

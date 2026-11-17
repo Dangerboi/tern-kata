@@ -44,7 +44,7 @@ rd_worker_admits() { "${rd_env[@]}" "$tmp/tern-kata" worker status 2>/dev/null |
 rd_start_worker() {
   "${rd_env[@]}" "$tmp/tern-kata" worker >>"$tmp/rd-worker.log" 2>&1 &
   rd_worker_pid=$!
-  wait_for -t 20 rd_worker_admits || { cat "$tmp/rd-worker.log" >&2; return 1; }
+  wait_for rd_worker_admits || { cat "$tmp/rd-worker.log" >&2; return 1; }
 }
 rd_stop() {
   [[ -z "$rd_worker_pid" ]] || { kill "$rd_worker_pid" 2>/dev/null || true; wait "$rd_worker_pid" 2>/dev/null || true; }
@@ -80,16 +80,16 @@ ctl key escape
 # The first run's slot frees a moment after kata shows it succeeded.
 rd_run=
 rd_run_started() { rd_run=$("${rd_env[@]}" "$tmp/tern-kata" run "$rd_hang" 2>/dev/null | awk '{print $2}') || true; [[ -n "$rd_run" ]]; }
-wait_for -t 20 rd_run_started
+wait_for rd_run_started
 rd_hang_stub_running() { pgrep -f -- "$rd_hang_stub" >/dev/null; }
-wait_for -t 20 rd_hang_stub_running
+wait_for rd_hang_stub_running
 kill -9 "$rd_worker_pid"
 wait "$rd_worker_pid" 2>/dev/null || true
 rd_worker_pid=
 pkill -9 -f -- "$rd_hang_stub" || true
 rd_start_worker
 rd_worker_holds() { "${rd_env[@]}" "$tmp/tern-kata" worker status | grep -q "held"; }
-wait_for -t 20 rd_worker_holds
+wait_for rd_worker_holds
 ctl key ctrl+r
 expect_tree "[data-id='main.columns.list.runs.$rd_run']" '.ok and .count == 1 and (.nodes[0].text | contains("held") and contains("interrupted"))'
 ctl click "[data-id='main.columns.list.runs.$rd_run']"

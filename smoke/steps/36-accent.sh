@@ -18,14 +18,14 @@ accent_expect() {
   local program_path='[.elements[] | select(.path | split(">") | last | test("^div\\.sf\\.sf-item")) | select(.path | split(">") | last | contains(".sel")) | .rect | tostring] | .[0]'
   local ref
   ref=$(ctl dump ".tn-drop-l" | jq -c '.elements[0].backgroundColor | [scan("[0-9.]+") | tonumber]')
-  for ((attempt = 0; attempt < 200; attempt++)); do
+  accent_filled() {
     ctl dump "[data-id^='main.columns.list.issues.']" >"$tmp/accent-dump.json"
-    if jq -e --argjson ref "$ref" --arg mode "$mode" --arg want "$want" "$program" "$tmp/accent-dump.json" >/dev/null; then
-      jq -r "$program_path" "$tmp/accent-dump.json"
-      return
-    fi
-    sleep 0.1
-  done
+    jq -e --argjson ref "$ref" --arg mode "$mode" --arg want "$want" "$program" "$tmp/accent-dump.json" >/dev/null
+  }
+  if wait_for accent_filled; then
+    jq -r "$program_path" "$tmp/accent-dump.json"
+    return
+  fi
   jq -c '.elements[] | {path: (.path | split(">") | last), bg: .backgroundColor, color}' "$tmp/accent-dump.json" >&2
   printf 'The selected row is not an accent-filled, readable row\n' >&2
   return 1
@@ -50,11 +50,10 @@ kata --workspace "$tmp/workspace" close "$accent_short" --done --message "Closed
 expect_tree "[data-id\$='.$accent_uid']" '.ok and .count == 1'
 ctl click "[data-id^='main.columns.list.issues.'][data-id\$='.$accent_uid']"
 accent_expect >/dev/null
-for ((attempt = 0; attempt < 200; attempt++)); do
+accent_closed_white() {
   ctl dump ".sf-item.sel[data-id\$='.$accent_uid'] *" >"$tmp/accent-closed-dump.json"
-  if jq -e '(.elements | length) > 0 and all(.elements[]; .color == "rgb(255, 255, 255)")' "$tmp/accent-closed-dump.json" >/dev/null; then break; fi
-  sleep 0.1
-done
-jq -e '(.elements | length) > 0 and all(.elements[]; .color == "rgb(255, 255, 255)")' "$tmp/accent-closed-dump.json" >/dev/null
+  jq -e '(.elements | length) > 0 and all(.elements[]; .color == "rgb(255, 255, 255)")' "$tmp/accent-closed-dump.json" >/dev/null
+}
+wait_for accent_closed_white
 kata --workspace "$tmp/workspace" delete "$accent_uid" --force --confirm "DELETE smoke#$accent_short" --json >/dev/null
 expect_tree "[data-id\$='.$accent_uid']" '.ok and .count == 0'

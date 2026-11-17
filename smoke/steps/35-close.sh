@@ -17,18 +17,19 @@ pc_start() {
   local before=" $(pc_pids) " pid
   pc_run "(cd $tmp/workspace && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP $1 KATA_HOME=$KATA_HOME $tmp/tern-kata)"
   pc_pid=
-  for ((attempt = 0; attempt < 100; attempt++)); do
+  pc_started() {
     for pid in $(pc_pids); do [[ $before == *" $pid "* ]] || pc_pid=$pid; done
-    [[ -z $pc_pid ]] || return 0
-    sleep 0.1
-  done
+    [[ -n $pc_pid ]]
+  }
+  wait_for pc_started && return 0
   printf 'tern-kata did not start in the new tab\n' >&2
   return 1
 }
 # Tern's close prompt: since Tern 0.9.12 its own dialog in the window, no longer a native one in `ctl system`.
 pc_dialog=".mdl-alert[role='dialog']"
 pc_dialogs() { ctl tree "$pc_dialog" | jq '.count'; }
-# Presses Tern's close chord and prints the milliseconds until its prompt is up; the prompt stays open.
+# Presses Tern's close chord and prints the milliseconds until its prompt is up; the prompt stays open. It must be up within
+# 5 s (a bound the step proves; a chord that misses it is not the runner's).
 pc_prompt_ms() {
   local known start
   known=$(pc_dialogs)
@@ -39,7 +40,7 @@ pc_prompt_ms() {
   done
   echo $(( ($(pc_now) - start) / 1000000 ))
 }
-# Prints the milliseconds since $2 until process $1 is gone; it fails after 10 s.
+# Prints the milliseconds since $2 until process $1 is gone; it fails after 10 s (the cap on a measurement the step bounds at 2 s).
 pc_gone_ms() {
   while [[ " $(pc_pids) " == *" $1 "* ]]; do
     if (( $(pc_now) - $2 > 10000000000 )); then printf 'tern-kata %s still running 10 s after the close\n' "$1" >&2; return 1; fi
@@ -68,10 +69,9 @@ ctl confirm-close running >/dev/null
 # The reference: another full-screen program. The headless Linux runner sends meta for the close chord's ctrl.
 pc_chord=meta+shift+w
 pc_run "(cd $tmp/workspace && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=$KATA_HOME kata tui)"
-for ((attempt = 0; attempt < 100; attempt++)); do
-  [[ $(ctl state | jq -r '.focused.running') != null ]] && break
-  sleep 0.1
-done
+pc_running() { [[ $(ctl state | jq -r '.focused.running') != null ]]; }
+wait_for pc_running
+# Nothing observable marks kata tui having drawn; the sleep only lets it draw before the prompt is timed.
 sleep 1
 pc_reference=$(pc_prompt_ms) || { pc_chord=ctrl+shift+w; pc_reference=$(pc_prompt_ms); }
 ctl click "$pc_dialog .mdl-go" >/dev/null
@@ -135,12 +135,7 @@ expect_tree "[data-id^='main.columns.list.issues.']" '.ok and .count > 0'
 pc_quit_start=$(pc_now)
 ctl key q
 printf 'tern-kata gone %s ms after q\n' "$(pc_gone_ms "$pc_pid" "$pc_quit_start")"
-for ((attempt = 0; attempt < 100; attempt++)); do
-  ctl state >"$tmp/pc-state.json"
-  jq -e '.focused.prompt == true and .focused.running == null and .focused.busy == false' "$tmp/pc-state.json" >/dev/null && break
-  sleep 0.1
-done
-jq -e '.focused.prompt == true and .focused.running == null' "$tmp/pc-state.json" >/dev/null
+wait_for shell_idle
 ctl close >/dev/null
 [[ $(pc_pids) == "$pc_main_pids" ]]
 

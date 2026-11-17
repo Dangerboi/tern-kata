@@ -21,11 +21,8 @@ ctl type '" + saved after a claim"'
 kata --workspace "$tmp/workspace" claim "$claim_draft" --if-unowned --json >/dev/null
 ctl key Ctrl+o
 expect_tree "[data-id='layer.editor']" '.ok and .count == 0'
-for ((attempt = 0; attempt < 100; attempt++)); do
-  [[ $(kata --workspace "$tmp/workspace" show "$claim_draft" --json | jq -r '.issue.body') == "Claim seeded body + saved after a claim" ]] && break
-  sleep 0.1
-done
-[[ $(kata --workspace "$tmp/workspace" show "$claim_draft" --json | jq -r '.issue.body') == "Claim seeded body + saved after a claim" ]]
+claim_draft_saved() { [[ $(kata --workspace "$tmp/workspace" show "$claim_draft" --json | jq -r '.issue.body') == "Claim seeded body + saved after a claim" ]]; }
+wait_for claim_draft_saved
 ctl key Escape
 
 expect_tree "[data-id='main.columns.list.issues.$claim_close']" '.ok and .count == 1'
@@ -36,11 +33,8 @@ expect_tree "[data-id='layer.close.foot.quick']" '.ok and .count == 1'
 kata --workspace "$tmp/workspace" claim "$claim_close" --if-unowned --json >/dev/null
 ctl click "[data-id='layer.close.foot.quick']"
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
-for ((attempt = 0; attempt < 100; attempt++)); do
-  [[ $(kata --workspace "$tmp/workspace" show "$claim_close" --json | jq -r '.issue.status') == closed ]] && break
-  sleep 0.1
-done
-[[ $(kata --workspace "$tmp/workspace" show "$claim_close" --json | jq -r '.issue.status') == closed ]]
+claim_close_closed() { [[ $(kata --workspace "$tmp/workspace" show "$claim_close" --json | jq -r '.issue.status') == closed ]]; }
+wait_for claim_close_closed
 
 for fixture in claim-draft claim-close; do
   uid=$(jq -r '.issue.uid' "$tmp/$fixture.json")

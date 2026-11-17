@@ -15,12 +15,12 @@ printf 'version = 1\n[project]\nname = "remote-smoke"\n' >"$remote_workspace/.ka
 
 python3 "$repo/smoke/remote_proxy.py" "$remote_upstream" "$tmp/remote-resolve.jsonl" >"$tmp/proxy.url" 2>"$tmp/proxy.log" &
 proxy_pid=$!
-for ((attempt = 0; attempt < 100; attempt++)); do
-  [[ ! -s "$tmp/proxy.url" ]] || break
-  kill -0 "$proxy_pid"
-  sleep 0.1
-done
-[[ -s "$tmp/proxy.url" ]]
+proxy_ready() {
+  [[ -s "$tmp/proxy.url" ]] && return 0
+  kill -0 "$proxy_pid" 2>/dev/null || { printf 'the remote proxy exited before it printed its URL\n' >&2; exit 1; }
+  return 1
+}
+wait_for proxy_ready
 remote_proxy=$(<"$tmp/proxy.url")
 printf 'ready\nrun "(cd %s && env -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s KATA_SERVER=%s %s/tern-kata)"\n' "$remote_workspace/nested" "$KATA_HOME" "$remote_proxy" "$tmp" >"$tmp/remote-launch.ctl"
 ctl --file "$tmp/remote-launch.ctl"

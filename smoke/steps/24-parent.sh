@@ -79,7 +79,7 @@ for parent_pane_height in "$parent_height" 420; do
   parent_bar_before=$(parent_bar)
   for _ in $(seq 8); do ctl key tab; done
   for _ in $(seq 45); do ctl key j; done
-  sleep 0.5
+  sleep 0.5 # proves a bound: the bar must not have moved within 0.5 s of the keys, so waiting longer would weaken it
   [[ $(parent_bar) == "$parent_bar_before" ]] || { printf 'Top bar moved with the detail focused at height %s: %s -> %s\n' "$parent_pane_height" "$parent_bar_before" "$(parent_bar)" >&2; return 1; }
 done
 ctl resize 1200 "$parent_height"

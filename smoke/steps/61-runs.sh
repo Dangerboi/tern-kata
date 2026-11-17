@@ -92,10 +92,8 @@ ctl key s
 expect_tree "[data-id='main.columns.list.runs.nothing-new']" '.ok and .count == 1 and (.nodes[0].text | contains("Nothing new since"))'
 expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.count == 0'
 rn_seen="$XDG_CONFIG_HOME/tern-kata/seen.toml"
-for ((attempt = 0; attempt < 100; attempt++)); do
-  grep -qs 'timeline = true' "$rn_seen" && grep -qs '^ *seen = 2026-10-08T12:01:00Z' "$rn_seen" && break
-  sleep 0.1
-done
+rn_seen_marked() { grep -qs 'timeline = true' "$rn_seen" && grep -qs '^ *seen = 2026-10-08T12:01:00Z' "$rn_seen"; }
+wait_for rn_seen_marked
 grep -q '^\[' "$rn_seen"
 grep -q 'timeline = true' "$rn_seen"
 grep -q '^ *seen = 2026-10-08T12:01:00Z' "$rn_seen"

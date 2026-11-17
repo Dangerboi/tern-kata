@@ -7,6 +7,12 @@ wait_limit=${SMOKE_WAIT_LIMIT:-120}
 source "$repo/scripts/plugin-info.sh"
 # Microseconds since the epoch; EPOCHREALTIME's radix character follows the locale.
 epoch_us() { printf -v "$1" '%s' "${EPOCHREALTIME//[.,]/}"; }
+# trace_failures: names the file, line and command of any command that ends a script run by itself (plugin.sh, release-check.sh),
+# which has no step name for run.sh to print. A command whose failure is handled (`||`, `if`) is not named.
+trace_failures() {
+  set -E
+  trap 'printf "%s:%s failed: %s\n" "${BASH_SOURCE[0]##*/}" "$LINENO" "$BASH_COMMAND" >&2' ERR
+}
 # wait_for [-t seconds] [-i interval] <command...>: polls (every 0.1 s unless -i gives the seconds) until the command succeeds,
 # for up to wait_limit seconds, and names the command when time runs out. Headless Tern runs plugin timers only on frames, so a
 # caller waiting on one keeps frames coming.

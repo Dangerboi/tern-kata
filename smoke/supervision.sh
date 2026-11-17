@@ -51,7 +51,7 @@ start_daemon() {
   # A short PATH, as a daemon started by a desktop launcher has: it lists neither tern-kata nor omp.
   env PATH=/usr/bin:/bin "$tern_bin" daemon --socket "$TERN_DAEMON_SOCKET" >"$tmp/daemon.out" 2>&1 &
   daemon_pid=$!
-  wait_for -t 10 socket_ready "$daemon_pid" "$TERN_DAEMON_SOCKET"
+  wait_for socket_ready "$daemon_pid" "$TERN_DAEMON_SOCKET"
 }
 stop_daemon() {
   [[ -z "$daemon_pid" ]] || { kill "$daemon_pid" 2>/dev/null || true; wait "$daemon_pid" 2>/dev/null || true; }
@@ -61,18 +61,19 @@ stop_daemon() {
 worker_pid() { [[ -f "$state/worker.lock" ]] && cat "$state/worker.lock" || true; }
 alive() { [[ -n "${1:-}" ]] && kill -0 "$1" 2>/dev/null; }
 worker_gone() { ! alive "$1"; }
-wait_gone() { wait_for -t 30 worker_gone "$1"; } # $1 the pid
+wait_gone() { wait_for worker_gone "$1"; } # $1 the pid
 # The worker answers on its control socket: `worker status` works.
 worker_answers() { "$tmp/bin/tern-kata" worker status >"$tmp/status.txt" 2>&1; }
-wait_worker() { # $1 seconds
-  wait_for -t "$1" worker_answers || { cat "$tmp/status.txt" >&2; return 1; }
+# The waits below run up to wait_limit seconds; a caller that proves a bound passes the seconds as the last argument.
+wait_worker() { # [$1 seconds]
+  wait_for ${1:+-t "$1"} worker_answers || { cat "$tmp/status.txt" >&2; return 1; }
 }
 new_worker_answers() { # $1 the old pid
   local new
   new=$(worker_pid)
   [[ -n "$new" && "$new" != "$1" ]] && alive "$new" && "$tmp/bin/tern-kata" worker status >/dev/null 2>&1
 }
-wait_new_worker() { wait_for -t "$2" new_worker_answers "$1"; } # $1 the old pid, $2 seconds
+wait_new_worker() { wait_for ${2:+-t "$2"} new_worker_answers "$1"; } # $1 the old pid, [$2 seconds]
 
 # The daemon reloads a linked plugin whenever a file in its folder changes, and a reloaded host half starts the worker at
 # once, with no wait. Link a private copy, so other work in the repository (a parallel check step) cannot reload it
@@ -91,7 +92,7 @@ if tern_at_least 0.9.21; then
   printf '{"worker.summary":{"at":1,"worker":{}}}\n' >"$kv_file"
 fi
 start_daemon
-sleep 3
+sleep 3 # proves a bound: no worker or log line may come from the host half within 3 s of its start without worker.toml
 [[ -z "$(worker_pid)" ]] || { echo "a worker started without worker.toml" >&2; exit 1; }
 if grep -qs 'tern-kata:' "$STENCIL_LOG_DIR/tern-daemon.log"; then echo "host half logged without worker.toml" >&2; exit 1; fi
 if tern_at_least 0.9.21; then
@@ -110,7 +111,7 @@ command = "omp"
 args = ["--stub-text", "supervised ok", "--stub-fail-when", "FAILME"]
 TOML
 # Every window is closed (none was ever opened); the worker comes up from the daemon alone.
-wait_worker 30
+wait_worker
 grep -q 'Supervised by Tern' "$tmp/status.txt" || { echo "worker status does not say Tern supervises it" >&2; cat "$tmp/status.txt" >&2; exit 1; }
 first=$(worker_pid)
 
@@ -125,13 +126,13 @@ runs_succeeded() { # $1 how many
   "$tmp/bin/tern-kata" worker status >"$tmp/status.txt"
   [[ $(grep -c '"Supervised smoke job"  succeeded' "$tmp/status.txt") -ge $1 ]]
 }
-accept_run() { # $1 the job's uid, $2 seconds
-  wait_for -t "$2" job_accepted "$1"
+accept_run() { # $1 the job's uid
+  wait_for job_accepted "$1"
   grep -q accepted <<<"$run_out" || { echo "$run_out" >&2; return 1; }
 }
 run_job() { # $1 how many runs have succeeded when it returns
-  accept_run "$job" 10
-  wait_for -t 10 runs_succeeded "$1" || { cat "$tmp/status.txt" >&2; return 1; }
+  accept_run "$job"
+  wait_for runs_succeeded "$1" || { cat "$tmp/status.txt" >&2; return 1; }
 }
 run_job 1
 # On a Tern whose host half cannot render widgets, the host half keeps a summary of the running worker in the plugin's tern.kv
@@ -142,12 +143,13 @@ summary_is() { # $1 present|gone
   tern plugin list >/dev/null 2>&1 # idle with no worker, the session daemon exits after about 12 s
   if [[ $1 == present ]]; then [[ -n "$(kv_summary)" ]]; else [[ -z "$(kv_summary)" ]]; fi
 }
-wait_summary() { # $1 present|gone, $2 seconds
-  wait_for -t "$2" summary_is "$1" || { echo "worker.summary: $(kv_summary)" >&2; return 1; }
+wait_summary() { # $1 present|gone
+  wait_for summary_is "$1" || { echo "worker.summary: $(kv_summary)" >&2; return 1; }
 }
 if tern_at_least 0.9.21; then
   # Tern 0.9.21+ renders the worker widget in the host half, so no summary goes to tern.kv (plugin.sh reads the widget itself);
-  # the poll that would have stored one comes within 10 s. The host half logs a failed registration at warn level.
+  # the poll that would have stored one comes within 10 s, so 13 s of looks prove it stored none (a bound the step proves).
+  # The host half logs a failed registration at warn level.
   for tick in {1..13}; do
     tern plugin list >/dev/null 2>&1
     [[ -z "$(kv_summary)" ]] || { echo "worker.summary was stored although the host half renders the widget: $(kv_summary)" >&2; exit 1; }
@@ -155,17 +157,17 @@ if tern_at_least 0.9.21; then
   done
   ! grep -q 'could not register the worker widget' "$STENCIL_LOG_DIR/tern-daemon.log" || { echo "the host half could not register the worker widget" >&2; exit 1; }
 else
-  wait_summary present 25
+  wait_summary present
   kv_summary | jq -e --argjson pid "$(worker_pid)" '.worker | .executor == "smoke-machine" and .pid == $pid and .capacity >= 1 and (.running | type) == "number" and (.held | length) == 0' >/dev/null || { echo "worker.summary is not the running worker's summary: $(kv_summary)" >&2; exit 1; }
 fi
 
 # A crashing worker is restarted, and each quick crash waits longer than the last.
 kill -9 "$first"
-wait_new_worker "$first" 20
+wait_new_worker "$first"
 second=$(worker_pid)
 epoch_us crash_at
 kill -9 "$second"
-wait_new_worker "$second" 20
+wait_new_worker "$second"
 epoch_us restarted_at
 third=$(worker_pid)
 restart_ms=$(( (restarted_at - crash_at) / 1000 ))
@@ -174,17 +176,18 @@ run_job 2
 
 # A daemon restart: the host half loads again and the worker runs again.
 stop_daemon
-# The worker may outlive the daemon (the next stage ends it): give it a moment to go with it.
+# The worker may outlive the daemon (the next stage ends it): give it a moment to go with it. A short grace, not a
+# requirement, so it keeps its 10 s and a worker that stays is not waited for until wait_limit.
 wait_for -t 10 worker_gone "$third" || true
 start_daemon
-wait_worker 40
+wait_worker
 fourth=$(worker_pid)
 alive "$fourth"
 run_job 3
 # The worker the old daemon left running keeps its lock, so the new host half starts none while it runs; when it ends, the
 # next look starts a worker.
 alive "$third" && kill -9 "$third"
-wait_new_worker "$third" 100
+wait_new_worker "$third"
 run_job 4
 good_config=$(<"$XDG_CONFIG_HOME/tern-kata/worker.toml")
 # A crash loop on a broken worker.toml grows the wait past one poll (10 s); fixing the file starts a worker within a poll.
@@ -193,9 +196,9 @@ printf 'this is = = not toml\n' >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
 log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
 kill -9 "$fifth"
 backoff_grew() { tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log" | grep -Eq 'restarting in ([2-9][0-9]|1[1-9]) s'; }
-wait_for -t 120 backoff_grew || { echo "the broken config never grew the wait past 10 s" >&2; exit 1; }
+wait_for backoff_grew || { echo "the broken config never grew the wait past 10 s" >&2; exit 1; }
 printf '%s\n' "$good_config" >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
-wait_new_worker "$fifth" 13 || { echo "fixing worker.toml did not start a worker within one poll" >&2; exit 1; }
+wait_new_worker "$fifth" 13 || { echo "fixing worker.toml did not start a worker within one poll" >&2; exit 1; } # 13 s proves a bound: within one poll
 # The supervision rule lives in Go (worker.SupervisionOn, whose config folder is worker.ConfigDir). It answers `worker stop`
 # ("a fresh worker" or "nothing will start it again") and the host half asks it through `worker supervised`; the host half
 # either starts a worker within a poll (10 s) or does not. This end-to-end step checks the host half acts on the answer.
@@ -211,11 +214,13 @@ stop_expecting() {
   esac
   wait_gone "$pid"
 }
-# wait_started <old pid> <seconds>: wait for a new worker, asking the daemon something at every look. Left idle with no
-# worker running the session daemon exits after about 12 s, and with it the host half under test.
+# wait_started <old pid> [seconds]: wait for a new worker, asking the daemon something at every look. Left idle with no
+# worker running the session daemon exits after about 12 s, and with it the host half under test. The seconds are for a step
+# that proves a bound (one poll is 10 s, so 13 s covers one); without them it waits up to wait_limit.
 started_worker() { tern plugin list >/dev/null 2>&1; new_worker_answers "$1"; }
-wait_started() { wait_for -t "$2" started_worker "$1"; }
+wait_started() { wait_for ${2:+-t "$2"} started_worker "$1"; }
 # no_worker_within <seconds> <reason>: the host half starts none (one poll is 10 s, so 13 s covers one), the daemon kept busy.
+# A bound the step proves, so the seconds stay fixed.
 no_worker_within() {
   for tick in $(seq "$1"); do sleep 1; tern plugin list >/dev/null 2>&1; done
   [[ -z "$(worker_pid)" ]] || ! alive "$(worker_pid)" || { echo "a worker started although $2" >&2; return 1; }
@@ -224,19 +229,19 @@ no_worker_within() {
 : >"$config/worker.manual"
 stop_expecting none
 no_worker_within 13 "worker.manual is present"
-wait_summary gone 15
+wait_summary gone
 # Removing worker.manual: the host half starts a worker within a poll, and stop promises a fresh one, which comes.
 rm "$config/worker.manual"
-wait_started "" 13 || { echo "removing worker.manual did not start a worker within one poll" >&2; exit 1; }
+wait_started "" 13 || { echo "removing worker.manual did not start a worker within one poll" >&2; exit 1; } # 13 s proves a bound: within one poll
 manual_worker=$(worker_pid)
 stop_expecting fresh
-wait_started "$manual_worker" 40 || { echo "the host half did not start the fresh worker stop promised" >&2; exit 1; }
+wait_started "$manual_worker" || { echo "the host half did not start the fresh worker stop promised" >&2; exit 1; }
 # No worker.toml: stop promises nothing follows, and the host half starts none. Restoring it starts one within a poll.
 rm "$config/worker.toml"
 stop_expecting none
 no_worker_within 13 "worker.toml is absent"
 printf '%s\n' "$good_config" >"$config/worker.toml"
-wait_started "" 13 || { echo "restoring worker.toml did not start a worker within one poll" >&2; exit 1; }
+wait_started "" 13 || { echo "restoring worker.toml did not start a worker within one poll" >&2; exit 1; } # 13 s proves a bound: within one poll
 # A plugin reload gives the host half fresh state while its worker runs on, as a Tern update's handoff does. The reloaded
 # host half starts no second worker for worker.lock to refuse and knows the held answer (an older host.luau would log it
 # as an unknown status); it names the running worker once, over two reloads and three looks, and starts a worker within a
@@ -250,6 +255,7 @@ adopted=$(worker_pid)
 keepalive=$!
 log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
 tern plugin reload tern-kata >/dev/null
+# The fixed 15 s of looks prove a bound: the reload must leave the running worker alone within them.
 for k in {0..14}; do # looks at 0.5 s (first load), then 3.5 s and 13.5 s (the load after the second reload)
   sleep 1
   if ((k == 2)); then tern plugin reload tern-kata >/dev/null; else tern plugin list >/dev/null 2>&1; fi
@@ -264,7 +270,7 @@ if grep -q '`worker supervised` exited with status' <<<"$since_reload"; then ech
 log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
 epoch_us killed_at
 kill -9 "$adopted"
-wait_started "$adopted" 13 || { echo "the reloaded host half did not start a worker within a poll of the running one's end" >&2; exit 1; }
+wait_started "$adopted" 13 || { echo "the reloaded host half did not start a worker within a poll of the running one's end" >&2; exit 1; } # 13 s proves a bound: within one poll
 epoch_us started_at
 since_kill_ms=$(( (started_at - killed_at) / 1000 ))
 if tern_at_least 0.9.16; then
@@ -279,10 +285,10 @@ if tern_at_least 0.9.24; then
   sed 's/"Supervised smoke job"/"Failing smoke job"/; s/say done/FAILME/; s/Supervised run/Failing run/' "$tmp/job.json" >"$tmp/failjob.json"
   failjob=$(kata --workspace "$tmp/workspace" cron job create --file "$tmp/failjob.json" --json | jq -r '.job.uid')
   for attempt in 1 2 3; do
-    accept_run "$failjob" 20
+    accept_run "$failjob"
   done
   worker_line_logged() { grep -Eq 'tern-kata worker: .*is paused after 3 failed runs' "$STENCIL_LOG_DIR/tern-daemon.log"; }
-  wait_for -t 20 worker_line_logged || { echo "a line the worker wrote to stderr never reached the daemon log" >&2; exit 1; }
+  wait_for worker_line_logged || { echo "a line the worker wrote to stderr never reached the daemon log" >&2; exit 1; }
   ! grep -q 'tern-kata worker: tern-kata worker: ' "$STENCIL_LOG_DIR/tern-daemon.log" || { echo "a worker line was logged with a doubled prefix" >&2; exit 1; }
 fi
 # `update` moves a supervised worker to the new binary: a release build older than the dist/ is what the host half starts,
@@ -295,7 +301,7 @@ build_old_release "$tmp/bin/tern-kata.old"
 mv "$tmp/bin/tern-kata.old" "$tmp/bin/tern-kata"
 old_worker=$(worker_pid)
 stop_expecting fresh
-wait_started "$old_worker" 40 || { echo "no worker started from the older release build" >&2; exit 1; }
+wait_started "$old_worker" || { echo "no worker started from the older release build" >&2; exit 1; }
 old_worker=$(worker_pid)
 "$tmp/bin/tern-kata" worker status | grep -q 'tern-kata v0.0.1' || { echo "the worker is not the older build" >&2; exit 1; }
 TERN_KATA_BASE_URL="$serve_url" "$tmp/bin/tern-kata" update >"$tmp/update.out"
@@ -303,6 +309,6 @@ grep -q 'Stopping when idle' "$tmp/update.out" || { echo "update did not stop th
 grep -q 'The plugin will start a fresh worker' "$tmp/update.out"
 grep -q 'tern-kata plugin is linked' "$tmp/update.out"
 wait_gone "$old_worker"
-wait_started "$old_worker" 40 || { echo "the host half did not start a worker after update" >&2; exit 1; }
+wait_started "$old_worker" || { echo "the host half did not start a worker after update" >&2; exit 1; }
 "$tmp/bin/tern-kata" worker status | grep -q "tern-kata v$up_version" || { echo "the new worker does not run v$up_version" >&2; exit 1; }
 printf 'Supervision smoke passed: no config = nothing, worker started and run with no window, quick crashes back off, worker back after a daemon restart and when the worker it left behind ends, a reloaded host half leaves the running worker alone and starts one when it ends, update moves the supervised worker to the new release, host half and `worker stop` agree on worker.manual and worker.toml (marker, no marker, no config) over the same config folder, fixing a broken worker.toml drops the wait\n'

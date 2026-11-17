@@ -18,11 +18,11 @@ stripe_expect() {
   local program='[.elements[] | select(.path | split(">") | last | test("^div\\.sf\\.sf-item")) | {sel: (.path | split(">") | last | contains(".sel")), bg: .backgroundColor, stripe: (.color | sub("rgb\\("; "rgba(") | sub("\\)$"; ", 0.05)"))}] as $r
     | ($r | length) == '"$1"'
     and all(range(0; $r | length); . as $i | $r[$i] | if .sel then .bg != "rgba(0, 0, 0, 0)" and .bg != .stripe elif $i % 2 == 1 then .bg == .stripe else .bg == "rgba(0, 0, 0, 0)" end)'
-  for ((attempt = 0; attempt < 200; attempt++)); do
+  stripe_alternates() {
     ctl dump "[data-id^='main.columns.list.issues.']" >"$tmp/stripe-dump.json"
-    if jq -e "$program" "$tmp/stripe-dump.json" >/dev/null; then return; fi
-    sleep 0.1
-  done
+    jq -e "$program" "$tmp/stripe-dump.json" >/dev/null
+  }
+  wait_for stripe_alternates && return
   jq -c '.elements[] | {path: (.path | split(">") | last), bg: .backgroundColor, color}' "$tmp/stripe-dump.json" >&2
   printf 'Row stripes are not alternating over %s rows\n' "$1" >&2
   return 1

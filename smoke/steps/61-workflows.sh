@@ -49,8 +49,8 @@ wf_below() { ctl tree "[data-id='main.columns.list.page.inspector.viewport'],[da
 [[ $(wf_below) -gt 100 ]] || { printf 'The long workflow does not overflow its inspector viewport\n' >&2; return 1; }
 ctl hover "[data-id='main.columns.list.page.inspector.viewport']" >/dev/null
 for _ in $(seq 40); do ctl wheel 0 300 >/dev/null; done
-for ((attempt = 0; attempt < 40; attempt++)); do [[ $(wf_below) -le 1 ]] && break; sleep 0.1; done
-[[ $(wf_below) -le 1 ]] || { printf 'The inspector viewport does not scroll to its end\n' >&2; return 1; }
+wf_at_end() { [[ $(wf_below) -le 1 ]]; }
+wait_for wf_at_end || { printf 'The inspector viewport does not scroll to its end\n' >&2; return 1; }
 [[ $(ctl tree "[data-id='main.topbar']" | jq -c '.nodes[0].rect') == "$wf_bar" ]] || { printf 'The top bar moved while the inspector scrolled\n' >&2; return 1; }
 ctl key escape
 ctl key 1

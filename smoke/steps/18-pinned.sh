@@ -27,9 +27,13 @@ for i in $(seq 45); do ctl key j; done
 expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[-1]["aria-selected"] == "true"'
 ctl tree "[data-id='main.topbar'],[data-id='main.columns.list.header']" | jq -c '[.nodes[].rect]' >"$tmp/pinned-rects-after.json"
 # At the end the selected row is on screen, above the footer: the list scrolled, not the Pane.
-ctl tree "[data-id='dock.hints']" | jq '.nodes[0].rect[1]' >"$tmp/pinned-dock-top.txt"
-ctl tree "[data-id^='main.columns.list.issues.01'][aria-selected='true']" >"$tmp/pinned-selected.json"
-jq -e --slurpfile dock "$tmp/pinned-dock-top.txt" '.count == 1 and (.nodes[0].rect | .[1] >= 0 and .[1] + .[3] <= $dock[0])' "$tmp/pinned-selected.json"
+# The list scrolls after the selection moves, so the check polls.
+pinned_selection_on_screen() {
+  ctl tree "[data-id='dock.hints']" | jq '.nodes[0].rect[1]' >"$tmp/pinned-dock-top.txt"
+  ctl tree "[data-id^='main.columns.list.issues.01'][aria-selected='true']" >"$tmp/pinned-selected.json"
+  jq -e --slurpfile dock "$tmp/pinned-dock-top.txt" '.count == 1 and (.nodes[0].rect | .[1] >= 0 and .[1] + .[3] <= $dock[0])' "$tmp/pinned-selected.json" >/dev/null
+}
+wait_for pinned_selection_on_screen
 for i in $(seq 45); do ctl key k; done
 expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[0]["aria-selected"] == "true"'
 

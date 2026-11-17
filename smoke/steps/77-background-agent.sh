@@ -32,7 +32,7 @@ ba_stop() {
 trap 'ba_status=$?; ba_stop; set +e; (exit $ba_status); cleanup' EXIT
 tern daemon --socket "$ba_sock" >"$tmp/ba-daemon.log" 2>&1 &
 ba_daemon_pid=$!
-wait_for -t 10 socket_ready "$ba_daemon_pid" "$ba_sock"
+wait_for socket_ready "$ba_daemon_pid" "$ba_sock"
 # The daemon exits once idle: the block the Pane stands in keeps it up.
 ba_pane=$(ba_tern new session ba-pane --json -- sleep 600 | jq -r '.block')
 

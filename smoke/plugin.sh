@@ -41,6 +41,7 @@ cleanup() {
 trap cleanup EXIT
 source "$(dirname "$0")/ctl.sh"
 ctl() { ctl_call "$@"; }
+trace_failures
 panes_are() { [[ $(ctl state | jq -r '.tabs[0].panes') == "$1" ]]; }
 # One `ready` call (at most Tern's 20 s), so wait_for's deadline bounds the whole wait.
 panes_ready() { tern ctl --control "$tmp/control.sock" ready >/dev/null && panes_are "$1"; }
@@ -152,13 +153,13 @@ palette_pane=$(jq -r '.focused.id' "$tmp/palette-state.json")
 # A normal quit after the 2 s window is not an install failure. The window is 20 timer ticks of 100 ms, which run on
 # frames: 5 s let it end with room for a loaded machine.
 ctl focus left
-sleep 5
+sleep 5 # a settle, not a wait: nothing observable marks the window's end
 ctl focus right
 ctl key q
 expect_panes 1
 ctl focus left
 # A second for a toast to show if the plugin read the quit as a failed start.
-sleep 1
+sleep 1 # proves a bound: no toast within 1 s of the quit
 expect_no_kata_toast
 ctl key F9
 ctl plugins expect smoke
@@ -418,7 +419,7 @@ wait_for shell_is_kata || { echo "shell not taken for kata: $(ctl state | jq -c 
 # The title also starts the plugin's title pump, which reuses the Pane while it waits for a surface: 50 ticks of a 200 ms timer
 # (10 s plus the queries between ticks) and nothing observable marks its end, so the wait is three times that; once the pump
 # gives up, only a surface would make the Pane live. The sleep outlasts the wait, so it is ended with Ctrl+c below.
-sleep 30
+sleep 30 # proves a bound: the Pane stays unmade for kata for the pump's whole wait, so it is not shortened
 ctl click "$x" "$y" cmd
 ctl plugins expect '"Plugin first body"'
 wait_for panes_are 3
@@ -516,7 +517,7 @@ ctl expect Press
 ctl key Enter
 expect_panes 1
 # The watcher polls once a second: 5 s let it act on the closed Pane.
-sleep 5
+sleep 5 # proves a bound: the watcher (once a second) must not run a plugin step within 5 s of the closed Pane
 [[ ! -e "$tmp/plugin-step.log" ]]
 expect_no_toast 'tern-kata plugin updated'
 # A plugin reload while a second update Pane is open (a local update brings the plugin along) must not turn that Pane into a

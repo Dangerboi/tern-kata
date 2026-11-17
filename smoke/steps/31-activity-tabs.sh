@@ -7,11 +7,11 @@ at_above() { at_rects | jq -r '.[1][1] - .[0][1] | -floor'; }
 at_below() { at_rects | jq -r '(.[1][1] + .[1][3]) - (.[0][1] + .[0][3]) | floor'; }
 at_wait() { # <label> <jq test on above/below as $a/$b>
   local a b
-  for ((attempt = 0; attempt < 40; attempt++)); do
+  at_settled() {
     a=$(at_above); b=$(at_below)
-    jq -en --argjson a "$a" --argjson b "$b" "$2" >/dev/null && return 0
-    sleep 0.1
-  done
+    jq -en --argjson a "$a" --argjson b "$b" "$2" >/dev/null
+  }
+  wait_for at_settled "$@" && return 0
   printf '%s: scrolled %s px, %s px left below\n' "$1" "$a" "$b" >&2
   return 1
 }

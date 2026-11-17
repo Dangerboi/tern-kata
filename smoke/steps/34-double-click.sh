@@ -14,10 +14,8 @@ dbl_double_click() {
   local mark
   mark=$(wc -l <"$tmp/dbl-frames.jsonl")
   ctl dblclick "[data-id\$='.$1']"
-  for ((attempt = 0; attempt < 100; attempt++)); do
-    [[ $(dbl_events "$mark") != "$2" ]] || return 0
-    sleep 0.1
-  done
+  dbl_events_are() { [[ $(dbl_events "$mark") == "$2" ]]; }
+  wait_for dbl_events_are "$1" "$2" && return 0
   printf 'Tern sent "%s" for a double click, want "%s"\n' "$(dbl_events "$mark")" "$2" >&2
   return 1
 }
