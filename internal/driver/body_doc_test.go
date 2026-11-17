@@ -3,6 +3,7 @@ package driver_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -665,5 +666,71 @@ func TestCommentSentAfterTheSelectionMovedIsWrittenOnTheIssueItWasMadeOn(t *test
 	}
 	if _, held := out.State.Model.Drafts["beta"]; held {
 		t.Fatal("the comment became beta's Draft")
+	}
+}
+
+func reopened(cmds []model.Cmd) bool {
+	for _, c := range cmds {
+		if _, ok := c.(model.ReopenIssueCmd); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func deadEdit(t *testing.T, s driver.State) driver.State {
+	t.Helper()
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	return driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
+}
+
+// Tern sometimes closes an edit at once after the body changed. The user types on, so keys that would run a binding are swallowed
+// for a moment, with a Notice that says why.
+func TestKeysAfterADeadEditRunNoBindingUntilTheWindowEnds(t *testing.T) {
+	s := deadEdit(t, onDoc(t, true))
+	at := now.Add(100 * time.Millisecond)
+	for _, k := range []string{"r", "u", "A", "enter"} {
+		out := driver.Step(s, key(k), at)
+		if len(out.Cmds) != 0 {
+			t.Fatalf("%s ran a binding: %#v", k, out.Cmds)
+		}
+		if n := out.State.Model.Notice; !strings.Contains(n, "did not open for editing") {
+			t.Fatalf("%s: notice %q, want it to say the body did not open", k, n)
+		}
+	}
+	if out := driver.Step(s, key("escape"), at); strings.Contains(out.State.Model.Notice, "did not open") {
+		t.Fatal("escape was swallowed")
+	}
+	if out := driver.Step(s, key("r"), now.Add(3*time.Second)); !reopened(out.Cmds) {
+		t.Fatalf("after the window r sent %#v, want the reopen", out.Cmds)
+	}
+}
+
+func TestAPointerActionEndsTheKeyGuard(t *testing.T) {
+	s := deadEdit(t, onDoc(t, true))
+	s = driver.Step(s, &tern.Select{ID: "main.columns.list.issues", Item: "alpha"}, now.Add(100*time.Millisecond)).State
+	if out := driver.Step(s, key("r"), now.Add(200*time.Millisecond)); !reopened(out.Cmds) {
+		t.Fatalf("r after a click sent %#v, want the reopen", out.Cmds)
+	}
+}
+
+func TestNoKeyGuardAfterANormalEdit(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s = driver.Step(s, &tern.Change{ID: id, Text: "mine"}, now.Add(10*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(20*time.Millisecond)).State
+	s = driver.Step(s, model.DraftSaved{UID: "alpha"}, now.Add(30*time.Millisecond)).State
+	if out := driver.Step(s, key("r"), now.Add(40*time.Millisecond)); !reopened(out.Cmds) {
+		t.Fatalf("r after an edit sent %#v, want the reopen", out.Cmds)
+	}
+	// An edit open longer than the bound that ends with no change is not a dead one either.
+	s = onDoc(t, true)
+	id = bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(2*time.Second)).State
+	if out := driver.Step(s, key("r"), now.Add(2100*time.Millisecond)); !reopened(out.Cmds) {
+		t.Fatalf("r after a long edit sent %#v, want the reopen", out.Cmds)
 	}
 }

@@ -114,6 +114,10 @@ type Model struct {
 	docEdit *docEdit
 	// docLate is text the doc sent for an Issue whose save was in flight, by uid: it is saved once that save settles.
 	docLate map[string]string
+	// docOpened is the doc's editing on that has not ended, and docGuardUntil the end of the window in which keys that would run a
+	// binding are swallowed after Tern closed an edit at once.
+	docOpened     *docOpened
+	docGuardUntil time.Time
 	// PaneBlock is the block id of this kata Pane ($TERN_PANE), "" when Tern did not say; agents split beside it.
 	PaneBlock string
 	// AgentMapping is agents.json as this Pane last read or changed it: the agents Panes on this host started.
@@ -231,6 +235,10 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 	}
 	if _, ok := msg.(ToggleLegendMsg); ok {
 		return toggleLegend(m), nil
+	}
+	if key, ok := msg.(KeyMsg); ok && m.docKeyGuarded(key) {
+		m.Notice = deadEditNotice
+		return m, nil
 	}
 	prev, pointer := m, selectPointerMsg(msg)
 	if press, ok := msg.(ButtonPressMsg); ok {

@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 // ternDocFloor is the first Tern whose doc element this Pane has seen work: in-place editing, and the Comment bubble on a
@@ -152,6 +153,7 @@ func (m Model) startDocEdit(issue Issue) Model {
 // opened in the overlay is theirs and stays. The text belongs to Issue uid: when the doc has since moved on to another Issue, it is
 // the open edit's (the doc sends its last second of typing after the move), never the Issue now shown.
 func bodyEdited(m Model, uid, text string) Model {
+	m = m.noteDocChange(uid)
 	if !m.InPlaceBody {
 		return m
 	}
@@ -237,8 +239,68 @@ func (m Model) docSaved(uid string, draft Draft) (Model, []Cmd) {
 	return sendDraftOf(m, uid, false)
 }
 
+// deadEditWithin is how soon after an editing on an editing off with no change in between is a dead edit: Tern closed the edit
+// itself, which it does for the first double click after the doc's text changed.
+const deadEditWithin = 500 * time.Millisecond
+
+// deadEditGuard is how long keys that would run a binding are swallowed after a dead edit: the user types on as if the edit were open.
+const deadEditGuard = 2 * time.Second
+
+const deadEditNotice = "The body did not open for editing. Double-click it again; keys are ignored for a moment."
+
+// docOpened is an editing on of the doc that has not ended: when it began, and whether a change came since.
+type docOpened struct {
+	uid   string
+	at    time.Time
+	typed bool
+}
+
+// noteDocEditing keeps track of the doc's editing on and off, and starts the key guard on a dead edit.
+func (m Model) noteDocEditing(uid string, on bool) Model {
+	if on {
+		m.docOpened = &docOpened{uid: uid, at: m.Now}
+		return m
+	}
+	opened := m.docOpened
+	if opened == nil || opened.uid != uid {
+		return m
+	}
+	m.docOpened = nil
+	if !opened.typed && m.Now.Sub(opened.at) <= deadEditWithin {
+		m.docGuardUntil = m.Now.Add(deadEditGuard)
+		m.Notice = deadEditNotice
+	}
+	return m
+}
+
+// noteDocChange notes that the doc sent a change of Issue uid's body since it began editing.
+func (m Model) noteDocChange(uid string) Model {
+	if opened := m.docOpened; opened != nil && opened.uid == uid && !opened.typed {
+		typed := *opened
+		typed.typed = true
+		m.docOpened = &typed
+	}
+	return m
+}
+
+// EndDocGuard ends the key guard: the pointer acted, so the user knows where they are.
+func (m Model) EndDocGuard() Model {
+	m.docGuardUntil = time.Time{}
+	return m
+}
+
+// docKeyGuarded reports whether key is one the key guard swallows: a printable key or enter, which would run a binding. Escape, the
+// arrows and the like pass.
+func (m Model) docKeyGuarded(key KeyMsg) bool {
+	return m.Now.Before(m.docGuardUntil) && (key.Text != "" || key.Chord == "enter")
+}
+
 // bodyEditing starts an in-place edit, or saves it when the user leaves the doc, through the write the overlay's Save makes.
 func bodyEditing(m Model, uid string, on bool) (Model, []Cmd) {
+	return applyBodyEditing(m.noteDocEditing(uid, on), uid, on)
+}
+
+func applyBodyEditing(m Model, uid string, on bool) (Model, []Cmd) {
 	if !m.InPlaceBody {
 		return m, nil
 	}
