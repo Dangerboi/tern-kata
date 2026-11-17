@@ -59,6 +59,9 @@ type Gateway struct {
 	// ternVersion is what `tern --version` said: one ask at a time, kept only when it succeeded.
 	ternVersion ternVersionCache
 
+	// versions is the version check's memory: the Pane's binary as it started, and the versions read from the files as they are.
+	versions versionWatch
+
 	liveCache liveBlocksCache
 
 	openFile func(path string) error

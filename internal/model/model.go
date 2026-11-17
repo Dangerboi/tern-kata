@@ -131,10 +131,12 @@ type Model struct {
 	agentAsks  int64
 	// agentsPruned says the first PruneAgents answer is in; sweepPending holds a wrap-up sweep asked for before it and the first
 	// relay were both in.
-	agentsPruned  bool
-	sweepPending  bool
-	Project       Project
-	Daemon        Daemon
+	agentsPruned bool
+	sweepPending bool
+	Project      Project
+	Daemon       Daemon
+	// Versions is what the Pane knows of the programs on its session host, which the top bar's version and notices read.
+	Versions      Versions
 	Snapshot      Snapshot
 	Relationships RelationshipIndex
 	Issues        []Issue
@@ -332,6 +334,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return moveTargetSelected(m, msg.Key)
 	case ToastPressMsg:
 		return pressToast(m, msg.Seq)
+	case VersionsChecked:
+		return versionsChecked(m, msg)
 	}
 	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)
@@ -375,7 +379,7 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = nil
 		m.agentAsks++
 		account := askAccount(&m)
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace}, LoadViews{}, PruneAgents{Workspace: msg.Workspace, PaneBlock: m.PaneBlock, Seq: m.agentAsks}, account}
+		return m, []Cmd{LoadProject{Workspace: msg.Workspace}, LoadViews{}, PruneAgents{Workspace: msg.Workspace, PaneBlock: m.PaneBlock, Seq: m.agentAsks}, account, askVersions(&m, 0)}
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case AgentStarted:

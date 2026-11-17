@@ -53,7 +53,12 @@ func (g *Gateway) RestartDaemon(ctx context.Context, workspace string) error {
 	if profile {
 		env = profileEnv()
 	}
-	return runKata(ctx, home, env, "daemon", "restart")
+	if err := runKata(ctx, home, env, "daemon", "restart"); err != nil {
+		return err
+	}
+	// The connection read the old daemon's version when it was made: the next call connects again and reads the new one.
+	g.forget(workspace, c)
+	return nil
 }
 
 // restartKataDaemon answers the Pane's RestartKataDaemon with the restart's outcome.

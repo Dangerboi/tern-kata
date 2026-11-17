@@ -418,6 +418,9 @@ func init() {
 
 	local((*Gateway).restartKataDaemon)
 
+	// The version check reads this machine's files and programs, then pings the daemon; each part it cannot read is left empty.
+	local((*Gateway).checkVersions)
+
 	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.LoadDetail) (model.DetailLoaded, error) {
 			return c.ReadDetail(ctx, cmd.UID)

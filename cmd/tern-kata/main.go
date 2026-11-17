@@ -147,9 +147,13 @@ func run() error {
 	}
 	host := data.HostName()
 	size := paneSize(term.Caps().Cols)
-	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, HostID: data.ThisHostID(), PaneBlock: os.Getenv("TERN_PANE"), QuitAtOnce: quitAtOnce}}
+	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, HostID: data.ThisHostID(), PaneBlock: os.Getenv("TERN_PANE"), QuitAtOnce: quitAtOnce,
+		Versions: model.Versions{Running: buildVersion()}}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata).WithHost(host)
+	if exe, err := os.Executable(); err == nil {
+		gateway = gateway.WithExecutable(exe)
+	}
 	defer gateway.Close()
 	input := any(model.Start{Workspace: workspace, IssueRef: plan.IssueRef, Nonce: rand.Text()})
 	loopErr := func() error {

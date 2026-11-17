@@ -29,6 +29,9 @@ const IssueListID = "main.columns.list.issues"
 
 var loadingMarker = ui.Span{T: "  loading…", S: "muted"}
 
+// noticeMarker is in the title's cell, which never shrinks, so it stays at every width; the Menu names each notice.
+var noticeMarker = ui.Span{T: model.NoticeMarker, S: "warning"}
+
 func Render(m model.Model, now time.Time) tern.View {
 	if len(m.VisibleColumns()) == 0 {
 		return narrowView()
@@ -204,15 +207,19 @@ func scrollerCommon(key string) ui.CommonWithoutMax {
 var fillMax = ui.MaxFrac(1)
 
 // topBar is the pinned row above the columns: the Collection title with its
-// markers on the left, the counts in the middle, and the Daemon then the Menu button at the right. The Menu button opens the
+// markers on the left (loading, and the notice marker while a version notice holds), the counts in the middle, and the Daemon,
+// this binary's version, then the Menu button at the right. The Menu button opens the
 // Menu. When the row is too narrow Tern's flex shrinks and truncates the Daemon first,
-// then the counts; the left cell and the button never shrink. The title keeps the accent whichever column has focus: it names
+// then the version and the counts; the left cell and the button never shrink. The title keeps the accent whichever column has focus: it names
 // what the Pane shows, and the columns' own borders show focus.
 func topBar(m model.Model) tern.Element {
 	title := barTitle(m)
 	heading := []ui.Span{{T: title, S: "title accent"}}
 	if m.Loading {
 		heading = append(heading, loadingMarker)
+	}
+	if len(m.VersionNotices()) > 0 {
+		heading = append(heading, noticeMarker)
 	}
 	flexCell := func(key string, tone ui.Tone, shrink float64) ui.Common {
 		return ui.Common{Key: key, Tone: tone, Shrink: &shrink}
@@ -243,6 +250,12 @@ func topBar(m model.Model) tern.Element {
 			ui.Text{Common: flexCell("daemon", ui.ToneMuted, 100), Text: m.DaemonLine(), Wrap: ui.WrapNone},
 			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
 		)
+		if m.Versions.Running != "" {
+			right = append(right,
+				ui.Text{Common: flexCell("version", ui.ToneMuted, 10), Text: "tern-kata " + m.Versions.Running, Wrap: ui.WrapNone},
+				ui.Text{Common: flexCell("version-sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
+			)
+		}
 	}
 	right = append(right, menuButton(m))
 	cells = append(cells, ui.Row{Common: rightCell, Gap: ui.GapNone, Children: right})

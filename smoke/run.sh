@@ -122,6 +122,8 @@ export XDG_STATE_HOME="$tmp/xdg-state"
 export XDG_CACHE_HOME="$tmp/xdg-cache"
 export TERN_DAEMON_SOCKET="$tmp/tern-daemon.sock"
 export STENCIL_LOG_DIR="$tmp/logs"
+# The Pane's daily `kata update --check` asks GitHub: the steps run without the network.
+export TERN_KATA_NO_UPDATE_CHECK=1
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
 
 cleanup() {

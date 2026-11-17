@@ -300,9 +300,10 @@ func (m Model) askRestartOnArrival() Model {
 	return m
 }
 
-// confirmRestartDaemon is y: the one restart goes out. A second y while it is out sends nothing.
+// confirmRestartDaemon is y: the one restart goes out. A second y while it is out sends nothing, nor does a y while the daemon
+// notice's restart is out.
 func confirmRestartDaemon(m Model) (Model, []Cmd) {
-	if !m.EmbeddingsCard.AskingRestart || m.Embeddings.Restarting {
+	if !m.EmbeddingsCard.AskingRestart || m.Embeddings.Restarting || m.Versions.restarting {
 		return m, nil
 	}
 	if m.Stale {
@@ -315,9 +316,12 @@ func confirmRestartDaemon(m Model) (Model, []Cmd) {
 	return m, []Cmd{RestartKataDaemon{Workspace: m.Workspace, Connection: m.Connection}}
 }
 
-// kataDaemonRestarted takes the restart's answer. Success reads the status again, which shows the indexing that follows. A
-// failure is reported by embeddingsFailed.
+// kataDaemonRestarted takes the restart's answer: the daemon notice's when that restart is out. Success reads the status again,
+// which shows the indexing that follows. A failure is reported by embeddingsFailed.
 func kataDaemonRestarted(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
+	if m.Versions.restarting {
+		return noticeRestartDone(m, msg)
+	}
 	if !m.Embeddings.Restarting {
 		return m, nil
 	}

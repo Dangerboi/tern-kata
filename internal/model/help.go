@@ -37,7 +37,8 @@ type questionEntry struct {
 }
 
 // questions lists the y/n questions in the order they win when several are open: the quit question wins over the delete-view one,
-// which wins over the Docbank switch, which wins over the unlink one. A new question is added here and nowhere else.
+// which wins over the Docbank switch, which wins over the unlink one, which wins over the daemon notice's restart. A new question is
+// added here and nowhere else.
 var questions = []questionEntry{
 	{ModeQuit, func(m Model) (Question, bool) {
 		return Question{Text: "Quit tern-kata? y/n", Yes: ConfirmQuitAction, No: StayAction, YesWords: "Quit", NoWords: "Stay"}, m.AskQuit
@@ -54,6 +55,9 @@ var questions = []questionEntry{
 			return Question{}, false
 		}
 		return Question{Text: "Unlink " + a.Attachment.Name + " from " + a.Ref + "? y/n", Yes: ConfirmUnlinkAttachmentAction, No: KeepAttachmentAction, YesWords: "Unlink", NoWords: "Keep", Danger: true}, true
+	}},
+	{ModeNoticeRestart, func(m Model) (Question, bool) {
+		return Question{Text: RestartQuestion, Yes: ConfirmNoticeRestartAction, No: DeclineNoticeRestartAction, YesWords: "Restart now", NoWords: "Not now"}, m.Versions.askRestart
 	}},
 }
 

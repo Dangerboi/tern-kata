@@ -67,6 +67,7 @@ const (
 	EntryRestore
 	EntryNewView
 	EntrySavedView // a saved view: Title is its name and Index its place in SavedViews
+	EntryNotice    // a version notice: Title is its headline and Index its NoticeKind
 )
 
 type PickerEntry struct {
@@ -86,6 +87,8 @@ func (e PickerEntry) Key() string {
 		return NewViewKey
 	case EntrySavedView:
 		return viewKeyPrefix + strconv.Itoa(e.Index)
+	case EntryNotice:
+		return noticeKeyPrefix + strconv.Itoa(e.Index)
 	case EntryNewProject:
 		return NewProjectKey
 	case EntryProjects:
@@ -152,6 +155,11 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 	}
 	if filter != "" && match(NewViewTitle) {
 		entries = append(entries, PickerEntry{Collection: Collection{Title: NewViewTitle}, Kind: EntryNewView})
+	}
+	for _, notice := range m.VersionNotices() {
+		if match(notice.Headline) {
+			entries = append(entries, PickerEntry{Collection: Collection{Title: notice.Headline}, Kind: EntryNotice, Index: int(notice.Kind)})
+		}
 	}
 	return entries
 }
@@ -265,6 +273,9 @@ func leaveSidebarLevel(m Model) Model {
 
 func openEntry(m Model, entry PickerEntry, popup bool) (Model, []Cmd) {
 	switch entry.Kind {
+	case EntryNotice:
+		m.Picker, m.Focus = PickerState{}, ColumnList
+		return openNotice(leaveSidebarLevel(m), NoticeKind(entry.Index))
 	case EntryLettered:
 		m.Picker, m.Focus = PickerState{}, ColumnList
 		m = leaveSidebarLevel(m)

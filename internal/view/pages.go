@@ -129,6 +129,9 @@ func topBarFit(m model.Model) barFit {
 	if m.Loading {
 		cols += displayWidth(loadingMarker.T)
 	}
+	if len(m.VersionNotices()) > 0 {
+		cols += displayWidth(noticeMarker.T)
+	}
 	return pageBarFit(m, cols)
 }
 

@@ -4,6 +4,16 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Install and update
+
+- The Pane's top bar shows its tern-kata version after the Daemon, and says when a restart or an update is owed on the session host.
+  - "↑ update" follows the title at every Pane width while a notice holds; the Menu lists each notice, and the Pane toasts it once.
+  - After `tern-kata update`, or a new build copied over the binary, a running Pane says within a minute that the new version is installed and the Pane must be reopened to use it.
+  - A local kata daemon older than the kata on PATH gets a Menu entry that restarts the daemon after asking.
+  - A newer kata release is named after a check made once a day per machine (`kata update --check`); `TERN_KATA_NO_UPDATE_CHECK` turns that check off.
+
 ### Changed
 
 #### Agents

@@ -162,6 +162,14 @@ The window plugin looks for a new release once a day. At window start, and every
 
 Turn it off with the **Turn tern-kata update checks off/on** palette command, which toasts the new state, or by setting `TERN_KATA_NO_UPDATE_CHECK` to any non-empty value in the window's environment: the variable keeps checks off on that machine whatever the toggle says. A plugin linked with `tern plugin link` never checks, since that is a development machine; the toggle command says so. `TERN_KATA_BASE_URL` points the check at another folder holding `version.txt`, such as a local `dist/`.
 
+### Version notices in the Pane
+
+The Pane's top bar names the tern-kata it runs after the Daemon ("tern-kata v0.15.0"; a Pane narrower than 80 columns leaves it out with the Daemon). Every minute the Pane also checks its own machine, the session host, and an "↑ update" marker follows the title, at every width, while one of these holds. The Menu lists each one, and the Pane toasts each once:
+
+- **tern-kata vX is installed**: the binary the Pane started from was replaced (`tern-kata update`, or a build copied over it). Reopen the Pane to run the new one. A build without a stamped version, such as one from `go install`, never claims this.
+- **kata daemon vX is older than kata vY**: `kata update` installed a newer kata but the local daemon still runs the old one. The Menu entry restarts the daemon after asking, as setting up search by meaning does; a remote daemon is restarted on its own machine.
+- **kata vX is out**: a newer kata release exists; run `kata update`. The Pane asks `kata update --check` at most once a day per machine (the time is kept in `kata-release-check.json` in tern-kata's config folder, so other Panes and restarts don't ask again), and a failed check is silent and counts. `TERN_KATA_NO_UPDATE_CHECK` turns this check off too. The Pane never checks for tern-kata releases; that is the window plugin's release check above.
+
 ## Troubleshooting
 
 If the Pane cannot find a local kata daemon whose storage is PostgreSQL, check the storage DSN: when it uses routing options (the `host`, `port`, `dbname`, `service` or `servicefile` query options, or `PG*` environment variables filling in missing parts), discovery fails because the lean kata client cannot resolve them. Set `KATA_SERVER` to the address `kata daemon locate` prints.

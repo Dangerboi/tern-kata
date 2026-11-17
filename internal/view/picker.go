@@ -30,6 +30,11 @@ func pickerLayer(m model.Model) tern.Element {
 		if entry.Kind == model.EntryViews && m.CurrentSavedView() != "" {
 			item.Value = ui.T(m.CurrentSavedView())
 		}
+		if entry.Kind == model.EntryNotice {
+			if notice, ok := m.NoticeOf(model.NoticeKind(entry.Index)); ok {
+				item.Value = ui.T(notice.Action)
+			}
+		}
 		items = append(items, item)
 	}
 	selected := ""
