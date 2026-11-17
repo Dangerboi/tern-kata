@@ -151,7 +151,8 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.Versions = m.Versions.forDaemon()
 	m.AskUnlink, m.AttachmentCopy = nil, AttachmentCopyState{}
 	dropped := len(m.Drafts)
-	m.Drafts, m.docEnded, m.docRested = nil, nil, nil
+	m.Drafts, m.docEdit, m.docEnded, m.docOpened, m.docRested = nil, nil, nil, nil, nil
+	m = m.EndDocGuard()
 	m.Project, m.Bound, m.Daemon = Project{}, false, msg.Daemon
 	m.Snapshot, m.Relationships, m.Issues, m.SelectedUID, m.Groups, m.ExpandedUIDs = Snapshot{}, nil, nil, "", nil, nil
 	m.Loading, m.Err = true, nil

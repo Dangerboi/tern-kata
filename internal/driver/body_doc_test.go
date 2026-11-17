@@ -1017,6 +1017,31 @@ func TestLateChangeAfterADaemonSwitchSendsNoText(t *testing.T) {
 	}
 }
 
+func TestChangesAfterADaemonSwitchWithTheEditOpenSendNoText(t *testing.T) {
+	for name, endEdit := range map[string]bool{"edit still open": false, "editing off after the switch": true} {
+		t.Run(name, func(t *testing.T) {
+			s := onDoc(t, true)
+			id := bodyDocID(t, s)
+			s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+			s = switchedAnswer(t, s).State
+			if endEdit {
+				out := step(t, s, &tern.Editing{ID: id, On: false})
+				if saves := savedCmds(out.Cmds); len(saves) != 0 {
+					t.Fatalf("editing off after the switch sent %#v", saves)
+				}
+				s = out.State
+			}
+			out := step(t, s, &tern.Change{ID: id, Text: "mine, later"})
+			if saves := savedCmds(out.Cmds); len(saves) != 0 {
+				t.Fatalf("a change after the switch sent %#v, want the old daemon's text dropped", saves)
+			}
+			if len(out.State.Model.Drafts) != 0 {
+				t.Fatalf("a change after the switch kept Drafts %#v", out.State.Model.Drafts)
+			}
+		})
+	}
+}
+
 // lateWithTheEditEnded is lateWhileSaving after Tern ended the edit (editing off), so no edit is open in the Pane when the save settles.
 func lateWithTheEditEnded(t *testing.T) driver.State {
 	t.Helper()
