@@ -22,14 +22,18 @@ type Draft struct {
 	Err                             error
 	ReplyTo, ReplyAuthor            string
 	ReplyKind                       ReplyKind
-	// FromDoc marks a Draft the Issue body's doc made, which the overlay does not show: an in-place edit, or a comment on a
-	// selection. HiddenPrefix is the stored text in front of what the doc draws (a Parent section it leaves out). Opening the Draft
-	// in the overlay makes it an ordinary one.
-	FromDoc      bool
-	HiddenPrefix string
-	// Ref names the Issue of a FromDoc Draft in a message raised when the Issue is no longer the one shown.
-	Ref string
+	// Doc is set on a Draft the Issue body's doc made, which the overlay does not show: an in-place edit, or a comment on a
+	// selection. Opening the Draft in the overlay makes it an ordinary one.
+	Doc *DocPart
 	Keyed
+}
+
+// DocPart is what only a Draft made in the Issue body's doc has.
+type DocPart struct {
+	// HiddenPrefix is the stored text in front of what the doc draws (a Parent section it leaves out).
+	HiddenPrefix string
+	// Ref names the Issue in a message raised when the Issue is no longer the one shown.
+	Ref string
 }
 
 // DraftBase is what a Draft was begun from: the Issue's Project, its body and its revision then. A save is written against it.
@@ -43,10 +47,13 @@ func baseOf(issue Issue) DraftBase {
 }
 
 // InPlaceEdit reports whether the Draft is an edit of the Issue body made in the doc, as against a comment from it or a Draft of the overlay.
-func (d Draft) InPlaceEdit() bool { return d.FromDoc && !d.Comment }
+func (d Draft) InPlaceEdit() bool { return d.Doc != nil && !d.Comment }
+
+// DocCanAct reports whether the Issue body's doc can act on the Draft: an in-place edit that is neither being saved nor in conflict.
+func (d Draft) DocCanAct() bool { return d.InPlaceEdit() && !d.Saving && d.Conflict == nil }
 
 // DocText is the text of an in-place edit as the doc holds it.
-func (d Draft) DocText() string { return strings.TrimPrefix(d.Editor.Text, d.HiddenPrefix) }
+func (d Draft) DocText() string { return strings.TrimPrefix(d.Editor.Text, d.Doc.HiddenPrefix) }
 
 type Keyed struct {
 	Key  string
@@ -191,8 +198,8 @@ func startDraft(m Model, comment bool) Model {
 		return m
 	}
 	uid := m.SelectedUID
-	if draft, ok := m.Drafts[uid]; ok && draft.FromDoc {
-		draft.FromDoc = false
+	if draft, ok := m.Drafts[uid]; ok && draft.Doc != nil {
+		draft.Doc = nil
 		m = putDraft(m, uid, draft)
 	}
 	if _, ok := m.Drafts[uid]; !ok {
@@ -227,12 +234,12 @@ func startReply(m Model) Model {
 func draftRefused(m Model, uid string, draft Draft, err error) Model {
 	draft.Err = err
 	m = putDraft(m, uid, draft)
-	if draft.FromDoc && m.EditorUID != uid {
+	if draft.Doc != nil && m.EditorUID != uid {
 		what := "your edit of"
 		if draft.Comment {
 			what = "your comment on"
 		}
-		m.Notice = fmt.Sprintf("Cannot save %s %s: %s. The Draft is kept: press e or c on that Issue to open it.", what, cmp.Or(draft.Ref, "the Issue"), err)
+		m.Notice = fmt.Sprintf("Cannot save %s %s: %s. The Draft is kept: press e or c on that Issue to open it.", what, cmp.Or(draft.Doc.Ref, "the Issue"), err)
 	}
 	return m
 }
@@ -317,7 +324,7 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 			draft.Conflict = &msg.Issue
 			draft.Err = nil
 			m = putDraft(m, msg.UID, draft)
-			if draft.FromDoc && m.EditorUID == "" { // the card is how a conflict is settled, so it opens over the doc
+			if draft.Doc != nil && m.EditorUID == "" { // the card is how a conflict is settled, so it opens over the doc
 				m.EditorUID = msg.UID
 				m = m.focusDetail()
 			}

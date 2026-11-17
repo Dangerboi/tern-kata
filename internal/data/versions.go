@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"go.kenn.io/kit/consolewindow"
-	"golang.org/x/mod/semver"
 
 	"github.com/Dangerboi/tern-kata/internal/atomicfile"
 	"github.com/Dangerboi/tern-kata/internal/filelock"
@@ -161,15 +160,7 @@ func kataCLIVersion(ctx context.Context, kata string) (version string, ran bool)
 	if json.Unmarshal(out, &answer) != nil {
 		return "", true
 	}
-	return semverOf(answer.Version), true
-}
-
-// semverOf is version with a leading v, "" when that is no semantic version.
-func semverOf(version string) string {
-	if version = "v" + strings.TrimPrefix(version, "v"); semver.IsValid(version) {
-		return version
-	}
-	return ""
+	return model.Semver(answer.Version), true
 }
 
 // releaseCheck is the hourly kata release check's last time and answer: Latest is the newer release it found, "" when none.
@@ -245,7 +236,7 @@ func askKataRelease(ctx context.Context, kata string) (string, bool) {
 	if !answer.UpdateAvailable {
 		return "", true
 	}
-	return semverOf(answer.LatestVersion), true
+	return model.Semver(answer.LatestVersion), true
 }
 
 // daemonVersion is the version the daemon for workspace says now, "" when it cannot be asked.
@@ -255,7 +246,7 @@ func (g *Gateway) daemonVersion(ctx context.Context, workspace string) string {
 		if err != nil {
 			return model.VersionsChecked{}, err
 		}
-		return model.VersionsChecked{Daemon: semverOf(ping.JSON200.Version)}, nil
+		return model.VersionsChecked{Daemon: model.Semver(ping.JSON200.Version)}, nil
 	})
 	if err != nil {
 		return ""

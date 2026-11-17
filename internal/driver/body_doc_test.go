@@ -247,8 +247,7 @@ func TestBodyWithAPictureStaysMarkdownOnATernWithDoc(t *testing.T) {
 	} {
 		issue := alpha
 		issue.Body, issue.ProjectID = body, 7
-		s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}).State
-		s.Model.InPlaceBody = true
+		s := onDocWith(t, true, &model.IssueDetailData{Issue: &issue})
 		if n := bodyNode(t, s); n.K != kind || kind == "md" && n.P["text"] != body {
 			t.Errorf("body %q drawn as %s, want %s", body, n.K, kind)
 		}

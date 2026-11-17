@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 
-	"golang.org/x/mod/semver"
 )
 
 // ternDocFloor is the first Tern whose doc element this Pane has seen work: in-place editing, and the Comment bubble on a
@@ -16,18 +15,6 @@ const ternDocFloor = "v0.9.26"
 // is older than the floor; a version that cannot be read is not enough.
 func TernDrawsDoc(version string) bool { return TernAtLeast(version, ternDocFloor) }
 
-// TernSemver is the semver of a Tern version as Tern names it ("0.9.26", "v0.9.26-dev"), with the leading v; false when it is no version.
-func TernSemver(version string) (string, bool) {
-	v := "v" + strings.TrimPrefix(strings.TrimSpace(version), "v")
-	return v, semver.IsValid(v)
-}
-
-// TernAtLeast reports whether a Tern of this version is at least floor, a semver with a leading v. A pre-release is older than its
-// release, and a version that cannot be read is not at least anything.
-func TernAtLeast(version, floor string) bool {
-	v, ok := TernSemver(version)
-	return ok && semver.Compare(v, floor) >= 0
-}
 
 var picture = regexp.MustCompile(`(?i)<img|!\[[^\]]*\]\(`)
 
@@ -100,10 +87,10 @@ func withoutParentSection(body, ref string) string {
 // docIssue is the Issue the body's doc shows: the detail's own, which stays on screen while the selection's Issue loads. The doc's
 // events belong to it, whatever the selection is.
 func (m Model) docIssue() *Issue {
-	if m.authority == nil {
-		return nil
+	if detail := m.DetailAuthority(); detail != nil {
+		return detail.Issue
 	}
-	return m.authority.Issue
+	return nil
 }
 
 // BodyDoc is what the Issue body's doc draws.
@@ -121,11 +108,11 @@ type BodyDoc struct {
 // BodyDoc is the state of issue's body doc.
 func (m Model) BodyDoc(issue Issue) BodyDoc {
 	draft, held := m.Drafts[issue.UID]
-	doc := BodyDoc{Text: m.docText(issue), Editable: !held || draft.InPlaceEdit() && !draft.Saving && draft.Conflict == nil}
+	doc := BodyDoc{Text: m.docText(issue), Editable: !held || draft.DocCanAct()}
 	if m.docEditing == issue.UID {
 		doc.Text = m.docDrawn
 	}
-	if held && draft.FromDoc && m.EditorUID != issue.UID {
+	if held && draft.Doc != nil && m.EditorUID != issue.UID {
 		doc.Err = draft.Err
 	}
 	return doc
@@ -163,7 +150,7 @@ func bodyEdited(m Model, text string) Model {
 	draft, held := m.Drafts[issue.UID]
 	hidden, base := m.docHidden, m.docBase
 	if held {
-		hidden, base = draft.HiddenPrefix, draft.DraftBase
+		hidden, base = draft.Doc.HiddenPrefix, draft.DraftBase
 	}
 	whole := normalizeLineBreaks(hidden + text)
 	if whole == normalizeLineBreaks(base.BaseText) {
@@ -173,7 +160,7 @@ func bodyEdited(m Model, text string) Model {
 		return m
 	}
 	if !held {
-		draft = Draft{DraftBase: base, FromDoc: true, HiddenPrefix: normalizeLineBreaks(hidden), Ref: issue.QualifiedID}
+		draft = Draft{DraftBase: base, Doc: &DocPart{HiddenPrefix: normalizeLineBreaks(hidden), Ref: issue.QualifiedID}}
 	}
 	draft.Editor, draft.Err = NewTextEditor(whole), nil
 	return putDraft(m, issue.UID, draft)
@@ -200,7 +187,7 @@ func bodyEditing(m Model, on bool) (Model, []Cmd) {
 // another Issue while the edit is open.
 func flushDocEdit(m Model, uid string) (Model, []Cmd) {
 	draft, held := m.Drafts[uid]
-	if !held || !draft.InPlaceEdit() || draft.Saving || draft.Conflict != nil {
+	if !held || !draft.DocCanAct() {
 		return m, nil
 	}
 	return sendDraftOf(m, uid, false)
@@ -226,7 +213,7 @@ func selectionComment(m Model, msg SelectionComment) (Model, []Cmd) {
 		lines[i] = strings.TrimRight("> "+line, " ")
 	}
 	text := strings.Join(lines, "\n") + "\n\n" + note
-	m = putDraft(m, issue.UID, Draft{Editor: NewTextEditor(text), DraftBase: baseOf(*issue), Comment: true, FromDoc: true, Ref: issue.QualifiedID})
+	m = putDraft(m, issue.UID, Draft{Editor: NewTextEditor(text), DraftBase: baseOf(*issue), Comment: true, Doc: &DocPart{Ref: issue.QualifiedID}})
 	return sendDraftOf(m, issue.UID, false)
 }
 

@@ -145,8 +145,8 @@ func parseTernVersion(text string) (string, error) {
 	if len(fields) < 2 || fields[0] != "tern" {
 		return "", fmt.Errorf("tern --version printed %q, not `tern <version>`", strings.TrimSpace(text))
 	}
-	version, ok := model.TernSemver(fields[1])
-	if !ok {
+	version := model.Semver(fields[1])
+	if version == "" {
 		return "", fmt.Errorf("tern --version names %q, which is no version", fields[1])
 	}
 	return version, nil
