@@ -703,7 +703,7 @@ func TestNoKeyGuardWhenTheBodyDidNotChangeSinceTheLastEdit(t *testing.T) {
 	s := onDoc(t, true)
 	id := bodyDocID(t, s)
 	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(-10*time.Second)).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(-10*time.Second+300*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(-10*time.Second+3*time.Second)).State // a session that lasted: Tern's state is at rest
 	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
 	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
 	if n := s.Model.Notice; strings.Contains(n, "did not open") {
@@ -744,6 +744,18 @@ func TestKeyGuardAfterARetriedKeptDraftSaved(t *testing.T) {
 	for _, k := range []string{"r", "u"} {
 		if out := driver.Step(s, key(k), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
 			t.Fatalf("%s after the dead edit sent %#v with notice %q, want it swallowed", k, out.Cmds, out.State.Model.Notice)
+		}
+	}
+}
+
+func TestKeyGuardOnTheFirstDeadEditAfterThePaneOpened(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
+	for _, k := range []string{"r", "u"} {
+		if out := driver.Step(s, key(k), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
+			t.Fatalf("%s after the first dead edit sent %#v with notice %q, want it swallowed", k, out.Cmds, out.State.Model.Notice)
 		}
 	}
 }

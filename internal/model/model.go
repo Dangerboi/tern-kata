@@ -116,7 +116,7 @@ type Model struct {
 	// docOpened is the doc's editing on that has not ended. docGuardUntil is the end of the window in which keys that would run a
 	// binding are swallowed after Tern closed an edit at once, and docGuardSeq numbers the guards started, so the answer of an earlier
 	// one's wait does not end a later one. docRested is the text the doc drew when the last edit session of any Issue ended, nil before
-	// the first.
+	// the first, which Tern may have seen before this Pane opened: a nil text counts as changed.
 	docOpened     *docOpened
 	docGuardUntil time.Time
 	docGuardSeq   int

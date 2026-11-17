@@ -309,10 +309,10 @@ type docOpened struct {
 }
 
 // docRedrawn reports whether the doc, which draws Issue uid's body now, draws other text than it did when the last edit session of any
-// Issue ended (a save, someone else's edit, another Issue): Tern keeps that state across nodes, and ends the next edit at once.
+// Issue ended (a save, someone else's edit, another Issue), or before the first one since the Pane opened: Tern keeps that state across nodes, and ends the next edit at once.
 func (m Model) docRedrawn(uid string) bool {
 	issue := m.docIssue()
-	return m.docRested != nil && issue != nil && issue.UID == uid && m.docText(*issue) != *m.docRested
+	return issue != nil && issue.UID == uid && (m.docRested == nil || m.docText(*issue) != *m.docRested)
 }
 
 // restDoc notes the text the doc drew during the edit session that ends now, as the text that session ended on. It is the text the
