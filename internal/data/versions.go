@@ -96,7 +96,8 @@ func (g *Gateway) checkVersions(ctx context.Context, cmd model.CheckVersions) mo
 }
 
 // installed is the version of the binary now at the Pane's path, "" while it is the file the Pane started from. A file missing
-// for the moment (mid-swap) keeps what was read before.
+// for the moment (mid-swap), or one whose --version failed (a timeout, a copy still being written), keeps what was read before,
+// and a failed run is tried again at the next check.
 func (w *versionWatch) installed(ctx context.Context) string {
 	if w.exe == "" {
 		return ""
@@ -107,48 +108,58 @@ func (w *versionWatch) installed(ctx context.Context) string {
 	case stamp == w.started:
 		w.binary = probed{}
 	case stamp != w.binary.stamp:
-		w.binary = probed{stamp: stamp, version: ternKataVersion(ctx, w.exe)}
+		if version, ran := ternKataVersion(ctx, w.exe); ran {
+			w.binary = probed{stamp: stamp, version: version}
+		}
 	}
 	return w.binary.version
 }
 
-// ternKataVersion is what `<exe> --version` names ("tern-kata v0.16.0"), "" when it names none.
-func ternKataVersion(ctx context.Context, exe string) string {
+// ternKataVersion is what `<exe> --version` names ("tern-kata v0.16.0"), "" when it names none; ran is false when the run
+// itself failed.
+func ternKataVersion(ctx context.Context, exe string) (version string, ran bool) {
 	out, err := runVersion(ctx, versionRunTimeout, exe, "--version")
 	if err != nil {
-		return ""
+		return "", false
 	}
 	name, version, ok := strings.Cut(strings.TrimSpace(string(out)), " ")
 	if !ok || name != "tern-kata" || strings.ContainsAny(version, " \n") {
-		return ""
+		return "", true
 	}
-	return version
+	return version, true
 }
 
-// kataVersion is the version of the kata at path, read again only when that file changed.
+// kataVersion is the version of the kata at path, read again only when that file changed; a failed run is tried again at the
+// next check, the version read before standing meanwhile.
 func (w *versionWatch) kataVersion(ctx context.Context, kata string) string {
 	stamp, ok := stampOf(kata)
 	if !ok {
 		return ""
 	}
 	if w.kata.path != kata || w.kata.stamp != stamp {
-		w.kata = probed{path: kata, stamp: stamp, version: kataCLIVersion(ctx, kata)}
+		switch version, ran := kataCLIVersion(ctx, kata); {
+		case ran:
+			w.kata = probed{path: kata, stamp: stamp, version: version}
+		case w.kata.path != kata:
+			return ""
+		}
 	}
 	return w.kata.version
 }
 
-func kataCLIVersion(ctx context.Context, kata string) string {
+// kataCLIVersion is the version `kata version --json` names, "" when it names none; ran is false when the run itself failed.
+func kataCLIVersion(ctx context.Context, kata string) (version string, ran bool) {
 	out, err := runVersion(ctx, versionRunTimeout, kata, "version", "--json")
 	if err != nil {
-		return ""
+		return "", false
 	}
 	var answer struct {
 		Version string `json:"version"`
 	}
 	if json.Unmarshal(out, &answer) != nil {
-		return ""
+		return "", true
 	}
-	return semverOf(answer.Version)
+	return semverOf(answer.Version), true
 }
 
 // semverOf is version with a leading v, "" when that is no semantic version.

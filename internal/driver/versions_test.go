@@ -60,8 +60,8 @@ func heading(t *testing.T, s driver.State) string {
 
 func TestTheTopBarShowsTheBinarysVersionAfterTheDaemon(t *testing.T) {
 	s, _ := versionPane(t, 200, "v0.15.0")
-	if got, ok := nodeText(t, s, topBarVersionID); !ok || got != "tern-kata v0.15.0" {
-		t.Fatalf("version cell %q (drawn %v), want tern-kata v0.15.0", got, ok)
+	if got, ok := nodeText(t, s, topBarVersionID); !ok || got != "tern-kata v0.15.0"+model.DaemonSeparator {
+		t.Fatalf("version cell %q (drawn %v), want tern-kata v0.15.0 and the separator before the Menu", got, ok)
 	}
 	if daemon, _ := nodeText(t, s, "main.topbar.right.daemon"); daemon != "Daemon: local · kata v0.23.0" {
 		t.Errorf("daemon cell %q", daemon)
@@ -226,5 +226,58 @@ func TestTheMarkerStaysAtTheNarrowestWidth(t *testing.T) {
 	}
 	if _, drawn := nodeText(t, out.State, topBarVersionID); drawn {
 		t.Errorf("the version is drawn at %d columns", model.MinCols)
+	}
+}
+
+// noticeRestartOut is a Pane that said y to the daemon notice's restart, and the restart it sent.
+func noticeRestartOut(t *testing.T) (driver.State, model.RestartKataDaemon) {
+	t.Helper()
+	s, check := versionPane(t, 200, "v0.15.0")
+	out, _ := checked(t, s, check, model.VersionsChecked{KataCLI: "v0.24.0", Daemon: "v0.23.0"})
+	confirmed := step(t, pickNotice(t, out.State, model.NoticeOldDaemon).State, key("y"))
+	restart, ok := restartCmd(confirmed.Cmds)
+	if !ok {
+		t.Fatalf("y sent %#v, want the restart", confirmed.Cmds)
+	}
+	return confirmed.State, restart
+}
+
+// A switch drops the old daemon's restart answer, so the restart it was waiting for must not hold the next one back.
+func TestADaemonSwitchEndsTheNoticesRestartOut(t *testing.T) {
+	s, restart := noticeRestartOut(t)
+	switched := switchedAnswer(t, s).State
+	late := step(t, switched, model.KataDaemonRestarted{Connection: restart.Connection}).State
+	project := model.Project{ID: 7, UID: "p", Name: "work"}
+	late.Model = loadFirst(late.Model, model.ProjectLoaded{Connection: late.Model.Connection, Project: project, Daemon: model.Daemon{Name: "home", Kind: model.DaemonLocal, Version: "v0.23.0"}},
+		model.SnapshotLoaded{Snapshot: model.Snapshot{Catalog: []model.CatalogProject{{Project: project}}}})
+	again := step(t, pickNotice(t, late, model.NoticeOldDaemon).State, key("y"))
+	if _, sent := restartCmd(again.Cmds); !sent {
+		t.Errorf("y on the new daemon's notice sent %#v, notice %q; want a restart", again.Cmds, again.State.Model.Notice)
+	}
+}
+
+// While the notice's restart is out the card's y says why it waits, and the restart's success reads the card's status again,
+// so the card no longer offers a restart that has just happened.
+func TestTheNoticesRestartSettlesTheSearchByMeaningCard(t *testing.T) {
+	s := embeddingsRowOn(t, restartOwed)
+	s.Model.Daemon = model.Daemon{Kind: model.DaemonLocal, Version: "v0.23.0"}
+	s = step(t, s, model.VersionsChecked{Request: 0, Connection: s.Model.Connection, KataCLI: "v0.24.0", Daemon: "v0.23.0"}).State
+	confirmed := step(t, pickNotice(t, s, model.NoticeOldDaemon).State, key("y"))
+	restart, ok := restartCmd(confirmed.Cmds)
+	if !ok {
+		t.Fatalf("y sent %#v, want the notice's restart", confirmed.Cmds)
+	}
+	card := step(t, confirmed.State, key("enter")).State
+	if card.Model.CurrentMode() != model.ModeEmbeddingsRestart {
+		t.Fatalf("mode %s, want the card's restart question", card.Model.CurrentMode())
+	}
+	waited := step(t, card, key("y"))
+	if _, sent := restartCmd(waited.Cmds); sent {
+		t.Fatalf("the card's y sent a second restart: %#v", waited.Cmds)
+	}
+	wantText(t, "card", wireTextOf(t, waited.State), "The kata daemon is restarting; wait for it.")
+	done := step(t, waited.State, model.KataDaemonRestarted{Connection: restart.Connection})
+	if _, ok := askedEmbeddings(done.Cmds); !ok {
+		t.Errorf("the restart's success sent %#v, want the search by meaning status read again", done.Cmds)
 	}
 }

@@ -105,6 +105,23 @@ func TestANewBinaryThatDoesNotSayItsVersionNamesNone(t *testing.T) {
 	}
 }
 
+// A run that failed (a timeout under load, a copier still holding the file) is tried again at the next check.
+func TestAFailedVersionRunIsTriedAgain(t *testing.T) {
+	t.Setenv("TERN_KATA_NO_UPDATE_CHECK", "1")
+	t.Setenv("PATH", t.TempDir())
+	exe := filepath.Join(t.TempDir(), "tern-kata")
+	script(t, exe, "exit 0\n")
+	g := newGateway(t, newLocator(Target{})).WithExecutable(exe)
+	tried := exe + ".tried"
+	script(t, exe, "[ -e '"+tried+"' ] || { : > '"+tried+"'; exit 1; }\necho 'tern-kata v0.16.0'\n")
+	if got := checkVersions(t, g).Installed; got != "" {
+		t.Fatalf("Installed %q from a failed run, want none", got)
+	}
+	if got := checkVersions(t, g).Installed; got != "v0.16.0" {
+		t.Errorf("Installed %q at the next check, want v0.16.0", got)
+	}
+}
+
 func TestTheKataCLIsVersionIsReadAgainOnlyWhenKataChanges(t *testing.T) {
 	t.Setenv("TERN_KATA_NO_UPDATE_CHECK", "1")
 	kata := fakeKata(t, "v0.24.0", "")

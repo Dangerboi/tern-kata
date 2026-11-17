@@ -251,10 +251,9 @@ func topBar(m model.Model) tern.Element {
 			ui.Text{Common: flexCell("sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
 		)
 		if m.Versions.Running != "" {
-			right = append(right,
-				ui.Text{Common: flexCell("version", ui.ToneMuted, 10), Text: "tern-kata " + m.Versions.Running, Wrap: ui.WrapNone},
-				ui.Text{Common: flexCell("version-sep", ui.ToneMuted, 0), Text: model.DaemonSeparator, Wrap: ui.WrapNone},
-			)
+			// The separator is part of the version's text, so it shrinks away with it: the right cell's fixed parts stay
+			// "… · Menu", which its minimum width is sized for.
+			right = append(right, ui.Text{Common: flexCell("version", ui.ToneMuted, 10), Text: "tern-kata " + m.Versions.Running + model.DaemonSeparator, Wrap: ui.WrapNone})
 		}
 	}
 	right = append(right, menuButton(m))

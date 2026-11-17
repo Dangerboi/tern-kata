@@ -300,10 +300,14 @@ func (m Model) askRestartOnArrival() Model {
 	return m
 }
 
-// confirmRestartDaemon is y: the one restart goes out. A second y while it is out sends nothing, nor does a y while the daemon
-// notice's restart is out.
+// confirmRestartDaemon is y: the one restart goes out. A second y while it is out sends nothing; a y while the daemon notice's
+// restart is out sends nothing and says so on the card.
 func confirmRestartDaemon(m Model) (Model, []Cmd) {
-	if !m.EmbeddingsCard.AskingRestart || m.Embeddings.Restarting || m.Versions.restarting {
+	if !m.EmbeddingsCard.AskingRestart || m.Embeddings.Restarting {
+		return m, nil
+	}
+	if m.Versions.restarting {
+		m.EmbeddingsCard.Err = errors.New(restartOutNotice)
 		return m, nil
 	}
 	if m.Stale {

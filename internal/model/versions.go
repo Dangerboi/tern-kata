@@ -19,8 +19,10 @@ type Versions struct {
 	checks              Latest
 	// toasted are the notices already toasted, by text, so each version is toasted once.
 	toasted []string
-	// askRestart says the restart question of the daemon notice is shown; restarting that its restart is out.
-	askRestart, restarting bool
+	// askRestart says the daemon notice's restart question is shown.
+	askRestart bool
+	// restarting says the daemon notice's restart is out.
+	restarting bool
 }
 
 const (
@@ -139,11 +141,11 @@ const noticeKeyPrefix = "notice."
 
 // NoticeOf is the notice of kind that holds now.
 func (m Model) NoticeOf(kind NoticeKind) (VersionNotice, bool) {
-	i := slices.IndexFunc(m.VersionNotices(), func(n VersionNotice) bool { return n.Kind == kind })
-	if i < 0 {
-		return VersionNotice{}, false
+	notices := m.VersionNotices()
+	if i := slices.IndexFunc(notices, func(n VersionNotice) bool { return n.Kind == kind }); i >= 0 {
+		return notices[i], true
 	}
-	return m.VersionNotices()[i], true
+	return VersionNotice{}, false
 }
 
 // openNotice is a pick of a notice's Menu entry. The daemon's asks before it restarts the daemon; the others can only be done
@@ -181,7 +183,8 @@ func confirmNoticeRestart(m Model) (Model, []Cmd) {
 }
 
 // noticeRestartDone takes the answer to the daemon notice's restart. Success checks the versions at once, which reads the new
-// daemon's version and so clears the notice; a failure says why and leaves the notice.
+// daemon's version and so clears the notice, and reads search by meaning's status again, which a restart may have settled; a
+// failure says why and leaves the notice.
 func noticeRestartDone(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
 	m.Versions.restarting = false
 	if msg.Err != nil {
@@ -189,5 +192,9 @@ func noticeRestartDone(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
 		return m, nil
 	}
 	m.Notice = "The kata daemon restarted."
-	return m, []Cmd{askVersions(&m, 0)}
+	cmds := []Cmd{askVersions(&m, 0)}
+	if m.Embeddings.Read {
+		cmds = append(cmds, askEmbeddings(&m, 0))
+	}
+	return m, cmds
 }
