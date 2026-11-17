@@ -786,3 +786,28 @@ func TestLateTextIsDroppedWithTheDraftsOnADaemonSwitch(t *testing.T) {
 		t.Fatalf("a save settling after the switch sent %#v", out.Cmds)
 	}
 }
+
+func TestFailureOfTheFollowUpSaveIsAnnouncedWhetherOrNotTheCardWasOpen(t *testing.T) {
+	for name, open := range map[string]bool{"card open": true, "card not open": false} {
+		t.Run(name, func(t *testing.T) {
+			s := lateWhileSaving(t)
+			if open {
+				s = feed(t, s, key("e")).State
+			}
+			out := step(t, s, model.DraftSaved{UID: "alpha"})
+			if len(savedCmds(out.Cmds)) != 1 {
+				t.Fatalf("the first save settling sent %#v, want the follow-up save", out.Cmds)
+			}
+			failed := step(t, out.State, model.DraftFailed{UID: "alpha", Err: errTest}).State
+			if n := failed.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, errTest.Error()) {
+				t.Fatalf("notice %q, want it to name the Issue and the error", n)
+			}
+			theirs := alpha
+			theirs.Body, theirs.Revision = "theirs", 9
+			conflict := step(t, out.State, model.DraftConflict{UID: "alpha", Issue: theirs}).State
+			if conflict.Model.EditorUID != "alpha" {
+				t.Fatalf("the conflict opened no card, editor %q", conflict.Model.EditorUID)
+			}
+		})
+	}
+}

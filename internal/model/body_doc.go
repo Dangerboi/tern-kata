@@ -220,7 +220,17 @@ func (m Model) docSaved(uid string, draft Draft) (Model, []Cmd) {
 	if draft.Late == nil || *draft.Late == saved {
 		return m, nil
 	}
-	next := Draft{DraftBase: draft.DraftBase, Doc: draft.Doc, Editor: NewTextEditor(*draft.Late)}
+	doc := draft.Doc
+	if doc == nil { // the user opened the Draft in the card meanwhile: the follow-up is the doc's again, so a failure or conflict is announced as any edit of the doc's
+		doc = &DocPart{}
+		if m.editsDoc(uid) {
+			doc.HiddenPrefix, doc.Ref = m.docEdit.hidden, m.docEdit.ref
+		} else if issue := m.issueByUID(uid); issue != nil {
+			_, hidden := m.BodyShown(*issue)
+			doc.HiddenPrefix, doc.Ref = normalizeLineBreaks(hidden), issue.QualifiedID
+		}
+	}
+	next := Draft{DraftBase: draft.DraftBase, Doc: doc, Editor: NewTextEditor(*draft.Late)}
 	next.BaseText = saved
 	m = putDraft(m, uid, next)
 	return sendDraftOf(m, uid, false)
