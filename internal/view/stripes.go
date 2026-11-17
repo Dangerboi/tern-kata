@@ -15,7 +15,7 @@ const (
 	ListOwnerRole = "tern-kata.ow"
 )
 
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + PropertiesCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + TwoLineRowCSS
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + PropertiesCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + TwoLineRowCSS + "\n" + DocCSS
 
 const PropertyKeyRole = "tern-kata.propkey"
 
