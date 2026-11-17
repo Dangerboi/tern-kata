@@ -99,11 +99,13 @@ type BodyDoc struct {
 	// Editable is false while the Issue holds a Draft the doc cannot take (one of the overlay, a comment, one whose save is in flight
 	// or in conflict): the doc then offers neither an edit nor a comment on a selection.
 	Editable bool
-	// Err is the failure of a kept in-place edit that no card shows; nil otherwise.
+	// Err is the failure of a kept doc Draft (an in-place edit or a comment) that no card shows; nil otherwise.
 	Err error
-	// Conflicted is set when a kept in-place edit conflicted and no card shows it: the line under the doc says so, since a Notice does not
-	// outlive the next key.
+	// Conflicted is set when a kept doc Draft (an in-place edit or a comment on a selection) conflicted and no card shows it: the line
+	// under the doc says so, since a Notice does not outlive the next key.
 	Conflicted bool
+	// What names that Draft for the line, "edit" or "comment"; "" when Conflicted is false.
+	What string
 }
 
 // BodyDoc is the state of issue's body doc.
@@ -115,7 +117,12 @@ func (m Model) BodyDoc(issue Issue) BodyDoc {
 	}
 	if held && draft.Doc != nil && m.EditorUID != issue.UID {
 		doc.Err = draft.Err
-		doc.Conflicted = draft.Conflict != nil
+		if doc.Conflicted = draft.Conflict != nil; doc.Conflicted {
+			doc.What = "edit"
+			if draft.Comment {
+				doc.What = "comment"
+			}
+		}
 	}
 	return doc
 }

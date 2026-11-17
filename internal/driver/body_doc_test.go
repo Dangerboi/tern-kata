@@ -558,3 +558,24 @@ func TestAHeldDraftStaysExplainedWhateverTheShownBodyHolds(t *testing.T) {
 		}
 	}
 }
+
+func TestTheLineUnderTheBodyNamesTheCommentItKeepsAndTheNoticeSaysTheSame(t *testing.T) {
+	s := onDoc(t, true)
+	s = feed(t, s, &tern.Comment{ID: bodyDocID(t, s), Quote: "q", Note: "n"}, key("j")).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}, key("e")).State
+	theirs := alpha
+	theirs.Body, theirs.Revision = "theirs", 4
+	s = feed(t, s, model.DraftConflict{UID: "alpha", Issue: theirs}).State
+	if n := s.Model.Notice; !strings.Contains(n, "Your comment on work#aaaa conflicts") {
+		t.Fatalf("notice %q, want it to name the comment", n)
+	}
+	s = feed(t, s, key("x"), key("escape"), key("y"), key("escape"), key("k")).State
+	back := alpha
+	back.Body, back.ProjectID, back.Revision, back.QualifiedID = docBody, 7, 3, "work#aaaa"
+	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &back}}).State
+	if line := bodyErrorLine(t, s); !strings.Contains(line, "Your comment conflicts with a newer change.") {
+		t.Fatalf("line %q, want it to name the comment", line)
+	}
+}

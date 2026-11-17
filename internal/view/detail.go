@@ -393,7 +393,7 @@ func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 		state = m.BodyDoc(issue)
 		switch {
 		case state.Conflicted:
-			line = []tern.Element{toneText("body-error", ui.ToneError, model.ConflictSentence("edit", ""))}
+			line = []tern.Element{toneText("body-error", ui.ToneError, model.ConflictSentence(state.What, ""))}
 		case state.Err != nil:
 			line = []tern.Element{toneText("body-error", ui.ToneError, state.Err.Error()+model.DraftKeptHint(state.Err, ""))}
 		}
