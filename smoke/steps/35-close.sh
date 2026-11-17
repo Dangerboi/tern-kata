@@ -31,12 +31,12 @@ pc_dialogs() { ctl tree "$pc_dialog" | jq '.count'; }
 # Presses Tern's close chord and prints the milliseconds until its prompt is up; the prompt stays open. It waits wait_limit seconds.
 # The close-prompt bound itself is the relative check against the reference, not this wait.
 pc_prompt_ms() {
-  local known start limit=$wait_limit
+  local known start
   known=$(pc_dialogs)
   start=$(pc_now)
   ctl key "$pc_chord" >/dev/null
   until (( $(pc_dialogs) > known )); do
-    if (( $(pc_now) - start > limit * 1000000000 )); then printf 'No close prompt within %s s of %s\n' "$limit" "$pc_chord" >&2; return 1; fi
+    if (( $(pc_now) - start > wait_limit * 1000000000 )); then printf 'No close prompt within %s s of %s\n' "$wait_limit" "$pc_chord" >&2; return 1; fi
   done
   echo $(( ($(pc_now) - start) / 1000000 ))
 }
@@ -68,7 +68,7 @@ pc_main_pids=$(pc_pids)
 ctl confirm-close running >/dev/null
 
 # The reference: another full-screen program. The headless Linux runner sends meta for the close chord's ctrl.
-pc_chord=meta+shift+w # headless Tern sends Ctrl+x as meta+x (the key table binds both), so the smoke presses meta
+pc_chord=meta+shift+w
 pc_run "(cd $tmp/workspace && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=$KATA_HOME kata tui)"
 pc_running() { [[ $(ctl state | jq -r '.focused.running') != null ]]; }
 wait_for pc_running
