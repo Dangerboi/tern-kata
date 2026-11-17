@@ -14,7 +14,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-const modernTernVersion = "tern 0.9.21 (bde0861)\n"
+const modernTernVersion = "tern 0.9.26 (bde0861)\n"
 
 // ternProbe answers the calls a stub that cares about neither makes of a current Tern: its version and its window clients.
 func ternProbe(args []string) ([]byte, bool) {

@@ -72,8 +72,20 @@ func TestOpenAttachmentUsesTheOSOpenerWhenTernCannotShowIt(t *testing.T) {
 		"tern exits non-zero": {"shot.png", func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(context.Context, []string) ([]byte, error) {
 			return []byte("no window answers"), errors.New("exit status 1")
 		}, "no window answers"},
-		"not in a Tern Pane": {"shot.png", func(*testing.T) {}, func(context.Context, []string) ([]byte, error) { t.Error("tern ran outside a Pane"); return nil, nil }, ""},
-		"a video":            {"clip.mp4", func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(context.Context, []string) ([]byte, error) { t.Error("tern ran for a video"); return nil, nil }, ""},
+		"not in a Tern Pane":         {"shot.png", func(*testing.T) {}, func(context.Context, []string) ([]byte, error) { t.Error("tern ran outside a Pane"); return nil, nil }, ""},
+		"a video Tern does not play": {"clip.avi", func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(context.Context, []string) ([]byte, error) { t.Error("tern ran for an avi"); return nil, nil }, ""},
+		"a video on a Tern from before it plays them": {"clip.mp4", func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(_ context.Context, args []string) ([]byte, error) {
+			if args[0] != "--version" {
+				t.Errorf("tern ran %q on a Tern that does not play video", args)
+			}
+			return []byte("tern 0.9.25 (x)"), nil
+		}, "video need Tern 0.9.26 or newer"},
+		"a PDF on a Tern of unknown version": {"paper.pdf", func(t *testing.T) { t.Setenv("TERN_PANE", "7") }, func(_ context.Context, args []string) ([]byte, error) {
+			if args[0] != "--version" {
+				t.Errorf("tern ran %q on a Tern of unknown version", args)
+			}
+			return []byte("tern next"), nil
+		}, "could not tell whether this Tern draws PDFs"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newDocbankFixture(t)
@@ -138,7 +150,7 @@ func TestOpenAttachmentBesideDoesNotFallBackToTheOSOpener(t *testing.T) {
 	for name, tc := range map[string]struct {
 		file string
 		pane bool
-	}{"tern fails": {"shot.png", true}, "not in a Pane": {"shot.png", false}, "a video": {"clip.mp4", true}} {
+	}{"tern fails": {"shot.png", true}, "not in a Pane": {"shot.png", false}, "an avi": {"clip.avi", true}} {
 		t.Run(name, func(t *testing.T) {
 			f := newDocbankFixture(t)
 			if tc.pane {
@@ -289,5 +301,78 @@ func TestExecTernKeepsStdoutApartFromStderr(t *testing.T) {
 	_, err := g.ternOutput(context.Background(), 0, []string{"close", "7"})
 	if err == nil || strings.Count(err.Error(), "no such block") != 1 || !strings.Contains(err.Error(), "exit status 1") {
 		t.Fatalf("failure %v, want the exit status and tern's words once", err)
+	}
+}
+
+func TestOpenAttachmentShowsVideoAudioAndPDFsInTernOn0926(t *testing.T) {
+	for _, name := range []string{"clip.mp4", "CLIP.MOV", "clip.m4v", "clip.webm", "song.mp3", "song.wav", "song.ogg", "song.flac", "song.m4a", "paper.pdf"} {
+		t.Run(name, func(t *testing.T) {
+			f := newDocbankFixture(t)
+			t.Setenv("TERN_PANE", "7")
+			asked := ternScript(f.gateway, map[string]func() ([]byte, error){"open": ternOut("")})
+
+			got := as[model.AttachmentOpened](t, run(t, f.gateway, f.openCmd(t, name)))
+			if want := [][]string{{"open", "--preview", got.Path}}; got.Err != nil || !slices.EqualFunc(*asked, want, slices.Equal) {
+				t.Fatalf("opened %+v, tern was asked %v, want %v", got, *asked, want)
+			}
+			if len(*f.opened) != 0 || got.OutsideTern {
+				t.Fatalf("the OS opener ran: %v (outside Tern %v)", *f.opened, got.OutsideTern)
+			}
+		})
+	}
+}
+
+func TestOpenAttachmentSendsAVIAndMKVToTheOSEvenOn0926(t *testing.T) {
+	for _, name := range []string{"clip.avi", "clip.mkv"} {
+		t.Run(name, func(t *testing.T) {
+			f := newDocbankFixture(t)
+			t.Setenv("TERN_PANE", "7")
+			asked := ternScript(f.gateway, map[string]func() ([]byte, error){"open": ternOut("")})
+
+			got := as[model.AttachmentOpened](t, run(t, f.gateway, f.openCmd(t, name)))
+			if got.Err != nil || !got.OutsideTern || !slices.Equal(*f.opened, []string{got.Path}) || len(*asked) != 0 {
+				t.Fatalf("opened %+v, OS opener ran for %v, tern was asked %v", got, *f.opened, *asked)
+			}
+		})
+	}
+}
+
+func TestOpenAttachmentBesideAllowsMediaOn0926AndRefusesAVIAndMKV(t *testing.T) {
+	f := newDocbankFixture(t)
+	t.Setenv("TERN_PANE", "7")
+	asked := ternScript(f.gateway, map[string]func() ([]byte, error){"open": ternOut("")})
+	for _, name := range []string{"clip.mp4", "song.mp3", "paper.pdf"} {
+		cmd := f.openCmd(t, name)
+		cmd.Way = model.WayBeside
+		got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd))
+		if got.Err != nil || got.Path == "" || !slices.ContainsFunc(*asked, func(c []string) bool { return slices.Equal(c, []string{"open", "--split", "right", got.Path}) }) {
+			t.Fatalf("%s beside: %+v, tern was asked %v", name, got, *asked)
+		}
+	}
+	for _, name := range []string{"clip.avi", "clip.mkv"} {
+		cmd := f.openCmd(t, name)
+		cmd.Way = model.WayBeside
+		if got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd)); got.Err == nil || !strings.Contains(got.Err.Error(), "Tern draws only") {
+			t.Fatalf("%s beside: %+v, want the refusal", name, got)
+		}
+	}
+	if len(*f.opened) != 0 {
+		t.Fatalf("the OS opener ran: %v", *f.opened)
+	}
+}
+
+func TestOpenAttachmentBesideRefusesMediaOnATernBefore0926(t *testing.T) {
+	f := newDocbankFixture(t)
+	t.Setenv("TERN_PANE", "7")
+	f.gateway.runTern = func(_ context.Context, args []string) ([]byte, error) {
+		if args[0] != "--version" {
+			t.Errorf("tern ran %q", args)
+		}
+		return []byte("tern 0.9.25 (x)"), nil
+	}
+	cmd := f.openCmd(t, "paper.pdf")
+	cmd.Way = model.WayBeside
+	if got := as[model.AttachmentOpened](t, run(t, f.gateway, cmd)); got.Err == nil || !strings.Contains(got.Err.Error(), "PDFs need Tern 0.9.26 or newer") {
+		t.Fatalf("opened %+v, want the Tern version it needs", got)
 	}
 }

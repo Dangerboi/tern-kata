@@ -14,12 +14,12 @@ func attachmentRef(name, mediaType string) map[string]any {
 	return map[string]any{"name": name, "media_type": mediaType, "size": float64(5), "docbank_version": "6f1c2e8a-2222-4222-8222-000000000001"}
 }
 
-// attachmentsPane shows Issue "a" of Project "work" on its Attachments tab with a shot.png and a clip.mp4.
+// attachmentsPane shows Issue "a" of Project "work" on its Attachments tab with a shot.png, a clip.mp4 and a movie.avi.
 func attachmentsPane(t *testing.T) driver.State {
 	t.Helper()
 	issue := boardCard("a")
 	issue.ProjectID = 7
-	issue.Metadata = map[string]any{"attachment.A1": attachmentRef("shot.png", "image/png"), "attachment.A2": attachmentRef("clip.mp4", "video/mp4")}
+	issue.Metadata = map[string]any{"attachment.A1": attachmentRef("shot.png", "image/png"), "attachment.A2": attachmentRef("clip.mp4", "video/mp4"), "attachment.A3": attachmentRef("movie.avi", "video/x-msvideo")}
 	s := projectPane(t, 160, issue)
 	s = step(t, s, model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &issue}}).State
 	return step(t, s, model.ActivityTabMsg{Tab: model.TabAttachments}).State
@@ -121,18 +121,20 @@ func TestAnAttachmentMenuPickMovesTheCursorToItsRow(t *testing.T) {
 
 func TestOpenBesideIsRefusedForATypeTernDoesNotDraw(t *testing.T) {
 	s := attachmentsPane(t)
-	_, menu := attachmentRow(t, s, "A2")
+	_, menu := attachmentRow(t, s, "A3")
 	reason, _ := menuItem(t, menu, "Open beside")["disabled"].(string)
 	if reason == "" {
-		t.Fatalf("Open beside of a video is on offer: %v", menuItem(t, menu, "Open beside"))
+		t.Fatalf("Open beside of an avi is on offer: %v", menuItem(t, menu, "Open beside"))
 	}
-	if _, menu := attachmentRow(t, s, "A1"); menuItem(t, menu, "Open beside")["disabled"] != nil {
-		t.Error("Open beside of an image is refused")
+	for _, id := range []string{"A1", "A2"} {
+		if _, menu := attachmentRow(t, s, id); menuItem(t, menu, "Open beside")["disabled"] != nil {
+			t.Errorf("Open beside of %s is refused", id)
+		}
 	}
-	s = step(t, s, model.DetailItemMsg{Tab: model.TabAttachments, Key: model.AttachmentRowKey("A2")}).State
+	s = step(t, s, model.DetailItemMsg{Tab: model.TabAttachments, Key: model.AttachmentRowKey("A3")}).State
 	out := step(t, s, key("v"))
 	if len(out.Cmds) != 0 || out.State.Model.Notice != reason {
-		t.Fatalf("v on a video: cmds %#v, notice %q, want the refusal %q", out.Cmds, out.State.Model.Notice, reason)
+		t.Fatalf("v on an avi: cmds %#v, notice %q, want the refusal %q", out.Cmds, out.State.Model.Notice, reason)
 	}
 }
 

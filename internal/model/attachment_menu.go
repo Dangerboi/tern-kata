@@ -73,19 +73,25 @@ func kindNames(kinds []fileKind) string {
 	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
-// ternDrawnKinds are the kinds Tern's own file block draws in place beside the Pane. Video, audio and PDFs open in a block that
-// only hands them to the OS of the machine showing the window, and a CSV opens a table block that takes the focus, so those go to
-// the OS opener of the session host.
+// ternDrawnKinds are the kinds Tern's own file block shows in place beside the Pane. Tern 0.9.26 plays video and audio and shows
+// PDFs there; an older Tern hands them to the OS of the machine showing the window, so a kind with a since release goes to the OS
+// opener of the session host on an older Tern or one whose version cannot be read (ternCannotDraw). A CSV opens a table block that
+// takes the focus, so it goes to the OS opener too, and so do .avi and .mkv, which Tern does not play. Known limit: a Windows window
+// with Tern-managed ABKit installed cannot play media in the preview and shows a card that says it plays in the default app, and
+// `tern open --preview` still succeeds there, so tern-kata cannot tell; Open with the system app (o) opens it.
 var ternDrawnKinds = []fileKind{
 	{name: "images", exts: []string{".png", ".jpg", ".jpeg", ".gif"}},
 	{name: "text", exts: []string{".txt"}},
 	{name: "Markdown", exts: []string{".md"}},
 	{name: "JSON", exts: []string{".json"}},
 	{name: "Word documents", exts: []string{".docx"}, since: "v0.9.21"},
+	{name: "video", exts: []string{".mp4", ".mov", ".m4v", ".webm"}, since: "v0.9.26"},
+	{name: "audio", exts: []string{".mp3", ".wav", ".ogg", ".flac", ".m4a"}, since: "v0.9.26"},
+	{name: "PDFs", exts: []string{".pdf"}, since: "v0.9.26"},
 }
 
 // TernDraws reports whether Tern's file block draws a file called name itself. A kind listed here but not in osOpenedKinds (a
-// Word document) is shown only by Tern and is never handed to the OS.
+// Word document) is shown only by Tern and is never handed to the OS; a video, audio or PDF is in both.
 func TernDraws(name string) bool { return hasKind(ternDrawnKinds, name) }
 
 // TernNeeds says which Tern release first draws a file called name: the name of its kind, as the text of a refusal says it, and
