@@ -83,7 +83,7 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	if (m.Focus != ColumnDetail && !m.listJump) || m.SelectedUID != m.landedOn {
 		m = m.endJumpHistory()
 	}
-	if edited := m.docEdit; edited != nil && m.DetailIssueUID() != edited.uid && m.holdsFlushableDraft(edited.uid) {
+	if edited := m.docEdit; edited != nil && m.DetailIssueUID() != edited.uid && m.holdsUnfailedDraft(edited.uid) {
 		// The doc moved on to another Issue while an edit of the first was open: that edit is saved to its own Issue, as leaving the
 		// doc does. A save that failed is not sent again until the user edits (which clears the error) or leaves the doc.
 		var saved []Cmd
@@ -95,8 +95,8 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	return m.withRows(), append(cmds, loadIssue...)
 }
 
-// holdsFlushableDraft reports whether Issue uid holds a Draft whose save has not failed.
-func (m Model) holdsFlushableDraft(uid string) bool {
+// holdsUnfailedDraft reports whether Issue uid holds a Draft whose save has not failed.
+func (m Model) holdsUnfailedDraft(uid string) bool {
 	draft, held := m.Drafts[uid]
 	return held && draft.Err == nil
 }

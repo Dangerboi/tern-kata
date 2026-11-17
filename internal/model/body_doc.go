@@ -118,7 +118,7 @@ func (m Model) BodyDoc(issue Issue) BodyDoc {
 
 func (m Model) docText(issue Issue) string {
 	body, _ := m.BodyShown(issue)
-	if draft, ok := m.Drafts[issue.UID]; ok && draft.InPlaceEdit() && (draft.Err != nil || draft.Conflict != nil || draft.Doc.Shown) {
+	if draft, ok := m.Drafts[issue.UID]; ok && draft.InPlaceEdit() && draft.Doc.Shown {
 		return draft.DocText()
 	}
 	return body
@@ -160,7 +160,6 @@ func bodyEdited(m Model, text string) Model {
 	if !held {
 		draft = Draft{DraftBase: base, Doc: &DocPart{HiddenPrefix: normalizeLineBreaks(hidden), Ref: issue.QualifiedID}}
 	}
-	draft = draft.noteShown()
 	draft.Editor, draft.Err = NewTextEditor(whole), nil
 	return putDraft(m, issue.UID, draft)
 }

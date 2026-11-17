@@ -354,6 +354,20 @@ func TestTheDocKeepsShowingTheDraftWhileARetrySaves(t *testing.T) {
 	}
 }
 
+func TestTheDocKeepsShowingTheDraftWhileAnOverwriteSaves(t *testing.T) {
+	s, _ := edited(t, onDoc(t, true), "mine")
+	theirs := alpha
+	theirs.Body, theirs.Revision = "theirs", 4
+	s = feed(t, s, model.DraftConflict{UID: "alpha", Issue: theirs}).State
+	if n := bodyNode(t, s); n.P["text"] != "mine" {
+		t.Fatalf("doc text %q during the conflict, want the Draft", n.P["text"])
+	}
+	s = step(t, s, key("o")).State // the overwrite is in flight
+	if n := bodyNode(t, s); n.P["text"] != "mine" {
+		t.Fatalf("doc text %q while the overwrite saves, want the Draft", n.P["text"])
+	}
+}
+
 func TestBodyChangedByOthersAfterTheEditBeganStillConflicts(t *testing.T) {
 	s := onDoc(t, true)
 	id := bodyDocID(t, s)

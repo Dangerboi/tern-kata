@@ -44,7 +44,8 @@ type DocPart struct {
 	HiddenPrefix string
 	// Ref names the Issue in a message raised when the Issue is no longer the one shown.
 	Ref string
-	// Shown is set once the doc has drawn the Draft's text (its save failed or conflicted), which it keeps drawing while a retry saves.
+	// Shown is set once the Draft's save failed or conflicted: the doc then draws the Draft's text, and keeps drawing it while a retry
+	// or an overwrite saves, however the failure is cleared.
 	Shown bool
 }
 
@@ -64,10 +65,9 @@ func (d Draft) InPlaceEdit() bool { return d.Doc != nil && !d.Comment }
 // DocCanAct reports whether the Issue body's doc can act on the Draft: an in-place edit that is neither being saved nor in conflict.
 func (d Draft) DocCanAct() bool { return d.InPlaceEdit() && !d.Saving && d.Conflict == nil }
 
-// noteShown records that the doc has drawn the Draft's text when it is the failed or conflicted edit that the doc shows, before an
-// edit or a retry clears the failure.
-func (d Draft) noteShown() Draft {
-	if d.Doc != nil && !d.Doc.Shown && (d.Err != nil || d.Conflict != nil) {
+// shown marks the Draft of the doc as one the doc draws: its save failed or conflicted.
+func (d Draft) shown() Draft {
+	if d.Doc != nil && !d.Doc.Shown {
 		doc := *d.Doc // Drafts are copied by value: the DocPart they share is not changed
 		doc.Shown = true
 		d.Doc = &doc
@@ -256,7 +256,7 @@ func startReply(m Model) Model {
 // may be on another Issue by now, so a Notice names the Issue.
 func draftRefused(m Model, uid string, draft Draft, err error) Model {
 	draft.Err = err
-	m = putDraft(m, uid, draft)
+	m = putDraft(m, uid, draft.shown())
 	if draft.Doc != nil && m.EditorUID != uid {
 		what := "your edit of"
 		if draft.Comment {
@@ -280,7 +280,6 @@ func sendDraftOf(m Model, uid string, force bool) (Model, []Cmd) {
 		draft.Err = err
 		return putDraft(m, uid, draft), nil
 	}
-	draft = draft.noteShown()
 	draft.Saving = true
 	draft.Err = nil
 	text := draft.Editor.Text
@@ -348,6 +347,7 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 			draft.Saving = false
 			draft.Conflict = &msg.Issue
 			draft.Err = nil
+			draft = draft.shown()
 			m = putDraft(m, msg.UID, draft)
 			if draft.Doc != nil && m.EditorUID == "" { // the card is how a conflict is settled, so it opens over the doc
 				m.EditorUID = msg.UID

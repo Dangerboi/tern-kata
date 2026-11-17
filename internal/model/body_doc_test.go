@@ -14,7 +14,7 @@ func TestAnIssueWithoutAUIDTakesAnEditInTheDoc(t *testing.T) {
 		t.Fatal("the detail was not loaded")
 	}
 	m, _ = model.Update(m, model.BodyEdited{Text: "mine"})
-	if doc := m.BodyDoc(issue); doc.Text != "mine" && doc.Text != "body" {
+	if doc := m.BodyDoc(issue); doc.Text != "body" {
 		t.Fatalf("doc text %q", doc.Text)
 	}
 	if _, cmds := model.Update(m, model.BodyEditing{On: false}); len(cmds) == 0 {
