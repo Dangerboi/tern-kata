@@ -27,7 +27,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - When Tern closes an edit at once after the text of the Issue's body changed since your last edit of any Issue's body, the Pane ignores the printable keys and `enter` that would run a key binding for about two seconds.
     - This happens on the first double click after a save, after someone else's edit, on another Issue, or after the Pane opens.
     - A Notice says to double-click the body again, so typing does not run a key binding.
-    - A click or other pointer action, a button press, an edit of the body, an edit that stays open longer than half a second, or the end of the two seconds lifts it and takes the Notice away.
+    - A click, a text selection, a field taking focus, a button press, a change to a dropdown or switch, an edit of the body, an edit that stays open longer than half a second, or the end of the two seconds lifts it and takes the Notice away.
     - An agent changing state does not lift it.
     - A card, a picker or a text field keeps its keys; the Menu is guarded like the list.
   - `e` and `$EDITOR` work as before.
