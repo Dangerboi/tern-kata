@@ -16,6 +16,7 @@ ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id='main.columns.list.issues.$oa_uid']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.issues.$oa_uid']"
 expect_tree "[data-id='main.columns.list.issues.$oa_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Smoke open attachment") and (contains("loading") | not)'
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab3']"
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.attachment-']" '.ok and .count == 2'
 oa_focus=$(ctl state | jq '.focused.id')
