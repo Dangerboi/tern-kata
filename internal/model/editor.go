@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 )
 
-var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
+var errDraftReadOnly = errors.New("Read-only: reconnecting to kata")
 
 type Draft struct {
 	Editor TextEditor
@@ -32,7 +32,6 @@ type Draft struct {
 	Keyed
 }
 
-// DocText is the text of an in-place edit as the doc holds it.
 // DraftBase is what a Draft was begun from: the Issue's Project, its body and its revision then. A save is written against it.
 type DraftBase struct {
 	BaseText                string
@@ -46,6 +45,7 @@ func baseOf(issue Issue) DraftBase {
 // InPlaceEdit reports whether the Draft is an edit of the Issue body made in the doc, as against a comment from it or a Draft of the overlay.
 func (d Draft) InPlaceEdit() bool { return d.FromDoc && !d.Comment }
 
+// DocText is the text of an in-place edit as the doc holds it.
 func (d Draft) DocText() string { return strings.TrimPrefix(d.Editor.Text, d.HiddenPrefix) }
 
 type Keyed struct {
@@ -222,14 +222,28 @@ func startReply(m Model) Model {
 	return m
 }
 
+// draftRefused keeps draft of Issue uid with err, which a save failed with. A Draft of the doc has no card showing the error, and the doc
+// may be on another Issue by now, so a Notice names the Issue.
+func draftRefused(m Model, uid string, draft Draft, err error) Model {
+	draft.Err = err
+	m = putDraft(m, uid, draft)
+	if draft.FromDoc && m.EditorUID != uid {
+		what := "your edit of"
+		if draft.Comment {
+			what = "your comment on"
+		}
+		m.Notice = fmt.Sprintf("Cannot save %s %s: %s. The Draft is kept: press e or c on that Issue to open it.", what, cmp.Or(draft.Ref, "the Issue"), err)
+	}
+	return m
+}
+
 func saveDraft(m Model) (Model, []Cmd) { return sendDraftOf(m, m.EditorUID, false) }
 
 // sendDraftOf sends the Draft of Issue uid, which the overlay need not show.
 func sendDraftOf(m Model, uid string, force bool) (Model, []Cmd) {
 	draft := m.Drafts[uid]
 	if m.Stale {
-		draft.Err = errDraftReadOnly
-		return putDraft(m, uid, draft), nil
+		return draftRefused(m, uid, draft, errDraftReadOnly), nil
 	}
 	if err := draft.validReply(); err != nil {
 		draft.Err = err
@@ -294,15 +308,7 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	case DraftFailed:
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Saving = false
-			draft.Err = msg.Err
-			m = putDraft(m, msg.UID, draft)
-			if draft.FromDoc && m.EditorUID != msg.UID { // no card shows the error, and the doc may be on another Issue by now
-				what := "your edit of"
-				if draft.Comment {
-					what = "your comment on"
-				}
-				m.Notice = fmt.Sprintf("Cannot save %s %s: %s The Draft is kept: press e or c on that Issue to open it.", what, cmp.Or(draft.Ref, "the Issue"), msg.Err)
-			}
+			m = draftRefused(m, msg.UID, draft, msg.Err)
 		}
 		return m, nil, true
 	case DraftConflict:

@@ -20,8 +20,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - On Tern 0.9.26 or newer the Issue body is edited in place: a double click on it edits, and leaving it saves at once, as the Edit Issue body card's Save does.
   - Someone else's edit made in between opens the same conflict card; if the save fails, the edit is kept as a Draft that `e` opens.
-  - If the doc moves to another Issue mid-edit, the edit is saved to its own Issue; a failed save raises a Notice naming the Issue.
-  - While the Issue holds a Draft the doc cannot take, the doc is read-only and offers no Comment button.
+  - If you select another Issue mid-edit, the edit is saved to its own Issue; a failed save raises a Notice naming the Issue.
+  - While the Issue holds a Draft the Issue body cannot take, the Issue body is read-only and offers no Comment button.
   - `e` and `$EDITOR` work as before.
   - A body with a picture (an `<img>` tag or a Markdown image) is drawn as before, so its pictures keep their size and open large on a click; edit it with `e`.
 - On Tern 0.9.26 or newer, selecting text in the Issue body offers a Comment button; the note becomes a comment on the Issue that quotes the selection above it.

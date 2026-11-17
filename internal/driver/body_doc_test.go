@@ -328,3 +328,45 @@ func TestEditAfterAFailedSaveKeepsTheDocTextSteady(t *testing.T) {
 		t.Fatalf("doc text %q while editing, want what it drew when the edit began", n.P["text"])
 	}
 }
+
+func TestBodyChangedByOthersAfterTheEditBeganStillConflicts(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}).State
+	theirs := alpha
+	theirs.Body, theirs.ProjectID, theirs.Revision, theirs.QualifiedID = "theirs", 7, 4, "work#aaaa"
+	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &theirs}}).State
+	s = feed(t, s, &tern.Change{ID: id, Text: docBody + "\n\nThird."}).State
+	out := step(t, s, &tern.Editing{ID: id, On: false})
+	saves := savedCmds(out.Cmds)
+	if len(saves) != 1 || saves[0].BaseText != docBody {
+		t.Fatalf("save %#v, want one against the body the edit began on", out.Cmds)
+	}
+}
+
+func TestSaveRefusedWhileReconnectingRaisesTheNoticeNamingTheIssue(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	s.Model.Stale = true
+	s = feed(t, s, &tern.Editing{ID: id, On: false}).State
+	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, "reconnecting") {
+		t.Fatalf("notice %q, want it to name the Issue and say kata is reconnecting", n)
+	}
+	if n := s.Model.Notice; strings.Count(n, "kept") > 1 {
+		t.Fatalf("notice %q says the Draft is kept twice", n)
+	}
+}
+
+func TestEditingOnDropsWhatAnEarlierEditLeftBehind(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}).State // the edit ends without an editing off
+	theirs := alpha
+	theirs.Body, theirs.ProjectID, theirs.Revision, theirs.QualifiedID = "theirs", 7, 4, "work#aaaa"
+	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &theirs}}).State
+	s = feed(t, s, &tern.Editing{ID: id, On: true}).State
+	if n := bodyNode(t, s); n.P["text"] != "theirs" {
+		t.Fatalf("doc text %q, want the body as it is when the new edit began", n.P["text"])
+	}
+}

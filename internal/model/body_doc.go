@@ -139,11 +139,11 @@ func (m Model) docText(issue Issue) string {
 	return body
 }
 
-// startDocEdit notes that the user edits issue in the doc, and what the doc draws until the edit ends.
+// startDocEdit notes that the user edits issue in the doc: what the doc draws until the edit ends, and what the edit is written
+// against, as the doc showed the Issue now.
 func (m Model) startDocEdit(issue Issue) Model {
-	if m.docEditing != issue.UID {
-		m.docDrawn, m.docEditing = m.docText(issue), issue.UID
-	}
+	_, hidden := m.BodyShown(issue)
+	m.docEditing, m.docDrawn, m.docHidden, m.docBase = issue.UID, m.docText(issue), hidden, baseOf(issue)
 	return m
 }
 
@@ -157,21 +157,23 @@ func bodyEdited(m Model, text string) Model {
 	if !m.BodyDoc(*issue).Editable {
 		return m
 	}
-	m = m.startDocEdit(*issue)
+	if m.docEditing != issue.UID {
+		m = m.startDocEdit(*issue)
+	}
 	draft, held := m.Drafts[issue.UID]
-	_, hidden := m.BodyShown(*issue)
+	hidden, base := m.docHidden, m.docBase
 	if held {
-		hidden = draft.HiddenPrefix
+		hidden, base = draft.HiddenPrefix, draft.DraftBase
 	}
 	whole := normalizeLineBreaks(hidden + text)
-	if whole == normalizeLineBreaks(issue.Body) {
+	if whole == normalizeLineBreaks(base.BaseText) {
 		if held {
 			m = dropDraft(m, issue.UID)
 		}
 		return m
 	}
 	if !held {
-		draft = Draft{DraftBase: baseOf(*issue), FromDoc: true, HiddenPrefix: normalizeLineBreaks(hidden), Ref: issue.QualifiedID}
+		draft = Draft{DraftBase: base, FromDoc: true, HiddenPrefix: normalizeLineBreaks(hidden), Ref: issue.QualifiedID}
 	}
 	draft.Editor, draft.Err = NewTextEditor(whole), nil
 	return putDraft(m, issue.UID, draft)
@@ -183,14 +185,14 @@ func bodyEditing(m Model, on bool) (Model, []Cmd) {
 	if issue == nil || !m.InPlaceBody {
 		return m, nil
 	}
-	if on {
+	if on { // a doc node removed without an editing off must not leave its edit behind
 		return m.startDocEdit(*issue), nil
 	}
 	uid := m.docEditing
 	if uid == "" {
 		uid = issue.UID
 	}
-	m.docEditing, m.docDrawn = "", ""
+	m.docEditing, m.docDrawn, m.docHidden, m.docBase = "", "", "", DraftBase{}
 	return flushDocEdit(m, uid)
 }
 
