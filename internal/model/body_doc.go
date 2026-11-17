@@ -1,6 +1,7 @@
 package model
 
 import (
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -240,61 +241,132 @@ func (m Model) docSaved(uid string, draft Draft) (Model, []Cmd) {
 // itself, which it does for the first double click after the doc's text changed.
 const deadEditWithin = 500 * time.Millisecond
 
-// deadEditGuard is how long keys that would run a binding are swallowed after a dead edit: the user types on as if the edit were open.
-const deadEditGuard = 2 * time.Second
+// DocGuardWindow is how long keys that would run a binding are swallowed after a dead edit: the user types on as if the edit were open.
+const DocGuardWindow = 2 * time.Second
 
 const deadEditNotice = "The body did not open for editing. Double-click it again; keys are ignored for a moment."
 
-// docOpened is an editing on of the doc that has not ended: when it began, and whether a change came since.
-type docOpened struct {
-	uid   string
-	at    time.Time
-	typed bool
-}
+// WaitDocGuard is the pause of DocGuardWindow after the key guard Seq began. It reads nothing; its answer DocGuardExpired ends that
+// guard, and the Notice that says why keys are ignored, when no input has.
+type WaitDocGuard struct{ Seq int }
 
-// noteDocEditing keeps track of the doc's editing on and off, and starts the key guard on a dead edit.
-func (m Model) noteDocEditing(uid string, on bool) Model {
-	if on {
-		m.docOpened = &docOpened{uid: uid, at: m.Now}
-		return m
-	}
-	opened := m.docOpened
-	if opened == nil || opened.uid != uid {
-		return m
-	}
-	m.docOpened = nil
-	if !opened.typed && m.Now.Sub(opened.at) <= deadEditWithin {
-		m.docGuardUntil = m.Now.Add(deadEditGuard)
-		m.Notice = deadEditNotice
+func (WaitDocGuard) cmd() {}
+
+type DocGuardExpired struct{ Seq int }
+
+func (DocGuardExpired) msg() {}
+
+func docGuardExpired(m Model, msg DocGuardExpired) Model {
+	if msg.Seq == m.docGuardSeq {
+		return m.EndDocGuard()
 	}
 	return m
 }
 
-// noteDocChange notes that the doc sent a change of Issue uid's body since it began editing.
+// docOpened is an editing on of the doc that has not ended: when it began, whether the text the doc draws differed then from what it
+// drew when its last edit session ended, and whether a change came since.
+type docOpened struct {
+	uid     string
+	at      time.Time
+	changed bool
+	typed   bool
+}
+
+// docRedrawn reports whether the doc of Issue uid, which the Pane draws now, draws other text than it did when its last edit session
+// ended (a save, someone else's edit): the one case in which Tern ends its next edit at once.
+func (m Model) docRedrawn(uid string) bool {
+	rested, ok := m.docRested[uid]
+	issue := m.docIssue()
+	return ok && issue != nil && issue.UID == uid && m.docText(*issue) != rested
+}
+
+// restDoc notes the text the doc of Issue uid draws now as the text its last edit session ended on.
+func (m Model) restDoc(uid string) Model {
+	issue := m.docIssue()
+	if issue == nil || issue.UID != uid {
+		return m
+	}
+	m.docRested = maps.Clone(m.docRested)
+	if m.docRested == nil {
+		m.docRested = make(map[string]string)
+	}
+	m.docRested[uid] = m.docText(*issue)
+	return m
+}
+
+// noteDocEditing keeps track of the doc's editing on and off. A dead edit, which Tern's bug can have caused (the text the doc draws
+// changed since its last edit session, and the edit ended within deadEditWithin with no change), starts the key guard: the command
+// that ends it comes back. An edit that stayed open past deadEditWithin was alive, so it ends the guard.
+func (m Model) noteDocEditing(uid string, on bool) (Model, []Cmd) {
+	if on {
+		m.docOpened = &docOpened{uid: uid, at: m.Now, changed: m.docRedrawn(uid)}
+		return m, nil
+	}
+	opened := m.docOpened
+	if opened == nil || opened.uid != uid {
+		return m, nil
+	}
+	m.docOpened = nil
+	switch {
+	case m.Now.Sub(opened.at) > deadEditWithin:
+		return m.EndDocGuard(), nil
+	case !opened.typed && opened.changed:
+		m.docGuardSeq++
+		m.docGuardUntil = m.Now.Add(DocGuardWindow)
+		m.Notice = deadEditNotice
+		return m, []Cmd{WaitDocGuard{Seq: m.docGuardSeq}}
+	}
+	return m, nil
+}
+
+// noteDocChange notes that the doc sent a change of Issue uid's body since it began editing; an edit ends the key guard.
 func (m Model) noteDocChange(uid string) Model {
 	if opened := m.docOpened; opened != nil && opened.uid == uid && !opened.typed {
 		typed := *opened
 		typed.typed = true
 		m.docOpened = &typed
 	}
-	return m
+	return m.EndDocGuard()
 }
 
-// EndDocGuard ends the key guard: the pointer acted, so the user knows where they are.
+// EndDocGuard ends the key guard, and takes its Notice away: the user knows where they are (the pointer acted, a change came), or the
+// window ran out.
 func (m Model) EndDocGuard() Model {
 	m.docGuardUntil = time.Time{}
+	if m.Notice == deadEditNotice {
+		m.Notice = ""
+	}
 	return m
 }
 
-// docKeyGuarded reports whether key is one the key guard swallows: a printable key or enter, which would run a binding. Escape, the
-// arrows and the like pass.
+// docKeyGuarded reports whether key is one the key guard swallows: a printable key or enter that would run a Pane binding on the
+// detail that shows the doc. Escape, the arrows and the like pass, and so does any key a card, the Menu, a picker or a text input
+// has, and any key while an edit is open past deadEditWithin (the doc has it).
 func (m Model) docKeyGuarded(key KeyMsg) bool {
-	return m.Now.Before(m.docGuardUntil) && (key.Text != "" || key.Chord == "enter")
+	if !m.Now.Before(m.docGuardUntil) || !(key.Text != "" || key.Chord == "enter") {
+		return false
+	}
+	if opened := m.docOpened; opened != nil && m.Now.Sub(opened.at) > deadEditWithin {
+		return false
+	}
+	if m.docIssue() == nil {
+		return false
+	}
+	switch m.CurrentMode() {
+	case ModeList, ModeDetail, ModeBoard, ModeLane:
+		return true
+	}
+	return false
 }
 
 // bodyEditing starts an in-place edit, or saves it when the user leaves the doc, through the write the overlay's Save makes.
 func bodyEditing(m Model, uid string, on bool) (Model, []Cmd) {
-	return applyBodyEditing(m.noteDocEditing(uid, on), uid, on)
+	m, guard := m.noteDocEditing(uid, on)
+	m, cmds := applyBodyEditing(m, uid, on)
+	if !on {
+		m = m.restDoc(uid)
+	}
+	return m, append(cmds, guard...)
 }
 
 func applyBodyEditing(m Model, uid string, on bool) (Model, []Cmd) {

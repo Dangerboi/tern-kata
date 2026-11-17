@@ -35,6 +35,11 @@ func (g *Gateway) waitToast(ctx context.Context, cmd model.WaitToast) model.Toas
 	return model.ToastExpired(cmd)
 }
 
+func (g *Gateway) waitDocGuard(ctx context.Context, cmd model.WaitDocGuard) model.DocGuardExpired {
+	g.pause(ctx, model.DocGuardWindow)
+	return model.DocGuardExpired(cmd)
+}
+
 func (g *Gateway) readAgentSessions(ctx context.Context, cmd model.ReadAgentSessions) model.AgentSessionsRead {
 	out := model.AgentSessionsRead{Request: cmd.Request, Sessions: make([]model.AgentSessionFacts, 0, len(cmd.Agents))}
 	for _, a := range cmd.Agents {

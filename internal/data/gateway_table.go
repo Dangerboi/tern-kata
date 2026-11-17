@@ -188,6 +188,7 @@ func init() {
 	local((*Gateway).readAgentSessions)
 	local((*Gateway).waitAgentSessions)
 	local((*Gateway).waitToast)
+	local((*Gateway).waitDocGuard)
 	local((*Gateway).openAgent)
 	local(withoutCtx((*Gateway).setAgentOpenFlag))
 	local((*Gateway).sendAgentBack)

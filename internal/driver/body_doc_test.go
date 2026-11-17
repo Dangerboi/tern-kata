@@ -678,11 +678,52 @@ func reopened(cmds []model.Cmd) bool {
 	return false
 }
 
+// editSaved is a whole edit session of the doc, "mine" typed and saved, that ended before now: the doc's text has changed since.
+func editSaved(t *testing.T, s driver.State) driver.State {
+	t.Helper()
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(-10*time.Second)).State
+	s = driver.Step(s, &tern.Change{ID: id, Text: "mine"}, now.Add(-10*time.Second+10*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(-10*time.Second+20*time.Millisecond)).State
+	return driver.Step(s, model.DraftSaved{UID: "alpha"}, now.Add(-10*time.Second+30*time.Millisecond)).State
+}
+
+// deadEdit is the first double click after a save: Tern closes the edit at once, with no change.
 func deadEdit(t *testing.T, s driver.State) driver.State {
 	t.Helper()
+	s = editSaved(t, s)
 	id := bodyDocID(t, s)
 	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
 	return driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
+}
+
+func TestNoKeyGuardWhenTheBodyDidNotChangeSinceTheLastEdit(t *testing.T) {
+	// A double click and esc on a body whose text is what the doc last drew is a real edit session that changed nothing.
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(-10*time.Second)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(-10*time.Second+300*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
+	if n := s.Model.Notice; strings.Contains(n, "did not open") {
+		t.Fatalf("notice %q after a double click on an unchanged body", n)
+	}
+	if out := driver.Step(s, key("r"), now.Add(100*time.Millisecond)); !reopened(out.Cmds) {
+		t.Fatalf("r after a double click and esc on an unchanged body sent %#v, want the reopen", out.Cmds)
+	}
+}
+
+func TestKeyGuardWhenSomeoneElseChangedTheBodyAfterTheLastEdit(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(-10*time.Second)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(-10*time.Second+3*time.Second)).State
+	s = detailReloadedWith(t, s, "someone else's text")
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
+	if out := driver.Step(s, key("r"), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
+		t.Fatalf("r after the dead edit sent %#v with notice %q, want it swallowed", out.Cmds, out.State.Model.Notice)
+	}
 }
 
 // Tern sometimes closes an edit at once after the body changed. The user types on, so keys that would run a binding are swallowed
@@ -712,6 +753,93 @@ func TestAPointerActionEndsTheKeyGuard(t *testing.T) {
 	s = driver.Step(s, &tern.Select{ID: "main.columns.list.issues", Item: "alpha"}, now.Add(100*time.Millisecond)).State
 	if out := driver.Step(s, key("r"), now.Add(200*time.Millisecond)); !reopened(out.Cmds) {
 		t.Fatalf("r after a click sent %#v, want the reopen", out.Cmds)
+	}
+}
+
+func TestAPointerChangeEndsTheKeyGuard(t *testing.T) {
+	s := deadEdit(t, onDoc(t, true))
+	s = driver.Step(s, &tern.Change{ID: "some.card.dropdown", Value: "closed"}, now.Add(100*time.Millisecond)).State
+	if out := driver.Step(s, key("r"), now.Add(200*time.Millisecond)); !reopened(out.Cmds) {
+		t.Fatalf("r after a dropdown or switch changed sent %#v, want the reopen", out.Cmds)
+	}
+}
+
+func TestAnEditOfTheBodyEndsTheKeyGuard(t *testing.T) {
+	s := deadEdit(t, onDoc(t, true))
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(100*time.Millisecond)).State
+	s = driver.Step(s, &tern.Change{ID: id, Text: "mine again"}, now.Add(300*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(400*time.Millisecond)).State
+	s = driver.Step(s, model.DraftSaved{UID: "alpha"}, now.Add(500*time.Millisecond)).State
+	if out := driver.Step(s, key("r"), now.Add(600*time.Millisecond)); !reopened(out.Cmds) {
+		t.Fatalf("r after an edit that came inside the window sent %#v, want the reopen", out.Cmds)
+	}
+}
+
+func TestAnEditingOnThatLastsPastTheBoundEndsTheKeyGuard(t *testing.T) {
+	s := deadEdit(t, onDoc(t, true))
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(100*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(900*time.Millisecond)).State
+	if out := driver.Step(s, key("r"), now.Add(1000*time.Millisecond)); !reopened(out.Cmds) {
+		t.Fatalf("r after an edit that stayed open past the bound sent %#v, want the reopen", out.Cmds)
+	}
+}
+
+func TestTheKeyGuardNoticeGoesWhenTheWindowEndsWithNoInput(t *testing.T) {
+	s := editSaved(t, onDoc(t, true))
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	out := driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond))
+	var wait *model.WaitDocGuard
+	for _, c := range out.Cmds {
+		if w, ok := c.(model.WaitDocGuard); ok {
+			wait = &w
+		}
+	}
+	if wait == nil {
+		t.Fatalf("the dead edit asked for no wait: %#v", out.Cmds)
+	}
+	if !strings.Contains(out.State.Model.Notice, "did not open") {
+		t.Fatalf("notice %q, want the guard's", out.State.Model.Notice)
+	}
+	ended := driver.Step(out.State, model.DocGuardExpired(*wait), now.Add(2*time.Second+40*time.Millisecond)).State
+	if n := ended.Model.Notice; n != "" {
+		t.Fatalf("notice %q after the window ended, want none", n)
+	}
+}
+
+func TestAnotherNoticeSurvivesTheEndOfTheKeyGuard(t *testing.T) {
+	s := editSaved(t, onDoc(t, true))
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	out := driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond))
+	var wait model.WaitDocGuard
+	for _, c := range out.Cmds {
+		if w, ok := c.(model.WaitDocGuard); ok {
+			wait = w
+		}
+	}
+	state := out.State
+	state.Model.Notice = "Another notice."
+	ended := driver.Step(state, model.DocGuardExpired(wait), now.Add(3*time.Second)).State
+	if n := ended.Model.Notice; n != "Another notice." {
+		t.Fatalf("notice %q, want the other notice kept", n)
+	}
+}
+
+func TestKeysTypedIntoAnOpenInputAreNotSwallowed(t *testing.T) {
+	s := editSaved(t, onDoc(t, true))
+	s = driver.Step(s, key("/"), now.Add(-5*time.Second)).State
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
+	out := driver.Step(s, key("x"), now.Add(100*time.Millisecond))
+	if out.State.Model.Filters.Search != "x" {
+		t.Fatalf("search holds %q, want the typed x", out.State.Model.Filters.Search)
+	}
+	if strings.Contains(out.State.Model.Notice, "did not open") {
+		t.Fatalf("notice %q, the key was swallowed", out.State.Model.Notice)
 	}
 }
 

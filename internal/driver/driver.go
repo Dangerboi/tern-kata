@@ -58,8 +58,8 @@ func Step(s State, in any, now time.Time) Output {
 		return Output{State: s, Err: fmt.Errorf("Tern surface: %s", in.Msg)}
 	case tern.Input:
 		switch in.(type) {
-		case *tern.Select, *tern.Focus, *tern.Toggle, *tern.Action, *tern.Comment:
-			s.Model = s.Model.EndDocGuard() // the pointer acted: the user knows where they are
+		case *tern.Select, *tern.Focus, *tern.Toggle, *tern.Action, *tern.Comment, *tern.Change:
+			s.Model = s.Model.EndDocGuard() // the pointer acted, or the user changed a value or the body: they know where they are
 		}
 		msg = decode(in)
 	}
