@@ -22,8 +22,16 @@ type Draft struct {
 	Err                             error
 	ReplyTo, ReplyAuthor            string
 	ReplyKind                       ReplyKind
+	// FromDoc marks a Draft the Issue body's doc made, which the overlay does not show: an in-place edit, or a comment on a
+	// selection. Hidden is the stored text in front of what the doc draws (a Parent section it leaves out). Opening the Draft
+	// in the overlay makes it an ordinary one.
+	FromDoc bool
+	Hidden  string
 	Keyed
 }
+
+// DocText is the text of an in-place edit as the doc holds it.
+func (d Draft) DocText() string { return strings.TrimPrefix(d.Editor.Text, d.Hidden) }
 
 type Keyed struct {
 	Key  string
@@ -168,6 +176,10 @@ func startDraft(m Model, comment bool) Model {
 		return m
 	}
 	uid := m.SelectedUID
+	if draft, ok := m.Drafts[uid]; ok && draft.FromDoc {
+		draft.FromDoc = false
+		m = putDraft(m, uid, draft)
+	}
 	if _, ok := m.Drafts[uid]; !ok {
 		issue := m.shownIssue()
 		text := issue.Body
@@ -197,15 +209,18 @@ func startReply(m Model) Model {
 
 func saveDraft(m Model) (Model, []Cmd) { return sendDraft(m, false) }
 
-func sendDraft(m Model, force bool) (Model, []Cmd) {
-	draft, _ := m.ActiveDraft()
+func sendDraft(m Model, force bool) (Model, []Cmd) { return sendDraftOf(m, m.EditorUID, force) }
+
+// sendDraftOf sends the Draft of Issue uid, which the overlay need not show.
+func sendDraftOf(m Model, uid string, force bool) (Model, []Cmd) {
+	draft := m.Drafts[uid]
 	if m.Stale {
 		draft.Err = errDraftReadOnly
-		return putDraft(m, m.EditorUID, draft), nil
+		return putDraft(m, uid, draft), nil
 	}
 	if err := draft.validReply(); err != nil {
 		draft.Err = err
-		return putDraft(m, m.EditorUID, draft), nil
+		return putDraft(m, uid, draft), nil
 	}
 	draft.Saving = true
 	draft.Err = nil
@@ -213,14 +228,14 @@ func sendDraft(m Model, force bool) (Model, []Cmd) {
 	if !draft.Comment && text == normalizeLineBreaks(draft.BaseText) {
 		text = draft.BaseText // the Draft opened with line breaks normalised; unedited, it saves the stored bytes, so kata sees no change; an edited body saves with LF line breaks
 	}
-	cmd := SaveDraft{Workspace: m.Workspace, UID: m.EditorUID, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: text, Comment: draft.Comment, Actor: m.Actor, ReplyTo: draft.ReplyTo, ReplyKind: draft.ReplyKind, Force: force}
+	cmd := SaveDraft{Workspace: m.Workspace, UID: uid, ProjectID: draft.ProjectID, BaseText: draft.BaseText, Text: text, Comment: draft.Comment, Actor: m.Actor, ReplyTo: draft.ReplyTo, ReplyKind: draft.ReplyKind, Force: force}
 	if draft.Comment {
 		request := cmd
 		request.BaseText, request.Force = "", false // kata fingerprints neither, so a resend that differs in them keeps its key
 		m, draft.Keyed = m.mintKey(draft.Keyed, request)
 		cmd.Key = draft.Key
 	}
-	m = putDraft(m, m.EditorUID, draft)
+	m = putDraft(m, uid, draft)
 	return m, []Cmd{cmd}
 }
 
@@ -258,6 +273,9 @@ func replyKey(m Model, b Binding) (Model, []Cmd, bool) {
 func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case DraftSaved:
+		if draft, ok := m.Drafts[msg.UID]; ok && draft.FromDoc && !draft.Comment {
+			m = m.bodySaved(msg.UID, draft.Editor.Text)
+		}
 		m = dropDraft(m, msg.UID)
 		return m.issueWritten(msg.UID), nil, true
 	case DraftFailed:
@@ -273,8 +291,20 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 			draft.Conflict = &msg.Issue
 			draft.Err = nil
 			m = putDraft(m, msg.UID, draft)
+			if draft.FromDoc && m.EditorUID == "" { // the card is how a conflict is settled, so it opens over the doc
+				m.EditorUID = msg.UID
+				m = m.focusDetail()
+			}
 		}
 		return m, nil, true
+	case BodyEdited:
+		return bodyEdited(m, msg.Text), nil, true
+	case BodyEditing:
+		m, cmds := bodyEditing(m, msg.On)
+		return m, cmds, true
+	case SelectionComment:
+		m, cmds := selectionComment(m, msg)
+		return m, cmds, true
 	case DraftEditorClosed:
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Err = msg.Err

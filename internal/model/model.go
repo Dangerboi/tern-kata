@@ -108,6 +108,8 @@ type Model struct {
 	// afterMove is the Issue just moved to another Project and its neighbouring row, until a snapshot stops listing it.
 	afterMove *movedIssue
 	Workspace string
+	// InPlaceBody is set when the Tern this Pane runs in draws a doc (TernDrawsDoc): the Issue body is drawn as one, edited in place.
+	InPlaceBody bool
 	// PaneBlock is the block id of this kata Pane ($TERN_PANE), "" when Tern did not say; agents split beside it.
 	PaneBlock string
 	// AgentMapping is agents.json as this Pane last read or changed it: the agents Panes on this host started.

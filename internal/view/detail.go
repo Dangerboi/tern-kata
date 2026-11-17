@@ -2,8 +2,6 @@ package view
 
 import (
 	"fmt"
-	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +20,9 @@ const DetailScrollID = DetailID + ".viewport"
 // DetailContentID is the container's only child. Tern's scroll op names a node
 // inside the scroller, not the scroller itself.
 const DetailContentID = DetailScrollID + ".content"
+
+// BodyID is the Issue body's node: a doc on a Tern that draws one, else Markdown.
+const BodyID = DetailContentID + ".body"
 
 const (
 	activityKey = "activity"
@@ -60,14 +61,8 @@ func detail(m model.Model, now time.Time) tern.Element {
 			ui.Text{Common: ui.Common{Key: "title", Actions: &ui.Actions{Click: FocusDetailClick}}, Spans: title},
 			ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status)}, Text: statusText(issue)},
 		)}, ui.Spacer{Common: ui.Common{Key: "gap"}, Size: ui.GapMD}}
-		body := issue.Body
-		if parent, ok := m.DetailParent(); ok {
-			body = withoutParentSection(body, parent.Ref)
-		}
-		if strings.TrimSpace(body) == "" {
-			body = "No body yet."
-		}
-		parts = append(parts, properties(m, issue, now), ui.Md{Common: ui.Common{Key: "body"}, Text: body})
+		parts = append(parts, properties(m, issue, now))
+		parts = append(parts, bodyNodes(m, *issue)...)
 		kids, activity := detailRows(m, now)
 		if len(kids) > 0 {
 			parts = append(parts, ui.Spacer{Common: ui.Common{Key: "gap-children"}, Size: ui.GapMD}, childrenTable(m, kids, now))
@@ -229,43 +224,6 @@ type detailChild struct {
 	mark ui.Mark
 }
 
-var (
-	atxHeading   = regexp.MustCompile(`^#{1,6}(\s|$)`)
-	parentHeader = regexp.MustCompile(`^##\s+Parent\s*$`)
-)
-
-// withoutParentSection drops a leading `## Parent` section (up to the next heading) that names the parent
-// by ref (#short or project#short) as a whole word; display only, the stored body is untouched.
-func withoutParentSection(body, ref string) string {
-	trimmed := strings.TrimLeft(body, "\r\n")
-	first, rest, _ := strings.Cut(trimmed, "\n")
-	if !parentHeader.MatchString(first) {
-		return body
-	}
-	section, after := rest, ""
-	for off, line := 0, rest; ; {
-		if atxHeading.MatchString(line) {
-			section, after = rest[:off], rest[off:]
-			break
-		}
-		nl := strings.IndexByte(line, '\n')
-		if nl < 0 {
-			break
-		}
-		off += nl + 1
-		line = rest[off:]
-	}
-	short := ref[strings.LastIndex(ref, "#")+1:]
-	named := slices.ContainsFunc(strings.Fields(section), func(word string) bool {
-		word = strings.Trim(word, ".,;:()[]<>\"'`*_")
-		return word == short || strings.HasSuffix(word, "#"+short)
-	})
-	if !named {
-		return body
-	}
-	return strings.TrimLeft(after, "\r\n")
-}
-
 // detailID is the Issue's id as the Pane's Collection sees it, the rule of the Board's Relationships line: "#id" inside the
 // Project Collection on screen, "project#id" for an Issue of another Project and in Collections that span Projects.
 func detailID(m model.Model, issue model.Issue) string {
@@ -417,4 +375,28 @@ func cronProperties(m model.Model) []propertyRow {
 		rows = append(rows, propertyRow{"Cron jobs", ui.Col{Common: ui.Common{Key: "v"}, Gap: ui.GapNone, Children: jobs}})
 	}
 	return rows
+}
+
+// bodyNodes draws the Issue body. On a Tern that draws a doc the body is one the user edits in place and comments on a selection of.
+// An empty body stays Markdown with its placeholder: `e` writes the first one.
+//
+// Tern ends an in-place edit when the program sends the doc a text op, and sends the edit as `change` while the user still types (a
+// second or so after the last key), so the doc keeps the stored body while the Draft is only held or saving: it already holds the
+// edit. Once the save failed or conflicted, the doc shows the Draft, which a discard then takes away again.
+func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
+	body, _ := m.BodyShown(issue)
+	if strings.TrimSpace(body) == "" {
+		return []tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: "No body yet."}}
+	}
+	if !m.InPlaceBody {
+		return []tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: body}}
+	}
+	if draft, ok := m.Drafts[issue.UID]; ok && draft.FromDoc && !draft.Comment && (draft.Err != nil || draft.Conflict != nil) {
+		body = draft.DocText()
+	}
+	doc := ui.Doc{Common: ui.Common{Key: "body"}, Text: body, Edit: true, Comment: true}
+	if draft, ok := m.Drafts[issue.UID]; ok && draft.FromDoc && draft.Err != nil && m.EditorUID != issue.UID {
+		return []tern.Element{doc, toneText("body-error", ui.ToneError, draft.Err.Error()+" The Draft is kept: press e or c to open it.")}
+	}
+	return []tern.Element{doc}
 }

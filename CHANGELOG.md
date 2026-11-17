@@ -16,6 +16,13 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - The first Pane of a new tern-kata version opens its release notes in a split beside it, once per machine.
   - After a jump over several versions it shows each one, newest first, with every **Breaking** change listed at the top.
 
+#### Issues and Pages
+
+- On Tern 0.9.26 or newer the Issue body is edited in place: a double click on it edits, and leaving it saves at once, as the Edit Issue body card's Save does.
+  - Someone else's edit made in between opens the same conflict card; if the save fails, the edit is kept as a Draft that `e` opens.
+  - `e` and `$EDITOR` work as before.
+- On Tern 0.9.26 or newer, selecting text in the Issue body offers a Comment button; the note becomes a comment on the Issue that quotes the selection above it.
+
 ### Changed
 
 #### Agents

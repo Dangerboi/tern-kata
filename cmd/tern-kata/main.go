@@ -147,7 +147,7 @@ func run() error {
 	}
 	host := data.HostName()
 	size := paneSize(term.Caps().Cols)
-	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, HostID: data.ThisHostID(), PaneBlock: os.Getenv("TERN_PANE"), QuitAtOnce: quitAtOnce,
+	state := driver.State{Model: model.Model{Cols: size.Cols, Rows: size.Rows, Actor: plan.Actor, InboxUser: plan.InboxUser, Host: host, HostID: data.ThisHostID(), PaneBlock: os.Getenv("TERN_PANE"), QuitAtOnce: quitAtOnce, InPlaceBody: model.TernDrawsDoc(term.Caps().Ver),
 		Versions: model.Versions{Running: buildVersion()}}}
 	results := make(chan model.Msg)
 	gateway := data.NewGateway(data.LocateWithKata).WithHost(host)
