@@ -15,26 +15,38 @@ import (
 var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
 
 type Draft struct {
-	Editor                          TextEditor
-	BaseText                        string
-	ProjectID, BaseRevision         int64
+	Editor TextEditor
+	DraftBase
 	Comment, Saving, DiscardConfirm bool
 	Conflict                        *Issue
 	Err                             error
 	ReplyTo, ReplyAuthor            string
 	ReplyKind                       ReplyKind
 	// FromDoc marks a Draft the Issue body's doc made, which the overlay does not show: an in-place edit, or a comment on a
-	// selection. Hidden is the stored text in front of what the doc draws (a Parent section it leaves out). Opening the Draft
+	// selection. HiddenPrefix is the stored text in front of what the doc draws (a Parent section it leaves out). Opening the Draft
 	// in the overlay makes it an ordinary one.
-	FromDoc bool
-	Hidden  string
+	FromDoc      bool
+	HiddenPrefix string
 	// Ref names the Issue of a FromDoc Draft in a message raised when the Issue is no longer the one shown.
 	Ref string
 	Keyed
 }
 
 // DocText is the text of an in-place edit as the doc holds it.
-func (d Draft) DocText() string { return strings.TrimPrefix(d.Editor.Text, d.Hidden) }
+// DraftBase is what a Draft was begun from: the Issue's Project, its body and its revision then. A save is written against it.
+type DraftBase struct {
+	BaseText                string
+	ProjectID, BaseRevision int64
+}
+
+func baseOf(issue Issue) DraftBase {
+	return DraftBase{BaseText: issue.Body, ProjectID: issue.ProjectID, BaseRevision: issue.Revision}
+}
+
+// InPlaceEdit reports whether the Draft is an edit of the Issue body made in the doc, as against a comment from it or a Draft of the overlay.
+func (d Draft) InPlaceEdit() bool { return d.FromDoc && !d.Comment }
+
+func (d Draft) DocText() string { return strings.TrimPrefix(d.Editor.Text, d.HiddenPrefix) }
 
 type Keyed struct {
 	Key  string
@@ -189,7 +201,7 @@ func startDraft(m Model, comment bool) Model {
 		if comment {
 			text = ""
 		}
-		m = putDraft(m, uid, Draft{Editor: NewTextEditor(normalizeLineBreaks(text)), ProjectID: issue.ProjectID, BaseText: issue.Body, BaseRevision: issue.Revision, Comment: comment})
+		m = putDraft(m, uid, Draft{Editor: NewTextEditor(normalizeLineBreaks(text)), DraftBase: baseOf(*issue), Comment: comment})
 	}
 	m.EditorUID = uid
 	return m.focusDetail()
@@ -210,9 +222,7 @@ func startReply(m Model) Model {
 	return m
 }
 
-func saveDraft(m Model) (Model, []Cmd) { return sendDraft(m, false) }
-
-func sendDraft(m Model, force bool) (Model, []Cmd) { return sendDraftOf(m, m.EditorUID, force) }
+func saveDraft(m Model) (Model, []Cmd) { return sendDraftOf(m, m.EditorUID, false) }
 
 // sendDraftOf sends the Draft of Issue uid, which the overlay need not show.
 func sendDraftOf(m Model, uid string, force bool) (Model, []Cmd) {
@@ -267,7 +277,7 @@ func replyKey(m Model, b Binding) (Model, []Cmd, bool) {
 		if !d.Duplicate() {
 			return m, nil, true
 		}
-		m, cmds := sendDraft(m, true)
+		m, cmds := sendDraftOf(m, m.EditorUID, true)
 		return m, cmds, true
 	}
 	return m, nil, false
@@ -276,7 +286,7 @@ func replyKey(m Model, b Binding) (Model, []Cmd, bool) {
 func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case DraftSaved:
-		if draft, ok := m.Drafts[msg.UID]; ok && draft.FromDoc && !draft.Comment {
+		if draft, ok := m.Drafts[msg.UID]; ok && draft.InPlaceEdit() {
 			m = m.bodySaved(msg.UID, draft.Editor.Text)
 		}
 		m = dropDraft(m, msg.UID)

@@ -17,7 +17,13 @@ func onDoc(t *testing.T, drawn bool) driver.State {
 	t.Helper()
 	issue := alpha
 	issue.Body, issue.ProjectID, issue.Revision, issue.QualifiedID = docBody, 7, 3, "work#aaaa"
-	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}).State
+	return onDocWith(t, drawn, &model.IssueDetailData{Issue: &issue})
+}
+
+// onDocWith is the Pane on alpha, whose detail is detail, on a Tern that draws a doc (drawn false: one that does not).
+func onDocWith(t *testing.T, drawn bool, detail *model.IssueDetailData) driver.State {
+	t.Helper()
+	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: detail}).State
 	s.Model.InPlaceBody = drawn
 	return feed(t, s, key("j"), key("k")).State // a draw on the new setting
 }
@@ -60,7 +66,7 @@ func TestBodyIsMarkdownOnATernWithoutDoc(t *testing.T) {
 	if n := bodyNode(t, s); n.K != "md" {
 		t.Fatalf("body = %s, want md as before", n.K)
 	}
-	id := "main.columns.detail.viewport.content.body"
+	id := view.BodyID
 	if out := feed(t, s, &tern.Change{ID: id, Text: "x"}, &tern.Editing{ID: id, On: false}); len(savedCmds(out.Cmds)) != 0 {
 		t.Fatalf("a doc event on a Tern without doc saved %v", out.Cmds)
 	}
@@ -171,9 +177,7 @@ func TestEditKeepsTheParentSectionTheDocHides(t *testing.T) {
 	issue := alpha
 	issue.Body, issue.ProjectID = "## Parent\n\nChild of #upup.\n\n# Plan\n\ntext", 7
 	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
-	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}).State
-	s.Model.InPlaceBody = true
-	s = feed(t, s, key("j"), key("k")).State
+	s := onDocWith(t, true, &model.IssueDetailData{Issue: &issue, Links: links})
 	if n := bodyNode(t, s); n.K != "doc" || n.P["text"] != "# Plan\n\ntext" {
 		t.Fatalf("body = %s %v, want a doc without the Parent section", n.K, n.P["text"])
 	}
@@ -215,7 +219,7 @@ func TestCommentWithoutNoteOrQuoteSendsNothing(t *testing.T) {
 
 func TestCommentWhileADraftIsOpenKeepsTheDraft(t *testing.T) {
 	s := feed(t, onDoc(t, true), key("e"), key("x")).State
-	id := "main.columns.detail.viewport.content.body"
+	id := view.BodyID
 	out := step(t, s, &tern.Comment{ID: id, Quote: "q", Note: "n"})
 	if len(savedCmds(out.Cmds)) != 0 {
 		t.Fatalf("sent %v", out.Cmds)
@@ -237,22 +241,16 @@ func TestTernDrawsDocFromItsVersion(t *testing.T) {
 }
 
 func TestBodyWithAPictureStaysMarkdownOnATernWithDoc(t *testing.T) {
-	for _, body := range []string{"a <img src=x.png> b", "<IMG width=40 src=x.png>", "see ![alt](x.png)", "![](http://h/x.png)"} {
+	for body, kind := range map[string]string{
+		"a <img src=x.png> b": "md", "<IMG width=40 src=x.png>": "md", "see ![alt](x.png)": "md", "![](http://h/x.png)": "md",
+		"no picture": "doc", "a [link](x.png) and ! [x]": "doc",
+	} {
 		issue := alpha
 		issue.Body, issue.ProjectID = body, 7
 		s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}).State
 		s.Model.InPlaceBody = true
-		if n := bodyNode(t, s); n.K != "md" || n.P["text"] != body {
-			t.Errorf("body %q drawn as %s", body, n.K)
-		}
-	}
-	for _, body := range []string{"no picture", "a [link](x.png) and ! [x]"} {
-		issue := alpha
-		issue.Body, issue.ProjectID = body, 7
-		s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}).State
-		s.Model.InPlaceBody = true
-		if n := bodyNode(t, s); n.K != "doc" {
-			t.Errorf("body %q drawn as %s", body, n.K)
+		if n := bodyNode(t, s); n.K != kind || kind == "md" && n.P["text"] != body {
+			t.Errorf("body %q drawn as %s, want %s", body, n.K, kind)
 		}
 	}
 }

@@ -392,10 +392,10 @@ func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 	if !m.InPlaceBody || model.HasPicture(body) {
 		return []tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: body}}
 	}
-	editable := m.DocEditable(issue)
-	doc := ui.Doc{Common: ui.Common{Key: "body"}, Text: m.BodyDocText(issue), Edit: editable, Comment: editable}
-	if draft, ok := m.Drafts[issue.UID]; ok && draft.FromDoc && draft.Err != nil && m.EditorUID != issue.UID {
-		return []tern.Element{doc, toneText("body-error", ui.ToneError, draft.Err.Error()+" The Draft is kept: press e or c to open it.")}
+	state := m.BodyDoc(issue)
+	doc := ui.Doc{Common: ui.Common{Key: "body"}, Text: state.Text, Edit: state.Editable, Comment: state.Editable}
+	if state.Err != nil {
+		return []tern.Element{doc, toneText("body-error", ui.ToneError, state.Err.Error()+" The Draft is kept: press e or c to open it.")}
 	}
 	return []tern.Element{doc}
 }

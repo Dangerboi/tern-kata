@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dangerboi/tern-kata/internal/model"
 	"go.kenn.io/kit/consolewindow"
-	"golang.org/x/mod/semver"
 )
 
 // ternTimeout bounds a tern command that has no timeout of its own.
@@ -97,7 +97,7 @@ func (g *Gateway) ternAtLeast(ctx context.Context, floor string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return semver.Compare(version, floor) >= 0, nil
+	return model.TernAtLeast(version, floor), nil
 }
 
 func (g *Gateway) ternVersionOf(ctx context.Context) (string, error) {
@@ -145,8 +145,8 @@ func parseTernVersion(text string) (string, error) {
 	if len(fields) < 2 || fields[0] != "tern" {
 		return "", fmt.Errorf("tern --version printed %q, not `tern <version>`", strings.TrimSpace(text))
 	}
-	version := "v" + strings.TrimPrefix(fields[1], "v")
-	if !semver.IsValid(version) {
+	version, ok := model.TernSemver(fields[1])
+	if !ok {
 		return "", fmt.Errorf("tern --version names %q, which is no version", fields[1])
 	}
 	return version, nil

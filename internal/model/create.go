@@ -65,7 +65,7 @@ func openCreate(m Model, child bool) (Model, []Cmd) {
 	} else if !m.Collection.IsProject() && issue != nil {
 		projectID = issue.ProjectID
 	}
-	m.Create = CreateState{Open: true, Field: CreateFields[0].Name, Draft: Draft{ProjectID: projectID, Editor: NewTextEditor("")}, ParentUID: parent}
+	m.Create = CreateState{Open: true, Field: CreateFields[0].Name, Draft: Draft{DraftBase: DraftBase{ProjectID: projectID}, Editor: NewTextEditor("")}, ParentUID: parent}
 	if projectID == 0 {
 		m.Create.Err = errors.New("Select a Project before creating an Issue.")
 		return m, nil
