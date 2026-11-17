@@ -811,3 +811,30 @@ func TestFailureOfTheFollowUpSaveIsAnnouncedWhetherOrNotTheCardWasOpen(t *testin
 		})
 	}
 }
+
+func TestFollowUpSaveOfACRLFBodyWithAParentSectionDrawsItOnce(t *testing.T) {
+	issue := alpha
+	issue.Body, issue.ProjectID, issue.Revision, issue.QualifiedID = "## Parent\r\n\r\nChild of #upup.\r\n\r\n# Plan\r\n\r\ntext", 7, 3, "work#aaaa"
+	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
+	detail := func() *model.IssueDetailData { return &model.IssueDetailData{Issue: &issue, Links: links} }
+	s := onDocWith(t, true, detail())
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	s = feed(t, s, key("j")).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}).State
+	s = feed(t, s, &tern.Change{ID: id, Text: "mine, late"}).State
+	s = feed(t, s, key("k")).State
+	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: detail()}).State
+	s = feed(t, s, key("e")).State
+	out := step(t, s, model.DraftSaved{UID: "alpha"})
+	if len(savedCmds(out.Cmds)) != 1 {
+		t.Fatalf("the first save settling sent %#v, want the follow-up save", out.Cmds)
+	}
+	s = step(t, out.State, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	s = feed(t, s, &tern.Editing{ID: id, On: false}).State // Tern's end of the edit, which comes after the failure
+	if n := bodyNode(t, s); n.P["text"] != "mine, late" {
+		t.Fatalf("doc text %q after the follow-up failed, want the edit without the Parent section", n.P["text"])
+	}
+}

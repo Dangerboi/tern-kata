@@ -224,7 +224,7 @@ func (m Model) docSaved(uid string, draft Draft) (Model, []Cmd) {
 	if doc == nil { // the user opened the Draft in the card meanwhile: the follow-up is the doc's again, so a failure or conflict is announced as any edit of the doc's
 		doc = &DocPart{}
 		if m.editsDoc(uid) {
-			doc.HiddenPrefix, doc.Ref = m.docEdit.hidden, m.docEdit.ref
+			doc.HiddenPrefix, doc.Ref = normalizeLineBreaks(m.docEdit.hidden), m.docEdit.ref
 		} else if issue := m.issueByUID(uid); issue != nil {
 			_, hidden := m.BodyShown(*issue)
 			doc.HiddenPrefix, doc.Ref = normalizeLineBreaks(hidden), issue.QualifiedID
