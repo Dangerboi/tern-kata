@@ -15,12 +15,13 @@ import (
 var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
 
 // DraftKeptHint is what follows the error of a failed save of a doc edit or comment: that the Draft is kept (unless the error says so
-// itself) and how to open it. at names the Issue when the user may be on another one, "" when they are on it.
-func DraftKeptHint(err error, at string) string {
+// itself) and how to open it. where is the phrase that places the Issue when the user may be on another one (" on that Issue"), "" when
+// they are on it.
+func DraftKeptHint(err error, where string) string {
 	if errors.Is(err, errDraftReadOnly) { // its text already says the Draft is kept
-		return ". Press e or c" + at + " to open it."
+		return ". Press e or c" + where + " to open it."
 	}
-	return ". The Draft is kept: press e or c" + at + " to open it."
+	return ". The Draft is kept: press e or c" + where + " to open it."
 }
 
 type Draft struct {

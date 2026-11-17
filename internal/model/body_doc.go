@@ -107,7 +107,7 @@ type BodyDoc struct {
 func (m Model) BodyDoc(issue Issue) BodyDoc {
 	draft, held := m.Drafts[issue.UID]
 	doc := BodyDoc{Text: m.docText(issue), Editable: !held || draft.DocCanAct()}
-	if m.docEditUID() == issue.UID {
+	if m.docEdit != nil && m.docEdit.uid == issue.UID {
 		doc.Text = m.docEdit.drawn
 	}
 	if held && draft.Doc != nil && m.EditorUID != issue.UID {
@@ -136,13 +136,13 @@ func (m Model) startDocEdit(issue Issue) Model {
 // opened in the overlay is theirs and stays.
 func bodyEdited(m Model, text string) Model {
 	issue := m.docIssue()
-	if issue == nil || !m.InPlaceBody || (m.docEditUID() != "" && m.docEditUID() != issue.UID) { // the latter: the edit began on an Issue the doc no longer shows, and left it
+	if issue == nil || !m.InPlaceBody || (m.docEdit != nil && m.docEdit.uid != issue.UID) { // the latter: the edit began on an Issue the doc no longer shows, and left it
 		return m
 	}
 	if !m.BodyDoc(*issue).Editable {
 		return m
 	}
-	if m.docEditUID() != issue.UID {
+	if m.docEdit == nil || m.docEdit.uid != issue.UID {
 		m = m.startDocEdit(*issue)
 	}
 	draft, held := m.Drafts[issue.UID]
@@ -177,10 +177,10 @@ func bodyEditing(m Model, on bool) (Model, []Cmd) {
 		}
 		return m.startDocEdit(*issue), nil
 	}
-	uid := m.docEditUID()
-	if uid == "" {
-		uid = issue.UID
+	if m.docEdit == nil { // no edit is open (an editing on the doc ignored, say): nothing was edited, so a Draft held for the Issue is not sent
+		return m, nil
 	}
+	uid := m.docEdit.uid
 	m.docEdit = nil
 	return flushDocEdit(m, uid)
 }

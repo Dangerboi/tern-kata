@@ -378,12 +378,7 @@ func bodyErrorLine(t *testing.T, s driver.State) string {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		if strings.HasSuffix(n.ID, ".content.body-error") {
-			spans, _ := n.P["spans"].([]any)
-			var text string
-			for _, sp := range spans {
-				text += sp.(map[string]any)["t"].(string)
-			}
-			return text
+			return spansJoined(n)
 		}
 	}
 	t.Fatal("the view draws no line under the doc")
@@ -391,16 +386,20 @@ func bodyErrorLine(t *testing.T, s driver.State) string {
 }
 
 func TestTheLineUnderTheDocSaysTheDraftIsKeptOnce(t *testing.T) {
-	for name, err := range map[string]error{"reconnecting": nil, "another failure": errTest} {
+	for _, c := range []struct {
+		name  string
+		stale bool // kata is reconnecting: the leave is refused, with no failed save
+	}{{"reconnecting", true}, {"another failure", false}} {
+		name := c.name
 		s := onDoc(t, true)
 		id := bodyDocID(t, s)
 		s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
-		if err == nil {
+		if c.stale {
 			s.Model.Stale = true
 			s = feed(t, s, &tern.Editing{ID: id, On: false}).State
 		} else {
 			s = feed(t, s, &tern.Editing{ID: id, On: false}).State
-			s = feed(t, s, model.DraftFailed{UID: "alpha", Err: err}).State
+			s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
 		}
 		line := bodyErrorLine(t, s)
 		if strings.Count(line, "kept") != 1 || !strings.Contains(line, "press e or c to open it") && !strings.Contains(line, "Press e or c to open it") {
@@ -434,5 +433,38 @@ func TestADoubleClickBeforeTheReadOnlyDrawTakesNoStaleBase(t *testing.T) {
 	saves := savedCmds(out.Cmds)
 	if len(saves) != 1 || saves[0].BaseText != "mine" {
 		t.Fatalf("save %#v, want one against the body the first save wrote", out.Cmds)
+	}
+}
+
+func TestAnIgnoredEditingOnDoesNotSendTheFailedDraftAgain(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	s = feed(t, s, &tern.Editing{ID: id, On: false}).State // the save is in flight
+	s = feed(t, s, &tern.Editing{ID: id, On: true}).State  // a second double click, ignored: the doc is read-only
+	s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	out := step(t, s, &tern.Editing{ID: id, On: false}) // the edit Tern kept open ends when the doc shows the kept Draft
+	if saves := savedCmds(out.Cmds); len(saves) != 0 {
+		t.Fatalf("saves %#v, want none: nothing was edited since the failure", saves)
+	}
+	if line := bodyErrorLine(t, out.State); !strings.Contains(line, "daemon said no") {
+		t.Fatalf("line %q, want the failure still shown", line)
+	}
+}
+
+func TestAChangeAfterAnIgnoredEditingOnKeepsTheEditAsTheDraft(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	s = feed(t, s, &tern.Editing{ID: id, On: false}).State
+	s = feed(t, s, &tern.Editing{ID: id, On: true}).State
+	s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	s = feed(t, s, &tern.Change{ID: id, Text: "mine more"}).State
+	if d := s.Model.Drafts["alpha"]; !strings.HasSuffix(d.DocText(), "mine more") || d.Err != nil {
+		t.Fatalf("draft %q (%v), want the edit kept as the Draft", d.DocText(), d.Err)
+	}
+	saves := savedCmds(step(t, s, &tern.Editing{ID: id, On: false}).Cmds)
+	if len(saves) != 1 || !strings.HasSuffix(saves[0].Text, "mine more") {
+		t.Fatalf("saves %#v, want the edit sent once, on leaving", saves)
 	}
 }
