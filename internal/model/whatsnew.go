@@ -9,17 +9,19 @@ type ShowWhatsNew struct {
 
 func (ShowWhatsNew) cmd() {}
 
-// WhatsNewShown answers ShowWhatsNew. Err is why notes that were due could not be opened; the version counts as shown anyway.
+// WhatsNewShown answers ShowWhatsNew for Version. Err is why notes that were due were not shown: notes that could not be written
+// leave the version unrecorded, so the next Pane tries again; notes written but not opened count as shown.
 type WhatsNewShown struct {
-	Err error
+	Version string
+	Err     error
 }
 
 func (WhatsNewShown) msg() {}
 
-// whatsNewShown says only why the notes could not be opened: an open notes block, or nothing due, needs no word.
+// whatsNewShown says only why the notes were not shown: open notes, or none due, need no word.
 func whatsNewShown(m Model, msg WhatsNewShown) Model {
 	if msg.Err != nil {
-		m.Notice = "What's new in tern-kata " + m.Versions.Running + " was not opened: " + oneLine(msg.Err.Error())
+		m.Notice = "What's new in tern-kata " + msg.Version + " was not shown: " + oneLine(msg.Err.Error())
 	}
 	return m
 }

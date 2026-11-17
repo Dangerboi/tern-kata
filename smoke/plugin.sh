@@ -66,7 +66,7 @@ expect_no_kata_toast() {
 }
 expect_toast() { wait_for tree_has "$1"; }
 mkdir -p "$tmp/workspace" "$tmp/bin" "$tmp/pane-bin" "$tmp/app" "$tmp/crates/tern/goldens" "$tmp/crates/plugins/fixtures"
-if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -o "$tmp/app/tern-kata" ./cmd/tern-kata); fi
+if [[ $# -gt 0 ]]; then cp "$1" "$tmp/app/tern-kata"; else (cd "$repo" && go build -buildvcs=false -o "$tmp/app/tern-kata" ./cmd/tern-kata); fi
 (cd "$repo" && go build -o "$tmp/app/omp" ./internal/worker/workertest/stub)
 printf '#!/bin/sh\nexec env KATA_HOME=%q %q "$@"\n' "$KATA_HOME" "$tmp/app/tern-kata" >"$tmp/pane-bin/tern-kata"
 chmod +x "$tmp/pane-bin/tern-kata"

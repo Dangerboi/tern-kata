@@ -83,6 +83,25 @@ func TestWithNoVersionShownBeforeOnlyThisVersionsSectionShows(t *testing.T) {
 	}
 }
 
+// One release after the version shown is still a step from one version to the next; its Breaking bullets are already at hand in
+// its one section, so they are not listed twice.
+func TestOneStepIsTitledFromTheVersionShown(t *testing.T) {
+	got, ok := whatsnew.Notes(changelog, "v0.16.0", "v0.17.0")
+	want := `# tern-kata v0.16.0 → v0.17.0
+
+## 0.17.0 - 2026-11-20
+
+### Removed
+
+- **Breaking:** The old widget is gone.
+  - Remove it from the bar.
+- Something else went.
+`
+	if !ok || got != want {
+		t.Fatalf("notes (ok %v):\n%s\nwant:\n%s", ok, got, want)
+	}
+}
+
 // A build whose version has no section of its own (a dev build, or one stamped from a commit between releases) shows nothing, nor
 // does a version already shown or an older one.
 func TestNothingToShow(t *testing.T) {

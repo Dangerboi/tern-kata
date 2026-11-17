@@ -70,11 +70,12 @@ func (s section) breaking() []string {
 	return out
 }
 
-// Notes is the Markdown a Pane of version shows when it is the first of its version to start on this machine, and shown the
-// version shown last ("" when none was, or it cannot be read). It holds the sections of the versions after shown up to version,
-// separate and newest first; across several versions every Breaking bullet is listed first, as those ask the reader to act. With
-// no version shown before, only version's own section. ok is false when there is nothing to show: version has no section of its
-// own (a dev build), or it is not newer than shown.
+// Notes is the Markdown the first Pane of version on this machine shows, where shown is the version shown last ("" when none was,
+// or it cannot be read). It holds the sections of the versions after shown up to version, separate and newest first, titled
+// "tern-kata <shown> → <version>"; across several versions every Breaking bullet is listed first too, as those ask the reader to
+// act. With no version shown before, it is only version's own section, titled "What's new in tern-kata <version>". Versions are
+// written with their v in the titles and without it in the section headings, as the changelog writes them. ok is false when there
+// is nothing to show: version has no section of its own (a dev build), or it is not newer than shown.
 func Notes(changelog, shown, version string) (string, bool) {
 	if !semver.IsValid(shown) {
 		shown = ""
@@ -97,10 +98,12 @@ func Notes(changelog, shown, version string) (string, bool) {
 		return "", false
 	}
 	var b strings.Builder
-	if len(picked) == 1 {
+	if shown == "" {
 		b.WriteString("# What's new in tern-kata " + version + "\n")
 	} else {
 		b.WriteString("# tern-kata " + shown + " → " + version + "\n")
+	}
+	if len(picked) > 1 {
 		var breaking []string
 		for _, s := range picked {
 			breaking = append(breaking, s.breaking()...)

@@ -52,7 +52,7 @@ func (g *Gateway) showWhatsNew(ctx context.Context, cmd model.ShowWhatsNew) mode
 	file := ""
 	if inTern() {
 		if file, err = writeNotes(cmd.Version, notes); err != nil {
-			return model.WhatsNewShown{Err: err}
+			return model.WhatsNewShown{Version: cmd.Version, Err: err}
 		}
 	}
 	if raw, err := json.Marshal(whatsNewState{Shown: cmd.Version}); err == nil {
@@ -62,7 +62,7 @@ func (g *Gateway) showWhatsNew(ctx context.Context, cmd model.ShowWhatsNew) mode
 		return model.WhatsNewShown{}
 	}
 	if err := g.ternOpen(ctx, "--split", "right", file); err != nil {
-		return model.WhatsNewShown{Err: err}
+		return model.WhatsNewShown{Version: cmd.Version, Err: err}
 	}
 	if cmd.PaneBlock != "" {
 		_, _ = g.ternOutput(ctx, ternTimeout, []string{"focus", cmd.PaneBlock}) // the notes are open; a focus left on them is no failure

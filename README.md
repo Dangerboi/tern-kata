@@ -172,7 +172,7 @@ The Pane's top bar names the tern-kata it runs after the Daemon ("tern-kata v0.1
 
 ### What's new
 
-The first tern-kata Pane of a new version on a machine opens that version's release notes in a split beside it, however the version got there (`tern-kata update`, the palette command, the install script or a copied binary). After a jump over several versions it shows each of them, newest first, under "tern-kata vOLD → vNEW", with every **Breaking** change listed first. Each version is shown once per machine: the last one shown is kept in `whats-new.json` in tern-kata's state folder, and other Panes of that version open nothing. A first install shows only its own version, and a development build, which has no release notes, shows nothing.
+The first tern-kata Pane of a new version on a machine opens that version's release notes in a split beside it, however the version got there (`tern-kata update`, the palette command, the install script or a copied binary), and the focus stays in the Pane. The notes cover every version since the one shown last, newest first, under "tern-kata vOLD → vNEW"; after a jump over several versions every **Breaking** change is listed first. Each version is shown once per machine: the last one shown is kept in `whats-new.json` in tern-kata's state folder, and other Panes of that version open nothing. A first install shows only its own version, and a development build, which has no release notes, shows nothing.
 
 ## Troubleshooting
 

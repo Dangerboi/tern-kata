@@ -28,7 +28,8 @@ if [[ -z ${SMOKE_SHARD:-} && $# -eq 0 ]]; then
   trap 'stop_jobs; rm -rf "$bin_dir"' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
-  (cd "$repo" && go build -o "$bin_dir/tern-kata" ./cmd/tern-kata)
+  # -buildvcs=false keeps a build at a release tag a dev build: a stamped one opens its release notes over the Pane at its first start.
+  (cd "$repo" && go build -buildvcs=false -o "$bin_dir/tern-kata" ./cmd/tern-kata)
   # Steps 81 and 82 and supervision.sh serve a release built at the current version; one build serves all three.
   build_release_dist "$bin_dir/dist"
   slow=(51-claim-expiry.sh 60-cron-made-issue.sh 62-job-card.sh 81-install-from-release.sh 82-update-from-release.sh)
@@ -95,7 +96,7 @@ if (( ${#steps[@]} == 0 )); then
   if [[ -n ${SMOKE_BIN:-} ]]; then
     cp "$SMOKE_BIN" "$bin_dir/tern-kata"
   else
-    (cd "$repo" && go build -o "$bin_dir/tern-kata" ./cmd/tern-kata)
+    (cd "$repo" && go build -buildvcs=false -o "$bin_dir/tern-kata" ./cmd/tern-kata)
   fi
   current=
   for extra in "${extras[@]}"; do
@@ -122,7 +123,7 @@ export XDG_STATE_HOME="$tmp/xdg-state"
 export XDG_CACHE_HOME="$tmp/xdg-cache"
 export TERN_DAEMON_SOCKET="$tmp/tern-daemon.sock"
 export STENCIL_LOG_DIR="$tmp/logs"
-# The Pane's daily `kata update --check` asks GitHub: the steps run without the network.
+# The Pane's hourly `kata update --check` asks GitHub: the steps run without the network.
 export TERN_KATA_NO_UPDATE_CHECK=1
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
 
@@ -178,7 +179,7 @@ kata --workspace "$tmp/workspace" create "Smoke third Issue" --body "Third seede
 if [[ -n ${SMOKE_BIN:-} ]]; then
   cp "$SMOKE_BIN" "$tmp/tern-kata"
 else
-  (cd "$repo" && go build -o "$tmp/tern-kata" ./cmd/tern-kata)
+  (cd "$repo" && go build -buildvcs=false -o "$tmp/tern-kata" ./cmd/tern-kata)
 fi
 
 source "$repo/smoke/ctl.sh"

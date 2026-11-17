@@ -172,7 +172,7 @@ func semverOf(version string) string {
 	return ""
 }
 
-// releaseCheck is the daily kata release check's last time and answer: Latest is the newer release it found, "" when none.
+// releaseCheck is the hourly kata release check's last time and answer: Latest is the newer release it found, "" when none.
 type releaseCheck struct {
 	Checked time.Time `json:"checked"`
 	Latest  string    `json:"latest,omitempty"`

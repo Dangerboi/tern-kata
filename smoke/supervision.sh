@@ -33,7 +33,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 source "$repo/smoke/ctl.sh"
 mkdir -p "$tmp/bin" "$tmp/workspace" "$tmp/checkout" "$XDG_CONFIG_HOME/tern-kata" "$state"
-if [[ $# -gt 0 ]]; then cp "$1" "$tmp/bin/tern-kata"; else (cd "$repo" && go build -o "$tmp/bin/tern-kata" ./cmd/tern-kata); fi
+if [[ $# -gt 0 ]]; then cp "$1" "$tmp/bin/tern-kata"; else (cd "$repo" && go build -buildvcs=false -o "$tmp/bin/tern-kata" ./cmd/tern-kata); fi
 # The stub stands for omp. Both programs sit in a folder the daemon's PATH does not list: the host half must find them.
 (cd "$repo" && go build -o "$tmp/bin/omp" ./internal/worker/workertest/stub)
 export TERN_KATA_INSTALL_DIR="$tmp/bin"
