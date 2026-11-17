@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -915,16 +916,34 @@ func TestLateTextIsDroppedWithTheDraftsOnADaemonSwitch(t *testing.T) {
 	}
 }
 
+// lateWithTheEditEnded is lateWhileSaving after Tern ended the edit (editing off), so no edit is open in the Pane when the save settles.
+func lateWithTheEditEnded(t *testing.T) driver.State {
+	t.Helper()
+	s := lateWhileSaving(t)
+	return feed(t, s, &tern.Editing{ID: bodyDocID(t, s), On: false}).State
+}
+
 func TestFailureOfTheFollowUpSaveIsAnnouncedWhetherOrNotTheCardWasOpen(t *testing.T) {
-	for name, open := range map[string]bool{"card open": true, "card not open": false} {
+	cases := map[string]struct {
+		start func(*testing.T) driver.State
+		open  bool
+	}{
+		"edit open, card open":     {lateWhileSaving, true},
+		"edit open, card not open": {lateWhileSaving, false},
+		"edit ended, card open":    {lateWithTheEditEnded, true},
+	}
+	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			s := lateWhileSaving(t)
-			if open {
+			s := c.start(t)
+			if c.open {
 				s = feed(t, s, key("e")).State
 			}
 			out := step(t, s, model.DraftSaved{UID: "alpha"})
 			if len(savedCmds(out.Cmds)) != 1 {
 				t.Fatalf("the first save settling sent %#v, want the follow-up save", out.Cmds)
+			}
+			if out.State.Model.EditorUID != "" {
+				t.Fatalf("the card is still open for %q after its save landed", out.State.Model.EditorUID)
 			}
 			failed := step(t, out.State, model.DraftFailed{UID: "alpha", Err: errTest}).State
 			if n := failed.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, errTest.Error()) {
@@ -940,12 +959,38 @@ func TestFailureOfTheFollowUpSaveIsAnnouncedWhetherOrNotTheCardWasOpen(t *testin
 	}
 }
 
-func TestFollowUpSaveOfACRLFBodyWithAParentSectionDrawsItOnce(t *testing.T) {
+// The detail of alpha stays on screen while the selection loads beta's, and alpha has no row in the list: the Issue is known only by
+// the detail.
+func TestFollowUpSaveNamesTheIssueWhenTheListHoldsNoRowForIt(t *testing.T) {
+	s := lateWithTheEditEnded(t)
+	s = feed(t, s, key("e")).State
+	s = feed(t, s, &tern.Select{ID: "main.columns.list.issues", Item: "beta"}).State
+	if s.Model.DetailIssueUID() != "alpha" || s.Model.SelectedUID != "beta" {
+		t.Fatalf("detail %q, selection %q, want alpha's detail still shown while beta's loads", s.Model.DetailIssueUID(), s.Model.SelectedUID)
+	}
+	s.Model.Issues = slices.DeleteFunc(slices.Clone(s.Model.Issues), func(i model.Issue) bool { return i.UID == "alpha" })
+	out := step(t, s, model.DraftSaved{UID: "alpha"})
+	if len(savedCmds(out.Cmds)) != 1 {
+		t.Fatalf("the first save settling sent %#v, want the follow-up save", out.Cmds)
+	}
+	failed := step(t, out.State, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	if n := failed.Model.Notice; !strings.Contains(n, "work#aaaa") {
+		t.Fatalf("notice %q, want it to name the Issue", n)
+	}
+}
+
+// crlfParentDetail is alpha whose body opens with a Parent section, with CRLF line breaks, as kata stores a body typed on Windows.
+func crlfParentDetail() *model.IssueDetailData {
 	issue := alpha
 	issue.Body, issue.ProjectID, issue.Revision, issue.QualifiedID = "## Parent\r\n\r\nChild of #upup.\r\n\r\n# Plan\r\n\r\ntext", 7, 3, "work#aaaa"
 	links := []model.Link{{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#upup"}}
-	detail := func() *model.IssueDetailData { return &model.IssueDetailData{Issue: &issue, Links: links} }
-	s := onDocWith(t, true, detail())
+	return &model.IssueDetailData{Issue: &issue, Links: links}
+}
+
+// lateOnTheParentedIssue is lateWhileSaving for crlfParentDetail, ending with the card open on alpha.
+func lateOnTheParentedIssue(t *testing.T) (driver.State, string) {
+	t.Helper()
+	s := onDocWith(t, true, crlfParentDetail())
 	id := bodyDocID(t, s)
 	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
 	s = feed(t, s, key("j")).State
@@ -954,15 +999,76 @@ func TestFollowUpSaveOfACRLFBodyWithAParentSectionDrawsItOnce(t *testing.T) {
 	s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}).State
 	s = feed(t, s, &tern.Change{ID: id, Text: "mine, late"}).State
 	s = feed(t, s, key("k")).State
-	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: detail()}).State
-	s = feed(t, s, key("e")).State
+	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: crlfParentDetail()}).State
+	return feed(t, s, key("e")).State, id
+}
+
+func TestFollowUpSaveOfACRLFBodyWithAParentSectionDrawsItOnce(t *testing.T) {
+	s, id := lateOnTheParentedIssue(t)
 	out := step(t, s, model.DraftSaved{UID: "alpha"})
-	if len(savedCmds(out.Cmds)) != 1 {
+	saves := savedCmds(out.Cmds)
+	if len(saves) != 1 {
 		t.Fatalf("the first save settling sent %#v, want the follow-up save", out.Cmds)
+	}
+	if n := strings.Count(saves[0].Text, "## Parent"); n != 1 {
+		t.Fatalf("the follow-up save holds the Parent section %d times: %q", n, saves[0].Text)
+	}
+	if n := strings.Count(out.State.Model.Drafts["alpha"].Editor.Text, "## Parent"); n != 1 {
+		t.Fatalf("the saved Draft holds the Parent section %d times: %q", n, out.State.Model.Drafts["alpha"].Editor.Text)
 	}
 	s = step(t, out.State, model.DraftFailed{UID: "alpha", Err: errTest}).State
 	s = feed(t, s, &tern.Editing{ID: id, On: false}).State // Tern's end of the edit, which comes after the failure
 	if n := bodyNode(t, s); n.P["text"] != "mine, late" {
 		t.Fatalf("doc text %q after the follow-up failed, want the edit without the Parent section", n.P["text"])
+	}
+}
+
+func TestFollowUpSaveHidesTheParentSectionOfItsOwnIssueWhateverDetailIsShown(t *testing.T) {
+	s, id := lateOnTheParentedIssue(t)
+	s = feed(t, s, &tern.Editing{ID: id, On: false}).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	s = feed(t, s, &tern.Select{ID: "main.columns.list.issues", Item: "beta"}, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}).State
+	if s.Model.DetailIssueUID() != "beta" {
+		t.Fatalf("the detail shows %q, want beta", s.Model.DetailIssueUID())
+	}
+	s = step(t, s, model.DraftSaved{UID: "alpha"}).State
+	s = step(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	draft, held := s.Model.Drafts["alpha"]
+	if !held || draft.Doc == nil {
+		t.Fatalf("alpha holds %#v, want its doc Draft", draft)
+	}
+	if text := draft.DocText(); text != "mine, late" {
+		t.Fatalf("the doc draws %q for alpha's Draft, want the edit without the Parent section", text)
+	}
+}
+
+func TestLateChangeAfterTheCardsSaveSettledOpensTheConflictCardAgainstWhatItSaved(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}, &tern.Editing{ID: id, On: false}).State
+	s = feed(t, s, key("e")).State // the card takes the Draft while its save is in flight
+	s = feed(t, s, model.DraftSaved{UID: "alpha"}).State
+	out := step(t, s, &tern.Change{ID: id, Text: "mine, late"})
+	saves := savedCmds(out.Cmds)
+	if len(saves) != 1 || saves[0].UID != "alpha" || saves[0].Text != "mine, late" || saves[0].BaseText != docBody {
+		t.Fatalf("a late change after the card's save settled sent %#v, want it saved on the text the edit began on", out.Cmds)
+	}
+	theirs := alpha
+	theirs.Body, theirs.Revision = "mine", 4
+	conflict := step(t, out.State, model.DraftConflict{UID: "alpha", Issue: theirs}).State
+	if conflict.Model.EditorUID != "alpha" {
+		t.Fatalf("the conflict opened no card, editor %q", conflict.Model.EditorUID)
+	}
+}
+
+func TestLateChangeAfterAnOrdinarySaveSettledIsSavedOnTheTextSaved(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}, &tern.Editing{ID: id, On: false}).State
+	s = feed(t, s, model.DraftSaved{UID: "alpha"}).State
+	out := step(t, s, &tern.Change{ID: id, Text: "mine, late"})
+	if saves := savedCmds(out.Cmds); len(saves) != 1 || saves[0].Text != "mine, late" || saves[0].BaseText != "mine" {
+		t.Fatalf("a late change after an ordinary save settled sent %#v, want it saved on the text saved", out.Cmds)
 	}
 }

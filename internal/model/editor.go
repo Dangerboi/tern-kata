@@ -44,9 +44,12 @@ type Draft struct {
 	// Doc is set on a Draft the Issue body's doc made, which the overlay does not show: an in-place edit, or a comment on a
 	// selection. Opening the Draft in the overlay makes it an ordinary one.
 	Doc *DocPart
+	// FromDoc is the Doc the Draft had before the overlay took it (`e` on an in-place edit whose save was in flight): what the doc's
+	// follow-up save of Late is made from.
+	FromDoc *DocPart
 	// Late is the text the doc sent for an in-place edit after its save left, to be saved once that save settles; it goes where
 	// the Draft goes.
-	Late *string
+	Late LateText
 	Keyed
 }
 
@@ -59,6 +62,12 @@ type DocPart struct {
 	// Shown is set once the Draft's save failed or conflicted: the doc then draws the Draft's text, and keeps drawing it while a retry
 	// or an overwrite saves, however the failure is cleared.
 	Shown bool
+}
+
+// LateText is Late's text, a value so that copies of a Draft share nothing; Held is false for none.
+type LateText struct {
+	Text string
+	Held bool
 }
 
 // DraftBase is what a Draft was begun from: the Issue's Project, its body and its revision then. A save is written against it.
@@ -235,7 +244,7 @@ func startDraft(m Model, comment bool) Model {
 	}
 	uid := m.SelectedUID
 	if draft, ok := m.Drafts[uid]; ok && draft.Doc != nil {
-		draft.Doc = nil
+		draft.FromDoc, draft.Doc = draft.Doc, nil
 		m = putDraft(m, uid, draft)
 	}
 	if _, ok := m.Drafts[uid]; !ok {
@@ -351,7 +360,7 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	case DraftSaved:
 		draft, ok := m.Drafts[msg.UID]
 		inPlace := ok && draft.InPlaceEdit()
-		late := ok && draft.Late != nil
+		late := ok && draft.Late.Held
 		if inPlace {
 			m = m.bodySaved(msg.UID, draft.Editor.Text)
 		}
@@ -387,7 +396,8 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		return m, nil, true
 	case BodyEdited:
-		return bodyEdited(m, msg.UID, msg.Text), nil, true
+		m, cmds := bodyEdited(m, msg.UID, msg.Text)
+		return m, cmds, true
 	case BodyEditing:
 		m, cmds := bodyEditing(m, msg.UID, msg.On)
 		return m, cmds, true

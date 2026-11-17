@@ -151,24 +151,30 @@ func (m Model) startDocEdit(issue Issue) Model {
 
 // bodyEdited holds the doc's new text as a Draft on the revision the edit began on; leaving the doc saves it. A Draft the user
 // opened in the overlay is theirs and stays. The text belongs to Issue uid: when the doc has since moved on to another Issue, it is
-// the open edit's (the doc sends its last second of typing after the move), never the Issue now shown.
-func bodyEdited(m Model, uid, text string) Model {
+// the open edit's (the doc sends its last second of typing after the move), never the Issue now shown. A change that comes after the
+// edit ended and its Draft is gone (the card's save settled) is lateAfterEnd's.
+func bodyEdited(m Model, uid, text string) (Model, []Cmd) {
 	m = m.noteDocChange(uid)
 	if !m.InPlaceBody {
-		return m
+		return m, nil
+	}
+	if ended := m.docEnded; ended != nil && ended.uid == uid && !m.editsDoc(uid) {
+		if _, held := m.Drafts[uid]; !held {
+			return lateAfterEnd(m, *ended, text)
+		}
 	}
 	if issue := m.docIssue(); issue != nil && issue.UID == uid {
 		if m.docEdit != nil && !m.editsDoc(uid) { // the edit began on an Issue the doc no longer shows, and left it
-			return m
+			return m, nil
 		}
 		if !m.BodyDoc(*issue).Editable {
-			return m
+			return m, nil
 		}
 		if !m.editsDoc(uid) {
 			m = m.startDocEdit(*issue)
 		}
 	} else if !m.editsDoc(uid) {
-		return m
+		return m, nil
 	}
 	draft, held := m.Drafts[uid]
 	hidden, base := m.docEdit.hidden, m.docEdit.base
@@ -178,39 +184,52 @@ func bodyEdited(m Model, uid, text string) Model {
 			hidden, base = draft.Doc.HiddenPrefix, draft.DraftBase
 		case draft.Saving && !draft.Comment && draft.Doc == nil: // the user opened the in-place edit's Draft in the card while it saved: the text still belongs to it
 		default: // the overlay's or a comment's: not the doc's to change
-			return m
+			return m, nil
 		}
 	}
 	whole := normalizeLineBreaks(hidden + text)
 	if held && draft.Saving { // the save in flight carries the text before this one: this is saved once that save settles
-		draft.Late = &whole
-		return putDraft(m, uid, draft)
+		draft.Late = LateText{Text: whole, Held: true}
+		return putDraft(m, uid, draft), nil
 	}
 	if whole == normalizeLineBreaks(base.BaseText) {
 		if held {
 			m = dropDraft(m, uid)
 		}
-		return m
+		return m, nil
 	}
 	if !held {
 		draft = Draft{DraftBase: base, Doc: &DocPart{HiddenPrefix: normalizeLineBreaks(hidden), Ref: m.docEdit.ref}}
 	}
 	draft.Editor, draft.Err = NewTextEditor(whole), nil
-	return putDraft(m, uid, draft)
+	return putDraft(m, uid, draft), nil
+}
+
+// lateAfterEnd saves the text the doc sent for Issue uid after its edit ended and the save of that edit settled, which no Draft
+// holds any more. It goes on the base the edit began on, so a save that a card made meanwhile opens the conflict card (the user sees
+// it) instead of being overwritten; an edit whose save the doc settled has had that base moved to the text it saved (docSaved).
+func lateAfterEnd(m Model, ended docEdit, text string) (Model, []Cmd) {
+	whole := normalizeLineBreaks(ended.hidden + text)
+	if whole == normalizeLineBreaks(ended.base.BaseText) {
+		return m, nil
+	}
+	m = putDraft(m, ended.uid, Draft{DraftBase: ended.base, Doc: &DocPart{HiddenPrefix: normalizeLineBreaks(ended.hidden), Ref: ended.ref}, Editor: NewTextEditor(whole)})
+	return sendDraftOf(m, ended.uid, false)
 }
 
 // withLate gives draft, whose save did not go through, the text the doc sent for it after the save left: the Draft the user keeps is
 // what they last typed.
 func withLate(draft Draft) Draft {
-	if draft.Late != nil {
-		draft.Editor = NewTextEditor(*draft.Late)
-		draft.Late = nil
+	if draft.Late.Held {
+		draft.Editor = NewTextEditor(draft.Late.Text)
+		draft.Late = LateText{}
 	}
 	return draft
 }
 
 // docSaved settles the save of Issue uid's body edit, which sent saved: the text the doc sent after it goes on to a save of its own,
-// against the text just saved. The edit still open in the doc is now written against that text too.
+// against the text just saved. The edit still open in the doc, or the one that ended, is now written against that text too, unless
+// a card made the save: that text is not the doc's, and a change that comes after it is checked against the base the edit began on.
 func (m Model) docSaved(uid string, draft Draft) (Model, []Cmd) {
 	saved := draft.Editor.Text
 	if m.editsDoc(uid) {
@@ -218,23 +237,41 @@ func (m Model) docSaved(uid string, draft Draft) (Model, []Cmd) {
 		edit.base.BaseText = saved
 		m.docEdit = &edit
 	}
-	if draft.Late == nil || *draft.Late == saved {
+	if ended := m.docEnded; ended != nil && ended.uid == uid && draft.Doc != nil {
+		edit := *ended
+		edit.base.BaseText = saved
+		m.docEnded = &edit
+	}
+	if !draft.Late.Held || draft.Late.Text == saved {
 		return m, nil
 	}
-	doc := draft.Doc
-	if doc == nil { // the user opened the Draft in the card meanwhile: the follow-up is the doc's again, so a failure or conflict is announced as any edit of the doc's
-		doc = &DocPart{}
-		if m.editsDoc(uid) {
-			doc.HiddenPrefix, doc.Ref = normalizeLineBreaks(m.docEdit.hidden), m.docEdit.ref
-		} else if issue := m.issueByUID(uid); issue != nil {
-			_, hidden := m.BodyShown(*issue)
-			doc.HiddenPrefix, doc.Ref = normalizeLineBreaks(hidden), issue.QualifiedID
-		}
-	}
-	next := Draft{DraftBase: draft.DraftBase, Doc: doc, Editor: NewTextEditor(*draft.Late)}
+	next := Draft{DraftBase: draft.DraftBase, Doc: m.followUpDoc(uid, draft), Editor: NewTextEditor(draft.Late.Text)}
 	next.BaseText = saved
 	m = putDraft(m, uid, next)
 	return sendDraftOf(m, uid, false)
+}
+
+// followUpDoc is the DocPart of the save that follows the one of draft, whose late text is saved next. A Draft the user opened in the
+// card meanwhile has none: the follow-up is the doc's again, so a failure or conflict is announced as any edit of the doc's, naming
+// the Issue and keeping the Parent section that Issue's own doc hides (kept with the Draft, not read off whatever detail is shown).
+func (m Model) followUpDoc(uid string, draft Draft) *DocPart {
+	if draft.Doc != nil {
+		return draft.Doc
+	}
+	if from := draft.FromDoc; from != nil {
+		return &DocPart{HiddenPrefix: from.HiddenPrefix, Ref: from.Ref}
+	}
+	switch issue := m.docIssue(); {
+	case m.editsDoc(uid):
+		return &DocPart{HiddenPrefix: normalizeLineBreaks(m.docEdit.hidden), Ref: m.docEdit.ref}
+	case issue != nil && issue.UID == uid:
+		_, hidden := m.BodyShown(*issue)
+		return &DocPart{HiddenPrefix: normalizeLineBreaks(hidden), Ref: issue.QualifiedID}
+	}
+	if issue := m.issueByUID(uid); issue != nil {
+		return &DocPart{Ref: issue.QualifiedID}
+	}
+	return &DocPart{}
 }
 
 // deadEditWithin is how soon after an editing on an editing off with no change in between is a dead edit: Tern closed the edit
@@ -369,11 +406,15 @@ func bodyEditing(m Model, uid string, on bool) (Model, []Cmd) {
 	return m, append(cmds, guard...)
 }
 
+// applyBodyEditing is the doc's editing on or off as an edit of the body: on notes the edit and what it is written against, off
+// takes it out of the doc and sends the Draft it left. The edit that ended is kept as docEnded, which a change that comes late
+// finds.
 func applyBodyEditing(m Model, uid string, on bool) (Model, []Cmd) {
 	if !m.InPlaceBody {
 		return m, nil
 	}
 	if on {
+		m.docEnded = nil
 		issue := m.docIssue()
 		if issue == nil || issue.UID != uid { // a doc that is no longer the one shown starts nothing
 			return m, nil
@@ -388,7 +429,7 @@ func applyBodyEditing(m Model, uid string, on bool) (Model, []Cmd) {
 	if !m.editsDoc(uid) { // no edit of this doc is open (an editing on the doc ignored, say): nothing was edited, so a Draft held for the Issue is not sent
 		return m, nil
 	}
-	m.docEdit = nil
+	m.docEnded, m.docEdit = m.docEdit, nil
 	return flushDocEdit(m, uid)
 }
 
