@@ -4,7 +4,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-
 )
 
 // ternDocFloor is the first Tern whose doc element this Pane has seen work: in-place editing, and the Comment bubble on a
@@ -14,7 +13,6 @@ const ternDocFloor = "v0.9.26"
 // TernDrawsDoc reports whether a Tern of this version (as the hello reply names it, "0.9.26") draws a doc. A pre-release of the floor
 // is older than the floor; a version that cannot be read is not enough.
 func TernDrawsDoc(version string) bool { return TernAtLeast(version, ternDocFloor) }
-
 
 var picture = regexp.MustCompile(`(?i)<img|!\[[^\]]*\]\(`)
 
@@ -173,6 +171,10 @@ func bodyEditing(m Model, on bool) (Model, []Cmd) {
 		return m, nil
 	}
 	if on { // a doc node removed without an editing off must not leave its edit behind
+		if !m.BodyDoc(*issue).Editable { // a save in flight: the edit would begin on a body the save is about to change
+			m.docEditing, m.docDrawn, m.docHidden, m.docBase = "", "", "", DraftBase{}
+			return m, nil
+		}
 		return m.startDocEdit(*issue), nil
 	}
 	uid := m.docEditing

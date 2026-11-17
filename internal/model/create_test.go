@@ -2,8 +2,8 @@ package model_test
 
 import (
 	"errors"
-	"strings"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"strings"
 	"testing"
 	"time"
 )

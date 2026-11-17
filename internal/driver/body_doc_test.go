@@ -369,3 +369,66 @@ func TestEditingOnDropsWhatAnEarlierEditLeftBehind(t *testing.T) {
 		t.Fatalf("doc text %q, want the body as it is when the new edit began", n.P["text"])
 	}
 }
+
+func bodyErrorLine(t *testing.T, s driver.State) string {
+	t.Helper()
+	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+		if strings.HasSuffix(n.ID, ".content.body-error") {
+			spans, _ := n.P["spans"].([]any)
+			var text string
+			for _, sp := range spans {
+				text += sp.(map[string]any)["t"].(string)
+			}
+			return text
+		}
+	}
+	t.Fatal("the view draws no line under the doc")
+	return ""
+}
+
+func TestTheLineUnderTheDocSaysTheDraftIsKeptOnce(t *testing.T) {
+	for name, err := range map[string]error{"reconnecting": nil, "another failure": errTest} {
+		s := onDoc(t, true)
+		id := bodyDocID(t, s)
+		s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+		if err == nil {
+			s.Model.Stale = true
+			s = feed(t, s, &tern.Editing{ID: id, On: false}).State
+		} else {
+			s = feed(t, s, &tern.Editing{ID: id, On: false}).State
+			s = feed(t, s, model.DraftFailed{UID: "alpha", Err: err}).State
+		}
+		line := bodyErrorLine(t, s)
+		if strings.Count(line, "kept") != 1 || !strings.Contains(line, "press e or c to open it") && !strings.Contains(line, "Press e or c to open it") {
+			t.Fatalf("%s: line %q, want it to say the Draft is kept once and how to open it", name, line)
+		}
+		if strings.Contains(line, "kept The") {
+			t.Fatalf("%s: line %q runs two sentences together", name, line)
+		}
+	}
+}
+
+func TestTheNoticeSaysTheDraftIsKeptOnceWhateverTheError(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}, &tern.Editing{ID: id, On: false}).State
+	s = feed(t, s, key("j"), model.DraftFailed{UID: "alpha", Err: errTest}).State
+	if n := s.Model.Notice; strings.Count(n, "kept") != 1 || !strings.Contains(n, "daemon said no") {
+		t.Fatalf("notice %q, want the error and the Draft kept once", n)
+	}
+}
+
+func TestADoubleClickBeforeTheReadOnlyDrawTakesNoStaleBase(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	s = feed(t, s, &tern.Editing{ID: id, On: false}).State // the save is in flight
+	s = feed(t, s, &tern.Editing{ID: id, On: true}).State  // a second double click before the read-only draw
+	s = feed(t, s, model.DraftSaved{UID: "alpha"}).State
+	s = feed(t, s, &tern.Change{ID: id, Text: "mine more"}).State
+	out := step(t, s, &tern.Editing{ID: id, On: false})
+	saves := savedCmds(out.Cmds)
+	if len(saves) != 1 || saves[0].BaseText != "mine" {
+		t.Fatalf("save %#v, want one against the body the first save wrote", out.Cmds)
+	}
+}
