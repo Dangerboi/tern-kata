@@ -19,10 +19,18 @@ var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
 // they are on it.
 func DraftKeptHint(err error, where string) string {
 	if errors.Is(err, errDraftReadOnly) { // its text already says the Draft is kept
-		return ". Press e or c" + where + " to open it."
+		return ". Press " + openKeys(where) + " it."
 	}
-	return ". The Draft is kept: press e or c" + where + " to open it."
+	return ". The Draft is kept: press " + openKeys(where) + " it."
 }
+
+// ConflictHint is the sentence that says how to open the conflict card of a Draft whose save conflicted; where is as in DraftKeptHint.
+func ConflictHint(where string) string {
+	return "Press " + openKeys(where) + " the conflict card."
+}
+
+// openKeys is the keys that open a kept Draft, and the words that lead to what they open.
+func openKeys(where string) string { return "e or c" + where + " to open" }
 
 type Draft struct {
 	Editor TextEditor
@@ -361,7 +369,7 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 				m.EditorUID = msg.UID
 				m = m.focusDetail()
 			case m.EditorUID != msg.UID: // another Issue's card is open: it stays, and a Notice says where the conflict is
-				m.Notice = fmt.Sprintf("Your %s conflicts with a newer change. Press e or c on that Issue to open the conflict card.", draftWhat(draft))
+				m.Notice = fmt.Sprintf("Your %s conflicts with a newer change. %s", draftWhat(draft), ConflictHint(" on that Issue"))
 			}
 		}
 		return m, nil, true

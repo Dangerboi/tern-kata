@@ -395,6 +395,9 @@ func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 	}
 	state := m.BodyDoc(issue)
 	doc := ui.Doc{Common: ui.Common{Key: "body"}, Text: state.Text, Edit: state.Editable, Comment: state.Editable}
+	if state.Conflicted {
+		return []tern.Element{doc, toneText("body-error", ui.ToneError, "Your edit conflicts with a newer change. "+model.ConflictHint(""))}
+	}
 	if state.Err != nil {
 		return []tern.Element{doc, toneText("body-error", ui.ToneError, state.Err.Error()+model.DraftKeptHint(state.Err, ""))}
 	}

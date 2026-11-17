@@ -512,16 +512,24 @@ func TestConflictWhileAnotherIssuesCardIsOpenRaisesTheNoticeNamingTheIssue(t *te
 	theirs := alpha
 	theirs.Body, theirs.Revision = "theirs", 4
 	s = feed(t, s, model.DraftConflict{UID: "alpha", Issue: theirs}).State
-	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, "conflict") || !strings.Contains(n, "e") {
+	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, "conflict") || !strings.Contains(n, "Press e or c on that Issue to open the conflict card.") {
 		t.Fatalf("notice %q, want it to name the Issue and say it conflicts", n)
 	}
 	if s.Model.EditorUID != "beta" {
 		t.Fatalf("editor on %q, want beta's card left open", s.Model.EditorUID)
 	}
+	s = feed(t, s, key("x")).State // the next key clears the Notice
+	if s.Model.Notice != "" {
+		t.Fatalf("notice %q, want it cleared by the key", s.Model.Notice)
+	}
 	s = feed(t, s, key("escape"), key("y"), key("escape"), key("k")).State // beta's card is discarded, and the selection goes back to alpha
 	back := alpha
 	back.Body, back.ProjectID, back.Revision, back.QualifiedID = docBody, 7, 3, "work#aaaa"
-	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &back}}, key("e")).State
+	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &back}}).State
+	if line := bodyErrorLine(t, s); !strings.Contains(line, "conflicts with a newer change") || !strings.Contains(line, "Press e or c to open the conflict card.") {
+		t.Fatalf("line %q, want it to say the edit conflicts and how to open the card", line)
+	}
+	s = feed(t, s, key("e")).State
 	if s.Model.EditorUID != "alpha" || s.Model.EditorMode() != model.ModeConflict {
 		t.Fatalf("e opened %q in mode %q, want alpha's conflict card", s.Model.EditorUID, s.Model.EditorMode())
 	}

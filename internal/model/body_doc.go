@@ -101,6 +101,9 @@ type BodyDoc struct {
 	Editable bool
 	// Err is the failure of a kept in-place edit that no card shows; nil otherwise.
 	Err error
+	// Conflicted is set when a kept in-place edit conflicted and no card shows it: the line under the doc says so, since a Notice does not
+	// outlive the next key.
+	Conflicted bool
 }
 
 // BodyDoc is the state of issue's body doc.
@@ -112,6 +115,7 @@ func (m Model) BodyDoc(issue Issue) BodyDoc {
 	}
 	if held && draft.Doc != nil && m.EditorUID != issue.UID {
 		doc.Err = draft.Err
+		doc.Conflicted = draft.Conflict != nil
 	}
 	return doc
 }
