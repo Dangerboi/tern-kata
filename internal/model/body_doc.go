@@ -107,8 +107,8 @@ type BodyDoc struct {
 func (m Model) BodyDoc(issue Issue) BodyDoc {
 	draft, held := m.Drafts[issue.UID]
 	doc := BodyDoc{Text: m.docText(issue), Editable: !held || draft.DocCanAct()}
-	if m.docEditing == issue.UID {
-		doc.Text = m.docDrawn
+	if m.docEditUID() == issue.UID {
+		doc.Text = m.docEdit.drawn
 	}
 	if held && draft.Doc != nil && m.EditorUID != issue.UID {
 		doc.Err = draft.Err
@@ -128,7 +128,7 @@ func (m Model) docText(issue Issue) string {
 // against, as the doc showed the Issue now.
 func (m Model) startDocEdit(issue Issue) Model {
 	_, hidden := m.BodyShown(issue)
-	m.docEditing, m.docDrawn, m.docHidden, m.docBase = issue.UID, m.docText(issue), hidden, baseOf(issue)
+	m.docEdit = &docEdit{uid: issue.UID, drawn: m.docText(issue), hidden: hidden, base: baseOf(issue)}
 	return m
 }
 
@@ -136,17 +136,17 @@ func (m Model) startDocEdit(issue Issue) Model {
 // opened in the overlay is theirs and stays.
 func bodyEdited(m Model, text string) Model {
 	issue := m.docIssue()
-	if issue == nil || !m.InPlaceBody || (m.docEditing != "" && m.docEditing != issue.UID) { // the latter: the edit began on an Issue the doc no longer shows, and left it
+	if issue == nil || !m.InPlaceBody || (m.docEditUID() != "" && m.docEditUID() != issue.UID) { // the latter: the edit began on an Issue the doc no longer shows, and left it
 		return m
 	}
 	if !m.BodyDoc(*issue).Editable {
 		return m
 	}
-	if m.docEditing != issue.UID {
+	if m.docEditUID() != issue.UID {
 		m = m.startDocEdit(*issue)
 	}
 	draft, held := m.Drafts[issue.UID]
-	hidden, base := m.docHidden, m.docBase
+	hidden, base := m.docEdit.hidden, m.docEdit.base
 	if held {
 		hidden, base = draft.Doc.HiddenPrefix, draft.DraftBase
 	}
@@ -172,16 +172,16 @@ func bodyEditing(m Model, on bool) (Model, []Cmd) {
 	}
 	if on { // a doc node removed without an editing off must not leave its edit behind
 		if !m.BodyDoc(*issue).Editable { // a save in flight: the edit would begin on a body the save is about to change
-			m.docEditing, m.docDrawn, m.docHidden, m.docBase = "", "", "", DraftBase{}
+			m.docEdit = nil
 			return m, nil
 		}
 		return m.startDocEdit(*issue), nil
 	}
-	uid := m.docEditing
+	uid := m.docEditUID()
 	if uid == "" {
 		uid = issue.UID
 	}
-	m.docEditing, m.docDrawn, m.docHidden, m.docBase = "", "", "", DraftBase{}
+	m.docEdit = nil
 	return flushDocEdit(m, uid)
 }
 
@@ -230,4 +230,22 @@ func (m Model) bodySaved(uid, text string) Model {
 		m.authority = &detail
 	}
 	return m
+}
+
+// docEdit is an in-place edit that is open in the doc.
+type docEdit struct {
+	// uid is the Issue whose body the user is editing.
+	uid string
+	// drawn is the text the doc held when the edit began (BodyDoc's Text), base what the edit is written against, and hidden the
+	// stored text in front of drawn.
+	drawn, hidden string
+	base          DraftBase
+}
+
+// docEditUID is the UID of the Issue whose body is edited in the doc, "" when none.
+func (m Model) docEditUID() string {
+	if m.docEdit == nil {
+		return ""
+	}
+	return m.docEdit.uid
 }

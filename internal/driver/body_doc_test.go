@@ -28,6 +28,14 @@ func onDocWith(t *testing.T, drawn bool, detail *model.IssueDetailData) driver.S
 	return feed(t, s, key("j"), key("k")).State // a draw on the new setting
 }
 
+// detailReloadedWith feeds the detail of alpha as someone else left it: revision 4 with body.
+func detailReloadedWith(t *testing.T, s driver.State, body string) driver.State {
+	t.Helper()
+	theirs := alpha
+	theirs.Body, theirs.ProjectID, theirs.Revision, theirs.QualifiedID = body, 7, 4, "work#aaaa"
+	return feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &theirs}}).State
+}
+
 func bodyNode(t *testing.T, s driver.State) tern.WireNode {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
@@ -332,9 +340,7 @@ func TestBodyChangedByOthersAfterTheEditBeganStillConflicts(t *testing.T) {
 	s := onDoc(t, true)
 	id := bodyDocID(t, s)
 	s = feed(t, s, &tern.Editing{ID: id, On: true}).State
-	theirs := alpha
-	theirs.Body, theirs.ProjectID, theirs.Revision, theirs.QualifiedID = "theirs", 7, 4, "work#aaaa"
-	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &theirs}}).State
+	s = detailReloadedWith(t, s, "theirs")
 	s = feed(t, s, &tern.Change{ID: id, Text: docBody + "\n\nThird."}).State
 	out := step(t, s, &tern.Editing{ID: id, On: false})
 	saves := savedCmds(out.Cmds)
@@ -361,9 +367,7 @@ func TestEditingOnDropsWhatAnEarlierEditLeftBehind(t *testing.T) {
 	s := onDoc(t, true)
 	id := bodyDocID(t, s)
 	s = feed(t, s, &tern.Editing{ID: id, On: true}).State // the edit ends without an editing off
-	theirs := alpha
-	theirs.Body, theirs.ProjectID, theirs.Revision, theirs.QualifiedID = "theirs", 7, 4, "work#aaaa"
-	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &theirs}}).State
+	s = detailReloadedWith(t, s, "theirs")
 	s = feed(t, s, &tern.Editing{ID: id, On: true}).State
 	if n := bodyNode(t, s); n.P["text"] != "theirs" {
 		t.Fatalf("doc text %q, want the body as it is when the new edit began", n.P["text"])
