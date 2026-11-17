@@ -24,7 +24,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - A save of the Issue body or of a comment on a selection that fails or is refused (kata reconnecting, say) raises a Notice naming the Issue that says its Draft is kept.
   - A conflict that arrives while another Issue's card is open raises a Notice saying `e` on that Issue opens the conflict card; the line under that Issue's body says so too once the Notice is gone, whether the body is empty, has a picture or is text.
   - While the Issue holds a Draft the Issue body cannot take, the Issue body is read-only and offers no Comment button.
-  - When Tern closes an edit at once because the body's text changed since your last edit of it (the first double click after a save or after someone else's edit), the Pane ignores the printable keys and `enter` that would run a key binding for about two seconds and a Notice says to double-click the body again, so typing does not run one.
+  - When Tern closes an edit at once because the body's text changed since your last edit of any Issue (the first double click after a save, after someone else's edit, or on another Issue), the Pane ignores the printable keys and `enter` that would run a key binding for about two seconds and a Notice says to double-click the body again, so typing does not run one.
     - A click or other pointer action, an edit of the body or the end of the two seconds lifts it and takes the Notice away; a card, the Menu, a picker or a text field keeps its keys.
   - `e` and `$EDITOR` work as before.
   - A body with a picture (an `<img>` tag or a Markdown image) is drawn as before, so its pictures keep their size and open large on a click; edit it with `e`.

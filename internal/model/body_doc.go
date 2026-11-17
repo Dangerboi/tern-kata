@@ -1,7 +1,6 @@
 package model
 
 import (
-	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -309,25 +308,25 @@ type docOpened struct {
 	typed   bool
 }
 
-// docRedrawn reports whether the doc of Issue uid, which the Pane draws now, draws other text than it did when its last edit session
-// ended (a save, someone else's edit): the one case in which Tern ends its next edit at once.
+// docRedrawn reports whether the doc, which draws Issue uid's body now, draws other text than it did when the last edit session of any
+// Issue ended (a save, someone else's edit, another Issue): Tern keeps that state across nodes, and ends the next edit at once.
 func (m Model) docRedrawn(uid string) bool {
-	rested, ok := m.docRested[uid]
 	issue := m.docIssue()
-	return ok && issue != nil && issue.UID == uid && m.docText(*issue) != rested
+	return m.docRested != nil && issue != nil && issue.UID == uid && m.docText(*issue) != *m.docRested
 }
 
-// restDoc notes the text the doc of Issue uid draws now as the text its last edit session ended on.
+// restDoc notes the text the doc drew during the edit session that ends now, as the text that session ended on. It is the text the
+// doc held when the edit began, not what it draws after the flush: a kept Draft is drawn at once, and that redraw comes after the session.
 func (m Model) restDoc(uid string) Model {
-	issue := m.docIssue()
-	if issue == nil || issue.UID != uid {
+	if m.editsDoc(uid) {
+		drawn := m.docEdit.drawn
+		m.docRested = &drawn
 		return m
 	}
-	m.docRested = maps.Clone(m.docRested)
-	if m.docRested == nil {
-		m.docRested = make(map[string]string)
+	if issue := m.docIssue(); issue != nil && issue.UID == uid {
+		drawn := m.docText(*issue)
+		m.docRested = &drawn
 	}
-	m.docRested[uid] = m.docText(*issue)
 	return m
 }
 
@@ -399,10 +398,10 @@ func (m Model) docKeyGuarded(key KeyMsg) bool {
 // bodyEditing starts an in-place edit, or saves it when the user leaves the doc, through the write the overlay's Save makes.
 func bodyEditing(m Model, uid string, on bool) (Model, []Cmd) {
 	m, guard := m.noteDocEditing(uid, on)
-	m, cmds := applyBodyEditing(m, uid, on)
 	if !on {
 		m = m.restDoc(uid)
 	}
+	m, cmds := applyBodyEditing(m, uid, on)
 	return m, append(cmds, guard...)
 }
 

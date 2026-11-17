@@ -727,6 +727,41 @@ func TestKeyGuardWhenSomeoneElseChangedTheBodyAfterTheLastEdit(t *testing.T) {
 	}
 }
 
+func TestKeyGuardAfterARetriedKeptDraftSaved(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	at := func(d time.Duration) time.Time { return now.Add(-20*time.Second + d) }
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, at(0)).State
+	s = driver.Step(s, &tern.Change{ID: id, Text: "mine"}, at(10*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, at(20*time.Millisecond)).State
+	s = driver.Step(s, model.DraftFailed{UID: "alpha", Err: errTest}, at(30*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, at(5*time.Second)).State
+	s = driver.Step(s, &tern.Change{ID: id, Text: "mine 2"}, at(5*time.Second+10*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, at(5*time.Second+20*time.Millisecond)).State
+	s = driver.Step(s, model.DraftSaved{UID: "alpha"}, at(5*time.Second+30*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
+	for _, k := range []string{"r", "u"} {
+		if out := driver.Step(s, key(k), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
+			t.Fatalf("%s after the dead edit sent %#v with notice %q, want it swallowed", k, out.Cmds, out.State.Model.Notice)
+		}
+	}
+}
+
+func TestKeyGuardOnAnotherIssueAfterAnEditOfTheFirst(t *testing.T) {
+	s := editSaved(t, onDoc(t, true))
+	loaded := beta
+	loaded.Body, loaded.ProjectID, loaded.Revision, loaded.QualifiedID = "beta body", 7, 1, "work#bbbb"
+	s = driver.Step(s, key("j"), now.Add(-time.Second)).State
+	s = driver.Step(s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}, now.Add(-time.Second)).State
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
+	if out := driver.Step(s, key("u"), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
+		t.Fatalf("u after a dead edit of beta sent %#v with notice %q, want it swallowed", out.Cmds, out.State.Model.Notice)
+	}
+}
+
 // Tern sometimes closes an edit at once after the body changed. The user types on, so keys that would run a binding are swallowed
 // for a moment, with a Notice that says why.
 func TestKeysAfterADeadEditRunNoBindingUntilTheWindowEnds(t *testing.T) {

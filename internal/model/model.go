@@ -115,11 +115,12 @@ type Model struct {
 	docEdit, docEnded *docEdit
 	// docOpened is the doc's editing on that has not ended. docGuardUntil is the end of the window in which keys that would run a
 	// binding are swallowed after Tern closed an edit at once, and docGuardSeq numbers the guards started, so the answer of an earlier
-	// one's wait does not end a later one. docRested is, by Issue, the text its doc drew when its last edit session ended.
+	// one's wait does not end a later one. docRested is the text the doc drew when the last edit session of any Issue ended, nil before
+	// the first.
 	docOpened     *docOpened
 	docGuardUntil time.Time
 	docGuardSeq   int
-	docRested     map[string]string
+	docRested     *string
 	// PaneBlock is the block id of this kata Pane ($TERN_PANE), "" when Tern did not say; agents split beside it.
 	PaneBlock string
 	// AgentMapping is agents.json as this Pane last read or changed it: the agents Panes on this host started.
