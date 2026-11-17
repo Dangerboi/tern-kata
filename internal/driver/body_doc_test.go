@@ -734,3 +734,55 @@ func TestNoKeyGuardAfterANormalEdit(t *testing.T) {
 		t.Fatalf("r after a long edit sent %#v, want the reopen", out.Cmds)
 	}
 }
+
+// lateWhileSaving is alpha's edit "mine" in flight (the selection moved to beta), then the doc's last second of typing for alpha, with
+// alpha selected and shown again.
+func lateWhileSaving(t *testing.T) driver.State {
+	t.Helper()
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	s = feed(t, s, key("j")).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}).State
+	s = feed(t, s, &tern.Change{ID: id, Text: "mine, late"}).State
+	s = feed(t, s, key("k")).State
+	back := alpha
+	back.Body, back.ProjectID, back.Revision, back.QualifiedID = docBody, 7, 3, "work#aaaa"
+	return feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &back}}).State
+}
+
+func TestLateTextIsSavedOnceWhenTheUserOpenedTheCardBeforeTheSaveSettled(t *testing.T) {
+	s := lateWhileSaving(t)
+	s = feed(t, s, key("e")).State
+	out := step(t, s, model.DraftSaved{UID: "alpha"})
+	saves := savedCmds(out.Cmds)
+	if len(saves) != 1 || saves[0].Text != "mine, late" || saves[0].BaseText != "mine" {
+		t.Fatalf("the first save settling sent %#v, want the late text saved once on the text saved", out.Cmds)
+	}
+	// A later edit of alpha is not overwritten by the late text.
+	s = out.State
+	s = feed(t, s, model.DraftSaved{UID: "alpha"}).State
+	back := alpha
+	back.Body, back.ProjectID, back.Revision, back.QualifiedID = "mine, late", 7, 5, "work#aaaa"
+	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &back}}).State
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "newer"}).State
+	out = step(t, s, &tern.Editing{ID: id, On: false})
+	if saves := savedCmds(out.Cmds); len(saves) != 1 || saves[0].Text != "newer" || saves[0].BaseText != "mine, late" {
+		t.Fatalf("the newer edit sent %#v", out.Cmds)
+	}
+	out = step(t, out.State, model.DraftSaved{UID: "alpha"})
+	if saves := savedCmds(out.Cmds); len(saves) != 0 {
+		t.Fatalf("the newer edit saved, then %#v was sent: stale late text", saves)
+	}
+}
+
+func TestLateTextIsDroppedWithTheDraftsOnADaemonSwitch(t *testing.T) {
+	s := lateWhileSaving(t)
+	s = switchedAnswer(t, s).State
+	if out := step(t, s, model.DraftSaved{UID: "alpha"}); len(savedCmds(out.Cmds)) != 0 {
+		t.Fatalf("a save settling after the switch sent %#v", out.Cmds)
+	}
+}

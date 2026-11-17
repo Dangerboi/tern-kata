@@ -44,6 +44,9 @@ type Draft struct {
 	// Doc is set on a Draft the Issue body's doc made, which the overlay does not show: an in-place edit, or a comment on a
 	// selection. Opening the Draft in the overlay makes it an ordinary one.
 	Doc *DocPart
+	// Late is the text the doc sent for an in-place edit after its save left, to be saved once that save settles; it goes where
+	// the Draft goes.
+	Late *string
 	Keyed
 }
 
@@ -348,26 +351,27 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	case DraftSaved:
 		draft, ok := m.Drafts[msg.UID]
 		inPlace := ok && draft.InPlaceEdit()
+		late := ok && draft.Late != nil
 		if inPlace {
 			m = m.bodySaved(msg.UID, draft.Editor.Text)
 		}
 		m = dropDraft(m, msg.UID).issueWritten(msg.UID)
 		var cmds []Cmd
-		if inPlace {
+		if inPlace || late {
 			m, cmds = m.docSaved(msg.UID, draft)
 		}
 		return m, cmds, true
 	case DraftFailed:
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Saving = false
-			m, draft = m.withLate(msg.UID, draft)
+			draft = withLate(draft)
 			m = draftRefused(m, msg.UID, draft, msg.Err)
 		}
 		return m, nil, true
 	case DraftConflict:
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Saving = false
-			m, draft = m.withLate(msg.UID, draft)
+			draft = withLate(draft)
 			draft.Conflict = &msg.Issue
 			draft.Err = nil
 			draft = draft.withShown()

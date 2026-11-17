@@ -1,7 +1,6 @@
 package model
 
 import (
-	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -173,19 +172,18 @@ func bodyEdited(m Model, uid, text string) Model {
 	draft, held := m.Drafts[uid]
 	hidden, base := m.docEdit.hidden, m.docEdit.base
 	if held {
-		if !draft.InPlaceEdit() { // the overlay's or a comment's: not the doc's to change
+		switch {
+		case draft.InPlaceEdit():
+			hidden, base = draft.Doc.HiddenPrefix, draft.DraftBase
+		case draft.Saving && !draft.Comment && draft.Doc == nil: // the user opened the in-place edit's Draft in the card while it saved: the text still belongs to it
+		default: // the overlay's or a comment's: not the doc's to change
 			return m
 		}
-		hidden, base = draft.Doc.HiddenPrefix, draft.DraftBase
 	}
 	whole := normalizeLineBreaks(hidden + text)
 	if held && draft.Saving { // the save in flight carries the text before this one: this is saved once that save settles
-		m.docLate = maps.Clone(m.docLate)
-		if m.docLate == nil {
-			m.docLate = make(map[string]string)
-		}
-		m.docLate[uid] = whole
-		return m
+		draft.Late = &whole
+		return putDraft(m, uid, draft)
 	}
 	if whole == normalizeLineBreaks(base.BaseText) {
 		if held {
@@ -200,28 +198,18 @@ func bodyEdited(m Model, uid, text string) Model {
 	return putDraft(m, uid, draft)
 }
 
-// takeLate removes and returns the text the doc sent for Issue uid while a save of it was in flight.
-func (m Model) takeLate(uid string) (Model, string, bool) {
-	text, ok := m.docLate[uid]
-	if ok {
-		m.docLate = maps.Clone(m.docLate)
-		delete(m.docLate, uid)
-	}
-	return m, text, ok
-}
-
 // withLate gives draft, whose save did not go through, the text the doc sent for it after the save left: the Draft the user keeps is
 // what they last typed.
-func (m Model) withLate(uid string, draft Draft) (Model, Draft) {
-	m, late, ok := m.takeLate(uid)
-	if ok {
-		draft.Editor = NewTextEditor(late)
+func withLate(draft Draft) Draft {
+	if draft.Late != nil {
+		draft.Editor = NewTextEditor(*draft.Late)
+		draft.Late = nil
 	}
-	return m, draft
+	return draft
 }
 
-// docSaved settles the save of Issue uid's in-place edit, which sent saved: the text the doc sent after it goes on to a save of its
-// own, against the text just saved. The edit still open in the doc is now written against that text too.
+// docSaved settles the save of Issue uid's body edit, which sent saved: the text the doc sent after it goes on to a save of its own,
+// against the text just saved. The edit still open in the doc is now written against that text too.
 func (m Model) docSaved(uid string, draft Draft) (Model, []Cmd) {
 	saved := draft.Editor.Text
 	if m.editsDoc(uid) {
@@ -229,11 +217,10 @@ func (m Model) docSaved(uid string, draft Draft) (Model, []Cmd) {
 		edit.base.BaseText = saved
 		m.docEdit = &edit
 	}
-	m, late, ok := m.takeLate(uid)
-	if !ok || late == saved {
+	if draft.Late == nil || *draft.Late == saved {
 		return m, nil
 	}
-	next := Draft{DraftBase: draft.DraftBase, Doc: draft.Doc, Editor: NewTextEditor(late)}
+	next := Draft{DraftBase: draft.DraftBase, Doc: draft.Doc, Editor: NewTextEditor(*draft.Late)}
 	next.BaseText = saved
 	m = putDraft(m, uid, next)
 	return sendDraftOf(m, uid, false)

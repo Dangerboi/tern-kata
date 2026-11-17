@@ -112,8 +112,6 @@ type Model struct {
 	InPlaceBody bool
 	// docEdit is the in-place edit of the Issue body the user has open in the doc, nil when none.
 	docEdit *docEdit
-	// docLate is text the doc sent for an Issue whose save was in flight, by uid: it is saved once that save settles.
-	docLate map[string]string
 	// docOpened is the doc's editing on that has not ended, and docGuardUntil the end of the window in which keys that would run a
 	// binding are swallowed after Tern closed an edit at once.
 	docOpened     *docOpened
