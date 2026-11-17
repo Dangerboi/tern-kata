@@ -18,9 +18,10 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
 
-// The version check answers the Pane's CheckVersions with what its session host holds. It runs a program again only when its
-// file changed since a run of it worked: a minute's check is two stats, the release check's small file and one daemon ping. A
-// run that failed is tried at every check until one works.
+// The version check answers the Pane's CheckVersions with what its session host holds: a minute's check is two stats, the
+// release check's small file and one daemon ping. A version run (--version, `kata version --json`) runs again only when its file
+// changed since a run of it worked, so a failed one is tried at every check until one works; the release check runs once a day
+// per machine, failed or not.
 
 // fileStamp tells a file from its replacement without reading it.
 type fileStamp struct {
