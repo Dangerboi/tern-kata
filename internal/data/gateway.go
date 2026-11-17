@@ -14,6 +14,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"go.kenn.io/kata/pkg/client"
 
+	ternkata "github.com/Dangerboi/tern-kata"
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/worker"
 )
@@ -61,6 +62,8 @@ type Gateway struct {
 
 	// versions is the version check's memory: the Pane's binary as it started, and the versions read from the files as they are.
 	versions versionWatch
+	// changelog is CHANGELOG.md as this binary carries it, which a new version's first Pane shows the news of.
+	changelog string
 
 	liveCache liveBlocksCache
 
@@ -72,7 +75,7 @@ type Gateway struct {
 
 func NewGateway(locate Locator) *Gateway {
 	return &Gateway{locate: locate, deadline: connectDeadline, callBudget: callBudget, clients: map[string]*Client{}, connecting: map[string]chan struct{}{}, now: time.Now, wakePoll: time.Minute, workerDirs: worker.DefaultDirs, runTern: execTern,
-		openFile: openFile, cacheDir: attachmentCacheDir, downloadsDir: downloadsDir}
+		openFile: openFile, cacheDir: attachmentCacheDir, downloadsDir: downloadsDir, changelog: ternkata.Changelog}
 }
 
 // HostName is this machine's host name, or empty when the OS can't say; the program reads it once and hands it to the model and the Gateway.

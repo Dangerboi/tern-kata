@@ -20,7 +20,7 @@ import (
 
 // The version check answers the Pane's CheckVersions with what its session host holds: a minute's check is two stats, the
 // release check's small file and one daemon ping. A version run (--version, `kata version --json`) runs again only when its file
-// changed since a run of it worked, so a failed one is tried at every check until one works; the release check runs once a day
+// changed since a run of it worked, so a failed one is tried at every check until one works; the release check runs once an hour
 // per machine, failed or not.
 
 // fileStamp tells a file from its replacement without reading it.
@@ -71,7 +71,7 @@ const (
 	// releaseCheckTimeout bounds `kata update --check`, which asks GitHub.
 	releaseCheckTimeout = 30 * time.Second
 	// releaseCheckEvery is how often a machine asks for a new kata release.
-	releaseCheckEvery = 24 * time.Hour
+	releaseCheckEvery = time.Hour
 	// noUpdateCheck turns the release check off, as it does the window plugin's.
 	noUpdateCheck = "TERN_KATA_NO_UPDATE_CHECK"
 	// releaseCheckFile keeps the release check's time and answer in tern-kata's config folder, for every Pane on the machine.
@@ -191,7 +191,7 @@ func (g *Gateway) releaseCheckDue(state releaseCheck) bool {
 	return since < 0 || since >= releaseCheckEvery
 }
 
-// kataRelease is the newer kata release the daily check found. The check runs when the last one on this machine is a day old,
+// kataRelease is the newer kata release the hourly check found. The check runs when the last one on this machine is an hour old,
 // under a lock so two Panes never ask together (one that finds the lock taken reads the last answer); a failed check counts as
 // one and keeps the last answer.
 func (g *Gateway) kataRelease(ctx context.Context, kata string) string {

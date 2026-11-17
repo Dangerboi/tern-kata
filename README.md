@@ -158,7 +158,7 @@ The **Update tern-kata** palette command runs `tern-kata update --pause` in a ne
 
 ### Release check
 
-The window plugin looks for a new release once a day. At window start, and every 24 hours while the window stays open, it reads `version.txt` from the latest GitHub release, but only when the last check is over 24 hours old (the time is kept in the plugin's store, so a second window or a restart doesn't ask again). When that release is newer than the plugin, a toast says "tern-kata vX is out (this window's plugin is vY). Run Update tern-kata from the palette." once per version on this machine. A failed request is silent and counts as a check. Nothing but that one small file is fetched, and nothing is installed by the check.
+The window plugin looks for a new release every hour. At window start, and every hour while the window stays open, it reads `version.txt` from the latest GitHub release, but only when the last check is an hour old (the time is kept in the plugin's store, so a second window or a restart doesn't ask again). When that release is newer than the plugin, a toast says "tern-kata vX is out (this window's plugin is vY). Run Update tern-kata from the palette." once per version on this machine, so a day with several releases may toast each. A failed request is silent and counts as a check. Nothing but that one small file is fetched, and nothing is installed by the check.
 
 Turn it off with the **Turn tern-kata update checks off/on** palette command, which toasts the new state, or by setting `TERN_KATA_NO_UPDATE_CHECK` to any non-empty value in the window's environment: the variable keeps checks off on that machine whatever the toggle says. A plugin linked with `tern plugin link` never checks, since that is a development machine; the toggle command says so. `TERN_KATA_BASE_URL` points the check at another folder holding `version.txt`, such as a local `dist/`.
 
@@ -168,7 +168,11 @@ The Pane's top bar names the tern-kata it runs after the Daemon ("tern-kata v0.1
 
 - **tern-kata vX is installed**: the binary the Pane started from was replaced (`tern-kata update`, or a build copied over it). Reopen the Pane to run the new one. A build without a stamped version, such as one from `go install`, never claims this.
 - **kata daemon vX is older than kata vY**: `kata update` installed a newer kata but the local daemon still runs the old one. The Menu entry restarts the daemon after asking, as setting up search by meaning does; a remote daemon is restarted on its own machine.
-- **kata vX is out**: a newer kata release exists; run `kata update`. The Pane asks `kata update --check` at most once a day per machine (the time is kept in `kata-release-check.json` in tern-kata's config folder, so other Panes and restarts don't ask again), and a failed check is silent and counts. `TERN_KATA_NO_UPDATE_CHECK` turns this check off too. The Pane never checks for tern-kata releases; that is the window plugin's release check above.
+- **kata vX is out**: a newer kata release exists; run `kata update`. The Pane asks `kata update --check` at most once an hour per machine (the time is kept in `kata-release-check.json` in tern-kata's config folder, so other Panes and restarts don't ask again), and a failed check is silent and counts. `TERN_KATA_NO_UPDATE_CHECK` turns this check off too. The Pane never checks for tern-kata releases; that is the window plugin's release check above.
+
+### What's new
+
+The first tern-kata Pane of a new version on a machine opens that version's release notes in a split beside it, however the version got there (`tern-kata update`, the palette command, the install script or a copied binary). After a jump over several versions it shows each of them, newest first, under "tern-kata vOLD → vNEW", with every **Breaking** change listed first. Each version is shown once per machine: the last one shown is kept in `whats-new.json` in tern-kata's state folder, and other Panes of that version open nothing. A first install shows only its own version, and a development build, which has no release notes, shows nothing.
 
 ## Troubleshooting
 

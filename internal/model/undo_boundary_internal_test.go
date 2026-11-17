@@ -56,6 +56,7 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{LoadConfigFiles{}, false},
 		{LoadEmbeddingsStatus{}, false},
 		{CheckVersions{}, false},
+		{ShowWhatsNew{}, false},
 		{TurnOnEmbeddings{}, false},
 		{LoadDetail{}, false},
 		{LoadFederation{}, false},

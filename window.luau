@@ -715,7 +715,7 @@ tern.on("agent_state", function(ev, cx)
     relayAll(cx, false)
 end)
 
--- The release check: window start, then every 24 hours while the window stays open. The decisions are in releases.luau; this
+-- The release check: window start, then every hour while the window stays open. The decisions are in releases.luau; this
 -- reads the clock, the environment, the store and the network. A failed fetch is a check like any other and stays silent.
 local KV_LAST_CHECK = "release_check.last"
 local KV_TOASTED = "release_check.toasted"
@@ -792,10 +792,10 @@ local function releaseCheck()
                 end
             end)
         end
-        -- While the window stays open the check comes round again; it fetches only when a day has passed since the last one.
+        -- While the window stays open the check comes round again; it fetches only when an hour has passed since the last one.
         -- The variable and a linked plugin hold for the whole load; only the toggle can change meanwhile.
         local off = releases.offBecause(check)
-        if off == nil or off == "toggle" then tern.timer(releases.DAY * 1000, releaseCheck) end
+        if off == nil or off == "toggle" then tern.timer(releases.CHECK_EVERY * 1000, releaseCheck) end
     end)
 end
 
@@ -811,7 +811,7 @@ end
 local KV_PENDING = "update.pending"
 
 -- Run once per load of this file: at window start, and after a plugin reload, which runs the file again without
--- window_start (the plugin the install left behind reports its update and carries the daily check on).
+-- window_start (the plugin the install left behind reports its update and carries the hourly check on).
 local loaded = false
 
 -- Whether this Tern delivers a step that outlived its VM as an event (set where the handler is registered, below).

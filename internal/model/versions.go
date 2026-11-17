@@ -15,7 +15,7 @@ type Versions struct {
 	Running string
 	// Installed is the version of the binary now at the Pane's own path, "" while that is still the file the Pane started from.
 	Installed string
-	// KataCLI is the version of the kata on PATH, KataLatest the newest kata release the daily check found ("" when none is newer).
+	// KataCLI is the version of the kata on PATH, KataLatest the newest kata release the hourly check found ("" when none is newer).
 	KataCLI, KataLatest string
 	checks              Latest
 	// toasted are the notices already toasted, by text, so each version is toasted once.
@@ -37,7 +37,7 @@ const (
 const VersionCheckEvery = time.Minute
 
 // CheckVersions asks what the session host holds now, after After: the version of the binary at the Pane's path once that file
-// changed, the kata CLI's version, the newest kata release (checked at most once a day per machine) and the daemon's version.
+// changed, the kata CLI's version, the newest kata release (checked at most once an hour per machine) and the daemon's version.
 // Request numbers the checks; Connection is the Pane's connection when it asked, as the daemon's version belongs to it.
 type CheckVersions struct {
 	Workspace  string

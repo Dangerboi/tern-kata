@@ -336,6 +336,8 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		return pressToast(m, msg.Seq)
 	case VersionsChecked:
 		return versionsChecked(m, msg)
+	case WhatsNewShown:
+		return whatsNewShown(m, msg), nil
 	}
 	if msg, ok := msg.(PickerSelected); ok {
 		return pickCollectionKey(m, msg.Key)
@@ -379,7 +381,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		m.Err = nil
 		m.agentAsks++
 		account := askAccount(&m)
-		return m, []Cmd{LoadProject{Workspace: msg.Workspace}, LoadViews{}, PruneAgents{Workspace: msg.Workspace, PaneBlock: m.PaneBlock, Seq: m.agentAsks}, account, askVersions(&m, 0)}
+		cmds := []Cmd{LoadProject{Workspace: msg.Workspace}, LoadViews{}, PruneAgents{Workspace: msg.Workspace, PaneBlock: m.PaneBlock, Seq: m.agentAsks}, account, askVersions(&m, 0)}
+		if m.Versions.Running != "" {
+			cmds = append(cmds, ShowWhatsNew{Version: m.Versions.Running, PaneBlock: m.PaneBlock})
+		}
+		return m, cmds
 	case ProjectLoaded:
 		return updateProject(m, msg)
 	case AgentStarted:

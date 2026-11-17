@@ -15,7 +15,8 @@ export type Check = {
 
 local M = {}
 
-M.DAY = 24 * 60 * 60
+-- CHECK_EVERY is how long after the last check (in seconds) the next one is due: an hour, as releases come often.
+M.CHECK_EVERY = 60 * 60
 
 -- The numbers of "0.7.0" or "v0.7.0", surrounding space ignored; nil for anything else, a pre-release included.
 function M.parse(text: string): { number }?
@@ -58,9 +59,9 @@ function M.offBecause(check: Check): "variable" | "linked" | "toggle" | nil
     return nil
 end
 
--- Due when never made, over 24 hours ago, or made in the future (the clock was set back).
+-- Due when never made, an hour or more ago, or made in the future (the clock was set back).
 function M.checkDue(now: number, lastCheck: number?): boolean
-    return lastCheck == nil or lastCheck > now or now - lastCheck >= M.DAY
+    return lastCheck == nil or lastCheck > now or now - lastCheck >= M.CHECK_EVERY
 end
 
 function M.shouldCheck(check: Check): boolean

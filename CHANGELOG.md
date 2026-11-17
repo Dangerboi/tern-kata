@@ -12,7 +12,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - "↑ update" follows the title at every Pane width while a notice holds; the Menu lists each notice, and the Pane toasts it once.
   - After `tern-kata update`, or a new build copied over the binary, a running Pane says within a minute that the new version is installed and the Pane must be reopened to use it.
   - A local kata daemon older than the kata on PATH gets a Menu entry that restarts the daemon after asking.
-  - A newer kata release is named after a check made once a day per machine (`kata update --check`); `TERN_KATA_NO_UPDATE_CHECK` turns that check off.
+  - A newer kata release is named after a check made once an hour per machine (`kata update --check`); `TERN_KATA_NO_UPDATE_CHECK` turns that check off.
+- The first Pane of a new tern-kata version opens its release notes in a split beside it, once per machine.
+  - After a jump over several versions it shows each one, newest first, with every **Breaking** change listed at the top.
 
 ### Changed
 
@@ -30,6 +32,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Tern window
 
 - The palette command that places tern-kata's widget is now **Add the kata worker widget to the widget bar**, as the worker widget is the only one left.
+- The window plugin checks for a new tern-kata release every hour instead of once a day; each release is still toasted once per machine.
 
 ### Removed
 

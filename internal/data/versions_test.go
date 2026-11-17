@@ -136,8 +136,8 @@ func TestTheKataCLIsVersionIsReadAgainOnlyWhenKataChanges(t *testing.T) {
 	}
 }
 
-// The release check runs at most once a day per machine: a second Pane, and a restarted one, read the first one's answer.
-func TestTheKataReleaseCheckRunsOnceADayForEveryPane(t *testing.T) {
+// The release check runs at most once an hour per machine: a second Pane, and a restarted one, read the first one's answer.
+func TestTheKataReleaseCheckRunsOnceAnHourForEveryPane(t *testing.T) {
 	t.Setenv("TERN_KATA_NO_UPDATE_CHECK", "")
 	kata := fakeKata(t, "v0.24.0", `{"update_available":true,"latest_version":"v0.25.0","current_version":"v0.24.0"}`)
 	clock := time.Date(2026, 11, 17, 9, 0, 0, 0, time.UTC)
@@ -147,17 +147,17 @@ func TestTheKataReleaseCheckRunsOnceADayForEveryPane(t *testing.T) {
 	if got := checkVersions(t, g).KataLatest; got != "v0.25.0" {
 		t.Fatalf("KataLatest %q, want v0.25.0", got)
 	}
-	clock = clock.Add(23 * time.Hour)
+	clock = clock.Add(59 * time.Minute)
 	if got := checkVersions(t, sharingConfig(t, g)).KataLatest; got != "v0.25.0" {
 		t.Errorf("another Pane's KataLatest %q, want the first one's v0.25.0", got)
 	}
 	if got := checks(t, kata); got != 1 {
-		t.Fatalf("%d release checks within a day, want 1", got)
+		t.Fatalf("%d release checks within an hour, want 1", got)
 	}
-	clock = clock.Add(2 * time.Hour)
+	clock = clock.Add(2 * time.Minute)
 	checkVersions(t, g)
 	if got := checks(t, kata); got != 2 {
-		t.Errorf("%d release checks after a day, want 2", got)
+		t.Errorf("%d release checks after an hour, want 2", got)
 	}
 }
 
