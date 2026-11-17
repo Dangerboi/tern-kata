@@ -11,8 +11,12 @@ for letter in S e a r c h space t a r g e t; do ctl key "$letter"; done
 expect_tree "[data-id='main.filters.search']" '.nodes[0].text == "search Search target"'
 # Rows follow update order: Down opens the results, then lands on Beta whichever row comes first.
 expect_tree "[data-id\$='.$search_alpha']" '.count == 1'
+search_selected() { ctl tree "[data-id\$='.$search_alpha'],[data-id\$='.$search_beta'],[data-id\$='.$search_gamma']" | jq -c '[.nodes[] | select(.["aria-selected"] == "true") | .text | capture("Search target (?<name>[A-Za-z]+)").name]'; }
+search_before=$(search_selected)
 ctl key Down
-sleep 0.5 # settle: nothing observable marks Down having moved the selection, which the next line reads once
+# Down moves the selection off the row that had it; wait until the selected row changes, then read whether it is Beta.
+search_selection_moved() { [[ $(search_selected) != "$search_before" ]]; }
+wait_for search_selection_moved
 if [[ $(ctl tree "[data-id\$='.$search_beta']" | jq -r '.nodes[0]["aria-selected"]') != true ]]; then ctl key Up; fi
 expect_tree "[data-id$='.$search_beta']" '.count == 1 and .nodes[0]["aria-selected"] == "true"'
 ctl key enter

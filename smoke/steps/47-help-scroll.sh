@@ -2,8 +2,25 @@
 # stay scrolled where they were. Own Project and Issues; it cleans up.
 hs_y() { ctl tree "$1" | jq -r '.nodes[0].rect[1] // empty | floor'; }
 hs_title="[data-id='main.columns.detail.viewport.content.heading.title']"
-# The sleep is a settle after the wheel: nothing observable marks the scroll having ended, and the steps read the position once.
-hs_wheel() { ctl hover "[data-id='$1']" >/dev/null; for _ in $(seq "$3"); do ctl wheel 0 "$2" >/dev/null; done; sleep 0.5; }
+# hs_wheel <hover id> <delta> <count> <tracked selector>: wheels, then waits until the tracked node's top is the same on three
+# reads in a row, which is when the scroll has ended.
+hs_wheel() {
+  local prev=. same=0 tracked=$4
+  ctl hover "[data-id='$1']" >/dev/null
+  for _ in $(seq "$3"); do ctl wheel 0 "$2" >/dev/null; done
+  hs_still() {
+    local cur
+    cur=$(hs_y "$tracked")
+    if [[ $cur == "$prev" ]]; then
+      (( ++same < 3 )) || return 0
+    else
+      same=0
+    fi
+    prev=$cur
+    return 1
+  }
+  wait_for -i 0.05 hs_still
+}
 
 hs_dir="$tmp/help-workspace"
 mkdir -p "$hs_dir" "$tmp/help-unbound"
@@ -29,8 +46,8 @@ expect_tree "$hs_title" '.ok and (.nodes[0].text | contains("Help long"))'
 
 # Scroll the detail and the list away from their tops.
 hs_title_top=$(hs_y "$hs_title")
-hs_wheel main.columns.detail.viewport 300 4
-hs_wheel main.columns.list.issues 300 4
+hs_wheel main.columns.detail.viewport 300 4 "$hs_title"
+hs_wheel main.columns.list.issues 300 4 "$hs_row"
 hs_title_y=$(hs_y "$hs_title")
 hs_row_y=$(hs_y "$hs_row")
 (( hs_title_y < hs_title_top - 100 )) || { printf 'The detail did not scroll (%s, was %s)\n' "$hs_title_y" "$hs_title_top" >&2; return 1; }

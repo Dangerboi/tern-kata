@@ -32,10 +32,9 @@ stuck_scrolls() {
   stuck_wheel 300 2
   stuck_moved() {
     y=$(stuck_y)
-    [[ -z $y ]] || (( y <= top - 100 ))
+    [[ -n $y ]] && (( y <= top - 100 ))
   }
-  wait_for stuck_moved || true
-  [[ -n $y && $y -le $((top - 100)) ]] || { printf 'The detail did not scroll after %s (top %s, now %s)\n' "$1" "$top" "$y" >&2; return 1; }
+  wait_for stuck_moved || { printf 'The detail did not scroll after %s (top %s, now %s)\n' "$1" "$top" "$y" >&2; return 1; }
   stuck_wheel -300 8
   stuck_settle
 }

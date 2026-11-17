@@ -153,7 +153,7 @@ palette_pane=$(jq -r '.focused.id' "$tmp/palette-state.json")
 # A normal quit after the 2 s window is not an install failure. The window is 20 timer ticks of 100 ms, which run on
 # frames: 5 s let it end with room for a loaded machine.
 ctl focus left
-sleep 5 # a settle, not a wait: nothing observable marks the window's end
+sleep 5 # not a bound and no wait is possible: nothing observable marks the window's end, so this only lets it pass; longer is fine
 ctl focus right
 ctl key q
 expect_panes 1

@@ -28,22 +28,24 @@ pc_start() {
 # Tern's close prompt: since Tern 0.9.12 its own dialog in the window, no longer a native one in `ctl system`.
 pc_dialog=".mdl-alert[role='dialog']"
 pc_dialogs() { ctl tree "$pc_dialog" | jq '.count'; }
-# Presses Tern's close chord and prints the milliseconds until its prompt is up; the prompt stays open. It must be up within
-# 5 s (a bound the step proves; a chord that misses it is not the runner's).
+# Presses Tern's close chord and prints the milliseconds until its prompt is up; the prompt stays open. It waits up to $1 seconds
+# (default wait_limit). Only the reference passes a short $1: a chord whose prompt misses it is read as the wrong chord for this
+# runner, so the other chord is tried. The close-prompt bound itself is the relative check against that reference, not this wait.
 pc_prompt_ms() {
-  local known start
+  local known start limit=${1:-$wait_limit}
   known=$(pc_dialogs)
   start=$(pc_now)
   ctl key "$pc_chord" >/dev/null
   until (( $(pc_dialogs) > known )); do
-    if (( $(pc_now) - start > 5000000000 )); then printf 'No close prompt within 5 s of %s\n' "$pc_chord" >&2; return 1; fi
+    if (( $(pc_now) - start > limit * 1000000000 )); then printf 'No close prompt within %s s of %s\n' "$limit" "$pc_chord" >&2; return 1; fi
   done
   echo $(( ($(pc_now) - start) / 1000000 ))
 }
-# Prints the milliseconds since $2 until process $1 is gone; it fails after 10 s (the cap on a measurement the step bounds at 2 s).
+# Prints the milliseconds since $2 until process $1 is gone; it fails after wait_limit seconds. Callers that bound the time
+# (pc_confirm: under 2 s) check the printed value; the others only report it.
 pc_gone_ms() {
   while [[ " $(pc_pids) " == *" $1 "* ]]; do
-    if (( $(pc_now) - $2 > 10000000000 )); then printf 'tern-kata %s still running 10 s after the close\n' "$1" >&2; return 1; fi
+    if (( $(pc_now) - $2 > wait_limit * 1000000000 )); then printf 'tern-kata %s still running %s s after the close\n' "$1" "$wait_limit" >&2; return 1; fi
     sleep 0.005
   done
   echo $(( ($(pc_now) - $2) / 1000000 ))
@@ -71,9 +73,11 @@ pc_chord=meta+shift+w
 pc_run "(cd $tmp/workspace && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=$KATA_HOME kata tui)"
 pc_running() { [[ $(ctl state | jq -r '.focused.running') != null ]]; }
 wait_for pc_running
-# Nothing observable marks kata tui having drawn; the sleep only lets it draw before the prompt is timed.
+# Nothing observable marks kata tui having drawn, so no wait is possible; this is not a bound. A slower draw would not fail the
+# step: the sleep only lets it draw before the prompt is timed.
 sleep 1
-pc_reference=$(pc_prompt_ms) || { pc_chord=ctrl+shift+w; pc_reference=$(pc_prompt_ms); }
+# 5 s only picks the chord: a meta prompt missing it means the runner sends ctrl; the ctrl try waits the full deadline.
+pc_reference=$(pc_prompt_ms 5) || { pc_chord=ctrl+shift+w; pc_reference=$(pc_prompt_ms); }
 ctl click "$pc_dialog .mdl-go" >/dev/null
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 [[ $(ctl state | jq '.tabs | length') == "$pc_tabs" ]]

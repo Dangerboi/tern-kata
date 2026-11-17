@@ -10,7 +10,7 @@ jc_children() {
 }
 jc_children_satisfy() { [[ $(jc_children | jq "$1") == true ]]; }
 jc_wait_children() { # wait until the child count satisfies a jq test on the count
-  wait_for -i 2 jc_children_satisfy "$1" && return 0
+  wait_for -t $(( wait_limit > 150 ? wait_limit : 150 )) -i 2 jc_children_satisfy "$1" && return 0
   printf 'Child count never satisfied %s: %s\n' "$1" "$(jc_children)" >&2
   return 1
 }

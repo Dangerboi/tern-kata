@@ -1,5 +1,5 @@
 # An Issue a native job made is marked in the list and its detail names the job, and the parent's detail lists the job. The
-# job fires every 60 seconds; kata's daemon delivers within about 90 seconds, so this step waits for the child.
+# job fires every 60 seconds; kata's daemon delivers within about 90 seconds, so this step waits for the child, at least 240 s.
 cm_dir="$tmp/workspace"
 kata --workspace "$cm_dir" create "Smoke cron parent" --body "Parent of a minutely job" --json >"$tmp/cron-parent.json"
 cm_parent=$(jq -r '.issue.uid' "$tmp/cron-parent.json")
@@ -19,7 +19,7 @@ cm_made_child() {
   cm_child=$(kata --workspace "$cm_dir" list --json | jq -r --arg job "$cm_job" '[.issues[] | select(.metadata["cron.occurrence"].job_uid == $job)][0].uid // empty')
   [[ -n "$cm_child" ]]
 }
-wait_for -i 1 cm_made_child
+wait_for -t $(( wait_limit > 240 ? wait_limit : 240 )) -i 1 cm_made_child
 
 # The child is nested under its parent, so expand the parent to see the child's row marked.
 ctl key 1

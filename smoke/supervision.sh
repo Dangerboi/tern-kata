@@ -32,6 +32,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 source "$repo/smoke/ctl.sh"
+one_poll=13 # s: the host half polls every 10 s, so this covers one; the waits and looks that use it prove a bound and stay short
 mkdir -p "$tmp/bin" "$tmp/workspace" "$tmp/checkout" "$XDG_CONFIG_HOME/tern-kata" "$state"
 if [[ $# -gt 0 ]]; then cp "$1" "$tmp/bin/tern-kata"; else (cd "$repo" && go build -buildvcs=false -o "$tmp/bin/tern-kata" ./cmd/tern-kata); fi
 # The stub stands for omp. Both programs sit in a folder the daemon's PATH does not list: the host half must find them.
@@ -148,9 +149,9 @@ wait_summary() { # $1 present|gone
 }
 if tern_at_least 0.9.21; then
   # Tern 0.9.21+ renders the worker widget in the host half, so no summary goes to tern.kv (plugin.sh reads the widget itself);
-  # the poll that would have stored one comes within 10 s, so 13 s of looks prove it stored none (a bound the step proves).
+  # the poll that would have stored one comes within 10 s, so one_poll seconds of looks prove it stored none.
   # The host half logs a failed registration at warn level.
-  for tick in {1..13}; do
+  for tick in $(seq "$one_poll"); do
     tern plugin list >/dev/null 2>&1
     [[ -z "$(kv_summary)" ]] || { echo "worker.summary was stored although the host half renders the widget: $(kv_summary)" >&2; exit 1; }
     sleep 1
@@ -198,7 +199,7 @@ kill -9 "$fifth"
 backoff_grew() { tail -n +"$log_from" "$STENCIL_LOG_DIR/tern-daemon.log" | grep -Eq 'restarting in ([2-9][0-9]|1[1-9]) s'; }
 wait_for backoff_grew || { echo "the broken config never grew the wait past 10 s" >&2; exit 1; }
 printf '%s\n' "$good_config" >"$XDG_CONFIG_HOME/tern-kata/worker.toml"
-wait_new_worker "$fifth" 13 || { echo "fixing worker.toml did not start a worker within one poll" >&2; exit 1; } # 13 s proves a bound: within one poll
+wait_new_worker "$fifth" "$one_poll" || { echo "fixing worker.toml did not start a worker within one poll" >&2; exit 1; }
 # The supervision rule lives in Go (worker.SupervisionOn, whose config folder is worker.ConfigDir). It answers `worker stop`
 # ("a fresh worker" or "nothing will start it again") and the host half asks it through `worker supervised`; the host half
 # either starts a worker within a poll (10 s) or does not. This end-to-end step checks the host half acts on the answer.
@@ -216,10 +217,10 @@ stop_expecting() {
 }
 # wait_started <old pid> [seconds]: wait for a new worker, asking the daemon something at every look. Left idle with no
 # worker running the session daemon exits after about 12 s, and with it the host half under test. The seconds are for a step
-# that proves a bound (one poll is 10 s, so 13 s covers one); without them it waits up to wait_limit.
+# that proves a bound (one_poll covers one poll); without them it waits up to wait_limit.
 started_worker() { tern plugin list >/dev/null 2>&1; new_worker_answers "$1"; }
 wait_started() { wait_for ${2:+-t "$2"} started_worker "$1"; }
-# no_worker_within <seconds> <reason>: the host half starts none (one poll is 10 s, so 13 s covers one), the daemon kept busy.
+# no_worker_within <seconds> <reason>: the host half starts none within the seconds (one_poll covers a poll), the daemon kept busy.
 # A bound the step proves, so the seconds stay fixed.
 no_worker_within() {
   for tick in $(seq "$1"); do sleep 1; tern plugin list >/dev/null 2>&1; done
@@ -228,20 +229,20 @@ no_worker_within() {
 # worker.manual beside worker.toml: stop promises nothing follows, and the host half starts none.
 : >"$config/worker.manual"
 stop_expecting none
-no_worker_within 13 "worker.manual is present"
+no_worker_within "$one_poll" "worker.manual is present"
 wait_summary gone
 # Removing worker.manual: the host half starts a worker within a poll, and stop promises a fresh one, which comes.
 rm "$config/worker.manual"
-wait_started "" 13 || { echo "removing worker.manual did not start a worker within one poll" >&2; exit 1; } # 13 s proves a bound: within one poll
+wait_started "" "$one_poll" || { echo "removing worker.manual did not start a worker within one poll" >&2; exit 1; }
 manual_worker=$(worker_pid)
 stop_expecting fresh
 wait_started "$manual_worker" || { echo "the host half did not start the fresh worker stop promised" >&2; exit 1; }
 # No worker.toml: stop promises nothing follows, and the host half starts none. Restoring it starts one within a poll.
 rm "$config/worker.toml"
 stop_expecting none
-no_worker_within 13 "worker.toml is absent"
+no_worker_within "$one_poll" "worker.toml is absent"
 printf '%s\n' "$good_config" >"$config/worker.toml"
-wait_started "" 13 || { echo "restoring worker.toml did not start a worker within one poll" >&2; exit 1; } # 13 s proves a bound: within one poll
+wait_started "" "$one_poll" || { echo "restoring worker.toml did not start a worker within one poll" >&2; exit 1; }
 # A plugin reload gives the host half fresh state while its worker runs on, as a Tern update's handoff does. The reloaded
 # host half starts no second worker for worker.lock to refuse and knows the held answer (an older host.luau would log it
 # as an unknown status); it names the running worker once, over two reloads and three looks, and starts a worker within a
@@ -270,7 +271,7 @@ if grep -q '`worker supervised` exited with status' <<<"$since_reload"; then ech
 log_from=$(( $(wc -l <"$STENCIL_LOG_DIR/tern-daemon.log") + 1 ))
 epoch_us killed_at
 kill -9 "$adopted"
-wait_started "$adopted" 13 || { echo "the reloaded host half did not start a worker within a poll of the running one's end" >&2; exit 1; } # 13 s proves a bound: within one poll
+wait_started "$adopted" "$one_poll" || { echo "the reloaded host half did not start a worker within a poll of the running one's end" >&2; exit 1; }
 epoch_us started_at
 since_kill_ms=$(( (started_at - killed_at) / 1000 ))
 if tern_at_least 0.9.16; then

@@ -21,6 +21,8 @@ Every push to `main` and every pull request runs `.github/workflows/ci.yml` as t
 
 To let time pass for the window plugin's timers in `plugin.sh`, sleep: headless Tern runs them only on frames, and its shells' idle zsh prompts redraw every 0.1 s, so frames keep coming. A `run` line in a ctl file waits a fixed 1.2 s after it types, so a loop of them is a slow way to wait. `pick_option <field id> <nth>` in `smoke/run.sh` picks a popup card's select option with clicks, each acknowledged by the Pane (the footer offers "pick choice" once the menu is open), so a step reads the Pane's state before its next click.
 
+Smoke waits go through `wait_for` (`smoke/ctl.sh`), which polls until its command succeeds and gives up after `SMOKE_WAIT_LIMIT` seconds (default 120), naming the command. A short fixed wait or `sleep` is allowed only where the step proves a bound (something must happen, or not happen, within that time); a comment beside it says so. A sleep with no state to poll says that no wait is possible and that it is not a bound. `plugin.sh` and `release-check.sh` call `trace_failures` (`smoke/ctl.sh`), so a command that ends the script unhandled prints its file, line and command.
+
 ## Releases
 
 Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml` (vet, test, then publish), with the tag's `CHANGELOG.md` section as the release notes. Check it locally before tagging:
