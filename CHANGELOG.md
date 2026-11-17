@@ -68,6 +68,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Attachments
 
+- `enter` on a video (`.mp4`, `.mov`, `.m4v`, `.webm`), audio (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`) or `.pdf` Attachment shows it in Tern's preview on Tern 0.9.26 and later, and Open beside takes them; `.avi` and `.mkv` still go to the system app, as do all of them on an older Tern.
+  - On a Windows window with Tern-managed ABKit installed the preview cannot play media and says it plays in the default app; Open with the system app (`o`) opens it.
 - The Detail footer names `U` "unlink by name", beside `z` "unlink…".
 
 #### Jobs and worker
