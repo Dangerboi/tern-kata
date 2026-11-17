@@ -25,9 +25,9 @@ expect_tree "[data-id^='main.columns.list.'][data-id\$='.$ps_kid']" '.ok and .co
 ctl click "[data-id^='main.columns.list.'][data-id\$='.$ps_kid']"
 ps_content="main.columns.detail.viewport.content"
 expect_tree "[data-id='$ps_content.heading.title']" '.ok and (.nodes[0].text | contains("Parentsec kid") and (contains("loading") | not))'
-expect_tree "[data-id='$ps_content.body']" '.ok and .count == 1 and (.nodes[0].text | contains("the kid body"))'
+expect_tree "[data-id^='$ps_content.body']" '.ok and .count == 1 and (.nodes[0].text | contains("the kid body"))'
 # No heading named Parent anywhere in the body.
-expect_tree "[data-id='$ps_content.body'] *" '.ok and ([.nodes[].text // ""] | map(select(. == "Parent")) | length == 0)'
+expect_tree "[data-id^='$ps_content.body'] *" '.ok and ([.nodes[].text // ""] | map(select(. == "Parent")) | length == 0)'
 expect_tree "[data-id='$ps_content.properties.parent']" '.ok and .count == 1'
 ps_labels=$(ctl tree "[data-id='$ps_content.properties.labels']" | jq -r '.nodes[0].rect[1]')
 ps_parent_y=$(ctl tree "[data-id='$ps_content.properties.parent']" | jq -r '.nodes[0].rect[1]')

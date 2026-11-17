@@ -39,7 +39,7 @@ func detailReloadedWith(t *testing.T, s driver.State, body string) driver.State 
 func bodyNode(t *testing.T, s driver.State) tern.WireNode {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if strings.HasSuffix(n.ID, ".content.body") {
+		if n.ID == view.BodyID || view.IsBodyDoc(n.ID) {
 			return n
 		}
 	}
@@ -48,6 +48,19 @@ func bodyNode(t *testing.T, s driver.State) tern.WireNode {
 }
 
 func bodyDocID(t *testing.T, s driver.State) string { return bodyNode(t, s).ID }
+
+// Tern keeps a node while its id stays, and the margin card of a selection comment belongs to the node: each Issue's doc has its own
+// id, so another Issue does not take the card over.
+func TestEachIssuesDocHasItsOwnNode(t *testing.T) {
+	s := onDoc(t, true)
+	first := bodyDocID(t, s)
+	other := beta
+	other.Body, other.ProjectID, other.Revision, other.QualifiedID = docBody, 7, 1, "work#bbbb"
+	s = feed(t, s, key("j"), model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &other}}).State
+	if second := bodyDocID(t, s); second == first {
+		t.Fatalf("alpha's and beta's docs share the id %q", first)
+	}
+}
 
 func savedCmds(cmds []model.Cmd) []model.SaveDraft {
 	var saves []model.SaveDraft
@@ -74,7 +87,7 @@ func TestBodyIsMarkdownOnATernWithoutDoc(t *testing.T) {
 	if n := bodyNode(t, s); n.K != "md" {
 		t.Fatalf("body = %s, want md as before", n.K)
 	}
-	id := view.BodyID
+	id := view.BodyDocID("alpha")
 	if out := feed(t, s, &tern.Change{ID: id, Text: "x"}, &tern.Editing{ID: id, On: false}); len(savedCmds(out.Cmds)) != 0 {
 		t.Fatalf("a doc event on a Tern without doc saved %v", out.Cmds)
 	}
@@ -227,7 +240,7 @@ func TestCommentWithoutNoteOrQuoteSendsNothing(t *testing.T) {
 
 func TestCommentWhileADraftIsOpenKeepsTheDraft(t *testing.T) {
 	s := feed(t, onDoc(t, true), key("e"), key("x")).State
-	id := view.BodyID
+	id := view.BodyDocID("alpha")
 	out := step(t, s, &tern.Comment{ID: id, Quote: "q", Note: "n"})
 	if len(savedCmds(out.Cmds)) != 0 {
 		t.Fatalf("sent %v", out.Cmds)

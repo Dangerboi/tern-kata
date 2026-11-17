@@ -21,8 +21,18 @@ const DetailScrollID = DetailID + ".viewport"
 // inside the scroller, not the scroller itself.
 const DetailContentID = DetailScrollID + ".content"
 
-// BodyID is the Issue body's node: a doc on a Tern that draws one, else Markdown.
+// BodyID is the Issue body's node when it is Markdown. On a Tern that draws a doc the body is the doc BodyDocID names.
 const BodyID = DetailContentID + ".body"
+
+const bodyDocPrefix = DetailContentID + ".bodydoc-"
+
+// BodyDocID is the id of the doc that shows Issue uid's body. Tern keeps a node while its id stays, and the doc's margin and its
+// open edit belong to the node, so a doc of its own for each Issue keeps them from following the detail onto another Issue. The
+// uid follows a dash, not a dot, so an Issue row's selector `[data-id$='.<uid>']` does not match the doc.
+func BodyDocID(uid string) string { return bodyDocPrefix + uid }
+
+// IsBodyDoc reports whether id is some Issue's body doc.
+func IsBodyDoc(id string) bool { return strings.HasPrefix(id, bodyDocPrefix) }
 
 const (
 	activityKey = "activity"
@@ -404,6 +414,6 @@ func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 	if !m.InPlaceBody || model.HasPicture(body) {
 		return append([]tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: body}}, line...)
 	}
-	doc := ui.Doc{Common: ui.Common{Key: "body"}, Text: state.Text, Edit: state.Editable, Comment: state.Editable}
+	doc := ui.Doc{Common: ui.Common{Key: strings.TrimPrefix(BodyDocID(issue.UID), DetailContentID+".")}, Text: state.Text, Edit: state.Editable, Comment: state.Editable}
 	return append([]tern.Element{doc}, line...)
 }

@@ -44,7 +44,7 @@ expect_tree "$ch_rows" '.ok and .count == 3'
 expect_tree "$ch_rows > .sf-tbl-c" '.ok and .count == 15'
 expect_tree "$ch_rows > .sf-tbl-c:nth-child(5)" '.ok and .count == 3 and ([.nodes[].text | select(test(" ago$"))] | length == 3)'
 ch_y() { ctl tree "[data-id='$1']" | jq -r ".nodes[0].rect[${2:-1}]"; }
-ch_body=$(ch_y "$ch_content.body")
+ch_body=$(ctl tree "[data-id^='$ch_content.body']" | jq -r '.nodes[0].rect[1]')
 ch_heading=$(ch_y "$ch_content.children.heading")
 ch_activity=$(ch_y "$ch_content.activity")
 awk -v b="$ch_body" -v t="$ch_heading" -v a="$ch_activity" 'BEGIN { exit !(b < t && t < a) }' || { printf 'Children table is not between the body and Activity: body y=%s children y=%s activity y=%s\n' "$ch_body" "$ch_heading" "$ch_activity" >&2; return 1; }

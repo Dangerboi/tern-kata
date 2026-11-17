@@ -10,7 +10,7 @@ else
   kata --workspace "$bd_dir" create "Doc body Issue" --body $'Intro line\n\nSecond paragraph' --json >"$tmp/bd-issue.json"
   bd_uid=$(jq -r '.issue.uid' "$tmp/bd-issue.json")
   bd_short=$(jq -r '.issue.short_id' "$tmp/bd-issue.json")
-  bd_body="[data-id='main.columns.detail.viewport.content.body']"
+  bd_body="[data-id^='main.columns.detail.viewport.content.bodydoc-']"
   bd_stored_body() { kata --workspace "$bd_dir" show "$bd_uid" --json | jq -r '.issue.body'; }
   bd_body_is() { [[ $(bd_stored_body) == "$1" ]]; }
 
@@ -59,6 +59,8 @@ else
   expect_tree "[data-id\$='.$bd_long_uid']" '.ok and .count == 1'
   ctl click "[data-id\$='.$bd_long_uid']"
   expect_tree "$bd_body" '.ok and .count == 1 and (.nodes[0].class | contains("sf-doc")) and (.nodes[0].text | contains("Long body line 12"))'
+  # The margin card of the selection comment made on the first Issue stays with that Issue's doc: this one's margin is empty.
+  expect_tree "$bd_body .sf-doc-card" '.ok and .count == 0'
   ctl key e
   expect_tree "[data-id='layer.editor.input']" '.ok and .count == 1'
   ctl click "[data-id^='layer.editor.'][data-id\$='.discard']"

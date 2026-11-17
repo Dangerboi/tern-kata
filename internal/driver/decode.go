@@ -31,16 +31,16 @@ func decode(input tern.Input) model.Msg {
 	case *tern.Select:
 		return view.DecodeSelect(input.ID, input.Item)
 	case *tern.Change:
-		if input.ID == view.BodyID {
+		if view.IsBodyDoc(input.ID) {
 			return model.BodyEdited{Text: input.Text}
 		}
 		return view.DecodeChange(input.ID, input.Value)
 	case *tern.Editing:
-		if input.ID == view.BodyID {
+		if view.IsBodyDoc(input.ID) {
 			return model.BodyEditing{On: input.On}
 		}
 	case *tern.Comment:
-		if input.ID == view.BodyID && input.Comment == "" {
+		if view.IsBodyDoc(input.ID) && input.Comment == "" {
 			return model.SelectionComment{Quote: input.Quote, Note: input.Note}
 		}
 	case *tern.Toggle:

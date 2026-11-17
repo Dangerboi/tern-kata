@@ -10,7 +10,7 @@ props="main.columns.detail.viewport.content.properties.priority.v"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.status']" '.ok and .count == 1'
 expect_tree "[data-id='$props']" '.ok and .count == 1 and .nodes[0].text == "P1"'
 expect_tree "[data-id='main.columns.detail.viewport.content.properties.labels.v.label-layout-label']" '.ok and .count == 1'
-expect_tree "[data-id='main.columns.detail.viewport.content.body']" '.ok and .count == 1'
+expect_tree "[data-id^='main.columns.detail.viewport.content.body']" '.ok and .count == 1'
 ctl key '!'
 ctl key 0
 ctl key enter
