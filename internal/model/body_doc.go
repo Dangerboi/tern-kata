@@ -87,18 +87,64 @@ func withoutParentSection(body, ref string) string {
 	return strings.TrimLeft(after, "\r\n")
 }
 
+// docIssue is the Issue the body's doc shows: the detail's own, which stays on screen while the selection's Issue loads. The doc's
+// events belong to it, whatever the selection is.
+func (m Model) docIssue() *Issue {
+	if m.authority == nil {
+		return nil
+	}
+	return m.authority.Issue
+}
+
+// DocEditable reports whether the body's doc may offer an edit and a selection comment on issue. A Draft of the overlay, a comment
+// Draft, one whose save is in flight and one in conflict cannot take what the doc would send, so the doc is drawn without both.
+func (m Model) DocEditable(issue Issue) bool {
+	draft, held := m.Drafts[issue.UID]
+	return !held || draft.FromDoc && !draft.Comment && !draft.Saving && draft.Conflict == nil
+}
+
+// BodyDocText is the text the body's doc draws for issue: the stored body, or the kept edit once its save failed or conflicted.
+// While the user edits the doc it is the text the doc held when the edit began: Tern ends an edit when the text changes, and the
+// kept edit changes with every pause in typing.
+func (m Model) BodyDocText(issue Issue) string {
+	if m.docEditing == issue.UID {
+		return m.docDrawn
+	}
+	return m.docText(issue)
+}
+
+func (m Model) docText(issue Issue) string {
+	body, _ := m.BodyShown(issue)
+	if draft, ok := m.Drafts[issue.UID]; ok && draft.FromDoc && !draft.Comment && (draft.Err != nil || draft.Conflict != nil) {
+		return draft.DocText()
+	}
+	return body
+}
+
+// startDocEdit notes that the user edits issue in the doc, and what the doc draws until the edit ends.
+func (m Model) startDocEdit(issue Issue) Model {
+	if m.docEditing != issue.UID {
+		m.docDrawn, m.docEditing = m.docText(issue), issue.UID
+	}
+	return m
+}
+
 // bodyEdited holds the doc's new text as a Draft on the revision the edit began on; leaving the doc saves it. A Draft the user
 // opened in the overlay is theirs and stays.
 func bodyEdited(m Model, text string) Model {
-	issue := m.shownIssue()
-	if issue == nil || !m.InPlaceBody {
+	issue := m.docIssue()
+	if issue == nil || !m.InPlaceBody || (m.docEditing != "" && m.docEditing != issue.UID) { // the latter: the edit began on an Issue the doc no longer shows, and left it
 		return m
 	}
+	if !m.DocEditable(*issue) {
+		return m
+	}
+	m = m.startDocEdit(*issue)
 	draft, held := m.Drafts[issue.UID]
-	if held && (!draft.FromDoc || draft.Comment || draft.Saving) {
-		return m
-	}
 	_, hidden := m.BodyShown(*issue)
+	if held {
+		hidden = draft.Hidden
+	}
 	whole := normalizeLineBreaks(hidden + text)
 	if whole == normalizeLineBreaks(issue.Body) {
 		if held {
@@ -107,29 +153,43 @@ func bodyEdited(m Model, text string) Model {
 		return m
 	}
 	if !held {
-		draft = Draft{ProjectID: issue.ProjectID, BaseText: issue.Body, BaseRevision: issue.Revision, FromDoc: true, Hidden: normalizeLineBreaks(hidden)}
+		draft = Draft{ProjectID: issue.ProjectID, BaseText: issue.Body, BaseRevision: issue.Revision, FromDoc: true, Hidden: normalizeLineBreaks(hidden), Ref: issue.QualifiedID}
 	}
-	draft.Editor = NewTextEditor(whole)
+	draft.Editor, draft.Err = NewTextEditor(whole), nil
 	return putDraft(m, issue.UID, draft)
 }
 
-// bodyEditing saves the in-place edit when the user leaves the doc, through the write the overlay's Save makes.
+// bodyEditing starts an in-place edit, or saves it when the user leaves the doc, through the write the overlay's Save makes.
 func bodyEditing(m Model, on bool) (Model, []Cmd) {
-	issue := m.shownIssue()
-	if on || issue == nil || !m.InPlaceBody {
+	issue := m.docIssue()
+	if issue == nil || !m.InPlaceBody {
 		return m, nil
 	}
-	draft, held := m.Drafts[issue.UID]
+	if on {
+		return m.startDocEdit(*issue), nil
+	}
+	uid := m.docEditing
+	if uid == "" {
+		uid = issue.UID
+	}
+	m.docEditing, m.docDrawn = "", ""
+	return flushDocEdit(m, uid)
+}
+
+// flushDocEdit sends the in-place edit held for Issue uid, if there is one: leaving the doc does, and so does the doc moving on to
+// another Issue while the edit is open.
+func flushDocEdit(m Model, uid string) (Model, []Cmd) {
+	draft, held := m.Drafts[uid]
 	if !held || !draft.FromDoc || draft.Comment || draft.Saving || draft.Conflict != nil {
 		return m, nil
 	}
-	return sendDraftOf(m, issue.UID, false)
+	return sendDraftOf(m, uid, false)
 }
 
 // selectionComment writes a comment on the Issue that quotes the selection above the note. The comment is a Draft like any other, so
 // a failure keeps it; an Issue with a Draft already holds no second one.
 func selectionComment(m Model, msg SelectionComment) (Model, []Cmd) {
-	issue := m.shownIssue()
+	issue := m.docIssue()
 	if issue == nil || !m.InPlaceBody {
 		return m, nil
 	}
@@ -146,7 +206,7 @@ func selectionComment(m Model, msg SelectionComment) (Model, []Cmd) {
 		lines[i] = strings.TrimRight("> "+line, " ")
 	}
 	text := strings.Join(lines, "\n") + "\n\n" + note
-	m = putDraft(m, issue.UID, Draft{Editor: NewTextEditor(text), ProjectID: issue.ProjectID, BaseText: issue.Body, BaseRevision: issue.Revision, Comment: true, FromDoc: true})
+	m = putDraft(m, issue.UID, Draft{Editor: NewTextEditor(text), ProjectID: issue.ProjectID, BaseText: issue.Body, BaseRevision: issue.Revision, Comment: true, FromDoc: true, Ref: issue.QualifiedID})
 	return sendDraftOf(m, issue.UID, false)
 }
 

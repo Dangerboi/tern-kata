@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"maps"
@@ -27,6 +28,8 @@ type Draft struct {
 	// in the overlay makes it an ordinary one.
 	FromDoc bool
 	Hidden  string
+	// Ref names the Issue of a FromDoc Draft in a message raised when the Issue is no longer the one shown.
+	Ref string
 	Keyed
 }
 
@@ -283,6 +286,13 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 			draft.Saving = false
 			draft.Err = msg.Err
 			m = putDraft(m, msg.UID, draft)
+			if draft.FromDoc && m.EditorUID != msg.UID { // no card shows the error, and the doc may be on another Issue by now
+				what := "your edit of"
+				if draft.Comment {
+					what = "your comment on"
+				}
+				m.Notice = fmt.Sprintf("Cannot save %s %s: %s The Draft is kept: press e or c on that Issue to open it.", what, cmp.Or(draft.Ref, "the Issue"), msg.Err)
+			}
 		}
 		return m, nil, true
 	case DraftConflict:

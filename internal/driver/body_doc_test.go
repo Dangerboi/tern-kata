@@ -16,7 +16,7 @@ const docBody = "# Plan\n\nFirst paragraph.\n\nSecond paragraph."
 func onDoc(t *testing.T, drawn bool) driver.State {
 	t.Helper()
 	issue := alpha
-	issue.Body, issue.ProjectID, issue.Revision = docBody, 7, 3
+	issue.Body, issue.ProjectID, issue.Revision, issue.QualifiedID = docBody, 7, 3, "work#aaaa"
 	s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}).State
 	s.Model.InPlaceBody = drawn
 	return feed(t, s, key("j"), key("k")).State // a draw on the new setting
@@ -254,5 +254,79 @@ func TestBodyWithAPictureStaysMarkdownOnATernWithDoc(t *testing.T) {
 		if n := bodyNode(t, s); n.K != "doc" {
 			t.Errorf("body %q drawn as %s", body, n.K)
 		}
+	}
+}
+
+func TestDocOffersNoEditOrCommentWhileADraftItCannotTakeIsHeld(t *testing.T) {
+	failedComment := func(t *testing.T) driver.State {
+		s := onDoc(t, true)
+		s = feed(t, s, &tern.Comment{ID: bodyDocID(t, s), Quote: "q", Note: "n"}).State
+		return feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	}
+	savingEdit := func(t *testing.T) driver.State {
+		s, _ := edited(t, onDoc(t, true), "mine")
+		return s
+	}
+	for name, s := range map[string]driver.State{"a failed comment": failedComment(t), "an edit being saved": savingEdit(t)} {
+		n := bodyNode(t, s)
+		if n.K != "doc" || n.P["edit"] == true || n.P["comment"] == true {
+			t.Errorf("%s: doc edit=%v comment=%v, want both off", name, n.P["edit"], n.P["comment"])
+		}
+	}
+	// A Draft that only holds an in-place edit takes the next one.
+	s := onDoc(t, true)
+	s = feed(t, s, &tern.Editing{ID: bodyDocID(t, s), On: true}, &tern.Change{ID: bodyDocID(t, s), Text: "typing"}).State
+	if n := bodyNode(t, s); n.P["edit"] != true || n.P["comment"] != true {
+		t.Errorf("an edit in progress: doc edit=%v comment=%v, want both on", n.P["edit"], n.P["comment"])
+	}
+}
+
+func TestLeavingTheDocAsTheSelectionMovesSavesToTheIssueEditedNotTheOneLoading(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	// The selection moves to beta while the doc still shows alpha, as when an agent closes alpha in a Collection that hides closed Issues.
+	s = feed(t, s, key("j")).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	out := step(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}})
+	saves := savedCmds(out.Cmds)
+	if len(saves) != 1 || saves[0].UID != "alpha" || saves[0].Text != "mine" || saves[0].BaseText != docBody {
+		t.Fatalf("beta's detail replacing alpha's sent %#v, want alpha's edit saved", out.Cmds)
+	}
+	// The doc, replaced by beta's, ends the edit and may send a late change: neither writes beta.
+	s = out.State
+	late := feed(t, s, &tern.Change{ID: id, Text: "late"}, &tern.Editing{ID: id, On: false})
+	if _, held := late.State.Model.Drafts["beta"]; held || len(savedCmds(late.Cmds)) != 0 {
+		t.Fatalf("late events wrote %v, held beta draft %v", late.Cmds, held)
+	}
+}
+
+func TestEditBegunWhileTheSelectionIsLoadingBelongsToTheIssueDrawn(t *testing.T) {
+	s := feed(t, onDoc(t, true), key("j")).State
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	out := step(t, s, &tern.Editing{ID: id, On: false})
+	if saves := savedCmds(out.Cmds); len(saves) != 1 || saves[0].UID != "alpha" || saves[0].Text != "mine" {
+		t.Fatalf("leaving the doc sent %#v, want alpha's edit saved", out.Cmds)
+	}
+}
+
+func TestFailedInPlaceSaveToastsAfterTheUserLeftTheIssue(t *testing.T) {
+	s, _ := edited(t, onDoc(t, true), "mine")
+	s = feed(t, s, key("j")).State
+	s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, errTest.Error()) {
+		t.Fatalf("notice %q, want it to name the Issue and the error", n)
+	}
+}
+
+func TestEditAfterAFailedSaveKeepsTheDocTextSteady(t *testing.T) {
+	s, _ := edited(t, onDoc(t, true), "mine")
+	s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine, and more"}).State
+	if n := bodyNode(t, s); n.P["text"] != "mine" {
+		t.Fatalf("doc text %q while editing, want what it drew when the edit began", n.P["text"])
 	}
 }

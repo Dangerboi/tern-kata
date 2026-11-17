@@ -110,6 +110,9 @@ type Model struct {
 	Workspace string
 	// InPlaceBody is set when the Tern this Pane runs in draws a doc (TernDrawsDoc): the Issue body is drawn as one, edited in place.
 	InPlaceBody bool
+	// docEditing is the UID of the Issue whose body the user is editing in the doc, "" when none; docDrawn is the text the doc held
+	// when that edit began (BodyDocText).
+	docEditing, docDrawn string
 	// PaneBlock is the block id of this kata Pane ($TERN_PANE), "" when Tern did not say; agents split beside it.
 	PaneBlock string
 	// AgentMapping is agents.json as this Pane last read or changed it: the agents Panes on this host started.

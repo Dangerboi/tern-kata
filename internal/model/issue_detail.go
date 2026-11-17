@@ -83,6 +83,13 @@ func updateWithDetail(m Model, msg Msg) (Model, []Cmd) {
 	if (m.Focus != ColumnDetail && !m.listJump) || m.SelectedUID != m.landedOn {
 		m = m.endJumpHistory()
 	}
+	if draft, held := m.Drafts[m.docEditing]; held && draft.Err == nil && m.DetailIssueUID() != m.docEditing {
+		// The doc moved on to another Issue while an edit of the first was open: that edit is saved to its own Issue, as leaving the
+		// doc does. A save that failed is not sent again until the user edits (which clears the error) or leaves the doc.
+		var saved []Cmd
+		m, saved = flushDocEdit(m, m.docEditing)
+		cmds = append(cmds, saved...)
+	}
 	m = m.settleWantedRecurrence()
 	m, loadIssue := m.loadDetail()
 	return m.withRows(), append(cmds, loadIssue...)
