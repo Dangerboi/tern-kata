@@ -346,20 +346,28 @@ func replyKey(m Model, b Binding) (Model, []Cmd, bool) {
 func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 	switch msg := msg.(type) {
 	case DraftSaved:
-		if draft, ok := m.Drafts[msg.UID]; ok && draft.InPlaceEdit() {
+		draft, ok := m.Drafts[msg.UID]
+		inPlace := ok && draft.InPlaceEdit()
+		if inPlace {
 			m = m.bodySaved(msg.UID, draft.Editor.Text)
 		}
-		m = dropDraft(m, msg.UID)
-		return m.issueWritten(msg.UID), nil, true
+		m = dropDraft(m, msg.UID).issueWritten(msg.UID)
+		var cmds []Cmd
+		if inPlace {
+			m, cmds = m.docSaved(msg.UID, draft)
+		}
+		return m, cmds, true
 	case DraftFailed:
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Saving = false
+			m, draft = m.withLate(msg.UID, draft)
 			m = draftRefused(m, msg.UID, draft, msg.Err)
 		}
 		return m, nil, true
 	case DraftConflict:
 		if draft, ok := m.Drafts[msg.UID]; ok {
 			draft.Saving = false
+			m, draft = m.withLate(msg.UID, draft)
 			draft.Conflict = &msg.Issue
 			draft.Err = nil
 			draft = draft.withShown()
@@ -375,9 +383,9 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		return m, nil, true
 	case BodyEdited:
-		return bodyEdited(m, msg.Text), nil, true
+		return bodyEdited(m, msg.UID, msg.Text), nil, true
 	case BodyEditing:
-		m, cmds := bodyEditing(m, msg.On)
+		m, cmds := bodyEditing(m, msg.UID, msg.On)
 		return m, cmds, true
 	case SelectionComment:
 		m, cmds := selectionComment(m, msg)

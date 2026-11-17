@@ -112,6 +112,8 @@ type Model struct {
 	InPlaceBody bool
 	// docEdit is the in-place edit of the Issue body the user has open in the doc, nil when none.
 	docEdit *docEdit
+	// docLate is text the doc sent for an Issue whose save was in flight, by uid: it is saved once that save settles.
+	docLate map[string]string
 	// PaneBlock is the block id of this kata Pane ($TERN_PANE), "" when Tern did not say; agents split beside it.
 	PaneBlock string
 	// AgentMapping is agents.json as this Pane last read or changed it: the agents Panes on this host started.

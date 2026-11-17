@@ -32,16 +32,16 @@ func decode(input tern.Input) model.Msg {
 		return view.DecodeSelect(input.ID, input.Item)
 	case *tern.Change:
 		if view.IsBodyDoc(input.ID) {
-			return model.BodyEdited{Text: input.Text}
+			return model.BodyEdited{UID: view.BodyDocUID(input.ID), Text: input.Text}
 		}
 		return view.DecodeChange(input.ID, input.Value)
 	case *tern.Editing:
 		if view.IsBodyDoc(input.ID) {
-			return model.BodyEditing{On: input.On}
+			return model.BodyEditing{UID: view.BodyDocUID(input.ID), On: input.On}
 		}
 	case *tern.Comment:
 		if view.IsBodyDoc(input.ID) && input.Comment == "" {
-			return model.SelectionComment{Quote: input.Quote, Note: input.Note}
+			return model.SelectionComment{UID: view.BodyDocUID(input.ID), Quote: input.Quote, Note: input.Note}
 		}
 	case *tern.Toggle:
 		return view.DecodeToggle(input.ID, input.Open)

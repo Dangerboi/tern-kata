@@ -312,11 +312,69 @@ func TestLeavingTheDocAsTheSelectionMovesSavesToTheIssueEditedNotTheOneLoading(t
 	if len(saves) != 1 || saves[0].UID != "alpha" || saves[0].Text != "mine" || saves[0].BaseText != docBody {
 		t.Fatalf("beta's detail replacing alpha's sent %#v, want alpha's edit saved", out.Cmds)
 	}
-	// The doc, replaced by beta's, ends the edit and may send a late change: neither writes beta.
+	// The doc, replaced by beta's, then sends the last second of typing and ends the edit, both with alpha's id: the text is alpha's,
+	// so it waits for the save in flight and is saved to alpha, never to beta.
 	s = out.State
-	late := feed(t, s, &tern.Change{ID: id, Text: "late"}, &tern.Editing{ID: id, On: false})
-	if _, held := late.State.Model.Drafts["beta"]; held || len(savedCmds(late.Cmds)) != 0 {
-		t.Fatalf("late events wrote %v, held beta draft %v", late.Cmds, held)
+	s = feed(t, s, &tern.Change{ID: id, Text: "mine, late"}, &tern.Editing{ID: id, On: false}).State
+	if _, held := s.Model.Drafts["beta"]; held {
+		t.Fatal("a late change wrote beta's Draft")
+	}
+	out = step(t, s, model.DraftSaved{UID: "alpha"})
+	saves = savedCmds(out.Cmds)
+	if len(saves) != 1 || saves[0].UID != "alpha" || saves[0].Text != "mine, late" || saves[0].BaseText != "mine" {
+		t.Fatalf("alpha's first save settling sent %#v, want the late text saved to alpha on the text just saved", out.Cmds)
+	}
+}
+
+func TestLateChangeWithNoDraftHeldYetIsSavedToTheIssueEdited(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}).State
+	s = feed(t, s, key("j")).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}).State
+	out := step(t, s, &tern.Change{ID: id, Text: "mine"})
+	if _, held := out.State.Model.Drafts["beta"]; held {
+		t.Fatal("a late change wrote beta's Draft")
+	}
+	saves := savedCmds(out.Cmds)
+	if len(saves) != 1 || saves[0].UID != "alpha" || saves[0].Text != "mine" || saves[0].BaseText != docBody {
+		t.Fatalf("a late change sent %#v, want alpha's edit saved", out.Cmds)
+	}
+	if again := savedCmds(step(t, out.State, &tern.Editing{ID: id, On: false}).Cmds); len(again) != 0 {
+		t.Fatalf("editing off sent %#v, want the edit saved once", again)
+	}
+}
+
+func TestLateChangeAfterTheSaveSettledIsSavedOnTheTextSaved(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	s = feed(t, s, key("j")).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}).State
+	s = feed(t, s, model.DraftSaved{UID: "alpha"}).State
+	out := step(t, s, &tern.Change{ID: id, Text: "mine, late"})
+	saves := savedCmds(out.Cmds)
+	if len(saves) != 1 || saves[0].UID != "alpha" || saves[0].Text != "mine, late" || saves[0].BaseText != "mine" {
+		t.Fatalf("a late change after the save settled sent %#v, want it saved to alpha on the text saved", out.Cmds)
+	}
+}
+
+func TestLateChangeIsKeptWhenTheSaveInFlightFails(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: true}, &tern.Change{ID: id, Text: "mine"}).State
+	s = feed(t, s, key("j")).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}).State
+	s = feed(t, s, &tern.Change{ID: id, Text: "mine, late"}, &tern.Editing{ID: id, On: false}).State
+	s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
+	if draft := s.Model.Drafts["alpha"]; draft.Editor.Text != "mine, late" {
+		t.Fatalf("alpha's kept Draft holds %q, want the late text", draft.Editor.Text)
 	}
 }
 
@@ -590,5 +648,22 @@ func TestTheLineUnderTheBodyNamesTheCommentItKeepsAndTheNoticeSaysTheSame(t *tes
 	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &back}}).State
 	if line := bodyErrorLine(t, s); !strings.Contains(line, "Your comment conflicts with a newer change.") {
 		t.Fatalf("line %q, want it to name the comment", line)
+	}
+}
+
+func TestCommentSentAfterTheSelectionMovedIsWrittenOnTheIssueItWasMadeOn(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = feed(t, s, key("j")).State
+	loaded := beta
+	loaded.Body, loaded.ProjectID = "beta body", 7
+	s = feed(t, s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}).State
+	out := step(t, s, &tern.Comment{ID: id, Quote: "First paragraph.", Note: "merge these"})
+	saves := savedCmds(out.Cmds)
+	if len(saves) != 1 || saves[0].UID != "alpha" || !saves[0].Comment {
+		t.Fatalf("cmds %#v, want a comment on alpha", out.Cmds)
+	}
+	if _, held := out.State.Model.Drafts["beta"]; held {
+		t.Fatal("the comment became beta's Draft")
 	}
 }

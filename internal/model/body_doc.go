@@ -1,6 +1,7 @@
 package model
 
 import (
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -20,18 +21,22 @@ var picture = regexp.MustCompile(`(?i)<img|!\[[^\]]*\]\(`)
 // draws neither at a picture's size nor opens it large. A picture inside code counts too: that body only keeps the Markdown look.
 func HasPicture(body string) bool { return picture.MatchString(body) }
 
-// BodyEdited is the new Markdown source of the Issue body's doc: the user edited it in place.
-type BodyEdited struct{ Text string }
+// BodyEdited is the new Markdown source of the doc that shows Issue UID's body: the user edited it in place. The doc may send it after
+// the selection moved on to another Issue, so UID, not the Issue shown, says whose it is.
+type BodyEdited struct{ UID, Text string }
 
 func (BodyEdited) msg() {}
 
-// BodyEditing is the Issue body's doc starting (On) or ending an in-place edit.
-type BodyEditing struct{ On bool }
+// BodyEditing is the doc that shows Issue UID's body starting (On) or ending an in-place edit.
+type BodyEditing struct {
+	UID string
+	On  bool
+}
 
 func (BodyEditing) msg() {}
 
-// SelectionComment is a comment the user wrote on a selection of the Issue body's doc.
-type SelectionComment struct{ Quote, Note string }
+// SelectionComment is a comment the user wrote on a selection of the doc that shows Issue UID's body.
+type SelectionComment struct{ UID, Quote, Note string }
 
 func (SelectionComment) msg() {}
 
@@ -139,59 +144,119 @@ func (m Model) docText(issue Issue) string {
 // against, as the doc showed the Issue now.
 func (m Model) startDocEdit(issue Issue) Model {
 	_, hidden := m.BodyShown(issue)
-	m.docEdit = &docEdit{uid: issue.UID, drawn: m.docText(issue), hidden: hidden, base: baseOf(issue)}
+	m.docEdit = &docEdit{uid: issue.UID, ref: issue.QualifiedID, drawn: m.docText(issue), hidden: hidden, base: baseOf(issue)}
 	return m
 }
 
 // bodyEdited holds the doc's new text as a Draft on the revision the edit began on; leaving the doc saves it. A Draft the user
-// opened in the overlay is theirs and stays.
-func bodyEdited(m Model, text string) Model {
-	issue := m.docIssue()
-	if issue == nil || !m.InPlaceBody || (m.docEdit != nil && !m.editsDoc(issue.UID)) { // the latter: the edit began on an Issue the doc no longer shows, and left it
+// opened in the overlay is theirs and stays. The text belongs to Issue uid: when the doc has since moved on to another Issue, it is
+// the open edit's (the doc sends its last second of typing after the move), never the Issue now shown.
+func bodyEdited(m Model, uid, text string) Model {
+	if !m.InPlaceBody {
 		return m
 	}
-	if !m.BodyDoc(*issue).Editable {
+	if issue := m.docIssue(); issue != nil && issue.UID == uid {
+		if m.docEdit != nil && !m.editsDoc(uid) { // the edit began on an Issue the doc no longer shows, and left it
+			return m
+		}
+		if !m.BodyDoc(*issue).Editable {
+			return m
+		}
+		if !m.editsDoc(uid) {
+			m = m.startDocEdit(*issue)
+		}
+	} else if !m.editsDoc(uid) {
 		return m
 	}
-	if !m.editsDoc(issue.UID) {
-		m = m.startDocEdit(*issue)
-	}
-	draft, held := m.Drafts[issue.UID]
+	draft, held := m.Drafts[uid]
 	hidden, base := m.docEdit.hidden, m.docEdit.base
 	if held {
+		if !draft.InPlaceEdit() { // the overlay's or a comment's: not the doc's to change
+			return m
+		}
 		hidden, base = draft.Doc.HiddenPrefix, draft.DraftBase
 	}
 	whole := normalizeLineBreaks(hidden + text)
+	if held && draft.Saving { // the save in flight carries the text before this one: this is saved once that save settles
+		m.docLate = maps.Clone(m.docLate)
+		if m.docLate == nil {
+			m.docLate = make(map[string]string)
+		}
+		m.docLate[uid] = whole
+		return m
+	}
 	if whole == normalizeLineBreaks(base.BaseText) {
 		if held {
-			m = dropDraft(m, issue.UID)
+			m = dropDraft(m, uid)
 		}
 		return m
 	}
 	if !held {
-		draft = Draft{DraftBase: base, Doc: &DocPart{HiddenPrefix: normalizeLineBreaks(hidden), Ref: issue.QualifiedID}}
+		draft = Draft{DraftBase: base, Doc: &DocPart{HiddenPrefix: normalizeLineBreaks(hidden), Ref: m.docEdit.ref}}
 	}
 	draft.Editor, draft.Err = NewTextEditor(whole), nil
-	return putDraft(m, issue.UID, draft)
+	return putDraft(m, uid, draft)
+}
+
+// takeLate removes and returns the text the doc sent for Issue uid while a save of it was in flight.
+func (m Model) takeLate(uid string) (Model, string, bool) {
+	text, ok := m.docLate[uid]
+	if ok {
+		m.docLate = maps.Clone(m.docLate)
+		delete(m.docLate, uid)
+	}
+	return m, text, ok
+}
+
+// withLate gives draft, whose save did not go through, the text the doc sent for it after the save left: the Draft the user keeps is
+// what they last typed.
+func (m Model) withLate(uid string, draft Draft) (Model, Draft) {
+	m, late, ok := m.takeLate(uid)
+	if ok {
+		draft.Editor = NewTextEditor(late)
+	}
+	return m, draft
+}
+
+// docSaved settles the save of Issue uid's in-place edit, which sent saved: the text the doc sent after it goes on to a save of its
+// own, against the text just saved. The edit still open in the doc is now written against that text too.
+func (m Model) docSaved(uid string, draft Draft) (Model, []Cmd) {
+	saved := draft.Editor.Text
+	if m.editsDoc(uid) {
+		edit := *m.docEdit
+		edit.base.BaseText = saved
+		m.docEdit = &edit
+	}
+	m, late, ok := m.takeLate(uid)
+	if !ok || late == saved {
+		return m, nil
+	}
+	next := Draft{DraftBase: draft.DraftBase, Doc: draft.Doc, Editor: NewTextEditor(late)}
+	next.BaseText = saved
+	m = putDraft(m, uid, next)
+	return sendDraftOf(m, uid, false)
 }
 
 // bodyEditing starts an in-place edit, or saves it when the user leaves the doc, through the write the overlay's Save makes.
-func bodyEditing(m Model, on bool) (Model, []Cmd) {
-	issue := m.docIssue()
-	if issue == nil || !m.InPlaceBody {
+func bodyEditing(m Model, uid string, on bool) (Model, []Cmd) {
+	if !m.InPlaceBody {
 		return m, nil
 	}
-	if on { // a doc node removed without an editing off must not leave its edit behind
+	if on {
+		issue := m.docIssue()
+		if issue == nil || issue.UID != uid { // a doc that is no longer the one shown starts nothing
+			return m, nil
+		}
+		// a doc node removed without an editing off must not leave its edit behind
 		if !m.BodyDoc(*issue).Editable { // a save in flight: the edit would begin on a body the save is about to change
 			m.docEdit = nil
 			return m, nil
 		}
 		return m.startDocEdit(*issue), nil
 	}
-	if m.docEdit == nil { // no edit is open (an editing on the doc ignored, say): nothing was edited, so a Draft held for the Issue is not sent
+	if !m.editsDoc(uid) { // no edit of this doc is open (an editing on the doc ignored, say): nothing was edited, so a Draft held for the Issue is not sent
 		return m, nil
 	}
-	uid := m.docEdit.uid
 	m.docEdit = nil
 	return flushDocEdit(m, uid)
 }
@@ -209,13 +274,19 @@ func flushDocEdit(m Model, uid string) (Model, []Cmd) {
 // selectionComment writes a comment on the Issue that quotes the selection above the note. The comment is a Draft like any other, so
 // a failure keeps it; an Issue with a Draft already holds no second one.
 func selectionComment(m Model, msg SelectionComment) (Model, []Cmd) {
-	issue := m.docIssue()
-	if issue == nil || !m.InPlaceBody {
+	if !m.InPlaceBody {
 		return m, nil
 	}
 	quote, note := strings.TrimSpace(normalizeLineBreaks(msg.Quote)), strings.TrimSpace(normalizeLineBreaks(msg.Note))
 	if quote == "" || note == "" {
 		return m, nil
+	}
+	issue := m.docIssue()
+	if issue == nil || issue.UID != msg.UID { // the selection moved on while the doc held the note: it is the first Issue's
+		if issue = m.issueByUID(msg.UID); issue == nil {
+			m, wait := m.raiseToast(Toast{Text: "Your comment on the selection was not sent: its Issue is no longer in the list. Select it and comment again."})
+			return m, []Cmd{wait}
+		}
 	}
 	if _, held := m.Drafts[issue.UID]; held {
 		m, wait := m.raiseToast(Toast{Text: "This Issue has a Draft open: send or discard it, then comment on the selection again."})
@@ -245,8 +316,8 @@ func (m Model) bodySaved(uid, text string) Model {
 
 // docEdit is an in-place edit that is open in the doc.
 type docEdit struct {
-	// uid is the Issue whose body the user is editing.
-	uid string
+	// uid is the Issue whose body the user is editing, and ref its name in a message.
+	uid, ref string
 	// drawn is the text the doc held when the edit began (BodyDoc's Text), base what the edit is written against, and hidden the
 	// stored text in front of drawn.
 	drawn, hidden string

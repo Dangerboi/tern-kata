@@ -34,6 +34,9 @@ func BodyDocID(uid string) string { return bodyDocPrefix + uid }
 // IsBodyDoc reports whether id is some Issue's body doc.
 func IsBodyDoc(id string) bool { return strings.HasPrefix(id, bodyDocPrefix) }
 
+// BodyDocUID is the uid of the Issue whose body the doc id names.
+func BodyDocUID(id string) string { return strings.TrimPrefix(id, bodyDocPrefix) }
+
 const (
 	activityKey = "activity"
 	tabsKey     = "tabs"
