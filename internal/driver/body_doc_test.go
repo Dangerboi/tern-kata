@@ -235,3 +235,24 @@ func TestTernDrawsDocFromItsVersion(t *testing.T) {
 		}
 	}
 }
+
+func TestBodyWithAPictureStaysMarkdownOnATernWithDoc(t *testing.T) {
+	for _, body := range []string{"a <img src=x.png> b", "<IMG width=40 src=x.png>", "see ![alt](x.png)", "![](http://h/x.png)"} {
+		issue := alpha
+		issue.Body, issue.ProjectID = body, 7
+		s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}).State
+		s.Model.InPlaceBody = true
+		if n := bodyNode(t, s); n.K != "md" || n.P["text"] != body {
+			t.Errorf("body %q drawn as %s", body, n.K)
+		}
+	}
+	for _, body := range []string{"no picture", "a [link](x.png) and ! [x]"} {
+		issue := alpha
+		issue.Body, issue.ProjectID = body, 7
+		s := feed(t, browsing(t, 160), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue}}).State
+		s.Model.InPlaceBody = true
+		if n := bodyNode(t, s); n.K != "doc" {
+			t.Errorf("body %q drawn as %s", body, n.K)
+		}
+	}
+}

@@ -378,7 +378,8 @@ func cronProperties(m model.Model) []propertyRow {
 }
 
 // bodyNodes draws the Issue body. On a Tern that draws a doc the body is one the user edits in place and comments on a selection of.
-// An empty body stays Markdown with its placeholder: `e` writes the first one.
+// An empty body stays Markdown with its placeholder: `e` writes the first one. A body with a picture stays Markdown too, which
+// keeps the picture at its size and opens it large on a click; `e` edits it.
 //
 // Tern ends an in-place edit when the program sends the doc a text op, and sends the edit as `change` while the user still types (a
 // second or so after the last key), so the doc keeps the stored body while the Draft is only held or saving: it already holds the
@@ -388,7 +389,7 @@ func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 	if strings.TrimSpace(body) == "" {
 		return []tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: "No body yet."}}
 	}
-	if !m.InPlaceBody {
+	if !m.InPlaceBody || model.HasPicture(body) {
 		return []tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: body}}
 	}
 	if draft, ok := m.Drafts[issue.UID]; ok && draft.FromDoc && !draft.Comment && (draft.Err != nil || draft.Conflict != nil) {

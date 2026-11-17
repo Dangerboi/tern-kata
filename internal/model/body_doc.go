@@ -19,6 +19,12 @@ func TernDrawsDoc(version string) bool {
 	return semver.IsValid(v) && semver.Compare(v, ternDocFloor) >= 0
 }
 
+var picture = regexp.MustCompile(`(?i)<img|!\[[^\]]*\]\(`)
+
+// HasPicture reports whether body holds an HTML <img> tag or a Markdown image. Such a body is drawn as Markdown, not as a doc, which
+// draws neither at a picture's size nor opens it large. A picture inside code counts too: that body only keeps the Markdown look.
+func HasPicture(body string) bool { return picture.MatchString(body) }
+
 // BodyEdited is the new Markdown source of the Issue body's doc: the user edited it in place.
 type BodyEdited struct{ Text string }
 
