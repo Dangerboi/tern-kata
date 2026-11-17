@@ -57,8 +57,7 @@ func Step(s State, in any, now time.Time) Output {
 		}
 		return Output{State: s, Err: fmt.Errorf("Tern surface: %s", in.Msg)}
 	case tern.Input:
-		switch in.(type) {
-		case *tern.Select, *tern.Focus, *tern.Toggle, *tern.Action, *tern.Comment, *tern.Change:
+		if userInput(in) {
 			s.Model = s.Model.EndDocGuard() // the pointer acted, or the user changed a value or the body: they know where they are
 		}
 		msg = decode(in)
@@ -85,6 +84,18 @@ func Step(s State, in any, now time.Time) Output {
 		out.Ops = append(out.Ops, tern.OpReveal(reveal, "nearest"))
 	}
 	return out
+}
+
+// userInput reports whether in is the user acting, not the window half relaying what it saw: the agent-states relay comes on every
+// agent state event, whatever the user does.
+func userInput(in tern.Input) bool {
+	switch in := in.(type) {
+	case *tern.Select, *tern.Focus, *tern.Toggle, *tern.Comment, *tern.Change:
+		return true
+	case *tern.Action:
+		return in.Act != string(model.AgentStatesAction)
+	}
+	return false
 }
 
 // route turns the step's Cmds into ops and the Output's Cmds and Editor. Its ops go ahead of the step's focus op: a menu the

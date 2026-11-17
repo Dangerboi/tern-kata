@@ -796,6 +796,46 @@ func TestKeysAfterADeadEditRunNoBindingUntilTheWindowEnds(t *testing.T) {
 	}
 }
 
+func TestAgentStatesRelayDoesNotEndTheKeyGuard(t *testing.T) {
+	s := deadEdit(t, onDoc(t, true))
+	s = driver.Step(s, &tern.Action{ID: "relay", Act: string(model.AgentStatesAction), Value: "[]"}, now.Add(100*time.Millisecond)).State
+	out := driver.Step(s, key("r"), now.Add(200*time.Millisecond))
+	if len(out.Cmds) != 0 {
+		t.Fatalf("r after an agent-states relay sent %#v, want it swallowed", out.Cmds)
+	}
+	if !strings.Contains(out.State.Model.Notice, "did not open for editing") {
+		t.Fatalf("notice %q, want the guard's", out.State.Model.Notice)
+	}
+}
+
+func TestAButtonPressEndsTheKeyGuard(t *testing.T) {
+	s := deadEdit(t, onDoc(t, true))
+	s = driver.Step(s, click("legend.chip", view.LegendClick()), now.Add(100*time.Millisecond)).State
+	if out := driver.Step(s, key("r"), now.Add(200*time.Millisecond)); !reopened(out.Cmds) {
+		t.Fatalf("r after a press sent %#v, want the reopen", out.Cmds)
+	}
+}
+
+func TestKeysAreSwallowedOnTheMenuAfterADeadEdit(t *testing.T) {
+	s := deadEdit(t, onDoc(t, true))
+	s = driver.Step(s, model.FocusColumnMsg{Column: model.ColumnCollections}, now.Add(100*time.Millisecond)).State
+	if mode := s.Model.CurrentMode(); mode != model.ModeCollections {
+		t.Fatalf("mode %q after focusing the Menu, want the Menu", mode)
+	}
+	for _, k := range []string{"b", "enter", "P"} {
+		out := driver.Step(s, key(k), now.Add(200*time.Millisecond))
+		if len(out.Cmds) != 0 || out.State.Model.CurrentMode() != model.ModeCollections {
+			t.Fatalf("%s on the Menu ran a binding: mode %q, %#v", k, out.State.Model.CurrentMode(), out.Cmds)
+		}
+		if !strings.Contains(out.State.Model.Notice, "did not open for editing") {
+			t.Fatalf("%s: notice %q, want the guard's", k, out.State.Model.Notice)
+		}
+	}
+	if out := driver.Step(s, key("P"), now.Add(3*time.Second)); out.State.Model.CurrentMode() != model.ModeCollections || out.State.Model.Notice != "" {
+		t.Fatalf("P after the window: mode %q, notice %q", out.State.Model.CurrentMode(), out.State.Model.Notice)
+	}
+}
+
 func TestAPointerActionEndsTheKeyGuard(t *testing.T) {
 	s := deadEdit(t, onDoc(t, true))
 	s = driver.Step(s, &tern.Select{ID: "main.columns.list.issues", Item: "alpha"}, now.Add(100*time.Millisecond)).State
@@ -963,6 +1003,20 @@ func TestLateTextIsDroppedWithTheDraftsOnADaemonSwitch(t *testing.T) {
 	}
 }
 
+func TestLateChangeAfterADaemonSwitchSendsNoText(t *testing.T) {
+	s := lateWhileSaving(t)
+	id := bodyDocID(t, s)
+	s = feed(t, s, &tern.Editing{ID: id, On: false}).State
+	s = switchedAnswer(t, s).State
+	out := step(t, s, &tern.Change{ID: id, Text: "mine, later"})
+	if saves := savedCmds(out.Cmds); len(saves) != 0 {
+		t.Fatalf("a change after the switch sent %#v, want the old daemon's text dropped", saves)
+	}
+	if len(out.State.Model.Drafts) != 0 {
+		t.Fatalf("a change after the switch kept Drafts %#v", out.State.Model.Drafts)
+	}
+}
+
 // lateWithTheEditEnded is lateWhileSaving after Tern ended the edit (editing off), so no edit is open in the Pane when the save settles.
 func lateWithTheEditEnded(t *testing.T) driver.State {
 	t.Helper()
@@ -975,9 +1029,10 @@ func TestFailureOfTheFollowUpSaveIsAnnouncedWhetherOrNotTheCardWasOpen(t *testin
 		start func(*testing.T) driver.State
 		open  bool
 	}{
-		"edit open, card open":     {lateWhileSaving, true},
-		"edit open, card not open": {lateWhileSaving, false},
-		"edit ended, card open":    {lateWithTheEditEnded, true},
+		"edit open, card open":      {lateWhileSaving, true},
+		"edit open, card not open":  {lateWhileSaving, false},
+		"edit ended, card open":     {lateWithTheEditEnded, true},
+		"edit ended, card not open": {lateWithTheEditEnded, false},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

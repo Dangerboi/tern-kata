@@ -309,7 +309,8 @@ type docOpened struct {
 }
 
 // docRedrawn reports whether the doc, which draws Issue uid's body now, draws other text than it did when the last edit session of any
-// Issue ended (a save, someone else's edit, another Issue), or before the first one since the Pane opened: Tern keeps that state across nodes, and ends the next edit at once.
+// Issue ended, or before the first one since the Pane opened. The drawn text changes on a save, on someone else's edit, and when the
+// doc draws another Issue. Tern keeps that state across nodes, and ends the next edit at once.
 func (m Model) docRedrawn(uid string) bool {
 	issue := m.docIssue()
 	return issue != nil && issue.UID == uid && (m.docRested == nil || m.docText(*issue) != *m.docRested)
@@ -376,8 +377,8 @@ func (m Model) EndDocGuard() Model {
 }
 
 // docKeyGuarded reports whether key is one the key guard swallows: a printable key or enter that would run a Pane binding on the
-// detail that shows the doc. Escape, the arrows and the like pass, and so does any key a card, the Menu, a picker or a text input
-// has, and any key while an edit is open past deadEditWithin (the doc has it).
+// detail that shows the doc, or on the Menu beside it. Escape, the arrows and the like pass, and so does any key a card, a picker or
+// a text input has, and any key while an edit is open past deadEditWithin (the doc has it).
 func (m Model) docKeyGuarded(key KeyMsg) bool {
 	if !m.Now.Before(m.docGuardUntil) || !(key.Text != "" || key.Chord == "enter") {
 		return false
@@ -389,7 +390,7 @@ func (m Model) docKeyGuarded(key KeyMsg) bool {
 		return false
 	}
 	switch m.CurrentMode() {
-	case ModeList, ModeDetail, ModeBoard, ModeLane:
+	case ModeList, ModeDetail, ModeBoard, ModeLane, ModeCollections:
 		return true
 	}
 	return false
