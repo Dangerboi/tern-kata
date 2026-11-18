@@ -17,7 +17,7 @@ end
 
 local function heldRuns(count: number): { workersummary.Held }
     local list: { workersummary.Held } = {}
-    for index = 1, count do table.insert(list, {uid = "run" .. index, ref = "r" .. index, reason = "why" .. index, resumable = true}) end
+    for index = 1, count do table.insert(list, {uid = "run" .. index, job = "job" .. index, ref = "r" .. index, reason = "why" .. index, resumable = true}) end
     return list
 end
 
@@ -90,8 +90,8 @@ test("every title line fits Tern's width for a long executor, Issue ref and reas
     local long = {
         executor = string.rep("e", 80), pid = 4242, running = 3, capacity = 4, inUse = 3,
         held = {
-            {uid = "a", ref = "algonaut-trading-platform#a1b2c3d4", reason = "secret_unavailable: the token for the project is gone", resumable = false},
-            {uid = "b", ref = "r", reason = "agent_quota: " .. string.rep("w", 90), resumable = false},
+            {uid = "a", job = "j", ref = "algonaut-trading-platform#a1b2c3d4", reason = "secret_unavailable: the token for the project is gone", resumable = false},
+            {uid = "b", job = "j", ref = "r", reason = "agent_quota: " .. string.rep("w", 90), resumable = false},
         },
     }
     for _, onHost in {true, false} do
@@ -105,54 +105,63 @@ test("every title line fits Tern's width for a long executor, Issue ref and reas
     assert(lines[4]:sub(1, 29) == "3 running, process 4242, eeee", lines[4])
 end)
 
-test("the card says where the worker is, each held run with its Issue link and Resume, then what runs and the process", function()
-    local held: { workersummary.Held } = {{uid = "01RUN", ref = "kata-a#a1b2", reason = "agent_quota: out of tokens", resumable = true}}
+test("the card says where the worker is, each held run as its job, Issue link and Resume over its reason, then what runs and the process", function()
+    local held: { workersummary.Held } = {{uid = "01RUN", job = "review", ref = "kata-a#a1b2", reason = "agent_quota: out of tokens", resumable = true}}
     local rows = cardRows(summary(2, held))
-    assert(#rows == 4, #rows)
+    assert(#rows == 5, #rows)
     assert(rows[1].label == "Worker" and rows[1].text == "on the session host")
-    local run = rows[2]
-    assert(run.label == "kata-a#a1b2" and run.text == "agent_quota: out of tokens" and run.tone == "warn")
-    assert(run.href == "https://kata.invalid/kata-a/a1b2", run.href)
-    assert(run.id == "01RUN" and run.actions ~= nil and #run.actions == 1 and run.actions[1].id == workerwidget.RESUME_ID)
-    assert(rows[3].label == "Running" and rows[3].text == "2")
-    assert(rows[4].label == "Process" and rows[4].text == "42 on box")
+    local head = rows[2]
+    assert(head.label == "review" and head.text == "kata-a#a1b2" and head.href == "https://kata.invalid/kata-a/a1b2", head.href)
+    assert(head.id == "01RUN" and head.actions ~= nil and #head.actions == 1 and head.actions[1].id == workerwidget.RESUME_ID)
+    assert(rows[3].label == nil and rows[3].text == "agent_quota: out of tokens" and rows[3].tone == "warn")
+    assert(rows[4].label == "Running" and rows[4].text == "2")
+    assert(rows[5].label == "Process" and rows[5].text == "42 on box")
     assert(cardRows(summary(0), false)[1].text == "on this machine")
+end)
+
+test("a long reason wraps by words on up to three full-width rows under its run, the last ending in an ellipsis", function()
+    local reason = "agent_quota: the agent ran out of quota for this billing period; resume it once the quota resets at midnight, or switch the job to another agent"
+    local held: { workersummary.Held } = {{uid = "a", job = "review", ref = "k#a1", reason = reason, resumable = false}}
+    local rows = cardRows(summary(0, held))
+    assert(#rows == 7, #rows)
+    assert(rows[3].text == "agent_quota: the agent ran out of quota for", rows[3].text)
+    assert(rows[4].text == "this billing period; resume it once the", rows[4].text)
+    assert(rows[5].text == "quota resets at midnight, or switch the job…" and rows[5].label == nil and rows[5].tone == "warn", rows[5].text)
+    for index = 3, 5 do assert((utf8.len(rows[index].text) :: number) <= 44, rows[index].text) end
 end)
 
 test("only the session host's half offers Resume, and only for a run the worker would resume", function()
     local held: { workersummary.Held } = {
-        {uid = "a", ref = "k#a1", reason = "r", resumable = true},
-        {uid = "b", ref = "k#b1", reason = "r", resumable = false},
-        {uid = "", ref = "k#c1", reason = "r", resumable = true},
-        {uid = string.rep("u", 65), ref = "k#d1", reason = "r", resumable = true},
+        {uid = "a", job = "j", ref = "k#a1", reason = "r", resumable = true},
+        {uid = "b", job = "j", ref = "k#b1", reason = "r", resumable = false},
+        {uid = "", job = "j", ref = "k#c1", reason = "r", resumable = true},
+        {uid = string.rep("u", 65), job = "j", ref = "k#d1", reason = "r", resumable = true},
     }
     local rows = cardRows(summary(0, held))
     assert(rows[2].actions ~= nil)
-    for index = 3, 5 do assert(rows[index].actions == nil and rows[index].id == nil, index) end
+    for _, index in {4, 6, 8} do assert(rows[index].text:sub(1, 2) == "k#" and rows[index].actions == nil and rows[index].id == nil, index) end
     assert(cardRows(summary(0, held), false)[2].actions == nil)
 end)
 
-test("a ref the link route cannot carry gets no link, and the row stays", function()
+test("a run with no job, Issue or reason keeps its heading row, and a ref the link route cannot carry gets no link", function()
     local held: { workersummary.Held } = {
-        {uid = "a", ref = "my project#a1", reason = "r", resumable = false},
-        {uid = "b", ref = "", reason = "", resumable = false},
-        {uid = "c", ref = "odd;$x&y#c1", reason = "r", resumable = false},
+        {uid = "a", job = "", ref = "my project#a1", reason = "r", resumable = false},
+        {uid = "b", job = "", ref = "", reason = "", resumable = false},
+        {uid = "c", job = string.rep("j", 30), ref = "odd;$x&y#c1", reason = "r", resumable = false},
     }
     local rows = cardRows(summary(0, held))
-    assert(rows[2].href == nil and rows[2].label == "my project#a1")
-    assert(rows[3].href == nil and rows[3].label == nil and rows[3].text == "held")
-    assert(rows[4].href == "https://kata.invalid/odd;$x&y/c1", rows[4].href)
+    assert(rows[2].href == nil and rows[2].label == nil and rows[2].text == "my project#a1")
+    assert(rows[4].href == nil and rows[4].text == "held run" and rows[5].label == "j" .. string.rep("j", 18) .. "…", rows[5].label)
+    assert(rows[5].href == "https://kata.invalid/odd;$x&y/c1", rows[5].href)
 end)
 
-test("the card keeps to Tern's 32 rows, the last held row saying how many more, and cuts text to 200 characters", function()
+test("the card keeps to Tern's 32 rows: held runs that do not fit become one row saying how many more", function()
     local rows = cardRows(summary(1, heldRuns(40)))
     assert(#rows == 32, #rows)
-    assert(rows[29].label == "r28" and rows[30].text == "and 12 more held")
-    assert(rows[32].label == "Process")
-    assert(#cardRows(summary(0, heldRuns(29))) == 32)
-    local long: { workersummary.Held } = {{uid = "a", ref = "k#a1", reason = string.rep("w", 250), resumable = false}}
-    local text = cardRows(summary(0, long))[2].text
-    assert(utf8.len(text) == 200 and text:sub(-3) == "…", text)
+    assert(rows[28].text == "r14" and rows[29].text == "why14" and rows[30].text == "and 26 more held", rows[30].text)
+    assert(rows[31].label == "Running" and rows[32].label == "Process")
+    local fourteen = cardRows(summary(0, heldRuns(14)))
+    assert(#fourteen == 31 and fourteen[29].text == "why14")
 end)
 
 harness.finish()

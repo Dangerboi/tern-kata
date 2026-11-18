@@ -7,9 +7,9 @@
 -- in tern.kv for the window half's widget, which `load`s it and shows it through `fresh`: that drops a record no host half has
 -- restamped for a minute, so a worker stopped while no daemon runs on that machine does not stay on the widget.
 
--- `uid` is the run's uid (what `tern-kata worker resume` takes) and `resumable` whether the worker would resume it now; a
--- binary from before those fields gives "" and false.
-export type Held = { uid: string, ref: string, reason: string, resumable: boolean }
+-- `uid` is the run's uid (what `tern-kata worker resume` takes), `job` its job's name and `resumable` whether the worker would
+-- resume it now; a binary from before those fields gives "", "" and false.
+export type Held = { uid: string, job: string, ref: string, reason: string, resumable: boolean }
 export type Summary = {
     executor: string,
     pid: number,
@@ -73,7 +73,7 @@ function M.of(status: any): Summary?
             -- HoldLine is the worker's own sentence for the hold; a binary from before it existed gives only the code.
             local reason = text(run.HoldLine)
             if reason == "" then reason = text(run.Hold) end
-            table.insert(summary.held, { uid = text(run.UID), ref = text(run.Issue), reason = reason, resumable = run.Resumable == true })
+            table.insert(summary.held, { uid = text(run.UID), job = text(run.Job), ref = text(run.Issue), reason = reason, resumable = run.Resumable == true })
         elseif not ended(run) then
             summary.running += 1
         end
@@ -95,7 +95,7 @@ local function summaryOf(stored: any): Summary?
     }
     for _, run in list(stored.held) do
         if type(run) == "table" then
-            table.insert(summary.held, { uid = text(run.uid), ref = text(run.ref), reason = text(run.reason), resumable = run.resumable == true })
+            table.insert(summary.held, { uid = text(run.uid), job = text(run.job), ref = text(run.ref), reason = text(run.reason), resumable = run.resumable == true })
         end
     end
     return summary

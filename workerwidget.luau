@@ -25,6 +25,12 @@ local CARD_ROWS = 32
 local CARD_CHARS = 200
 -- A card row's id, which a button needs, is 1 to 64 characters.
 local ROW_ID_CHARS = 64
+-- Tern draws each card row on one line and cuts it with an ellipsis. A row without a label spans the card (272 px of sans
+-- text on 0.9.27, about 49 average characters), so a hold reason is wrapped by words at REASON_CHARS onto at most
+-- REASON_LINES such rows. A job name, the label before the Issue link and Resume, is cut at JOB_CHARS.
+local REASON_CHARS = 44
+local REASON_LINES = 3
+local JOB_CHARS = 20
 
 -- The tooltip, which a Tern before 0.9.27 shows instead of the card (`card` below). Its lines are written so that what each
 -- line is for survives Tern's cut at LINE_CHARS (widgets.fit): the first line is where the worker is, a held run is its hold
@@ -49,30 +55,40 @@ local function issueLink(ref: string): string?
     return "https://kata.invalid/" .. project .. "/" .. short
 end
 
--- The hover card (Tern 0.9.27+; an older Tern shows `title`): where the worker is, a row per held run (its Issue, which a
--- click opens, and the worker's sentence for the hold, with a Resume button when the worker would resume it and the session
--- host's half draws the widget, as that half runs the command), then what runs and the process. Held runs past what fits
--- become one "and N more held" row.
+-- The rows of one held run: a heading row with its job, its Issue (a link that opens it) and a Resume button when the worker
+-- would resume it and the session host's half draws the widget (that half runs the command), then the worker's sentence for
+-- the hold, wrapped on full-width rows under it.
+local function heldRows(run: workersummary.Held, onHost: boolean): { WidgetCardRow }
+    local head: WidgetCardRow = {
+        label = if run.job ~= "" then widgets.cut(run.job, JOB_CHARS) else nil,
+        text = if run.ref ~= "" then widgets.cut(run.ref, CARD_CHARS) else "held run",
+        href = issueLink(run.ref),
+    }
+    if onHost and run.resumable and #run.uid >= 1 and #run.uid <= ROW_ID_CHARS then
+        head.id = run.uid
+        head.actions = {{id = M.RESUME_ID, label = "Resume"}}
+    end
+    local rows = {head}
+    for _, line in widgets.wrap(run.reason, REASON_CHARS, REASON_LINES) do
+        table.insert(rows, {text = line, tone = "warn"})
+    end
+    return rows
+end
+
+-- The hover card (Tern 0.9.27+; an older Tern shows `title`): where the worker is, each held run as heldRows lays it out, then
+-- what runs and the process. Held runs past Tern's row limit become one "and N more held" row.
 local function card(summary: Summary, onHost: boolean): { WidgetCardRow }
     local rows: { WidgetCardRow } = {{label = "Worker", text = if onHost then "on the session host" else "on this machine", tone = "muted"}}
-    local room = CARD_ROWS - 3
-    if #summary.held > room then room -= 1 end
+    -- The Running and Process rows close the card.
+    local limit = CARD_ROWS - 2
     for index, run in summary.held do
-        if index > room then
-            table.insert(rows, {text = "and " .. (#summary.held - room) .. " more held", tone = "muted"})
+        local block = heldRows(run, onHost)
+        local more = if index < #summary.held then 1 else 0
+        if #rows + #block + more > limit then
+            table.insert(rows, {text = "and " .. (#summary.held - index + 1) .. " more held", tone = "muted"})
             break
         end
-        local row: WidgetCardRow = {
-            label = if run.ref ~= "" then widgets.cut(run.ref, CARD_CHARS) else nil,
-            text = widgets.cut(if run.reason ~= "" then run.reason else "held", CARD_CHARS),
-            tone = "warn",
-            href = issueLink(run.ref),
-        }
-        if onHost and run.resumable and #run.uid >= 1 and #run.uid <= ROW_ID_CHARS then
-            row.id = run.uid
-            row.actions = {{id = M.RESUME_ID, label = "Resume"}}
-        end
-        table.insert(rows, row)
+        for _, row in block do table.insert(rows, row) end
     end
     table.insert(rows, {label = "Running", text = tostring(summary.running)})
     local process = tostring(summary.pid)

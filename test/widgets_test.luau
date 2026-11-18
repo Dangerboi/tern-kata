@@ -41,6 +41,23 @@ test("capped fits every line it shows", function()
     assert(shown[2] == "short")
 end)
 
+test("wrap breaks at spaces into lines that fit, and gives no lines for empty text", function()
+    local lines = widgets.wrap("one two three\nfour", 9, 3)
+    assert(table.concat(lines, "|") == "one two|three|four", table.concat(lines, "|"))
+    assert(#widgets.wrap("", 9, 3) == 0 and #widgets.wrap("  \n ", 9, 3) == 0)
+end)
+
+test("wrap splits a word longer than a line, counting characters", function()
+    assert(table.concat(widgets.wrap("abcdefghij k", 4, 5), "|") == "abcd|efgh|ij k")
+    assert(table.concat(widgets.wrap(string.rep("é", 6), 4, 2), "|") == string.rep("é", 4) .. "|éé")
+end)
+
+test("wrap ends the last line in an ellipsis when text is left over", function()
+    local lines = widgets.wrap("aaa bbb ccc ddd eee", 7, 2)
+    assert(table.concat(lines, "|") == "aaa bbb|ccc dd…", table.concat(lines, "|"))
+    assert(table.concat(widgets.wrap(string.rep("x", 10), 4, 2), "|") == "xxxx|xxx…")
+end)
+
 test("merge appends the widget after the others, which keep their place and style", function()
     local list: { any } = {{id = "clock", style = "analog"}, "cpu@ring"}
     local merged, added = widgets.merge(list, {"tern-kata/waiting"})

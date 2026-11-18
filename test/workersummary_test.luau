@@ -88,21 +88,22 @@ local function fakeKv(initial: any, failGet: boolean?): (workersummary.Kv, { [st
     return kv, data
 end
 
-test("a held run carries its uid and whether the worker would resume it; a binary without them gives none", function()
+test("a held run carries its uid, job and whether the worker would resume it; a binary without them gives none", function()
     local runs: { any } = {
-        { UID = "01RUNA", Issue = "k#1", Held = true, Hold = "interrupted", Resumable = true, EndedAt = ZERO },
+        { UID = "01RUNA", Job = "review", Issue = "k#1", Held = true, Hold = "interrupted", Resumable = true, EndedAt = ZERO },
         { UID = "01RUNB", Issue = "k#2", Held = true, Hold = "agent_login", Resumable = false, EndedAt = ZERO },
         { Issue = "k#3", Held = true, Hold = "interrupted", EndedAt = ZERO },
     }
     local got = workersummary.of({ PID = 1, Runs = runs })
     assert(got ~= nil and #got.held == 3)
-    assert(got.held[1].uid == "01RUNA" and got.held[1].resumable)
+    assert(got.held[1].uid == "01RUNA" and got.held[1].job == "review" and got.held[1].resumable)
+    assert(got.held[2].job == "")
     assert(got.held[2].uid == "01RUNB" and not got.held[2].resumable)
     assert(got.held[3].uid == "" and not got.held[3].resumable)
     local kv = fakeKv(nil)
     assert(workersummary.save(kv, got, 1) == nil)
     local record = workersummary.load(kv, nil)
-    assert(record ~= nil and record.worker.held[1].uid == "01RUNA" and record.worker.held[1].resumable and not record.worker.held[2].resumable)
+    assert(record ~= nil and record.worker.held[1].uid == "01RUNA" and record.worker.held[1].job == "review" and record.worker.held[1].resumable and not record.worker.held[2].resumable)
 end)
 
 test("a saved summary loads back and is fresh until STALE_S seconds after its stamp", function()
