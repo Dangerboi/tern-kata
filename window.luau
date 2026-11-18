@@ -589,6 +589,8 @@ end
 if tern.chrome.widget ~= nil then
     tern.on("window_start", tryReadWorkerSummary)
     tern.timer(1, pollWorkerSummary)
+    -- The card's Resume pills (workerwidget.css); the host half draws the widget, but styles live in the window.
+    tern.css("worker-card", workerwidget.css(PLUGIN))
     tern.command({
         id = "add-widgets",
         title = "Add the kata worker widget to the widget bar",

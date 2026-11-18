@@ -122,4 +122,13 @@ function M.spec(plugin: string, onHost: boolean, summary: () -> Summary?): Widge
     }
 end
 
+-- The window's stylesheet for this widget's hover card, which Tern draws as `.wgc[data-widget="<plugin>/<id>"]`: its Resume
+-- buttons are solid pills in the theme's accent fill (with white text, as the Pane's selected rows use it), where Tern's
+-- own card buttons are plain text. A window without this plugin draws them plain.
+function M.css(plugin: string): string
+    local button = '.wgc[data-widget="' .. plugin .. "/" .. M.ID .. '"] .wgc-plugin-act'
+    return button .. " {\n\tborder-radius: 999px;\n\tpadding: 0 10px;\n\tcolor: #fff;\n\tbackground-color: var(--accent-fill);\n}\n"
+        .. button .. ":hover {\n\tbackground-color: color-mix(in srgb, var(--accent-fill) 85%, #000);\n}\n"
+end
+
 return M
