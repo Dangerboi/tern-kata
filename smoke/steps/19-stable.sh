@@ -50,6 +50,7 @@ expect_ops "$tmp/stable-frames.jsonl" "$mark" '.[1] == "main.columns.detail.view
 ctl click "[data-id='main.columns.list.issues.$stable_first']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
 ctl key enter
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Smoke stable first") and (contains("loading") | not)'
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
 expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']" '.ok and (.nodes[0].text | startswith("[ Links"))'
 kata --workspace "$tmp/workspace" comment "$stable_first" --body "Stable refresh comment" --json

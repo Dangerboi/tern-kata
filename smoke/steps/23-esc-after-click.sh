@@ -43,6 +43,7 @@ ctl click "[data-id$='.$esc_target']"
 hint_expect_mode list
 ctl key enter
 hint_expect_mode detail
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Esc target") and (contains("loading") | not)'
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 1'
 # The reference is the styled span itself, no separate button: its text starts with the peer's short id, and a click opens it.
@@ -62,6 +63,7 @@ hint_expect_mode collections
 # A Collection clicked mid-jump ends the jump: enter then esc leaves detail instead of replaying it.
 ctl click "[data-id$='.$esc_target']"
 ctl key enter
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Esc target") and (contains("loading") | not)'
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 1'
 ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']"

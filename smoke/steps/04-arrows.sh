@@ -67,6 +67,7 @@ back_to_parent() {
 }
 ctl click "[data-id$='.$arrows_parent']"
 ctl key Enter
+expect_tree "$detail_title" '.ok and (.nodes[0].text | contains("Smoke arrows parent") and (contains("loading") | not))'
 jump
 expect_tree "$detail_title" '.ok and (.nodes[0].text | contains(" child"))'
 if jq -e '.nodes[0].text | contains("Smoke arrows first child")' "$tmp/assert-tree.json" >/dev/null; then
