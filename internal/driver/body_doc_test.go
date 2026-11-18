@@ -689,57 +689,40 @@ func editSaved(t *testing.T, s driver.State) driver.State {
 	return driver.Step(s, model.DraftSaved{UID: "alpha"}, now.Add(-10*time.Second+30*time.Millisecond)).State
 }
 
-// deadEdit is the first double click after a save: Tern closes the edit at once, with no change.
+// frameThenOpen is the Pane sending a frame (someone else changed the body, so the doc draws other text) 20 ms before Tern's editing
+// on, a frame Tern may take as sent after it, and returns the state at the editing on, at now, and the id of the doc.
+func frameThenOpen(t *testing.T, s driver.State) (driver.State, string) {
+	t.Helper()
+	theirs := alpha
+	theirs.Body, theirs.ProjectID, theirs.Revision, theirs.QualifiedID = "someone else's text", 7, 4, "work#aaaa"
+	s = driver.Step(s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &theirs}}, now.Add(-20*time.Millisecond)).State
+	id := bodyDocID(t, s)
+	return driver.Step(s, &tern.Editing{ID: id, On: true}, now).State, id
+}
+
+// deadEdit is a double click after a frame: Tern closes the edit at once, with no change.
 func deadEdit(t *testing.T, s driver.State) driver.State {
 	t.Helper()
-	s = editSaved(t, s)
-	id := bodyDocID(t, s)
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s, id := frameThenOpen(t, editSaved(t, s))
 	return driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
 }
 
-func TestNoKeyGuardWhenTheBodyDidNotChangeSinceTheLastEdit(t *testing.T) {
-	// A double click and esc on a body whose text is what the doc last drew is a real edit session that changed nothing.
-	s := onDoc(t, true)
+func TestNoKeyGuardWhenNoFrameWentOutAroundTheEditingOn(t *testing.T) {
+	// A quick double click and esc with no frame between is a real edit session that changed nothing.
+	s := editSaved(t, onDoc(t, true))
 	id := bodyDocID(t, s)
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(-10*time.Second)).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(-10*time.Second+3*time.Second)).State // a session that lasted: Tern's state is at rest
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(time.Second)).State
+	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(time.Second+40*time.Millisecond)).State
 	if n := s.Model.Notice; strings.Contains(n, "did not open") {
-		t.Fatalf("notice %q after a double click on an unchanged body", n)
+		t.Fatalf("notice %q after a double click and esc that no frame came between", n)
 	}
-	if out := driver.Step(s, key("r"), now.Add(100*time.Millisecond)); !reopened(out.Cmds) {
-		t.Fatalf("r after a double click and esc on an unchanged body sent %#v, want the reopen", out.Cmds)
-	}
-}
-
-func TestKeyGuardWhenSomeoneElseChangedTheBodyAfterTheLastEdit(t *testing.T) {
-	s := onDoc(t, true)
-	id := bodyDocID(t, s)
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(-10*time.Second)).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(-10*time.Second+3*time.Second)).State
-	s = detailReloadedWith(t, s, "someone else's text")
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
-	if out := driver.Step(s, key("r"), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
-		t.Fatalf("r after the dead edit sent %#v with notice %q, want it swallowed", out.Cmds, out.State.Model.Notice)
+	if out := driver.Step(s, key("r"), now.Add(time.Second+100*time.Millisecond)); !reopened(out.Cmds) {
+		t.Fatalf("r after a double click and esc sent %#v, want the reopen", out.Cmds)
 	}
 }
 
-func TestKeyGuardAfterARetriedKeptDraftSaved(t *testing.T) {
-	s := onDoc(t, true)
-	id := bodyDocID(t, s)
-	at := func(d time.Duration) time.Time { return now.Add(-20*time.Second + d) }
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, at(0)).State
-	s = driver.Step(s, &tern.Change{ID: id, Text: "mine"}, at(10*time.Millisecond)).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: false}, at(20*time.Millisecond)).State
-	s = driver.Step(s, model.DraftFailed{UID: "alpha", Err: errTest}, at(30*time.Millisecond)).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, at(5*time.Second)).State
-	s = driver.Step(s, &tern.Change{ID: id, Text: "mine 2"}, at(5*time.Second+10*time.Millisecond)).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: false}, at(5*time.Second+20*time.Millisecond)).State
-	s = driver.Step(s, model.DraftSaved{UID: "alpha"}, at(5*time.Second+30*time.Millisecond)).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+func TestKeyGuardWhenAFrameWentOutJustBeforeTheEditingOn(t *testing.T) {
+	s, id := frameThenOpen(t, onDoc(t, true))
 	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
 	for _, k := range []string{"r", "u"} {
 		if out := driver.Step(s, key(k), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
@@ -748,33 +731,28 @@ func TestKeyGuardAfterARetriedKeptDraftSaved(t *testing.T) {
 	}
 }
 
-func TestKeyGuardOnTheFirstDeadEditAfterThePaneOpened(t *testing.T) {
+// Tern ends an edit that a frame follows, so the Pane sends none while the edit is open: the model takes what comes (a daemon result,
+// the clock moving) and the editing off draws it.
+func TestNoFrameWhileTheDocEditIsOpen(t *testing.T) {
 	s := onDoc(t, true)
 	id := bodyDocID(t, s)
 	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
-	for _, k := range []string{"r", "u"} {
-		if out := driver.Step(s, key(k), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
-			t.Fatalf("%s after the first dead edit sent %#v with notice %q, want it swallowed", k, out.Cmds, out.State.Model.Notice)
-		}
+	if out := driver.Step(s, model.DraftSaved{UID: "none"}, now.Add(time.Second)); out.View != nil {
+		t.Fatal("a step with the clock moved on drew while the edit was open")
+	}
+	theirs := alpha
+	theirs.Body, theirs.ProjectID, theirs.Revision, theirs.QualifiedID = "someone else's text", 7, 4, "work#aaaa"
+	out := driver.Step(s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &theirs}}, now.Add(5*time.Second))
+	if out.View != nil {
+		t.Fatal("a daemon result drew while the edit was open")
+	}
+	s = driver.Step(out.State, &tern.Change{ID: id, Text: "mine"}, now.Add(6*time.Second)).State
+	if out = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(7*time.Second)); out.View == nil {
+		t.Fatal("the editing off did not draw")
 	}
 }
 
-func TestKeyGuardOnAnotherIssueAfterAnEditOfTheFirst(t *testing.T) {
-	s := editSaved(t, onDoc(t, true))
-	loaded := beta
-	loaded.Body, loaded.ProjectID, loaded.Revision, loaded.QualifiedID = "beta body", 7, 1, "work#bbbb"
-	s = driver.Step(s, key("j"), now.Add(-time.Second)).State
-	s = driver.Step(s, model.DetailLoaded{UID: "beta", Selected: &model.IssueDetailData{Issue: &loaded}}, now.Add(-time.Second)).State
-	id := bodyDocID(t, s)
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
-	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
-	if out := driver.Step(s, key("u"), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
-		t.Fatalf("u after a dead edit of beta sent %#v with notice %q, want it swallowed", out.Cmds, out.State.Model.Notice)
-	}
-}
-
-// Tern sometimes closes an edit at once after the body changed. The user types on, so keys that would run a binding are swallowed
+// Tern closes an edit at once when a frame was already on its way. The user types on, so keys that would run a binding are swallowed
 // for a moment, with a Notice that says why.
 func TestKeysAfterADeadEditRunNoBindingUntilTheWindowEnds(t *testing.T) {
 	s := deadEdit(t, onDoc(t, true))
@@ -875,9 +853,7 @@ func TestAnEditingOnThatLastsPastTheBoundEndsTheKeyGuard(t *testing.T) {
 }
 
 func TestTheKeyGuardNoticeGoesWhenTheWindowEndsWithNoInput(t *testing.T) {
-	s := editSaved(t, onDoc(t, true))
-	id := bodyDocID(t, s)
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s, id := frameThenOpen(t, editSaved(t, onDoc(t, true)))
 	out := driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond))
 	var wait *model.WaitDocGuard
 	for _, c := range out.Cmds {
@@ -898,9 +874,7 @@ func TestTheKeyGuardNoticeGoesWhenTheWindowEndsWithNoInput(t *testing.T) {
 }
 
 func TestAnotherNoticeSurvivesTheEndOfTheKeyGuard(t *testing.T) {
-	s := editSaved(t, onDoc(t, true))
-	id := bodyDocID(t, s)
-	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s, id := frameThenOpen(t, editSaved(t, onDoc(t, true)))
 	out := driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond))
 	var wait model.WaitDocGuard
 	for _, c := range out.Cmds {
@@ -1197,5 +1171,87 @@ func TestLateChangeAfterAnOrdinarySaveSettledIsSavedOnTheTextSaved(t *testing.T)
 	out := step(t, s, &tern.Change{ID: id, Text: "mine, late"})
 	if saves := savedCmds(out.Cmds); len(saves) != 1 || saves[0].Text != "mine, late" || saves[0].BaseText != "mine" {
 		t.Fatalf("a late change after an ordinary save settled sent %#v, want it saved on the text saved", out.Cmds)
+	}
+}
+
+func focusOps(ops []tern.Op) int {
+	n := 0
+	for _, op := range ops {
+		if len(op) > 0 && op[0] == "focus" {
+			n++
+		}
+	}
+	return n
+}
+
+// The SDK sends a raw op as a frame, which ends the edit too: ops wait with the frames, and the step that releases the hold sends them
+// after its view, with only the last focus.
+func TestOpsWaitForTheEditingOff(t *testing.T) {
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	s.Focus = "stale.one"
+	theirs := alpha
+	theirs.Body, theirs.ProjectID, theirs.Revision, theirs.QualifiedID = "someone else's text", 7, 4, "work#aaaa"
+	out := driver.Step(s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &theirs}}, now.Add(time.Second))
+	if len(out.Ops) != 0 || out.View != nil {
+		t.Fatalf("a step during the edit sent view %v ops %#v", out.View != nil, out.Ops)
+	}
+	if focusOps(out.State.HeldOps) != 1 {
+		t.Fatalf("held ops %#v, want the focus op kept", out.State.HeldOps)
+	}
+	s = out.State
+	s.Focus = "stale.two"
+	out = driver.Step(s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &theirs}}, now.Add(2*time.Second))
+	if focusOps(out.State.HeldOps) != 1 {
+		t.Fatalf("held ops %#v, want only the last focus", out.State.HeldOps)
+	}
+	out = driver.Step(out.State, &tern.Editing{ID: id, On: false}, now.Add(3*time.Second))
+	if out.View == nil || focusOps(out.Ops) != 1 || len(out.State.HeldOps) != 0 {
+		t.Fatalf("the editing off sent view %v ops %#v, held %#v; want the view and one focus", out.View != nil, out.Ops, out.State.HeldOps)
+	}
+}
+
+func TestInputOutsideTheDocReleasesTheHold(t *testing.T) {
+	cases := map[string]struct {
+		in      any
+		release bool
+	}{
+		"key":              {key("x"), true},
+		"select elsewhere": {&tern.Select{ID: "main.columns.list.issues", Item: "alpha"}, true},
+		"action":           {&tern.Action{ID: "legend.chip", Act: "press"}, true},
+		"change elsewhere": {&tern.Change{ID: "some.card.dropdown", Value: "closed"}, true},
+		"focus elsewhere":  {&tern.Focus{ID: "some.field"}, true},
+		"agent relay":      {&tern.Action{ID: "relay", Act: string(model.AgentStatesAction), Value: "[]"}, true},
+	}
+	for name, c := range cases {
+		s := onDoc(t, true)
+		id := bodyDocID(t, s)
+		s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+		out := driver.Step(s, c.in, now.Add(time.Second))
+		if name == "agent relay" { // the relay is the window half, not the user
+			if out.View != nil {
+				t.Fatalf("%s drew while the edit was open", name)
+			}
+			continue
+		}
+		if out.State.Model.HoldsFrames() {
+			t.Fatalf("%s did not release the hold", name)
+		}
+		// a late editing off does no harm and starts no guard
+		out = driver.Step(out.State, &tern.Editing{ID: id, On: false}, now.Add(1100*time.Millisecond))
+		if strings.Contains(out.State.Model.Notice, "did not open") {
+			t.Fatalf("%s: the late editing off started the guard", name)
+		}
+	}
+	s := onDoc(t, true)
+	id := bodyDocID(t, s)
+	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now).State
+	for _, in := range []any{&tern.Change{ID: id, Text: "mine"}, &tern.Focus{ID: id}, &tern.Select{ID: id}} {
+		if out := driver.Step(s, in, now.Add(time.Second)); out.View != nil {
+			t.Fatalf("%T on the doc itself released the hold", in)
+		} else {
+			s = out.State
+		}
 	}
 }

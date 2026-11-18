@@ -274,7 +274,7 @@ func (m Model) followUpDoc(uid string, draft Draft) *DocPart {
 }
 
 // deadEditWithin is how soon after an editing on an editing off with no change in between is a dead edit: Tern closed the edit
-// itself, which it does for the first double click after the doc's text changed.
+// itself, which it does for any frame the Pane sends while the edit is open.
 const deadEditWithin = 500 * time.Millisecond
 
 // DocGuardWindow is how long keys that would run a binding are swallowed after a dead edit: the user types on as if the edit were open.
@@ -299,44 +299,42 @@ func docGuardExpired(m Model, msg DocGuardExpired) Model {
 	return m
 }
 
-// docOpened is an editing on of the doc that has not ended: when it began, whether the text the doc draws differed then from what it
-// drew when its last edit session ended, and whether a change came since.
+// docOpened is an editing on of the doc that has not ended: when it began, whether the Pane had sent a frame just before that Tern
+// may take as sent after it (the driver says so, see FramedBeforeEditing), and whether a change came since.
 type docOpened struct {
-	uid     string
-	at      time.Time
-	changed bool
-	typed   bool
+	uid    string
+	at     time.Time
+	framed bool
+	typed  bool
 }
 
-// docRedrawn reports whether the doc, which draws Issue uid's body now, draws other text than it did when the last edit session of any
-// Issue ended, or before the first one since the Pane opened. The drawn text changes on a save, on someone else's edit, and when the
-// doc draws another Issue. Tern keeps that state across nodes, and ends the next edit at once.
-func (m Model) docRedrawn(uid string) bool {
-	issue := m.docIssue()
-	return issue != nil && issue.UID == uid && (m.docRested == nil || m.docText(*issue) != *m.docRested)
+// HoldsFrames reports whether the Pane sends no frame now: Tern ends an in-place edit of the doc when the program sends a frame that
+// changes any node, at any time while the edit is open, so the view waits for the editing off. The model keeps taking input.
+func (m Model) HoldsFrames() bool { return m.docOpened != nil }
+
+// ReleaseFrames ends the hold without an editing off: the user acted outside the doc, so Tern's edit is over or the Pane would draw
+// nothing for as long as an editing off never came. No guard starts; an editing off that comes later finds no opened edit.
+func (m Model) ReleaseFrames() Model {
+	m.docOpened = nil
+	return m
 }
 
-// restDoc notes the text the doc drew during the edit session that ends now, as the text that session ended on. It is the text the
-// doc held when the edit began, not what it draws after the flush: a kept Draft is drawn at once, and that redraw comes after the session.
-func (m Model) restDoc(uid string) Model {
-	if m.editsDoc(uid) {
-		drawn := m.docEdit.drawn
-		m.docRested = &drawn
-		return m
-	}
-	if issue := m.docIssue(); issue != nil && issue.UID == uid {
-		drawn := m.docText(*issue)
-		m.docRested = &drawn
+// FramedBeforeEditing notes that the Pane sent a frame so soon before the open edit's editing on that Tern may take it as sent after.
+func (m Model) FramedBeforeEditing() Model {
+	if opened := m.docOpened; opened != nil {
+		framed := *opened
+		framed.framed = true
+		m.docOpened = &framed
 	}
 	return m
 }
 
-// noteDocEditing keeps track of the doc's editing on and off. A dead edit, which Tern's bug can have caused (the text the doc draws
-// changed since its last edit session, and the edit ended within deadEditWithin with no change), starts the key guard: the command
-// that ends it comes back. An edit that stayed open past deadEditWithin was alive, so it ends the guard.
+// noteDocEditing keeps track of the doc's editing on and off. A dead edit, which a frame of the Pane's after the editing on causes
+// (see HoldsFrames: only one that was already on its way), starts the key guard: the command that ends it comes back. An edit that
+// stayed open past deadEditWithin was alive, so it ends the guard.
 func (m Model) noteDocEditing(uid string, on bool) (Model, []Cmd) {
 	if on {
-		m.docOpened = &docOpened{uid: uid, at: m.Now, changed: m.docRedrawn(uid)}
+		m.docOpened = &docOpened{uid: uid, at: m.Now}
 		return m, nil
 	}
 	opened := m.docOpened
@@ -347,7 +345,7 @@ func (m Model) noteDocEditing(uid string, on bool) (Model, []Cmd) {
 	switch {
 	case m.Now.Sub(opened.at) > deadEditWithin:
 		return m.EndDocGuard(), nil
-	case !opened.typed && opened.changed:
+	case !opened.typed && opened.framed:
 		m.docGuardSeq++
 		m.docGuardUntil = m.Now.Add(DocGuardWindow)
 		m.Notice = deadEditNotice
@@ -399,9 +397,6 @@ func (m Model) docKeyGuarded(key KeyMsg) bool {
 // bodyEditing starts an in-place edit, or saves it when the user leaves the doc, through the write the overlay's Save makes.
 func bodyEditing(m Model, uid string, on bool) (Model, []Cmd) {
 	m, guard := m.noteDocEditing(uid, on)
-	if !on {
-		m = m.restDoc(uid)
-	}
 	m, cmds := applyBodyEditing(m, uid, on)
 	return m, append(cmds, guard...)
 }

@@ -113,14 +113,12 @@ type Model struct {
 	// docEdit is the in-place edit of the Issue body the user has open in the doc, nil when none, and docEnded the one that ended last
 	// (what a change that comes late is written against), until the doc begins another; a daemon switch clears both.
 	docEdit, docEnded *docEdit
-	// docOpened is the doc's editing on that has not ended; a daemon switch clears it, the guard and docRested. docGuardUntil is the end of the window in which keys that would run a
-	// binding are swallowed after Tern closed an edit at once, and docGuardSeq numbers the guards started, so the answer of an earlier
-	// one's wait does not end a later one. docRested is the text the doc drew when the last edit session of any Issue ended, nil before
-	// the first or after a daemon switch, which Tern may have seen before this Pane opened: a nil text counts as changed.
+	// docOpened is the doc's editing on that has not ended; a daemon switch clears it and the guard. docGuardUntil is the end of the
+	// window in which keys that would run a binding are swallowed after Tern closed an edit at once, and docGuardSeq numbers the
+	// guards started, so the answer of an earlier one's wait does not end a later one.
 	docOpened     *docOpened
 	docGuardUntil time.Time
 	docGuardSeq   int
-	docRested     *string
 	// PaneBlock is the block id of this kata Pane ($TERN_PANE), "" when Tern did not say; agents split beside it.
 	PaneBlock string
 	// AgentMapping is agents.json as this Pane last read or changed it: the agents Panes on this host started.
