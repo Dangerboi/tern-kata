@@ -34,6 +34,14 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - `e` and `$EDITOR` work as before.
   - A body with a picture (an `<img>` tag or a Markdown image) is drawn as before, so its pictures keep their size and open large on a click; edit it with `e`.
 - On Tern 0.9.26 or newer, selecting text in the Issue body offers a Comment button; the note becomes a comment on the Issue that quotes the selection above it.
+- On Tern 0.9.27 and later Board cards glide to their new place when an Issue moves to another Lane or a Lane reorders, instead of jumping there.
+
+#### Jobs and worker
+
+- On Tern 0.9.27 and later hovering the kata worker widget shows a card listing each held run with its Issue and hold reason, then the running count, process and executor.
+  - A click on a held run's reason opens its Issue in kata.
+  - A **Resume** button on a run the worker would resume resumes it, as `u` on the Runs Page does, and toasts the worker's answer.
+  - An older Tern keeps the tooltip.
 
 ### Changed
 

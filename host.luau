@@ -473,6 +473,41 @@ else
     end
 end
 
+-- A Resume button on the worker widget's card (Tern 0.9.27+, workerwidget.luau) runs `tern-kata worker resume <run-uid>`,
+-- the row's id being the run's uid, toasts the worker's answer and looks at the worker again, so the run leaves the card.
+-- Tern before 0.9.27 has no card and may raise on the event name.
+local function resume_held(uid: string, cx: EffectCx)
+    local binary = find_binary()
+    if binary == nil then
+        cx:toast("error", "Cannot resume the run: tern-kata is not installed on the session host")
+        return
+    end
+    local ok, err = pcall(function()
+        tern.process.run({binary, "worker", "resume", uid}, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
+            if result.status == 0 and not result.timed_out then
+                cx:toast("success", "Resuming the run", last_line(result.stdout))
+            else
+                cx:toast("error", "Cannot resume the run", if result.timed_out then "The worker did not answer." else last_line(result.stderr))
+            end
+            start()
+        end)
+    end)
+    if not ok then cx:toast("error", "Cannot resume the run", tostring(err)) end
+end
+
+do
+    local ok, err = pcall(function()
+        tern.on("widget_action", function(ev: WidgetActionEvent, cx: EffectCx): boolean?
+            if ev.widget ~= workerwidget.ID or ev.act ~= workerwidget.RESUME_ID then return nil end
+            resume_held(ev.row, cx)
+            return true
+        end)
+    end)
+    if not ok then
+        tern.log.info("tern-kata: Tern does not offer widget card buttons, so held runs are resumed from the kata Pane: " .. tostring(err))
+    end
+end
+
 -- The first look waits a moment so loading stays well inside the 2 s budget. A daemon restart or a plugin reload loads this
 -- file again: it starts the worker, or leaves the one still running and starts one when that ends.
 arm(500)

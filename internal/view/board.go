@@ -37,7 +37,9 @@ func SelectedRowID(m model.Model) string {
 
 // board is the Board: one column per Lane, No lane first and Done last, each a header over its cards. It takes the list column's
 // place. A Lane is a column, not a Card: a Card's body sizes to its content, so only a column's list fills the Lane down to the
-// bottom and scrolls inside it, which keeps the Pane itself from scrolling the top bar away.
+// bottom and scrolls inside it, which keeps the Pane itself from scrolling the top bar away. The Lanes' row is a layout
+// transition (Tern 0.9.27+; older Terns snap): a card, whose motion key is its Issue's uid, glides to its new place when its
+// Issue moves to another Lane or its Lane reorders.
 func board(m model.Model, now time.Time) tern.Element {
 	columns := m.BoardColumns()
 	laneList := m.LaneList()
@@ -81,7 +83,7 @@ func board(m model.Model, now time.Time) tern.Element {
 	}
 	children = append(children,
 		ui.Text{Common: ui.Common{Key: "lane-source"}, Spans: []ui.Span{{T: "Lane list: " + m.LaneSource(), S: "muted"}}, Wrap: ui.WrapNone},
-		ui.Row{Common: ui.Common{Key: "board", Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{H: ui.Lines(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: lanes})
+		ui.Row{Common: ui.Common{Key: "board", Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{H: ui.Lines(0)}, Transition: ui.TransitionLayout}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: lanes})
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1}, "", children)
 }
 
@@ -170,7 +172,7 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 	body = slices.Insert(body, 0, tern.Element(ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}))
 	return ui.Card{
-		Common:   ui.Common{Key: issue.UID, Tone: cardTone, Actions: rowActions(issue, false, menu, CardClick(issue.UID))},
+		Common:   ui.Common{Key: issue.UID, MotionKey: issue.UID, Tone: cardTone, Actions: rowActions(issue, false, menu, CardClick(issue.UID))},
 		Selected: selected,
 		Children: body,
 	}

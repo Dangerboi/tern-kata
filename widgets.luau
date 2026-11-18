@@ -14,14 +14,19 @@ function M.commandId(plugin: string, name: string): string
     return "plugin." .. plugin .. "." .. name
 end
 
--- The line on one line (a pane title may hold line breaks) when it fits a tooltip line, else its first characters and an
--- ellipsis.
-function M.fit(text: string): string
+-- The text on one line (a pane title may hold line breaks) when it has at most `limit` characters, else its first characters
+-- and an ellipsis, `limit` in all.
+function M.cut(text: string, limit: number): string
     local line = text:gsub("[\r\n]+", " ")
     -- A line that is not valid UTF-8 is measured in bytes.
     local valid = utf8.len(line) ~= nil
-    if (if valid then utf8.len(line) else #line) <= LINE_CHARS then return line end
-    return line:sub(1, (if valid then utf8.offset(line, LINE_CHARS) else LINE_CHARS) - 1) .. "…"
+    if (if valid then utf8.len(line) else #line) <= limit then return line end
+    return line:sub(1, (if valid then utf8.offset(line, limit) else limit) - 1) .. "…"
+end
+
+-- The text cut to a tooltip line.
+function M.fit(text: string): string
+    return M.cut(text, LINE_CHARS)
 end
 
 -- At most CAPPED_LINES lines, each fitted, then how many more there were.
