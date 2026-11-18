@@ -559,9 +559,10 @@ end
 
 local function readWorkerSummary()
     workerRecord = workersummary.load(tern.kv, workerRecord)
-    local summary = workersummary.fresh(workerRecord, os.time())
+    local now = os.time()
+    local summary = workersummary.fresh(workerRecord, now)
     setWorkerFallback(summary ~= nil)
-    local text = if summary ~= nil then tern.json.encode(summary) else ""
+    local text = if summary ~= nil then tern.json.encode(summary) .. workerwidget.clockKey(summary, now) else ""
     if text ~= workerSummaryText then
         workerSummary = summary
         workerSummaryText = text

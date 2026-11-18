@@ -7,9 +7,10 @@
 -- in tern.kv for the window half's widget, which `load`s it and shows it through `fresh`: that drops a record no host half has
 -- restamped for a minute, so a worker stopped while no daemon runs on that machine does not stay on the widget.
 
--- `uid` is the run's uid (what `tern-kata worker resume` takes), `job` its job's name and `resumable` whether the worker would
--- resume it now; a binary from before those fields gives "", "" and false.
-export type Held = { uid: string, job: string, ref: string, reason: string, resumable: boolean }
+-- `uid` is the run's uid (what `tern-kata worker resume` takes), `job` its job's name, `resumable` and `abandonable` whether the
+-- worker would resume or abandon it now, and `heldAt` when it was held (Unix seconds, from its EndedAt); a binary from before
+-- those fields gives "", "", false, false and nil.
+export type Held = { uid: string, job: string, ref: string, reason: string, resumable: boolean, abandonable: boolean, heldAt: number? }
 export type Summary = {
     executor: string,
     pid: number,
@@ -51,6 +52,28 @@ local function ended(run: any): boolean
     return at ~= "" and at:sub(1, 4) ~= "0001"
 end
 
+-- The Unix time of an RFC 3339 stamp as Go writes it (`2026-11-18T09:00:00.5+01:00`, `...Z`); nil for anything else and for
+-- the worker's zero time.
+function M.epoch(stamp: string): number?
+    local y, mo, d, h, mi, s, rest = stamp:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)(.*)$")
+    if y == nil or y == "0001" then return nil end
+    local zone = (rest :: string):gsub("^%.%d+", "")
+    local offset = 0
+    if zone ~= "Z" then
+        local sign, oh, om = zone:match("^([+-])(%d%d):(%d%d)$")
+        if sign == nil then return nil end
+        offset = ((tonumber(oh) :: number) * 60 + (tonumber(om) :: number)) * 60 * (if sign == "-" then -1 else 1)
+    end
+    -- Days since 1970-01-01 of a civil date (H. Hinnant's days_from_civil).
+    local month = tonumber(mo) :: number
+    local year = (tonumber(y) :: number) - (if month <= 2 then 1 else 0)
+    local era = year // 400
+    local yearOfEra = year - era * 400
+    local dayOfYear = (153 * ((month + 9) % 12) + 2) // 5 + (tonumber(d) :: number) - 1
+    local days = era * 146097 + yearOfEra * 365 + yearOfEra // 4 - yearOfEra // 100 + dayOfYear - 719468
+    return days * 86400 + (tonumber(h) :: number) * 3600 + (tonumber(mi) :: number) * 60 + (tonumber(s) :: number) - offset
+end
+
 function M.of(status: any): Summary?
     if type(status) ~= "table" or type(status.PID) ~= "number" then return nil end
     local summary: Summary = {
@@ -73,7 +96,10 @@ function M.of(status: any): Summary?
             -- HoldLine is the worker's own sentence for the hold; a binary from before it existed gives only the code.
             local reason = text(run.HoldLine)
             if reason == "" then reason = text(run.Hold) end
-            table.insert(summary.held, { uid = text(run.UID), job = text(run.Job), ref = text(run.Issue), reason = reason, resumable = run.Resumable == true })
+            table.insert(summary.held, {
+                uid = text(run.UID), job = text(run.Job), ref = text(run.Issue), reason = reason,
+                resumable = run.Resumable == true, abandonable = run.Abandonable == true, heldAt = M.epoch(text(run.EndedAt)),
+            })
         elseif not ended(run) then
             summary.running += 1
         end
@@ -95,7 +121,11 @@ local function summaryOf(stored: any): Summary?
     }
     for _, run in list(stored.held) do
         if type(run) == "table" then
-            table.insert(summary.held, { uid = text(run.uid), job = text(run.job), ref = text(run.ref), reason = text(run.reason), resumable = run.resumable == true })
+            table.insert(summary.held, {
+                uid = text(run.uid), job = text(run.job), ref = text(run.ref), reason = text(run.reason),
+                resumable = run.resumable == true, abandonable = run.abandonable == true,
+                heldAt = if type(run.heldAt) == "number" then run.heldAt else nil,
+            })
         end
     end
     return summary

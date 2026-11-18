@@ -195,9 +195,10 @@ local function last_line(text: string): string
 end
 
 -- The widget rendered here shows `last_summary`; Tern draws it again, in every window attached to this host, only when the
--- summary changed (a poll that finds the same worker makes no refresh).
+-- summary changed, or the minute did while runs are held (their ages, workerwidget.clockKey): a poll that finds the same
+-- worker in the same minute makes no refresh.
 local function show_worker()
-    local text = if last_summary ~= nil then tern.json.encode(last_summary) else ""
+    local text = if last_summary ~= nil then tern.json.encode(last_summary) .. workerwidget.clockKey(last_summary, os.time()) else ""
     if text == shown_text then return end
     shown_text = text
     local ok, err = pcall(function() tern.chrome.refresh() end)
@@ -473,38 +474,42 @@ else
     end
 end
 
--- A Resume button on the worker widget's card (Tern 0.9.27+, workerwidget.luau) runs `tern-kata worker resume <run-uid>`,
--- the row's id being the run's uid, toasts the worker's answer and looks at the worker again, so the run leaves the card.
--- Tern before 0.9.27 has no card and may raise on the event name.
-local function resume_held(uid: string, cx: EffectCx)
+-- A Resume or Abandon button on the worker widget's card (Tern 0.9.27+, workerwidget.luau) runs `tern-kata worker resume
+-- <run-uid>` or `worker abandon <run-uid>`, the row's id being the run's uid, toasts the worker's answer and looks at the
+-- worker again, so the run leaves the card. Tern before 0.9.27 has no card and may raise on the event name.
+local function settle_held(verb: string, uid: string, cx: EffectCx)
+    local failed = "Cannot " .. verb .. " the run"
     local binary = find_binary()
     if binary == nil then
-        cx:toast("error", "Cannot resume the run: tern-kata is not installed on the session host")
+        cx:toast("error", failed .. ": tern-kata is not installed on the session host")
         return
     end
     local ok, err = pcall(function()
-        tern.process.run({binary, "worker", "resume", uid}, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
+        tern.process.run({binary, "worker", verb, uid}, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
             if result.status == 0 and not result.timed_out then
-                cx:toast("success", "Resuming the run", last_line(result.stdout))
+                cx:toast("success", if verb == "resume" then "Resuming the run" else "Abandoned the run", last_line(result.stdout))
             else
-                cx:toast("error", "Cannot resume the run", if result.timed_out then "The worker did not answer." else last_line(result.stderr))
+                cx:toast("error", failed, if result.timed_out then "The worker did not answer." else last_line(result.stderr))
             end
             start()
         end)
     end)
-    if not ok then cx:toast("error", "Cannot resume the run", tostring(err)) end
+    if not ok then cx:toast("error", failed, tostring(err)) end
 end
+
+local CARD_VERBS = {[workerwidget.RESUME_ID] = "resume", [workerwidget.ABANDON_ID] = "abandon"}
 
 do
     local ok, err = pcall(function()
         tern.on("widget_action", function(ev: WidgetActionEvent, cx: EffectCx): boolean?
-            if ev.widget ~= workerwidget.ID or ev.act ~= workerwidget.RESUME_ID then return nil end
-            resume_held(ev.row, cx)
+            local verb = CARD_VERBS[ev.act]
+            if ev.widget ~= workerwidget.ID or verb == nil then return nil end
+            settle_held(verb, ev.row, cx)
             return true
         end)
     end)
     if not ok then
-        tern.log.info("tern-kata: Tern does not offer widget card buttons, so held runs are resumed from the kata Pane: " .. tostring(err))
+        tern.log.info("tern-kata: Tern does not offer widget card buttons, so held runs are resumed and abandoned from the kata Pane: " .. tostring(err))
     end
 end
 

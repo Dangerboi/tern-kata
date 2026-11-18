@@ -17,8 +17,9 @@ M.NAME = "kata worker"
 -- The ids of the window commands a click runs; window.luau registers the commands under these ids.
 M.OPEN_ID = "open"
 M.SHOW_HELD_ID = "show-held-runs"
--- The id of the Resume button on a held run's card row; host.luau handles its `widget_action`, whose `row` is the run's uid.
+-- The ids of the buttons on a held run's card row; host.luau handles their `widget_action`, whose `row` is the run's uid.
 M.RESUME_ID = "resume"
+M.ABANDON_ID = "abandon"
 
 -- Tern keeps a hover card's first 32 rows and leaves out a row whose label or text runs over 200 characters.
 local CARD_ROWS = 32
@@ -27,10 +28,10 @@ local CARD_CHARS = 200
 local ROW_ID_CHARS = 64
 -- Tern draws each card row on one line and cuts it with an ellipsis. A row without a label spans the card (272 px of sans
 -- text on 0.9.27, about 49 average characters), so a hold reason is wrapped by words at REASON_CHARS onto at most
--- REASON_LINES such rows. A job name, the label before the Issue link and Resume, is cut at JOB_CHARS.
+-- REASON_LINES such rows. A job name, which the label before the Issue link and button starts with, is cut at JOB_CHARS.
 local REASON_CHARS = 44
 local REASON_LINES = 3
-local JOB_CHARS = 20
+local JOB_CHARS = 16
 
 -- The tooltip, which a Tern before 0.9.27 shows instead of the card (`card` below). Its lines are written so that what each
 -- line is for survives Tern's cut at LINE_CHARS (widgets.fit): the first line is where the worker is, a held run is its hold
@@ -55,18 +56,38 @@ local function issueLink(ref: string): string?
     return "https://kata.invalid/" .. project .. "/" .. short
 end
 
--- The rows of one held run: a heading row with its job, its Issue (a link that opens it) and a Resume button when the worker
--- would resume it and the session host's half draws the widget (that half runs the command), then the worker's sentence for
--- the hold, wrapped on full-width rows under it.
-local function heldRows(run: workersummary.Held, onHost: boolean): { WidgetCardRow }
+-- How long ago `since` was at `now` (Unix seconds), in the largest whole unit: "<1 m", "12 m", "3 h", "2 d".
+function M.age(since: number, now: number): string
+    local seconds = math.max(0, now - since)
+    if seconds < 60 then return "<1 m" end
+    if seconds < 3600 then return seconds // 60 .. " m" end
+    if seconds < 86400 then return seconds // 3600 .. " h" end
+    return seconds // 86400 .. " d"
+end
+
+-- The rows of one held run: a heading row with its job and how long it has been held, its Issue (a link that opens it) and a
+-- button, then the worker's sentence for the hold, wrapped on full-width rows under it. The button is Resume when the worker
+-- would resume the run, and Abandon when it would not but would abandon it, which is then the only way to settle it (as
+-- `worker status` says); that row has the error tone, which the stylesheet draws the Abandon button in. Neither is offered
+-- while the worker would take neither verb (its hold is still being reported, or its agent's process is still there), nor by
+-- the window half's widget, as only the session host's half runs the command.
+local function heldRows(run: workersummary.Held, onHost: boolean, now: number): { WidgetCardRow }
+    local title = if run.job ~= "" then widgets.cut(run.job, JOB_CHARS) else "held"
+    if run.heldAt ~= nil then title ..= " · " .. M.age(run.heldAt, now) end
     local head: WidgetCardRow = {
-        label = if run.job ~= "" then widgets.cut(run.job, JOB_CHARS) else nil,
-        text = if run.ref ~= "" then widgets.cut(run.ref, CARD_CHARS) else "held run",
+        label = title,
+        text = if run.ref ~= "" then widgets.cut(run.ref, CARD_CHARS) else "no Issue",
         href = issueLink(run.ref),
     }
-    if onHost and run.resumable and #run.uid >= 1 and #run.uid <= ROW_ID_CHARS then
-        head.id = run.uid
-        head.actions = {{id = M.RESUME_ID, label = "Resume"}}
+    if onHost and #run.uid >= 1 and #run.uid <= ROW_ID_CHARS then
+        if run.resumable then
+            head.id = run.uid
+            head.actions = {{id = M.RESUME_ID, label = "Resume"}}
+        elseif run.abandonable then
+            head.id = run.uid
+            head.tone = "error"
+            head.actions = {{id = M.ABANDON_ID, label = "Abandon"}}
+        end
     end
     local rows = {head}
     for _, line in widgets.wrap(run.reason, REASON_CHARS, REASON_LINES) do
@@ -75,14 +96,15 @@ local function heldRows(run: workersummary.Held, onHost: boolean): { WidgetCardR
     return rows
 end
 
--- The hover card (Tern 0.9.27+; an older Tern shows `title`): where the worker is, each held run as heldRows lays it out, then
--- what runs and the process. Held runs past Tern's row limit become one "and N more held" row.
-local function card(summary: Summary, onHost: boolean): { WidgetCardRow }
-    local rows: { WidgetCardRow } = {{label = "Worker", text = if onHost then "on the session host" else "on this machine", tone = "muted"}}
-    -- The Running and Process rows close the card.
+-- The hover card (Tern 0.9.27+; an older Tern shows `title`): each held run as heldRows lays it out, then what runs and which
+-- worker this is: its executor and pid, and "this machine" on the window half's widget, which reads its own machine's worker
+-- rather than the session host's. Held runs past Tern's row limit become one "and N more held" row.
+local function card(summary: Summary, onHost: boolean, now: number): { WidgetCardRow }
+    local rows: { WidgetCardRow } = {}
+    -- The Running and Worker rows close the card.
     local limit = CARD_ROWS - 2
     for index, run in summary.held do
-        local block = heldRows(run, onHost)
+        local block = heldRows(run, onHost, now)
         local more = if index < #summary.held then 1 else 0
         if #rows + #block + more > limit then
             table.insert(rows, {text = "and " .. (#summary.held - index + 1) .. " more held", tone = "muted"})
@@ -91,44 +113,72 @@ local function card(summary: Summary, onHost: boolean): { WidgetCardRow }
         for _, row in block do table.insert(rows, row) end
     end
     table.insert(rows, {label = "Running", text = tostring(summary.running)})
-    local process = tostring(summary.pid)
-    if summary.executor ~= "" then process ..= " on " .. summary.executor end
-    table.insert(rows, {label = "Process", text = widgets.cut(process, CARD_CHARS)})
+    local names = {}
+    if summary.executor ~= "" then table.insert(names, summary.executor) end
+    if not onHost then table.insert(names, "this machine") end
+    table.insert(names, "pid " .. summary.pid)
+    table.insert(rows, {label = "Worker", text = widgets.cut(table.concat(names, " · "), CARD_CHARS)})
     return rows
 end
 
-local function view(summary: Summary?, onHost: boolean, plugin: string): WidgetView?
+local function view(summary: Summary?, onHost: boolean, plugin: string, now: number): WidgetView?
     if summary == nil then return nil end
     local value = if summary.capacity > 0 then summary.inUse / summary.capacity else 0
     local held = #summary.held
     if held > 0 then
-        return {text = held .. " held", tone = "warning", title = title(summary, onHost), card = card(summary, onHost), command = widgets.commandId(plugin, M.SHOW_HELD_ID), value = value}
+        return {text = held .. " held", tone = "warning", title = title(summary, onHost), card = card(summary, onHost, now), command = widgets.commandId(plugin, M.SHOW_HELD_ID), value = value}
     end
     local text = if summary.running > 0 then summary.running .. " running" else "idle"
-    return {text = text, tone = "muted", title = title(summary, onHost), card = card(summary, onHost), command = widgets.commandId(plugin, M.OPEN_ID), value = value}
+    return {text = text, tone = "muted", title = title(summary, onHost), card = card(summary, onHost, now), command = widgets.commandId(plugin, M.OPEN_ID), value = value}
+end
+
+-- What the widget shows changes with the clock while runs are held (their ages): a caller that redraws only when this key
+-- changes, besides the summary itself, keeps the ages current to the minute.
+function M.clockKey(summary: Summary?, now: number): string
+    if summary == nil or #summary.held == 0 then return "" end
+    return tostring(now // 60)
 end
 
 -- What `tern.chrome.widget(M.ID, ...)` takes, for the half that draws the session host's worker (`onHost`) or this machine's;
--- `summary` is read at each render.
-function M.spec(plugin: string, onHost: boolean, summary: () -> Summary?): WidgetSpec
+-- `summary` is read at each render, and `clock` (Unix seconds; os.time by default) dates the held runs.
+function M.spec(plugin: string, onHost: boolean, summary: () -> Summary?, clock: (() -> number)?): WidgetSpec
+    local now: () -> number = clock or function() return os.time() end
     return {
         name = M.NAME,
         description = "What the kata worker on " .. (if onHost then "the session host" else "this machine") .. " is running, and the runs held for you; a click opens them",
         icon = "server",
         styles = {"text", "ring"} :: { WidgetStyle },
         render = function(_pane): WidgetView?
-            return view(summary(), onHost, plugin)
+            return view(summary(), onHost, plugin, now())
         end,
     }
 end
 
--- The window's stylesheet for this widget's hover card, which Tern draws as `.wgc[data-widget="<plugin>/<id>"]`: its Resume
--- buttons are solid pills in the theme's accent fill (with white text, as the Pane's selected rows use it), where Tern's
--- own card buttons are plain text. A window without this plugin draws them plain.
+-- The window's stylesheet for this widget's hover card, which Tern draws as `.wgc[data-widget="<plugin>/<id>"]` with one
+-- `.wgc-plugin-row` per card row (`.bare` without a label, `data-tone` its tone). It gives the card the built-in Agents card's
+-- hierarchy, where Tern draws every plugin row alike: a held run's job is its title, its Issue a chip (cut with an ellipsis
+-- before the button is), its reason a muted paragraph behind a rule in the warning colour, runs are spaced apart, and Running
+-- and Worker sit under a line as the card's footer. Resume is a solid pill in the theme's accent fill (with white text, as the
+-- Pane's selected rows use it); Abandon, on the error-toned rows, an outlined pill in the error colour, so the button that
+-- ends a run does not look like the one that continues it. Tern's own card buttons are plain text. A window without this
+-- plugin, or a Tern whose card markup changed, draws the card plain.
 function M.css(plugin: string): string
-    local button = '.wgc[data-widget="' .. plugin .. "/" .. M.ID .. '"] .wgc-plugin-act'
-    return button .. " {\n\tborder-radius: 999px;\n\tpadding: 0 10px;\n\tcolor: #fff;\n\tbackground-color: var(--accent-fill);\n}\n"
-        .. button .. ":hover {\n\tbackground-color: color-mix(in srgb, var(--accent-fill) 85%, #000);\n}\n"
+    local card = '.wgc[data-widget="' .. plugin .. "/" .. M.ID .. '"]'
+    local head = card .. " .wgc-plugin-row:has(.wgc-plugin-link, .wgc-plugin-act)"
+    local abandon = card .. ' .wgc-plugin-row[data-tone="error"] .wgc-plugin-act'
+    return table.concat({
+        head .. " {\n\tmargin-top: 6px;\n}",
+        head .. " .wgc-k {\n\tflex: none;\n\tcolor: var(--t1);\n\tfont-weight: 600;\n}",
+        card .. " .wgc-plugin-link {\n\tflex: 0 1 auto;\n\tmin-width: 0;\n\tmargin-left: 2px;\n\tpadding: 1px 6px;\n\tborder-radius: 5px;\n\toverflow: hidden;\n\ttext-overflow: ellipsis;\n\twhite-space: nowrap;\n\tcolor: var(--t1);\n\tbackground-color: color-mix(in srgb, var(--t1) 8%, transparent);\n\ttext-decoration: none;\n}",
+        card .. " .wgc-plugin-link:hover {\n\tcolor: var(--accent);\n}",
+        card .. ' .wgc-plugin-row.bare[data-tone="warn"] {\n\tmin-height: 0;\n\theight: 18px;\n\tmargin-left: 2px;\n\tpadding-left: 10px;\n\tborder-left: 2px solid var(--warn);\n}',
+        card .. ' .wgc-plugin-row.bare[data-tone="warn"] .wgc-v {\n\tcolor: var(--t2);\n}',
+        card .. " .wgc-plugin-row:nth-last-child(2) {\n\tmargin-top: 6px;\n\tpadding-top: 6px;\n\tborder-top: 1px solid color-mix(in srgb, var(--t1) 12%, transparent);\n}",
+        card .. " .wgc-plugin-act {\n\tflex: none;\n\tmargin-left: auto;\n\tborder: 1px solid transparent;\n\tborder-radius: 999px;\n\tpadding: 0 10px;\n\tcolor: #fff;\n\tbackground-color: var(--accent-fill);\n}",
+        card .. " .wgc-plugin-act:hover {\n\tbackground-color: color-mix(in srgb, var(--accent-fill) 85%, #000);\n}",
+        abandon .. " {\n\tcolor: var(--bad);\n\tbackground-color: transparent;\n\tborder-color: color-mix(in srgb, var(--bad) 55%, transparent);\n}",
+        abandon .. ":hover {\n\tbackground-color: color-mix(in srgb, var(--bad) 14%, transparent);\n}",
+    }, "\n") .. "\n"
 end
 
 return M

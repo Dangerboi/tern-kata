@@ -38,9 +38,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Jobs and worker
 
-- On Tern 0.9.27 and later hovering the kata worker widget shows a card listing each held run by its job and Issue, with the hold reason under it on up to three lines, then the running count, process and executor.
+- On Tern 0.9.27 and later hovering the kata worker widget shows a card listing each held run by its job, how long it has been held and its Issue, with the hold reason under it on up to three lines, then the running count and the worker's executor and pid.
   - A click on a held run's Issue opens it in kata.
   - A **Resume** button on a run the worker would resume resumes it, as `u` on the Runs Page does, and toasts the worker's answer.
+  - A run the worker can no longer resume, such as one whose omp session is gone, gets an **Abandon** button instead, as `A` on the Runs Page.
   - An older Tern keeps the tooltip.
 
 ### Changed

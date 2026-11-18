@@ -88,22 +88,37 @@ local function fakeKv(initial: any, failGet: boolean?): (workersummary.Kv, { [st
     return kv, data
 end
 
-test("a held run carries its uid, job and whether the worker would resume it; a binary without them gives none", function()
+test("a held run carries its uid, job, held time and the verbs the worker would take; a binary without them gives none", function()
     local runs: { any } = {
-        { UID = "01RUNA", Job = "review", Issue = "k#1", Held = true, Hold = "interrupted", Resumable = true, EndedAt = ZERO },
-        { UID = "01RUNB", Issue = "k#2", Held = true, Hold = "agent_login", Resumable = false, EndedAt = ZERO },
-        { Issue = "k#3", Held = true, Hold = "interrupted", EndedAt = ZERO },
+        { UID = "01RUNA", Job = "review", Issue = "k#1", Held = true, Hold = "interrupted", Resumable = true, Abandonable = true, EndedAt = "2026-11-18T09:00:00.123456789+01:00" },
+        { UID = "01RUNB", Issue = "k#2", Held = true, Hold = "agent_login", Resumable = false, Abandonable = true, EndedAt = ZERO },
+        { Issue = "k#3", Held = true, Hold = "interrupted" },
     }
     local got = workersummary.of({ PID = 1, Runs = runs })
     assert(got ~= nil and #got.held == 3)
-    assert(got.held[1].uid == "01RUNA" and got.held[1].job == "review" and got.held[1].resumable)
-    assert(got.held[2].job == "")
-    assert(got.held[2].uid == "01RUNB" and not got.held[2].resumable)
-    assert(got.held[3].uid == "" and not got.held[3].resumable)
+    local a, b, c = got.held[1], got.held[2], got.held[3]
+    assert(a.uid == "01RUNA" and a.job == "review" and a.resumable and a.abandonable and a.heldAt == workersummary.epoch("2026-11-18T08:00:00Z"))
+    assert(b.uid == "01RUNB" and b.job == "" and not b.resumable and b.abandonable and b.heldAt == nil)
+    assert(c.uid == "" and not c.resumable and not c.abandonable and c.heldAt == nil)
     local kv = fakeKv(nil)
     assert(workersummary.save(kv, got, 1) == nil)
     local record = workersummary.load(kv, nil)
-    assert(record ~= nil and record.worker.held[1].uid == "01RUNA" and record.worker.held[1].job == "review" and record.worker.held[1].resumable and not record.worker.held[2].resumable)
+    assert(record ~= nil)
+    local back = record.worker.held
+    assert(back[1].uid == "01RUNA" and back[1].job == "review" and back[1].resumable and back[1].abandonable and back[1].heldAt == a.heldAt)
+    assert(not back[2].resumable and back[2].abandonable and back[2].heldAt == nil)
+end)
+
+test("epoch reads the RFC 3339 stamps Go writes, in any zone, and nothing else", function()
+    assert(workersummary.epoch("1970-01-01T00:00:00Z") == 0)
+    assert(workersummary.epoch("2000-03-01T00:00:00Z") == 951868800)
+    assert(workersummary.epoch("2026-11-18T08:00:00Z") == 1794988800)
+    assert(workersummary.epoch("2026-11-18T09:00:00+01:00") == 1794988800)
+    assert(workersummary.epoch("2026-11-17T22:30:00.5-09:30") == 1794988800)
+    assert(workersummary.epoch("2024-02-29T12:00:00Z") == 1709208000)
+    for _, bad in {"", ZERO, "2026-11-18", "2026-11-18T08:00:00", "2026-11-18T08:00:00+0100", "yesterday"} do
+        assert(workersummary.epoch(bad) == nil, bad)
+    end
 end)
 
 test("a saved summary loads back and is fresh until STALE_S seconds after its stamp", function()
