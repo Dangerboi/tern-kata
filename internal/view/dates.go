@@ -22,17 +22,19 @@ func datesLayer(m model.Model) tern.Element {
 		text := form.Value(name)
 		children = append(children,
 			toneText(string(name)+"-label", tone, label),
-			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T("none"), Readonly: form.Saving}},
+			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T("YYYY-MM-DD"), Readonly: form.Saving}},
 			toneText(string(name)+"-preview", ui.ToneMuted, m.DatesPreview(name)))
+		if form.Field == name {
+			children = append(children, toneText("hint", ui.ToneMuted, "Date like 2026-11-20, today, tomorrow or +3d. Blank clears it."))
+		}
 	}
-	children = append(children, toneText("note", ui.ToneMuted, "Type "+model.DateInputHint+", or press "+calendarKey(model.ModeDatesForm)+" for a calendar. Leave a field blank to clear it."))
 	if form.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
 	if form.Saving {
-		children = append(children, toneText("pending", ui.TonePending, "Saving dates…"))
+		children = append(children, toneText("pending", ui.TonePending, model.Progress("Saving", "")))
 	} else {
-		children = append(children, buttonRow(cardButton("save", model.ModeDatesForm, model.DatesSubmit, "Save dates", true), cardButton("cancel", model.ModeDatesForm, model.DatesCancel, "Cancel", false)))
+		children = append(children, formFoot(cardButton("save", model.ModeDatesForm, model.DatesSubmit, "Save", true), exitButton("cancel", model.ModeDatesForm, model.DatesCancel, "Cancel")))
 	}
-	return withCalendar(m, model.CardDates, ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDates)}, Head: ui.T("Dates"), Icon: ui.IconClock, Modal: true, Size: ui.SizeLG}, children)))
+	return withCalendar(m, model.CardDates, ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDates)}, Head: ui.T("Dates"), Meta: refMeta(form.Ref), Icon: ui.IconClock, Modal: true, Size: ui.SizeLG}, children)))
 }

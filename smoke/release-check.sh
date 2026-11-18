@@ -78,7 +78,7 @@ expect_no_toast() {
   for round in {1..15}; do pump; sleep 0.1; done
   if tree_has "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
 }
-out_toast='tern-kata v9.9.9 is out (this window'"'"'s plugin is v0.0.1)'
+out_toast='tern-kata v9.9.9 is available (this window has v0.0.1)'
 clear_kv() { find "$TERN_CONFIG_DIR" -name kv.json -delete; }
 
 
@@ -109,7 +109,7 @@ start_tern
 kv=$(find "$TERN_CONFIG_DIR" -name kv.json)
 jq -n --argjson at "$(date +%s)" '{"update.pending": {version: "0.0.1", at: $at, done: true}, "release_check.last": $at}' >"$kv"
 ctl plugins fixtures
-expect_toast 'tern-kata plugin updated to v0.0.1'
+expect_toast 'Updated the tern-kata plugin to v0.0.1.'
 [[ $(jq 'has("update.pending")' "$kv") == false ]]
 stop_tern
 
@@ -120,7 +120,7 @@ if tern_at_least 0.9.16; then
   kv=$(find "$TERN_CONFIG_DIR" -name kv.json)
   jq -n --argjson at "$(date +%s)" '{"update.pending": {version: "0.0.1", at: $at}, "release_check.last": $at}' >"$kv"
   ctl plugins fixtures
-  expect_no_toast 'tern-kata plugin updated'
+  expect_no_toast 'Updated the tern-kata plugin'
   [[ $(jq 'has("update.pending")' "$kv") == true ]]
   stop_tern
 fi
@@ -138,7 +138,7 @@ clear_kv
 start_tern
 expect_no_toast "$out_toast"
 [[ $(fetches) -eq $((fetches_before + 2)) ]]
-printf 'palette "Turn tern-kata update checks off/on"\nkey Enter\n' >"$tmp/palette.ctl"
+printf 'palette "Toggle update checks"\nkey Enter\n' >"$tmp/palette.ctl"
 ctl --file "$tmp/palette.ctl"
 expect_toast 'A linked plugin never checks'
 stop_tern

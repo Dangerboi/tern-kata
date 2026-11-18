@@ -45,27 +45,27 @@ tr_activity="main.columns.detail.viewport.content.activity"
 tr_label() { expect_tree "[data-id='$tr_tab$1']" ".ok and (.nodes[0].text | $2)"; }
 tr_cards="[data-id^='$tr_activity.'].sf-card"
 ctl key enter
-tr_label 0 'startswith("[ Comments (4) ]")'
+tr_label 0 '. == "Comments 4"'
 
 # To the Attachments tab (empty), then to the bottom of the detail.
 ctl key shift+Tab
-tr_label 3 'startswith("[ Attachments (0) ]")'
+tr_label 3 '. == "Attachments"'
 tr_scroll_to_bottom
 expect_tree "[data-id='$tr_activity.empty']" '.ok and .count == 1'
 
 # tab wraps to Comments, taller than the empty line: its last card must be in view, the tab names too.
 ctl key Tab
-tr_label 0 'startswith("[ Comments (4) ]")'
+tr_label 0 '. == "Comments 4"'
 expect_tree "$tr_cards" '.ok and .count == 4'
 tr_wait_inside "tab to Comments" "$tr_cards"
 tr_wait_inside "tab to Comments, tab names" "[data-id='$tr_activity.tabs']"
 
 # The same by a click on a tab name: to the bottom on Attachments again, click Comments.
 ctl key shift+Tab
-tr_label 3 'startswith("[ Attachments (0) ]")'
+tr_label 3 '. == "Attachments"'
 tr_scroll_to_bottom
 ctl click "[data-id='${tr_tab}0']"
-tr_label 0 'startswith("[ Comments (4) ]")'
+tr_label 0 '. == "Comments 4"'
 tr_wait_inside "click on Comments" "$tr_cards"
 
 quit_app

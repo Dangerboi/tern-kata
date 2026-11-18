@@ -11,15 +11,30 @@ import (
 type VerbTone string
 
 const (
-	VerbAccent  VerbTone = "accent"
 	VerbSuccess VerbTone = "success"
-	VerbWarning VerbTone = "warning"
+	VerbMuted   VerbTone = "muted"
 )
 
-// DetailTime is the one time rule of the detail: Events, comments and the Created/Updated properties read
-// like 2026-10-09 22:42, in the Pane calendar.
+// DetailTime is the one time rule of the detail: Events, comments and the meta line read like 18:21 today and 2026-10-09 22:42
+// on any other day, in the Pane calendar.
 func (m Model) DetailTime(t time.Time) string {
-	return m.Calendar.Stamp(t)
+	return m.Calendar.Read(t, m.Now)
+}
+
+// EventHidden says the Events tab does not list the event: it only lists changes to the Issue, and the Issue's meta line already
+// says who created it and when. Comments live on the Comments tab, and a notification slot's rows (told someone about a reply)
+// are bookkeeping, not a change to the Issue.
+func EventHidden(event Event) bool {
+	switch event.Type {
+	case "issue.created", "issue.commented", "issue.comment_edited":
+		return true
+	case "issue.metadata_updated":
+		payload, _ := decodePayload(event.Payload)
+		diff, _ := payload["diff"].(map[string]any)
+		_, notification := slotDiff(diff)
+		return notification
+	}
+	return false
 }
 
 // historyRow phrases one event as "<actor> <verb> <object>". Only issue.closed carries a detail
@@ -30,7 +45,7 @@ func (m Model) historyRow(event Event) DetailRow {
 	verb, object, detail, tone := "", "", "", VerbTone("")
 	switch event.Type {
 	case "issue.created":
-		verb, object, tone = "created", "this Issue", VerbAccent
+		verb, object = "created", "this Issue"
 	case "issue.commented":
 		verb = "commented"
 	case "issue.comment_edited":
@@ -40,13 +55,14 @@ func (m Model) historyRow(event Event) DetailRow {
 	case "issue.unassigned":
 		verb = "unassigned"
 	case "issue.closed":
-		verb, object, detail, tone = "closed:", payload.text("reason"), closeDetail(payload, m.currentMetadata()), VerbSuccess
+		verb, object, tone = "closed", closeReason(payload.text("reason")), closeTone(payload.text("reason"))
+		detail = closeDetail(payload, m.currentMetadata())
 	case "issue.reopened":
-		verb, tone = "reopened", VerbWarning
+		verb = "reopened"
 	case "issue.labeled":
-		verb, object = "added label", "`"+payload.text("label")+"`"
+		verb, object = "added label", payload.text("label")
 	case "issue.unlabeled":
-		verb, object = "removed label", "`"+payload.text("label")+"`"
+		verb, object = "removed label", payload.text("label")
 	case "issue.priority_set":
 		verb, object = "set priority to", payload.text("priority")
 	case "issue.priority_cleared":
@@ -88,6 +104,30 @@ func (m Model) historyRow(event Event) DetailRow {
 		}
 	}
 	return row
+}
+
+// closeReason is the object of a closed event: "as done", "as won't fix"; the reason's words in lowercase, and an unknown code as it
+// is. A close with no reason reads just "closed".
+func closeReason(code string) string {
+	if code == "" {
+		return ""
+	}
+	words := CloseReasonWords(code)
+	if words != code {
+		words = strings.ToLower(words[:1]) + words[1:]
+	}
+	return "as " + words
+}
+
+// closeTone is success for a close as done, muted for a close that is not a completion, and plain for a code kata adds later.
+func closeTone(code string) VerbTone {
+	switch {
+	case code == "done":
+		return VerbSuccess
+	case CloseReasonWords(code) != code:
+		return VerbMuted
+	}
+	return ""
 }
 
 // assignmentRenewed and assignmentExpired word the timed-assignment events as kata tui does, with the time as the payload has it.
@@ -201,17 +241,20 @@ func closeDetail(p payloadMap, current map[string]any) string {
 		evidence = append(evidence, strings.Join(parts, " "))
 	}
 	message, list := strings.TrimSpace(p.text("message")), strings.Join(evidence, ", ")
+	if list != "" {
+		list = "Evidence: " + list
+	}
 	switch {
 	case message == "":
 		return list
 	case list == "":
 		return message
 	}
-	return message + " (" + list + ")"
+	return message + "\n\n" + list
 }
 
-// attachmentEvidence is how an attachment evidence entry reads in a close: "attachment <name>", with [changed] when the Issue
-// has another version of the file now and [removed] when it no longer has the Attachment. The name comes from the copy kata froze
+// attachmentEvidence is how an attachment evidence entry reads in a close: "attachment <name>", with (changed) when the Issue
+// has another version of the file now and (removed) when it no longer has the Attachment. The name comes from the copy kata froze
 // into the evidence, so it survives the Attachment's removal. An entry with no copy reads from the Issue's current Attachment,
 // like kata's web UI; one that has neither reads "Attachment removed", and one whose copy is no reference "Invalid attachment".
 func attachmentEvidence(fields map[string]any, metadata map[string]any) string {
@@ -229,9 +272,9 @@ func attachmentEvidence(fields map[string]any, metadata map[string]any) string {
 	}
 	switch {
 	case !nowOK:
-		return "attachment " + frozen.Name + " [removed]"
+		return "attachment " + frozen.Name + " (removed)"
 	case !strings.EqualFold(now.Version, frozen.Version):
-		return "attachment " + frozen.Name + " [changed]"
+		return "attachment " + frozen.Name + " (changed)"
 	}
 	return "attachment " + frozen.Name
 }
@@ -255,7 +298,14 @@ func editedFields(p payloadMap) string {
 
 var inverseRelation = map[string]string{"parent": "child", "child": "parent", "blocks": "blocked_by", "blocked_by": "blocks"}
 
-func relationName(relation string) string { return strings.ReplaceAll(relation, "_", " ") }
+// relationLabel is a Links row's label: the relation in words, capitalised.
+func relationLabel(relation string) string {
+	words := RelationWords(relation)
+	if words == "" {
+		return words
+	}
+	return strings.ToUpper(words[:1]) + words[1:]
+}
 
 func linkObject(event Event, p payloadMap) string {
 	relation, peer := p.text("type"), p.text("to_short_id")
@@ -265,7 +315,7 @@ func linkObject(event Event, p payloadMap) string {
 	if incoming, _ := p["incoming"].(bool); incoming && inverseRelation[relation] != "" {
 		relation = inverseRelation[relation]
 	}
-	return relationName(relation) + " " + peer
+	return RelationWords(relation) + " " + peer
 }
 
 type linkField struct{ field, relation string }
@@ -299,7 +349,7 @@ func linksChanged(p payloadMap) (verb, object string) {
 	case len(added) == 0:
 		return "unlinked", strings.Join(removed, ", ")
 	}
-	return "changed links:", strings.Join(append(collect(linkAdds, "+"), collect(linkRemoves, "-")...), ", ")
+	return "changed links", strings.Join(append(collect(linkAdds, "+"), collect(linkRemoves, "-")...), ", ")
 }
 
 // metadataChanged phrases schedule and deadline changes, and names the keys
@@ -332,12 +382,58 @@ func metadataChanged(p payloadMap) (verb, object string) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	for i, key := range keys {
-		if address, ok := NotificationAddress(key); ok {
-			keys[i] = address
+	var attached, removed, others []string
+	for _, key := range keys {
+		if id, ok := strings.CutPrefix(key, attachmentKeyPrefix); ok {
+			change, _ := diff[key].(map[string]any)
+			if name, set := changedAttachment(id, change); set {
+				attached = append(attached, name)
+			} else {
+				removed = append(removed, name)
+			}
+			continue
+		}
+		if word := metadataKeyWords(key); !slices.Contains(others, word) {
+			others = append(others, word)
 		}
 	}
-	return "updated metadata:", strings.Join(keys, ", ")
+	switch {
+	case len(others) == 0 && len(removed) == 0:
+		return "attached", strings.Join(attached, ", ")
+	case len(others) == 0 && len(attached) == 0:
+		return "removed", strings.Join(removed, ", ")
+	}
+	return "updated", strings.Join(append(append(others, attached...), removed...), ", ")
+}
+
+// changedAttachment is the file name in one attachment key's diff and whether the diff set it (false: it removed it). A name that
+// cannot be read is "an attachment".
+func changedAttachment(id string, change map[string]any) (name string, set bool) {
+	set = change["to"] != nil
+	value := change["from"]
+	if set {
+		value = change["to"]
+	}
+	if ref, ok := attachmentRef(id, value); ok {
+		return ref.Name, set
+	}
+	return "an attachment", set
+}
+
+// metadataKeyWords is a metadata key as words: a notification slot as its address, the Work attention keys as "Work attention",
+// and any other key with its dots and underscores read as spaces.
+func metadataKeyWords(key string) string {
+	if address, ok := NotificationAddress(key); ok {
+		return address
+	}
+	if key == WorkAttentionKey || key == WorkAttentionMsgKey {
+		return "Work attention"
+	}
+	words := strings.NewReplacer(".", " ", "_", " ").Replace(key)
+	if words == "" {
+		return words
+	}
+	return strings.ToLower(words[:1]) + words[1:]
 }
 
 func movedTo(event Event, p payloadMap) string {

@@ -61,10 +61,10 @@ func submitProject(m Model) (Model, []Cmd) {
 	name := strings.TrimSpace(form.Name)
 	switch {
 	case name == "":
-		form.Err = errors.New("Name is required.")
+		form.Err = cardFailure("create", "Project", errors.New("a name is required"))
 		return m, nil
 	case m.Stale:
-		form.Err = errors.New("Daemon disconnected; reconnect before creating a Project.")
+		form.Err = cardFailure("create", "Project", ErrDisconnected)
 		return m, nil
 	}
 	form.Saving, form.Err = true, nil
@@ -97,7 +97,7 @@ func projectSaved(m Model, msg ProjectSaved) (Model, []Cmd) {
 		return m, nil
 	}
 	if msg.Err != nil {
-		m.ProjectForm.Saving, m.ProjectForm.Err = false, msg.Err
+		m.ProjectForm.Saving, m.ProjectForm.Err = false, cardFailure("create", "Project", msg.Err)
 		return m, nil
 	}
 	if m.ProjectForm.Bind {

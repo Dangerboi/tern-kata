@@ -1,7 +1,9 @@
 package view
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -10,50 +12,57 @@ import (
 
 const AttentionListID = "main.columns.list.attention"
 
-func attention(m model.Model) tern.Element {
+func attention(m model.Model, now time.Time) tern.Element {
 	address, refusal := m.InboxAddress()
-	spans := []ui.Span{{T: "Attention", S: "strong"}}
-	if refusal == nil {
-		spans = append(spans, ui.Span{T: " " + m.AttentionHeader(), S: "muted"})
-	}
-	if m.Attention.Loading {
-		spans = append(spans, loadingMarker)
-	}
-	children := ui.Nodes(heading(spans...))
 	if refusal != nil {
-		children = append(children, plainText("refused", ui.ToneError, "The Inbox address is refused: "+refusal.Error()))
+		children := ui.Nodes(pageHead("heading", "Attention"), toneText("refused", ui.ToneError, model.Cannot("read", "your inbox", refusal)))
 		return listPanel(m, 1, children)
 	}
+	// The count waits for the first answer: a zero before it would read as an empty inbox.
+	count, loading := "", ""
+	if m.Attention.Loaded {
+		count = strconv.Itoa(len(m.Attention.Requests))
+	}
+	if m.Attention.Loading {
+		loading = "loading…"
+	}
+	children := ui.Nodes(pageHead("heading", "Attention", count, m.AttentionHeader(), loading))
 	if m.Attention.Err != nil {
-		children = append(children, plainText("error", ui.ToneError, m.Attention.Err.Error()))
+		children = append(children, toneText("error", ui.ToneError, model.Cannot("read", "the requests", m.Attention.Err)))
 	}
 	cards := make([]tern.Element, len(m.Attention.Requests))
 	for i, request := range m.Attention.Requests {
-		cards[i] = attentionCard(request, request.IssueUID == m.Attention.Selected)
+		cards[i] = attentionCard(m, request, request.IssueUID == m.Attention.Selected, now)
 	}
 	empty := "Loading requests…"
 	if m.Attention.Err != nil {
 		empty = "The requests could not be read."
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("attention"), Max: fillMax, Empty: ui.T(empty), Children: cards}
-	children = append(children, listAndEmpty(list, !m.Attention.Loaded, emptyState("No requests", "Nothing is waiting on "+address+"; a request shows here when someone asks it."))...)
+	children = append(children, listAndEmpty(list, !m.Attention.Loaded, emptyState("No requests", "Requests addressed to "+address+" appear here."))...)
 	return listPanel(m, 1, children)
 }
 
-func attentionCard(request model.AttentionRequest, selected bool) tern.Element {
-	head := headRow(
-		ui.Text{Common: ui.Common{Key: "issue"}, Spans: []ui.Span{{T: request.QualifiedID(), S: toneStyle(ui.ToneInfo)}}, Wrap: ui.WrapNone},
+// attentionCard is one request: the Issue's title and ref on the left, who asked and how long ago on the right, then the
+// message, whole on the selected card and its first line on the others. The age carries the absolute time in a hovercard.
+func attentionCard(m model.Model, request model.AttentionRequest, selected bool, now time.Time) tern.Element {
+	left := ui.Nodes(
 		ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: request.Title, S: "strong"}}},
+		ui.Text{Common: ui.Common{Key: "issue"}, Spans: []ui.Span{refSpan(request.QualifiedID(), true)}, Wrap: ui.WrapNone},
 	)
-	who := []string{request.Sender(), request.Tag()}
-	if handle := request.CommentHandle(); handle != "" {
-		who = append(who, handle)
+	if tag := request.Tag(); tag != "" {
+		left = append(left, ui.Badge{Common: ui.Common{Key: "tag", Tone: ui.ToneMuted}, Text: tag})
 	}
-	tone := ui.ToneWarning
-	if request.Slot.Kind != "" || request.Slot.Broadcast {
-		tone = ui.ToneInfo
+	if request.Slot.Re != "" {
+		left = append(left, ui.Text{Common: ui.Common{Key: "comment", Tone: ui.ToneMuted}, Text: "on a comment", Wrap: ui.WrapNone})
 	}
-	body := ui.Nodes(head, ui.Text{Common: ui.Common{Key: "who", Tone: tone}, Text: strings.Join(who, " · "), Wrap: ui.WrapNone})
+	who := ui.Text{Common: ui.Common{Key: "who", Tone: ui.ToneMuted}, Text: request.Sender() + " · " + model.RelativeTime(request.Updated, now), Wrap: ui.WrapNone}
+	if !request.Updated.IsZero() {
+		who.Hovercard = ui.Hovercard{Element: ui.Text{Common: ui.Common{Key: "stamp"}, Spans: []ui.Span{timeSpan(m.Calendar.Stamp(request.Updated))}}}
+	}
+	head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
+		ui.Row{Common: ui.Common{Key: "subject"}, Gap: ui.GapMD, Wrap: true, Children: left}, who)}
+	body := ui.Nodes(head)
 	if selected {
 		body = append(body, ui.Text{Common: ui.Common{Key: "message"}, Text: strings.TrimSpace(request.Slot.Message)})
 	} else {

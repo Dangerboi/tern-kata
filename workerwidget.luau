@@ -33,15 +33,40 @@ local REASON_CHARS = 44
 local REASON_LINES = 3
 local JOB_CHARS = 24
 
+-- The words for a hold code, the Lua twin of `HoldWords` in words.go; a code from a newer kata stays as it is.
+local HOLD_WORDS: { [string]: string } = {
+    agent_quota = "Quota reached",
+    agent_login = "Login required",
+    interrupted = "Interrupted",
+    launch_unproven = "Launch not confirmed",
+    no_receipt = "No receipt from the agent",
+    group_unproven = "Process group not confirmed",
+    invalid_prompt = "Invalid prompt",
+    execution_error = "Execution error",
+    admission_rejected = "Admission rejected",
+    create_rejected = "Create rejected",
+    secret_unavailable = "Secret unavailable",
+}
+
+-- A hold as the worker reports it is its code, or its code and its sentence ("agent_quota: out of tokens"): the code
+-- becomes words and the sentence follows it.
+local function holdWords(reason: string): string
+    local code, rest = reason:match("^([%w_]+): (.*)$")
+    if code == nil then return HOLD_WORDS[reason] or reason end
+    local words = HOLD_WORDS[code]
+    if words == nil then return reason end
+    return words .. ": " .. (rest :: string)
+end
+
 -- The tooltip, which a Tern before 0.9.27 shows instead of the card (`card` below). Its lines are written so that what each
 -- line is for survives Tern's cut at LINE_CHARS (widgets.fit): the first line is where the worker is, a held run is its hold
--- (whose code comes first, "agent_quota: ...") and then its Issue, and the
+-- (whose words come first, "Quota reached: ...") and then its Issue, and the
 -- executor, which can be a long host name, is last on the last line. The job is left out; the Issue names it. The host half's
 -- widget shows the session host's worker in every window attached to it, while the window half's reads the worker of the
 -- machine the window itself runs on, which on a remote window is not the session host.
 local function title(summary: Summary, onHost: boolean): string
     local held: { string } = {}
-    for _, run in summary.held do table.insert(held, run.reason .. " " .. run.ref) end
+    for _, run in summary.held do table.insert(held, holdWords(run.reason) .. " " .. run.ref) end
     local lines = {"Worker " .. (if onHost then "on the session host" else "on this machine")}
     for _, line in widgets.capped(held) do table.insert(lines, line) end
     table.insert(lines, widgets.fit(summary.running .. " running, process " .. summary.pid .. ", " .. summary.executor))
@@ -56,13 +81,15 @@ local function issueLink(ref: string): string?
     return "https://kata.invalid/" .. project .. "/" .. short
 end
 
--- How long ago `since` was at `now` (Unix seconds), in the largest whole unit: "<1 m", "12 m", "3 h", "2 d".
+-- How long ago `since` was at `now` (Unix seconds), in the largest whole unit, with no space: "<1m", "12m", "3h", "2d", "1w". The widget
+-- redraws once a minute, so there are no seconds.
 function M.age(since: number, now: number): string
     local seconds = math.max(0, now - since)
-    if seconds < 60 then return "<1 m" end
-    if seconds < 3600 then return seconds // 60 .. " m" end
-    if seconds < 86400 then return seconds // 3600 .. " h" end
-    return seconds // 86400 .. " d"
+    if seconds < 60 then return "<1m" end
+    if seconds < 3600 then return seconds // 60 .. "m" end
+    if seconds < 86400 then return seconds // 3600 .. "h" end
+    if seconds < 7 * 86400 then return seconds // 86400 .. "d" end
+    return seconds // (7 * 86400) .. "w"
 end
 
 -- The rows of one held run, as a heading, a byline and a body:
@@ -83,7 +110,7 @@ local function heldRows(run: workersummary.Held, onHost: boolean, now: number): 
         href = issueLink(run.ref),
         tone = "accent",
     }
-    local byline = if run.job ~= "" then widgets.cut(run.job, JOB_CHARS) else "held"
+    local byline = if run.job ~= "" then widgets.cut(run.job, JOB_CHARS) else "Held"
     if run.heldAt ~= nil then byline ..= " · " .. M.age(run.heldAt, now) end
     local meta: WidgetCardRow = {label = byline, text = "", tone = "muted"}
     if onHost and #run.uid >= 1 and #run.uid <= ROW_ID_CHARS then
@@ -97,7 +124,7 @@ local function heldRows(run: workersummary.Held, onHost: boolean, now: number): 
         end
     end
     local rows = {head, meta}
-    for _, line in widgets.wrap(run.reason, REASON_CHARS, REASON_LINES) do
+    for _, line in widgets.wrap(holdWords(run.reason), REASON_CHARS, REASON_LINES) do
         table.insert(rows, {text = line, tone = "warn"})
     end
     return rows

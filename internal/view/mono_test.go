@@ -59,19 +59,20 @@ func TestListRowMachineStringsAreMono(t *testing.T) {
 	}
 }
 
+// The counts sit in the context line under the top bar and the position counter in the footer: both are muted sans, since a
+// count is a word's number and mono is for ids, times, versions and aligned columns. The name predates that rule.
 func TestTopBarCountsAndPositionAreMono(t *testing.T) {
 	nodes := render(t, browsing())
-	counts := nodes["main.topbar.counts"]
-	got := monoRuns(counts)
-	if len(got) != 3 || strings.Join(got, "") == "" {
+	counts := nodes["main.filters.counts"]
+	if got := monoRuns(counts); len(got) != 0 {
 		t.Errorf("counts mono spans %q, spans %v", got, spansOf(counts.P))
 	}
-	if got := text(counts); !strings.HasPrefix(got, "open: ") {
+	if got := text(counts); !strings.Contains(got, " open · ") || !strings.HasSuffix(got, " closed") {
 		t.Errorf("counts text = %q", got)
 	}
 	position := nodes["dock.hints.position"]
-	if len(monoRuns(position)) != 1 {
-		t.Errorf("position is not mono: %v", spansOf(position.P))
+	if len(monoRuns(position)) != 0 || !strings.Contains(text(position), " of ") {
+		t.Errorf("position %q is mono or not N of M: %v", text(position), spansOf(position.P))
 	}
 }
 
@@ -85,18 +86,16 @@ func TestDetailMachineStringsAreMono(t *testing.T) {
 		model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
 	props := view.DetailContentID + ".properties"
 	wantMono(t, "heading id", nodes[view.DetailContentID+".heading.title"], "#aaaa")
-	for _, key := range []string{"created", "updated"} {
-		n := nodes[props+"."+key+".v"]
-		wantMono(t, key, n, text(n))
+	when := at.In(tokyo).Format("2006-01-02 15:04")
+	wantMono(t, "meta line", nodes[props+".meta"], when, when)
+	if role, _ := nodes[props+".scheduled.v"].P["role"].(string); !strings.Contains(role, view.MonoRole) {
+		t.Errorf("scheduled badge role = %q", role)
 	}
-	wantMono(t, "children", nodes[props+".children.v"], "1", "1")
-	for _, key := range []string{"priority", "scheduled"} {
-		if role, _ := nodes[props+"."+key+".v"].P["role"].(string); !strings.Contains(role, view.MonoRole) {
-			t.Errorf("%s badge role = %q", key, role)
-		}
+	if role, _ := nodes[props+".priority.v"].P["role"].(string); strings.Contains(role, view.MonoRole) {
+		t.Errorf("priority badge role = %q, want the sans face", role)
 	}
-	if wantAuthor := nodes[props+".author.v"]; len(monoRuns(wantAuthor)) != 0 {
-		t.Errorf("the author is mono: %v", spansOf(wantAuthor.P))
+	if got := monoRuns(nodes[props+".owner.v"]); len(got) != 0 {
+		t.Errorf("the owner is mono: %v", got)
 	}
 }
 
@@ -109,7 +108,10 @@ func TestPropertyKeysShareOneBox(t *testing.T) {
 		t.Fatalf("%d properties", len(props.C))
 	}
 	for _, row := range props.C {
-		key := nodes[row.ID+".k"]
+		key, ok := nodes[row.ID+".k"]
+		if !ok {
+			continue // the created line is not a property
+		}
 		if role, _ := key.P["role"].(string); role != view.PropertyKeyRole {
 			t.Errorf("%s role = %q", row.ID, role)
 		}
@@ -119,16 +121,17 @@ func TestPropertyKeysShareOneBox(t *testing.T) {
 	}
 }
 
-// The header's labels over the mono cells are mono as well, so a column's header and rows share one box width in px.
+// The header's boxed labels are mono like the cells under them, so a column's header and rows share one box width in px; the
+// Title label is sans.
 func TestListHeaderLabelsOverMonoCellsAreMono(t *testing.T) {
 	header := render(t, browsing())["main.columns.list.header"]
-	var monos []string
 	for _, run := range styled(header) {
-		if slices.Contains(strings.Fields(run[1]), "mono") {
-			monos = append(monos, strings.TrimSpace(run[0]))
+		isMono := slices.Contains(strings.Fields(run[1]), "mono")
+		if strings.TrimSpace(run[0]) == "Title" && isMono {
+			t.Errorf("the Title label is mono: %v", run)
 		}
-	}
-	if want := []string{"#", "prio", "kids", "updated"}; !slices.Equal(monos, want) {
-		t.Errorf("mono header labels %q, want %q", monos, want)
+		if strings.TrimSpace(run[0]) == "Updated" && !isMono {
+			t.Errorf("the Updated label is not mono: %v", run)
+		}
 	}
 }

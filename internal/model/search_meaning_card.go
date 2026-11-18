@@ -55,7 +55,7 @@ type EmbeddingsTurnedOn struct {
 func (EmbeddingsTurnedOn) msg() {}
 
 // RestartQuestion is what the card asks before the Pane restarts the kata daemon it is connected to.
-const RestartQuestion = "Restart the kata daemon now? Other Panes, agents and the worker lose their connection for a moment and reconnect. y/n"
+const RestartQuestion = "Restart the kata daemon now? Other Panes, agents and the worker lose their connection for a moment and reconnect."
 
 // RestartKataDaemon asks for `kata daemon restart` on the daemon the Pane is connected to: the user said yes to the question.
 type RestartKataDaemon struct {
@@ -88,9 +88,9 @@ func EmbeddingsQuestion(s EmbeddingsStatus) string {
 	const lead = "Turn on search by meaning? "
 	switch {
 	case s.OllamaAvailable:
-		return lead + "kata will use your Ollama; nothing to download. y/n"
+		return lead + "kata will use your Ollama; nothing to download."
 	case s.DownloadBytes == 0:
-		return lead + "kata will use its built-in model, already on the kata daemon's machine; nothing to download. Search stays by words until the daemon restarts. y/n"
+		return lead + "kata will use its built-in model, already on the kata daemon's machine; nothing to download. Search stays by words until the daemon restarts."
 	}
 	where := "this machine"
 	if s.Remote {
@@ -100,7 +100,7 @@ func EmbeddingsQuestion(s EmbeddingsStatus) string {
 		}
 	}
 	return lead + "kata downloads about " + megabytes(s.DownloadBytes) + " MB (shared by all Kenn apps) to the kata daemon's machine (" + where +
-		"). Search stays by words until the daemon restarts. y/n"
+		"). Search stays by words until the daemon restarts."
 }
 
 // EmbeddingsProgress is a bar of the card. Fraction is nil when kata gives no total, which draws a bar that sweeps.
@@ -139,13 +139,13 @@ func (m Model) EmbeddingsCardBody() EmbeddingsCardBody {
 	s := m.Embeddings
 	switch {
 	case !s.Read:
-		b.State, b.Pending = "Reading search by meaning from the kata daemon…", true
+		b.State, b.Pending = Progress("Reading", "search by meaning"), true
 	case s.Restarting:
-		b.State, b.Pending = "Restarting the kata daemon…", true
+		b.State, b.Pending = Progress("Restarting", "kata daemon"), true
 	case s.Err != nil:
-		b.State, b.Failed = "kata cannot report search by meaning here: "+oneLine(s.Err.Error()), true
+		b.State, b.Failed = Cannot("read", "search by meaning", s.Err), true
 	case s.Turning:
-		b.State, b.Pending = "Turning it on…", true
+		b.State, b.Pending = Progress("Turning on", "search by meaning"), true
 	case m.EmbeddingsCard.AskingRestart:
 		b.Question = RestartQuestion
 	case m.EmbeddingsCard.Asking:
@@ -250,7 +250,7 @@ func confirmTurnOnEmbeddings(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.Stale {
-		m.EmbeddingsCard.Err = errors.New("Daemon disconnected; reconnect before turning on search by meaning.")
+		m.EmbeddingsCard.Err = errors.New(Cannot("turn on", "search by meaning", ErrDisconnected))
 		return m, nil
 	}
 	m.EmbeddingsCard.Asking, m.EmbeddingsCard.Err = false, nil
@@ -267,7 +267,7 @@ func (m Model) embeddingsFailed(text string) Model {
 	case m.OnConfig():
 		m.ConfigPage.Message, m.ConfigPage.MessageErr = text, true
 	default:
-		m.Notice = text
+		m = m.fail(text)
 	}
 	return m
 }
@@ -279,7 +279,7 @@ func embeddingsTurnedOn(m Model, msg EmbeddingsTurnedOn) (Model, []Cmd) {
 	m.Embeddings.Turning = false
 	if msg.Err != nil {
 		m.EmbeddingsCard.Asking = false
-		m = m.embeddingsFailed("Search by meaning was not turned on: " + oneLine(msg.Err.Error()))
+		m = m.embeddingsFailed(Cannot("turn on", "search by meaning", msg.Err))
 		return m, []Cmd{askEmbeddings(&m, 0)}
 	}
 	m.Embeddings.reads.Discard()
@@ -311,7 +311,7 @@ func confirmRestartDaemon(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.Stale {
-		m.EmbeddingsCard.Err = errors.New("Daemon disconnected; reconnect before restarting the kata daemon.")
+		m.EmbeddingsCard.Err = errors.New(Cannot("restart", "the kata daemon", ErrDisconnected))
 		return m, nil
 	}
 	m.EmbeddingsCard.AskingRestart, m.EmbeddingsCard.Err = false, nil
@@ -335,7 +335,7 @@ func kataDaemonRestarted(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
 		m.Embeddings.returning = true
 		return m, []Cmd{askEmbeddings(&m, 0)}
 	}
-	return m.embeddingsFailed("The kata daemon was not restarted: " + oneLine(msg.Err.Error())), nil
+	return m.embeddingsFailed(Cannot("restart", "the kata daemon", msg.Err)), nil
 }
 
 // updateEmbeddings takes the answers about search by meaning, whichever Page is shown.
@@ -354,11 +354,10 @@ func updateEmbeddings(m Model, msg Msg) (Model, []Cmd, bool) {
 	return m, nil, false
 }
 
-// EmbeddingsCardTitle names the daemon the card is about, as the Config row does.
+// EmbeddingsCardTitle names the daemon the card is about; the card draws it as its head's meta.
 func (m Model) EmbeddingsCardTitle() string { return daemonTitle(m.Daemon.Name) }
 
-// daemonTitle is "kata daemon: name", the daemon named "default" when its name is empty. The card's title and the Config row's
-// title are both built from it.
+// daemonTitle is "kata daemon: name", the daemon named "default" when its name is empty. The card's head meta is built from it.
 func daemonTitle(name string) string {
 	if name = strings.TrimSpace(oneLine(name)); name == "" {
 		name = "default"

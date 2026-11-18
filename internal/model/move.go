@@ -41,7 +41,7 @@ func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
 	}
 	issue := m.Issues[at]
 	if m.Stale {
-		m.Notice = "Daemon disconnected; reconnect before moving."
+		m = m.fail(Cannot("move", "", ErrDisconnected))
 		return m, nil
 	}
 	if IsClosed(issue) {
@@ -76,7 +76,7 @@ func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
 	m.Issues[at] = issue
 	m.Moving = uid
 	if !matchesLabelFilter(issue, m.Filters.Label) {
-		m.Notice = fmt.Sprintf("%s moved to %s, outside the current filters.", issue.ShortID, LaneTitle(target))
+		m = m.say(fmt.Sprintf("Moved %s to %s, outside the current filters.", m.RefName(issue.ProjectName, issue.ShortID), LaneTitle(target)))
 	}
 	return m, []Cmd{cmd}
 }
@@ -98,7 +98,7 @@ func matchesLabelFilter(issue Issue, filter string) bool {
 func updateMove(m Model, msg MoveResultMsg) (Model, []Cmd) {
 	m.Moving = ""
 	if msg.Err != nil {
-		m.Notice = msg.Err.Error()
+		m = m.fail(Cannot("move", "", msg.Err))
 	}
 	return snapshotChanged(m.issueWritten(msg.UID))
 }

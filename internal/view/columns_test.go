@@ -34,7 +34,9 @@ func columnsFixture(t testing.TB) model.Model {
 func labels(n [][2]string) []string {
 	var out []string
 	for _, span := range n {
-		out = append(out, strings.TrimSpace(span[0]))
+		if label := strings.TrimSpace(strings.ReplaceAll(span[0], "\u200b", "")); label != "" {
+			out = append(out, label)
+		}
 	}
 	return out
 }
@@ -42,12 +44,12 @@ func labels(n [][2]string) []string {
 func TestHeaderRowLabelsTheColumns(t *testing.T) {
 	m := columnsFixture(t)
 	side := render(t, m)["main.columns.list.header"]
-	if got, want := labels(styled(side)), []string{"#", "prio", "status", "title", "kids", "updated"}; !slices.Equal(got, want) {
+	if got, want := labels(styled(side)), []string{"ID", "Status", "Title", "Children", "Updated"}; !slices.Equal(got, want) {
 		t.Errorf("side by side header %q, want %q", got, want)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"})
 	full := render(t, m)["main.columns.list.header"]
-	if got, want := labels(styled(full)), []string{"#", "prio", "status", "title", "kids", "owner", "updated"}; !slices.Equal(got, want) {
+	if got, want := labels(styled(full)), []string{"ID", "Status", "Title", "Children", "Owner", "Updated"}; !slices.Equal(got, want) {
 		t.Errorf("full width header %q, want %q", got, want)
 	}
 }
@@ -65,8 +67,8 @@ func TestRowShowsKidsOwnerAndUpdated(t *testing.T) {
 	if strings.Contains(leaf, "/") || !strings.Contains(leaf, "3d ago") {
 		t.Errorf("leaf row %q: want no kids and 3d ago", leaf)
 	}
-	if got := style(t, nodes[view.IssueID("parent")], "dana"); got != "accent" {
-		t.Errorf("owner style = %q, want accent, the nearest text colour to the user tone", got)
+	if got := style(t, nodes[view.IssueID("parent")], "dana"); got != "em" {
+		t.Errorf("owner style = %q, want the plain em token, a real style so the cell is an element", got)
 	}
 }
 

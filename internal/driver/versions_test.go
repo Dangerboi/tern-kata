@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	topBarVersionID = "main.topbar.right.version"
-	topBarHeadingID = "main.topbar.left.heading"
-	oldBinaryText   = "tern-kata v0.16.0 is installed: reopen this Pane to use it."
+	topBarVersionID = "main.topbar.right.facts.version"
+	topBarChipID    = "main.topbar.left.update"
+	oldBinaryText   = "tern-kata v0.16.0 is available. Reopen this Pane to use it."
 )
 
 // versionPane is a Pane of the given width running tern-kata at version running on a local kata v0.23.0 daemon, first load
@@ -52,45 +52,46 @@ func checked(t *testing.T, s driver.State, check model.CheckVersions, answer mod
 	return out, next
 }
 
-func heading(t *testing.T, s driver.State) string {
+// chip is the top bar's update chip, "" while no notice holds.
+func chip(t *testing.T, s driver.State) string {
 	t.Helper()
-	text, _ := nodeText(t, s, topBarHeadingID)
+	text, _ := nodeText(t, s, topBarChipID)
 	return text
 }
 
 func TestTheTopBarShowsTheBinarysVersionAfterTheDaemon(t *testing.T) {
 	s, _ := versionPane(t, 200, "v0.15.0")
-	if got, ok := nodeText(t, s, topBarVersionID); !ok || got != "tern-kata v0.15.0"+model.DaemonSeparator {
-		t.Fatalf("version cell %q (drawn %v), want tern-kata v0.15.0 and the separator before the Menu", got, ok)
+	if got, ok := nodeText(t, s, topBarVersionID); !ok || got != " · tern-kata v0.15.0" {
+		t.Fatalf("version cell %q (drawn %v), want tern-kata v0.15.0 after the Daemon's facts", got, ok)
 	}
-	if daemon, _ := nodeText(t, s, "main.topbar.right.daemon"); daemon != "Daemon: local · kata v0.23.0" {
-		t.Errorf("daemon cell %q", daemon)
+	if kind, _ := nodeText(t, s, "main.topbar.right.facts.fact0"); kind != "local" {
+		t.Errorf("kind cell %q", kind)
+	}
+	if kata, _ := nodeText(t, s, "main.topbar.right.facts.fact1"); kata != " · kata v0.23.0" {
+		t.Errorf("kata cell %q", kata)
 	}
 }
 
-func TestAReplacedBinaryShowsTheMarkerAMenuEntryAndOneToast(t *testing.T) {
+func TestAReplacedBinaryShowsTheChipAndAMenuEntryButNoToast(t *testing.T) {
 	s, check := versionPane(t, 200, "v0.15.0")
-	if strings.Contains(heading(t, s), model.NoticeMarker) {
-		t.Fatalf("marker before any notice: %q", heading(t, s))
+	if got := chip(t, s); got != "" {
+		t.Fatalf("chip before any notice: %q", got)
 	}
 	out, next := checked(t, s, check, model.VersionsChecked{Installed: "v0.16.0", KataCLI: "v0.23.0", Daemon: "v0.23.0"})
 	if next.After != model.VersionCheckEvery {
 		t.Errorf("next check after %s, want %s", next.After, model.VersionCheckEvery)
 	}
-	if !strings.HasSuffix(heading(t, out.State), model.NoticeMarker) {
-		t.Errorf("heading %q lacks the marker", heading(t, out.State))
+	if got := chip(t, out.State); got != "↑ tern-kata v0.16.0" {
+		t.Errorf("chip %q, want the new version", got)
 	}
-	if toast := out.State.Model.Toast; toast == nil || toast.Text != oldBinaryText {
-		t.Fatalf("toast %+v, want %q", toast, oldBinaryText)
+	if toast := out.State.Model.Toast; toast != nil {
+		t.Fatalf("toast %+v, want none: the chip is the notice", toast)
 	}
-	seq := out.State.Model.ToastSeq
-
-	again, _ := checked(t, out.State, next, model.VersionsChecked{Installed: "v0.16.0", KataCLI: "v0.23.0", Daemon: "v0.23.0"})
-	if again.State.Model.ToastSeq != seq {
-		t.Errorf("the same notice toasted twice: %+v", again.State.Model.Toast)
+	menu := step(t, out.State, openMenu).State
+	wantText(t, "Menu", wireTextOf(t, menu), "tern-kata v0.16.0 is available", "Reopen this Pane")
+	if picked := pickNotice(t, out.State, model.NoticeOldBinary).State; picked.Model.Notice != oldBinaryText {
+		t.Errorf("the pick's Notice %q, want %q", picked.Model.Notice, oldBinaryText)
 	}
-	menu := step(t, again.State, openMenu).State
-	wantText(t, "Menu", wireTextOf(t, menu), "tern-kata v0.16.0 is installed", "reopen this Pane")
 }
 
 // The Pane claims an old binary only on two versions it can compare that differ: a build without a stamped version never does.
@@ -104,21 +105,19 @@ func TestNoOldBinaryNoticeWithoutTwoDifferentStampedVersions(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s, check := versionPane(t, 200, tc.running)
 			out, _ := checked(t, s, check, model.VersionsChecked{Installed: tc.installed, KataCLI: "v0.23.0", Daemon: "v0.23.0"})
-			if strings.Contains(heading(t, out.State), model.NoticeMarker) || out.State.Model.Toast != nil {
-				t.Errorf("heading %q, toast %+v; want no notice", heading(t, out.State), out.State.Model.Toast)
+			if chip(t, out.State) != "" || out.State.Model.Toast != nil {
+				t.Errorf("chip %q, toast %+v; want no notice", chip(t, out.State), out.State.Model.Toast)
 			}
 		})
 	}
 }
 
-const daemonNoticeText = "The kata daemon runs v0.23.0 and kata v0.24.0 is installed: restart the daemon from the Menu to use it."
-
 // pickNotice opens the Menu and picks its entry for the notice of kind.
-func pickNotice(t *testing.T, s driver.State, kind model.NoticeKind) driver.Output {
+func pickNotice(t *testing.T, s driver.State, kind model.VersionNoticeKind) driver.Output {
 	t.Helper()
 	menu := step(t, s, openMenu).State
 	for _, entry := range menu.Model.PickerEntries() {
-		if entry.Kind == model.EntryNotice && model.NoticeKind(entry.Index) == kind {
+		if entry.Kind == model.EntryNotice && model.VersionNoticeKind(entry.Index) == kind {
 			return step(t, menu, model.PickerSelected{Key: entry.Key()})
 		}
 	}
@@ -138,11 +137,14 @@ func restartCmd(cmds []model.Cmd) (model.RestartKataDaemon, bool) {
 func TestADaemonOlderThanTheKataCLIIsRestartedFromItsMenuEntryAndTheNoticeClears(t *testing.T) {
 	s, check := versionPane(t, 200, "v0.15.0")
 	out, _ := checked(t, s, check, model.VersionsChecked{KataCLI: "v0.24.0", Daemon: "v0.23.0"})
-	if toast := out.State.Model.Toast; toast == nil || toast.Text != daemonNoticeText {
-		t.Fatalf("toast %+v, want %q", toast, daemonNoticeText)
+	if toast := out.State.Model.Toast; toast != nil {
+		t.Fatalf("toast %+v, want none", toast)
+	}
+	if got := chip(t, out.State); got != "↑ kata daemon" {
+		t.Fatalf("chip %q", got)
 	}
 	menu := step(t, out.State, openMenu).State
-	wantText(t, "Menu", wireTextOf(t, menu), "kata daemon v0.23.0 is older than kata v0.24.0", "restart the daemon…")
+	wantText(t, "Menu", wireTextOf(t, menu), "kata daemon v0.23.0 is older than kata v0.24.0", "Restart the daemon…")
 
 	asked := pickNotice(t, out.State, model.NoticeOldDaemon)
 	if _, sent := restartCmd(asked.Cmds); sent {
@@ -164,11 +166,11 @@ func TestADaemonOlderThanTheKataCLIIsRestartedFromItsMenuEntryAndTheNoticeClears
 		t.Fatalf("the restart asked for %#v, want a version check at once", restarted.Cmds)
 	}
 	cleared, _ := checked(t, restarted.State, recheck, model.VersionsChecked{KataCLI: "v0.24.0", Daemon: "v0.24.0"})
-	if strings.Contains(heading(t, cleared.State), model.NoticeMarker) {
-		t.Errorf("the marker stays after the restart: %q", heading(t, cleared.State))
+	if got := chip(t, cleared.State); got != "" {
+		t.Errorf("the chip stays after the restart: %q", got)
 	}
-	if daemon, _ := nodeText(t, cleared.State, "main.topbar.right.daemon"); daemon != "Daemon: local · kata v0.24.0" {
-		t.Errorf("daemon cell %q, want the restarted daemon's version", daemon)
+	if kata, _ := nodeText(t, cleared.State, "main.topbar.right.facts.fact1"); kata != " · kata v0.24.0" {
+		t.Errorf("kata cell %q, want the restarted daemon's version", kata)
 	}
 }
 
@@ -178,9 +180,9 @@ func TestAFailedRestartSaysWhyAndKeepsTheNotice(t *testing.T) {
 	confirmed := step(t, pickNotice(t, out.State, model.NoticeOldDaemon).State, key("y"))
 	restart, _ := restartCmd(confirmed.Cmds)
 	failed := step(t, confirmed.State, model.KataDaemonRestarted{Err: errors.New("kata is not on PATH"), Connection: restart.Connection}).State
-	wantText(t, "Pane", wireTextOf(t, failed), "The kata daemon was not restarted: kata is not on PATH")
-	if !strings.HasSuffix(heading(t, failed), model.NoticeMarker) {
-		t.Errorf("the marker went with a failed restart: %q", heading(t, failed))
+	wantText(t, "Pane", wireTextOf(t, failed), "Cannot restart the kata daemon: kata is not on PATH.")
+	if got := chip(t, failed); got == "" {
+		t.Errorf("the chip went with a failed restart")
 	}
 }
 
@@ -198,11 +200,11 @@ func TestARemoteDaemonGetsNoDaemonNotice(t *testing.T) {
 func TestANewerKataReleaseShowsItsNoticeUntilKataIsUpdated(t *testing.T) {
 	s, check := versionPane(t, 200, "v0.15.0")
 	out, next := checked(t, s, check, model.VersionsChecked{KataCLI: "v0.23.0", KataLatest: "v0.24.0", Daemon: "v0.23.0"})
-	const text = "kata v0.24.0 is out: run kata update to install it."
-	if toast := out.State.Model.Toast; toast == nil || toast.Text != text {
-		t.Fatalf("toast %+v, want %q", toast, text)
+	const text = "kata v0.24.0 is available. Run kata update to install it."
+	if got := chip(t, out.State); got != "↑ kata v0.24.0" {
+		t.Fatalf("chip %q", got)
 	}
-	wantText(t, "Menu", wireTextOf(t, step(t, out.State, openMenu).State), "kata v0.24.0 is out", "run kata update")
+	wantText(t, "Menu", wireTextOf(t, step(t, out.State, openMenu).State), "kata v0.24.0 is available", "kata update")
 	if picked := pickNotice(t, out.State, model.NoticeKataRelease).State; picked.Model.Notice != text {
 		t.Errorf("the pick's Notice %q, want %q", picked.Model.Notice, text)
 	}
@@ -216,13 +218,13 @@ func TestANewerKataReleaseShowsItsNoticeUntilKataIsUpdated(t *testing.T) {
 	}
 }
 
-// The marker sits in the title's cell, which never shrinks: the narrowest Pane that draws the top bar still shows it, while the
-// version, like the Daemon, is left out below FoldedLegendCols.
-func TestTheMarkerStaysAtTheNarrowestWidth(t *testing.T) {
+// The chip sits in the title's cell, which never shrinks: the narrowest Pane that draws the top bar still shows it, while the
+// version, like the Daemon's, is left out below FoldedLegendCols.
+func TestTheChipStaysAtTheNarrowestWidth(t *testing.T) {
 	s, check := versionPane(t, model.MinCols, "v0.15.0")
 	out, _ := checked(t, s, check, model.VersionsChecked{Installed: "v0.16.0", KataCLI: "v0.23.0", Daemon: "v0.23.0"})
-	if !strings.HasSuffix(heading(t, out.State), model.NoticeMarker) {
-		t.Errorf("heading %q lacks the marker at %d columns", heading(t, out.State), model.MinCols)
+	if got := chip(t, out.State); got == "" {
+		t.Errorf("no chip at %d columns", model.MinCols)
 	}
 	if _, drawn := nodeText(t, out.State, topBarVersionID); drawn {
 		t.Errorf("the version is drawn at %d columns", model.MinCols)

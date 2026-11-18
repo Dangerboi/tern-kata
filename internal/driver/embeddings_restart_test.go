@@ -28,7 +28,7 @@ func restartAsked(t *testing.T) driver.State {
 // and a job waiting for a restart is not polled.
 func TestTheRestartQuestionAppearsWhenTheJobReachesRestartWithTheCardOpen(t *testing.T) {
 	s := restartAsked(t)
-	wantText(t, "question", wireTextOf(t, s), "Restart the kata daemon now? Other Panes, agents and the worker lose their connection for a moment and reconnect. y/n", "Restart now", "Not now")
+	wantText(t, "question", wireTextOf(t, s), "Restart the kata daemon now? Other Panes, agents and the worker lose their connection for a moment and reconnect.", "Restart now", "Not now")
 
 	sent := turnedOn(t, embeddingsCardOpen(t))
 	out := step(t, sent.State, model.EmbeddingsTurnedOn{Status: restartOwed, Connection: sent.State.Model.Connection})
@@ -47,7 +47,7 @@ func TestNClosesTheRestartQuestionAndKeepsTheRestartNeeded(t *testing.T) {
 		t.Fatalf("n sent %#v, card %v; want nothing sent and the card closed", declined.Cmds, declined.State.Model.TopCard())
 	}
 	closed := declined.State
-	wantText(t, "row", wireTextOf(t, closed), "set up: needs a kata daemon restart")
+	wantText(t, "row", wireTextOf(t, closed), "set up · needs a kata daemon restart")
 }
 
 func TestACardOpenedWhileARestartIsOwedOnALocalDaemonOpensOnTheRestartQuestion(t *testing.T) {
@@ -98,7 +98,7 @@ func TestYSendsExactlyOneRestartAndItsSuccessReadsTheStatusAgain(t *testing.T) {
 	if !equalCmds(out.Cmds, want) {
 		t.Fatalf("y sent %#v, want %#v", out.Cmds, want)
 	}
-	wantText(t, "restarting", wireTextOf(t, out.State), "Restarting the kata daemon…")
+	wantText(t, "restarting", wireTextOf(t, out.State), "Restarting kata daemon…")
 	for _, chords := range [][]string{{"escape", "enter", "y"}, {"escape", "r", "y"}} {
 		inputs := make([]any, len(chords))
 		for i, c := range chords {
@@ -120,7 +120,7 @@ func TestYSendsExactlyOneRestartAndItsSuccessReadsTheStatusAgain(t *testing.T) {
 func TestAFailedRestartShowsKatasLineOnTheCardAndOffersNoSecondRestartUntilAsked(t *testing.T) {
 	out := step(t, restartAsked(t), key("y"))
 	failed := step(t, out.State, model.KataDaemonRestarted{Err: errors.New("daemon is not running"), Connection: out.State.Model.Connection})
-	wantText(t, "failure", wireTextOf(t, failed.State), "The kata daemon was not restarted: daemon is not running", "set up: needs a kata daemon restart")
+	wantText(t, "failure", wireTextOf(t, failed.State), "Cannot restart the kata daemon: daemon is not running.", "set up · needs a kata daemon restart")
 	if len(failed.Cmds) != 0 {
 		t.Errorf("a failure sent %#v", failed.Cmds)
 	}

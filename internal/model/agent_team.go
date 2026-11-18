@@ -80,7 +80,7 @@ func (m Model) teamPauseRefusal(uid string) string {
 func pauseTeam(m Model) (Model, []Cmd) {
 	if reason := m.AgentCardUnavailable(AgentCardPause); reason != "" {
 		m.AgentCard = AgentCardState{}
-		m.Notice = reason
+		m = m.fail(reason)
 		return m, nil
 	}
 	t, _ := m.TeamOn(m.AgentCard.IssueUID)
@@ -109,15 +109,13 @@ func (TeamPausedSet) msg() {}
 
 func teamPausedSet(m Model, msg TeamPausedSet) (Model, []Cmd) {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot %s the team on %s: %s", map[bool]string{true: "pause", false: "resume"}[msg.Paused], msg.ParentRef, msg.Err)
-		return m, nil
+		return m.fail(Cannot(map[bool]string{true: "pause", false: "resume"}[msg.Paused], "the team on "+msg.ParentRef, msg.Err)), nil
 	}
 	m.Teams = msg.Teams
 	if msg.Paused {
-		m.Notice = fmt.Sprintf("Paused the team on %s: no child starts until you resume it.", msg.ParentRef)
-		return m, nil
+		return m.say(fmt.Sprintf("Paused the team on %s.", msg.ParentRef)), nil
 	}
-	m.Notice = fmt.Sprintf("Resumed the team on %s.", msg.ParentRef)
+	m = m.say(fmt.Sprintf("Resumed the team on %s.", msg.ParentRef))
 	m, cmds := driveTeams(m, true)
 	return restartAgentSessions(m, cmds)
 }
@@ -126,7 +124,7 @@ func teamPausedSet(m Model, msg TeamPausedSet) (Model, []Cmd) {
 func openTeamDialog(m Model) (Model, []Cmd) {
 	if reason := m.AgentCardUnavailable(AgentCardTeam); reason != "" {
 		m.AgentCard = AgentCardState{}
-		m.Notice = reason
+		m = m.fail(reason)
 		return m, nil
 	}
 	m.AgentCard.Team = TeamDialog{Open: true, Where: AgentSplit, Limit: TeamDefaultLimit}
@@ -166,7 +164,7 @@ func startTeam(m Model) (Model, []Cmd) {
 	issue := m.issueByUID(m.AgentCard.IssueUID)
 	m.AgentCard = AgentCardState{}
 	if reason != "" {
-		m.Notice = reason
+		m = m.fail(reason)
 		return m, nil
 	}
 	cmd := StartTeam{Placement: d.Where, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,
@@ -174,7 +172,7 @@ func startTeam(m Model) (Model, []Cmd) {
 	if m.Bound && issue.ProjectID == m.Project.ID {
 		cmd.Workspace = m.Workspace
 	}
-	m.Notice = fmt.Sprintf("Starting a team on %s…", issue.QualifiedID)
+	m = m.say(Progress("Starting", "a team on "+issue.QualifiedID))
 	return m, []Cmd{cmd}
 }
 

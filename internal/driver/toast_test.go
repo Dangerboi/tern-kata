@@ -60,7 +60,7 @@ func TestANoticeWithAKeyIsOneToastWhoseButtonDoesWhatTheKeyDoes(t *testing.T) {
 		raised             driver.Output
 		text, label, chord string
 	}{
-		{"delete", afterDelete, "Deleted work#a. Press u to restore it.", "Undo", "u"},
+		{"delete", afterDelete, "Deleted #a.", "Undo", "u"},
 		{"w on a closed Issue", step(t, agentPanes(t, closed)["list"], key("w")), model.ClosedIssueRefusal, "Reopen", "r"},
 		{"w on a closed Issue in its detail", step(t, agentPanes(t, closed)["detail"], key("w")), model.ClosedIssueRefusal, "Reopen", "r"},
 		{"move on a closed card", step(t, boardPane(t, closedAt("d", 10, 5)), key(">")), "d is closed; press r to reopen it.", "Reopen", "r"},
@@ -72,8 +72,8 @@ func TestANoticeWithAKeyIsOneToastWhoseButtonDoesWhatTheKeyDoes(t *testing.T) {
 				t.Fatalf("%d toasts, notice %q; want one toast and no Notice line", len(nodes), tc.raised.State.Model.Notice)
 			}
 			p, act := nodes[0].P, view.ToastClick(tc.raised.State.Model.Toast.Seq)
-			if p["text"] != tc.text || p["label"] != tc.label || p["action"] != act {
-				t.Fatalf("toast text %q label %q action %q, want %q, %q, %q", p["text"], p["label"], p["action"], tc.text, tc.label, act)
+			if p["text"] != tc.text || p["label"] != tc.label+" "+view.Keycap(tc.chord, tc.chord) || p["action"] != act {
+				t.Fatalf("toast text %q label %q action %q, want %q, %q, %q", p["text"], p["label"], p["action"], tc.text, tc.label+" "+view.Keycap(tc.chord, tc.chord), act)
 			}
 			pressed := step(t, tc.raised.State, click(nodes[0].ID, act))
 			keyed := step(t, tc.raised.State, key(tc.chord))

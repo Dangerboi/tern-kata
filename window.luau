@@ -247,7 +247,7 @@ local function sendOwed(cx: WindowCx, pane: number)
         local ok, err = pcall(function()
             cx.session:event(pane, {ev = "action", id = "main.columns.list.issues", act = item.act, value = item.value})
         end)
-        if not ok then cx:toast("error", "tern-kata did not take the action", tostring(err)) end
+        if not ok then cx:toast("error", "Cannot send the action to tern-kata", tostring(err)) end
     end
 end
 
@@ -292,11 +292,11 @@ end
 local function exitedRightAway(cx: WindowCx, pane: number, status: number)
     if status == 0 then return end
     if status == 2 or status == 3 then
-        cx:toast("error", "tern-kata failed to start", "tern-kata may be older than this plugin: run Update tern-kata from the command palette, or run tern-kata in a shell to see why")
+        cx:toast("error", "Cannot start tern-kata", "It may be older than this plugin. Run Update tern-kata, or run tern-kata in a shell to see why.")
     elseif status == 1 then
-        cx:toast("error", "tern-kata didn't start", "It may be older than this plugin: run Update tern-kata; if it isn't installed, run Install tern-kata. Or run tern-kata in a shell to see why")
+        cx:toast("error", "Cannot start tern-kata", "It may be older than this plugin or not installed. Run Update tern-kata or Install tern-kata, or run tern-kata in a shell to see why.")
     else
-        cx:toast("error", "tern-kata is not installed or not on PATH", "Run Install tern-kata from the command palette, or the install script in the README")
+        cx:toast("error", "Cannot start tern-kata", "It is not installed or not on PATH. Run Install tern-kata, or the install script in the README.")
     end
 end
 
@@ -311,7 +311,7 @@ local RELAY_TRIES = 50
 local function dropOwed(cx: WindowCx, st: PaneState)
     if #st.owed == 0 then return end
     st.owed = {}
-    cx:toast("error", "tern-kata did not start", "The click was dropped: kata is not running in that Pane")
+    cx:toast("error", "Cannot send the click", "tern-kata is not running in that Pane.")
 end
 
 local function pump(pane: number)
@@ -594,23 +594,23 @@ if tern.chrome.widget ~= nil then
     tern.css("worker-card", workerwidget.css(PLUGIN))
     tern.command({
         id = "add-widgets",
-        title = "Add the kata worker widget to the widget bar",
+        title = "Add worker widget",
         run = function(cx)
             local list = cx.settings:get("widgets")
             local merged, added = widgets.merge(if type(list) == "table" then list else {}, {PLUGIN .. "/" .. workerwidget.ID})
             if #added == 0 then
-                cx:toast("info", "The kata worker widget is already in the widget bar")
+                cx:toast("info", "The tern-kata worker widget is already in the widget bar.")
                 return
             end
             cx.settings:set("widgets", merged)
-            cx:toast("info", "Added the kata worker widget to the widget bar")
+            cx:toast("success", "Added the tern-kata worker widget to the widget bar.")
         end,
     })
 end
 
 tern.command({
     id = workerwidget.SHOW_HELD_ID,
-    title = "Show kata's held runs",
+    title = "Show held runs",
     run = function(cx)
         openKata(cx, "show-held-runs", "")
     end,
@@ -621,19 +621,19 @@ tern.command({
 -- the agent's session is shown before the focus, as the focus handler's path does, so an agent in another session is reached.
 tern.command({
     id = GO_WAITING_ID,
-    title = "Go to the agent waiting for you",
+    title = "Go to waiting agent",
     keys = {"shift+f9"},
     run = function(cx)
         local pane = waitingPanes(cx)[1]
         local info = if pane then cx.session:pane(pane) else nil
         if not pane or not info then
-            cx:toast("info", "No agent is waiting for you")
+            cx:toast("info", "No agent is waiting for you.")
             return
         end
         if info.parked or not info.tab then
             local ok, err = cx.layout:unpark(pane)
             if not ok then
-                cx:toast("error", err or "Could not bring the waiting agent back")
+                cx:toast("error", "Cannot bring back the waiting agent", err)
                 return
             end
             info = cx.session:pane(pane)
@@ -835,7 +835,7 @@ local function onLoad(cx: WindowCx)
         end
         if outcome == "updated" then
             tern.kv.set(KV_PENDING, nil)
-            cx:toast("info", "tern-kata plugin updated to v" .. (pending :: any).version)
+            cx:toast("success", "Updated the tern-kata plugin to v" .. (pending :: any).version .. ".")
         elseif outcome == "drop" then
             tern.kv.set(KV_PENDING, nil)
         end
@@ -853,10 +853,10 @@ hasProcessExit = pcall(function()
         if pending == nil or not ev.stdout:find(releases.STEP_MARKER, 1, true) then return end
         tern.kv.set(KV_PENDING, nil)
         if ev.status == 0 then
-            cx:toast("info", "tern-kata plugin updated to v" .. tostring(pending.version))
+            cx:toast("success", "Updated the tern-kata plugin to v" .. tostring(pending.version) .. ".")
         else
             local line = lastStderrLine(ev.stderr)
-            cx:toast("error", "tern-kata plugin was not updated", line ~= "" and line or ("the install script exited with status " .. tostring(ev.status)))
+            cx:toast("error", "Cannot update the tern-kata plugin", line ~= "" and line or ("The install script exited with status " .. tostring(ev.status) .. "."))
         end
     end)
 end)
@@ -868,7 +868,7 @@ end)
 
 tern.command({
     id = "update-checks",
-    title = "Turn tern-kata update checks off/on",
+    title = "Toggle update checks",
     run = function(cx)
         withPluginDir(function()
             local off, text = releases.toggle(currentCheck())
@@ -894,7 +894,7 @@ end)
 if routed then
     tern.command({
         id = "attachments-side-panel",
-        title = "Switch kata Attachments between floating and the side panel",
+        title = "Toggle Attachments panel",
         run = function(cx)
             local nowSide, text = attachmentview.toggle(attachmentsInSidePanel())
             tern.kv.set(KV_ATTACHMENTS_SIDE, if nowSide then true else nil)
@@ -907,14 +907,14 @@ end
 
 tern.command({
     id = workerwidget.OPEN_ID,
-    title = "Open kata",
+    title = "Open tern-kata",
     keys = {"f9"},
     run = function(cx) openKata(cx, nil, "") end,
 })
 
 tern.command({
     id = "wrap-up-agents",
-    title = "Wrap up every running agent",
+    title = "Wrap up all agents",
     run = function(cx)
         openKata(cx, "wrap-up-sweep", "")
     end,
@@ -968,13 +968,13 @@ local function updatePlugin(cx: WindowCx, version: string)
             tern.kv.set(KV_PENDING, nil)
             if cx2 then
                 local line = lastStderrLine(result.stderr)
-                cx2:toast("error", "tern-kata plugin was not updated", line ~= "" and line or ("the install script exited with status " .. result.status))
+                cx2:toast("error", "Cannot update the tern-kata plugin", line ~= "" and line or ("The install script exited with status " .. result.status .. "."))
             end
         end)
     end)
     if not ok then
         tern.kv.set(KV_PENDING, nil)
-        cx:toast("error", "tern-kata was updated on the session host, but this device's plugin wasn't", "Update the plugin on a machine that can run the install script")
+        cx:toast("error", "Cannot update the plugin on this device", "tern-kata was updated on the session host. Update the plugin on a machine that can run the install script.")
     end
 end
 
@@ -990,12 +990,12 @@ local function watchUpdate(pane: number, version: string, remote: boolean)
         if info and info.exited == nil then return watchUpdate(pane, version, remote) end
         if not remote then return end
         if ownVersion() == version then
-            cx:toast("info", "tern-kata plugin v" .. version .. " is up to date")
+            cx:toast("info", "The tern-kata plugin v" .. version .. " is up to date.")
             return
         end
         withPluginDir(function()
             if releases.isLinked(tern.plugin.dir, pluginDir) then
-                cx:toast("info", "tern-kata plugin is linked, left as it is")
+                cx:toast("info", "The tern-kata plugin is linked, so it stays as it is.")
                 return
             end
             updatePlugin(cx, version)
@@ -1012,7 +1012,7 @@ tern.command({
             if not cx2 then return end
             local version = if result.error == nil and result.status == 200 then releases.release(result.body) else nil
             if not version then
-                cx2:toast("error", "tern-kata was not updated", "Could not read version.txt of the latest release")
+                cx2:toast("error", "Cannot update tern-kata", "version.txt of the latest release is unreadable.")
                 return
             end
             local pane = launch(cx2, panecommands.UPDATE)

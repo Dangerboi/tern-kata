@@ -1,35 +1,60 @@
 package view
 
 import (
+	"strconv"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
+// DaemonListID is the Daemons Page's table.
 const DaemonListID = "main.columns.list.daemons"
 
+// daemons is the Daemons Page: the catalog's daemons as a table of name, endpoint, authentication and state, with the one under
+// the cursor drawn selected. The table keeps its selected row in view itself.
 func daemons(m model.Model) tern.Element {
 	d := m.Daemons
-	children := ui.Nodes(
-		heading(ui.Span{T: "Daemons", S: "strong"}),
-		ui.Text{Common: ui.Common{Key: "summary", Tone: ui.ToneMuted}, Text: d.Summary(), Wrap: ui.WrapNone},
-	)
-	if notice, shown := d.Notice(); shown {
-		return listPanel(m, 0.5, append(children, noticeLines(notice.Err, !d.Loading, notice.Text, notice.Detail)...))
+	notice, noticed := d.Notice()
+	count := ""
+	if !noticed {
+		count = strconv.Itoa(len(d.Entries))
 	}
-	children = append(children, ui.Text{Common: ui.Common{Key: "header", Tone: ui.ToneMuted}, Text: model.DaemonsHeader(), Wrap: ui.WrapNone})
-	cards := make([]tern.Element, len(d.Entries))
-	for i, e := range d.Entries {
-		tone := ui.ToneNeutral
-		if e.Current {
-			tone = ui.ToneSuccess
+	children := ui.Nodes(pageHead("heading", "Daemons", count))
+	if noticed {
+		if notice.Empty {
+			empty := emptyState(notice.Text, notice.Detail)
+			empty.Key = "empty"
+			return listPanel(m, 0.5, append(children, empty))
 		}
-		cards[i] = ui.Card{Common: ui.Common{Key: e.Name, Tone: tone}, Selected: i == d.Cursor,
-			Children: ui.Nodes(ui.Text{Common: ui.Common{Key: "row"}, Text: e.Row(), Wrap: ui.WrapNone})}
+		return listPanel(m, 0.5, append(children, noticeLines(notice.Err, !notice.Pending, notice.Text, notice.Detail)...))
 	}
-	children = append(children, ui.List{CommonWithoutMax: scrollerCommon("daemons"), Max: fillMax, Children: cards})
+	rows := make([]ui.TableRow, len(d.Entries))
+	for i, e := range d.Entries {
+		rows[i] = ui.TableRow{ID: e.Name, Cells: map[string]ui.Cell{
+			"name":     ui.Spans(ui.Span{T: e.Label()}),
+			"endpoint": ui.Spans(ui.Span{T: e.Where()}),
+			"auth":     ui.Spans(ui.Span{T: e.Auth(), S: "muted"}),
+			"state":    ui.Spans(ui.Span{T: e.State(), S: string(ui.ToneSuccess)}),
+		}}
+	}
+	selected := ""
 	if entry := m.SelectedDaemon(); entry != nil {
-		children = append(children, plainText("footer", ui.ToneMuted, entry.Footer()))
+		selected = entry.Name
+	}
+	children = append(children, ui.Table{
+		Common: ui.Common{Key: "daemons", Grow: 1},
+		Cols: []ui.Column{
+			{ID: "name", Head: ui.T("Name"), Grow: 1, Priority: 4, Truncate: ui.TruncateEnd},
+			{ID: "endpoint", Head: ui.T("Endpoint"), Mono: true, Grow: 1, Priority: 3, Truncate: ui.TruncateEnd},
+			{ID: "auth", Head: ui.T("Auth"), Priority: 2},
+			{ID: "state", Head: ui.T("State"), Priority: 1},
+		},
+		Rows:     rows,
+		Selected: selected,
+	})
+	if entry := m.SelectedDaemon(); entry != nil && entry.AllowInsecure {
+		children = append(children, plainText("footer", ui.ToneMuted, "Insecure connection allowed."))
 	}
 	if line := d.SwitchingLine(); line != "" {
 		children = append(children, plainText("switching", ui.TonePending, line))

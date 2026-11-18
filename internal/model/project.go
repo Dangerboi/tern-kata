@@ -1,7 +1,5 @@
 package model
 
-import "fmt"
-
 func updateProject(m Model, msg ProjectLoaded) (Model, []Cmd) {
 	m.Project = msg.Project
 	m.Bound, m.SidebarLevel = msg.Project.UID != "", MenuViews
@@ -15,7 +13,7 @@ func updateProject(m Model, msg ProjectLoaded) (Model, []Cmd) {
 		m.Filters = msg.Default
 	}
 	if msg.DefaultErr != nil {
-		m.Notice = fmt.Sprintf("Default filter not applied: %v", msg.DefaultErr)
+		m = m.fail(Cannot("apply", "the default filter", msg.DefaultErr))
 	}
 	m.Loading = true
 	m.Err = nil

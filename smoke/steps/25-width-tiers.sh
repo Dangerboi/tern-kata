@@ -56,7 +56,7 @@ title_json=$(jq -Rn --arg t "$width_title" '$t')
 ctl key esc
 expect_tree "[data-id='main.columns.list']" '.ok and .count == 1'
 ctl key j
-expect_tree "[data-id='dock.hints.position']" '.nodes[0].text | startswith("3 /")'
+expect_tree "[data-id='dock.hints.position']" '.nodes[0].text | startswith("3 of")'
 ctl key PageDown
 ctl key enter
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".ok and .count == 1 and (.nodes[0].text != $title_json) and (.nodes[0].text | contains(\"loading\") | not)"

@@ -71,12 +71,20 @@ func openFederationNameForEnroll(m Model) (Model, []Cmd) {
 var spokeNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 // ValidateSpokeName reports whether the hub will take name for a spoke, in kata's words. An empty name is fine: it names nothing, or
-// clears the name.
+// clears the name. The name card words its own refusal and does not show this one.
 func ValidateSpokeName(name string) error {
 	if name == "" || spokeNamePattern.MatchString(name) {
 		return nil
 	}
 	return fmt.Errorf("invalid federation spoke name: %q must match [a-z][a-z0-9-]{0,31}", name)
+}
+
+// Failure is the sentence under the name card for the last refusal or failure, "" when there is none.
+func (n FederationName) Failure() string {
+	if n.Err == nil {
+		return ""
+	}
+	return Cannot("save", "the spoke name", n.Err)
 }
 
 // federationNameKey is one key for the name card: Enter saves, esc closes, every other key is typed. No key is taken while a
@@ -92,7 +100,7 @@ func federationNameKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == FederationNameSave:
 		name := strings.TrimSpace(n.Input)
 		if err := ValidateSpokeName(name); err != nil {
-			n.Err = err
+			n.Err = fmt.Errorf("%q is not a valid spoke name", name)
 			return m, nil
 		}
 		if !n.Rename {

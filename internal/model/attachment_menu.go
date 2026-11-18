@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // The context menu of an Attachment row of the Issue detail, and the long press that lists the same. Each item is a key of the
@@ -226,8 +228,7 @@ func openAttachmentAs(way AttachmentWay) func(Model) (Model, []Cmd) {
 			return m, nil
 		}
 		if reason := AttachmentRefusal(a, way); reason != "" {
-			m.Notice = reason
-			return m, nil
+			return m.fail(reason), nil
 		}
 		return m, []Cmd{OpenAttachment{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Attachment: a, Way: way}}
 	}
@@ -239,8 +240,7 @@ func askUnlinkAttachment(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.Stale {
-		m.Notice = "Daemon disconnected; reconnect before unlinking an attachment."
-		return m, nil
+		return m.fail("Cannot unlink the attachment: the daemon is disconnected."), nil
 	}
 	m.AskUnlink = &UnlinkAsk{UID: issue.UID, Ref: issue.Qualified(), ProjectID: issue.ProjectID, Attachment: a}
 	return m, nil
@@ -266,7 +266,7 @@ func attachmentMenuPick(m Model, msg ContextMenuPickMsg) (Model, []Cmd) {
 		return m, nil
 	}
 	m = next
-	m.Notice = ""
+	m = m.clearNotice()
 	next, cmds, _ := runChord(m, msg.Chord, msg.Mode)
 	return next, cmds
 }
@@ -276,12 +276,18 @@ func AttachmentCopyCommand(issueRef, attachmentID string) string {
 	return "kata docbank attachments get " + issueRef + " " + attachmentID
 }
 
+// openerNote is a note from the opener, which is lowercase text without a period, as a sentence.
+func openerNote(note string) string {
+	note = strings.TrimSuffix(strings.TrimSpace(note), ".")
+	first, size := utf8.DecodeRuneInString(note)
+	return string(unicode.ToUpper(first)) + note[size:] + "."
+}
+
 // attachmentOpened takes the answer of OpenAttachment. A failure and each way's success are said as a Notice, a toast for a save,
 // or the Copy card.
 func attachmentOpened(m Model, msg AttachmentOpened) (Model, []Cmd) {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot %s %s: %v", attachmentActionOf(msg.Way).verb, msg.Name, msg.Err)
-		return m, nil
+		return m.fail(Cannot(attachmentActionOf(msg.Way).verb, msg.Name, msg.Err)), nil
 	}
 	switch msg.Way {
 	case WaySave:
@@ -290,36 +296,36 @@ func attachmentOpened(m Model, msg AttachmentOpened) (Model, []Cmd) {
 			text += " on the computer showing this window"
 		}
 		if msg.Note != "" {
-			text += " on the Pane's computer: " + msg.Note
+			text += " on the Pane's computer: " + strings.TrimSuffix(msg.Note, ".")
 		}
+		text += "."
 		m, wait := m.raiseToast(Toast{Text: text})
 		return m, []Cmd{wait}
 	case WayCopy:
 		issue := m.issueByUID(msg.UID)
 		if issue == nil {
-			m.Notice = "That Issue is no longer listed."
-			return m, nil
+			return m.fail("That Issue is no longer listed."), nil
 		}
 		copied := AttachmentCopyState{Open: true, Name: msg.Name, Path: msg.Path, Command: AttachmentCopyCommand(issue.Qualified(), msg.AttachmentID)}
 		if m.covered() {
-			m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("%s is at %s; fetch it with: %s", msg.Name, copied.Path, copied.Command)})
+			m, wait := m.raiseToast(Toast{Text: "Copied " + msg.Name + "."})
 			return m, []Cmd{wait}
 		}
 		m.AttachmentCopy = copied
 		return m, nil
 	case WayBeside:
-		m.Notice = fmt.Sprintf("Opened %s beside the Pane (%s)", msg.Name, msg.Path)
+		m = m.say(fmt.Sprintf("Opened %s beside the Pane.", msg.Name))
 	case WaySystem:
-		m.Notice = fmt.Sprintf("Opened %s with the system app (%s)", msg.Name, msg.Path)
+		m = m.say(fmt.Sprintf("Opened %s with the system app.", msg.Name))
 	default:
+		text := fmt.Sprintf("Opened %s.", msg.Name)
 		if msg.OutsideTern {
-			m.Notice = fmt.Sprintf("Opened %s outside Tern (%s)", msg.Name, msg.Path)
-		} else {
-			m.Notice = fmt.Sprintf("Opened %s (%s)", msg.Name, msg.Path)
+			text = fmt.Sprintf("Opened %s outside Tern.", msg.Name)
 		}
 		if msg.Note != "" {
-			m.Notice += ": " + msg.Note
+			text += " " + openerNote(msg.Note)
 		}
+		m = m.say(text)
 	}
 	return m, nil
 }
@@ -337,15 +343,13 @@ func attachmentCopyKey(m Model, msg KeyMsg) (Model, []Cmd) {
 func attachmentUnlinked(m Model, msg AttachmentUnlinked) (Model, []Cmd) {
 	report := ""
 	if issue := m.issueByUID(msg.UID); issue != nil {
-		report = fmt.Sprintf("Unlinked %s from %s; its bytes stay in Docbank", msg.Name, issue.ShortID)
+		report = fmt.Sprintf("Unlinked %s from %s. Its bytes stay in Docbank.", msg.Name, issue.ShortID)
 	}
 	if !msg.FromQuestion {
 		return fieldWritten(m, msg.UID, report, msg.Err)
 	}
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot unlink %s: %v", msg.Name, msg.Err)
-		return m, nil
+		return m.fail(Cannot("unlink", msg.Name, msg.Err)), nil
 	}
-	m.Notice = report
-	return snapshotChanged(m.issueWritten(msg.UID))
+	return snapshotChanged(m.say(report).issueWritten(msg.UID))
 }

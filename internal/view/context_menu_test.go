@@ -24,7 +24,10 @@ func menuOf(t *testing.T, nodes shown, id string) []menuRow {
 	items, _ := actions["menu"].([]any)
 	var rows []menuRow
 	for _, item := range items {
-		fields := item.(map[string]any)
+		fields, ok := item.(map[string]any)
+		if !ok {
+			continue // a separator
+		}
 		row := menuRow{Label: fields["label"].(string), ID: fields["id"].(string)}
 		for _, key := range fields["keys"].([]any) {
 			row.Keys = append(row.Keys, key.(string))
@@ -55,21 +58,27 @@ func TestIssueRowMenuListsTheKeysActionsAndDisablesWhatCannotRun(t *testing.T) {
 		want []menuRow
 	}{
 		{"open", view.IssueID(alpha.UID), alpha.UID, []menuRow{
-			{"Open", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "enter"), "", []string{"↵"}},
-			{"Agent…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "w"), "", []string{"w"}},
-			{"Close", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "x"), "", []string{"x"}},
+			{"Open", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "enter"), "", []string{"⏎"}},
+			{"Close…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "x"), "", []string{"X"}},
 			{"Priority…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "!"), "", []string{"!"}},
-			{"Dates…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "d"), "", []string{"d"}},
-			{"Move to Project", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "shift+m"), "", []string{"⇧M"}},
+			{"Dates…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "d"), "", []string{"D"}},
+			{"Owner…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "a"), "", []string{"A"}},
+			{"Labels…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "+"), "", []string{"+"}},
+			{"Move to Project…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "shift+m"), "", []string{"⇧M"}},
+			{"Agents…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "w"), "", []string{"W"}},
+			{"New child…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "shift+n"), "", []string{"⇧N"}},
 		}},
 		{"closed", view.IssueID(closed.UID), closed.UID, []menuRow{
-			{"Open", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "enter"), "", []string{"↵"}},
-			{"Agent…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "w"), model.ClosedIssueRefusal, []string{"w"}},
-			{"Close", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "x"), model.ClosedAlreadyRefusal, []string{"x"}},
-			{"Reopen", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "r"), "", []string{"r"}},
+			{"Open", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "enter"), "", []string{"⏎"}},
+			{"Close…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "x"), model.ClosedAlreadyRefusal, []string{"X"}},
+			{"Reopen", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "r"), "", []string{"R"}},
 			{"Priority…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "!"), "", []string{"!"}},
-			{"Dates…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "d"), "", []string{"d"}},
-			{"Move to Project", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "shift+m"), "", []string{"⇧M"}},
+			{"Dates…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "d"), "", []string{"D"}},
+			{"Owner…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "a"), "", []string{"A"}},
+			{"Labels…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "+"), "", []string{"+"}},
+			{"Move to Project…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "shift+m"), "", []string{"⇧M"}},
+			{"Agents…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "w"), model.ClosedIssueRefusal, []string{"W"}},
+			{"New child…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "shift+n"), "", []string{"⇧N"}},
 		}},
 	}
 	for _, tc := range cases {
@@ -88,12 +97,12 @@ func TestBoardCardAndLaneRowMenusPressTheirModesKeys(t *testing.T) {
 	)
 	board := render(t, wide)
 	card := menuOf(t, board, "main.columns.list.board.lane0.cards."+alpha.UID)
-	if len(card) != 6 || card[0].Label != "Open" || card[0].ID != view.ContextMenuPickClick(alpha.UID, model.ModeBoard, "", "enter") || card[5].ID != view.ContextMenuPickClick(alpha.UID, model.ModeBoard, "", "shift+m") {
+	if len(card) != 9 || card[0].Label != "Open" || card[0].ID != view.ContextMenuPickClick(alpha.UID, model.ModeBoard, "", "enter") || card[6].ID != view.ContextMenuPickClick(alpha.UID, model.ModeBoard, "", "shift+m") {
 		t.Errorf("Board card menu: %+v", card)
 	}
 	lane := apply(wide, model.KeyMsg{Chord: "enter"})
 	rows := menuOf(t, render(t, lane), view.IssueID(alpha.UID))
-	if len(rows) != 6 || rows[0].ID != view.ContextMenuPickClick(alpha.UID, model.ModeLane, "", "enter") || rows[2].Label != "Close" {
+	if len(rows) != 9 || rows[0].ID != view.ContextMenuPickClick(alpha.UID, model.ModeLane, "", "enter") || rows[1].Label != "Close…" {
 		t.Errorf("Lane row menu: %+v", rows)
 	}
 }

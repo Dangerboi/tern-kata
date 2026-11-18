@@ -255,9 +255,9 @@ func TestAWorkflowJobPicksFromTheProjectsLiveWorkflows(t *testing.T) {
 func TestAWorkflowPickerThatHasNothingToOfferSaysWhy(t *testing.T) {
 	s := step(t, jobsPane(t, 160), key("n")).State
 	s = choose(t, s, model.JobFieldKind, kindWorkflow)
-	wantText(t, "still reading", cardText(t, s), "reading the Project's workflows")
+	wantText(t, "still reading", cardText(t, s), "Loading the Project's workflows")
 	s = feed(t, s, model.JobWorkflowsLoaded{ProjectID: 7}).State
-	wantText(t, "none", cardText(t, s), "no workflow", "Workflows Page")
+	wantText(t, "none", cardText(t, s), "This Project has no workflow", "Workflows Page")
 	s = feed(t, s, model.JobWorkflowsLoaded{ProjectID: 7, Err: errTest}).State
 	s = set(t, s, model.JobFieldName, "Run")
 	out := step(t, s, key("ctrl+o"))
@@ -310,14 +310,14 @@ func TestAWorkerConfigThatCannotBeReadLeavesFreeTextAndSaysWhy(t *testing.T) {
 func TestOnceAndIssueDateTriggersSaveAndPreviewInWords(t *testing.T) {
 	s := choose(t, promptCard(t), model.JobFieldTrigger, triggerOnce)
 	s = set(t, s, model.JobFieldAt, "2026-10-09T09:30:00+02:00")
-	wantText(t, "once preview", cardText(t, s), "once at 2026-10-09 09:30 +02:00", "Fri 2026-10-09 07:30 UTC")
+	wantText(t, "once preview", cardText(t, s), "once at 2026-10-09 09:30 +02:00", "2026-10-09 07:30")
 	d := saved(t, s).Definition
 	if d.Trigger != (cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "2026-10-09T09:30:00+02:00"}) {
 		t.Fatalf("trigger %+v", d.Trigger)
 	}
 
 	s = choose(t, promptCard(t), model.JobFieldTrigger, triggerManual)
-	wantText(t, "manual preview", cardText(t, s), "Schedule: manual")
+	wantText(t, "manual preview", cardText(t, s), "Runs on demand")
 	if strings.Contains(cardText(t, s), "Next runs") {
 		t.Error("a manual trigger lists next runs")
 	}
@@ -436,7 +436,7 @@ func TestJobCardRefusesInvalidAdapterInputNamingTheFieldAndSendsNothing(t *testi
 		{"deadline lead beyond kata's range", notifyCard, func(t *testing.T, s driver.State) driver.State {
 			s = set(t, choose(t, s, model.JobFieldTrigger, triggerIssueDeadline), model.JobFieldIssue, "ab12")
 			return set(t, s, model.JobFieldLead, "99999999999999")
-		}, model.JobFieldLead, "Lead before the deadline"},
+		}, model.JobFieldLead, "Lead"},
 		{"skip with a negative grace", promptCard, func(t *testing.T, s driver.State) driver.State {
 			return set(t, choose(t, s, model.JobFieldCatchup, 2), model.JobFieldGrace, "-1")
 		}, model.JobFieldGrace, "Grace"},
@@ -478,8 +478,8 @@ func TestEditingAnAgentPromptJobPrefillsEveryFieldAndKeepsTheOptionsItDoesNotEdi
 	s := editedJob(t, job)
 	wantText(t, "prefilled card", cardText(t, s), "triage the inbox", "then report", "fast", "repo", "GH_TOKEN=github", "Triage", "86400", "600", "60", "0 9 * * 1-5", "Europe/Berlin", "Agent prompt", "Skip runs older than the grace")
 	f := s.Model.JobForm
-	if kinds := f.JobChoices(model.JobFieldKind); len(kinds) != 3 || kinds[0].Label == "Recurring child" {
-		t.Fatalf("an adapter job offers the kinds %+v, which should not include the recurring child", kinds)
+	if kinds := f.JobChoices(model.JobFieldKind); len(kinds) != 3 || kinds[0].Label == "Recurring Issue" {
+		t.Fatalf("an adapter job offers the kinds %+v, which should not include the Recurring Issue", kinds)
 	}
 	s = set(t, s, model.JobFieldProfile, "slow")
 	save := saved(t, s)
@@ -508,7 +508,7 @@ func TestEditingAWorkflowJobAndANotifyJobPrefillsThem(t *testing.T) {
 	notify.Definition.Action = cronjob.Action{Kind: cronjob.ActionNotify, Recipient: "alice", Message: "Look"}
 	notify.Definition.Issue = &cronjob.IssuePolicy{Kind: cronjob.IssueExisting, UID: "ISSUE1"}
 	s := editedJob(t, notify)
-	wantText(t, "notify card", cardText(t, s), "Notify", "ISSUE1", "alice", "Look")
+	wantText(t, "notify card", cardText(t, s), "Notification", "ISSUE1", "alice", "Look")
 	if save := saved(t, s); save.IssueRef != "ISSUE1" || save.Definition.Issue.Kind != cronjob.IssueExisting || save.ExpectedEventUID != notify.DefinitionEventUID {
 		t.Fatalf("save %+v", save)
 	}
@@ -581,12 +581,12 @@ func TestAnAdapterIntervalCountsFromTheJobsCreationInTheRowAndThePreview(t *test
 	job := promptJob("J2", "Triage")
 	job.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerInterval, IntervalSeconds: 5400}
 	s := jobsPane(t, 160, job)
-	wantText(t, "adapter job row", jobCardText(t, s, "J2"), "every 90 minutes", "next 12:30")
+	wantText(t, "adapter job row", jobCardText(t, s, "J2"), "every 90 minutes", "Next run 12:30")
 
 	card := editedJob(t, job)
-	wantText(t, "preview", cardText(t, card), "Thu 2026-10-08 12:30 UTC", "Thu 2026-10-08 14:00 UTC", "Thu 2026-10-08 15:30 UTC")
+	wantText(t, "preview", cardText(t, card), "12:30", "14:00", "15:30")
 	card = set(t, card, model.JobFieldInterval, "45m") // ticks at 11:45, 12:30, 13:15
-	wantText(t, "preview follows the field", cardText(t, card), "Thu 2026-10-08 12:30 UTC", "Thu 2026-10-08 13:15 UTC")
+	wantText(t, "preview follows the field", cardText(t, card), "12:30", "13:15")
 }
 
 func TestAnIntervalTooLongForKataIsRefusedNamingTheFieldInsteadOfWrappingToZero(t *testing.T) {

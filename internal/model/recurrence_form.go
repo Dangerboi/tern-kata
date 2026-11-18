@@ -70,6 +70,15 @@ func localZoneNote(stored, zone string) string {
 	return "The stored time zone is Local (the daemon's own zone); saving sets " + zone + "."
 }
 
+// RecurrenceRef names the Issue the Recurrence card is about, as the head's meta: "#short" in its own Project, "project#short"
+// elsewhere. It is "" when the Issue is no longer known.
+func (m Model) RecurrenceRef() string {
+	if issue := closeIssue(m); issue != nil && issue.UID == m.RecurrenceForm.UID {
+		return m.RefName(issue.ProjectName, issue.ShortID)
+	}
+	return ""
+}
+
 func (f RecurrenceFormState) ZoneNote() string {
 	if !f.Change {
 		return ""
@@ -343,7 +352,7 @@ func weekdayNamed(word string) (time.Weekday, bool) {
 
 func submitRecurrence(m Model) (Model, []Cmd) {
 	f := &m.RecurrenceForm
-	if f.Refused || f.refuseSubmit(m, "making this Issue recur") {
+	if f.Refused || f.refuseSubmit(m, "make", "this Issue recur") {
 		return m, nil
 	}
 	terms, err := f.terms()
@@ -488,7 +497,7 @@ func answerStop(m Model, msg KeyMsg) (Model, []Cmd) {
 		f.StopConfirm = false
 	case bound && binding.Action == RecurrenceStopConfirm:
 		f.StopConfirm = false
-		if f.refuseStale(m, "stopping this recurrence") {
+		if f.refuseStale(m, "stop", "this recurrence") {
 			return m, nil
 		}
 		f.Saving, f.Stopping, f.Err = true, true, nil

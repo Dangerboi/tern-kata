@@ -11,7 +11,7 @@ expect_tree "[data-id\$='.$id_mention']" '.ok and .count == 1'
 
 ctl key /
 for ((i = 0; i < ${#id_short}; i++)); do ctl key "${id_short:i:1}"; done
-expect_tree "[data-id='main.filters.search']" ".nodes[0].text == \"search $id_short\""
+expect_tree "[data-id='main.filters.search']" '.ok and .count == 0'
 expect_tree "[data-id\$='.$id_target']" '.ok and .count == 1'
 expect_tree "[data-id\$='.$id_mention']" '.ok and .count == 0'
 # The result behaves as any search result: enter focuses it, a second enter commits it, and the Issue stays alone and selected.
@@ -23,7 +23,7 @@ expect_tree "[data-id\$='.$id_mention']" '.ok and .count == 0'
 
 # Words are still full text: both Issues carry "Idsearch".
 ctl key c
-expect_tree "[data-id='main.filters']" '.ok and .count == 0'
+expect_tree "[data-id='main.filters.icon']" '.ok and .count == 0'
 ctl key /
 for letter in I d s e a r c h; do ctl key "$letter"; done
 expect_tree "[data-id\$='.$id_target']" '.ok and .count == 1'
@@ -31,7 +31,7 @@ expect_tree "[data-id\$='.$id_mention']" '.ok and .count == 1'
 ctl key enter
 ctl key enter
 ctl key c
-expect_tree "[data-id='main.filters']" '.ok and .count == 0'
+expect_tree "[data-id='main.filters.icon']" '.ok and .count == 0'
 
 for fixture in target mention; do
   short=$(jq -r '.issue.short_id' "$tmp/idsearch-$fixture.json")

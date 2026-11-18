@@ -102,17 +102,17 @@ func TestTheBoardsFilterCardHasNoStatusRowButKeepsTheValue(t *testing.T) {
 
 func TestTheBoardsFilterLineOmitsStatusAndKeepsDefault(t *testing.T) {
 	board := feed(t, statusDefaultPane(t, boardCard("a")), key("b"), newestLanes{ProjectUID: "p"}).State
-	if got := filterLineText(t, board); strings.Contains(got, "status") {
+	if got := filterLineText(t, board); strings.Contains(got, "Status") {
 		t.Errorf("the Board's filter line = %q, want no status", got)
 	}
 	withOwner := model.Filters{Status: "open", Owner: "me"}
 	pane := board
 	pane.Model.Filters, pane.Model.DefaultFilters = withOwner, withOwner
-	if got := filterLineText(t, pane); got != "owner me (default)" {
-		t.Errorf("filter line = %q, want %q", got, "owner me (default)")
+	if got := filterLineText(t, pane); got != "Owner me (Default filter)" {
+		t.Errorf("filter line = %q, want %q", got, "Owner me (Default filter)")
 	}
 	issues := feed(t, pane, key("b")).State
-	if got := filterLineText(t, issues); got != "status open · owner me (default)" {
+	if got := filterLineText(t, issues); got != "Status open · Owner me (Default filter)" {
 		t.Errorf("the Issues Page's filter line = %q", got)
 	}
 }

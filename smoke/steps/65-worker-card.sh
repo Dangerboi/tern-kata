@@ -7,16 +7,16 @@ wc_file="$XDG_CONFIG_HOME/tern-kata/worker.toml"
 
 ctl key 2
 expect_tree "[data-id='main.columns.list.jobs']" '.ok and .count == 1'
-expect_tree "[data-id='main.columns.list.worker']" '.ok and .count == 1 and (.nodes[0].text | contains("press W to set one up"))'
+expect_tree "[data-id='main.columns.list.worker']" '.ok and .count == 1 and (.nodes[0] | [.. | objects | .text? // empty] | join(" ") | contains("none set up for smoke"))'
 ctl key W
-expect_tree "[data-id='layer.worker']" '.ok and .count == 1 and (.nodes[0] | [.. | objects | .text? // empty] | join(" ") | contains("none yet"))'
-expect_tree "[data-id='layer.worker.facts.project.value']" '.ok and .count == 1 and .nodes[0].text == "smoke"'
+expect_tree "[data-id='layer.worker']" '.ok and .count == 1 and (.nodes[0] | [.. | objects | .text? // empty] | join(" ") | contains("not created"))'
+expect_tree "[data-id='layer.worker.properties.project.value']" '.ok and .count == 1 and .nodes[0].text == "smoke"'
 expect_tree "[data-id='layer.worker.executor']" '.ok and .count == 1 and (.nodes[0].text | length > 0)'
 expect_tree "[data-id='layer.worker.command']" '.ok and .count == 1 and (.nodes[0].text | startswith("omp"))'
 
 # Without the trust choice nothing is written and the refusal names it.
 ctl key Ctrl+o
-expect_tree "[data-id='layer.worker.error']" '.ok and .count == 1 and (.nodes[0].text | contains("Trust"))'
+expect_tree "[data-id='layer.worker.foot.error']" '.ok and .count == 1 and (.nodes[0].text | contains("Trust"))'
 [[ ! -e "$wc_file" ]]
 
 ctl click "[data-id='layer.worker.trust.control']"
@@ -32,6 +32,6 @@ expect_tree "[data-id='layer.worker']" '.ok and .count == 0'
 
 # The banner now sees a file that lists the Project.
 ctl key ctrl+r
-expect_tree "[data-id='main.columns.list.worker']" '.ok and .count == 1 and (.nodes[0].text | contains("W shows the setup") or contains("running"))'
+expect_tree "[data-id='main.columns.list.worker']" '.ok and .count == 1 and (.nodes[0] | [.. | objects | .text? // empty] | join(" ") | contains("none set up") | not)'
 rm -f "$wc_file"
 ctl key 1

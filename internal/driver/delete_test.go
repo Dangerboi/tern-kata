@@ -11,15 +11,24 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
+// statusLeaf is the id of a card leaf: a card's error, pending, saving, sending and question lines are drawn in its foot.
+func statusLeaf(leaf string) string {
+	switch leaf {
+	case "error", "pending", "saving", "sending", "question":
+		return "foot." + leaf
+	}
+	return leaf
+}
+
 func deleteText(t *testing.T, s driver.State, leaf string) string {
 	t.Helper()
-	text, _ := nodeText(t, s, view.LayerID(model.CardDelete)+"."+leaf)
+	text, _ := nodeText(t, s, view.LayerID(model.CardDelete)+"."+statusLeaf(leaf))
 	return text
 }
 
 func formText(t *testing.T, s driver.State, leaf string) string {
 	t.Helper()
-	text, _ := nodeText(t, s, view.LayerID(model.CardField)+"."+leaf)
+	text, _ := nodeText(t, s, view.LayerID(model.CardField)+"."+statusLeaf(leaf))
 	return text
 }
 
@@ -65,10 +74,10 @@ func TestXOpensTheDeleteCardInEveryModeNamingTheIssueAndSayingItCanBeRestored(t 
 			if m.CurrentMode() != model.ModeDeleteForm || m.TopCard() != model.CardDelete || len(open.Cmds) != 0 {
 				t.Fatalf("mode %s card %v cmds %v", m.CurrentMode(), m.TopCard(), open.Cmds)
 			}
-			if got := deleteText(t, open.State, "issue"); got != "work#a Title of a" {
-				t.Errorf("the card names %q, want the qualified id and the title", got)
+			if got := deleteText(t, open.State, "issue"); got != "Title of a" {
+				t.Errorf("the card names %q, want the title", got)
 			}
-			if got := deleteText(t, open.State, "note"); !strings.Contains(got, "can be restored") {
+			if got := deleteText(t, open.State, "note"); !strings.Contains(got, "Restore it with") {
 				t.Errorf("the card says %q, want that a deleted Issue can be restored", got)
 			}
 			if !strings.HasPrefix(open.State.Focus, view.LayerID(model.CardDelete)) {
@@ -89,7 +98,7 @@ func TestTheDeleteCardRefusesUntilTheTypedIdMatches(t *testing.T) {
 		if len(theDeletes(out.Cmds)) != 0 {
 			t.Fatalf("typed %q and Enter sent %#v", wrong, out.Cmds)
 		}
-		if got := deleteText(t, out.State, "error"); got != "Type work#a or DELETE work#a to confirm the delete." {
+		if got := deleteText(t, out.State, "error"); got != "Cannot delete #a: type its id to confirm." {
 			t.Errorf("typed %q: the card says %q", wrong, got)
 		}
 		if out.State.Model.TopCard() != model.CardDelete {
@@ -144,7 +153,7 @@ func TestADeleteClosesTheCardLeavesTheListAndUDeletesItBack(t *testing.T) {
 	sent := step(t, s, key("enter"))
 	out := step(t, sent.State, deleted("a"))
 	m := out.State.Model
-	if m.TopCard() != model.NoCard || m.Notice != "" || toastText(t, out) != "Deleted work#a. Press u to restore it." {
+	if m.TopCard() != model.NoCard || m.Notice != "" || toastText(t, out) != "Deleted #a." {
 		t.Fatalf("card %v notice %q toast %q", m.TopCard(), m.Notice, toastText(t, out))
 	}
 	after := movedSnapshot(t, out.State, out.Cmds, movable("b"))
@@ -161,13 +170,13 @@ func TestADeleteClosesTheCardLeavesTheListAndUDeletesItBack(t *testing.T) {
 		t.Fatalf("u sent %#v, want one undo", undone.Cmds)
 	}
 	back := step(t, undone.State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoChanged, Ref: "a"})
-	if got := back.State.Model.Notice; got != "undid delete on #a" {
+	if got := back.State.Model.Notice; got != "Undid the delete on #a." {
 		t.Errorf("notice %q", got)
 	}
 	if _, asked := snapshotFor(back.Cmds); !asked {
 		t.Errorf("the Collection was not read again after the restore: %#v", back.Cmds)
 	}
-	if got := pressU(t, back.State).State.Model.Notice; got != "nothing to undo" {
+	if got := pressU(t, back.State).State.Model.Notice; got != "Nothing to undo." {
 		t.Errorf("a second u says %q", got)
 	}
 }
@@ -177,7 +186,7 @@ func TestUAfterADeleteSaysAlreadyRestoredWhenKataHoldsItRestored(t *testing.T) {
 	s = feed(t, s, key("enter"), deleted("a")).State
 	cmd := undoCmd(t, pressU(t, s))
 	out := step(t, pressU(t, s).State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoAlready, Ref: "a"})
-	if got := out.State.Model.Notice; got != "#a already restored; no change made" {
+	if got := out.State.Model.Notice; got != "#a is already restored." {
 		t.Fatalf("notice %q", got)
 	}
 }
@@ -205,7 +214,7 @@ func menuRestore(t *testing.T, s driver.State) driver.State {
 
 func TestTheMenuOffersToRestoreADeletedIssueThroughOneField(t *testing.T) {
 	s := menuRestore(t, movePane(t, movable("a")))
-	if got := s.Model.FieldFormTitle(); got != "Restore a deleted Issue (short id, project#id or ULID)" {
+	if got := s.Model.FieldFormTitle(); got != "Restore Issue" {
 		t.Errorf("title %q", got)
 	}
 	// Enter reads the Issue first.
@@ -216,7 +225,7 @@ func TestTheMenuOffersToRestoreADeletedIssueThroughOneField(t *testing.T) {
 	}
 	// It shows the title and that the Issue is deleted.
 	found := step(t, asked.State, model.DeletedLooked{Ref: "a", Issue: model.DeletedIssue{UID: "x", ProjectID: 7, ShortID: "a", Title: "Gone", Deleted: true}})
-	if got := formText(t, found.State, "found"); got != "work#a Gone" {
+	if got := formText(t, found.State, "found"); got != "#a Gone" {
 		t.Errorf("the form shows %q, want the Issue and its title", got)
 	}
 	if got := formText(t, found.State, "found-state"); !strings.Contains(got, "is deleted") {
@@ -231,7 +240,7 @@ func TestTheMenuOffersToRestoreADeletedIssueThroughOneField(t *testing.T) {
 		t.Fatalf("Enter while the restore is out sent %#v", again.Cmds)
 	}
 	done := step(t, restoring.State, model.IssueRestored{UID: "x", Changed: true})
-	if done.State.Model.TopCard() != model.NoCard || done.State.Model.Notice != "Restored work#a." {
+	if done.State.Model.TopCard() != model.NoCard || done.State.Model.Notice != "Restored #a." {
 		t.Fatalf("card %v notice %q", done.State.Model.TopCard(), done.State.Model.Notice)
 	}
 	if _, asked := snapshotFor(done.Cmds); !asked {
@@ -245,7 +254,7 @@ func TestRestoringAnIssueOfAProjectOutsideTheCatalogNamesItByShortIdAlone(t *tes
 	found := step(t, asked.State, model.DeletedLooked{Ref: "a", Issue: model.DeletedIssue{UID: "x", ProjectID: 99, ShortID: "abcd", Title: "Gone", Deleted: true}})
 	restoring := step(t, found.State, key("enter"))
 	done := step(t, restoring.State, model.IssueRestored{UID: "x", Changed: true})
-	if got := done.State.Model.Notice; got != "Restored abcd." {
+	if got := done.State.Model.Notice; got != "Restored #abcd." {
 		t.Errorf("notice %q, want no bare leading #", got)
 	}
 }
@@ -283,7 +292,7 @@ func TestTheMenuRestoreTakesProjectQualifiedIdsAndULIDs(t *testing.T) {
 
 func TestTheMenuRestoreRefusesWhatItCannotAsk(t *testing.T) {
 	for typedRef, want := range map[string]string{
-		"nowhere#zz": `kata Project "nowhere" not found`,
+		"nowhere#zz": `Project "nowhere" not found.`,
 		"shop#":      "Enter an Issue id after #.",
 		"":           "Enter a value.",
 	} {
@@ -302,7 +311,7 @@ func TestKatasRefusalsShowOnTheRestoreForm(t *testing.T) {
 	s := menuRestore(t, movePane(t, movable("a")))
 	asked := step(t, typed(t, s, "zz"), key("enter"))
 	missing := step(t, asked.State, model.DeletedLooked{Ref: "zz", Err: errors.New("issue not found")})
-	if got := formText(t, missing.State, "error"); got != "issue not found" || missing.State.Model.TopCard() != model.CardField {
+	if got := formText(t, missing.State, "error"); got != "Cannot restore: this Issue is not found." || missing.State.Model.TopCard() != model.CardField {
 		t.Fatalf("the form says %q, want kata's refusal on the open form", got)
 	}
 
@@ -314,11 +323,11 @@ func TestKatasRefusalsShowOnTheRestoreForm(t *testing.T) {
 	}
 	restoring := step(t, found.State, key("enter"))
 	nothing := step(t, restoring.State, model.IssueRestored{UID: "x"})
-	if got := formText(t, nothing.State, "error"); got != "work#zz is not deleted; kata restored nothing." {
+	if got := formText(t, nothing.State, "error"); got != "Cannot restore: this Issue is not deleted." {
 		t.Errorf("the form says %q", got)
 	}
 	refused := step(t, step(t, nothing.State, key("enter")).State, model.IssueRestored{UID: "x", Err: errors.New("federated replicas are read-only")})
-	if got := formText(t, refused.State, "error"); got != "federated replicas are read-only" || refused.State.Model.TopCard() != model.CardField {
+	if got := formText(t, refused.State, "error"); got != "Cannot restore: federated replicas are read-only." || refused.State.Model.TopCard() != model.CardField {
 		t.Errorf("the form says %q", got)
 	}
 }
@@ -344,7 +353,7 @@ func TestARestoreFromTheMenuClearsTheUndoHistory(t *testing.T) {
 	found := step(t, asked.State, model.DeletedLooked{Ref: "zz", Issue: model.DeletedIssue{UID: "x", ProjectID: 7, ShortID: "zz", Title: "Gone", Deleted: true}})
 	restoring := step(t, found.State, key("enter"))
 	done := feed(t, restoring.State, model.IssueRestored{UID: "x", Changed: true})
-	if got := pressU(t, done.State).State.Model.Notice; got != "nothing to undo: restoring an Issue cannot be undone" {
+	if got := pressU(t, done.State).State.Model.Notice; got != "Nothing to undo: restoring an Issue cannot be undone." {
 		t.Fatalf("u says %q", got)
 	}
 }
@@ -385,7 +394,7 @@ func issueScopedAnswer(scoped bool) model.AuthCapabilitiesLoaded {
 func offersDelete(m model.Model) bool {
 	for _, group := range model.HelpSheetOn(m.Page, m) {
 		for _, line := range group.Lines {
-			if slices.Contains(line.Keys, "X") {
+			if slices.Contains(line.Keys, "⇧X") {
 				return true
 			}
 		}

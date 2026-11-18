@@ -93,9 +93,10 @@ func (s ShareLanes) same(o ShareLanes) bool {
 // refuses.
 func (m Model) shareLaneList(lanes []string, doneDays, doneCards int, stop bool) (Model, []Cmd) {
 	form := &m.LanesForm
-	if form.refuseStale(m, "sharing the Lane list") {
+	if form.refuseStale(m, "share", "the Lane list") {
 		return m, nil
 	}
+	form.ErrField = ""
 	if form.ProjectID == 0 {
 		form.Err = errors.New("The Project could not be read, so its shared Lane list cannot be written.")
 		if m.Board.sharedErr != nil {
@@ -104,7 +105,7 @@ func (m Model) shareLaneList(lanes []string, doneDays, doneCards int, stop bool)
 		return m, nil
 	}
 	if m.Board.archived {
-		form.Err = errors.New("An archived Project's shared Lane list can't be changed. Restore the Project first, or save to This machine.")
+		form.Err = errors.New("An archived Project's shared Lane list cannot be changed. Restore the Project first, or save to This machine.")
 		return m, nil
 	}
 	share := ShareLanes{Workspace: m.Workspace, Actor: m.Actor, ProjectUID: m.Collection.ProjectUID, ProjectID: form.ProjectID,
@@ -183,14 +184,14 @@ func applyLanesLoaded(m Model, msg LanesLoaded) Model {
 		m.Board.reported = ""
 	} else if text := msg.SharedErr.Error(); text != m.Board.reported {
 		m.Board.reported = text
-		notices = append(notices, fmt.Sprintf("Shared Lane list not used: %v.", msg.SharedErr))
+		notices = append(notices, Cannot("use", "the shared Lane list", msg.SharedErr))
 	}
 	if msg.Err != nil && !msg.Shared {
 		m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = nil, 0, 0
-		notices = append(notices, fmt.Sprintf("Lane list file unreadable, showing the default Lanes: %v", msg.Err))
+		notices = append(notices, Cannot("read", "the Lane list file", msg.Err)+" Showing the default Lanes.")
 	}
 	if len(notices) > 0 {
-		m.Notice = strings.Join(notices, " ")
+		m = m.fail(strings.Join(notices, " "))
 	}
 	if m.waitingForFollow() {
 		return m
@@ -210,22 +211,20 @@ func (s SaveLanes) answeredBy(msg LanesSaved) bool {
 func lanesSaved(m Model, msg LanesSaved) Model {
 	if m.LanesForm.Open && m.LanesForm.Saving && m.LanesForm.Sent.answeredBy(msg) {
 		if msg.Err != nil {
-			m.LanesForm.Saving, m.LanesForm.Err = false, fmt.Errorf("Lanes not saved: %w", msg.Err)
+			m.LanesForm.Saving, m.LanesForm.Err, m.LanesForm.ErrField = false, errors.New(Cannot("save", "Lanes", msg.Err)), ""
 			return m
 		}
 		m.LanesForm = LanesFormState{}
 	}
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Lanes not saved: %v", msg.Err)
-		return m
+		return m.fail(Cannot("save", "Lanes", msg.Err))
 	}
 	if msg.ProjectUID != m.Collection.ProjectUID {
 		return m
 	}
 	m.Board.reads.Supersede()
 	if m.Board.Shared {
-		m.Notice = "Lanes saved on this machine. The Project's shared list stays in use until sharing stops."
-		return m
+		return m.say("Saved Lanes on this machine. The Project's shared list stays in use until sharing stops.")
 	}
 	m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = msg.Lanes, msg.DoneDays, msg.DoneCards
 	return m.keepLane().WithVisibleSelection()
@@ -238,27 +237,25 @@ func lanesShared(m Model, msg LanesShared) (Model, []Cmd) {
 		m.LanesForm.Saving = false
 		switch {
 		case msg.Conflict:
-			m.LanesForm.Revision, m.LanesForm.Err = msg.Current.Revision, conflictError(msg.Current)
+			m.LanesForm.Revision, m.LanesForm.Err, m.LanesForm.ErrField = msg.Current.Revision, conflictError(msg.Current), ""
 			return m, nil
 		case msg.Err != nil:
-			m.LanesForm.Err = fmt.Errorf("%s: %w", shareFailure(msg.Share), msg.Err)
+			m.LanesForm.Err, m.LanesForm.ErrField = errors.New(shareFailure(msg.Share, msg.Err)), ""
 			return m, nil
 		}
 		m.LanesForm = LanesFormState{}
 	}
 	switch {
 	case msg.Conflict:
-		m.Notice = shareFailure(msg.Share) + ": the Project changed meanwhile."
-		return m, nil
+		return m.fail(shareFailure(msg.Share, errors.New("the Project changed meanwhile"))), nil
 	case msg.Err != nil:
-		m.Notice = fmt.Sprintf("%s: %v", shareFailure(msg.Share), msg.Err)
-		return m, nil
+		return m.fail(shareFailure(msg.Share, msg.Err)), nil
 	case msg.Share.ProjectUID != m.Collection.ProjectUID:
 		return m, nil
 	}
 	m.Board.reads.Supersede()
 	if msg.Share.Stop {
-		m.Notice = "The Project no longer shares a Lane list."
+		m = m.say("The Project no longer shares a Lane list.")
 		return m.lanesRefresh()
 	}
 	m.Board.Lanes, m.Board.DoneDays, m.Board.DoneCards = msg.Share.Lanes, msg.Share.DoneDays, msg.Share.DoneCards
@@ -266,11 +263,12 @@ func lanesShared(m Model, msg LanesShared) (Model, []Cmd) {
 	return m.keepLane().WithVisibleSelection(), nil
 }
 
-func shareFailure(s ShareLanes) string {
+// shareFailure is the sentence for a write of the Project's shared list that did not happen.
+func shareFailure(s ShareLanes, err error) string {
 	if s.Stop {
-		return "Sharing not stopped"
+		return Cannot("stop sharing", "Lanes", err)
 	}
-	return "Lanes not shared"
+	return Cannot("share", "Lanes", err)
 }
 
 func conflictError(current LanesLoaded) error {

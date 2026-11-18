@@ -8,7 +8,7 @@ ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 ctl key P
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-expect_tree "[data-id='layer.collections.list.back']" '.ok and .count == 1'
+expect_tree "[data-id='layer.collections.list.back']" '.ok and .count == 0'
 # esc leaves the Projects list for the Menu's top level, a second esc closes the Menu.
 ctl key esc
 ctl key esc

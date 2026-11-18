@@ -29,7 +29,7 @@ func (FiltersSaved) msg() {}
 // waits, the card staying open, for the answer.
 func saveFilterDefault(m Model) (Model, []Cmd) {
 	if m.Project.UID == "" {
-		m.FilterForm.Err = errors.New("This folder is bound to no Project, so there is no default filter to save.")
+		m.FilterForm.Err = errors.New(Cannot("save", "the default filter", errors.New("this folder is bound to no Project")))
 		return m, nil
 	}
 	values := trimmedFilters(m.FilterForm.Values)
@@ -48,16 +48,16 @@ func filtersSaved(m Model, msg FiltersSaved) (Model, []Cmd) {
 		return m, nil
 	}
 	if msg.Err != nil {
-		m.FilterForm.Saving, m.FilterForm.Err = false, fmt.Errorf("Default filter not saved: %w", msg.Err)
+		m.FilterForm.Saving, m.FilterForm.Err = false, errors.New(Cannot("save", "the default filter", msg.Err))
 		return m, nil
 	}
 	m.DefaultFilters = msg.Default
 	m.Filters = msg.Default
 	m.Filters.Search = form.Values.Search
 	m.FilterForm = FilterFormState{}
-	m.Notice = fmt.Sprintf("Saved as %s's default filter", m.Project.Name)
+	m = m.say(fmt.Sprintf("Saved as %s's default filter.", m.Project.Name))
 	if msg.Default == (Filters{}) {
-		m.Notice = fmt.Sprintf("Removed %s's default filter", m.Project.Name)
+		m = m.say(fmt.Sprintf("Removed %s's default filter.", m.Project.Name))
 	}
 	m.SelectedUID = ""
 	return snapshotChanged(m)

@@ -214,7 +214,7 @@ func TestPickerEnterSwitchesLikeTheSidebar(t *testing.T) {
 			base, _ := pickerKeys(pickerStart(120, true), tt.keys...)
 			want, wantCmds := model.Update(base, model.CollectionSelected{Collection: inbox})
 			want.Focus = model.ColumnList
-			got, gotCmds := menuKeys(base, "down", "enter", "down", "enter")
+			got, gotCmds := menuKeys(base, "down", "enter", "enter")
 			if !reflect.DeepEqual(got, want) || !reflect.DeepEqual(gotCmds, wantCmds) || len(gotCmds) != 1 {
 				t.Fatalf("picker switch: collection=%+v loading=%v focus=%v picker=%+v cmds=%#v, want %+v %#v", got.Collection, got.Loading, got.Focus, got.Picker, gotCmds, want.Collection, wantCmds)
 			}
@@ -223,7 +223,7 @@ func TestPickerEnterSwitchesLikeTheSidebar(t *testing.T) {
 }
 
 func TestPickerReturnsToBoundProject(t *testing.T) {
-	m, _ := menuKeys(pickerStart(120, true), "down", "enter", "down", "enter")
+	m, _ := menuKeys(pickerStart(120, true), "down", "enter", "enter")
 	if m.Collection.View != "inbox" {
 		t.Fatalf("first switch: %+v", m.Collection)
 	}
@@ -362,7 +362,7 @@ func TestPickerKeysAreAdvertisedFromTheKeymap(t *testing.T) {
 		}
 	}
 	picker := advertised(model.ModePicker)
-	for chord, action := range map[string]model.Action{"down": model.MoveDown, "up": model.MoveUp, "enter": model.PickCollection, "escape": model.ClosePicker} {
+	for chord, action := range map[string]model.Action{"down": model.MoveDown, "enter": model.PickCollection, "escape": model.ClosePicker} {
 		if picker[chord] != action {
 			t.Fatalf("picker hints: %s = %q, want %q", chord, picker[chord], action)
 		}
@@ -397,14 +397,14 @@ func projectsLevel(t *testing.T, bound bool) model.Model {
 
 func TestPickerProjectsEntryListsEveryProject(t *testing.T) {
 	m := projectsLevel(t, true)
-	if got, want := pickerTitles(m), []string{"Back", "alpha", "smoke"}; !reflect.DeepEqual(got, want) {
+	if got, want := pickerTitles(m), []string{"smoke", "alpha"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Projects level = %q, want %q", got, want)
 	}
 }
 
 func TestPickerPicksAProjectFromTheProjectsLevel(t *testing.T) {
 	alpha := model.Collection{View: "project", ProjectUID: "alpha-uid", Title: "alpha"}
-	m, cmds := pickerKeys(projectsLevel(t, true), "up", "enter")
+	m, cmds := pickerKeys(projectsLevel(t, true), "down", "enter")
 	if m.Picker.Open || m.Collection != alpha || m.Focus != model.ColumnList || !readsCollection(cmds, m, "") {
 		t.Fatalf("pick: open=%v collection=%+v cmds=%#v", m.Picker.Open, m.Collection, cmds)
 	}
@@ -426,11 +426,12 @@ func TestPickerEscapeLeavesTheProjectsLevelBeforeClosing(t *testing.T) {
 
 func TestPickerBackEntryAndClicksSwitchLevels(t *testing.T) {
 	base := projectsLevel(t, true)
-	viaEnter, _ := pickerKeys(base, "home", "enter")
 	viaEsc, _ := pickerKeys(base, "escape")
-	viaClick, _ := model.Update(base, model.PickerSelected{Key: "back"})
-	if viaEnter.Picker.Level != model.MenuTop || !reflect.DeepEqual(viaEnter, viaEsc) || !reflect.DeepEqual(viaClick, viaEsc) {
-		t.Fatalf("back: enter %+v, esc %+v, click %+v", viaEnter.Picker, viaEsc.Picker, viaClick.Picker)
+	if viaEsc.Picker.Level != model.MenuTop {
+		t.Fatalf("back: esc %+v", viaEsc.Picker)
+	}
+	if got := pickerTitles(base); slices.Contains(got, "Back") {
+		t.Fatalf("the popup lists a Back row: %q", got)
 	}
 	top, _ := menuKeys(pickerStart(120, true))
 	into, _ := model.Update(top, model.PickerSelected{Key: "projects"})
@@ -552,10 +553,9 @@ func TestEveryWayUpFromAMenuLevelLandsOnTheRowThatLedThere(t *testing.T) {
 		ways := map[string]model.Model{}
 		ways["esc"], _ = pickerKeys(tt.start, "escape")
 		ways["backspace"], _ = pickerKeys(tt.start, "backspace")
-		ways["enter on Back"], _ = pickerKeys(tt.start, "home", "enter")
-		if tt.popup {
-			ways["click on Back"], _ = model.Update(tt.start, model.PickerSelected{Key: "back"})
-		} else {
+		if !tt.popup {
+			// Only the sidebar has a Back row; the popup has the Back button and esc.
+			ways["enter on Back"], _ = pickerKeys(tt.start, "home", "enter")
 			ways["click on Back"], _ = model.Update(tt.start, model.CollectionPointerSelected{Key: "back"})
 		}
 		for name, got := range ways {
@@ -587,11 +587,11 @@ func viewsLevel(t *testing.T) model.Model {
 	return m
 }
 
-func TestPickerViewsLevelListsBackAndTheFixedCollections(t *testing.T) {
+func TestPickerViewsLevelListsTheFixedCollections(t *testing.T) {
 	m := viewsLevel(t)
-	want := []string{"Back", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "New view"}
+	want := []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "New view"}
 	if got := pickerTitles(m); !reflect.DeepEqual(got, want) || m.Picker.Cursor != 0 {
-		t.Fatalf("Views level = %q cursor %d, want %q on Back", got, m.Picker.Cursor, want)
+		t.Fatalf("Views level = %q cursor %d, want %q on Inbox", got, m.Picker.Cursor, want)
 	}
 	for i, title := range want[1 : len(want)-1] {
 		opened, _ := pickerKeys(m, slices.Repeat([]string{"down"}, i+1)...)
@@ -633,7 +633,7 @@ func TestPickerOpensOnViewsWhileAFixedCollectionIsCurrent(t *testing.T) {
 }
 
 func TestPickerViewsLevelCursorStartsOnTheCurrentCollection(t *testing.T) {
-	m, _ := menuKeys(pickerStart(120, true), "down", "enter", "down", "down", "enter")
+	m, _ := menuKeys(pickerStart(120, true), "down", "enter", "down", "enter")
 	if m.Collection.View != "today" {
 		t.Fatalf("fixture: collection %+v", m.Collection)
 	}
@@ -661,7 +661,7 @@ func TestViewsRowNamesTheCurrentFixedCollection(t *testing.T) {
 	if got := pickerStart(120, true).CurrentView(); got != "" {
 		t.Fatalf("with a Project current the Views row names %q", got)
 	}
-	m, _ := menuKeys(pickerStart(120, true), "down", "enter", "down", "down", "enter")
+	m, _ := menuKeys(pickerStart(120, true), "down", "enter", "down", "enter")
 	if got := m.CurrentView(); got != "Today" {
 		t.Fatalf("CurrentView = %q, want Today", got)
 	}

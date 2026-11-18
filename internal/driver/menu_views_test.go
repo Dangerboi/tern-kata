@@ -59,9 +59,9 @@ func TestMenuTopLevelListsTheProjectViewsProjectsPagesRestoreAndNewProject(t *te
 	}
 }
 
-func TestMenuViewsOpensBackAndTheSixCollectionsByEnterAndClick(t *testing.T) {
+func TestMenuViewsOpensTheSixCollectionsByEnterAndClick(t *testing.T) {
 	top := boundMenu(t)
-	want := append(append([]string{"Back"}, fixedCollections...), model.NewViewTitle)
+	want := append(slices.Clone(fixedCollections), model.NewViewTitle)
 	byEnter := pressed(top, "down", "enter")
 	byClick := step(t, top, &tern.Select{ID: view.PickerListID, Item: rowShowing(t, top.Model, view.PickerListID, "Views")}).State
 	for name, s := range map[string]driver.State{"enter": byEnter, "click": byClick} {
@@ -70,7 +70,7 @@ func TestMenuViewsOpensBackAndTheSixCollectionsByEnterAndClick(t *testing.T) {
 		}
 	}
 	for i, title := range fixedCollections {
-		opened := pressed(byEnter, slices.Repeat([]string{"down"}, i+1)...)
+		opened := pressed(byEnter, slices.Repeat([]string{"down"}, i)...)
 		opened = pressed(opened, "enter")
 		if opened.Model.Picker.Open || opened.Model.Collection.Title != title || opened.Model.Collection.IsProject() {
 			t.Errorf("%s: Menu open %v, Collection %+v", title, opened.Model.Picker.Open, opened.Model.Collection)
@@ -82,14 +82,11 @@ func TestMenuViewsOpensBackAndTheSixCollectionsByEnterAndClick(t *testing.T) {
 	}
 }
 
-func TestMenuLeavesTheViewsLevelOnViewsByBackEscAndBackspace(t *testing.T) {
+func TestMenuLeavesTheViewsLevelOnViewsByEscAndBackspace(t *testing.T) {
 	views := pressed(boundMenu(t), "down", "enter")
-	clickBack := step(t, views, &tern.Select{ID: view.PickerListID, Item: rowShowing(t, views.Model, view.PickerListID, "Back")}).State
 	for name, s := range map[string]driver.State{
-		"esc":           pressed(views, "escape"),
-		"backspace":     pressed(views, "backspace"),
-		"enter on Back": pressed(views, "enter"),
-		"click on Back": clickBack,
+		"esc":       pressed(views, "escape"),
+		"backspace": pressed(views, "backspace"),
 	} {
 		if !s.Model.Picker.Open || s.Model.Picker.Level != model.MenuTop || cursorTitle(s) != "Views" {
 			t.Errorf("%s: open %v level %v cursor on %q, want the top level on Views", name, s.Model.Picker.Open, s.Model.Picker.Level, cursorTitle(s))
@@ -140,7 +137,7 @@ func TestMenuViewsRowNamesTheCurrentFixedCollectionAndTakesTheCursor(t *testing.
 	if cursorTitle(top) != "work" {
 		t.Fatalf("with a Project current the cursor is on %q, want the pinned Project", cursorTitle(top))
 	}
-	today := pressed(top, "down", "enter", "down", "down", "enter")
+	today := pressed(top, "down", "enter", "down", "enter")
 	if today.Model.Collection.View != "today" {
 		t.Fatalf("fixture: Collection %+v", today.Model.Collection)
 	}
@@ -231,7 +228,7 @@ func savedRowID(t *testing.T, m model.Model, name string) string {
 
 func TestMenuViewsLevelListsSavedViewsByNameAfterTheFixedCollectionsAndNamesAGoneProject(t *testing.T) {
 	s := savedViewsMenu(t)
-	want := append(append([]string{"Back"}, fixedCollections...), "Lost", "Mine", "work bugs", model.NewViewTitle)
+	want := append(slices.Clone(fixedCollections), "Lost", "Mine", "work bugs", model.NewViewTitle)
 	if got := menuTitles(s); !slices.Equal(got, want) {
 		t.Fatalf("Views level = %q, want %q", got, want)
 	}

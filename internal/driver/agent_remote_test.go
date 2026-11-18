@@ -49,8 +49,8 @@ func remotePane(t *testing.T) driver.State {
 func TestTheAgentCardListsRemoteAgentsAfterTheLocalOnesWithTheirHost(t *testing.T) {
 	s := step(t, remotePane(t), key("w")).State
 	for key, want := range map[string]string{
-		model.AgentRecordKey("b1b1b1b1", "8"): "on desk · started 2026-11-01 09:00",
-		model.AgentRecordKey("c2c2c2c2", "4"): "on mac · started 2026-11-01 10:00",
+		model.AgentRecordKey("b1b1b1b1", "8"): "on desk · 2026-11-01 09:00",
+		model.AgentRecordKey("c2c2c2c2", "4"): "on mac · 2026-11-01 10:00",
 	} {
 		if rows := rowsNamed(t, s.Model, view.AgentListID, want); len(rows) != 1 || rows[0] != view.AgentItemID(key) {
 			t.Errorf("rows reading %q: %v, want only %s", want, rows, view.AgentItemID(key))
@@ -96,7 +96,7 @@ func TestForgetAsksNamingHostAndStartThenWritesTheRecordOffAndTheSlotAway(t *tes
 		t.Fatalf("f: mode %s, cmds %#v; want the question and no write", m.CurrentMode(), asked.Cmds)
 	}
 	text := wireTextOf(t, asked.State)
-	for _, part := range []string{"Forget the agent on desk", "2026-11-01 09:00", "work#t1"} {
+	for _, part := range []string{"Forget the agent on desk", "#t1"} {
 		if !strings.Contains(text, part) {
 			t.Errorf("the question lacks %q: %s", part, text)
 		}
@@ -126,8 +126,8 @@ func TestALocalRowSaysAnotherHostUsesItsAddress(t *testing.T) {
 	s := remotePane(t)
 	s.Model.AgentMapping[0].AddressUsedBy = "desk"
 	s = step(t, s, key("w")).State
-	want := "agent working · started 2026-10-30 09:05 · split · " + model.AddressUsedWords("desk")
-	if rows := rowsNamed(t, s.Model, view.AgentListID, want); len(rows) != 1 || rows[0] != view.AgentItemID("31") {
+	want := "working · 2026-10-30 09:05 · split · " + model.AddressUsedWords("desk")
+	if rows := agentRowsReading(t, s.Model, want); len(rows) != 1 || rows[0] != view.AgentItemID("31") {
 		t.Errorf("rows reading %q: %v", want, rows)
 	}
 	if !strings.Contains(model.AddressUsedWords("desk"), "not published") {
@@ -145,8 +145,8 @@ func TestTheBadgeCountsRemoteAgentsAndNamesTheirHostWhenNoLocalAgentRuns(t *test
 		"only one remote agent":          {false, []model.AgentRecord{remoteRecord("desk", "b1b1b1b1", "8", "dana/omp-8", at)}, "agent on desk", "muted"},
 		"two agents on one host":         {false, []model.AgentRecord{remoteRecord("desk", "b1b1b1b1", "8", "dana/omp-8", at), remoteRecord("desk", "b1b1b1b1", "9", "dana/omp-9", at)}, "agent on desk · 2", "muted"},
 		"agents on two hosts":            {false, []model.AgentRecord{remoteRecord("desk", "b1b1b1b1", "8", "dana/omp-8", at), remoteRecord("mac", "c2c2c2c2", "4", "dana/omp-4", at)}, "agents on 2 hosts", "muted"},
-		"a local agent and a remote one": {true, []model.AgentRecord{remoteRecord("desk", "b1b1b1b1", "8", "dana/omp-8", at)}, "agent working · 2", "accent"},
-		"this host's own record":         {true, []model.AgentRecord{remoteRecord("here", thisHostID, "5", "dana/omp-5", at)}, "agent working", "accent"},
+		"a local agent and a remote one": {true, []model.AgentRecord{remoteRecord("desk", "b1b1b1b1", "8", "dana/omp-8", at)}, "agent working · 2", "pending"},
+		"this host's own record":         {true, []model.AgentRecord{remoteRecord("here", thisHostID, "5", "dana/omp-5", at)}, "agent working", "pending"},
 	} {
 		panes := agentPanes(t, agentIssue("t1"))
 		for _, pane := range []string{"list", "lane"} {
@@ -162,16 +162,18 @@ func TestTheBadgeCountsRemoteAgentsAndNamesTheirHostWhenNoLocalAgentRuns(t *test
 	}
 }
 
-func TestTheBadgeSaysMessageUnreadForAMessageAtARemoteAddress(t *testing.T) {
+func TestTheBadgeFlagsAMessageAtARemoteAddressAsUnread(t *testing.T) {
 	at := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
 	s := withRemoteRecords(agentPanes(t, agentIssue("t1"))["list"], "t1", remoteRecord("desk", "b1b1b1b1", "8", "dana/omp-8", at))
 	s.Model.Issues[0].Metadata[model.NotificationKey("dana/omp-8")] = map[string]any{"from": "dana", "message": "rebase first\nthen test"}
-	if text, style := badgeSpan(t, s, "t1"); text != "agent on desk · message unread" || style != "warning" {
+	// A short title leaves room in the row for both badges, which go together when the row is too narrow.
+	s.Model.Issues[0].Title = "T"
+	if text, style := badgeSpan(t, s, "t1"); text != "agent on desk" || style != "muted" {
 		t.Errorf("badge %q in %q", text, style)
 	}
 	s = step(t, s, key("w")).State
-	want := "on desk · started 2026-11-01 09:00 · message unread: rebase first"
-	if rows := rowsNamed(t, s.Model, view.AgentListID, want); len(rows) != 1 {
+	want := "on desk · 2026-11-01 09:00 message unread: rebase first"
+	if rows := agentRowsReading(t, s.Model, want); len(rows) != 1 {
 		t.Errorf("rows reading %q: %v", want, rows)
 	}
 }

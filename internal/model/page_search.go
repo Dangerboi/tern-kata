@@ -112,7 +112,7 @@ func (m Model) jobSearchWords(job CronJob) []string {
 }
 
 func runSearchWords(row RunRow) []string {
-	return []string{row.State, row.Name, row.Issue, row.Executor, row.Start, row.Duration, row.Reason, row.Hold, row.Summary}
+	return []string{row.State, row.Name, row.IssueRef, row.IssueTitle, row.Executor, row.Start, row.Duration, row.Reason, row.Hold, row.Summary}
 }
 
 func (m Model) workflowSearchWords(w Workflow) []string {

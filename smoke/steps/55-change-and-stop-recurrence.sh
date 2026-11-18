@@ -18,7 +18,8 @@ expect_tree "[data-id='main.columns.list.issues.$cs_uid']" '.ok and .count == 1 
 ctl key O
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 1 and (.nodes[0].text | contains("Change recurrence"))'
 expect_tree "[data-id='layer.recurrence.foot.stop']" '.ok and .count == 1'
-expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("Every (weeks): 1"))'
+expect_tree "[data-id='layer.recurrence.every-label']" '.ok and .count == 1 and .nodes[0].text == "Every"'
+expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("1"))'
 ctl key Tab
 ctl key Backspace
 ctl type '"2"'
@@ -30,18 +31,18 @@ expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(c
 ctl key O
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 1'
 ctl key Ctrl+x
-expect_tree "[data-id='layer.recurrence.stop']" '.ok and .count == 1'
+expect_tree "[data-id='layer.recurrence.foot.question']" '.ok and .count == 1'
 ctl key n
-expect_tree "[data-id='layer.recurrence.stop']" '.ok and .count == 0'
+expect_tree "[data-id='layer.recurrence.foot.question']" '.ok and .count == 0'
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 1'
 ctl key Ctrl+x
-expect_tree "[data-id='layer.recurrence.stop']" '.ok and .count == 1'
+expect_tree "[data-id='layer.recurrence.foot.question']" '.ok and .count == 1'
 ctl key y
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 0'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("stopped")))'
 # A stopped Issue gets a card that only says so: kata refuses a second recurrence.
 ctl key O
-expect_tree "[data-id='layer.recurrence.error']" '.ok and .count == 1 and (.nodes[0].text | contains("stopped"))'
+expect_tree "[data-id='layer.recurrence.foot.error']" '.ok and .count == 1 and (.nodes[0].text | contains("stopped"))'
 expect_tree "[data-id='layer.recurrence.frequency']" '.ok and .count == 0'
 ctl key Escape
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 0'

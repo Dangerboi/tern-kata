@@ -175,7 +175,7 @@ func TestAFailedCloseLeavesTheEntryAndShowsTernsWords(t *testing.T) {
 	m := closePane([]model.Issue{closed("a")}, finishedEntry("5", "a"))
 	m, _ = relayed(m, model.AgentState{Block: "5", State: "idle"})
 	m, cmds := model.Update(m, model.AgentClosed{Block: "5", Err: errors.New("exit status 1: no block")})
-	if m.Notice != "Cannot close the agent: exit status 1: no block" || len(m.AgentMapping) != 1 || len(cmds) != 0 {
+	if m.Notice != "Cannot close the agent: exit status 1: no block." || len(m.AgentMapping) != 1 || len(cmds) != 0 {
 		t.Fatalf("notice %q, mapping %+v", m.Notice, m.AgentMapping)
 	}
 	if _, cmds = relayed(m, model.AgentState{Block: "5", State: "idle"}); len(closes(cmds)) != 0 {

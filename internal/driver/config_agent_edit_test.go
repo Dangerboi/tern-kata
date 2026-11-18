@@ -90,7 +90,7 @@ func TestConfigAgentEditThatDoesNotLoadKeepsTheTextAndTheNextEStartsFromIt(t *te
 		t.Fatalf("the edited text sent %#v, want %#v", sent.Cmds, want)
 	}
 	refused := step(t, sent.State, model.AgentConfigSaved{Text: bad, Err: errors.New("agent.toml: unknown key bogus")})
-	wantText(t, "the Page", wireTextOf(t, refused.State), "unknown key bogus", "not saved", "your text is kept")
+	wantText(t, "the Page", wireTextOf(t, refused.State), "unknown key bogus", "Cannot save agent.toml", "your text is kept")
 	if len(refused.Cmds) != 0 {
 		t.Errorf("a refusal sent %#v", refused.Cmds)
 	}
@@ -131,7 +131,7 @@ func TestConfigAgentEditThatSavesReadsTheRowsAgainAndSaysAgentsUseItFromNow(t *t
 	if !ok {
 		t.Fatalf("cmds %#v, want the rows read again", done.Cmds)
 	}
-	wantText(t, "the Page", wireTextOf(t, done.State), "agent.toml saved; agents started from now on use it.")
+	wantText(t, "the Page", wireTextOf(t, done.State), "Saved agent.toml. Agents started from now on use it.")
 	reread := step(t, done.State, model.ConfigFilesLoaded{Request: load.Request, Folder: "/cfg/tern-kata", Files: agentRows(next, false)})
 	if again := step(t, reread.State, key("e")); again.Editor == nil || again.Editor.Text != next {
 		t.Errorf("e after a save opened %#v, want the new file", again.Editor)
@@ -165,7 +165,7 @@ func TestConfigAgentRowOffersEditAsAButtonAndInTheFooter(t *testing.T) {
 	found := false
 	for b := range model.BindingsForMode(s.Model.CurrentMode(), true) {
 		if b.Chord == "e" && b.Offered(s.Model) {
-			found = b.Described(s.Model) == "edit agent.toml"
+			found = b.Described(s.Model) == "Edit agent.toml"
 		}
 	}
 	if !found {

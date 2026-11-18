@@ -36,7 +36,7 @@ expect_tree "[data-id='layer.job.preview']" '.ok and .count == 1 and (.nodes[0] 
 ctl click "[data-id='layer.job.title']"
 ctl type '"Smoke every minute tick"'
 ctl key Ctrl+o
-expect_tree "[data-id='layer.job.error']" '.ok and .count == 1 and (.nodes[0].text | contains("Interval:"))'
+expect_tree "[data-id='layer.job.foot.error']" '.ok and .count == 1 and (.nodes[0].text | contains("Interval:"))'
 kata --workspace "$jc_dir" cron job list --json | jq -e '.jobs | length == 0' >/dev/null
 # Sixty seconds reads in words and lists the next runs.
 ctl click "[data-id='layer.job.interval']"

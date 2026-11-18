@@ -232,33 +232,61 @@ func (m Model) SelectedSpoke() *FederationSpoke {
 	return rowAt(m.Federation.Spokes, m.Federation.Cursor)
 }
 
-// Header is the line naming the active daemon, as kata tui words it.
-func (f FederationState) Header() string {
-	return "Federation for active daemon: " + oneLine(f.Daemon) + " " + oneLine(f.Endpoint) + " instance " + dashLine(f.InstanceUID) +
-		" auth " + oneLine(f.Auth)
+// Facts are the Page head's facts after its title: the spoke count (on the list only), the active daemon and how it is
+// authenticated. The daemon's endpoint is named only when it differs from its name, and its instance uid not at all.
+func (f FederationState) Facts() []string {
+	var facts []string
+	if f.Screen == FederationList && len(f.Spokes) > 0 {
+		facts = append(facts, strconv.Itoa(len(f.Spokes)))
+	}
+	daemon, endpoint := oneLine(f.Daemon), oneLine(f.Endpoint)
+	if daemon != "" {
+		facts = append(facts, daemon)
+	}
+	if endpoint != "" && endpoint != daemon {
+		facts = append(facts, endpoint)
+	}
+	if auth := oneLine(f.Auth); auth != "" {
+		facts = append(facts, "auth "+auth)
+	}
+	return facts
 }
 
-func (f FederationState) Summary() string { return strconv.Itoa(len(f.Spokes)) + " spoke federations" }
-
+// FederationNotice is what stands in place of the list. Err says a failure, Empty that there is no spoke (the view draws an empty
+// state) and Pending that the text is a line of progress.
 type FederationNotice struct {
-	Text string
-	Err  bool
+	Text                string
+	Err, Empty, Pending bool
 }
 
 // Notice is what stands in place of the list: loading comes first, then a failure, then no spokes; false when the list is shown.
 func (f FederationState) Notice() (FederationNotice, bool) {
 	switch {
 	case f.Loading:
-		return FederationNotice{Text: "loading federation status..."}, true
+		return FederationNotice{Text: Progress("Loading", "federation status"), Pending: true}, true
 	case f.Err != nil:
-		return FederationNotice{Text: "failed to load federation: " + oneLine(f.Err.Error()), Err: true}, true
+		return FederationNotice{Text: Cannot("read", "federation status", f.Err), Err: true}, true
 	case len(f.Spokes) == 0:
-		return FederationNotice{Text: "no spoke federation enrollments"}, true
+		return FederationNotice{Text: "No spoke federations", Empty: true}, true
 	}
 	return FederationNotice{}, false
 }
 
-func dashLine(s string) string { return dashIfEmpty(oneLine(s)) }
+// LeaveFailure is the sentence for the last leave that failed, "" when none did.
+func (f FederationState) LeaveFailure() string {
+	if f.LeaveErr == nil {
+		return ""
+	}
+	return Cannot("leave", "the federation", f.LeaveErr)
+}
+
+// dashLine is s on one line, None when it is empty.
+func dashLine(s string) string {
+	if line := oneLine(s); line != "" {
+		return line
+	}
+	return None
+}
 
 func dashIfEmpty(s string) string {
 	if s == "" {
@@ -267,14 +295,7 @@ func dashIfEmpty(s string) string {
 	return s
 }
 
-func federationTime(t time.Time) string {
-	if t.IsZero() {
-		return "-"
-	}
-	return t.UTC().Format("2006-01-02 15:04:05Z")
-}
-
-// HubHost is the hub as the list shows it: the host of its URL, else the URL, "-" when there is none.
+// HubHost is the hub as the list shows it: the host of its URL, else the URL, None when there is none.
 func (s FederationSpoke) HubHost() string {
 	if u, err := url.Parse(s.HubURL); err == nil && u.Host != "" {
 		return oneLine(u.Host)
@@ -282,15 +303,12 @@ func (s FederationSpoke) HubHost() string {
 	return dashLine(s.HubURL)
 }
 
-func (s FederationSpoke) Push() string {
-	if s.PushEnabled {
-		return "push"
-	}
-	return "off"
-}
+// Push is whether the spoke pushes its changes to the hub, as the card words it.
+func (s FederationSpoke) Push() string { return onOff(s.PushEnabled) }
 
-// Sync is when the Project last synced with its hub: "never", "error" when it never did and a failure is recorded, else how long ago.
-func (s FederationSpoke) Sync(now time.Time) string {
+// SyncWords is when the Project last synced with its hub: "never" when it never did, "error" when it never did and a failure is
+// recorded, else how long ago.
+func (s FederationSpoke) SyncWords(now time.Time) string {
 	switch {
 	case !s.LastSuccessfulSyncAt.IsZero():
 		return RelativeTime(s.LastSuccessfulSyncAt, now)
@@ -300,100 +318,116 @@ func (s FederationSpoke) Sync(now time.Time) string {
 	return "never"
 }
 
-func (s FederationSpoke) Badges() string {
-	var badges []string
+// Warnings are the spoke's conditions that need attention, in words: none for a healthy spoke.
+func (s FederationSpoke) Warnings() []string {
+	var words []string
 	if s.AllowInsecure {
-		badges = append(badges, "insecure")
+		words = append(words, "insecure connection")
 	}
 	if s.ActiveQuarantineCount > 0 {
-		badges = append(badges, "quarantine")
+		words = append(words, "quarantined")
 	}
 	if s.ResetBlocker != "" {
-		badges = append(badges, "reset")
+		words = append(words, "reset blocked")
 	}
 	if s.UnresolvedViolationCount > 0 {
-		badges = append(badges, "violations")
+		words = append(words, "claim violations")
 	}
-	if len(badges) == 0 {
-		return "-"
-	}
-	return strings.Join(badges, ",")
+	return words
 }
 
-func (s FederationSpoke) Lines(now time.Time) [2]string {
-	return [2]string{
-		oneLine(s.ProjectName) + s.nameWord() + "  Hub " + s.HubHost() + "  Actor " + dashLine(s.BoundActor),
-		"Push " + s.Push() + "  Pending " + strconv.FormatInt(s.PendingPushCount, 10) + "  Sync " + s.Sync(now) + "  Badges " + s.Badges(),
+// CardFacts is the muted line under a spoke's name in the list: the push state, the events waiting to push and the last sync.
+func (s FederationSpoke) CardFacts(now time.Time) string {
+	return "Push " + s.Push() + " · " + strconv.FormatInt(s.PendingPushCount, 10) + " pending · Synced " + s.SyncWords(now)
+}
+
+// HubURLFact is the hub's URL as the line under the list shows it.
+func (s FederationSpoke) HubURLFact() string { return dashLine(s.HubURL) }
+
+// CredentialFact is the spoke's credential status as the line under the list words it.
+func (s FederationSpoke) CredentialFact() string {
+	return "Credential " + strings.ToLower(dashLine(s.CredentialStatus))
+}
+
+// InsecureWords says whether an insecure connection to the hub is allowed.
+func InsecureWords(allowed bool) string {
+	if allowed {
+		return "allowed"
 	}
+	return "not allowed"
 }
 
-func (s FederationSpoke) nameWord() string {
-	if s.SpokeName == "" {
-		return ""
+// onOff says whether a setting is on.
+func onOff(on bool) string {
+	if on {
+		return "on"
 	}
-	return "  Name " + oneLine(s.SpokeName)
+	return "off"
 }
 
-func (s FederationSpoke) Footer() string {
-	return "hub " + oneLine(s.HubURL) + "/project " + strconv.FormatInt(s.HubProjectID, 10) + " · actor " + dashLine(s.BoundActor) +
-		" · credential " + dashLine(s.CredentialStatus)
-}
+// A FactRow's Tone: a sentence that needs attention, or one that reports a failure.
+const (
+	FactWarning = "warning"
+	FactError   = "error"
+)
 
-func (s FederationSpoke) DetailLines() []string {
-	var lines []string
+// DetailRows are the spoke's detail as label→value rows. A row with no Key is a sentence, a row with neither Key nor Value ends a
+// group. Times read in the Pane's zone. The hub Project's uid is not a row: it names no one.
+func (s FederationSpoke) DetailRows(cal PaneCalendar, now time.Time) []FactRow {
+	var rows []FactRow
 	for _, field := range s.Embedding {
-		lines = append(lines, oneLine(field))
+		rows = append(rows, FactRow{Value: oneLine(field)})
 	}
-	if len(lines) > 0 {
-		lines = append(lines, "")
+	if len(rows) > 0 {
+		rows = append(rows, FactRow{})
 	}
-	lines = append(lines,
-		oneLine(s.ProjectName),
-		"spoke name: "+s.SpokeLabel(),
-		"hub URL: "+oneLine(s.HubURL),
-		"hub project ID: "+strconv.FormatInt(s.HubProjectID, 10),
-		"hub project UID: "+dashLine(s.HubProjectUID),
-		"actor: "+dashLine(s.BoundActor),
-		"capabilities: "+oneLine(s.Capabilities),
-		"push enabled: "+strconv.FormatBool(s.PushEnabled),
-		"credential: "+dashLine(s.CredentialStatus),
-		"allow_insecure: "+strconv.FormatBool(s.AllowInsecure),
-		"",
-		"pull cursor: "+strconv.FormatInt(s.PullCursorEventID, 10),
-		"push cursor: "+strconv.FormatInt(s.PushCursorEventID, 10),
-		"pending push: "+strconv.FormatInt(s.PendingPushCount, 10),
-		"pending push high water: "+strconv.FormatInt(s.PendingPushHighWaterEventID, 10),
-		"pending claims: "+strconv.FormatInt(s.PendingClaimCount, 10),
-		"live claims: "+strconv.FormatInt(s.LiveClaimCount, 10),
-		"quarantine count: "+strconv.FormatInt(s.ActiveQuarantineCount, 10),
+	rows = append(rows,
+		FactRow{Key: "Project", Value: oneLine(s.ProjectName)},
+		FactRow{Key: "Spoke name", Value: s.SpokeLabel()},
+		FactRow{Key: "Hub", Value: dashLine(s.HubURL), Mono: true},
+		FactRow{Key: "Hub Project", Value: strconv.FormatInt(s.HubProjectID, 10), Mono: true},
+		FactRow{Key: "Actor", Value: dashLine(s.BoundActor)},
+		FactRow{Key: "Capabilities", Value: dashLine(s.Capabilities)},
+		FactRow{Key: "Push", Value: s.Push()},
+		FactRow{Key: "Credential", Value: dashLine(s.CredentialStatus)},
+		FactRow{Key: "Insecure connection", Value: InsecureWords(s.AllowInsecure)},
+		FactRow{},
+		FactRow{Key: "Pull cursor", Value: strconv.FormatInt(s.PullCursorEventID, 10), Mono: true},
+		FactRow{Key: "Push cursor", Value: strconv.FormatInt(s.PushCursorEventID, 10), Mono: true},
+		FactRow{Key: "Pending push", Value: strconv.FormatInt(s.PendingPushCount, 10), Mono: true},
+		FactRow{Key: "Push high water", Value: strconv.FormatInt(s.PendingPushHighWaterEventID, 10), Mono: true},
+		FactRow{Key: "Pending claims", Value: strconv.FormatInt(s.PendingClaimCount, 10), Mono: true},
+		FactRow{Key: "Live claims", Value: strconv.FormatInt(s.LiveClaimCount, 10), Mono: true},
+		FactRow{Key: "Quarantines", Value: strconv.FormatInt(s.ActiveQuarantineCount, 10), Mono: true},
 	)
 	for _, q := range s.ActiveQuarantines {
-		lines = append(lines, fmt.Sprintf("quarantine #%d: %s events %d-%d at %s: %s", q.ID, oneLine(q.Direction), q.FirstEventID, q.LastEventID,
-			q.CreatedAt.UTC().Format("2006-01-02 15:04:05Z"), oneLine(q.Error)))
+		rows = append(rows, FactRow{Value: fmt.Sprintf("Quarantine #%d: %s events %d to %d at %s: %s", q.ID, oneLine(q.Direction), q.FirstEventID, q.LastEventID,
+			cal.Stamp(q.CreatedAt), oneLine(q.Error)), Tone: FactWarning})
 	}
-	lastError := "-"
+	lastError := None
 	if s.HasLastError {
 		lastError = oneLine(s.LastError)
 		if !s.LastErrorAt.IsZero() {
-			lastError = federationTime(s.LastErrorAt) + " " + lastError
+			lastError = cal.Read(s.LastErrorAt, now) + " " + lastError
 		}
 	}
-	return append(lines,
-		"reset blocker: "+dashLine(s.ResetBlocker),
-		fmt.Sprintf("claim violations: %d unresolved, %d recent", s.UnresolvedViolationCount, s.RecentViolationCount),
-		"last pull success: "+federationTime(s.LastPullSuccessAt),
-		"last push success: "+federationTime(s.LastPushSuccessAt),
-		"last sync success: "+federationTime(s.LastSuccessfulSyncAt),
-		"last error: "+lastError,
+	return append(rows,
+		FactRow{},
+		FactRow{Key: "Reset blocker", Value: dashLine(s.ResetBlocker)},
+		FactRow{Key: "Claim violations", Value: fmt.Sprintf("%d unresolved, %d recent", s.UnresolvedViolationCount, s.RecentViolationCount)},
+		FactRow{Key: "Last pull", Value: cal.Read(s.LastPullSuccessAt, now)},
+		FactRow{Key: "Last push", Value: cal.Read(s.LastPushSuccessAt, now)},
+		FactRow{Key: "Last sync", Value: cal.Read(s.LastSuccessfulSyncAt, now)},
+		FactRow{Key: "Last error", Value: lastError},
 	)
 }
 
 var federationRows = []actionEntry{
-	{action: OpenFederationDetail, modes: []Mode{ModeFederation}, keys: keys("enter", "↵"), help: "detail", footer: []Mode{ModeFederation}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 4, "show the spoke's detail"}}, handle: openFederationDetail},
-	{action: StartFederationLeave, modes: []Mode{ModeFederation}, keys: keys("x", "x"), help: "leave", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 6, "leave the selected spoke's federation (preview first)"}}, handle: startFederationLeave},
-	{action: RefreshFederation, modes: []Mode{ModeFederation}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 5, "read the federation status again"}}, handle: askFederation},
-	{action: NameFederationSpoke, modes: []Mode{ModeFederation}, keys: keys("shift+n", "N"), help: "name spoke", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 32, "name the selected spoke, or clear its name with an empty one (kept by the hub)"}}, handle: openFederationNameForSpoke},
-	{action: StartFederationEnroll, modes: []Mode{ModeFederation}, keys: keys("n", "n"), help: "enroll", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 30, "enroll a Project in a hub's federation (choose, preview, confirm)"}}, handle: startFederationEnroll},
-	{action: StartFederationBrowse, modes: []Mode{ModeFederation}, keys: keys("b", "b"), help: "browse hubs", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 31, "browse the Projects of the catalog's hubs (read only)"}}, handle: startFederationBrowse},
+	{action: OpenFederationDetail, modes: []Mode{ModeFederation}, keys: keys("enter", "enter"), help: "detail", footer: []Mode{ModeFederation}, footerKey: "enter", sheet: []sheetLine{{sheetLettered, 4, "Show spoke detail"}}, handle: openFederationDetail},
+	{action: StartFederationLeave, modes: []Mode{ModeFederation}, keys: keys("x", "x"), help: "leave", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 6, "Leave federation"}}, handle: startFederationLeave},
+	{action: RefreshFederation, modes: []Mode{ModeFederation}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 5, "Read again"}}, handle: askFederation},
+	{action: NameFederationSpoke, modes: []Mode{ModeFederation}, keys: keys("shift+n", "⇧N"), help: "name spoke", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 32, "Name spoke"}}, handle: openFederationNameForSpoke},
+	{action: StartFederationEnroll, modes: []Mode{ModeFederation}, keys: keys("n", "n"), help: "enroll", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 30, "Enroll a Project"}}, handle: startFederationEnroll},
+	{action: StartFederationBrowse, modes: []Mode{ModeFederation}, keys: keys("b", "b"), help: "browse hubs", footer: []Mode{ModeFederation}, sheet: []sheetLine{{sheetLettered, 31, "Browse hub Projects"}}, handle: startFederationBrowse},
 	letteredBackRow(ModeFederation, federationBack),
 }

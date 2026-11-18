@@ -25,7 +25,7 @@ expect_tree "$ek_rows" '.nodes[0]["aria-selected"] == "true"'
 ctl key /
 ctl key I
 ctl key Ctrl+n
-expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "Project: emacs-keys"'
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "emacs-keys"'
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("commit search"))'
 ctl key Escape
 ctl key Escape
@@ -44,11 +44,11 @@ ek_entries="[data-id^='main.columns.collections.']"
 expect_tree "$ek_entries" '.ok and .count >= 7'
 ctl key Escape
 ctl key Home
-expect_tree "$ek_entries" '.nodes[0]["aria-selected"] == "true"'
+expect_tree "$ek_entries" '[.nodes[] | select(.class | contains("sf-item"))][0]["aria-selected"] == "true"'
 ctl key Ctrl+n
-expect_tree "$ek_entries" '.nodes[1]["aria-selected"] == "true"'
+expect_tree "$ek_entries" '[.nodes[] | select(.class | contains("sf-item"))][1]["aria-selected"] == "true"'
 ctl key Ctrl+p
-expect_tree "$ek_entries" '.nodes[0]["aria-selected"] == "true"'
+expect_tree "$ek_entries" '[.nodes[] | select(.class | contains("sf-item"))][0]["aria-selected"] == "true"'
 ctl key End
 ctl key I
 expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "Inbox"'

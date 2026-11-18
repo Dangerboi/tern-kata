@@ -10,6 +10,37 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
+// workerMono is what the card's sentences name that is a command or a file, longest first so that "tern-kata worker doctor" is
+// one span and not "tern-kata worker" followed by plain text.
+var workerMono = []string{"tern-kata worker doctor", "tern-kata worker", "worker.toml", "worker.manual", "commands = true"}
+
+// monoWords is text in style with each of words drawn mono, the earliest match first.
+func monoWords(text, style string, words ...string) []ui.Span {
+	var spans []ui.Span
+	for text != "" {
+		at, found := len(text), ""
+		for _, word := range words {
+			if i := strings.Index(text, word); i >= 0 && i < at {
+				at, found = i, word
+			}
+		}
+		if found == "" {
+			return append(spans, ui.Span{T: text, S: style})
+		}
+		if at > 0 {
+			spans = append(spans, ui.Span{T: text[:at], S: style})
+		}
+		spans = append(spans, monoSpan(found, style))
+		text = text[at+len(found):]
+	}
+	return spans
+}
+
+// workerText is a line of the card's sentences in tone, with its commands and files drawn mono.
+func workerText(key string, tone ui.Tone, text string) ui.Text {
+	return ui.Text{Common: ui.Common{Key: key, Tone: tone}, Spans: monoWords(text, toneStyle(tone), workerMono...)}
+}
+
 func workerLayer(m model.Model) tern.Element {
 	f := m.WorkerCard
 	if !f.Open {
@@ -20,39 +51,39 @@ func workerLayer(m model.Model) tern.Element {
 
 	switch m.WorkerCardKind() {
 	case model.WorkerLoading:
-		children = append(children, toneText("loading", ui.TonePending, "Reading this machine's worker setup…"))
+		children = append(children, toneText("loading", ui.TonePending, model.Progress("Reading", "the worker setup")))
 	case model.WorkerUnreadable:
-		children = append(children, toneText("unreadable", ui.ToneError, "Cannot read the worker setup: "+m.Worker.SetupErr.Error()))
+		children = append(children, toneText("unreadable", ui.ToneError, model.Cannot("read", "the worker setup", m.Worker.SetupErr)))
 	case model.WorkerUnbound:
-		children = append(children, toneText("unbound", ui.ToneWarning, "This folder is not bound to a kata Project, so there is no Project to serve. Run `kata init` here, then open the card again."))
+		children = append(children, ui.Text{Common: ui.Common{Key: "unbound", Tone: ui.ToneWarning}, Spans: []ui.Span{
+			{T: "This folder is not bound to a kata Project, so there is nothing to serve. Run ", S: toneStyle(ui.ToneWarning)},
+			monoSpan("kata init", toneStyle(ui.ToneWarning)),
+			{T: " here, then open this card again.", S: toneStyle(ui.ToneWarning)}}})
 	default:
 		children = append(children, workerFacts(m))
 	}
 
 	switch {
 	case f.Saved != "":
-		children = append(children, gap("gap-saved"), toneText("saved", ui.ToneSuccess, f.Saved), toneText("trust-note", ui.ToneWarning, model.WorkerTrustNote))
+		children = append(children, gap("gap-saved"), toneText("saved", ui.ToneSuccess, f.Saved), workerText("trust-note", ui.ToneMuted, model.WorkerTrustNote))
 		if f.Restart {
-			children = append(children, gap("gap-restart"), stopChoices(m, "restart", f.Next, "Restart when idle", "Restart now"))
+			children = append(children, gap("gap-restart"), stopQuestion(m, "restart", f.Next, "Restart when idle", "Restart now"))
 		} else {
-			children = append(children, toneText("next", ui.ToneNeutral, f.Next))
+			children = append(children, workerText("next", ui.ToneMuted, f.Next))
 		}
 	case f.AskOff:
-		children = append(children, gap("gap-off"), stopChoices(m, "off", model.WorkerOffQuestion, "Stop when idle", "Stop now"))
+		children = append(children, gap("gap-off"), stopQuestion(m, "off", model.WorkerOffQuestion, "Stop when idle", "Stop now"))
 	case m.WorkerCardSaves():
 		children = append(append(children, gap("gap-fields")), workerFields(m)...)
 	}
 	if f.Supervision != "" {
-		children = append(children, gap("gap-supervision"), toneText("supervision-done", ui.ToneSuccess, f.Supervision))
+		children = append(children, gap("gap-supervision"), workerText("supervision-done", ui.ToneSuccess, f.Supervision))
 	}
-	if f.Switching {
-		children = append(children, toneText("pending", ui.TonePending, "Changing supervision…"))
-	}
-	if f.Saving {
-		children = append(children, toneText("pending", ui.TonePending, "Writing worker.toml…"))
-	}
-	if f.Stopping {
-		children = append(children, toneText("pending", ui.TonePending, "Asking the worker to stop…"))
+	switch {
+	case f.Saving:
+		children = append(children, toneText("pending", ui.TonePending, model.Progress("Saving", "")))
+	case f.Switching || f.Stopping:
+		children = append(children, toneText("pending", ui.TonePending, model.Progress("Working", "")))
 	}
 	if f.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
@@ -61,32 +92,37 @@ func workerLayer(m model.Model) tern.Element {
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorker)}, Head: ui.T("Worker"), Icon: ui.IconCpu, Modal: true, Size: ui.SizeLG}, children))
 }
 
-func workerFacts(m model.Model) tern.Element {
-	s := m.Worker.Setup
-	muted := func(text string) ui.Span { return ui.Span{T: text, S: "muted"} }
-	fact := func(key, label string, value ...ui.Span) tern.Element {
-		return factRow(key, "", muted(label), value...)
-	}
-	file, fileTone := fileState(m)
-	return ui.Col{Common: ui.Common{Key: "facts"}, Gap: ui.GapXS, Children: ui.Nodes(
-		fact("project", "Project", ui.Span{T: s.Project, S: "strong"}),
-		fact("checkout", "Checkout", ui.Span{T: s.Checkout}),
-		fact("file", "worker.toml", ui.Span{T: file, S: toneStyle(fileTone)}, muted(" · "+s.Path)),
-		fact("worker", "Worker", workerSpans(m)...),
-		fact("supervision", "Supervision", supervisionSpans(m)...),
-	)}
+// workerValue is the value cell of a fact row: it grows into the row and may shrink below its content, as every fact's does.
+func workerValue(spans ...ui.Span) ui.Text {
+	return ui.Text{Common: ui.Common{Key: "value", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Spans: spans}
 }
 
-func stopChoices(m model.Model, key, question, idleLabel, nowLabel string) tern.Element {
-	idle, now := m.WorkerStopWords()
-	nowStyle := ""
-	if m.WorkerInFlightCount() > 0 {
-		nowStyle = toneStyle(ui.ToneWarning)
+// workerLines stacks lines in one value cell: a state and the line that explains it.
+func workerLines(lines ...tern.Element) ui.Col {
+	return ui.Col{Common: ui.Common{Key: "value", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Gap: ui.GapXS, Children: lines}
+}
+
+func workerFacts(m model.Model) tern.Element {
+	s := m.Worker.Setup
+	rows := []tern.Element{
+		propRow("Project", workerValue(ui.Span{T: s.Project, S: "strong"})),
+		propRow("Checkout", workerValue(monoSpan(s.Checkout, ""))),
 	}
+	if m.WorkerCardKind() == model.WorkerServed && !slices.Equal(s.Checkouts, []string{s.Checkout}) {
+		rows = append(rows, propRow("Mapped to", workerValue(monoSpan(strings.Join(s.Checkouts, ", "), ""))))
+	}
+	return propGrid(append(rows,
+		propRow("Config", configValue(m)),
+		propRow("Worker", workerState(m)),
+		propRow("Supervision", supervisionValue(m)))...)
+}
+
+// stopQuestion is a question about stopping the running worker: the question strong, then one muted line for what each answer
+// does. The answers are the card's buttons.
+func stopQuestion(m model.Model, key, question, idleLabel, nowLabel string) tern.Element {
 	return ui.Col{Common: ui.Common{Key: key}, Gap: ui.GapXS, Children: ui.Nodes(
 		ui.Text{Common: ui.Common{Key: "question"}, Spans: []ui.Span{{T: question, S: "strong"}}},
-		factRow("idle", "", ui.Span{T: idleLabel, S: "strong"}, ui.Span{T: idle}),
-		factRow("now", "", ui.Span{T: nowLabel, S: "strong"}, ui.Span{T: now, S: nowStyle}),
+		toneText("consequences", ui.ToneMuted, m.WorkerStopLine(idleLabel, nowLabel)),
 	)}
 }
 
@@ -96,7 +132,7 @@ func workerFields(m model.Model) []tern.Element {
 		if f.Field == name {
 			return ui.ToneAccent
 		}
-		return ui.ToneNeutral
+		return ui.ToneMuted
 	}
 	var children []tern.Element
 	if m.WorkerCardKind() == model.WorkerSetUp {
@@ -110,13 +146,12 @@ func workerFields(m model.Model) []tern.Element {
 				ui.Input{Common: ui.Common{Key: string(spec.Name), Tone: tone(spec.Name), Aria: model.WorkerPrompt(spec.Name)}, Field: ui.Field{Text: text, Cursor: caretAt(f.Caret, spec.Name, text), Mode: "insert", Placeholder: ui.T(model.WorkerHint(spec.Name)), Readonly: f.Saving}})
 		}
 	}
-	verb := "Set up lists"
-	if m.WorkerCardKind() == model.WorkerServe {
-		verb = "Serving lists"
-	}
 	children = append(children,
-		toneText("checkout", ui.ToneInfo, verb+" "+m.Worker.Setup.Project+" with checkout "+m.Worker.Setup.Checkout+"."),
-		choiceControl(m, model.CardWorker, model.WorkerFieldTrust, "Trust", f.Field == model.WorkerFieldTrust, "", model.WorkerTrustNote))
+		ui.Text{Common: ui.Common{Key: "checkout"}, Spans: []ui.Span{
+			{T: "Will serve " + m.Worker.Setup.Project + " from ", S: "muted"},
+			timeSpan(m.Worker.Setup.Checkout),
+			{T: ".", S: "muted"}}},
+		choiceControl(m, model.CardWorker, model.WorkerFieldTrust, "Trust", f.Field == model.WorkerFieldTrust, model.WorkerTrustNote, ""))
 	return children
 }
 
@@ -124,40 +159,42 @@ func workerActions(m model.Model) tern.Element {
 	f := m.WorkerCard
 	switch {
 	case f.Saved != "" && f.Restart:
-		return buttonRow(
+		return formFoot(
 			cardButton("restart-idle", model.ModeWorkerRestart, model.WorkerRestartIdle, "Restart when idle", true),
-			cardButton("restart-now", model.ModeWorkerRestart, model.WorkerRestartNow, "Restart now", false),
-			cardButton("leave", model.ModeWorkerRestart, model.WorkerLeave, "Leave it running", false))
+			exitButton("leave", model.ModeWorkerRestart, model.WorkerLeave, "Leave it running"),
+			cardButton("restart-now", model.ModeWorkerRestart, model.WorkerRestartNow, "Restart now", false))
 	case f.AskOff:
-		return buttonRow(
+		return formFoot(
 			cardButton("off-idle", model.ModeWorkerOff, model.WorkerOffIdle, "Stop when idle", true),
-			cardButton("off-now", model.ModeWorkerOff, model.WorkerOffNow, "Stop now", false),
-			cardButton("off-cancel", model.ModeWorkerOff, model.WorkerOffCancel, "Keep supervision", false))
+			exitButton("off-cancel", model.ModeWorkerOff, model.WorkerOffCancel, "Keep supervision"),
+			cardButton("off-now", model.ModeWorkerOff, model.WorkerOffNow, "Stop now", false))
 	case m.WorkerCardSaves():
 		save := "Set up worker"
 		if m.WorkerCardKind() == model.WorkerServe {
 			save = "Serve " + m.Worker.Setup.Project
 		}
-		buttons := []tern.Element{cardButton("save", model.ModeWorkerCard, model.WorkerSave, save, true)}
+		var others []ui.Button
 		if m.WorkerCardEdits() {
-			buttons = append(buttons, cardButton("edit", model.ModeWorkerCard, model.WorkerEdit, "Edit worker.toml", false))
+			others = append(others, cardButton("edit", model.ModeWorkerCard, model.WorkerEdit, "Edit worker.toml", false))
 		}
 		if m.WorkerCardKind() >= model.WorkerBroken {
-			buttons = append(buttons, supervisionButton(m))
+			others = append(others, supervisionButton(m))
 		}
-		return buttonRow(append(buttons, cardButton("cancel", model.ModeWorkerCard, model.WorkerCancel, "Cancel", false))...)
+		return formFoot(cardButton("save", model.ModeWorkerCard, model.WorkerSave, save, true),
+			exitButton("cancel", model.ModeWorkerCard, model.WorkerCancel, "Cancel"), others...)
 	}
-	var buttons []tern.Element
-	if m.WorkerCardEdits() {
-		buttons = append(buttons, cardButton("edit", model.ModeWorkerRead, model.WorkerEdit, "Edit worker.toml", true))
-	}
+	closeButton := exitButton("close", model.ModeWorkerRead, model.WorkerCancel, "Close")
+	var others []ui.Button
 	if m.WorkerCardKind() >= model.WorkerSetUp {
-		buttons = append(buttons, supervisionButton(m))
+		others = append(others, supervisionButton(m))
 	}
-	return buttonRow(append(buttons, cardButton("close", model.ModeWorkerRead, model.WorkerCancel, "Close", false))...)
+	if m.WorkerCardEdits() {
+		return formFoot(cardButton("edit", model.ModeWorkerRead, model.WorkerEdit, "Edit worker.toml", true), closeButton, others...)
+	}
+	return buttonRow(buttonElements(append(others, closeButton))...)
 }
 
-func supervisionButton(m model.Model) tern.Element {
+func supervisionButton(m model.Model) ui.Button {
 	label := "Turn supervision off"
 	if m.Worker.Setup.Manual {
 		label = "Turn supervision on"
@@ -165,62 +202,73 @@ func supervisionButton(m model.Model) tern.Element {
 	return cardButton("supervision", m.WorkerCardMode(), model.WorkerSupervision, label, false)
 }
 
-// fileState is the state of worker.toml in words and the tone of its colour. The checkouts it maps the Project to are named only
-// when they are not just the Checkout row above.
-func fileState(m model.Model) (string, ui.Tone) {
+// configValue is the Config row's value: worker.toml's state in words and its tone, the path of the file once as a muted second
+// line, and, for a file that does not load, why in the error tone.
+func configValue(m model.Model) tern.Element {
 	s := m.Worker.Setup
+	state, tone := "ok", ui.ToneSuccess
 	switch m.WorkerCardKind() {
 	case model.WorkerSetUp:
-		return "none yet", ui.ToneWarning
+		state, tone = "not created", ui.ToneWarning
 	case model.WorkerBroken:
-		return "does not load: " + s.LoadErr, ui.ToneError
+		state, tone = "broken", ui.ToneError
 	case model.WorkerServe:
-		return "loads, and does not list " + s.Project, ui.ToneWarning
+		state, tone = "does not list "+s.Project, ui.ToneWarning
 	}
-	words := "loads, lists " + s.Project
-	if !slices.Equal(s.Checkouts, []string{s.Checkout}) {
-		words += " with checkout " + strings.Join(s.Checkouts, ", ")
+	lines := ui.Nodes(
+		ui.Text{Common: ui.Common{Key: "state"}, Spans: []ui.Span{{T: state, S: toneStyle(tone)}}},
+		ui.Text{Common: ui.Common{Key: "path"}, Spans: []ui.Span{timeSpan(s.Path)}})
+	if m.WorkerCardKind() == model.WorkerBroken {
+		lines = append(lines, toneText("problem", ui.ToneError, s.Problem()))
 	}
-	return words, ui.ToneSuccess
+	return workerLines(lines...)
 }
 
-func workerSpans(m model.Model) []ui.Span {
+// workerState is the Worker row's value: whether a worker runs here, as which executor, and what it is doing. The process id is
+// in a Hovercard, where a person who needs it can read it.
+func workerState(m model.Model) tern.Element {
 	w := m.Worker
 	switch {
 	case !w.Read:
-		return []ui.Span{{T: "asking…", S: "muted"}}
+		return workerValue(ui.Span{T: model.Progress("Asking", ""), S: "muted"})
 	case w.Err != nil:
-		return []ui.Span{{T: w.Err.Error(), S: toneStyle(ui.ToneError)}}
+		return workerValue(ui.Span{T: model.Cannot("read", "the worker", w.Err), S: toneStyle(ui.ToneError)})
 	case !w.Running:
-		return []ui.Span{{T: "not running", S: toneStyle(ui.ToneWarning)}}
+		return workerValue(ui.Span{T: "not running", S: toneStyle(ui.ToneWarning)})
 	}
 	spans := []ui.Span{
-		{T: "running", S: toneStyle(ui.ToneSuccess)},
-		{T: " · executor " + w.Executor + " · process " + strconv.Itoa(w.PID) + " · " + m.WorkerInFlightWords(), S: "muted"},
+		{T: "running as " + w.Executor, S: toneStyle(ui.ToneSuccess)},
+		{T: " · " + m.WorkerBusyWords(), S: "muted"},
 	}
 	switch w.Stopping {
 	case "idle":
-		spans = append(spans, ui.Span{T: " · draining toward an exit", S: toneStyle(ui.ToneWarning)})
+		spans = append(spans, ui.Span{T: " · exiting when idle", S: toneStyle(ui.ToneWarning)})
 	case "now":
 		spans = append(spans, ui.Span{T: " · ending now", S: toneStyle(ui.ToneWarning)})
 	}
-	return spans
+	value := workerValue(spans...)
+	value.Hovercard = ui.Hovercard{Element: ui.Text{Common: ui.Common{Key: "process"}, Spans: []ui.Span{{T: "Process ", S: "muted"}, monoSpan(strconv.Itoa(w.PID), "")}}}
+	return value
 }
 
-func supervisionSpans(m model.Model) []ui.Span {
+// supervisionValue is the Supervision row's value: on, off or a worker started by hand, with the sentence that explains it
+// only for the two that need attention.
+func supervisionValue(m model.Model) tern.Element {
 	w, s := m.Worker, m.Worker.Setup
-	state, style, means := "on", toneStyle(ui.ToneSuccess), "the plugin starts a worker once a worker.toml loads"
+	state, tone, hint := "on", ui.ToneSuccess, ""
 	switch {
 	case s.Manual:
-		state, style, means = "off", toneStyle(ui.ToneWarning), model.ManualPresentWords()
+		state, tone, hint = "off", ui.ToneWarning, model.ManualPresentWords()
 	case w.Running && w.Supervised:
-		means = "the plugin starts it again when it exits"
 	case w.Running:
-		state, style, means = "started by hand", toneStyle(ui.ToneWarning), "the plugin does not restart it"
+		state, tone, hint = "started by hand", ui.ToneWarning, "the plugin does not restart it"
 	case s.Exists && s.LoadErr == "":
-		means = "the plugin starts a worker within 10 seconds"
 	default:
-		style = ""
+		tone = ui.ToneNeutral
 	}
-	return []ui.Span{{T: state, S: style}, {T: " · " + means, S: "muted"}}
+	lines := ui.Nodes(ui.Text{Common: ui.Common{Key: "state"}, Spans: []ui.Span{{T: state, S: toneStyle(tone)}}})
+	if hint != "" {
+		lines = append(lines, ui.Text{Common: ui.Common{Key: "hint"}, Spans: monoWords(hint, "muted", workerMono...)})
+	}
+	return workerLines(lines...)
 }

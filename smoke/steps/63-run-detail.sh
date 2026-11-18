@@ -61,13 +61,13 @@ ctl --file "$tmp/rd-launch.ctl"
 # The Jobs Page says the worker runs and serves the Project.
 ctl key 2
 expect_tree "[data-id='main.columns.list.jobs.$rd_slow']" '.ok and .count == 1'
-expect_tree "[data-id='main.columns.list.worker']" '.ok and .count == 1 and (.nodes[0].text | contains("smoke-box running and serving smoke"))'
+expect_tree "[data-id='main.columns.list.worker']" '.ok and .count == 1 and (.nodes[0].text | contains("Worker smoke-box") and contains("slots in use"))'
 
 # R runs the selected job now; the Runs Page shows it running with the agent's words so far, then succeeded.
 ctl click "[data-id='main.columns.list.jobs.$rd_slow']"
 ctl key R
 ctl key 3
-expect_tree "[data-id^='main.columns.list.runs.']" '.ok and .count >= 1 and (.nodes[0].text | contains("running") and contains("Smoke slow run") and contains("on smoke-box"))'
+expect_tree "[data-id^='main.columns.list.runs.']" '.ok and .count >= 1 and (.nodes[0].text | contains("running") and contains("Smoke slow run") and contains("smoke-box"))'
 # The Runs Page keeps its selection across Pages, which earlier steps left on their own run: g selects the newest.
 ctl key g
 ctl key enter
@@ -91,15 +91,15 @@ rd_start_worker
 rd_worker_holds() { "${rd_env[@]}" "$tmp/tern-kata" worker status | grep -q "held"; }
 wait_for rd_worker_holds
 ctl key ctrl+r
-expect_tree "[data-id='main.columns.list.runs.$rd_run']" '.ok and .count == 1 and (.nodes[0].text | contains("held") and contains("interrupted"))'
+expect_tree "[data-id='main.columns.list.runs.$rd_run']" '.ok and .count == 1 and (.nodes[0].text | contains("held") and contains("Interrupted"))'
 ctl click "[data-id='main.columns.list.runs.$rd_run']"
 ctl key enter
 rd_detail_continues() {
   ctl key ctrl+r
-  ctl tree "[data-id^='main.columns.detail']" | jq -e '[.nodes[].text] | any(contains("u continues"))' >/dev/null
+  ctl tree "[data-id^='main.columns.detail']" | jq -e '[.nodes[].text] | any(contains("Why"))' >/dev/null
 }
 wait_for rd_detail_continues
-expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("interrupted"))) and ([.nodes[].text] | any(contains("u continues")))'
+expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Interrupted"))) and ([.nodes[].text] | any(contains("Why")))'
 ctl key u
 expect_tree "[data-id='main.columns.list.runs.$rd_run']" '.ok and .count == 1 and (.nodes[0].text | contains("succeeded"))'
 

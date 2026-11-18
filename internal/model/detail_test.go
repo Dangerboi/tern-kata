@@ -138,12 +138,10 @@ func TestLiveDetailAuthority(t *testing.T) {
 }
 
 func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
-	for _, tt := range []struct{ relation, selected, shown, ref, peer string }{
-		{"parent", "child", "parent", "project#parent", "parent"},
-		{"parent", "parent", "child", "project#child", "child"},
-		{"blocks", "child", "blocks", "project#parent", "parent"},
-		{"blocks", "parent", "blocked_by", "project#child", "child"},
-		{"related", "parent", "related", "project#child", "child"},
+	for _, tt := range []struct{ relation, selected, shown, label, ref, peer string }{
+		{"blocks", "child", "blocks", "Blocks", "project#parent", "parent"},
+		{"blocks", "parent", "blocked_by", "Blocked by", "project#child", "child"},
+		{"related", "parent", "related", "Related", "project#child", "child"},
 	} {
 		t.Run(tt.relation+"/"+tt.selected, func(t *testing.T) {
 			m, _ := model.Update(withDetail(model.Model{SelectedUID: tt.selected}, nil), model.DetailLoaded{
@@ -152,10 +150,29 @@ func TestLinkRelationsRelativeToSelectedIssue(t *testing.T) {
 				}}},
 			})
 			row, ok := activityRow(m, model.TabLinks, 0)
-			if !ok || row.Relation != tt.shown || row.Ref != tt.ref || row.ReferenceUID != tt.peer {
+			if !ok || row.Relation != tt.shown || row.RelationLabel != tt.label || row.Ref != tt.ref || row.ReferenceUID != tt.peer {
 				t.Fatalf("relation: %+v, want %q %q -> %q", row, tt.shown, tt.ref, tt.peer)
 			}
 		})
+	}
+}
+
+func TestLinksTabLeavesParentAndChildrenToTheirOwnPlaces(t *testing.T) {
+	m, _ := model.Update(withDetail(model.Model{SelectedUID: "child"}, nil), model.DetailLoaded{
+		UID: "child", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "child"}, Links: []model.Link{
+			{ID: 1, Type: "parent", FromIssueUID: "child", ToIssueUID: "parent", FromQualifiedID: "project#child", ToQualifiedID: "project#parent"},
+			{ID: 2, Type: "blocks", FromIssueUID: "child", ToIssueUID: "other", FromQualifiedID: "project#child", ToQualifiedID: "project#other"},
+		}},
+	})
+	if parent, ok := m.DetailParent(); !ok || parent.Ref != "project#parent" {
+		t.Errorf("parent = %+v, %v", parent, ok)
+	}
+	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabLinks})
+	if n := m.DetailRowCount(model.TabLinks); n != 1 {
+		t.Errorf("links tab counts %d, want 1", n)
+	}
+	if row, ok := activityRow(m, model.TabLinks, 0); !ok || row.Relation != "blocks" {
+		t.Errorf("first link row = %+v, %v", row, ok)
 	}
 }
 

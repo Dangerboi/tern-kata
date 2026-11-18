@@ -137,9 +137,9 @@ func TestJobsPageKeyAsksForTheProjectsJobsAndThePageBarShowsTheCurrentPage(t *te
 func TestJobsPageRowsShowStateNameKindScheduleProfileAndNextRun(t *testing.T) {
 	s := jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", false)), promptJob("J2", "Triage"))
 
-	wantText(t, "native job row", jobCardText(t, s, "J1"), "active", "Weekly", "recurring child", "every hour", "next 13:00")
+	wantText(t, "native job row", jobCardText(t, s, "J1"), "active", "Weekly", "Recurring Issue", "every hour", "Next run 13:00")
 	// 2026-10-08 is a Thursday: the next nine o'clock in Berlin is 07:00 UTC on Friday.
-	wantText(t, "adapter job row", jobCardText(t, s, "J2"), "active", "Triage", "agent prompt", "every weekday at 09:00 Europe/Berlin", "profile fast", "next 2026-10-09 07:00")
+	wantText(t, "adapter job row", jobCardText(t, s, "J2"), "active", "Triage", "Agent prompt", "every weekday at 09:00 Europe/Berlin", "Next run 2026-10-09 07:00")
 }
 
 func TestJobsPageLeavesOutWhatItCannotWorkOut(t *testing.T) {
@@ -182,7 +182,7 @@ func TestJobsPageShowsEachPauseReason(t *testing.T) {
 	}
 	// None of the paused rows promises a next run.
 	for _, uid := range []string{"J1", "J2", "J3", "J4"} {
-		if text := jobCardText(t, s, uid); strings.Contains(text, "next ") {
+		if text := jobCardText(t, s, uid); strings.Contains(text, "Next run") {
 			t.Errorf("%s is not running but draws a next run: %s", uid, text)
 		}
 	}
@@ -236,12 +236,12 @@ func TestJobsPageArchivedToggleHidesAndShowsArchivedJobs(t *testing.T) {
 func TestJobsPageInspectorShowsTheSelectedJobsDefinitionAndParent(t *testing.T) {
 	s := jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", false)), promptJob("J2", "Triage"))
 	wantText(t, "inspector of the native job", inspectorText(t, s),
-		"Weekly", "recurring child", "Child title", "Tick", "Write the report", "current-owner-or-author", "Catchup", "all",
+		"Weekly", "Recurring Issue", "Child title", "Tick", "Write the report", "The Issue's owner or author", "Catch up", "Every missed run",
 		"#pa11 Weekly report · open", "Delivered through")
 
 	s = feed(t, s, key("j")).State
 	wantText(t, "inspector of the prompt job", inspectorText(t, s),
-		"Triage", "triage the inbox\\nthen report", "0 9 * * 1-5", "Europe/Berlin", "Profile", "fast", "skip, grace 60 s")
+		"Triage", "triage the inbox\\nthen report", "every weekday at 09:00 Europe/Berlin", "Profile", "fast", "Skip runs older than the grace · grace 1 minute")
 	if strings.Contains(inspectorText(t, s), "Parent") {
 		t.Error("an adapter job has no parent to show")
 	}
@@ -336,7 +336,7 @@ func TestJobsPageNeedsAProject(t *testing.T) {
 	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160)).State
 	s.Model = loadFirst(s.Model, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha}}})
 	out := step(t, s, key("2"))
-	if out.State.Model.Page != model.PageIssues || !strings.Contains(out.State.Model.Notice, "Jobs Page needs a Project") {
+	if out.State.Model.Page != model.PageIssues || !strings.Contains(out.State.Model.Notice, "Cannot open the Jobs Page") {
 		t.Fatalf("page %v notice %q", out.State.Model.Page, out.State.Model.Notice)
 	}
 }
@@ -383,9 +383,9 @@ func TestJobsPageRowsShowTheLatestRunOrChildAndTheInspectorTheRecentOnes(t *test
 				{UID: "c1", ShortID: "cd34", Title: "Tick — 2026-10-08T10:00:00Z", Status: "closed", ScheduledAt: now.Add(-2 * time.Hour)},
 			}},
 		}}).State
-	wantText(t, "adapter row", jobCardText(t, s, "J1"), "last run failed", "step build failed")
-	wantText(t, "native row", jobCardText(t, s, "N1"), "last child #ab12", "open")
-	if strings.Contains(jobCardText(t, s, "J3"), "last") {
+	wantText(t, "adapter row", jobCardText(t, s, "J1"), "Last run failed", "step build failed")
+	wantText(t, "native row", jobCardText(t, s, "N1"), "Last Issue #ab12", "open")
+	if strings.Contains(jobCardText(t, s, "J3"), "Last") {
 		t.Errorf("a job that did nothing yet draws a last line: %s", jobCardText(t, s, "J3"))
 	}
 
@@ -408,7 +408,7 @@ func TestJobsPageWarnsOfAnAdapterJobMakingMoreThanADayOfIssuesPerDay(t *testing.
 
 	s := jobsPane(t, 160, everyMinute, existing, native, disabled)
 	wantText(t, "every minute", jobCardText(t, s, "J1"), "creates about 1440 Issues a day; consider an existing Issue")
-	for uid, why := range map[string]string{"J4": "it reports to an existing Issue", "N1": "a recurring child is made of children", "J5": "it is disabled and makes none"} {
+	for uid, why := range map[string]string{"J4": "it reports to an existing Issue", "N1": "a recurring Issue is made of children", "J5": "it is disabled and makes none"} {
 		if strings.Contains(jobCardText(t, s, uid), "Issues a day") {
 			t.Errorf("%s warns, but %s", uid, why)
 		}

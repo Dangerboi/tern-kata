@@ -2,7 +2,6 @@ package model
 
 import (
 	"cmp"
-	"fmt"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -349,8 +348,7 @@ func agentAttentionWritten(m Model, msg AgentAttentionWritten) (Model, []Cmd) {
 		if msg.Clear {
 			verb = "clear"
 		}
-		m.Notice = fmt.Sprintf("Cannot %s the Attention request for an agent: %s", verb, msg.Err)
-		return m, nil
+		return m.fail(Cannot(verb, "the Attention request for an agent", msg.Err)), nil
 	}
 	if msg.Clear || msg.From == "" {
 		return m, nil

@@ -66,7 +66,7 @@ func board(m model.Model, now time.Time) tern.Element {
 		}
 		head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Children: ui.Nodes(
 			ui.Badge{Common: ui.Common{Key: "title", Tone: tones[i]}, Text: column.Title},
-			ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: mono("muted")}}, Wrap: ui.WrapNone},
+			ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: "muted"}}, Wrap: ui.WrapNone},
 		)}
 		lanes[i] = ui.Col{
 			Common: ui.Common{Key: laneKey(i), Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
@@ -74,16 +74,22 @@ func board(m model.Model, now time.Time) tern.Element {
 			Children: append(ui.Nodes(
 				head,
 				ui.Rule{Common: ui.Common{Key: "rule", Tone: tones[i]}},
-			), listAndEmpty(ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Children: cards}, false, emptyLane("No cards"))...),
+			), ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Children: cards}),
 		}
 	}
 	children := []tern.Element{}
 	if m.Search.Open {
 		children = append(children, searchInput(m))
 	}
-	children = append(children,
-		ui.Text{Common: ui.Common{Key: "lane-source"}, Spans: []ui.Span{{T: "Lane list: " + m.LaneSource(), S: "muted"}}, Wrap: ui.WrapNone},
-		ui.Row{Common: ui.Common{Key: "board", Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{H: ui.Lines(0)}, Transition: ui.TransitionLayout}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: lanes})
+	row := ui.Row{Common: ui.Common{Key: "board", Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{H: ui.Lines(0)}, Transition: ui.TransitionLayout}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: lanes}
+	// With no card in any Lane and nothing loading the Board says why, as the Issues list does. The Lanes stay mounted, hidden, so
+	// the cards keep their motion when Issues come back.
+	if !m.Loading && boardEmpty(columns) {
+		row.Hidden = true
+		children = append(children, row, boardEmptyState(m))
+	} else {
+		children = append(children, row)
+	}
 	return panel(m, model.ColumnList, ui.Common{Key: "list", Grow: 1}, "", children)
 }
 
@@ -91,7 +97,34 @@ var dateTones = map[model.DateTone]ui.Tone{
 	model.DateMuted:   ui.ToneMuted,
 	model.DateWarning: ui.ToneWarning,
 	model.DateError:   ui.ToneError,
-	model.DateAccent:  ui.ToneAccent,
+}
+
+// boardEmpty says no Lane holds a card.
+func boardEmpty(columns []model.BoardColumn) bool {
+	for _, column := range columns {
+		if len(column.Cards) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// boardEmptyState is the Issues list's empty state for the same cause: filters that leave none, else a Collection with none. The
+// Board ignores the status filter, so it is left out of the judgement.
+func boardEmptyState(m model.Model) ui.Empty {
+	filters := m.Filters
+	filters.Status = ""
+	var e ui.Empty
+	switch {
+	case filters != (model.Filters{}):
+		e = emptyState("No Issues match", "These filters leave none.", emptyButton(m, "clear-filters", model.ClearFilters, "Clear filters", false)...)
+	case m.Collection.IsProject():
+		e = emptyState("No Issues", "This Collection has none.", emptyButton(m, "new", model.NewIssue, "New Issue", true)...)
+	default:
+		e = emptyState("No Issues", "This Collection has none. Select another Collection or create one with kata create.")
+	}
+	e.Key = "board-empty"
+	return e
 }
 
 func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, menu contextMenuKeys, today model.CalendarDay, badges model.AgentBadgeIndex, now time.Time) tern.Element {
@@ -102,42 +135,49 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		titleStyle = "muted"
 	}
 	title := ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: issueTitle(issue), S: titleStyle}}, Lines: 2}
-	labels := card.Labels
 	if selected {
 		title.Lines = 0
-		labels = issue.Labels
 	}
 	ids := ui.Nodes(ui.Badge{Common: ui.Common{Key: "short", Tone: tone, Role: MonoRole}, Text: issue.ShortID})
 	if text, prioTone := priorityText(issue.Priority); text != "" {
 		ids = append(ids, ui.Badge{Common: ui.Common{Key: "prio", Tone: prioTone, Role: MonoRole}, Text: text})
 	}
+	var badge model.DateBadge
 	if !done {
-		if badge, ok := today.ChooseDateBadge(issue); ok {
-			ids = append(ids, ui.Badge{Common: ui.Common{Key: "date", Tone: dateTones[badge.Tone], Role: MonoRole}, Text: badge.Text})
+		var ok bool
+		if badge, ok = today.ChooseDateBadge(issue); ok {
+			ids = append(ids, ui.Badge{Common: ui.Common{Key: "date", Tone: dateTones[badge.Tone]}, Text: badge.Text})
 		}
+	}
+	cardTone := ui.ToneNeutral
+	if done {
+		cardTone = ui.ToneMuted
 	}
 	body := ui.Nodes(title)
-	if selected {
-		owner := m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String()
-		if owner == "" {
-			owner = "unassigned"
+	if tags := selectedRels.HighlightsOf(issue.UID); len(tags) > 0 && !selected {
+		// The ring warns only for a blocking pair; every other relation is told in words alone.
+		tagStyle := "muted"
+		if tags[0] == model.HighlightBlocksThis || tags[0] == model.HighlightBlockedByThis {
+			tagStyle = "warning"
+			if !done {
+				cardTone = ui.ToneWarning
+			}
 		}
-		body = append(body, ui.Badge{Common: ui.Common{Key: "owner", Tone: ownerTone}, Text: owner})
+		words := make([]string, len(tags))
+		for i, tag := range tags {
+			words[i] = string(tag)
+		}
+		body = append(body, ui.Text{Common: ui.Common{Key: "tag-" + string(tags[0])}, Spans: []ui.Span{{T: strings.Join(words, ", "), S: tagStyle}}})
 	}
-	if len(labels) > 0 {
-		chips := make([]tern.Element, len(labels))
-		for i, label := range labels {
-			chips[i] = ui.Badge{Common: ui.Common{Key: label, Tone: labelTone}, Text: label}
+	if len(card.Labels) > 0 {
+		chips := make([]tern.Element, len(card.Labels))
+		for i, label := range card.Labels {
+			chips[i] = ui.Badge{Common: ui.Common{Key: label, Tone: ui.ToneNeutral}, Text: label}
 		}
 		body = append(body, ui.Row{Common: ui.Common{Key: "labels"}, Gap: ui.GapSM, Wrap: true, Children: chips})
 	}
 	if len(card.Also) > 0 {
-		body = append(body, ui.Text{Common: ui.Common{Key: "also"}, Spans: monoSpans("also: "+strings.Join(card.Also, ", "), "warning")})
-	}
-	if selected {
-		if line := model.DatesLine(issue); line != "" {
-			body = append(body, ui.Text{Common: ui.Common{Key: "dates"}, Spans: monoSpans(line, "muted")})
-		}
+		body = append(body, ui.Text{Common: ui.Common{Key: "also"}, Spans: []ui.Span{{T: "also in " + strings.Join(card.Also, ", "), S: "muted"}}})
 	}
 	if !done {
 		if spans := blockedSpans(card); spans != nil {
@@ -145,29 +185,19 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		}
 	}
 	if badge, ok := badges.For(issue.UID); ok {
-		body = append(body, agentBadgeElement(badge, "agent"))
+		state := agentBadgeElement(badge, "agent")
+		state.Text = badge.Word
+		body = append(body, state)
+		if unread, ok := agentUnreadElement(badge, "agent-unread"); ok {
+			body = append(body, unread)
+		}
 	}
 	if w, ok := model.IssueWorkAttention(issue); ok {
 		body = append(body, ui.Badge{Common: ui.Common{Key: "attention", Tone: attentionTone(w)}, Text: w.Word()})
 	}
 	if selected {
-		if line := relationshipsLine(m, card, now); line != nil {
-			body = append(body, line)
-		}
-	}
-	if card.Reopen != "" {
-		body = append(body, ui.Text{Common: ui.Common{Key: "reopen"}, Spans: []ui.Span{{T: "r → " + card.Reopen, S: "muted"}}})
-	}
-	cardTone := ui.ToneNeutral
-	if done {
-		cardTone = ui.ToneMuted
-	}
-	if tags := selectedRels.HighlightsOf(issue.UID); len(tags) > 0 && !selected {
-		for _, tag := range tags {
-			ids = append(ids, ui.Badge{Common: ui.Common{Key: "tag-" + string(tag), Tone: highlightTone[tag]}, Text: string(tag)})
-		}
-		if !done {
-			cardTone = highlightTone[tags[0]]
+		if row := cardFacts(m, card, badge.Other, now); row != nil {
+			body = append(body, row)
 		}
 	}
 	body = slices.Insert(body, 0, tern.Element(ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}))
@@ -213,50 +243,54 @@ func shownRefs(refs []model.RelationshipRef) ([]model.RelationshipRef, int) {
 	return refs[:shown], len(refs) - shown
 }
 
-var highlightTone = map[model.Highlight]ui.Tone{
-	model.HighlightBlocksThis:    ui.ToneError,
-	model.HighlightBlockedByThis: ui.ToneWarning,
-	model.HighlightParent:        ui.ToneAccent,
-	model.HighlightChild:         ui.ToneInfo,
-	model.HighlightRelated:       ui.ToneNeutral,
-}
-
-func relationshipsLine(m model.Model, card model.BoardCard, now time.Time) tern.Element {
-	r, project := card.Relationships, card.Issue.ProjectName
-	var parts []tern.Element
+// cardFacts is the selected card's one muted row of facts, separated by a muted middle dot, each only when present: the owner,
+// the date the badge leaves out, the parent, how many children are open, what it blocks, what it relates to and, on a Done card,
+// the Lane it reopens in. What blocks it is not here: the Blocked marker already says so.
+func cardFacts(m model.Model, card model.BoardCard, otherDate string, now time.Time) tern.Element {
+	r, issue := card.Relationships, card.Issue
+	var facts []tern.Element
+	if owner := m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String(); owner != "" {
+		facts = append(facts, ui.Text{Common: ui.Common{Key: "owner"}, Spans: []ui.Span{ownerSpan(owner)}})
+	}
+	if otherDate != "" {
+		facts = append(facts, ui.Text{Common: ui.Common{Key: "other-date"}, Spans: []ui.Span{{T: otherDate, S: "muted"}}})
+	}
 	add := func(key, label string, refs ...model.RelationshipRef) {
 		shown, more := shownRefs(refs)
 		items := ui.Nodes(ui.Text{Common: ui.Common{Key: "label"}, Spans: []ui.Span{{T: label, S: "muted"}}})
 		for _, ref := range shown {
-			items = append(items, ui.Text{Common: ui.Common{Key: ref.UID, Hovercard: refCard(m, relFacts(ref), now), Actions: &ui.Actions{Click: RefClick(ref.UID)}}, Spans: []ui.Span{{T: ref.ID(project), S: "accent link mono"}}})
+			items = append(items, ui.Text{Common: ui.Common{Key: ref.UID, Hovercard: refCard(m, relFacts(ref), now), Actions: &ui.Actions{Click: RefClick(ref.UID)}}, Spans: []ui.Span{refSpan(ref.ID(issue.ProjectName), true)}})
 		}
 		if more > 0 {
-			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{{T: "+" + strconv.Itoa(more), S: mono("muted")}}})
+			items = append(items, ui.Text{Common: ui.Common{Key: "more"}, Spans: []ui.Span{monoSpan("+"+strconv.Itoa(more), "muted")}})
 		}
-		parts = append(parts, ui.Row{Common: ui.Common{Key: key}, Gap: ui.GapSM, Wrap: true, Children: items})
+		facts = append(facts, ui.Row{Common: ui.Common{Key: key}, Gap: ui.GapSM, Wrap: true, Children: items})
 	}
 	if r.Parent != nil {
 		add("parent", "parent", *r.Parent)
 	}
 	if len(r.Children) > 0 {
-		open := len(r.OpenChildren())
-		noun := "children"
-		if len(r.Children) == 1 {
-			noun = "child"
-		}
-		parts = append(parts, ui.Text{Common: ui.Common{Key: "children"}, Spans: monoSpans(fmt.Sprintf("%d %s, %d open", len(r.Children), noun, open), "muted")})
+		words := fmt.Sprintf("%d of %d %s open", len(r.OpenChildren()), len(r.Children), model.Noun(len(r.Children), "child", "children"))
+		facts = append(facts, ui.Text{Common: ui.Common{Key: "children"}, Spans: []ui.Span{{T: words, S: "muted"}}})
 	}
 	if blocks := r.OpenBlocked(); len(blocks) > 0 {
 		add("blocks", "blocks", blocks...)
 	}
-	if blockers := r.OpenBlockers(); len(blockers) > 0 {
-		add("blocked-by", "blocked by", blockers...)
-	}
 	if len(r.Related) > 0 {
 		add("related", "related", r.Related...)
 	}
-	if len(parts) == 0 {
+	if card.Reopen != "" {
+		facts = append(facts, ui.Text{Common: ui.Common{Key: "reopen"}, Spans: []ui.Span{{T: "reopens in " + card.Reopen, S: "muted"}}})
+	}
+	if len(facts) == 0 {
 		return nil
 	}
-	return ui.Row{Common: ui.Common{Key: "relationships"}, Gap: ui.GapMD, Wrap: true, Children: parts}
+	parts := make([]tern.Element, 0, 2*len(facts)-1)
+	for i, fact := range facts {
+		if i > 0 {
+			parts = append(parts, ui.Text{Common: ui.Common{Key: "sep" + strconv.Itoa(i)}, Spans: []ui.Span{{T: "·", S: "muted"}}})
+		}
+		parts = append(parts, fact)
+	}
+	return ui.Row{Common: ui.Common{Key: "facts"}, Gap: ui.GapSM, Wrap: true, Children: parts}
 }

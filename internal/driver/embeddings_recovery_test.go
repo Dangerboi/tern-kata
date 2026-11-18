@@ -29,7 +29,7 @@ func cardClosedMidTurnOn(t *testing.T) driver.State {
 func TestARefusedTurnOnAfterTheCardWasClosedShowsOnTheConfigPage(t *testing.T) {
 	s := cardClosedMidTurnOn(t)
 	out := step(t, s, model.EmbeddingsTurnedOn{Err: errors.New("kata: daemon administration required"), Connection: s.Model.Connection})
-	wantText(t, "Config Page", wireTextOf(t, out.State), "Search by meaning was not turned on: kata: daemon administration required")
+	wantText(t, "Config Page", wireTextOf(t, out.State), "Cannot turn on search by meaning: kata: daemon administration required.")
 	if c := out.State.Model.ConfigPage; !c.MessageErr {
 		t.Errorf("message %q not marked as an error", c.Message)
 	}
@@ -48,7 +48,7 @@ func TestARefusedTurnOnAfterTheCardWasClosedOnTheSearchLineIsANotice(t *testing.
 		t.Fatal("esc did not close the card")
 	}
 	done := step(t, s, model.EmbeddingsTurnedOn{Err: errors.New("kata is unreachable"), Connection: s.Model.Connection})
-	if got := done.State.Model.Notice; got != "Search by meaning was not turned on: kata is unreachable" {
+	if got := done.State.Model.Notice; got != "Cannot turn on search by meaning: kata is unreachable." {
 		t.Errorf("notice %q, want kata's reason", got)
 	}
 }
@@ -66,7 +66,7 @@ func TestAFailedReadKeepsPollingWhileTheDownloadRunsAndRecoversOnTheNextGoodRead
 	if hasCmd[model.LoadEmbeddingsStatus](done.Cmds) {
 		t.Errorf("a finished job was read again: %#v", done.Cmds)
 	}
-	wantText(t, "row", wireTextOf(t, done.State), "set up: needs a kata daemon restart")
+	wantText(t, "row", wireTextOf(t, done.State), "set up · needs a kata daemon restart")
 }
 
 func TestAFailedReadRightAfterARestartAnswerKeepsPollingUntilTheDaemonIsBack(t *testing.T) {
@@ -88,7 +88,7 @@ func TestAFailedReadRightAfterARestartAnswerKeepsPollingUntilTheDaemonIsBack(t *
 func TestTheRowAfterADocbankSwitchIsReadAgainSoAnOwedRestartIsGone(t *testing.T) {
 	s, ask := embeddingsPane(t, pinnedDocbankRows())
 	s = statusAnswered(t, s, ask, restartOwed).State
-	wantText(t, "row before", wireTextOf(t, s), "set up: needs a kata daemon restart")
+	wantText(t, "row before", wireTextOf(t, s), "set up · needs a kata daemon restart")
 	for s.Model.SelectedConfigFile().Key != model.ConfigDocbank {
 		s = step(t, s, key("j")).State
 	}

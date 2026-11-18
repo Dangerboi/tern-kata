@@ -10,14 +10,26 @@ import (
 
 var PickerListID = LayerID(model.CardPicker) + ".list"
 
+// pickerHeads are the card's head at each Menu level.
+var pickerHeads = map[model.MenuLevel]string{model.MenuTop: "Menu", model.MenuViews: model.ViewsTitle, model.MenuProjects: model.ProjectsTitle}
+
 func pickerLayer(m model.Model) tern.Element {
 	if !m.Picker.Open {
 		return nil
 	}
 	entries := m.PickerEntries()
-	items := make([]tern.Element, 0, len(entries))
+	items := make([]tern.Element, 0, len(entries)+3)
+	section := ""
 	for _, entry := range entries {
+		// The top level groups its rows under a rule per Section; the first group has no label.
+		if m.Picker.Level == model.MenuTop && m.Picker.Filter == "" && entry.Section != section {
+			section = entry.Section
+			items = append(items, ui.Rule{Common: ui.Common{Key: "section." + section}, Label: ui.T(section)})
+		}
 		item := ui.Item{Common: ui.Common{Key: entry.Key()}, Label: ui.T(m.EntryTitle(entry))}
+		if entry.Hint != "" {
+			item.Hint = []string{entry.Hint}
+		}
 		if entry.Kind == model.EntrySavedView && entry.Title == m.CurrentSavedView() {
 			item.Value = ui.T("current")
 		}
@@ -31,7 +43,7 @@ func pickerLayer(m model.Model) tern.Element {
 			item.Value = ui.T(m.CurrentSavedView())
 		}
 		if entry.Kind == model.EntryNotice {
-			if notice, ok := m.NoticeOf(model.NoticeKind(entry.Index)); ok {
+			if notice, ok := m.NoticeOf(model.VersionNoticeKind(entry.Index)); ok {
 				item.Value = ui.T(notice.Action)
 			}
 		}
@@ -46,25 +58,26 @@ func pickerLayer(m model.Model) tern.Element {
 	if m.Picker.Level != model.MenuTop && m.Picker.Filter == "" {
 		closeLabel = "Back"
 	}
-	empty := "No Menu entries match."
-	if len(m.Collections) == 0 {
-		empty = "Loading Menu…"
+	empty := "Loading…"
+	if len(m.Collections) > 0 {
+		empty = "Nothing matches " + strconv.Quote(m.Picker.Filter) + "."
 	}
 	notes := []tern.Element{}
 	if q, ok := m.Question(); ok {
 		notes = append(notes, question(q))
 	}
-	if m.Views.Err != nil {
-		notes = append(notes, toneText("views-error", ui.ToneError, "Saved views not read: "+m.Views.Err.Error()))
-	}
-	for i, problem := range m.Views.Problems {
-		notes = append(notes, toneText("views-problem-"+strconv.Itoa(i), ui.ToneWarning, "Saved view left out: "+problem.Error()))
+	if text, failed := m.ViewsNote(); text != "" {
+		tone := ui.ToneWarning
+		if failed {
+			tone = ui.ToneError
+		}
+		notes = append(notes, toneText("views-note", tone, text))
 	}
 	children := []tern.Element{
-		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Filter Menu"}, Field: ui.Field{Text: m.Picker.Filter, Cursor: caretAt(m.Picker.Caret, "", m.Picker.Filter), Mode: "insert", Placeholder: ui.T("Filter Menu")}, Clear: true},
+		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Filter"}, Field: ui.Field{Text: m.Picker.Filter, Cursor: caretAt(m.Picker.Caret, "", m.Picker.Filter), Mode: "insert", Placeholder: ui.T("Filter")}, Clear: true},
 		ui.List{CommonWithoutMax: ui.CommonWithoutMax{Key: "list"}, Selected: selected, Empty: ui.T(empty), Max: ui.MaxLines(12), Children: items},
 	}
 	children = append(children, notes...)
-	children = append(children, buttonRow(cardButton("close", model.ModePicker, model.ClosePicker, closeLabel, false)))
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardPicker)}, Head: ui.T("Menu"), Modal: true, Size: ui.SizeMD}, children))
+	children = append(children, buttonRow(exitButton("close", model.ModePicker, model.ClosePicker, closeLabel)))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardPicker)}, Head: ui.T(pickerHeads[m.Picker.Level]), Modal: true, Size: ui.SizeMD}, children))
 }

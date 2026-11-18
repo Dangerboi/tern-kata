@@ -51,3 +51,10 @@ func TestDateWithWeekdayShowsTheTimeOfATimedValue(t *testing.T) {
 		}
 	}
 }
+
+func TestParseDateInputRefusalNamesTheFormsToType(t *testing.T) {
+	_, err := model.ParseDateInput("someday", "2026-10-08")
+	if err == nil || err.Error() != "must be a date like 2026-11-20, today, tomorrow or +3d." {
+		t.Errorf("error = %v", err)
+	}
+}

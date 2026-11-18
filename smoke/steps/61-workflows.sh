@@ -21,14 +21,14 @@ expect_tree "[data-id\$='.steps-title']" '.count == 0'
 # Enter shows the steps of the selected workflow.
 ctl key enter
 expect_tree "[data-id\$='.steps-title']" '.ok and .count == 1'
-expect_tree "[data-id^='main.columns.list.page.inspector']" '.ok and ([.nodes[] | (.text // "")] | any(contains("echo first-step")))'
+expect_tree "[data-id^='main.columns.list.page.inspector']" '.ok and ([.nodes[] | tostring] | any(contains("echo first-step")))'
 ctl key escape
 expect_tree "[data-id\$='.steps-title']" '.count == 0'
 # A double click on the other workflow selects it and shows its steps, as Enter does.
 ctl dblclick "[data-id='main.columns.list.page.names.rows.$wf_second']"
 expect_tree "[data-id='main.columns.list.page.names.rows.$wf_second']" '.ok and .nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id\$='.steps-title']" '.ok and .count == 1'
-expect_tree "[data-id^='main.columns.list.page.inspector']" '.ok and ([.nodes[] | (.text // "")] | any(contains("echo second-step")))'
+expect_tree "[data-id^='main.columns.list.page.inspector']" '.ok and ([.nodes[] | tostring] | any(contains("echo second-step")))'
 ctl key escape
 expect_tree "[data-id\$='.steps-title']" '.count == 0'
 ctl key 1

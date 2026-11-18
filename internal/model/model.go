@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -99,6 +100,10 @@ type Model struct {
 	FieldForm FieldFormState
 	// Notice reports a write that has nothing to show in the Issues, and goes at the next key.
 	Notice string
+	// NoticeKind says whether the Notice is a failure, which is drawn in the error tone.
+	NoticeKind NoticeKind
+	// StaleSince is the step the Pane went stale at: the Issues on screen are as of that time.
+	StaleSince time.Time
 	// Toast is a Notice with one button (a key it presses, or an Issue it opens). It is drawn from the step that raised it until
 	// ToastExpired for its Seq, so a client that attaches late never gets a stale button. ToastSeq counts the toasts raised: the
 	// view keys the node on it, so each message shows once and the same message twice shows twice.
@@ -238,7 +243,7 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		return toggleLegend(m), nil
 	}
 	if key, ok := msg.(KeyMsg); ok && m.docKeyGuarded(key) {
-		m.Notice = deadEditNotice
+		m = m.fail(deadEditNotice)
 		return m, nil
 	}
 	prev, pointer := m, selectPointerMsg(msg)
@@ -247,9 +252,12 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		msg = KeyMsg{Chord: press.Chord}
 	}
 	if _, ok := msg.(KeyMsg); ok {
-		m.Notice = ""
+		m = m.clearNotice()
 	}
 	next, cmds := updateWithDetail(m, msg)
+	if !prev.Stale && next.Stale {
+		next.StaleSince = next.Now
+	}
 	switch msg.(type) {
 	case SnapshotLoaded, StreamEvent:
 		var raised, ended []Cmd
@@ -548,7 +556,11 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		case OpenRow:
 			return openRow(m, msg.Value)
 		case OpenPicker:
-			return openPicker(m), reloadViews()
+			m = openPicker(m)
+			if msg.Value == MenuOnNotice && m.Picker.Open {
+				m.Picker.Cursor = max(0, slices.IndexFunc(m.PickerEntries(), func(e PickerEntry) bool { return e.Kind == EntryNotice }))
+			}
+			return m, reloadViews()
 		}
 	case IssueOpened:
 		return m.openByReference(msg.Ref, msg.Selected)
@@ -608,7 +620,7 @@ func runChordOn(m Model, uid, chord string, mode Mode) (Model, []Cmd) {
 			return m, nil
 		}
 	}
-	m.Notice = ""
+	m = m.clearNotice()
 	next, cmds, _ := runChord(m, chord, mode)
 	return next, cmds
 }

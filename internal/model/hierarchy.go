@@ -209,9 +209,9 @@ func updateHierarchy(m Model, action Action) Model {
 			return m
 		}
 		m.GraphOrder = !m.GraphOrder
-		m.Notice = "graph order: temporal"
+		m = m.say("Graph order is temporal.")
 		if m.GraphOrder {
-			m.Notice = "graph order: topological"
+			m = m.say("Graph order is topological.")
 		}
 		return m.WithVisibleSelection()
 	}

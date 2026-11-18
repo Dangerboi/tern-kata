@@ -41,6 +41,9 @@ type LanesFormState struct {
 	formCard
 	Text, Days, Cards string
 	Share             bool
+	// ErrField is the field Err is about: the error draws under it. It is empty for a failure of the save itself, which draws
+	// at the bottom of the card.
+	ErrField Field
 	// ProjectID and Revision are the Project as read with the list when the card opened; a shared write is guarded on
 	// Revision, which a conflict moves to the revision read with the Project's list as it stands.
 	ProjectID, Revision int64
@@ -56,12 +59,10 @@ func (f LanesFormState) Value(name Field) string { return lanesTable.value(f, na
 func openLanesForm(m Model) Model {
 	m.lanesWanted = false
 	if !m.Board.loaded {
-		m.Notice = "The Lane list is still loading."
-		return m
+		return m.say("The Lane list is still loading.")
 	}
 	if m.Board.fileErr != nil && !m.Board.Shared {
-		m.Notice = fmt.Sprintf("Lanes not opened: %v", m.Board.fileErr)
-		return m
+		return m.fail(Cannot("open", "Lanes", m.Board.fileErr))
 	}
 	m.LanesForm = LanesFormState{Open: true, Field: LanesNames, Text: strings.Join(m.LaneList(), ", "), Share: m.Board.Shared,
 		ProjectID: m.Board.projectID, Revision: m.Board.revision}
@@ -78,6 +79,17 @@ func openLanesForm(m Model) Model {
 // Lane list (the Project was read, yet its value left unused).
 func (m Model) SharesLanes() bool {
 	return m.Board.Shared || m.Board.projectID != 0 && m.Board.sharedErr != nil
+}
+
+// LanesMeta is the line under the Lanes card's head that says which Lane list the Board uses now.
+func (m Model) LanesMeta() string {
+	switch {
+	case m.Board.Shared:
+		return "Using the Project's shared list"
+	case len(m.Board.Lanes) > 0 || m.Board.DoneDays > 0 || m.Board.DoneCards > 0:
+		return "Using this machine's list"
+	}
+	return "Using the built-in list"
 }
 
 func (m Model) UnusedLabels() []string {
@@ -153,14 +165,17 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == LanesSubmit:
 		lanes, err := parseLanes(form.Text)
 		var days, cards int
+		bad := LanesNames
 		if err == nil {
+			bad = LanesDays
 			days, err = parseDone(form.Days, "Days back", maxDoneDays)
 		}
 		if err == nil {
+			bad = LanesCards
 			cards, err = parseDone(form.Cards, "Most cards", maxDoneCards)
 		}
 		if err != nil {
-			form.Err = err
+			form.Err, form.ErrField = err, bad
 			return m, nil
 		}
 		if slices.Equal(lanes, DefaultLanes()) {
@@ -170,16 +185,16 @@ func updateLanesFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 			return m.shareLaneList(lanes, days, cards, false)
 		}
 		if m.Board.fileErr != nil {
-			form.Err = fmt.Errorf("Lanes not saved: %w", m.Board.fileErr)
+			form.Err, form.ErrField = errors.New(Cannot("save", "Lanes", m.Board.fileErr)), ""
 			return m, nil
 		}
-		form.Saving, form.Err = true, nil
+		form.Saving, form.Err, form.ErrField = true, nil, ""
 		save := SaveLanes{ProjectUID: m.Collection.ProjectUID, ProjectName: m.Collection.Title, Lanes: slices.Clone(lanes), DoneDays: days, DoneCards: cards}
 		form.Sent = save
 		return m, []Cmd{save}
 	case bound && binding.Action == LanesStopSharing:
 		if !m.SharesLanes() && form.ProjectID != 0 {
-			form.Err = errors.New("The Project shares no Lane list.")
+			form.Err, form.ErrField = errors.New("The Project shares no Lane list."), ""
 			return m, nil
 		}
 		return m.shareLaneList(nil, 0, 0, true)

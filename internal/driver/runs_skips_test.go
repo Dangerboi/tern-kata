@@ -39,7 +39,7 @@ func TestRunsPageShowsAJobsSkipsAsOneRowOfTheWorkersStatusWithItsCountAndLatestR
 	out := localRunsPane(t, skippedStatus(skips, dailyLimitSkips("J2", "Other", 1)), finishedRun("R1"))
 
 	text, _ := skipRowNodes(t, out.State, "J1")
-	wantText(t, "skip row", text, "40 skips", "Triage", "runs_per_day", "2 of 2 runs today", out.State.Model.Calendar.Read(skips.LatestAt, now))
+	wantText(t, "skip row", text, "40 skips", "Triage", "Daily run limit", "2 of 2 runs today", out.State.Model.Calendar.Read(skips.LatestAt, now))
 	other, _ := skipRowNodes(t, out.State, "J2")
 	wantText(t, "single skip", other, "1 skip", "Other")
 	wantText(t, "run row beside it", runCardText(t, out.State, "R1"), "succeeded", "Triage")

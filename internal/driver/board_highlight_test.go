@@ -28,82 +28,81 @@ func highlightBoard(t *testing.T) driver.State {
 	return step(t, linkedBoard(t, links, issues...), model.SelectMsg{UID: "sel"}).State
 }
 
-// highlight is the tags and the tone of uid's card as drawn: the badges after the short id badge in the card's id row, each
-// with its tone, and the card's own tone.
-func highlight(t *testing.T, s driver.State, uid string) (tags []string, tone string) {
+// highlight is the tag line and the tone of uid's card as drawn: the muted line under the title that names every relationship to
+// the selected Issue, joined by commas, with the style it is drawn in ("" when there is none), and the card's own ring tone.
+func highlight(t *testing.T, s driver.State, uid string) (line, style, tone string) {
 	t.Helper()
 	nodes := wireNodes(t, view.Render(s.Model, now))
 	card := rowOf(t, s.Model, view.BoardID, uid)
 	n := node(t, nodes, card)
 	if _, ok := n.P["head"]; ok {
-		t.Errorf("%s draws a head, the tags are badges in the id row", uid)
+		t.Errorf("%s draws a head, the tags are a line under the title", uid)
 	}
-	row := node(t, nodes, card+".id")
-	for i, c := range row.C {
-		if i == 0 {
-			continue
+	for _, c := range nodes {
+		if strings.HasPrefix(c.ID, card+".tag-") {
+			line, style = spanText(t, c), spanStyle(t, c)
 		}
-		text, _ := c.P["text"].(string)
-		tone, _ := c.P["tone"].(string)
-		tags = append(tags, text+"/"+tone)
+		if strings.HasPrefix(c.ID, card+".id.tag-") {
+			t.Errorf("%s draws a tag badge in the id row", uid)
+		}
 	}
 	tone, _ = n.P["tone"].(string)
-	return tags, tone
+	return line, style, tone
 }
 
-func TestEachRelationshipTagsTheOtherCardInItsTone(t *testing.T) {
+func TestEachRelationshipTagsTheOtherCardInWords(t *testing.T) {
 	s := highlightBoard(t)
-	for _, c := range []struct{ uid, tag, tone string }{
-		{"par", "parent", "accent"},
-		{"kid", "child", "info"},
-		{"blocker", "blocks this", "error"},
-		{"blocked", "blocked by this", "warning"},
-		{"rel", "related", "neutral"},
+	for _, c := range []struct{ uid, line, style, tone string }{
+		{"par", "parent of selected", "muted", "neutral"},
+		{"kid", "child of selected", "muted", "neutral"},
+		{"blocker", "blocks selected", "warning", "warning"},
+		{"blocked", "blocked by selected", "warning", "warning"},
+		{"rel", "related to selected", "muted", "neutral"},
 	} {
-		tags, tone := highlight(t, s, c.uid)
-		if len(tags) != 1 || tags[0] != c.tag+"/"+c.tone || tone != c.tone {
-			t.Errorf("%s: tags %q tone %q, want [%s] %s", c.uid, tags, tone, c.tag, c.tone)
+		line, style, tone := highlight(t, s, c.uid)
+		if line != c.line || style != c.style || tone != c.tone {
+			t.Errorf("%s: line %q style %q tone %q, want %q %s %s", c.uid, line, style, tone, c.line, c.style, c.tone)
 		}
 	}
-	if tags, tone := highlight(t, s, "stranger"); len(tags) != 0 || tone != "neutral" {
-		t.Errorf("an unrelated card has tags %q tone %q", tags, tone)
+	if line, _, tone := highlight(t, s, "stranger"); line != "" || tone != "neutral" {
+		t.Errorf("an unrelated card has tag line %q tone %q", line, tone)
 	}
 }
 
-func TestSeveralRelationshipsShowEveryTagAndRingByPrecedence(t *testing.T) {
-	tags, tone := highlight(t, highlightBoard(t), "both")
-	if want := []string{"blocks this/error", "child/info"}; strings.Join(tags, "|") != strings.Join(want, "|") || tone != "error" {
-		t.Errorf("tags %q tone %q, want %q error", tags, tone, want)
+func TestSeveralRelationshipsShareOneLineAndRingByPrecedence(t *testing.T) {
+	line, style, tone := highlight(t, highlightBoard(t), "both")
+	if line != "blocks selected, child of selected" || style != "warning" || tone != "warning" {
+		t.Errorf("line %q style %q tone %q, want both words, warning, warning", line, style, tone)
 	}
 }
 
 func TestTheSelectedCardKeepsItsRingAndDoneCardsStayMuted(t *testing.T) {
 	s := highlightBoard(t)
-	if tags, _ := highlight(t, s, "sel"); len(tags) != 0 {
-		t.Errorf("the selected card is tagged %q", tags)
+	if line, _, _ := highlight(t, s, "sel"); line != "" {
+		t.Errorf("the selected card is tagged %q", line)
 	}
 	n := node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.BoardID, "sel"))
 	if n.P["selected"] != true {
 		t.Errorf("the selected card lost its selected ring")
 	}
-	tags, tone := highlight(t, s, "old")
-	if len(tags) != 1 || tags[0] != "related/neutral" || tone != "muted" {
-		t.Errorf("a related Done card: tags %q tone %q, want [related] muted", tags, tone)
+	line, _, tone := highlight(t, s, "old")
+	if line != "related to selected" || tone != "muted" {
+		t.Errorf("a related Done card: line %q tone %q, want related to selected, muted", line, tone)
 	}
 }
 
 func TestTheHighlightFollowsTheSelectionAndNeedsOne(t *testing.T) {
 	s := step(t, highlightBoard(t), model.SelectMsg{UID: "par"}).State
-	if tags, tone := highlight(t, s, "sel"); len(tags) != 1 || tags[0] != "child/info" || tone != "info" {
-		t.Errorf("with the parent selected, sel has tags %q tone %q, want [child] info", tags, tone)
+	if line, _, tone := highlight(t, s, "sel"); line != "child of selected" || tone != "neutral" {
+		t.Errorf("with the parent selected, sel has line %q tone %q, want child of selected, neutral", line, tone)
 	}
-	if tags, _ := highlight(t, s, "kid"); len(tags) != 0 {
-		t.Errorf("the old selection's relative kept tags %q", tags)
+	if line, _, _ := highlight(t, s, "kid"); line != "" {
+		t.Errorf("the old selection's relative kept line %q", line)
 	}
 	s.Model.SelectedUID = ""
 	for _, uid := range []string{"sel", "par", "blocker"} {
-		if tags, tone := highlight(t, s, uid); len(tags) != 0 || tone != "neutral" {
-			t.Errorf("without a selection %s has tags %q tone %q", uid, tags, tone)
+		if line, _, tone := highlight(t, s, uid); line != "" || tone != "neutral" {
+			t.Errorf("without a selection %s has line %q tone %q", uid, line, tone)
 		}
 	}
 }

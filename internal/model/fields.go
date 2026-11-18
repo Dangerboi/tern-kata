@@ -130,40 +130,46 @@ const (
 )
 
 type fieldSpec struct {
-	title      string
-	needsValue bool
-	clean      func(string) string
-	check      func(string) error
-	open       fieldOpen
-	send       func(m Model) (Model, []Cmd)
+	title string
+	// label is the word above the input and placeholder the format it takes, shown while it is empty.
+	label, placeholder string
+	needsValue         bool
+	clean              func(string) string
+	check              func(string) error
+	open               fieldOpen
+	send               func(m Model) (Model, []Cmd)
 }
 
 var fieldSpecs = map[Action]fieldSpec{
-	AddLabelAction:       {title: "Add label", needsValue: true, open: openProjectLabels, send: sendFieldWrite},
-	RemoveLabelAction:    {title: "Remove label", needsValue: true, open: openIssueLabels, send: sendFieldWrite},
-	AssignOwnerAction:    {title: "Assign owner", needsValue: true, send: sendFieldWrite},
+	AddLabelAction:       {title: "Add label", label: "Label", placeholder: "Name", needsValue: true, open: openProjectLabels, send: sendFieldWrite},
+	RemoveLabelAction:    {title: "Remove label", label: "Label", placeholder: "Name", needsValue: true, open: openIssueLabels, send: sendFieldWrite},
+	AssignOwnerAction:    {title: "Assign owner", label: "Owner", placeholder: "Name", needsValue: true, send: sendFieldWrite},
 	ClearOwnerAction:     {title: "Clear owner", open: openImmediate, send: sendFieldWrite},
-	PriorityAction:       {title: "Priority (0-4, or - to clear)", check: checkPriority, send: sendFieldWrite},
-	SetParentAction:      {title: "Set parent (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
-	TimedAssignAction:    {title: "Assignment duration (1m..24h, e.g. 1h)", needsValue: true, check: checkAssignmentDuration, send: sendTimedAssignment},
-	AddBlockerAction:     {title: "This Issue blocks (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
-	AddRelatedAction:     {title: "Related to (Issue id)", needsValue: true, clean: trimHash, send: sendFieldWrite},
-	AttachFileAction:     {title: "Attach a file (path)", needsValue: true, send: sendAttach},
-	DetachFileAction:     {title: "Unlink attachment", open: openAttachments, send: sendDetach},
-	RestoreDeletedAction: {title: RestoreTitle + " (short id, project#id or ULID)", needsValue: true, send: sendRestore},
+	PriorityAction:       {title: "Set priority", label: "Priority", placeholder: "P0 to P4, or - to clear", clean: trimPriority, check: checkPriority, send: sendFieldWrite},
+	SetParentAction:      {title: "Set parent", label: "Parent", placeholder: "Issue id", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	TimedAssignAction:    {title: "Assign for a time", label: "Duration", placeholder: "1h (1m to 24h)", needsValue: true, check: checkAssignmentDuration, send: sendTimedAssignment},
+	AddBlockerAction:     {title: "Add blocker", label: "Issue", placeholder: "Issue id", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	AddRelatedAction:     {title: "Add related Issue", label: "Issue", placeholder: "Issue id", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	AttachFileAction:     {title: "Attach file", label: "File", placeholder: "File path", needsValue: true, send: sendAttach},
+	DetachFileAction:     {title: "Unlink attachment", label: "Attachment", placeholder: "Name", open: openAttachments, send: sendDetach},
+	RestoreDeletedAction: {title: "Restore Issue", label: "Issue", placeholder: "Short id or project#id", needsValue: true, send: sendRestore},
 }
 
 func FieldTitle(action Action) string { return fieldSpecs[action].title }
 
 func (m Model) FieldFormTitle() string { return FieldTitle(m.FieldForm.Action) }
 
-// FieldFormMeta is the Issue the open form acts on, as "#shortid", where kata tui names it in the title; "" when the form does not
-// name one.
+// FieldFormLabel is the word above the open form's input, "" for a form with no input.
+func (m Model) FieldFormLabel() string { return fieldSpecs[m.FieldForm.Action].label }
+
+// FieldFormPlaceholder is the format the open form's empty input takes.
+func (m Model) FieldFormPlaceholder() string { return fieldSpecs[m.FieldForm.Action].placeholder }
+
+// FieldFormMeta is the Issue the open form acts on, named as the Pane names it; "" for a form that names none (Restore
+// finds its Issue from what is typed).
 func (m Model) FieldFormMeta() string {
-	if f := m.FieldForm; f.Action == TimedAssignAction {
-		if issue := m.issueByUID(f.UID); issue != nil {
-			return "#" + issue.ShortID
-		}
+	if issue := m.issueByUID(m.FieldForm.UID); issue != nil && m.FieldForm.UID != "" {
+		return m.RefName(m.projectName(issue.ProjectID), issue.ShortID)
 	}
 	return ""
 }
@@ -172,7 +178,7 @@ func (m Model) FieldFormMeta() string {
 func assignmentSeconds(v string) (int64, error) {
 	d, err := time.ParseDuration(strings.TrimSpace(v))
 	if err != nil || d < time.Minute || d > 24*time.Hour || d%time.Second != 0 {
-		return 0, errors.New("duration must be a whole number of seconds from 1m through 24h")
+		return 0, errors.New("Use a whole number of seconds from 1m to 24h.")
 	}
 	return int64(d / time.Second), nil
 }
@@ -201,9 +207,12 @@ func PriorityText(p *int64) string {
 	return fmt.Sprintf("P%d", *p)
 }
 
+// trimPriority lets a priority be typed as the badge shows it, P2, as well as the number.
+func trimPriority(v string) string { return strings.TrimLeft(v, "Pp") }
+
 func checkPriority(v string) error {
 	if n, err := strconv.Atoi(v); v != "-" && (err != nil || n < 0 || n > 4) {
-		return errors.New("Priority must be 0-4, or - to clear.")
+		return errors.New(Cannot("set", "priority", errors.New("use P0 to P4, or - to clear")))
 	}
 	return nil
 }
@@ -234,7 +243,7 @@ func openField(m Model, action Action) (Model, []Cmd) {
 		f.Labels = AttachmentLabels(f.Attachments)
 		if len(f.Labels) == 0 {
 			m.FieldForm = FieldFormState{}
-			m.Notice = fmt.Sprintf("%s has no attachments.", issue.ShortID)
+			m = m.say(m.RefName(m.projectName(issue.ProjectID), issue.ShortID) + " has no attachments.")
 		}
 	}
 	return m, nil
@@ -246,7 +255,7 @@ func submitField(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.Stale {
-		f.Err = errors.New("Daemon disconnected; reconnect before saving this field.")
+		f.Err = errors.New(Cannot("save", "", ErrDisconnected))
 		return m, nil
 	}
 	spec := fieldSpecs[f.Action]
@@ -369,7 +378,7 @@ func fieldWritten(m Model, uid, report string, err error) (Model, []Cmd) {
 	}
 	m.FieldForm = FieldFormState{}
 	if report != "" {
-		m.Notice = report
+		m = m.say(report)
 	}
 	return snapshotChanged(m.issueWritten(uid))
 }

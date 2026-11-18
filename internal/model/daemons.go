@@ -3,9 +3,6 @@ package model
 import (
 	"errors"
 	"slices"
-	"strconv"
-	"strings"
-	"unicode/utf8"
 )
 
 // The Daemons Page is a Lettered Page: it lists the daemons named in kata's client configuration, as kata tui lists them, and Enter
@@ -138,8 +135,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	}
 	m.Daemons.Switching = ""
 	if msg.Err != nil {
-		m.Notice = `daemon "` + msg.Name + `": ` + oneLine(msg.Err.Error())
-		return m, nil
+		return m.fail(Cannot("connect to", oneLine(msg.Name), msg.Err)), nil
 	}
 	m.Connection++
 	m = m.leavePage()
@@ -178,14 +174,11 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 		StreamGeneration: m.StreamGeneration + 1, snapshotReads: m.snapshotReads.Discarded(),
 		wakeGeneration: m.wakeGeneration, resubscribe: true,
 	}
-	m.Notice = `daemon "` + msg.Name + `": connected`
-	switch dropped {
-	case 0:
-	case 1:
-		m.Notice += "; 1 unsent draft dropped"
-	default:
-		m.Notice += "; " + strconv.Itoa(dropped) + " unsent drafts dropped"
+	connected := "Connected to " + oneLine(msg.Name)
+	if dropped > 0 {
+		connected += " and dropped " + Count(dropped, "unsent draft", "")
 	}
+	m = m.say(connected + ".")
 	account := askAccount(&m)
 	return m, []Cmd{LoadProject{Workspace: m.Workspace, Switched: true, Connection: m.Connection}, account}
 }
@@ -197,26 +190,22 @@ func moveDaemon(m Model, action Action) Model {
 
 func (m Model) SelectedDaemon() *DaemonEntry { return rowAt(m.Daemons.Entries, m.Daemons.Cursor) }
 
-func (d DaemonsState) Summary() string { return strconv.Itoa(len(d.Entries)) + " daemons" }
-
-// DaemonsNotice is what stands in place of the list, with a line under it when there is something to add.
+// DaemonsNotice is what stands in place of the list. Empty says the catalog names no daemon, which the view draws as an empty
+// state; Err says a failure and Pending that the text is a line of progress.
 type DaemonsNotice struct {
-	Text, Detail string
-	Err          bool
+	Text, Detail        string
+	Err, Empty, Pending bool
 }
 
 // Notice is what stands in place of the list: loading, a failed read, or the empty catalog; false when the list is shown.
 func (d DaemonsState) Notice() (DaemonsNotice, bool) {
 	switch {
 	case d.Loading:
-		return DaemonsNotice{Text: "loading daemons..."}, true
+		return DaemonsNotice{Text: Progress("Loading", "daemons"), Pending: true}, true
 	case d.Err != nil:
-		return DaemonsNotice{Text: "failed to read the daemon catalog: " + oneLine(d.Err.Error()), Err: true}, true
+		return DaemonsNotice{Text: Cannot("read", "the daemon catalog", d.Err), Err: true}, true
 	case len(d.Entries) == 0:
-		return DaemonsNotice{
-			Text:   "no named daemons",
-			Detail: "add a [[daemon]] entry to " + oneLine(d.ConfigPath) + ": a name, and either url (a remote daemon) or local = true",
-		}, true
+		return DaemonsNotice{Text: "No named daemons", Detail: "Add a [[daemon]] entry to config.toml.", Empty: true}, true
 	}
 	return DaemonsNotice{}, false
 }
@@ -226,18 +215,16 @@ func (d DaemonsState) SwitchingLine() string {
 	if d.Switching == "" {
 		return ""
 	}
-	return "connecting to daemon " + oneLine(d.Switching) + "..."
+	return Progress("Connecting to", oneLine(d.Switching))
 }
 
-// Footer is the line under the list about the selected daemon: its name and endpoint, and allow_insecure when it is set.
-func (e DaemonEntry) Footer() string {
-	text := oneLine(e.Name) + " · " + oneLine(e.Endpoint)
-	if e.AllowInsecure {
-		text += " · allow_insecure"
-	}
-	return text
-}
+// Label is the entry's name on one line, as the table's Name cell shows it.
+func (e DaemonEntry) Label() string { return oneLine(e.Name) }
 
+// Where is the entry's endpoint on one line, as the table's Endpoint cell shows it.
+func (e DaemonEntry) Where() string { return oneLine(e.Endpoint) }
+
+// Auth is the entry's authentication in words: "token" or "no token".
 func (e DaemonEntry) Auth() string {
 	if e.Token {
 		return "token"
@@ -245,6 +232,7 @@ func (e DaemonEntry) Auth() string {
 	return "no token"
 }
 
+// State is the table's State cell: "current" for the daemon this Pane talks to, else empty.
 func (e DaemonEntry) State() string {
 	if e.Current {
 		return "current"
@@ -252,24 +240,7 @@ func (e DaemonEntry) State() string {
 	return ""
 }
 
-func DaemonsHeader() string { return daemonRow("Daemon", "Endpoint", "Auth", "State") }
-
-func (e DaemonEntry) Row() string {
-	return daemonRow(oneLine(e.Name), oneLine(e.Endpoint), e.Auth(), e.State())
-}
-
-func daemonRow(name, endpoint, auth, state string) string {
-	return strings.TrimRight(padRunes(name, 22)+"  "+padRunes(endpoint, 28)+"  "+padRunes(auth, 8)+"  "+state, " ")
-}
-
-func padRunes(s string, width int) string {
-	if n := utf8.RuneCountInString(s); n < width {
-		return s + strings.Repeat(" ", width-n)
-	}
-	return s
-}
-
 var daemonsRows = []actionEntry{
-	{action: SwitchDaemonAction, modes: []Mode{ModeDaemons}, keys: keys("enter", "↵"), help: "switch", footer: []Mode{ModeDaemons}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 10, "switch this Pane to the selected daemon"}}, handle: switchSelectedDaemon},
+	{action: SwitchDaemonAction, modes: []Mode{ModeDaemons}, keys: keys("enter", "enter"), help: "switch", footer: []Mode{ModeDaemons}, footerKey: "enter", sheet: []sheetLine{{sheetLettered, 10, "Switch to this daemon"}}, handle: switchSelectedDaemon},
 	letteredBackRow(ModeDaemons, letteredBack),
 }

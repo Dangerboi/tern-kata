@@ -26,9 +26,11 @@ type WorkerReading struct {
 
 func (r WorkerReading) Refuses() bool { return len(r.Refusals) > 0 }
 
+// ReadingLine is one line of the reading: a warning, the good verdict, or plain muted text when neither is set.
 type ReadingLine struct {
 	Text string
 	Warn bool
+	Good bool
 }
 
 // Lines are the reading in words: the verdict, then one line per refusal, then what could not be checked. Refusals warn; the
@@ -37,17 +39,17 @@ func (r WorkerReading) Lines() []ReadingLine {
 	var lines []ReadingLine
 	switch {
 	case r.Refuses():
-		lines = append(lines, ReadingLine{"This machine's Worker will not run it:", true})
+		lines = append(lines, ReadingLine{Text: "This machine's worker will not run it:", Warn: true})
 		for _, why := range r.Refusals {
-			lines = append(lines, ReadingLine{"• " + why, true})
+			lines = append(lines, ReadingLine{Text: why, Warn: true})
 		}
 	case r.BudgetUnchecked:
-		lines = append(lines, ReadingLine{"Nothing here that does not depend on worker.toml would stop this machine's Worker.", false})
+		lines = append(lines, ReadingLine{Text: "Nothing here that does not depend on worker.toml would stop this machine's worker."})
 	default:
-		lines = append(lines, ReadingLine{"This machine's Worker would run it.", false})
+		lines = append(lines, ReadingLine{Text: "This machine's worker can run it.", Good: true})
 	}
 	if r.BudgetUnchecked {
-		lines = append(lines, ReadingLine{"The prompt budget could not be checked: " + r.BudgetWhy + ".", !r.ConfigMissing})
+		lines = append(lines, ReadingLine{Text: "Cannot check the prompt budget: " + r.BudgetWhy + ".", Warn: !r.ConfigMissing})
 	}
 	return lines
 }

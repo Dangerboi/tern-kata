@@ -1,13 +1,16 @@
-# Rows carry theme-toned badges and no label chips, and the top bar title is accent.
+# Rows carry theme-toned badges and no label chips: an open status is plain text, P0 is error, a closed status is muted
+# (see the closed row in 36-accent.sh). The top bar title is accent.
 # The fixture is deleted afterwards so later steps see the three seeded Issues.
 kata --workspace "$tmp/workspace" create "Smoke colour Issue" --priority 0 --label colour-chip --json >"$tmp/colour.json"
 colour_uid=$(jq -r '.issue.uid' "$tmp/colour.json")
 colour_short=$(jq -r '.issue.short_id' "$tmp/colour.json")
 colour_row="[data-id='main.columns.list.issues.$colour_uid']"
-expect_tree "$colour_row" '.ok and .count == 1 and (.nodes[0].text | contains("P0 open"))'
-expect_tree "$colour_row *" '[.nodes[] | select(.text == "open" or .text == "P0") | {(.text): .class}] | add == {"open": "sf-t-accent", "P0": "sf-t-error sf-t-mono"}'
+expect_tree "$colour_row" '.ok and .count == 1 and (.nodes[0].text | test("P0\\s+open"))'
+expect_tree "$colour_row *" '[.nodes[] | select(.text == "open" or .text == "P0") | {(.text): .class}] | add as $c | ($c.P0 == "sf-t-error sf-t-mono") and (($c.open // "") | test("sf-t-(accent|success|muted)") | not)'
 expect_tree "$colour_row" '(.nodes[0].text | contains("colour-chip") | not)'
 expect_tree "[data-id='main.topbar.left.heading'] *" '.nodes[0].class == "sf-t-title sf-t-accent"'
+kata --workspace "$tmp/workspace" close "$colour_short" --done --message "Closed by the colour smoke step so the status is muted" --commit abc1234def56 --json >/dev/null
+expect_tree "$colour_row *" '[.nodes[] | select(.text == "closed") | .class] == ["sf-t-muted"]'
 
 kata --workspace "$tmp/workspace" delete "$colour_uid" --force --confirm "DELETE smoke#$colour_short" --json
 expect_tree "$colour_row" '.ok and .count == 0'

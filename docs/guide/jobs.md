@@ -6,16 +6,16 @@
 
 ![The Jobs Page with a job selected and its inspector open, listing its next runs](../images/jobs.png)
 
-One card per job. A card shows:
+One card per job. The heading reads `Jobs 4`, with `· 2 archived hidden` added only while archived jobs are hidden. With none, the Page reads "No jobs" / "A job makes an Issue or runs an agent on a schedule." with a **New job** button. A card shows:
 
 - a state badge: `active`, `disabled`, `archived`, or `paused: parent closed`, `paused: parent deleted`, `paused: Project archived`;
 - the name;
-- the kind: `recurring child`, `agent prompt`, `workflow` or `notify`;
-- the schedule in words: "every weekday at 09:00 Europe/Berlin", "every 15 minutes" (only for a step that divides the hour; `*/40` shows as `cron */40 * * * *`), "once at 2026-11-01 09:00 UTC", "manual", "at the Issue's scheduled date", "2 days before the Issue's deadline";
-- the agent profile;
-- the next run in the Pane calendar's zone.
+- the kind: Recurring Issue, Agent prompt, Workflow or Notification;
+- the schedule in words: "every weekday at 09:00 Europe/Berlin", "every 15 minutes" (only for a step that divides the hour; `*/40` shows as `cron */40 * * * *`), "once at 2026-11-01 09:00 UTC", "on demand", "at the Issue's scheduled date", "2 days before the Issue's deadline". The time zone is appended only to a phrase that names a clock time or to a raw cron expression, never to "every 15 minutes", "every hour" or "every minute";
+- the next run, `Next run 19:21` in the Pane calendar's zone (`2026-11-19 09:00` when it is not today);
+- the last run or the last Issue: `Last run failed · 2026-11-16 13:00 · Quota reached · the provider answered 429` (the status word in its tone), or `Last Issue #ab12 Tick · open · 18:00` for a Recurring Issue job.
 
-A schedule that can't be read, or a next run that can't be worked out, is left off the card: a job that isn't running, a manual or Issue-date trigger, a once trigger in the past, or an interval of a recurring-child job whose parent has no delivery anchor yet. An interval of a job a worker runs does show, counted from the job's creation.
+The agent profile is in the inspector, not on the card. A schedule that can't be read, or a next run that can't be worked out, is left off the card: a job that isn't running, a manual or Issue-date trigger, a once trigger in the past, or an interval of a Recurring Issue job whose parent has no delivery anchor yet. An interval of a job a worker runs does show, counted from the job's creation.
 
 ### Keys
 
@@ -26,7 +26,7 @@ A schedule that can't be read, or a next run that can't be worked out, is left o
 | Esc or Tab | Back to the list (on the list, Esc first ends a search) |
 | `n` | New job (opens the [Job card](#job-card)) |
 | `e` | Edit the selected job |
-| `J` | On an Issue (list, Board, Lane view, Issue detail): new recurring-child job with that Issue as parent |
+| `J` | On an Issue (list, Board, Lane view, Issue detail): new Recurring Issue job with that Issue as parent |
 | `p` | Pause (writes the job disabled) or resume |
 | `x` | Archive, or restore an archived job; the footer reads "archive" or "restore" |
 | `a` | Show or hide archived jobs (hidden until then) |
@@ -39,37 +39,37 @@ A schedule that can't be read, or a next run that can't be worked out, is left o
 
 ### What a card tells you
 
-- A kata-run job ("recurring child") makes a child Issue under its parent each time it fires. It pauses by itself while its parent is closed or deleted or its Project is archived; reopening, restoring or re-enabling resumes it. The Pane works the reason out from the parent and the Project, since kata stores none: a disabled job reads `disabled` whatever its parent is doing, and an archived Project reads as paused for every job the Pane already holds, because kata then answers none of them.
-- A card also names the job's latest run (an adapter job: status, when, the first line of its summary) or latest child Issue (a recurring child), and the inspector lists the five most recent.
+- A kata-run job (a Recurring Issue) makes a child Issue under its parent each time it fires. It pauses by itself while its parent is closed or deleted or its Project is archived; reopening, restoring or re-enabling resumes it. The Pane works the reason out from the parent and the Project, since kata stores none: a disabled job reads `disabled` whatever its parent is doing, and an archived Project reads as paused for every job the Pane already holds, because kata then answers none of them.
+- A card also names the job's latest run (an adapter job: the status word in its tone, when, the reason in words and the first line of its summary) or latest child Issue (a Recurring Issue job), and the inspector lists the five most recent.
 - An enabled per-run Issue job of a worker that creates more than 24 Issues a day (`worker status` and `worker doctor` list it too) carries the line "creates about N Issues a day; consider an existing Issue"; the job keeps running. An interval of a worker's job counts from the job's creation, as the worker does.
 - The Jobs Page keeps its selection while another Page is shown and reads the jobs again when you return.
 - A job this machine's worker serves the Project for but sets aside (a profile, checkout or secret `worker.toml` does not map, a timeout over `max_timeout`, a workflow it does not run) shows "Set aside on this machine: <reason>" in the warning tone on its card and a **Set aside** fact in the inspector; the reason is the worker's, from `worker status`.
 
 ### Inspector
 
-At 140 columns and wider an **inspector** beside the list shows the selected job's full definition (trigger, prompt or workflow, recipient and message, Issue policy, overlap, catchup, timeout, checkout, the names of its secrets) and, for a recurring-child job, its parent Issue with the delivery progress. Narrower, only the focused column shows: Enter or Tab on a card shows the inspector, Esc or Tab goes back.
+At 140 columns and wider an **inspector** beside the list shows the selected job's facts as label and value rows, in the same key column as the Issue properties, each row absent when it is empty: State, Worker (`Paused after 3 failed runs in a row`), Set aside, Kind, Schedule, Next runs, Warning, Recent runs (the status word in its tone, then the time and the run's reason in words), Recent children, Prompt, Workflow (the workflow's name), Recipient (`The Issue's owner or author` for the default), Message, Adapter, Profile, Checkout, Secrets, Issue (`New Issue per run` or `Existing Issue`), Child title, Child body, Scheduled offset, Deadline offset, Timeout (durations in words, such as `1 hour`), Overlap and Catch up (worded as the card words them: `Wait for the running one`, `Run alongside it`, `Latest missed run`, `Every missed run`, `Skip runs older than the grace`, with `· grace 2 hours` appended), Parent (with the delivery progress for a Recurring Issue job), Delivered through, Missed, Created (`2026-11-18 18:21 · author`) and Updated. Cron, Time zone, Interval and At rows appear only when the schedule cannot be read in words. Author, revision and UID are not rows: the ids sit in a hovercard on the job's name at the top of the inspector. Narrower, only the focused column shows: Enter or Tab on a card shows the inspector, Esc or Tab goes back.
 
-The inspector lists the next three runs under **Next runs**, each with its zone abbreviation (a cron trigger in its own zone, an interval or once trigger in the Pane calendar's zone). An interval or `@every` trigger of a job a worker runs counts from the job's creation, as the list row's does. Where there are none it says why: "none while paused", "none while the parent is closed" (likewise for a deleted parent, an archived Project and an archived job), "none: runs only when started" for a manual trigger, "unavailable: follows the Issue's date" for an Issue-date trigger, and "unavailable" where the runs can't be worked out (a schedule the Pane can't read, or a cron zone it doesn't know).
+The inspector lists the next three runs under **Next runs**, one per line as `2026-11-19 09:00` (`09:00` when it is today), with no zone abbreviation (a cron trigger in its own zone, an interval or once trigger in the Pane calendar's zone). An interval or `@every` trigger of a job a worker runs counts from the job's creation, as the list row's does. Where there are none it says why: "none while paused", "none while the parent is closed" (likewise for a deleted parent, an archived Project and an archived job), "unavailable: follows the Issue's date" for an Issue-date trigger, and "unavailable" where the runs can't be worked out (a schedule the Pane can't read, or a cron zone it doesn't know). A manual job has no Next runs row, since its Schedule row says "on demand".
 
-With the inspector focused, Enter on a recurring-child job's parent opens that Issue on the Issues Page (a deleted parent leaves a Notice instead).
+With the inspector focused, Enter on a Recurring Issue job's parent opens that Issue on the Issues Page (a deleted parent leaves a Notice instead).
 
 ### Issues made by a job
 
-An Issue a recurring-child job made is marked "◷" in the list and on its Board card, and its detail has a **Cron job** property: the job's name (its uid when the job is gone) and the run's scheduled time. Enter on it (it is the first row the detail's cursor stands on) or a click opens the Jobs Page with that job selected.
+An Issue a Recurring Issue job made is marked "◷" in the list and on its Board card, and its detail has a **Cron job** property: the job's name (its uid when the job is gone) and the run's scheduled time. Enter on it (it is the first row the detail's cursor stands on) or a click opens the Jobs Page with that job selected.
 
 The parent's detail has a **Cron jobs** property listing its jobs with state, pause reason and schedule, each openable the same way; a closed parent says its Cron jobs are paused. The detail reads the Project's jobs for this, so it names them a moment after the Issue shows.
 
 ### Is the worker running?
 
-A line under the heading says whether **this machine's worker** runs and serves the Pane's Project:
+The Jobs Page shows one line under its head about **this machine's worker**: a badge and a muted detail.
 
-- no worker set up, a `worker.toml` that does not load, or one that does not list the Project (the line says which and points at `W`);
-- no worker running yet (the plugin starts one, or `worker.manual` leaves it to you);
-- a worker that does not serve the Project;
-- a Project it serves but admits nothing for (the reason is the worker's, for instance another machine's lease);
-- the worker's executor label with its slots in use.
+- `Worker smoke-box` (success) with `0 of 3 slots in use`;
+- `Worker smoke-box` (warning) with `admits nothing: <why>` (the reason is the worker's, for instance another machine's lease), `does not serve smoke; restart it to pick up worker.toml` or `does not serve smoke; not listed in worker.toml`;
+- `No worker` (warning) with `none set up for smoke`, `worker.toml does not load`, `worker.toml does not list smoke`, `supervision is off, so none starts by itself` or `none is running on this machine`;
+- `Starting` (pending) with `the plugin starts one within 10 seconds`;
+- with supervision off and a worker running, ` · supervision is off` ends the detail.
 
-The Pane asks the worker over its control socket when the page opens, on `ctrl+r` and after a run is requested.
+The banner names no key; the footer shows `W`. Adapter jobs run only when a worker serves the Project. The Pane asks the worker over its control socket when the page opens, on `ctrl+r` and after a run is requested.
 
 ### Run now
 
@@ -89,18 +89,20 @@ On the Jobs Page, `p` pauses a job that is running (it writes the job disabled) 
 
 ![The Job card editing an agent prompt job, with the schedule preview](../images/job-card.png)
 
-`n` on the Jobs Page opens the **Job card** for a new job; `J` on an Issue (list, Board, Lane view, Issue detail) opens it for a new recurring-child job with that Issue as its parent; `e` opens it on the selected job, prefilled.
+`n` on the Jobs Page opens the **Job card** for a new job; `J` on an Issue (list, Board, Lane view, Issue detail) opens it for a new Recurring Issue job with that Issue as its parent; `e` opens it on the selected job, prefilled. A refusal reads "Cannot create a job: disconnected from kata.", "Cannot create a job: this Project is archived." or "Cannot edit the job: it is archived; restore it first."
 
 The **Kind** field offers:
 
 | Kind | Run by |
 |---|---|
-| **Recurring child** | kata's own daemon |
+| **Recurring Issue** | kata's own daemon |
 | **Agent prompt** | an adapter ([the worker](worker.md)) |
 | **Workflow** | an adapter |
-| **Notify** | an adapter |
+| **Notification** | an adapter |
 
-kata never runs the last three. The card makes and edits all of them and kata accepts them; the worker runs all three kinds and refuses a workflow it does not support with the reason. A job being edited offers only the kinds of its own side (a recurring child stays one, and a worker's job stays a worker's).
+kata never runs the last three. The card makes and edits all of them and kata accepts them; the worker runs all three kinds and refuses a workflow it does not support with the reason. A job being edited offers only the kinds of its own side (a Recurring Issue stays one, and a worker's job stays a worker's).
+
+Each field has a one- or two-word label (Cron expression, Time zone, Interval, Once at, Target Issue, Notify about, Lead, Parent Issue, Prompt, Workflow, Agent profile, Checkout, Secrets, Adapter, Run Issue, Child title, Child body, Scheduled offset, Deadline offset, Inbox recipient, Inbox message, Overlap, Timeout, Catch up, Grace, Enabled), and the format it reads is a muted hint under the focused field. The card marks no field as required; a refusal names the field.
 
 The fields are reached with `tab` and `shift+tab`; a field that doesn't apply is hidden and skipped.
 
@@ -108,16 +110,16 @@ The fields are reached with `tab` and `shift+tab`; a field that doesn't apply is
 
 **Name**, and the **Trigger**, whose choices depend on the kind.
 
-- A recurring child takes a **cron** expression (five fields, or a descriptor like `@daily`; `@every` and a `TZ=` prefix are refused) with its **time zone** (an IANA name, blank is UTC, the Pane's zone to start with), or an **interval** in seconds or as a duration like `15m` or `2h`, at least 60 seconds.
-- A worker's job also takes **once** (a full RFC 3339 instant with its offset, `2026-11-01T09:00:00+01:00` or `…Z`; a date or a time alone is refused), **manual** (it runs only on `tern-kata run` or a request), **Issue's scheduled date** and, for Notify only, **Issue's deadline** with a **lead** (seconds or `2h`, `1d`; blank fires at the deadline), because kata lets a deadline fire a notification and nothing else.
+- A Recurring Issue takes a **Cron expression** (five fields, or a descriptor like `@daily`; `@every` and a `TZ=` prefix are refused) with its **Time zone** (an IANA name, blank is UTC, the Pane's zone to start with), or an **Interval** in seconds or as a duration like `15m` or `2h`, at least 60 seconds.
+- A worker's job also takes **Once at** (a full RFC 3339 instant with its offset, `2026-11-01T09:00:00+01:00` or `…Z`; a date or a time alone is refused), **manual** (it runs only on `tern-kata run` or a request), **Issue's scheduled date** and, for a Notification only, **Issue's deadline** with a **Lead** (seconds or `2h`, `1d`; blank fires at the deadline), because kata lets a deadline fire a notification and nothing else.
 - An Issue-date trigger names its **Target Issue** by short id.
 - A worker's interval has no 60-second floor.
 
-Under the trigger a live preview reads the schedule in words and lists the next runs: three for a cron or a recurring child's interval; the instant of a once trigger; none for manual and Issue dates. An interval counts from the job's creation, so a new job's runs are "about" those times. A trigger that can't be read says why instead.
+Under the trigger a live preview reads the schedule in words ("Runs every day at 09:00 UTC") and a **Next runs** row lists the next runs, one per line as `2026-10-09 09:00` (`09:00` when it is today; no weekday, no zone letters): three for a cron or a Recurring Issue's interval; the instant of a once trigger; none for manual and Issue dates. An interval counts from the job's creation, so a new job's runs are "about" those times. A trigger that can't be read says "Not a valid schedule: <reason>."; an unknown start point says "Next runs are unknown until its start point is known."
 
-### Recurring child fields
+### Recurring Issue fields
 
-- **Parent Issue**: a short id, which a job made with `J` has filled in. The card resolves it to the Issue's full uid. A job keeps its parent, so the field is hidden when editing.
+- **Parent Issue**: a short id, which a job made with `J` has filled in. The card resolves it to the Issue's full uid. A job keeps its parent, so when editing the card shows a Parent row (`#ab12 Title`) with the muted line "A job keeps its parent." instead of the field.
 - **Child title** and **Child body**: the body is one line; a body with line breaks is shown on one line and saved that way.
 - **Inbox recipient**: blank is the parent's current owner or author; otherwise an exact address like `alice` or `alice/reviewer`.
 - **Inbox message**.
@@ -131,7 +133,7 @@ Under the trigger a live preview reads the schedule in words and lists the next 
 
 ### Conditions
 
-An Agent prompt or Workflow job being edited shows its **conditions** (`options.conditions`, see [Conditions and skips](worker-reference.md#conditions-and-skips)) read-only under the fields: at most so many runs per day or week, at most so many dollars spent per day or week, and "only with new commits since the last succeeded run", with "in folders …" when it names folders. The card reads them with the same reader the worker admits runs with. A job without conditions shows nothing, and so does a new job. Conditions that do not parse show the reader's error instead; the worker holds that job's due occurrences and lists it as blocked until it is fixed. A worker that does not know conditions ignores them, and the card says so. The card does not edit conditions; write them into `options` with kata.
+An Agent prompt or Workflow job being edited shows its **conditions** (`options.conditions`, see [Conditions and skips](worker-reference.md#conditions-and-skips)) read-only under the fields, headed "Only runs when", with one line per condition: at most so many runs per day or week, at most so many dollars spent per day or week, and "New commits since the last succeeded run", with "in folders …" when it names folders. The card reads them with the same reader the worker admits runs with. A job without conditions shows nothing, and so does a new job. Conditions that do not parse show "Cannot read the conditions: <reason>. The worker holds every due run of this job until they are fixed."; the worker lists the job as blocked until it is fixed. The card does not edit conditions; write them into `options` with kata.
 - **Run Issue** policy: **a new Issue per run**, with a title, a one-line body and optional **scheduled** and **deadline offsets** from the run such as `1d` or `-2h`, or **an existing Issue**, named by short id, which every run belongs to.
 - **Overlap**: wait for the running one (the default) or run alongside it.
 - **Timeout**: seconds or `30m`, `2h`; blank is the worker's default.
@@ -139,7 +141,7 @@ An Agent prompt or Workflow job being edited shows its **conditions** (`options.
 
 ### Notify fields
 
-A **Notify** job notifies an existing Issue: the **Target Issue**, or the trigger's Issue for an Issue-date trigger. For an Issue-date trigger an optional **Other Issue to notify about** names a second Issue to notify instead of the trigger's. It also has an **Inbox recipient** (blank is the Issue's current owner or author; a named recipient needs a **message**) and an **Inbox message**.
+A **Notification** job notifies an existing Issue: the **Target Issue**, or the trigger's Issue for an Issue-date trigger. For an Issue-date trigger an optional **Notify about** names a second Issue to notify instead of the trigger's. It also has an **Inbox recipient** (blank is the Issue's current owner or author; a named recipient needs a **message**) and an **Inbox message**.
 
 kata's own date sweeper already notifies the owner or author of the trigger's Issue when a zero-lead job with a blank **Inbox recipient** watches an Issue date and notifies that same Issue, so the worker does not send it a second time. A job that notifies another Issue, has a lead, names a recipient or has a **Message** of its own is the worker's: the sweeper sends only its generic "Scheduled date reached" text, so the worker sends your message, and kata's own reminder still arrives too.
 
@@ -147,11 +149,11 @@ kata's own date sweeper already notifies the owner or author of the trigger's Is
 
 **Catch up** is one of:
 
-- the latest missed run;
-- every missed run;
-- skip runs older than the **grace** in seconds, which skip requires for a recurring child and takes as optional for a worker's job.
+- **Latest missed run**;
+- **Every missed run**;
+- **Skip runs older than the grace**, with the **Grace** in seconds, which skip requires for a Recurring Issue and takes as optional for a worker's job.
 
-On the day a cron trigger's zone falls back, a time inside the repeated hour runs twice (two runs); on the day it springs forward, a skipped time such as midnight can fail to run that day. It applies to cron, interval and once triggers. **Enabled** turns the job on or off. Turning a paused recurring child back on from the card, with catch-up on every missed run and runs missed, opens the [Backfill card](#backfill-card) first, as `p` does; it sends the card's draft with the answer, and Esc returns to the card.
+On the day a cron trigger's zone falls back, a time inside the repeated hour runs twice (two runs); on the day it springs forward, a skipped time such as midnight can fail to run that day. It applies to cron, interval and once triggers. **Enabled** turns the job on or off. Turning a paused Recurring Issue job back on from the card, with catch-up on every missed run and runs missed, opens the [Backfill card](#backfill-card) first, as `p` does; it sends the card's draft with the answer, and Esc returns to the card.
 
 ### Conditions
 
@@ -177,12 +179,12 @@ See [Conditions and skips](worker-reference.md#conditions-and-skips) for the rul
 <details>
 <summary>What the card refuses, and what a save does</summary>
 
-Invalid input is refused naming the field and nothing is sent:
+Invalid input is refused as "Cannot save the job: <Field>: <reason>.", with focus on the field, and nothing is sent:
 
 - a bad cron expression;
 - an unknown time zone;
-- an interval under 60 seconds for a recurring child, or one beyond kata's range;
-- skip without a grace on a recurring child;
+- an interval under 60 seconds for a Recurring Issue, or one beyond kata's range;
+- skip without a grace on a Recurring Issue;
 - a blank name, child title or prompt;
 - a workflow that isn't a live one of the Project;
 - an Issue-date trigger or existing-Issue policy with no Issue;
@@ -196,26 +198,26 @@ An Issue that doesn't exist is refused by the write naming the field, and kata's
 
 A new job is sent at a uid the card made when it opened, so sending the same card again is not a second job.
 
-An edit is a Guarded write on the job's `definition_event_uid`: if the job changed meanwhile nothing is written, the card shows the newer job (name, state, schedule, child title, catch-up, when it changed) and keeps your draft, and saving again needs an explicit choice:
+An edit is a Guarded write on the job's `definition_event_uid`: if the job changed meanwhile nothing is written. The card says "Changed since you opened it. Nothing was written; your Draft is kept.", shows the newer job (Name, State, Schedule, Child title, Catch up, Updated) and keeps your draft, and saving again needs an explicit choice:
 
 | Key | Result |
 |---|---|
-| `o` | save the draft over the newer job |
-| `u` | replace the draft with the newer job |
-| `d` | discard the draft |
+| `u` | **Use theirs** (primary): replace the draft with the newer job |
+| `o` | **Keep mine**: save the draft over the newer job |
+| `d` | **Discard mine** |
 
 </details>
 
 ## Backfill card
 
-Before a recurring-child job whose catch-up is every missed run makes the runs it missed, the **Backfill card** asks. Reopening the parent with `r` on the Issues Page, resuming the job with `p` and restoring it with `x` on an archived one each end a pause, after which kata's daemon creates one child Issue for every occurrence since the parent's progress stopped advancing, all at once.
+Before a Recurring Issue job whose catch-up is every missed run makes the runs it missed, the **Backfill card** asks. Reopening the parent with `r` on the Issues Page, resuming the job with `p`, restoring it with `x` on an archived one and saving it from the Job card each end a pause, after which kata's daemon creates one child Issue for every occurrence since the parent's progress stopped advancing, all at once.
 
-When that count is above zero the card names it, job by job (a parent can have several jobs), and offers:
+When that count is above zero the card asks "Create 4 missed Issues?" ("Create 1 missed Issue?", "Create 10000 or more missed Issues?") and warns in one sentence: for a single job, "Minute tick missed 4 runs. Resuming creates all of them now, or only the latest." ("Restoring" and "Saving" in place of "Resuming" for those keys; "Reopening #12 creates the Issues its jobs missed, all of them or only the latest of each." for a reopen, which lists each job with its missed runs under the sentence). Choices, primary first and the safe exit last:
 
 | Key | Choice |
 |---|---|
-| `c` | **create them** |
-| `l` | **switch to latest and resume** ("restore" or "reopen" for those keys): first replaces the job's catch-up with `latest` as a Guarded write, then goes on |
-| `esc` | **cancel**: changes nothing |
+| `l` | **Only the latest**: first replaces the job's catch-up with `latest` as a Guarded write, then goes on (resume, restore, save or reopen) |
+| `c` | **Create all**: the daemon makes every missed child Issue |
+| `esc` | **Cancel**: changes nothing |
 
-A job that catches up with `latest` or `skip`, one with nothing missed and one that would stay paused for another reason (the parent is still closed, the job disabled) ask nothing. `r` reads the parent's jobs afresh first, since its progress stopped when it closed. A job changed meanwhile is not written; the list shows it and a Notice says so. Restoring a deleted parent from the Menu asks no Backfill; only reopening a closed parent does.
+While a write is under way the card shows `Resuming…`, `Restoring…`, `Saving…` or `Reopening…` in its foot and disables its buttons. After the last write a Notice says `Resumed "Minute tick" with only its latest missed run.` (or `Restored …`). A job that catches up with `latest` or `skip`, one with nothing missed and one that would stay paused for another reason (the parent is still closed, the job disabled) ask nothing. `r` reads the parent's jobs afresh first, since its progress stopped when it closed; a failed read says "Cannot read the Issue's jobs, so nothing was reopened: <reason>." A job changed meanwhile is not written; the list shows it and a Notice says so. Restoring a deleted parent from the Menu asks no Backfill; only reopening a closed parent does.

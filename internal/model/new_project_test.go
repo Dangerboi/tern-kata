@@ -141,7 +141,7 @@ func TestNewProjectRejectionKeepsTheForm(t *testing.T) {
 	saving, _ := pickerKeys(newProjectOpened(false), "x", "enter")
 	rejected, cmds := model.Update(saving, model.ProjectSaved{Err: errors.New(message)})
 	form := rejected.ProjectForm
-	if len(cmds) != 0 || !form.Open || form.Saving || form.Name != "my-repox" || form.Err == nil || form.Err.Error() != message {
+	if len(cmds) != 0 || !form.Open || form.Saving || form.Name != "my-repox" || form.Err == nil || form.Err.Error() != "Cannot create Project: project with this name was archived via `kata projects remove`. run \"kata projects restore my-repox\" or pick a different name" {
 		t.Fatalf("rejection: cmds=%#v form=%+v", cmds, form)
 	}
 	if rejected.Bound || rejected.Collection.View != "inbox" || rejected.CurrentMode() != model.ModeProjectForm {
@@ -267,16 +267,15 @@ func TestPickerNewProjectBindsAnUnboundDirectory(t *testing.T) {
 	}
 }
 
-func TestNewProjectFormAdvertisesItsKeysFromTheKeymap(t *testing.T) {
-	hints := map[string]model.Action{}
+// The form's buttons press enter and esc, so its footer does not advertise them again.
+func TestNewProjectFormFooterDoesNotRepeatItsButtons(t *testing.T) {
 	for binding := range model.BindingsForMode(model.ModeProjectForm, true) {
 		if binding.Mode != model.ModeProjectForm {
 			t.Fatalf("the form advertises an inactive global binding: %+v", binding)
 		}
-		hints[binding.Chord] = binding.Action
-	}
-	if hints["enter"] != model.ProjectSubmit || hints["escape"] != model.ProjectCancel {
-		t.Fatalf("form hints = %v", hints)
+		if binding.Action == model.ProjectSubmit || binding.Action == model.ProjectCancel {
+			t.Errorf("form footer repeats a button: %+v", binding)
+		}
 	}
 }
 

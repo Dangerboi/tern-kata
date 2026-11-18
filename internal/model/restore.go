@@ -14,6 +14,7 @@ import (
 const RestoreDeletedAction Action = "restore-deleted"
 
 const (
+	// RestoreTitle is the Menu entry that opens the form, whose own head is "Restore Issue".
 	RestoreTitle = "Restore a deleted Issue"
 	RestoreKey   = "restore"
 )
@@ -97,7 +98,7 @@ func (m Model) lookupDeleted(ref string) (LookupDeleted, error) {
 				return cmd, nil
 			}
 		}
-		return cmd, fmt.Errorf("kata Project %q not found", name)
+		return cmd, fmt.Errorf("Project %q not found.", name)
 	}
 	if _, err := ulid.ParseStrict(ref); err == nil {
 		cmd.ByUID = true
@@ -138,16 +139,18 @@ func deletedLooked(m Model, msg DeletedLooked) Model {
 	}
 	f.Saving = false
 	if msg.Err != nil {
-		f.Err = msg.Err
+		f.Err = restoreError(msg.Err)
 		return m
 	}
 	found := msg.Issue
-	found.QualifiedID = found.ShortID
-	if name := m.projectName(found.ProjectID); name != "" {
-		found.QualifiedID = name + "#" + found.ShortID
-	}
+	found.QualifiedID = m.RefName(m.projectName(found.ProjectID), found.ShortID)
 	f.Found = &found
 	return m
+}
+
+// DeletedRef names a deleted Issue the way the Pane names every Issue.
+func (m Model) DeletedRef(d DeletedIssue) string {
+	return m.RefName(m.projectName(d.ProjectID), d.ShortID)
 }
 
 func issueRestored(m Model, msg IssueRestored) (Model, []Cmd) {
@@ -158,14 +161,22 @@ func issueRestored(m Model, msg IssueRestored) (Model, []Cmd) {
 	f.Saving = false
 	switch {
 	case msg.Err != nil:
-		f.Err = msg.Err
+		f.Err = restoreError(msg.Err)
 	case !msg.Changed:
-		f.Err = fmt.Errorf("%s is not deleted; kata restored nothing.", f.Found.QualifiedID)
+		f.Err = errors.New(Cannot("restore", "", errors.New("this Issue is not deleted")))
 	default:
-		qualified := f.Found.QualifiedID
+		ref := m.DeletedRef(*f.Found)
 		m.FieldForm = FieldFormState{}
-		m.Notice = fmt.Sprintf("Restored %s.", qualified)
+		m = m.say("Restored " + ref + ".")
 		return snapshotChanged(m.issueWritten(msg.UID))
 	}
 	return m, nil
+}
+
+// restoreError is kata's refusal of a read or restore as the card's error line; an Issue kata does not know reads as one.
+func restoreError(err error) error {
+	if strings.Contains(strings.ToLower(Reason(err)), "not found") {
+		err = errors.New("this Issue is not found")
+	}
+	return errors.New(Cannot("restore", "", err))
 }

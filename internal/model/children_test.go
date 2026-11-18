@@ -100,7 +100,7 @@ func TestClickOnAChildJumpsAndEscComesBack(t *testing.T) {
 }
 
 func TestTabSwitchLandsOnTheFirstActivityRow(t *testing.T) {
-	for _, msg := range []model.Msg{model.ActivityTabMsg{Tab: model.TabComments}, model.ActivityTabMsg{Tab: model.TabLinks}} {
+	for _, msg := range []model.Msg{model.ActivityTabMsg{Tab: model.TabComments}} {
 		m, _ := model.Update(parentDetail(), msg)
 		rows := m.DetailRows()
 		if i := m.DetailIndex(); i >= len(rows) || rows[i].Kind == model.RowChild || (i > 0 && rows[i-1].Kind != model.RowChild) {

@@ -10,17 +10,19 @@ expect_tree .sf-list '.count == 0'
 ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1'
 expect_tree "[data-id$='.$hierarchy_child']" '.count == 0'
-expect_tree "[data-id$='.$hierarchy_parent']" "([.nodes[0] | .. | objects | .text? // empty] | join(\" \")) as \$text | (\$text | contains(\"$hierarchy_short\") and contains(\"Smoke hierarchy parent\") and contains(\"open\") and contains(\"P0\") and contains(\"1/1\") and (contains(\"smoke-owner\") | not) and (contains(\"smoke-label\") | not))"
+expect_tree "[data-id$='.$hierarchy_parent']" "([.nodes[0] | .. | objects | .text? // empty] | join(\" \")) as \$text | (\$text | contains(\"$hierarchy_short\") and contains(\"Smoke hierarchy\") and contains(\"open\") and contains(\"P0\") and contains(\"1/1\") and (contains(\"smoke-owner\") | not) and (contains(\"smoke-label\") | not))"
 ctl key L
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1 and (.nodes[0].text | contains("smoke-o…"))'
 ctl key L
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1 and (.nodes[0].text | contains("smoke-o…") | not)'
 ctl click "[data-id$='.$hierarchy_parent']"
 ctl key Right
-expect_tree "[data-id$='.$hierarchy_child']" '.count == 1 and (.nodes[0].text | startswith("└─"))'
+expect_tree "[data-id$='.$hierarchy_child']" '.count == 1 and (.nodes[0].text | startswith("▸"))'
 expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 0'
 ctl key E
-expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 1 and (.nodes[0].text | startswith("└─"))'
+# The tree text drops leading spaces, so the indent is not asserted: the child's fold mark and the grandchild's presence are.
+expect_tree "[data-id$='.$hierarchy_child']" '.count == 1 and (.nodes[0].text | startswith("▾"))'
+expect_tree "[data-id$='.$hierarchy_grandchild']" '.count == 1'
 ctl key E
 expect_tree "[data-id$='.$hierarchy_child']" '.count == 0'
 ctl key v

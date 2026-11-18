@@ -94,7 +94,7 @@ func TestRenderPickerListsPinnedProjectFirstAndMarksCurrent(t *testing.T) {
 		t.Fatal("picker list not rendered")
 	}
 	prefix := "layer.collections.list."
-	want := []string{"project.smoke-uid", "views", "projects", "page.credentials", "page.federation", "page.daemons", "page.config", "restore", "new-project"}
+	want := []string{"project.smoke-uid", "views", "projects", "section.Pages", "page.credentials", "page.federation", "page.daemons", "page.config", "section.Actions", "restore", "new-project"}
 	var got []string
 	for _, id := range pickerChildIDs(list) {
 		got = append(got, strings.TrimPrefix(id, prefix))
@@ -154,7 +154,7 @@ func TestRenderMenuTextsAndButtons(t *testing.T) {
 	if got := nodes["main.topbar.right.menu"]; text(got) != "Menu" || got.P["actions"].(map[string]any)["click"] != view.MenuClick {
 		t.Fatalf("top bar button = %v", got)
 	}
-	if got := nodes["layer.collections.input"].P["placeholder"]; got != "Filter Menu" {
+	if got := nodes["layer.collections.input"].P["placeholder"]; got != "Filter" {
 		t.Fatalf("filter placeholder = %v", got)
 	}
 }
@@ -170,7 +170,7 @@ func TestRenderMenuProjectsLevelListsProjectsAndMarksCurrent(t *testing.T) {
 	for _, id := range pickerChildIDs(list) {
 		got = append(got, strings.TrimPrefix(id, "layer.collections.list."))
 	}
-	if strings.Join(got, ",") != "back,project.alpha-uid,project.smoke-uid" {
+	if strings.Join(got, ",") != "project.smoke-uid,project.alpha-uid" {
 		t.Fatalf("Projects level rows = %v", got)
 	}
 	if nodes["layer.collections.list.project.smoke-uid"].P["value"] != "current" || nodes["layer.collections.list.project.alpha-uid"].P["value"] == "current" {
@@ -188,11 +188,11 @@ func TestRenderSidebarListsProjectsOnlyAtItsProjectsLevel(t *testing.T) {
 		}
 		return strings.Join(rows, ",")
 	}
-	if got := ids(m); got != "back,inbox,today,upcoming,deadlines,all-open,logbook,new-view" {
+	if got := ids(m); got != "back,rule-views,inbox,today,upcoming,deadlines,all-open,logbook,rule-new-view,new-view" {
 		t.Fatalf("sidebar Views level = %s", got)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
-	if got := ids(m); got != "views,projects,page.credentials,page.federation,page.daemons,page.config,restore,new-project" {
+	if got := ids(m); got != "views,projects,rule-Pages,page.credentials,page.federation,page.daemons,page.config,rule-Actions,restore,new-project" {
 		t.Fatalf("sidebar top level = %s", got)
 	}
 	m, _ = model.Update(m, model.CollectionPointerSelected{Key: "projects"})
@@ -235,10 +235,9 @@ func TestRenderMenuViewsLevelListsTheFixedCollectionsAndMarksCurrent(t *testing.
 	for _, id := range pickerChildIDs(nodes["layer.collections.list"]) {
 		got = append(got, strings.TrimPrefix(id, "layer.collections.list."))
 	}
-	if strings.Join(got, ",") != "back,inbox,today,upcoming,deadlines,all-open,logbook,new-view" {
+	if strings.Join(got, ",") != "inbox,today,upcoming,deadlines,all-open,logbook,new-view" {
 		t.Fatalf("Views level rows = %v", got)
 	}
-	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"}) // Today
 	m = menuOpened(m)
@@ -271,7 +270,7 @@ func TestRenderSavedViewsRowsNotesAndTheViewCard(t *testing.T) {
 	for _, id := range pickerChildIDs(nodes["layer.collections.list"]) {
 		got = append(got, strings.TrimPrefix(id, "layer.collections.list."))
 	}
-	if strings.Join(got, ",") != "back,inbox,today,upcoming,deadlines,all-open,logbook,view.0,view.1,new-view" {
+	if strings.Join(got, ",") != "inbox,today,upcoming,deadlines,all-open,logbook,view.0,view.1,new-view" {
 		t.Fatalf("rows = %v", got)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "end"})

@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -71,7 +72,9 @@ func (p DatesPair) Of(name Field) string {
 // date kata projects without holding it in metadata.
 type DatesFormState struct {
 	formCard
-	UID       string
+	UID string
+	// Ref names the Issue in the card's head.
+	Ref       string
 	ProjectID int64
 	Text      DatesPair
 	Prefill   DatesPair
@@ -135,16 +138,33 @@ func dateDay(label, text, today string) (string, error) {
 	return day, nil
 }
 
-// DatesPreview is the muted line under a field: the date its text resolves to with its weekday (and the time of a timed value),
-// "no date" for blank, and nothing for text that is not a date (saving refuses it). A prefilled value kata holds in a form this
-// card does not read shows its day.
+// dateSuffix is the muted text beside a date field: the weekday when the text already is a date ("Mon", with the time of a
+// timed value), the day and weekday when the text resolves from today or +3d ("2026-11-21 Sat"), and nothing for blank text,
+// for text that is not a date (saving refuses it) and for a UTC instant, which has no weekday that holds in every zone.
+func dateSuffix(text, today string) string {
+	day, err := ParseDateInput(text, today)
+	if err != nil || day == "" || strings.HasSuffix(day, "Z") {
+		return ""
+	}
+	full := DateWithWeekday(day)
+	if strings.TrimSpace(text) == day {
+		return full[len(dayLayout)+1:]
+	}
+	return full
+}
+
+// DatesPreview is the muted text beside a field, as dateSuffix reads the field's text. A prefilled value kata holds in a form
+// this card does not read shows its weekday.
 func (m Model) DatesPreview(name Field) string {
 	f := m.DatesForm
 	text := f.Text.Of(name)
-	if preview := datePreview(text, m.Calendar.Date); preview != "" || text != f.Prefill.Of(name) || text == "" {
-		return preview
+	if suffix := dateSuffix(text, m.Calendar.Date); suffix != "" || text != f.Prefill.Of(name) || text == "" {
+		return suffix
 	}
-	return DateWithWeekday(text[:min(len(text), len(dayLayout))])
+	if full := DateWithWeekday(text[:min(len(text), len(dayLayout))]); full != "" {
+		return full[len(dayLayout)+1:]
+	}
+	return ""
 }
 
 func openDates(m Model) Model {
@@ -155,7 +175,7 @@ func openDates(m Model) Model {
 	if issue == nil {
 		return m
 	}
-	f := DatesFormState{Open: true, Field: DatesScheduled, UID: issue.UID, ProjectID: issue.ProjectID}
+	f := DatesFormState{Open: true, Field: DatesScheduled, UID: issue.UID, Ref: m.RefName(issue.ProjectName, issue.ShortID), ProjectID: issue.ProjectID}
 	for _, field := range []Field{DatesScheduled, DatesDeadline} {
 		key := datesKey(field)
 		held, _ := issue.Metadata[key].(string)
@@ -200,7 +220,7 @@ func datesChanges(f DatesFormState, today string) ([]DateChange, error) {
 
 func submitDates(m Model) (Model, []Cmd) {
 	f := &m.DatesForm
-	if f.refuseSubmit(m, "saving dates") {
+	if f.refuseSubmit(m, "save", "the dates") {
 		return m, nil
 	}
 	changes, err := datesChanges(*f, m.Calendar.Date)

@@ -87,7 +87,7 @@ func TestFoldedRunsCountByStatus(t *testing.T) {
 	g := model.RunGroup{Runs: []model.Run{
 		endedRun("1", "a", cronjob.RunSucceeded, 3), endedRun("2", "a", cronjob.RunCancelled, 2), endedRun("3", "a", cronjob.RunSucceeded, 1),
 	}}
-	if got, want := g.Counts(), "2 succeeded · 1 cancelled"; got != want {
+	if got, want := g.Counts(), "2 succeeded, 1 cancelled"; got != want {
 		t.Errorf("counts %q, want %q", got, want)
 	}
 }

@@ -34,14 +34,3 @@ func withCalendar(m model.Model, card model.Card, layer tern.Nodes) tern.Element
 	}
 	return append(layer, ui.Overlay{Common: ui.Common{Key: calendarLayerKey(card)}, Anchor: ui.AtNode(FieldID(card, shown.Field), "below"), Size: ui.SizeSM, Children: ui.Nodes(cal)})
 }
-
-func calendarKey(mode model.Mode) string {
-	if keys := model.CardKeys(mode, model.ShowCalendar); len(keys) > 0 {
-		return keys[0].Key
-	}
-	return ""
-}
-
-func calendarHint(key string, mode model.Mode) tern.Element {
-	return toneText(key+"-calendar-hint", ui.ToneMuted, calendarKey(mode)+" opens a calendar")
-}

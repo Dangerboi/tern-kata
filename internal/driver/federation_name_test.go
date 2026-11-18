@@ -15,13 +15,13 @@ func namedSpoke(project, name string) model.FederationSpoke {
 
 func TestThePreviewOffersAnOptionalSpokeNameThatTheRunCarries(t *testing.T) {
 	s := previewed(t, atHubProjectStep(t, enrollPane(t), rowReplica, hubBeta))
-	wantShown(t, "the preview", s, "spoke name: -")
+	wantShown(t, "the preview", s, "Spoke name", "—")
 
 	card := step(t, s, key("shift+n"))
 	if card.State.Model.TopCard() != model.CardFederationName || card.State.Model.CurrentMode() != model.ModeFederationName || len(card.Cmds) != 0 {
 		t.Fatalf("N gave card %v, mode %q and %#v, want the name card and no daemon call", card.State.Model.TopCard(), card.State.Model.CurrentMode(), card.Cmds)
 	}
-	wantShown(t, "the name card", card.State, "Name Spoke", "name for the spoke (empty for none):")
+	wantShown(t, "the name card", card.State, "Name spoke", "Spoke name", "A letter, then up to 31 lowercase letters, digits or hyphens. Empty names none.")
 
 	// esc leaves the draft unnamed.
 	if back := step(t, typeText(t, card.State, "ph"), key("escape")).State; back.Model.TopCard() != model.NoCard || back.Model.Federation.Draft.SpokeName != "" {
@@ -32,7 +32,7 @@ func TestThePreviewOffersAnOptionalSpokeNameThatTheRunCarries(t *testing.T) {
 	if len(named.Cmds) != 0 || named.State.Model.TopCard() != model.NoCard || named.State.Model.Federation.Draft.SpokeName != "phone" {
 		t.Fatalf("Enter on the card gave card %v, name %q and %#v, want the draft named and no daemon call", named.State.Model.TopCard(), named.State.Model.Federation.Draft.SpokeName, named.Cmds)
 	}
-	wantShown(t, "the named preview", named.State, "spoke name: phone")
+	wantShown(t, "the named preview", named.State, "Spoke name", "phone")
 
 	// The card opens on the name given and an empty name takes it back.
 	again := step(t, named.State, key("shift+n")).State
@@ -52,13 +52,12 @@ func TestThePreviewOffersAnOptionalSpokeNameThatTheRunCarries(t *testing.T) {
 
 func TestTheSpokeNameShowsOnTheCardAndTheDetail(t *testing.T) {
 	s := federationListed(t, namedSpoke("acme", "laptop"), healthySpoke("zeta"))
-	wantShown(t, "the list", s, "acme  Name laptop  Hub hub.example:7474  Actor alice", "zeta  Hub hub.example:7474  Actor alice")
-	wantNotShown(t, "the unnamed spoke", s, "zeta  Name")
+	wantShown(t, "the list", s, "acme", "laptop", "hub.example:7474", "Actor alice", "zeta")
 
 	detail := step(t, s, key("enter")).State
-	wantShown(t, "the detail", detail, "spoke name: laptop")
+	wantShown(t, "the detail", detail, "Spoke name", "laptop")
 	other := step(t, step(t, s, key("j")).State, key("enter")).State
-	wantShown(t, "the unnamed detail", other, "spoke name: -")
+	wantShown(t, "the unnamed detail", other, "Spoke name", "—")
 }
 
 func TestNOnASpokeRenamesItOnItsHubAndAnEmptyNameClearsIt(t *testing.T) {
@@ -72,7 +71,7 @@ func TestNOnASpokeRenamesItOnItsHubAndAnEmptyNameClearsIt(t *testing.T) {
 			if card.State.Model.TopCard() != model.CardFederationName || len(card.Cmds) != 0 || card.State.Model.Federation.Name.Input != "laptop" {
 				t.Fatalf("N gave card %v, input %q and %#v, want the card on the current name", card.State.Model.TopCard(), card.State.Model.Federation.Name.Input, card.Cmds)
 			}
-			wantShown(t, "the card", card.State, "Rename Spoke", "name for this spoke on its hub (empty clears it):")
+			wantShown(t, "the card", card.State, "Rename spoke", "A letter, then up to 31 lowercase letters, digits or hyphens. Empty clears it.")
 
 			saved := step(t, typeText(t, card.State, "2"), key("enter"))
 			cmd, ok := asked[model.SetFederationSpokeName](saved.Cmds)
@@ -116,7 +115,7 @@ func TestTheCardRefusesABadNameItselfAndSendsNothing(t *testing.T) {
 	if len(saved.Cmds) != 0 || saved.State.Model.Federation.Name.Saving || saved.State.Model.TopCard() != model.CardFederationName || saved.State.Model.Federation.Name.Input != "Bad Name" {
 		t.Fatalf("a bad name left card %v, saving %v, input %q and asked %#v", saved.State.Model.TopCard(), saved.State.Model.Federation.Name.Saving, saved.State.Model.Federation.Name.Input, saved.Cmds)
 	}
-	wantShown(t, "the card", saved.State, `invalid federation spoke name: "Bad Name" must match [a-z][a-z0-9-]{0,31}`)
+	wantShown(t, "the card", saved.State, `Cannot save the spoke name: "Bad Name" is not a valid spoke name.`)
 
 	preview := previewed(t, atHubProjectStep(t, enrollPane(t), rowReplica, hubBeta))
 	named := step(t, typeText(t, step(t, preview, key("shift+n")).State, "Phone"), key("enter")).State

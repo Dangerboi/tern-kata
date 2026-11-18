@@ -124,13 +124,13 @@ func pinnedToDocbank(rawURL, docbankHome string) bool {
 // docbankRow is the Docbank row: the [docbank] section of the default kata daemon's config.toml, whichever daemon the Pane is
 // switched to. A file that cannot be read shows the reader's error like the other rows.
 func (g *Gateway) docbankRow() model.ConfigFile {
-	const title = "Docbank (the [docbank] section of kata's config.toml)"
+	const title = "Docbank"
 	home, err := kataHome()
 	if err != nil {
 		return model.ConfigFile{Key: model.ConfigDocbank, Title: title, Status: model.ConfigBroken, Err: err.Error()}
 	}
 	pinned := false
-	row := configRow(model.ConfigDocbank, title, filepath.Join(home, "config.toml"), "not set up: `kata docbank setup` sets Docbank up", nil, func(string) (string, error) {
+	row := configRow(model.ConfigDocbank, title, filepath.Join(home, "config.toml"), "Not set up: run kata docbank setup", nil, func(string) (string, error) {
 		section, err := ReadDocbankSection(home)
 		if err != nil {
 			return "", err
@@ -138,14 +138,14 @@ func (g *Gateway) docbankRow() model.ConfigFile {
 		docbankHome, _ := DocbankHome() // without a home no url is the old form
 		switch ClassifyDocbank(section, docbankHome) {
 		case DocbankLocal:
-			return "the Docbank on this machine: kata starts it when needed and follows its port and key", nil
+			return "On this machine: kata starts it when needed and follows its port and key", nil
 		case DocbankAtURL:
-			return "Docbank at " + section.URL, nil
+			return "At " + section.URL, nil
 		case DocbankPinned:
 			pinned = true
-			return "pinned to " + section.URL + " by tern-kata's old setup: kata does not start it", nil
+			return "Pinned to " + section.URL + " by tern-kata's old setup: kata does not start it", nil
 		}
-		return "not set up: `kata docbank setup` sets Docbank up", nil
+		return "Not set up: run kata docbank setup", nil
 	})
 	if pinned {
 		row.Actions = []model.ConfigAction{model.ConfigSwitchDocbank}

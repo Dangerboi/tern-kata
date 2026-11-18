@@ -71,7 +71,7 @@ func TestEveryWriteWithoutAnInverseClearsTheHistory(t *testing.T) {
 				t.Fatalf("before the write u says %q, want it to start an undo", got)
 			}
 			m, _ = model.Update(tt.act(m), tt.answer)
-			if got, want := undoSays(m), "nothing to undo: "+tt.reason; got != want {
+			if got, want := undoSays(m), "Nothing to undo: "+tt.reason+"."; got != want {
 				t.Fatalf("after the write u says %q, want %q", got, want)
 			}
 		})
@@ -87,7 +87,7 @@ func TestCreatingAnIssueClearsTheHistory(t *testing.T) {
 		t.Fatal("nothing sent")
 	}
 	m, _ = model.Update(m, model.IssueCreated{UID: "created"})
-	if got := undoSays(m); got != "nothing to undo: issue creation cannot be undone" {
+	if got := undoSays(m); got != "Nothing to undo: issue creation cannot be undone." {
 		t.Fatalf("u says %q", got)
 	}
 }

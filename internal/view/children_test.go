@@ -36,10 +36,10 @@ func parenting(tab model.ActivityTab) model.Model {
 	)
 }
 
-func TestPropertiesShowTheChildCountsAndNoChildLines(t *testing.T) {
+func TestPropertiesHaveNoChildrenRowAndNoChildLines(t *testing.T) {
 	nodes := render(t, parenting(model.TabLinks))
-	if got := text(nodes[view.DetailContentID+".properties.children.v"]); got != "1 open / 3 total" {
-		t.Errorf("counts line = %q", got)
+	if ids := nodes.under(view.DetailContentID + ".properties.children"); len(ids) != 0 {
+		t.Errorf("properties still have a Children row: %v", ids)
 	}
 	if ids := nodes.under(view.DetailContentID + ".properties.parent"); len(ids) != 0 {
 		t.Errorf("properties still list relatives with no parent: %v", ids)
@@ -56,7 +56,7 @@ func TestChildrenTableSitsBetweenTheBodyAndActivity(t *testing.T) {
 	if body < 0 || table <= body || activity <= table {
 		t.Fatalf("content order = %v, want body, children, activity", order)
 	}
-	if got := text(nodes[childrenID+".heading"]); got != "Children" {
+	if got := text(nodes[childrenID+".heading"]); got != "Children 1 of 3 open" {
 		t.Errorf("heading = %q", got)
 	}
 }
@@ -136,9 +136,13 @@ func TestChildrenAreANativeTableWithFiveColumnsInTheListsOrder(t *testing.T) {
 			if num(c["grow"]) != 1 || c["truncate"] != "end" {
 				t.Errorf("title column = %v, want grow 1 and truncate end", c)
 			}
-		case "ticket", "updated":
+		case "ticket":
 			if c["mono"] != true {
 				t.Errorf("%v column is not mono", c["id"])
+			}
+		case "updated":
+			if c["mono"] == true || c["align"] != "end" {
+				t.Errorf("updated column = %v, want sans and right-aligned", c)
 			}
 		}
 	}
@@ -154,7 +158,7 @@ func TestChildrenAreANativeTableWithFiveColumnsInTheListsOrder(t *testing.T) {
 	for _, c := range cols {
 		ids = append(ids, c.id+":"+c.head)
 	}
-	if want := []string{"ticket:ticket", "status:status", "title:title", "owner:owner", "updated:updated"}; !slices.Equal(ids, want) {
+	if want := []string{"ticket:Id", "status:Status", "title:Title", "owner:Owner", "updated:Updated"}; !slices.Equal(ids, want) {
 		t.Errorf("columns = %v, want %v", ids, want)
 	}
 	var rows []string
@@ -182,9 +186,9 @@ func TestChildCellsShowReferenceStatusTitleOwnerAndUpdated(t *testing.T) {
 
 func TestStatusCellHasADotInTheStatusTone(t *testing.T) {
 	nodes := render(t, parenting(model.TabComments))
-	for row, want := range map[string]string{"kid": "accent", "done": "muted"} {
+	for row, want := range map[string]string{"kid": "", "done": "muted"} {
 		cell, ok := tableCell(t, nodes, row, "status").(map[string]any)
-		if !ok || cell["dot"] != want {
+		if got, _ := cell["dot"].(string); !ok || got != want {
 			t.Errorf("%s status cell = %v, want a text cell with a %s dot", row, tableCell(t, nodes, row, "status"), want)
 		}
 	}

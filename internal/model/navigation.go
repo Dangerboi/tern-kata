@@ -91,6 +91,10 @@ func (m Model) Position() (selected, total int) {
 		jobs := m.visibleJobs()
 		return slices.IndexFunc(jobs, func(j CronJob) bool { return j.UID == m.Jobs.Selected }) + 1, len(jobs)
 	}
+	if m.OnWorkflows() {
+		workflows := m.VisibleWorkflows()
+		return slices.IndexFunc(workflows, func(w Workflow) bool { return w.UID == m.Workflows.Selected }) + 1, len(workflows)
+	}
 	rows := m.VisibleRows()
 	for i, issue := range rows {
 		if issue.UID == m.SelectedUID {

@@ -187,8 +187,8 @@ func TestABroadcastIncludesAgentsOnOtherHostsOfTheIssueAndItsOpenChildren(t *tes
 	s = step(t, sending.State, model.AgentMessageSent{UID: "p", Address: "dana/omp-31"}).State
 	s = step(t, s, model.AgentMessageSent{UID: "p", Address: "dana/omp-8"}).State
 	s = step(t, s, model.AgentMessageSent{UID: "c1", Address: "dana/omp-4"}).State
-	wantShown(t, "the outcome", s, "3 agents got the message.", "Skipped omp on work#c1: "+model.AgentOtherActorRefusal)
-	wantNotShown(t, "the outcome", s, "work#c2")
+	wantShown(t, "the outcome", s, "3 agents got the message.", "Skipped omp on #c1: "+model.AgentOtherActorRefusal)
+	wantNotShown(t, "the outcome", s, "#c2")
 }
 
 func TestABroadcastOnAnUnverifiedDaemonListsRemoteAgentsSkippedButWritesToLocalOnes(t *testing.T) {
@@ -198,7 +198,7 @@ func TestABroadcastOnAnUnverifiedDaemonListsRemoteAgentsSkippedButWritesToLocalO
 		t.Fatalf("cmds %#v, want one write to the local agent", sending.Cmds)
 	}
 	s = step(t, sending.State, model.AgentMessageSent{UID: "p", Address: "dana/omp-31"}).State
-	wantShown(t, "the outcome", s, "1 agent got the message.", "Skipped omp on work#p: "+model.AgentUnverifiedRefusal, "Skipped omp on work#c1: "+model.AgentUnverifiedRefusal)
+	wantShown(t, "the outcome", s, "1 agent got the message.", "Skipped omp on #p: "+model.AgentUnverifiedRefusal, "Skipped omp on #c1: "+model.AgentUnverifiedRefusal)
 }
 
 func TestTheSweepIncludesAgentsOnOtherHostsOnAnyIssueAndFollowsThemToFinished(t *testing.T) {
@@ -235,17 +235,17 @@ func TestTheSweepIncludesAgentsOnOtherHostsOnAnyIssueAndFollowsThemToFinished(t 
 			t.Errorf("no read %+v in %+v", w, reads)
 		}
 	}
-	wantShown(t, "just after sending", s, "0 of 4 agents have finished the wrap-up.", "omp on work#p, on desk: not yet", "omp on work#c1, on mac: not yet",
-		"Skipped omp on work#c1: "+model.AgentOtherActorRefusal)
+	wantShown(t, "just after sending", s, "0 of 4 agents finished the wrap-up.", "omp · #p · desk · not yet", "omp · #c1 · mac · not yet",
+		"Skipped omp on #c1: "+model.AgentOtherActorRefusal)
 
 	// Its teammate's comment since the sweep finishes it; no stream event or relay moves a remote agent otherwise.
 	s = step(t, s, model.SweepCommentsRead{UID: "p", Address: "dana/omp-8", Commented: true}).State
-	wantShown(t, "after desk's agent commented", s, "1 of 4 agents have finished the wrap-up.", "omp on work#p, on desk: finished")
+	wantShown(t, "after desk's agent commented", s, "1 of 4 agents finished the wrap-up.", "omp · #p · desk · finished")
 
 	// The record going away (the agent exited and its host removed it) finishes it too.
 	s = withRemoteRecords(s, "c1")
-	wantShown(t, "after mac's record went", s, "2 of 4 agents have finished the wrap-up.", "omp on work#c1, on mac: finished")
-	wantShown(t, "the record still there", s, "omp on work#c2, on mac: not yet")
+	wantShown(t, "after mac's record went", s, "2 of 4 agents finished the wrap-up.", "omp · #c1 · mac · finished")
+	wantShown(t, "the record still there", s, "omp · #c2 · mac · not yet")
 }
 
 func TestTheSweepWithOnlyRemoteAgentsOpensTheCard(t *testing.T) {

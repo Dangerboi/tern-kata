@@ -348,7 +348,7 @@ func (m Model) noteDocEditing(uid string, on bool) (Model, []Cmd) {
 	case !opened.typed && opened.framed:
 		m.docGuardSeq++
 		m.docGuardUntil = m.Now.Add(DocGuardWindow)
-		m.Notice = deadEditNotice
+		m = m.fail(deadEditNotice)
 		return m, []Cmd{WaitDocGuard{Seq: m.docGuardSeq}}
 	}
 	return m, nil
@@ -369,7 +369,7 @@ func (m Model) noteDocChange(uid string) Model {
 func (m Model) EndDocGuard() Model {
 	m.docGuardUntil = time.Time{}
 	if m.Notice == deadEditNotice {
-		m.Notice = ""
+		m = m.clearNotice()
 	}
 	return m
 }

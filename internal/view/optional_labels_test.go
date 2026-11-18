@@ -20,9 +20,9 @@ func labelTexts(t *testing.T, m model.Model, layer string, keys []string) []any 
 	return got
 }
 
-func TestRenderCreateLabelsMarkOptionalFields(t *testing.T) {
-	want := []any{"Title", "Body (optional)", "Labels (optional, comma-separated)", "Owner (optional)", "Priority (optional, 0-4)"}
-	keys := []string{"title", "body", "labels", "owner", "priority"}
+func TestRenderCreateLabelsAreNounsWithoutOptionalMarks(t *testing.T) {
+	want := []any{"Title", "Body", "Labels", "Owner", "Scheduled", "Deadline"}
+	keys := []string{"title", "body", "labels", "owner", "scheduled", "deadline"}
 	for _, chord := range []string{"n", "shift+n"} {
 		m, _ := model.Update(selectedFirst(), model.KeyMsg{Chord: chord, Text: chord})
 		got := labelTexts(t, m, "layer.create", keys)
@@ -35,23 +35,28 @@ func TestRenderCreateLabelsMarkOptionalFields(t *testing.T) {
 }
 
 func TestRenderCloseLabelsAboveEveryInput(t *testing.T) {
-	want := []any{
-		"Reason (done / wontfix / duplicate / superseded / audit-no-change)",
-		"Message",
-		"Commit SHA (optional)",
-		"PR URL (optional)",
-		"Test command (optional)",
-		"Reviewed paths, comma-separated (optional)",
-		"External account (optional)",
-		"Issue reference (duplicate / superseded)",
-		"Rationale (audit-no-change)",
-	}
+	want := []any{"Message", "Commit", "Pull request", "Test command", "Reviewed paths", "External account"}
 	m, _ := model.Update(selectedFirst(), model.KeyMsg{Chord: "x", Text: "x"})
-	got := labelTexts(t, m, "layer.close", []string{"reason", "message", "commit", "pr", "test", "reviewed", "external", "reference", "rationale"})
+	got := labelTexts(t, m, "layer.close", []string{"message", "commit", "pr", "test", "reviewed", "external"})
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("label %d = %v, want %v", i, got[i], want[i])
 		}
+	}
+}
+
+func TestRenderCloseShowsTheReferenceAndRationaleOnlyForTheirReasons(t *testing.T) {
+	m, _ := model.Update(selectedFirst(), model.KeyMsg{Chord: "x", Text: "x"})
+	if _, ok := pickerNodes(t, m)["layer.close.reference-label"]; ok {
+		t.Error("a done close shows the reference field")
+	}
+	m.CloseForm.Values.Reason = string(model.ReasonSuperseded)
+	if got := text(pickerNodes(t, m)["layer.close.reference-label"]); got != "Replaced by" {
+		t.Errorf("superseded reference label = %v", got)
+	}
+	m.CloseForm.Values.Reason = string(model.ReasonAuditNoChange)
+	if got := text(pickerNodes(t, m)["layer.close.rationale-label"]); got != "Why nothing changed" {
+		t.Errorf("rationale label = %v", got)
 	}
 }
 

@@ -221,7 +221,8 @@ func buildCards() []cardEntry {
 			},
 			key:     createCard.key,
 			table:   &createTable,
-			editing: []fieldEditing{{mode: ModeCreate, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
+			editing: []fieldEditing{{mode: ModeCreate, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}}},
+			choices: createChoiceSet,
 			target:  EditCreateBody, bodyField: CreateBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if !createTable.busyOf(m.Create) {
@@ -237,6 +238,7 @@ func buildCards() []cardEntry {
 			key:    draftCard.key,
 			busy:   draftBusy,
 			fields: []FieldSpec{}, input: true,
+			choices: draftChoiceSet, choose: chooseReplyKind,
 			target: EditDraftBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if !draftBusy(m) {
@@ -283,7 +285,8 @@ func buildCards() []cardEntry {
 			modes:   []Mode{ModeCloseForm},
 			key:     closeKey,
 			table:   &closeTable,
-			editing: []fieldEditing{{mode: ModeCloseForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}, delete: "erase"}},
+			editing: []fieldEditing{{mode: ModeCloseForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}, delete: "erase"}},
+			choices: closeChoiceSet,
 		},
 		{
 			card: CardDates, name: "dates",
@@ -302,7 +305,8 @@ func buildCards() []cardEntry {
 			modes:   []Mode{ModeTokenForm},
 			key:     updateTokenFormKey,
 			table:   &tokenTable,
-			editing: []fieldEditing{{mode: ModeTokenForm, actions: []Action{NextField, PreviousField, DeleteInput, ClearInput}}},
+			editing: []fieldEditing{{mode: ModeTokenForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}}},
+			choices: tokenChoiceSet,
 		},
 		{
 			card: CardRevoke, name: "revoke", open: func(m Model) bool { return m.RevokeCard.Open },
@@ -773,6 +777,13 @@ func focusField(m Model, name Field) Model {
 // chooseField focuses the choice field called name of the open card and gives it its choice at index; a text field, a
 // field the card hides or a busy card changes nothing.
 func chooseField(m Model, name Field, index int) Model {
+	if entry, ok := m.topEntry(); ok && entry.focus == nil && entry.choose != nil && entry.choices != nil && !entry.busy(m) {
+		// A card of one body has no focus to move: its choice is picked where it stands.
+		if _, isChoice := entry.choices(m, name); isChoice {
+			m = entry.pick(m, index)
+		}
+		return m
+	}
 	m = focusField(m, name)
 	if entry, ok := m.topEntry(); ok && entry.choose != nil && !entry.busy(m) && *entry.focus(&m) == name && !takesText(entry.fields, name) {
 		m = entry.pick(m, index)

@@ -11,7 +11,7 @@ import (
 type AgentTone string
 
 const (
-	AgentToneAccent  AgentTone = "accent"
+	AgentTonePending AgentTone = "pending"
 	AgentToneWarning AgentTone = "warning"
 	AgentToneMuted   AgentTone = "muted"
 )
@@ -80,13 +80,28 @@ func AgentStateWords(state AgentStateWord) (string, AgentTone) {
 	case AgentWaitingInput:
 		return AgentWaitingMessage, AgentToneWarning
 	case AgentWorking:
-		return "agent working", AgentToneAccent
+		return "agent working", AgentTonePending
 	case AgentIdle:
 		return "agent idle", AgentToneMuted
 	case AgentExited:
 		return "agent exited", AgentToneMuted
 	}
 	return "agent", AgentToneMuted
+}
+
+// AgentStateLabel is the state alone, for a label that already says "Agent": no "agent" prefix. A state no relay gave reads as unknown.
+func AgentStateLabel(state AgentStateWord) string {
+	switch state {
+	case AgentWaitingInput:
+		return "waiting for you"
+	case AgentWorking:
+		return "working"
+	case AgentIdle:
+		return "idle"
+	case AgentExited:
+		return "exited"
+	}
+	return "state unknown"
 }
 
 const UnreadMessageWords = "message unread"
@@ -109,9 +124,12 @@ func unreadMessage(metadata map[string]any, address string) string {
 
 // AgentBadge is what the Agent badge says about an Issue's agents and the one agent a click on it focuses.
 type AgentBadge struct {
-	Text  string
-	Tone  AgentTone
-	Block string
+	// Text is the badge in a row or card, which has no label: "agent working". Word is the state alone for the detail's Agent row.
+	Text, Word string
+	Tone       AgentTone
+	Block      string
+	// Unread says some agent of the Issue has a message the Issue's metadata still holds; the view draws it as a second badge.
+	Unread bool
 }
 
 // ChooseAgent is the agent a badge names: the most pressing state (waiting, working, idle, exited, none), the newest start on a tie.
@@ -147,16 +165,20 @@ func badgeOf(agents []IssueAgent, remote []RemoteAgent) (AgentBadge, bool) {
 	if ok {
 		badge.Block = best.Block
 		badge.Text, badge.Tone = AgentStateWords(best.State)
+		badge.Word = AgentStateLabel(best.State)
 	} else {
 		badge.Text = RemoteBadgeWords(remote)
+		badge.Word = strings.TrimPrefix(badge.Text, "agent ")
 		countless = strings.HasPrefix(badge.Text, "agents on")
 	}
 	if n := len(agents) + len(remote); n > 1 && !countless {
 		badge.Text += fmt.Sprintf(" · %d", n)
+		if !countless {
+			badge.Word += fmt.Sprintf(" · %d", n)
+		}
 	}
 	if slices.ContainsFunc(agents, func(a IssueAgent) bool { return a.Unread != "" }) || slices.ContainsFunc(remote, func(r RemoteAgent) bool { return r.Unread != "" }) {
-		badge.Text += " · " + UnreadMessageWords
-		badge.Tone = AgentToneWarning
+		badge.Unread = true
 	}
 	return badge, true
 }
@@ -228,7 +250,7 @@ func (AgentFocused) msg() {}
 
 func agentFocused(m Model, msg AgentFocused) Model {
 	if msg.Err != nil {
-		m.Notice = "Cannot focus the agent: " + msg.Err.Error()
+		m = m.fail(Cannot("focus", "the agent", msg.Err))
 	}
 	return m
 }

@@ -26,7 +26,7 @@ func TestCellMeasuresDisplayWidth(t *testing.T) {
 // the column's width in cells comes out narrower than its header. The row's own role names the column widths and the owner is
 // cut but not padded.
 func TestOwnerCellIsABoxOfTheColumnWidthWhateverItsGlyphs(t *testing.T) {
-	cols := listColumns{ownerShown: true, id: 6, owner: 10}
+	cols := listColumns{ownerShown: true, prioShown: true, statusShown: true, kidsShown: true, id: 6, owner: 10}
 	if got, want := cols.role(), "tern-kata.row tern-kata.id6 tern-kata.ow10"; got != want {
 		t.Errorf("role = %q, want %q", got, want)
 	}
@@ -34,7 +34,7 @@ func TestOwnerCellIsABoxOfTheColumnWidthWhateverItsGlyphs(t *testing.T) {
 		t.Errorf("role %q names an owner column that is not drawn", got)
 	}
 	for text, want := range map[string]string{"田中太郎": "  田中太郎", "🤖bot": "  🤖bot", "alexandria-long": "  alexandri…"} {
-		if got := rightCells("", text, "", cols, "", "")[1].T; got != want {
+		if got := rightCells(cols, "", "", "", text, "", "", "")[2].T; got != want {
 			t.Errorf("owner cell of %q = %q, want %q", text, got, want)
 		}
 	}
@@ -43,9 +43,9 @@ func TestOwnerCellIsABoxOfTheColumnWidthWhateverItsGlyphs(t *testing.T) {
 // A column wider than the widest box rule would have no box, so it is held to that width and its cells are cut to it.
 func TestColumnsStopAtTheWidestBoxAndCutTheirCells(t *testing.T) {
 	cols := listColumns{ownerShown: true, id: 1, owner: ownerWidth}
-	cols.fit(maxBoxWidth+30, maxBoxWidth+30)
-	if cols.id != maxBoxWidth || cols.owner != maxBoxWidth {
-		t.Fatalf("columns id %d, owner %d, want both %d", cols.id, cols.owner, maxBoxWidth)
+	cols.fit(maxBoxWidth+30, maxBoxWidth+30, maxDateWidth+30)
+	if cols.id != maxBoxWidth || cols.owner != maxBoxWidth || cols.date != maxDateWidth {
+		t.Fatalf("columns id %d, owner %d, date %d, want %d, %d, %d", cols.id, cols.owner, cols.date, maxBoxWidth, maxBoxWidth, maxDateWidth)
 	}
 	for _, token := range strings.Fields(cols.role())[1:] {
 		if !strings.Contains(CSS, "[data-role~='"+token+"']") {

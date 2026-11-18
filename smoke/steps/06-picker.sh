@@ -6,7 +6,7 @@ picker_items="[data-id^='layer.collections.list.']"
 picker_heading="[data-id='main.topbar.left.heading']"
 
 # A bound directory opens on its Project with no Menu sidebar.
-expect_tree "$picker_heading" '.ok and .count == 1 and .nodes[0].text == "Project: smoke"'
+expect_tree "$picker_heading" '.ok and .count == 1 and .nodes[0].text == "smoke"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "[data-id='main.columns.detail']" '.ok and .count == 1'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
@@ -15,10 +15,10 @@ expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 picker_projects_entry="[data-id='layer.collections.list.projects']"
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-expect_tree "$picker_items" '.ok and .count == 9 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Views" and .nodes[2].text == "Projects" and .nodes[-1].text == "New Project"'
-expect_tree "$picker_items" '.nodes[-2].text == "Restore a deleted Issue" and .nodes[-3].text == "Config" and .nodes[-4].text == "Daemons" and .nodes[-5].text == "Federation" and .nodes[-6].text == "Credentials"'
+expect_tree "$picker_items" '.ok and ([.nodes[] | select(.role == "option")] | length) == 9 and .nodes[0].text == "smokecurrent" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Views" and .nodes[2].text == "Projects" and .nodes[-1].text == "New Project"'
+expect_tree "$picker_items" '([.nodes[] | select(.role == "option") | .text] | .[-2] == "Restore a deleted Issue" and .[-3] == "ConfigK" and .[-4] == "DaemonsD" and .[-5] == "FederationF" and .[-6] == "CredentialsC") and ([.nodes[].text] | index("Pages") != null and index("Actions") != null)'
 expect_tree "[data-id^='layer.collections.list.project.']" '.ok and .count == 1'
-expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("open Collection") and contains("esc close"))'
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("move") and contains("open") and contains("close"))'
 ctl key End
 expect_tree "$picker_items" '.nodes[-1]["aria-selected"] == "true"'
 ctl key Up
@@ -35,7 +35,7 @@ for letter in a l p h a; do ctl key "$letter"; done
 expect_tree "$picker_items" '.ok and .count == 1 and .nodes[0].text == "picker-alpha"'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # enter switches to the filtered Collection; reopening shows it as current while the bound Project stays first.
@@ -43,7 +43,7 @@ ctl click "[data-id='main.topbar.right.menu']"
 for letter in a l p h a; do ctl key "$letter"; done
 ctl key enter
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "picker-alpha"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 1 and (.nodes[0].text | contains("Picker alpha Issue"))'
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "$picker_items" '.ok and .nodes[0].text == "smoke" and .nodes[0]["aria-selected"] == "true"'
@@ -53,7 +53,7 @@ ctl key Down
 ctl key Down
 expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key enter
-expect_tree "$picker_items" '.ok and .nodes[0].text == "Back" and (.nodes | map(.text) | index("picker-alphacurrent") != null)'
+expect_tree "$picker_items" '.ok and .nodes[0].text == "picker-alphacurrent" and .nodes[1].text == "smoke"'
 expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
 ctl key esc
@@ -61,15 +61,15 @@ expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key Home
 ctl key enter
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
-# enter on Views lists Back and the six Collections with the cursor on Back; esc and backspace return to the top on Views, still open.
+# enter on Views lists the six Collections and New view with the cursor on the first; esc and backspace return to the top on Views, still open.
 picker_views_entry="[data-id='layer.collections.list.views']"
 ctl click "[data-id='main.topbar.right.menu']"
 ctl key Down
 ctl key enter
-expect_tree "$picker_items" '.ok and .count == 8 and .nodes[0].text == "Back" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Inbox" and .nodes[2].text == "Today" and .nodes[3].text == "Upcoming" and .nodes[4].text == "Deadlines" and .nodes[5].text == "All Open" and .nodes[6].text == "Logbook" and .nodes[7].text == "New view"'
+expect_tree "$picker_items" '.ok and .count == 7 and .nodes[0].text == "Inbox" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Today" and .nodes[2].text == "Upcoming" and .nodes[3].text == "Deadlines" and .nodes[4].text == "All Open" and .nodes[5].text == "Logbook" and .nodes[6].text == "New view"'
 expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
 ctl key esc
 expect_tree "$picker_views_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
@@ -89,7 +89,7 @@ ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "$picker_views_entry" '.ok and .nodes[0].text == "ViewsToday" and .nodes[0]["aria-selected"] == "true"'
 ctl key Home
 ctl key enter
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # A click on a row switches like enter; the Menu button opens the Menu; esc closes it, also after a click inside it.
@@ -99,16 +99,16 @@ ctl click "$picker_projects_entry"
 expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.list.project.$picker_alpha_uid']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "picker-alpha"'
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl click "[data-id='layer.collections.input']"
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: picker-alpha"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "picker-alpha"'
 ctl click "[data-id='main.topbar.right.menu']"
 ctl key enter
-expect_tree "$picker_heading" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "$picker_heading" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # esc backs out detail, then the list, into the picker, then closes it.
@@ -144,7 +144,7 @@ expect_tree "[data-id='main.columns.collections']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.collections.inbox']" '.ok and .nodes[0]["aria-selected"] == "true"'
 expect_tree "$picker_heading" '.ok and .nodes[0].text == "Inbox"'
 ctl key esc
-expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("next Collection"))'
+expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("move"))'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 quit_app
 

@@ -2,6 +2,8 @@
 
 `O` opens the Recurrence card in a Pane. `tern-kata recur` does the same from a shell or an agent, without Tern, with the card's rules and messages:
 
+The card's head reads **Make recurring** or **Change recurrence**, with the Issue's ref as a muted line, and its primary button is **Save** in both modes. Each field has its label above it: Frequency, Every (the unit `weeks`, `days`, `months` or `years` follows the number), Weekdays, Day of month (the hint `1-31, last, 2nd tue, last fri` shows while it has focus), Month, Ends, Occurrences or End date, Start date and Time zone; dates are typed as `YYYY-MM-DD`. When changing a rule, a muted summary under the head reads for example `Weekly on Mon, Thu · next 2026-11-05`. A rule set outside Tern shows the warning "Set outside Tern. Saving replaces it." with the rule in a muted line. Stopping asks "Stop this Issue recurring? Existing occurrences stay." with **Stop recurring** and **Keep editing**.
+
 ```sh
 tern-kata recur <ref>                                         # the schedule in words and the next Occurrence's date
 tern-kata recur <ref> --frequency weekly --on mon,thu         # make it recur, or change its schedule

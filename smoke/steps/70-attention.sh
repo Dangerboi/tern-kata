@@ -15,7 +15,7 @@ expect_tree "$at_count" '.ok and .count == 0'
 kata --as smoke-asker --workspace "$at_dir" notify "$at_short" --to smoke-attention --message "Please look at this Issue" --json >/dev/null
 expect_tree "$at_count" '.ok and .count == 1 and .nodes[0].text == "1"'
 ctl key 6
-expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1 and (.nodes[0].text | contains("Smoke attention Issue") and contains("smoke-asker") and contains("request") and contains("Please look at this Issue"))'
+expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1 and (.nodes[0].text | contains("Smoke attention Issue") and contains("smoke-asker") and contains("Please look at this Issue"))'
 expect_tree "[data-id='main.columns.list.attention']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.list.issues']" '.count == 0'
 ctl key enter
@@ -58,7 +58,7 @@ expect_tree "$at_count" '.ok and .count == 0'
 at_comment=$(kata --as smoke-asker --workspace "$at_dir" comment "$at_short" -m "Which option do you pick?" --json | jq -r '.comment.uid')
 at_handle=$(kata --workspace "$at_dir" show "$at_short" --json | jq -r --arg uid "$at_comment" '.comments[] | select(.uid == $uid) | .handle')
 kata --as smoke-asker --workspace "$at_dir" notify "$at_short" --to smoke-attention --re "$at_handle" --message "Answer this comment" --json >/dev/null
-expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1 and (.nodes[0].text | contains("Answer this comment") and contains("c:"))'
+expect_tree "[data-id='main.columns.list.attention.$at_issue']" '.ok and .count == 1 and (.nodes[0].text | contains("Answer this comment") and contains("on a comment"))'
 expect_tree "$at_count" '.ok and .count == 1 and .nodes[0].text == "1"'
 ctl key enter
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[] | (.text // "")] | any(contains("Which option do you pick?")))'

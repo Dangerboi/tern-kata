@@ -34,7 +34,7 @@ func (g *Gateway) loadConfigFiles(_ context.Context, cmd model.LoadConfigFiles) 
 	enter := []model.ConfigAction{model.ConfigOpen}
 	views := NewViewsStore(folder)
 	files := []model.ConfigFile{
-		configRow(model.ConfigLanes, lanesFileName, filepath.Join(folder, lanesFileName), "not created: every Project uses the default Lanes", enter, func(path string) (string, error) {
+		configRow(model.ConfigLanes, lanesFileName, filepath.Join(folder, lanesFileName), "Not created: every Project uses the default Lanes", enter, func(path string) (string, error) {
 			file, err := readLanes(path)
 			if err != nil {
 				return "", err
@@ -45,9 +45,9 @@ func (g *Gateway) loadConfigFiles(_ context.Context, cmd model.LoadConfigFiles) 
 					n++
 				}
 			}
-			return countOf(n, "Project", "Projects") + " with a Lane list", nil
+			return model.Count(n, "Project", "Projects") + " with a Lane list", nil
 		}),
-		configRow(model.ConfigFilters, filtersFileName, filepath.Join(folder, filtersFileName), "not created: no Project has a default filter", enter, func(path string) (string, error) {
+		configRow(model.ConfigFilters, filtersFileName, filepath.Join(folder, filtersFileName), "Not created: no Project has a default filter", enter, func(path string) (string, error) {
 			file, err := readTables[filtersFile](path)
 			if err != nil {
 				return "", err
@@ -58,20 +58,20 @@ func (g *Gateway) loadConfigFiles(_ context.Context, cmd model.LoadConfigFiles) 
 					n++
 				}
 			}
-			return countOf(n, "Project", "Projects") + " with a default filter", nil
+			return model.Count(n, "Project", "Projects") + " with a default filter", nil
 		}),
-		configRow(model.ConfigViews, "views.toml", views.Path, "not created: no saved views", enter, func(string) (string, error) {
+		configRow(model.ConfigViews, "views.toml", views.Path, "Not created: no saved views", enter, func(string) (string, error) {
 			read, err := views.Read()
 			if err != nil {
 				return "", err
 			}
-			summary := countOf(len(read.Views), "saved view", "saved views")
+			summary := model.Count(len(read.Views), "Saved view", "Saved views")
 			if len(read.Problems) > 0 {
 				summary += ", " + strconv.Itoa(len(read.Problems)) + " skipped as invalid"
 			}
 			return summary, nil
 		}),
-		configRow(model.ConfigSeen, seenFileName, filepath.Join(folder, seenFileName), "not created: no Runs marked seen", enter, func(path string) (string, error) {
+		configRow(model.ConfigSeen, seenFileName, filepath.Join(folder, seenFileName), "Not created: no Runs marked seen", enter, func(path string) (string, error) {
 			file, err := readTables[seenFile](path)
 			if err != nil {
 				return "", err
@@ -85,20 +85,21 @@ func (g *Gateway) loadConfigFiles(_ context.Context, cmd model.LoadConfigFiles) 
 					timeline++
 				}
 			}
-			return countOf(marked, "Project", "Projects") + " with a seen mark, " + strconv.Itoa(timeline) + " with since you last looked on", nil
+			return model.Count(marked, "Project", "Projects") + " " + model.Noun(marked, "has", "have") + " a seen mark; since you last looked is on for " + strconv.Itoa(timeline), nil
 		}),
-		configRow(model.ConfigWorker, worker.ConfigFileName, dirs.ConfigPath(), "no worker set up", enter, func(path string) (string, error) {
+		configRow(model.ConfigWorker, worker.ConfigFileName, dirs.ConfigPath(), "No worker set up", enter, func(path string) (string, error) {
 			cfg, err := worker.LoadConfig(path)
 			summary := ""
 			if err == nil {
-				summary = countOf(len(cfg.Projects), "Project", "Projects") + " served"
+				summary = model.Count(len(cfg.Projects), "Project", "Projects") + " served"
 			}
-			return joinSummary(summary, workerSupervision(dirs)), err
+			return capital(joinSummary(summary, workerSupervision(dirs))), err
 		}),
 		agentRow(filepath.Join(folder, AgentConfigFile)),
 	}
 	files = append(files, g.docbankRow(), g.kataConfigRow())
-	return model.ConfigFilesLoaded{Request: cmd.Request, Folder: folder, Files: files}
+	home, _ := os.UserHomeDir() // only the "~" shortening needs it.
+	return model.ConfigFilesLoaded{Request: cmd.Request, Folder: folder, Home: home, Files: files}
 }
 
 // configRow reads one file: missing says what a missing file implies, and read is the file's own loader, given the path. A summary
@@ -125,7 +126,7 @@ func configRow(key model.ConfigFileKey, title, path, missing string, actions []m
 // it must still find on disk.
 func agentRow(path string) model.ConfigFile {
 	var text string
-	row := configRow(model.ConfigAgent, AgentConfigFile, path, "agents start with the defaults", []model.ConfigAction{model.ConfigEdit}, func(path string) (string, error) {
+	row := configRow(model.ConfigAgent, AgentConfigFile, path, "Not created: agents start with the defaults", []model.ConfigAction{model.ConfigEdit}, func(path string) (string, error) {
 		token, err := guardedfile.Read(path)
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", path, err)
@@ -174,23 +175,26 @@ func (g *Gateway) saveAgentConfig(cmd model.SaveAgentConfig) model.AgentConfigSa
 	return done
 }
 
+// readOnlyWords opens the kata config.toml row's summary: the Pane reads that file and never writes it.
+const readOnlyWords = "read-only"
+
 // kataConfigRow is kata's own config.toml, read by the Daemon catalog reader; the Pane never writes it.
 func (g *Gateway) kataConfigRow() model.ConfigFile {
-	const title = "config.toml (kata's, read-only)"
+	const title = "kata config.toml"
 	home, err := kataHome()
 	if err != nil {
 		return model.ConfigFile{Key: model.ConfigKata, Title: title, Status: model.ConfigBroken, Err: err.Error()}
 	}
-	return configRow(model.ConfigKata, title, filepath.Join(home, "config.toml"), "empty daemon catalog", []model.ConfigAction{model.ConfigOpen}, func(string) (string, error) {
+	return configRow(model.ConfigKata, title, filepath.Join(home, "config.toml"), readOnlyWords+" · 0 daemons", []model.ConfigAction{model.ConfigOpen}, func(string) (string, error) {
 		catalog, err := ReadCatalogAt(home)
 		if err != nil {
 			return "", err
 		}
-		quit := "q quits without asking"
+		quit := "quits without asking"
 		if catalog.ConfirmQuit {
-			quit = "q asks before quitting"
+			quit = "asks before quitting"
 		}
-		return joinSummary(countOf(len(catalog.Daemons), "daemon", "daemons"), quit), nil
+		return joinSummary(readOnlyWords, model.Count(len(catalog.Daemons), "daemon", "daemons"), quit), nil
 	})
 }
 
@@ -216,24 +220,25 @@ func agentSummary(c AgentConfig) string {
 	if projects := slices.Sorted(maps.Keys(c.Projects)); len(projects) > 0 {
 		parts = append(parts, "own table for "+strings.Join(projects, ", "))
 	}
-	return strings.Join(parts, " · ")
+	return capital(strings.Join(parts, " · "))
+}
+
+// capital starts a summary with a capital letter: a summary is a sentence fragment that opens its line.
+func capital(summary string) string {
+	if summary == "" {
+		return ""
+	}
+	return strings.ToUpper(summary[:1]) + summary[1:]
 }
 
 func workerSupervision(d worker.Dirs) string {
 	switch {
 	case d.ManualPresent():
-		return "Supervision off (" + worker.ManualFileName + ")"
+		return "supervision off (" + worker.ManualFileName + ")"
 	case d.SupervisionOn():
-		return "Supervision on"
+		return "supervision on"
 	}
 	return ""
-}
-
-func countOf(n int, one, many string) string {
-	if n == 1 {
-		return "1 " + one
-	}
-	return strconv.Itoa(n) + " " + many
 }
 
 func joinSummary(parts ...string) string {

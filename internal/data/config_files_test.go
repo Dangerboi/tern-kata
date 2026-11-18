@@ -55,14 +55,14 @@ func keyStrings(keys []model.ConfigFileKey) []string {
 func TestConfigFilesReadsEveryMissingFileWithWhatItsAbsenceImplies(t *testing.T) {
 	rows, _, dirs := configFiles(t, nil, "")
 	for key, want := range map[model.ConfigFileKey]string{
-		model.ConfigLanes:   "not created: every Project uses the default Lanes",
-		model.ConfigFilters: "not created: no Project has a default filter",
-		model.ConfigViews:   "not created: no saved views",
-		model.ConfigSeen:    "not created: no Runs marked seen",
-		model.ConfigWorker:  "no worker set up",
-		model.ConfigAgent:   "agents start with the defaults",
-		model.ConfigDocbank: "not set up: `kata docbank setup` sets Docbank up",
-		model.ConfigKata:    "empty daemon catalog",
+		model.ConfigLanes:   "Not created: every Project uses the default Lanes",
+		model.ConfigFilters: "Not created: no Project has a default filter",
+		model.ConfigViews:   "Not created: no saved views",
+		model.ConfigSeen:    "Not created: no Runs marked seen",
+		model.ConfigWorker:  "No worker set up",
+		model.ConfigAgent:   "Not created: agents start with the defaults",
+		model.ConfigDocbank: "Not set up: run kata docbank setup",
+		model.ConfigKata:    "read-only · 0 daemons",
 	} {
 		row := rows[key]
 		if row.Status != model.ConfigMissing || row.Err != "" || row.Summary != want || !filepath.IsAbs(row.Path) {
@@ -103,12 +103,12 @@ func TestConfigFilesSummarisesEveryFileThatLoads(t *testing.T) {
 	for key, want := range map[model.ConfigFileKey]string{
 		model.ConfigLanes:   "1 Project with a Lane list",
 		model.ConfigFilters: "1 Project with a default filter",
-		model.ConfigViews:   "1 saved view, 1 skipped as invalid",
-		model.ConfigSeen:    "2 Projects with a seen mark, 2 with since you last looked on",
-		model.ConfigWorker:  "1 Project served · Supervision on",
-		model.ConfigAgent:   "actor me-agent · host laptop · name builder · command omp --fast · message from dana, dana-laptop · own table for alpha, zeta",
-		model.ConfigDocbank: "not set up: `kata docbank setup` sets Docbank up",
-		model.ConfigKata:    "1 daemon · q quits without asking",
+		model.ConfigViews:   "1 Saved view, 1 skipped as invalid",
+		model.ConfigSeen:    "2 Projects have a seen mark; since you last looked is on for 2",
+		model.ConfigWorker:  "1 Project served · supervision on",
+		model.ConfigAgent:   "Actor me-agent · host laptop · name builder · command omp --fast · message from dana, dana-laptop · own table for alpha, zeta",
+		model.ConfigDocbank: "Not set up: run kata docbank setup",
+		model.ConfigKata:    "read-only · 1 daemon · quits without asking",
 	} {
 		if row := rows[key]; row.Status != model.ConfigLoads || row.Err != "" || row.Summary != want {
 			t.Errorf("%s: %+v, want a file that loads reading %q", key, row, want)
@@ -118,7 +118,7 @@ func TestConfigFilesSummarisesEveryFileThatLoads(t *testing.T) {
 
 func TestConfigFilesSaysWhenWorkerManualTurnedSupervisionOff(t *testing.T) {
 	rows, _, _ := configFiles(t, map[string]string{"worker.toml": servingWork(t.TempDir()), worker.ManualFileName: ""}, "")
-	if row := rows[model.ConfigWorker]; row.Status != model.ConfigLoads || row.Summary != "1 Project served · Supervision off (worker.manual)" {
+	if row := rows[model.ConfigWorker]; row.Status != model.ConfigLoads || row.Summary != "1 Project served · supervision off (worker.manual)" {
 		t.Errorf("worker row %+v", row)
 	}
 }
@@ -145,7 +145,7 @@ func TestConfigFilesShowsEachBrokenFilesLoaderErrorOnItsOwnRowAndTheOthersStillR
 
 func TestConfigFilesOneBrokenFileLeavesTheOthersLoading(t *testing.T) {
 	rows, _, _ := configFiles(t, map[string]string{"lanes.toml": "[\"01A\"\n", "agent.toml": "name = \"builder\"\n"}, "")
-	if rows[model.ConfigLanes].Status != model.ConfigBroken || rows[model.ConfigAgent].Status != model.ConfigLoads || rows[model.ConfigAgent].Summary != "name builder" {
+	if rows[model.ConfigLanes].Status != model.ConfigBroken || rows[model.ConfigAgent].Status != model.ConfigLoads || rows[model.ConfigAgent].Summary != "Name builder" {
 		t.Errorf("lanes %+v, agent %+v", rows[model.ConfigLanes], rows[model.ConfigAgent])
 	}
 }
@@ -180,17 +180,17 @@ func TestConfigFilesDocbankRowSaysWhichSetupKatasSectionIs(t *testing.T) {
 		status        model.ConfigFileStatus
 		summary       string
 	}{
-		"no config.toml":                        {"", "", model.ConfigMissing, "not set up: `kata docbank setup` sets Docbank up"},
-		"no [docbank] section":                  {"[tui]\nconfirm_quit = false\n", docbankServerConfig, model.ConfigLoads, "not set up: `kata docbank setup` sets Docbank up"},
-		"local = true":                          {"[docbank]\nlocal = true\n", "", model.ConfigLoads, "the Docbank on this machine: kata starts it when needed and follows its port and key"},
-		"a url on another machine":              {"[docbank]\nurl = \"https://docbank.example\"\napi_key_file = \"/k\"\n", docbankServerConfig, model.ConfigLoads, "Docbank at https://docbank.example"},
-		"a loopback url on another port":        {"[docbank]\nurl = \"http://127.0.0.1:9090\"\n", docbankServerConfig, model.ConfigLoads, "Docbank at http://127.0.0.1:9090"},
-		"a loopback url with no Docbank config": {"[docbank]\nurl = \"http://127.0.0.1:8080\"\n", "", model.ConfigLoads, "Docbank at http://127.0.0.1:8080"},
-		"tern-kata's old pinned setup":          {"[docbank]\nurl = \"http://127.0.0.1:8080\"\napi_key_file = \"/k\"\nfolder = \"/kata\"\n", docbankServerConfig, model.ConfigLoads, "pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"},
-		"the old form on localhost":             {"[docbank]\nurl = \"http://localhost:8080\"\n", docbankServerConfig, model.ConfigLoads, "pinned to http://localhost:8080 by tern-kata's old setup: kata does not start it"},
-		"the old form on ::1":                   {"[docbank]\nurl = \"http://[::1]:8080\"\n", docbankServerConfig, model.ConfigLoads, "pinned to http://[::1]:8080 by tern-kata's old setup: kata does not start it"},
-		"a url beats local = true":              {"[docbank]\nlocal = true\nurl = \"https://docbank.example\"\n", "", model.ConfigLoads, "Docbank at https://docbank.example"},
-		"keys kata may add":                     {"[docbank]\nlocal = true\nsome_future_key = 3\n", "", model.ConfigLoads, "the Docbank on this machine: kata starts it when needed and follows its port and key"},
+		"no config.toml":                        {"", "", model.ConfigMissing, "Not set up: run kata docbank setup"},
+		"no [docbank] section":                  {"[tui]\nconfirm_quit = false\n", docbankServerConfig, model.ConfigLoads, "Not set up: run kata docbank setup"},
+		"local = true":                          {"[docbank]\nlocal = true\n", "", model.ConfigLoads, "On this machine: kata starts it when needed and follows its port and key"},
+		"a url on another machine":              {"[docbank]\nurl = \"https://docbank.example\"\napi_key_file = \"/k\"\n", docbankServerConfig, model.ConfigLoads, "At https://docbank.example"},
+		"a loopback url on another port":        {"[docbank]\nurl = \"http://127.0.0.1:9090\"\n", docbankServerConfig, model.ConfigLoads, "At http://127.0.0.1:9090"},
+		"a loopback url with no Docbank config": {"[docbank]\nurl = \"http://127.0.0.1:8080\"\n", "", model.ConfigLoads, "At http://127.0.0.1:8080"},
+		"tern-kata's old pinned setup":          {"[docbank]\nurl = \"http://127.0.0.1:8080\"\napi_key_file = \"/k\"\nfolder = \"/kata\"\n", docbankServerConfig, model.ConfigLoads, "Pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"},
+		"the old form on localhost":             {"[docbank]\nurl = \"http://localhost:8080\"\n", docbankServerConfig, model.ConfigLoads, "Pinned to http://localhost:8080 by tern-kata's old setup: kata does not start it"},
+		"the old form on ::1":                   {"[docbank]\nurl = \"http://[::1]:8080\"\n", docbankServerConfig, model.ConfigLoads, "Pinned to http://[::1]:8080 by tern-kata's old setup: kata does not start it"},
+		"a url beats local = true":              {"[docbank]\nlocal = true\nurl = \"https://docbank.example\"\n", "", model.ConfigLoads, "At https://docbank.example"},
+		"keys kata may add":                     {"[docbank]\nlocal = true\nsome_future_key = 3\n", "", model.ConfigLoads, "On this machine: kata starts it when needed and follows its port and key"},
 	} {
 		row := docbankRowWith(t, tc.kata, tc.docbank)
 		if row.Status != tc.status || row.Err != "" || row.Summary != tc.summary {

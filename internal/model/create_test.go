@@ -64,7 +64,7 @@ func TestCreateDraft(t *testing.T) {
 		model.KeyMsg{Text: " New Issue "}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Text: "Draft body"},
 		model.KeyMsg{Chord: "tab"}, model.FieldLabelsLoaded{UID: model.CreateDraftUID, Labels: []string{"bug", "other"}},
 		model.KeyMsg{Text: "bu"}, model.KeyMsg{Chord: "ctrl+space"}, model.KeyMsg{Text: ", custom"},
-		model.KeyMsg{Chord: "tab"}, model.KeyMsg{Text: "owner"}, model.KeyMsg{Chord: "tab"}, model.KeyMsg{Text: "2"},
+		model.KeyMsg{Chord: "tab"}, model.KeyMsg{Text: "owner"}, model.KeyMsg{Chord: "tab"}, model.ChooseMsg{Field: model.CreatePriority, Index: 3},
 	} {
 		m, _ = model.Update(m, msg)
 	}
@@ -127,22 +127,6 @@ func TestCreateDiscardAndValidation(t *testing.T) {
 			}
 		})
 	}
-	for _, priority := range []string{"-1", "5", "bad"} {
-		m := model.Model{Project: model.Project{ID: 7}}
-		m, _ = model.Update(m, model.KeyMsg{Chord: "n"})
-		m, _ = model.Update(m, model.KeyMsg{Text: "title"})
-		m, _ = model.Update(m, model.FocusFieldMsg{Field: model.CreatePriority})
-		m, _ = model.Update(m, model.KeyMsg{Text: priority})
-		m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
-		if m.Create.Err == nil {
-			t.Fatal("priority accepted")
-		}
-		for _, cmd := range cmds {
-			if _, ok := cmd.(model.CreateIssueCmd); ok {
-				t.Fatal("invalid priority wrote")
-			}
-		}
-	}
 }
 
 func TestNavigationReleasesExcludedCreatedIssue(t *testing.T) {
@@ -190,7 +174,7 @@ func TestCreateRefusedWhileReconnectingSaysTheDraftIsKept(t *testing.T) {
 	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+n"})
 	m.Stale = true
 	m, cmds := model.Update(m, model.KeyMsg{Chord: "ctrl+o"})
-	if m.Create.Err == nil || !strings.Contains(m.Create.Err.Error(), "reconnecting") || !strings.Contains(m.Create.Err.Error(), "Draft kept") || len(cmds) != 0 {
-		t.Fatalf("create error %v, cmds %v; want the reconnecting refusal that says the Draft is kept", m.Create.Err, cmds)
+	if m.Create.Err == nil || !strings.Contains(m.Create.Err.Error(), "disconnected from kata") || !strings.Contains(m.Create.Err.Error(), "Draft is kept") || len(cmds) != 0 {
+		t.Fatalf("create error %v, cmds %v; want the disconnected refusal that says the Draft is kept", m.Create.Err, cmds)
 	}
 }

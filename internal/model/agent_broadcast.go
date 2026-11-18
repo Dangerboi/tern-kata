@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"slices"
 )
 
@@ -13,7 +12,7 @@ const (
 
 // Why `S` opens no card, and why a broadcast skips an agent whose slot holds a message it has not cleared.
 const (
-	NoAgentsToBroadcastRefusal = "No agent is running on this Issue or its open children."
+	NoAgentsToBroadcastRefusal = "Nothing to broadcast: no running agents."
 	AgentHoldsMessageRefusal   = "The agent holds an unread message; it was not replaced."
 )
 
@@ -98,8 +97,7 @@ func openAgentBroadcast(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if len(m.BroadcastTargets(issue.UID, issue.QualifiedID)) == 0 {
-		m.Notice = NoAgentsToBroadcastRefusal
-		return m, nil
+		return m.fail(NoAgentsToBroadcastRefusal), nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, Broadcast: true, IssueUID: issue.UID, IssueRef: issue.QualifiedID, ProjectID: issue.ProjectID}
 	return m, nil
@@ -146,7 +144,7 @@ func broadcastSent(m Model, msg AgentMessageSent) Model {
 	targets[i].Answered = true
 	switch {
 	case msg.Err != nil:
-		targets[i].Skipped = fmt.Sprintf("The message could not be written: %s", msg.Err)
+		targets[i].Skipped = "The message could not be written: " + Reason(msg.Err) + "."
 	case msg.Held != "":
 		targets[i].Skipped = AgentHoldsMessageRefusal
 	default:

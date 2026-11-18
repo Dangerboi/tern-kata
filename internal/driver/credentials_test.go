@@ -148,23 +148,23 @@ func TestANumberedPageKeyLeavesTheCredentialsPage(t *testing.T) {
 
 func TestCredentialsPageStatesFromLoadingToTheList(t *testing.T) {
 	out := credentialsOpened(t, projectPane(t, 160, boardCard("a")))
-	wantText(t, "while the check is out", wireTextOf(t, out.State), "loading credential inventory...", "0 credentials")
+	wantText(t, "while the check is out", wireTextOf(t, out.State), "Loading credentials…")
 	check, _ := askedCapabilities(out.Cmds)
 
 	unavailable := step(t, out.State, model.AuthCapabilitiesLoaded{Request: check.Request}).State
-	wantText(t, "without token audit read", wireTextOf(t, unavailable), "credential audit unavailable for this connection", "the active principal does not have token audit read capability")
+	wantText(t, "without token audit read", wireTextOf(t, unavailable), "Credential audit is not available on this connection.")
 
 	failedCheck := step(t, out.State, model.AuthCapabilitiesLoaded{Request: check.Request, Err: errors.New("boom")}).State
-	wantText(t, "a failed check", wireTextOf(t, failedCheck), "failed to determine credential audit access: boom")
+	wantText(t, "a failed check", wireTextOf(t, failedCheck), "Cannot read credentials: boom.")
 
 	audited, load := credentialsAuditedFrom(t, out)
-	wantText(t, "while the list is out", wireTextOf(t, audited), "loading credential inventory...")
+	wantText(t, "while the list is out", wireTextOf(t, audited), "Loading credentials…")
 
 	empty := step(t, audited, model.CredentialsLoaded{Request: load.Request, ObservedAt: now}).State
-	wantText(t, "an empty list", wireTextOf(t, empty), "no credentials", "0 credentials · observed at 2026-10-08 12:00:00Z")
+	wantText(t, "an empty list", wireTextOf(t, empty), "No credentials", "as of 12:00")
 
 	failed := step(t, audited, model.CredentialsLoaded{Request: load.Request, Err: errors.New("daemon down")}).State
-	wantText(t, "a failed read", wireTextOf(t, failed), "failed to load credentials: daemon down")
+	wantText(t, "a failed read", wireTextOf(t, failed), "Cannot read credentials: daemon down.")
 }
 
 func credentialsAuditedFrom(t *testing.T, out driver.Output) (driver.State, model.LoadCredentials) {
@@ -189,12 +189,12 @@ func TestCredentialsPageListsEachTokenWithKataTuisFieldsNewestFirst(t *testing.T
 	}}).State
 	text := wireTextOf(t, s)
 	wantText(t, "token cards", text,
-		"2 credentials · observed at 2026-10-08 12:00:00Z",
-		"state live  ID 3  name laptop  actor alice", "scope global  project —  root —",
-		"created 2026-09-01 08:30:00Z  expires —", "last observed use — ", "revoked —",
-		"state revoked  ID 9  name —  actor bot", "scope issue_subtree  project P-UID  root ROOT-UID",
-		"created 2026-09-01 09:30:00Z  expires 2026-10-01 08:30:00Z", "last observed use 2026-09-01 10:30:00Z  revoked 2026-09-03 08:30:00Z")
-	if strings.Index(text, "ID 9") > strings.Index(text, "ID 3") {
+		"as of 12:00",
+		"State", "live", "Name", "laptop", "Actor", "alice", "Scope", "Global",
+		"Created", "2026-09-01 08:30", "Expires", "Last used", "Revoked",
+		"revoked", "Issue subtree", "bot", "2026-09-01 09:30", "2026-10-01 08:30", "2026-09-01 10:30", "2026-09-03 08:30")
+	wantNotShown(t, "the cards", s, "2 credentials", "observed at", "issue_subtree")
+	if strings.Index(text, "Token 9") > strings.Index(text, "Token 3") {
 		t.Error("the newer token is not listed first")
 	}
 	if sel, total := s.Model.Position(); sel != 1 || total != 2 {
@@ -212,13 +212,13 @@ func TestCredentialsPageRefreshesEveryThirtySecondsWhileShown(t *testing.T) {
 	if !ok || next.After != 30*time.Second || next.Request == load.Request || next.Workspace != "/repo" {
 		t.Fatalf("after a read: %#v, want one more read after 30 seconds", first.Cmds)
 	}
-	if wantText(t, "while waiting", wireTextOf(t, first.State), "1 credentials"); strings.Contains(wireTextOf(t, first.State), "loading") {
+	if wantText(t, "while waiting", wireTextOf(t, first.State), "Token 1"); strings.Contains(wireTextOf(t, first.State), "Loading") {
 		t.Error("the Page shows loading while it only waits for the next refresh")
 	}
 
 	later := now.Add(30 * time.Second)
 	second := step(t, first.State, model.CredentialsLoaded{Request: next.Request, ObservedAt: later, Tokens: []model.Credential{credentialToken(1, "a", "live", now), credentialToken(2, "b", "live", later)}})
-	wantText(t, "after the refresh", wireTextOf(t, second.State), "2 credentials · observed at 2026-10-08 12:00:30Z")
+	wantText(t, "after the refresh", wireTextOf(t, second.State), "Token 2", "as of 12:00")
 	if again, ok := askedCredentials(second.Cmds); !ok || again.After != 30*time.Second || again.Request == next.Request {
 		t.Fatalf("after a refresh: %#v, want the next one", second.Cmds)
 	}
@@ -229,7 +229,7 @@ func TestCredentialsPageKeepsItsListWhenARefreshFails(t *testing.T) {
 	held := step(t, audited, model.CredentialsLoaded{Request: load.Request, ObservedAt: now, Tokens: []model.Credential{credentialToken(1, "a", "live", now)}})
 	next, _ := askedCredentials(held.Cmds)
 	failed := step(t, held.State, model.CredentialsLoaded{Request: next.Request, Err: errors.New("timeout")})
-	wantText(t, "failed refresh", wireTextOf(t, failed.State), "state live  ID 1", "refresh failed: timeout")
+	wantText(t, "failed refresh", wireTextOf(t, failed.State), "Token 1", "Cannot refresh credentials: timeout.")
 	if _, ok := askedCredentials(failed.Cmds); !ok {
 		t.Error("a failed refresh stops the refreshing")
 	}
@@ -243,7 +243,7 @@ func TestLeavingTheCredentialsPageDropsAnswersStillOut(t *testing.T) {
 		t.Errorf("an answer after leaving asked %#v on page %v", late.Cmds, late.State.Model.Page)
 	}
 	reopened := credentialsOpened(t, late.State).State
-	wantText(t, "reopened", wireTextOf(t, reopened), "loading credential inventory...")
+	wantText(t, "reopened", wireTextOf(t, reopened), "Loading credentials…")
 }
 
 func TestRRefreshesTheListAtOnceAndRetriesAFailedCheck(t *testing.T) {
@@ -256,7 +256,7 @@ func TestRRefreshesTheListAtOnceAndRetriesAFailedCheck(t *testing.T) {
 	}
 	// The refresh the key replaced is dropped when it answers.
 	stale := step(t, out.State, model.CredentialsLoaded{Request: load.Request + 1, ObservedAt: now.Add(time.Hour)})
-	wantText(t, "after a stale answer", wireTextOf(t, stale.State), "observed at 2026-10-08 12:00:00Z")
+	wantText(t, "after a stale answer", wireTextOf(t, stale.State), "as of 12:00")
 
 	opened := credentialsOpened(t, projectPane(t, 160, boardCard("a")))
 	check, _ := askedCapabilities(opened.Cmds)
@@ -266,7 +266,7 @@ func TestRRefreshesTheListAtOnceAndRetriesAFailedCheck(t *testing.T) {
 	if !ok || again.Request == check.Request {
 		t.Fatalf("r after a failed check asked %#v, want the check again", retry.Cmds)
 	}
-	wantText(t, "while retrying", wireTextOf(t, retry.State), "loading credential inventory...")
+	wantText(t, "while retrying", wireTextOf(t, retry.State), "Loading credentials…")
 
 	unavailable := step(t, opened.State, model.AuthCapabilitiesLoaded{Request: check.Request}).State
 	if got := step(t, unavailable, key("r")); len(got.Cmds) != 0 {

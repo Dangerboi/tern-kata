@@ -58,8 +58,8 @@ func TestJobsPageSaysWhetherThisMachinesWorkerRunsAndServesTheProject(t *testing
 		status *model.WorkerStatus
 		want   string
 	}{
-		{"no worker", nil, "No worker is running on this machine"},
-		{"serving", servingWorker(), `Worker laptop running and serving work: 1 of 2 slots in use`},
+		{"no worker", nil, "none is running on this machine"},
+		{"serving", servingWorker(), "1 of 2 slots in use"},
 		{"not served", &model.WorkerStatus{Executor: "laptop", Projects: []model.WorkerProject{{Name: "other", Admitting: true}}}, "does not serve work"},
 		{"lease held elsewhere", &model.WorkerStatus{Executor: "laptop", Projects: []model.WorkerProject{{Name: "work", Why: "its lease is held by worker desktop"}}}, "admits nothing: its lease is held by worker desktop"},
 	}
@@ -94,7 +94,7 @@ func TestRRunsTheSelectedAdapterJobOnTheWorker(t *testing.T) {
 		t.Fatalf("cmds %#v, want a run-now ask for the selected job", out.Cmds)
 	}
 	done := step(t, out.State, model.JobRunRequested{JobUID: "A1", JobName: "Triage", RunUID: "R9"})
-	wantText(t, "notice", done.State.Model.Notice, "R9")
+	wantText(t, "notice", done.State.Model.Notice, "Started")
 	refused := step(t, out.State, model.JobRunRequested{JobUID: "A1", JobName: "Triage", Err: errors.New("Project work admits nothing: no free slot")})
 	wantText(t, "notice", refused.State.Model.Notice, "no free slot")
 }
@@ -105,14 +105,14 @@ func TestRRefusesANativeJobAndAMissingOrNonServingWorker(t *testing.T) {
 	if len(out.Cmds) != 0 {
 		t.Errorf("a native job asked the worker: %#v", out.Cmds)
 	}
-	wantText(t, "native refusal", out.State.Model.Notice, "native job", "kata runs it")
+	wantText(t, "native refusal", out.State.Model.Notice, "Cannot run", "kata runs a native job itself")
 
 	none := jobsPaneWithWorker(t, nil, promptJob("A1", "Triage"))
 	out = step(t, none, key("shift+r"))
 	if len(out.Cmds) != 0 {
 		t.Errorf("no worker, yet the Pane asked: %#v", out.Cmds)
 	}
-	wantText(t, "no worker refusal", out.State.Model.Notice, "No worker is running")
+	wantText(t, "no worker refusal", out.State.Model.Notice, "no worker: none is running on this machine")
 
 	elsewhere := jobsPaneWithWorker(t, &model.WorkerStatus{Executor: "laptop", Projects: []model.WorkerProject{{Name: "other", Admitting: true}}}, promptJob("A1", "Triage"))
 	out = step(t, elsewhere, key("shift+r"))
@@ -141,8 +141,8 @@ func TestRunsPageShowsAHeldRunWithItsReasonAndOtherExecutorsRunsAsKataHoldsThem(
 	other.ExecutorLabel = "desktop"
 	out := localRunsPane(t, servingWorker(heldRun("R1")), heldKataRun("R1"), other)
 
-	wantText(t, "held row", runCardText(t, out.State, "R1"), "held", "interrupted", "on laptop")
-	wantText(t, "other executor's row", runCardText(t, out.State, "R2"), "succeeded", "on desktop")
+	wantText(t, "held row", runCardText(t, out.State, "R1"), "held", "Interrupted", "laptop")
+	wantText(t, "other executor's row", runCardText(t, out.State, "R2"), "succeeded", "desktop")
 	if _, ok := askedLocalRun(out.Cmds); !ok {
 		t.Fatalf("the selected run of this machine asked the worker for no detail: %#v", out.Cmds)
 	}
@@ -174,8 +174,11 @@ func TestRunDetailShowsTheHeldReasonStepsAndTheOutputTail(t *testing.T) {
 	out := localRunsPane(t, servingWorker(run), heldKataRun("R1"))
 	s := step(t, out.State, model.LocalRunLoaded{UID: "R1", Detail: localDetail("R1", run)}).State
 	s = step(t, s, key("enter")).State
-	wantText(t, "run detail", inspectorText(t, s), "Held because", "interrupted", "the worker stopped while the agent ran", "u continues", "Step 1", "attempt 2", "exit 1",
-		"I triaged four items and now wait for review", "warning: slow disk", "sess-1")
+	wantText(t, "run detail", inspectorText(t, s), "Why", "Interrupted", "the worker stopped while the agent ran", "Step 1", "attempt 2", "exit 1",
+		"I triaged four items and now wait for review", "warning: slow disk")
+	if ids := s.Model.RunIDs(); len(ids) == 0 || ids[len(ids)-1].Value != "sess-1" {
+		t.Errorf("the title hovercard lacks the session id: %+v", ids)
+	}
 }
 
 func TestRunsPageFollowsARunningRunUntilItSettles(t *testing.T) {
@@ -298,7 +301,6 @@ func TestACancelsARunningRunOfThisMachineAndUStillNeedsAHeldOne(t *testing.T) {
 	if len(cancelled.Cmds) != 1 || cancelled.Cmds[0] != (model.AbandonLocalRun{UID: "R1"}) {
 		t.Fatalf("A on a running run: cmds %#v, want the worker asked to cancel it", cancelled.Cmds)
 	}
-	wantText(t, "inspector", inspectorText(t, out.State), "A cancels the run")
 	moved := step(t, cancelled.State, model.LocalRunMoved{UID: "R1", State: "cancelling"})
 	wantText(t, "notice", moved.State.Model.Notice, "Cancelling the run")
 
@@ -329,7 +331,7 @@ func TestALateAnswerForAnotherRunDoesNotReplaceTheSelectedRunsDetail(t *testing.
 	s := step(t, out.State, model.LocalRunLoaded{UID: "R2", Detail: localDetail("R2", b)}).State
 	s = step(t, s, model.LocalRunLoaded{UID: "R1", Detail: localDetail("R1", a)}).State
 	s = step(t, s, key("enter")).State
-	wantText(t, "run detail", inspectorText(t, s), "Held because", "Step 1", "sess-1")
+	wantText(t, "run detail", inspectorText(t, s), "Why", "Step 1")
 }
 
 func TestJobsPageNamesTheWorkersPauseAfterFailedRunsAndUResumesIt(t *testing.T) {
@@ -337,8 +339,8 @@ func TestJobsPageNamesTheWorkersPauseAfterFailedRunsAndUResumesIt(t *testing.T) 
 	status.Projects[0].Paused = map[string]int{"A1": 3}
 	s := jobsPaneWithWorker(t, status, promptJob("A1", "Triage"), promptJob("A2", "Report"))
 	text := wireTextOf(t, s)
-	wantText(t, "Jobs Page", text, "paused: failed runs", "paused after 3 failed runs in a row", "u resumes it")
-	wantText(t, "inspector of the paused job", inspectorText(t, s), "paused after 3 failed runs in a row")
+	wantText(t, "Jobs Page", text, "paused: failed runs", "Paused after 3 failed runs in a row")
+	wantText(t, "inspector of the paused job", inspectorText(t, s), "Paused after 3 failed runs in a row")
 
 	out := step(t, s, key("u"))
 	if len(out.Cmds) != 1 || out.Cmds[0] != (model.ResumeJob{JobUID: "A1", JobName: "Triage"}) {
@@ -358,7 +360,7 @@ func TestJobsPageNamesTheWorkersPauseAfterFailedRunsAndUResumesIt(t *testing.T) 
 		t.Errorf("u on a job the worker runs asked the worker: %#v", none.Cmds)
 	}
 	wantText(t, "notice", none.State.Model.Notice, "not paused by this machine's worker")
-	if strings.Contains(inspectorText(t, healthy.State), "paused after") {
+	if strings.Contains(inspectorText(t, healthy.State), "Paused after") {
 		t.Fatalf("the inspector of a job the worker runs names a pause:\n%s", inspectorText(t, healthy.State))
 	}
 }

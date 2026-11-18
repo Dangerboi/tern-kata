@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-const DateInputHint = "YYYY-MM-DD, YYYY-MM-DDTHH:MM[:SS], YYYY-MM-DDTHH:MM:SSZ, today, tomorrow, +Nd or +Nw"
+// DateInputHint names the forms to type into a date field, in a phrase that follows "must be" in an error and "Date like" in a hint.
+// Timed and UTC forms are accepted without being named; docs/guide/dates.md lists them.
+const DateInputHint = "a date like 2026-11-20, today, tomorrow or +3d"
 
 var relativeDate = regexp.MustCompile(`^\+(\d{1,4})([dw])$`)
 

@@ -116,11 +116,11 @@ func TestAttentionPageReadsTheInboxUserInsteadOfTheActor(t *testing.T) {
 func TestAttentionPageListsRequestsNewestFirstWithTheirSenderTagHandleAndFirstLine(t *testing.T) {
 	s := attentionPageWith(t, attentionRequests(t), 0)
 
-	wantText(t, "work request", attentionCardText(t, s, "work-aa11"), "work#aa11", "Deploy the fix", "bob", "request", "Please deploy today")
+	wantText(t, "work request", attentionCardText(t, s, "work-aa11"), "work#aa11", "Deploy the fix", "bob", "5m ago", "Please deploy today")
 	if strings.Contains(attentionCardText(t, s, "other-bb22"), "second line") {
 		t.Error("a row that is not selected draws more than the message's first line")
 	}
-	wantText(t, "other Project's request", attentionCardText(t, s, "other-bb22"), "other#bb22", "Review the schema", "pip/scout", "request", "c:vwxyz0", "Is this right?")
+	wantText(t, "other Project's request", attentionCardText(t, s, "other-bb22"), "other#bb22", "Review the schema", "pip/scout", "on a comment", "Is this right?")
 	wantText(t, "reply notice", attentionCardText(t, s, "work-cc33"), "work#cc33", "worker", "reply", "broadcast", "Run held: needs the owner")
 
 	text := wireTextOf(t, s)
@@ -136,12 +136,12 @@ func TestAttentionPageListsRequestsNewestFirstWithTheirSenderTagHandleAndFirstLi
 func TestAttentionPageSelectedRowShowsTheWholeMessageAndTheHeaderCountsRequestsAndSkipped(t *testing.T) {
 	s := attentionPageWith(t, attentionRequests(t), 2)
 	wantText(t, "selected row", attentionCardText(t, s, "work-aa11"), "Please deploy today", "second line of the message")
-	wantText(t, "page", wireTextOf(t, s), "for dana · 3 requests · 2 skipped")
+	wantText(t, "page", wireTextOf(t, s), "Attention", "3", "for dana · 2 unreadable")
 
 	one := attentionPageWith(t, attentionRequests(t)[:1], 0)
-	wantText(t, "page", wireTextOf(t, one), "for dana · 1 request")
-	if strings.Contains(wireTextOf(t, one), "skipped") {
-		t.Error("the header names skipped slots when none were skipped")
+	wantText(t, "page", wireTextOf(t, one), "Attention", "1", "for dana")
+	if strings.Contains(wireTextOf(t, one), "unreadable") {
+		t.Error("the header names unreadable slots when none were unreadable")
 	}
 }
 
@@ -163,7 +163,7 @@ func TestAttentionPageMovesTheSelectionWithTheArrowKeys(t *testing.T) {
 
 func TestAttentionPageSaysWhenNoRequestWaits(t *testing.T) {
 	s := attentionPageWith(t, nil, 0)
-	wantText(t, "empty Page", wireTextOf(t, s), "No requests", "Nothing is waiting on dana", "for dana · 0 requests")
+	wantText(t, "empty Page", wireTextOf(t, s), "No requests", "Requests addressed to dana appear here.", "Attention", "0", "for dana")
 }
 
 func TestAttentionPageFailedReadShowsKatasErrorAndKeepsTheRows(t *testing.T) {
@@ -175,11 +175,11 @@ func TestAttentionPageFailedReadShowsKatasErrorAndKeepsTheRows(t *testing.T) {
 	}
 	failed := step(t, out.State, model.AttentionLoaded{Request: load.Request, Err: errors.New("the daemon hiccuped")}).State
 	text := wireTextOf(t, failed)
-	wantText(t, "failed Page", text, "the daemon hiccuped", "work#aa11", "other#bb22", "work#cc33", "for dana · 3 requests")
+	wantText(t, "failed Page", text, "Cannot read the requests: the daemon hiccuped.", "work#aa11", "other#bb22", "work#cc33", "for dana")
 
 	again := step(t, failed, key("ctrl+r"))
 	recovered := answerAttention(t, again, attentionRequests(t)[:1], 0)
-	if strings.Contains(wireTextOf(t, recovered), "the daemon hiccuped") {
+	if strings.Contains(wireTextOf(t, recovered), "Cannot read the requests") {
 		t.Error("the error line stays after a good read")
 	}
 
@@ -190,8 +190,8 @@ func TestAttentionPageFailedReadShowsKatasErrorAndKeepsTheRows(t *testing.T) {
 		t.Fatalf("no attention read asked for: %#v", opened.Cmds)
 	}
 	first := step(t, opened.State, model.AttentionLoaded{Request: read.Request, Err: errors.New("no daemon")}).State
-	wantText(t, "first read failed", wireTextOf(t, first), "no daemon")
-	if strings.Contains(wireTextOf(t, first), "Nothing is waiting on dana") {
+	wantText(t, "first read failed", wireTextOf(t, first), "Cannot read the requests: no daemon.")
+	if strings.Contains(wireTextOf(t, first), "No requests") {
 		t.Error("a failed first read is drawn as an empty inbox")
 	}
 }
@@ -208,8 +208,8 @@ func TestAttentionPageRefusedAddressShowsTheReasonAndReadsNothing(t *testing.T) 
 		if _, asked := askedAttention(out.Cmds); asked {
 			t.Errorf("%s: a read was asked for", name)
 		}
-		wantText(t, name, wireTextOf(t, out.State), "refused")
-		if strings.Contains(wireTextOf(t, out.State), "Nothing is waiting on") || strings.Contains(wireTextOf(t, out.State), "requests ·") {
+		wantText(t, name, wireTextOf(t, out.State), "Cannot read your inbox:")
+		if strings.Contains(wireTextOf(t, out.State), "No requests") || strings.Contains(wireTextOf(t, out.State), "for dana") {
 			t.Errorf("%s: the Page draws a header or an empty inbox", name)
 		}
 		if _, asked := askedAttention(step(t, out.State, key("ctrl+r")).Cmds); asked {
@@ -328,7 +328,7 @@ func TestSixReturnsToTheAttentionPageAsItWas(t *testing.T) {
 	if got := back.State.Model.Attention; got.Selected != "other-bb22" || len(got.Requests) != 3 || got.Skipped != 2 {
 		t.Fatalf("state on return %+v, want the requests, the skip count and the selection kept", got)
 	}
-	wantText(t, "returned Page", wireTextOf(t, back.State), "for dana · 3 requests · 2 skipped", "other#bb22")
+	wantText(t, "returned Page", wireTextOf(t, back.State), "for dana · 2 unreadable", "other#bb22")
 	if _, ok := askedAttention(back.Cmds); !ok {
 		t.Error("returning to the Page reads no fresh requests")
 	}
@@ -424,7 +424,7 @@ func TestAClearedRequestLeavesTheListAndThePageReadsAgain(t *testing.T) {
 	if strings.Contains(wireTextOf(t, cleared.State), "work#aa11") {
 		t.Error("the cleared request is still drawn")
 	}
-	wantText(t, "header", wireTextOf(t, cleared.State), "for dana · 2 requests")
+	wantText(t, "header", wireTextOf(t, cleared.State), "Attention", "2", "for dana")
 	if _, ok := askedAttention(cleared.Cmds); !ok {
 		t.Error("no read asked for to confirm the clear")
 	}
@@ -439,13 +439,13 @@ func TestAClearThatFindsTheRequestChangedSaysSoAndReadsAgain(t *testing.T) {
 	s := attentionPageWith(t, attentionRequests(t), 0)
 	out := step(t, step(t, s, key("c")).State, model.AttentionCleared{UID: "work-aa11", Changed: true})
 	m := out.State.Model
-	if m.Notice != "The request changed meanwhile; nothing was cleared" {
+	if m.Notice != model.AttentionChangedNotice {
 		t.Fatalf("notice %q", m.Notice)
 	}
 	if len(m.Attention.Requests) != 3 {
 		t.Errorf("%d requests, want the row kept until the read shows the new value", len(m.Attention.Requests))
 	}
-	wantText(t, "page", wireTextOf(t, out.State), "nothing was cleared")
+	wantText(t, "page", wireTextOf(t, out.State), "Cannot clear the request: it changed meanwhile.")
 	if _, ok := askedAttention(out.Cmds); !ok {
 		t.Error("no reload asked for")
 	}
@@ -457,7 +457,7 @@ func TestAClearThatFindsTheRequestChangedSaysSoAndReadsAgain(t *testing.T) {
 func TestAClearThatFailsShowsTheDaemonsErrorAndKeepsTheRow(t *testing.T) {
 	s := attentionPageWith(t, attentionRequests(t), 0)
 	out := step(t, step(t, s, key("c")).State, model.AttentionCleared{UID: "work-aa11", Err: errors.New("the daemon refused")})
-	if out.State.Model.Notice != "the daemon refused" || len(out.State.Model.Attention.Requests) != 3 {
+	if out.State.Model.Notice != "Cannot clear the request: the daemon refused." || len(out.State.Model.Attention.Requests) != 3 {
 		t.Fatalf("notice %q, %d requests", out.State.Model.Notice, len(out.State.Model.Attention.Requests))
 	}
 	if len(askedClear(step(t, out.State, key("c")).Cmds)) != 1 {
@@ -773,7 +773,7 @@ func TestUOnTheAttentionPageRestoresTheDeletedIssueAndReadsTheRequestsAgain(t *t
 		t.Fatalf("u sent %#v, want one restore of a", out.Cmds)
 	}
 	back := step(t, out.State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoChanged, Ref: "a"})
-	if got := back.State.Model.Notice; got != "undid delete on #a" {
+	if got := back.State.Model.Notice; got != "Undid the delete on #a." {
 		t.Errorf("notice %q", got)
 	}
 	if _, asked := askedAttention(back.Cmds); !asked {
@@ -788,7 +788,7 @@ func TestUOnTheAttentionPageAfterAnAlreadyRestoredDeleteSaysSo(t *testing.T) {
 	out := pressU(t, attentionAfter(t, deleted("a")))
 	cmd := undoCmd(t, out)
 	back := step(t, out.State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoAlready, Ref: "a"})
-	if got := back.State.Model.Notice; got != "#a already restored; no change made" {
+	if got := back.State.Model.Notice; got != "#a is already restored." {
 		t.Fatalf("notice %q", got)
 	}
 }

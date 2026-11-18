@@ -21,7 +21,7 @@ func (WhatsNewShown) msg() {}
 // whatsNewShown says only why the notes were not shown: open notes, or none due, need no word.
 func whatsNewShown(m Model, msg WhatsNewShown) Model {
 	if msg.Err != nil {
-		m.Notice = "What's new in tern-kata " + msg.Version + " was not shown: " + oneLine(msg.Err.Error())
+		m = m.fail(Cannot("show", "what's new in tern-kata "+msg.Version, msg.Err))
 	}
 	return m
 }

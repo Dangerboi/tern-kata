@@ -36,3 +36,10 @@ ctl key backspace
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
 ctl key 1
 expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
+# Every list Page opens with its own head: the Page's name in the title, then a muted count and scope.
+for page_key in 2:Jobs 3:Runs 4:Workflows 6:Attention; do
+  ctl key "${page_key%%:*}"
+  expect_tree "[data-id^='main.columns.list'][data-id\$='.heading.title']" ".ok and .count == 1 and .nodes[0].text == \"${page_key#*:}\""
+done
+ctl key 1
+expect_tree "[data-id='main.columns.list.issues']" '.count == 1'

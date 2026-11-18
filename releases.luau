@@ -76,17 +76,16 @@ function M.toast(releaseText: string, own: string, toasted: string?): (string?, 
     if M.compare(release, own) ~= 1 then return nil, nil end
     if toasted ~= nil and M.compare(release, toasted) ~= 1 then return nil, nil end
     local ownText = own:match("^%s*v?(.-)%s*$") :: string
-    return "tern-kata v" .. release .. " is out (this window's plugin is v" .. ownText
-        .. "). Run Update tern-kata from the palette.", release
+    return "tern-kata v" .. release .. " is available (this window has v" .. ownText .. "). Run Update tern-kata.", release
 end
 
 function M.toggle(check: Check): (boolean, string)
     local off = not check.toggleOff
-    local text = off and "tern-kata update checks are off" or "tern-kata update checks are on"
+    local text = off and "tern-kata update checks are off." or "tern-kata update checks are on."
     if check.envOff then
-        text ..= ". TERN_KATA_NO_UPDATE_CHECK is set, which keeps checks off on this machine"
+        text ..= " TERN_KATA_NO_UPDATE_CHECK is set, which keeps checks off on this machine."
     elseif check.linked then
-        text ..= ". A linked plugin never checks"
+        text ..= " A linked plugin never checks."
     end
     return off, text
 end

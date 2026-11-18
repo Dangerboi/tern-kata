@@ -4,8 +4,12 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // ViewsState is what the Pane knows of views.toml: the saved views it read at start and each time the Menu opened, in file
@@ -85,17 +89,50 @@ const (
 	ProjectArchived = "archived"
 )
 
+// errViewsChanged is why a save or delete of a saved view is refused after another program wrote the file.
+var errViewsChanged = errors.New("views.toml changed since it was read")
+
 func viewsLoaded(m Model, msg ViewsLoaded) Model {
 	m.Views = ViewsState{List: msg.Views, Token: msg.Token, Err: msg.Err, Problems: msg.Problems, Deleting: m.Views.Deleting}
 	if _, ok := m.savedViewNamed(m.Views.Deleting); m.Views.Deleting != "" && !ok {
 		m.Views.Deleting = ""
 	}
-	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Saved views not read: %v", msg.Err)
-	} else if len(msg.Problems) > 0 {
-		m.Notice = fmt.Sprintf("Saved views left out: %v", msg.Problems[0])
-	}
 	return m.keepActiveView()
+}
+
+// problemName is the quoted name in a read problem's "[[view]] 2 ("name")" marker, "" when the text has none.
+var problemName = regexp.MustCompile(`\[\[view\]\] \d+ \(("(?:[^"\\]|\\.)*")\)`)
+
+// ViewsNote is the one line the Menu shows about views.toml: a failed read in full, else how many saved views the read skipped
+// and, for one, which and why. The path and the file's detail are on the Config Page. text is "" when there is nothing to say.
+func (m Model) ViewsNote() (text string, failed bool) {
+	if m.Views.Err != nil {
+		return Cannot("read", "saved views", m.Views.Err), true
+	}
+	problems := m.Views.Problems
+	if len(problems) == 0 {
+		return "", false
+	}
+	head := Count(len(problems), "saved view", "saved views") + " skipped"
+	if len(problems) > 1 {
+		return head + ".", false
+	}
+	var name string
+	if found := problemName.FindStringSubmatch(problems[0].Error()); found != nil {
+		name, _ = strconv.Unquote(found[1])
+	}
+	reason := Reason(problems[0])
+	var field ViewFieldError
+	if errors.As(problems[0], &field) {
+		reason = Reason(field.Err)
+	}
+	if first, size := utf8.DecodeRuneInString(reason); size < len(reason) && unicode.IsUpper(first) && !unicode.IsUpper([]rune(reason)[1]) {
+		reason = string(unicode.ToLower(first)) + reason[size:]
+	}
+	if name != "" {
+		reason = name + ": " + reason
+	}
+	return head + ": " + reason + ".", false
 }
 
 // keepActiveView forgets the view this Pane opened once the file no longer has it, or lists another view of that name (a
@@ -180,11 +217,9 @@ func (m Model) CurrentSavedView() string {
 func openSavedView(m Model, v SavedView) (Model, []Cmd) {
 	switch m.ViewBaseNote(v) {
 	case ProjectGone:
-		m.Notice = fmt.Sprintf("View %s: its Project is gone; nothing changed", v.Name)
-		return m, nil
+		return m.fail(fmt.Sprintf("Cannot open view %s: its Project is gone.", v.Name)), nil
 	case ProjectArchived:
-		m.Notice = fmt.Sprintf("View %s: its Project is archived; nothing changed", v.Name)
-		return m, nil
+		return m.fail(fmt.Sprintf("Cannot open view %s: its Project is archived.", v.Name)), nil
 	}
 	base := v.Base
 	if base.IsProject() {
@@ -192,8 +227,7 @@ func openSavedView(m Model, v SavedView) (Model, []Cmd) {
 		base = ProjectCollection(base.ProjectUID, entry.Project.Name)
 	}
 	if !slices.Contains(m.Collections, base) {
-		m.Notice = fmt.Sprintf("View %s: its Collection is not loaded yet; nothing changed", v.Name)
-		return m, nil
+		return m.fail(fmt.Sprintf("Cannot open view %s: its Collection is not loaded yet.", v.Name)), nil
 	}
 	filters := v.FiltersFor(m.Actor)
 	m.Picker, m.Focus = PickerState{}, ColumnList
@@ -253,8 +287,11 @@ func confirmDeleteView(m Model) (Model, []Cmd) {
 	}
 	m.Views.Deleting = ""
 	if m.Views.Token == nil {
-		m.Notice = "Saved views not deleted: " + cmp.Or(errText(m.Views.Err), "views.toml was not read")
-		return m, nil
+		reason := errors.New("views.toml was not read")
+		if m.Views.Err != nil {
+			reason = m.Views.Err
+		}
+		return m.fail(Cannot("delete", "saved views", reason)), nil
 	}
 	return m, []Cmd{DeleteView{Name: name, Token: m.Views.Token}}
 }
@@ -275,11 +312,11 @@ func viewDeleted(m Model, msg ViewDeleted) (Model, []Cmd) {
 	m = viewsLoaded(m, msg.Loaded)
 	switch {
 	case msg.Changed:
-		m.Notice = fmt.Sprintf("views.toml changed since it was read; view %s was not deleted", msg.Sent.Name)
+		m = m.fail(Cannot("delete", "view "+msg.Sent.Name, errViewsChanged))
 	case msg.Err != nil:
-		m.Notice = fmt.Sprintf("View %s not deleted: %v", msg.Sent.Name, msg.Err)
+		m = m.fail(Cannot("delete", "view "+msg.Sent.Name, msg.Err))
 	default:
-		m.Notice = "Deleted view " + msg.Sent.Name
+		m = m.say("Deleted view " + msg.Sent.Name + ".")
 	}
 	m.clampMenuCursors()
 	return m, nil
@@ -300,18 +337,17 @@ func viewSaved(m Model, msg ViewSaved) (Model, []Cmd) {
 			m.ViewForm.Saving = false
 			m.ViewForm.Err = msg.Err
 			if msg.Changed {
-				m.ViewForm.Err = errors.New("views.toml changed since it was read; the view was not saved. Check the name and save again")
+				m.ViewForm.Err = errViewsChanged
 			}
 		case msg.Changed:
-			m.Notice = fmt.Sprintf("views.toml changed since it was read; view %s was not saved", msg.Sent.View.Name)
+			m = m.fail(Cannot("save", "view "+msg.Sent.View.Name, errViewsChanged))
 		default:
-			m.Notice = fmt.Sprintf("View %s not saved: %v", msg.Sent.View.Name, msg.Err)
+			m = m.fail(Cannot("save", "view "+msg.Sent.View.Name, msg.Err))
 		}
 		return m, nil
 	}
 	if !ours {
-		m.Notice = "Saved view " + msg.Sent.View.Name
-		return m, nil
+		return m.say("Saved view " + msg.Sent.View.Name + "."), nil
 	}
 	m.ViewForm = ViewFormState{}
 	saved, ok := m.savedViewNamed(msg.Sent.View.Name)

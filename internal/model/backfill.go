@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -143,7 +142,7 @@ func backfillJobsRead(m Model, msg JobsLoaded) (Model, []Cmd) {
 	issue := m.Backfill.Issue
 	m.Backfill = BackfillState{}
 	if msg.Err != nil {
-		m.Notice = "Could not read the Issue's Cron jobs, so nothing was reopened: " + msg.Err.Error()
+		m = m.fail("Cannot read the Issue's jobs, so nothing was reopened: " + Reason(msg.Err) + ".")
 		return m, nil
 	}
 	var jobs []CronJob
@@ -174,7 +173,7 @@ func backfillKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.Stale {
-		m.Backfill.Err = errors.New("Daemon disconnected; reconnect before changing a job.")
+		m.Backfill.Err = cardFailure("change", "the job", ErrDisconnected)
 		return m, nil
 	}
 	m.Backfill.Err = nil
@@ -249,7 +248,7 @@ func backfillWritten(m Model, msg JobWritten) (Model, []Cmd, bool) {
 	switch {
 	case msg.Err != nil:
 		m.Jobs.Writing = ""
-		m.Backfill.Err = msg.Err
+		m.Backfill.Err = cardFailure("change", "the job", msg.Err)
 		return m, nil, true
 	case msg.Changed != nil:
 		m.Backfill = BackfillState{}
@@ -272,19 +271,65 @@ func backfillWritten(m Model, msg JobWritten) (Model, []Cmd, bool) {
 	m, cmds := finishBackfill(m)
 	switch kind {
 	case BackfillResume:
-		m.Notice = fmt.Sprintf("Switched job %q to the latest missed run and resumed it.", msg.Job.Name)
+		m = m.say(fmt.Sprintf("Resumed %q with only its latest missed run.", msg.Job.Name))
 	case BackfillRestore:
-		m.Notice = fmt.Sprintf("Switched job %q to the latest missed run and restored it.", msg.Job.Name)
+		m = m.say(fmt.Sprintf("Restored %q with only its latest missed run.", msg.Job.Name))
 	}
 	return m, cmds, true
 }
 
 func MissedWords(n int) string {
-	switch {
-	case n >= maxMissedCount:
-		return strconv.Itoa(maxMissedCount) + " or more missed runs"
-	case n == 1:
-		return "1 missed run"
+	return "missed " + RunWords(n)
+}
+
+// RunWords is a number of runs in words; at the cap the real count is unknown, so it reads "or more".
+func RunWords(n int) string {
+	if n >= maxMissedCount {
+		return strconv.Itoa(maxMissedCount) + " or more runs"
 	}
-	return strconv.Itoa(n) + " missed runs"
+	return Count(n, "run", "runs")
+}
+
+// Verb is what the card's answer goes on to do, as the card's pending line and its sentence say it.
+func (b BackfillState) Verb() string {
+	switch b.For {
+	case BackfillRestore:
+		return "Restoring"
+	case BackfillSave:
+		return "Saving"
+	case BackfillReopen:
+		return "Reopening"
+	}
+	return "Resuming"
+}
+
+// Head is the card's question: how many child Issues answering "create" makes at once.
+func (b BackfillState) Head() string {
+	n := b.Total()
+	if n >= maxMissedCount {
+		return "Create " + strconv.Itoa(maxMissedCount) + " or more missed Issues?"
+	}
+	return "Create " + Count(n, "missed Issue", "missed Issues") + "?"
+}
+
+// BackfillSentence is the one sentence the card warns with. A single job is named in it; several jobs, which only a reopen
+// has, are named in the rows under it.
+func (m Model) BackfillSentence() string {
+	b := m.Backfill
+	verb := b.Verb()
+	if b.For == BackfillReopen {
+		ref := m.RefName(b.Issue.ProjectName, b.Issue.ShortID)
+		if b.Total() == 1 {
+			return verb + " " + ref + " creates the Issue its job missed."
+		}
+		return verb + " " + ref + " creates the Issues its jobs missed, all of them or only the latest of each."
+	}
+	if len(b.Jobs) == 1 {
+		job := b.Jobs[0]
+		if job.Missed == 1 {
+			return fmt.Sprintf("%s missed 1 run. %s creates it now.", job.Job.Name, verb)
+		}
+		return fmt.Sprintf("%s missed %s. %s creates all of them now, or only the latest.", job.Job.Name, RunWords(job.Missed), verb)
+	}
+	return verb + " creates the Issues its jobs missed, all of them or only the latest of each."
 }

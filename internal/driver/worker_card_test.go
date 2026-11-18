@@ -81,12 +81,12 @@ func TestWorkerCardStatesAndWhatEachOffers(t *testing.T) {
 		field  bool // the setup fields are drawn
 		trust  bool // the trust choice is drawn
 	}{
-		{"no file", nil, noWorkerFile, []string{"none yet", "Project: work", "checkout /repo", "not running", "the plugin starts a worker once a worker.toml loads"}, true, true},
-		{"file that does not load", nil, brokenFile, []string{"does not load: worker.toml: unknown key bogus"}, false, false},
-		{"file without the Project", nil, otherProject, []string{"loads, and does not list work"}, false, true},
-		{"file with the Project, worker supervised", supervisedHere, listedProject, []string{"loads, lists work", "process 4242", "the plugin starts it again when it exits"}, false, false},
-		{"file with the Project at another checkout", supervisedHere, mappedElsewhere, []string{"loads, lists work with checkout /elsewhere"}, false, false},
-		{"marker", nil, manual(listedProject), []string{worker.ManualFileName + " is present: the plugin neither starts nor restarts"}, false, false},
+		{"no file", nil, noWorkerFile, []string{"not created", "/cfg/tern-kata/worker.toml", "/repo", "not running", "Will serve work from"}, true, true},
+		{"file that does not load", nil, brokenFile, []string{"broken", "unknown key bogus"}, false, false},
+		{"file without the Project", nil, otherProject, []string{"does not list work"}, false, true},
+		{"file with the Project, worker supervised", supervisedHere, listedProject, []string{"ok", "running as laptop", "idle"}, false, false},
+		{"file with the Project at another checkout", supervisedHere, mappedElsewhere, []string{"Mapped to", "/elsewhere"}, false, false},
+		{"marker", nil, manual(listedProject), []string{"is present, so the plugin neither starts nor restarts"}, false, false},
 		{"worker started by hand", &model.WorkerStatus{Executor: "laptop", PID: 7}, listedProject, []string{"started by hand"}, false, false},
 		{"folder bound to no Project", nil, unboundFolder, []string{"not bound to a kata Project", "kata init"}, false, false},
 	} {
@@ -113,7 +113,7 @@ func TestWorkerCardSetUpFieldsStartAsWorkerInitWouldAndCommandStartsBlank(t *tes
 	if !strings.HasPrefix(s.Focus, layerTitled(t, s.Model, "Worker")) {
 		t.Errorf("text focus %q is not on the Worker card", s.Focus)
 	}
-	wantText(t, "card", wireTextOf(t, s), "checkout /repo", "Anyone who can write jobs")
+	wantText(t, "card", wireTextOf(t, s), "Will serve work from", "/repo", "Anyone who can write jobs")
 }
 
 func TestWorkerCardCommandFieldShowsTheDefaultAsItsPlaceholder(t *testing.T) {
@@ -202,7 +202,7 @@ func TestWorkerCardRefusesABlankExecutorNamingTheField(t *testing.T) {
 
 func TestWorkerCardServeNeedsOnlyTheTrustChoiceAndAddsTheProject(t *testing.T) {
 	s := workerCardOpen(t, nil, otherProject)
-	wantText(t, "card", wireTextOf(t, s), "Serving lists work with checkout /repo")
+	wantText(t, "card", wireTextOf(t, s), "Will serve work from", "/repo")
 	if s.Model.WorkerCard.Field != model.WorkerFieldTrust {
 		t.Fatalf("focus %q, want the trust choice, the only field", s.Model.WorkerCard.Field)
 	}
@@ -260,14 +260,14 @@ func TestWorkerCardAfterASaveWithNoWorkerSaysThePluginStartsOne(t *testing.T) {
 		want  string
 	}{
 		{"supervised", noWorkerFile, "starts the worker within 10 seconds"},
-		{"marker", manual(noWorkerFile), worker.ManualFileName + " is present, so the plugin does not start the worker"},
+		{"marker", manual(noWorkerFile), "is present, so the plugin does not start the worker"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := workerCardOpen(t, nil, tt.setup)
 			s = step(t, s, model.ChooseMsg{Field: model.WorkerFieldTrust, Index: 1}).State
 			sent := step(t, s, key("ctrl+o"))
 			done := step(t, sent.State, model.WorkerSetupSaved{Project: "work", Key: "work"})
-			wantText(t, "card", wireTextOf(t, done.State), "worker.toml written (checkout work)", tt.want)
+			wantText(t, "card", wireTextOf(t, done.State), "worker.toml written.", tt.want)
 			if done.State.Model.CurrentMode() != model.ModeWorkerRead || done.State.Model.WorkerCard.Restart {
 				t.Errorf("mode %s restart %v, want the plain card", done.State.Model.CurrentMode(), done.State.Model.WorkerCard.Restart)
 			}
@@ -294,7 +294,7 @@ func TestWorkerCardAfterASaveWithAWorkerRunningOffersARestartThatSendsTheStopReq
 	if s.Model.CurrentMode() != model.ModeWorkerRestart {
 		t.Fatalf("mode %s, want the restart question", s.Model.CurrentMode())
 	}
-	wantText(t, "card", wireTextOf(t, s), "Restart when idle", "Restart now", "1 run in flight (Triage)", "held `interrupted`", "reads worker.toml only at start")
+	wantText(t, "card", wireTextOf(t, s), "Restart when idle: takes no new run and exits after its 1 run in flight", "Restart now: exits at once and holds the run", "reads worker.toml only at start")
 
 	idle := step(t, s, key("i"))
 	if !reflect.DeepEqual(idle.Cmds, []model.Cmd{model.StopWorker{Mode: "idle"}}) {
@@ -314,7 +314,7 @@ func TestWorkerCardAfterASaveWithAWorkerRunningOffersARestartThatSendsTheStopReq
 		t.Errorf("the card stayed open after the stop")
 	}
 	unsupervised := step(t, now.State, model.WorkerStopped{Mode: "now"})
-	wantText(t, "notice", unsupervised.State.Model.Notice, "ending now", "held `interrupted`", "nothing starts it again")
+	wantText(t, "notice", unsupervised.State.Model.Notice, "ending now", "holds its runs", "nothing starts it again")
 
 	refused := step(t, idle.State, model.WorkerStopped{Mode: "idle", Err: errors.New("the worker is stopping")})
 	if refused.State.Model.TopCard() != model.CardWorker || refused.State.Model.WorkerCard.Err == nil {
@@ -333,14 +333,14 @@ func TestJobsPageBannerPerWorkerState(t *testing.T) {
 		setup  model.WorkerSetup
 		want   string
 	}{
-		{"no file", nil, noWorkerFile, "No worker is set up on this machine: press W to set one up for work"},
-		{"file does not load", nil, brokenFile, "worker.toml does not load, so no worker can start: press W"},
-		{"file without the Project", nil, otherProject, "worker.toml does not list work, so no worker serves it: press W to serve it"},
-		{"manual", nil, manual(listedProject), worker.ManualFileName + " keeps the plugin from starting one"},
-		{"plugin starts it", nil, listedProject, "the plugin starts one within 10 seconds (W shows the setup)"},
-		{"running and serving", servingWorker(), listedProject, "running and serving work: 1 of 2 slots in use (W: worker)"},
-		{"running without the Project", &model.WorkerStatus{Executor: "laptop"}, otherProject, "does not serve work; press W to serve it, then restart the worker"},
-		{"running, file lists it", &model.WorkerStatus{Executor: "laptop"}, listedProject, "though worker.toml lists it; restart the worker"},
+		{"no file", nil, noWorkerFile, "none set up for work"},
+		{"file does not load", nil, brokenFile, "worker.toml does not load"},
+		{"file without the Project", nil, otherProject, "worker.toml does not list work"},
+		{"manual", nil, manual(listedProject), "supervision is off, so none starts by itself"},
+		{"plugin starts it", nil, listedProject, "the plugin starts one within 10 seconds"},
+		{"running and serving", servingWorker(), listedProject, "1 of 2 slots in use"},
+		{"running without the Project", &model.WorkerStatus{Executor: "laptop"}, otherProject, "does not serve work; not listed in worker.toml"},
+		{"running, file lists it", &model.WorkerStatus{Executor: "laptop"}, listedProject, "does not serve work; restart it to pick up worker.toml"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := jobsPaneWithWorker(t, tt.status, promptJob("A1", "Triage"))
@@ -379,15 +379,15 @@ func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 			}
 		}
 	}
-	if line == nil || !slices.Contains(line.Keys, "W") {
+	if line == nil || !slices.Contains(line.Keys, "⇧W") {
 		t.Errorf("the help sheet's Jobs group lists no W line for the Worker card: %+v", line)
 	}
 	var footer []string
 	for binding := range model.BindingsForMode(model.ModeJobs, true) {
 		footer = append(footer, binding.Key)
 	}
-	if !slices.Contains(footer, "W") {
-		t.Errorf("the Jobs footer %v lacks W", footer)
+	if !slices.Contains(footer, "⇧W") {
+		t.Errorf("the Jobs footer %v lacks ⇧W", footer)
 	}
 }
 
@@ -405,15 +405,21 @@ func TestWorkerCardFooterListsOnlyTheKeysThatActInTheState(t *testing.T) {
 			t.Errorf("read-only footer %v lists %s, which does nothing there", read, k)
 		}
 	}
+	// The card's buttons carry e, s and esc (Edit, supervision, Close), so the dock does not repeat them.
 	for _, k := range []string{"e", "s", "esc"} {
-		if !slices.Contains(read, k) {
-			t.Errorf("read-only footer %v lacks %s", read, k)
+		if slices.Contains(read, k) {
+			t.Errorf("read-only footer %v repeats %s, which a button of the card presses", read, k)
 		}
 	}
 	fields := footer(workerCardOpen(t, nil, noWorkerFile))
-	for _, k := range []string{"tab", "ctrl+o", "right", "esc"} {
+	for _, k := range []string{"tab", "right"} {
 		if !slices.Contains(fields, k) {
 			t.Errorf("field footer %v lacks %s", fields, k)
+		}
+	}
+	for _, k := range []string{"ctrl+o", "esc"} {
+		if slices.Contains(fields, k) {
+			t.Errorf("field footer %v repeats %s, which a button of the card presses", fields, k)
 		}
 	}
 }
@@ -452,7 +458,7 @@ func TestWorkerCardRefusedEditKeepsTheTextAndNamesTheProblem(t *testing.T) {
 	sent := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: bad})
 	refused := step(t, sent.State, model.WorkerEdited{Text: bad, Err: errors.New("worker.toml: unknown key bogus")})
 	msg, _ := errorOnCard(t, refused.State.Model)
-	if refused.State.Model.TopCard() != model.CardWorker || !strings.Contains(msg, "unknown key bogus") || !strings.Contains(msg, "not saved") {
+	if refused.State.Model.TopCard() != model.CardWorker || !strings.Contains(msg, "unknown key bogus") || !strings.Contains(msg, "Cannot save worker.toml") || !strings.Contains(msg, "Your text is kept") {
 		t.Fatalf("card %v error %q, want the card kept with the problem named", refused.State.Model.TopCard(), msg)
 	}
 	again := step(t, refused.State, key("e"))
@@ -479,7 +485,7 @@ func TestWorkerCardEditOfAFileThatChangedKeepsTheTextReadsTheSetupAgainAndSaysSo
 	sent := step(t, opened.State, model.DraftEditorClosed{UID: model.WorkerDraftUID, Text: mine})
 	refused := step(t, sent.State, model.WorkerEdited{Text: mine, Err: worker.ErrConfigChanged})
 	msg, _ := errorOnCard(t, refused.State.Model)
-	for _, want := range []string{"changed", "lacks that change"} {
+	for _, want := range []string{"changed", "Your text is kept"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error %q lacks %q", msg, want)
 		}
@@ -526,7 +532,7 @@ func TestWorkerCardSupervisionOffWithNoWorkerWritesTheMarkerAtOnce(t *testing.T)
 		t.Fatalf("s sent %#v, want the marker written with no stop", off.Cmds)
 	}
 	done := step(t, off.State, model.WorkerSupervisionSet{Manual: true})
-	wantText(t, "card", wireTextOf(t, done.State), "Supervision is off: "+worker.ManualFileName+" is created", "the plugin starts no worker", "Turn supervision on")
+	wantText(t, "card", wireTextOf(t, done.State), "Supervision is off: the plugin starts no worker", "Turn supervision on")
 	if !slices.Contains(done.Cmds, model.Cmd(askedSetup)) || done.State.Model.TopCard() != model.CardWorker {
 		t.Errorf("cmds %#v card %v, want the setup read again and the card open", done.Cmds, done.State.Model.TopCard())
 	}
@@ -540,7 +546,7 @@ func TestWorkerCardSupervisionOffWithAWorkerRunningAsksHowToStopIt(t *testing.T)
 	if len(asked.Cmds) != 0 || asked.State.Model.CurrentMode() != model.ModeWorkerOff {
 		t.Fatalf("s: cmds %#v mode %s, want the question and no write yet", asked.Cmds, asked.State.Model.CurrentMode())
 	}
-	wantText(t, "card", wireTextOf(t, asked.State), "Stop when idle", "Stop now", "1 run in flight (Triage)", "held `interrupted`")
+	wantText(t, "card", wireTextOf(t, asked.State), "Stop when idle: takes no new run and exits after its 1 run in flight", "Stop now: exits at once and holds the run")
 
 	idle := step(t, asked.State, key("i"))
 	if !reflect.DeepEqual(idle.Cmds, []model.Cmd{model.SetWorkerSupervision{Manual: true, Stop: "idle"}}) {
@@ -555,11 +561,11 @@ func TestWorkerCardSupervisionOffWithAWorkerRunningAsksHowToStopIt(t *testing.T)
 	}
 
 	done := step(t, idle.State, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "idle", InFlight: 1}})
-	wantText(t, "card", wireTextOf(t, done.State), worker.ManualFileName+" is created", "finishes its 1 run in flight", "nothing starts it again")
+	wantText(t, "card", wireTextOf(t, done.State), "Supervision is off", "finishes its 1 run in flight", "nothing starts it again")
 	ended := step(t, now.State, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "now", InFlight: 1}})
-	wantText(t, "card", wireTextOf(t, ended.State), "ending now", "1 run in flight (Triage)", "held `interrupted`")
+	wantText(t, "card", wireTextOf(t, ended.State), "ending now", "1 run in flight", "held to resume later")
 	refused := step(t, idle.State, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "idle", Err: errors.New("busy")}})
-	wantText(t, "card", wireTextOf(t, refused.State), worker.ManualFileName+" is created", "The stop was refused: busy")
+	wantText(t, "card", wireTextOf(t, refused.State), "Supervision is off", "Cannot stop the worker: busy")
 
 	kept := step(t, asked.State, key("escape"))
 	if kept.State.Model.TopCard() != model.CardWorker || len(kept.Cmds) != 0 || kept.State.Model.CurrentMode() != model.ModeWorkerRead {
@@ -567,13 +573,13 @@ func TestWorkerCardSupervisionOffWithAWorkerRunningAsksHowToStopIt(t *testing.T)
 	}
 }
 
-// With no run in flight neither the question nor the answer claims a run is held `interrupted`.
+// With no run in flight neither the question nor the answer claims a run is held.
 func TestWorkerCardSupervisionOffWithNoRunInFlightPromisesNoHeldRun(t *testing.T) {
 	asked := step(t, workerCardOpen(t, supervisedHere, listedProject), key("s")).State
 	now := step(t, asked, key("n")).State
 	ended := step(t, now, model.WorkerSupervisionSet{Manual: true, Stop: &model.WorkerStopped{Mode: "now"}}).State
 	for name, s := range map[string]driver.State{"question": asked, "answer": ended} {
-		if text := wireTextOf(t, s); strings.Contains(text, "held `interrupted`") {
+		if text := wireTextOf(t, s); strings.Contains(text, "holds the run") || strings.Contains(text, "to resume later") {
 			t.Errorf("%s says a run is held: %s", name, text)
 		}
 	}
@@ -583,7 +589,7 @@ func TestWorkerCardSupervisionOffWithNoRunInFlightPromisesNoHeldRun(t *testing.T
 
 func TestWorkerCardSupervisionOnRemovesTheMarkerAndSaysThePluginStartsTheWorker(t *testing.T) {
 	s := workerCardOpen(t, nil, manual(listedProject))
-	wantText(t, "card", wireTextOf(t, s), "Turn supervision on", worker.ManualFileName+" is present")
+	wantText(t, "card", wireTextOf(t, s), "Turn supervision on", "is present")
 	on := step(t, s, key("s"))
 	if !reflect.DeepEqual(on.Cmds, []model.Cmd{model.SetWorkerSupervision{Manual: false}}) {
 		t.Fatalf("s sent %#v, want the marker removed", on.Cmds)
@@ -606,5 +612,5 @@ func TestWorkerCardTypesSWhileFieldsAreDrawn(t *testing.T) {
 func TestJobsPageBannerShowsSupervisionOffForARunningWorker(t *testing.T) {
 	s := jobsPaneWithWorker(t, servingWorker(), promptJob("A1", "Triage"))
 	s = step(t, s, model.WorkerSetupLoaded{Setup: manual(listedProject)}).State
-	wantText(t, "Jobs Page", wireTextOf(t, s), "running and serving work", "Supervision is off ("+worker.ManualFileName+")")
+	wantText(t, "Jobs Page", wireTextOf(t, s), "slots in use", "supervision is off")
 }

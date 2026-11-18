@@ -175,9 +175,9 @@ func teamsDriven(m Model, msg TeamsDriven) (Model, []Cmd) {
 	}
 	switch {
 	case len(msg.Failures) > 0:
-		m.Notice = msg.Failures[0]
+		m = m.fail(msg.Failures[0])
 	case msg.Err != nil:
-		m.Notice = fmt.Sprintf("Cannot drive the teams: %s", msg.Err)
+		m = m.fail(Cannot("drive", "the teams", msg.Err))
 	}
 	var cmds []Cmd
 	if m.teamDrive.again {
@@ -203,15 +203,16 @@ func (m Model) mapStarted(e AgentEntry) Model {
 
 func teamStarted(m Model, msg TeamStarted) (Model, []Cmd) {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot start a team on %s: %s", msg.IssueRef, msg.Err)
+		m = m.fail(Cannot("start", "a team on "+msg.IssueRef, msg.Err))
 		return m, nil
 	}
 	m = m.mapStarted(msg.Entry)
 	_, where := msg.Placement.words()
-	m.Notice = fmt.Sprintf("Started a team on %s: its coordinator is in %s.", msg.IssueRef, where)
+	text := fmt.Sprintf("Started a team on %s: its coordinator is in %s.", msg.IssueRef, where)
 	if msg.Note != "" {
-		m.Notice += " But " + msg.Note
+		text += " But " + msg.Note
 	}
+	m = m.say(text)
 	m, cmds := driveTeams(m, true)
 	return restartAgentSessions(m, cmds)
 }

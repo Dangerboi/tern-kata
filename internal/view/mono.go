@@ -1,13 +1,8 @@
 package view
 
-import (
-	"regexp"
-	"strings"
+import "strings"
 
-	"github.com/stencil-hq/tern-sdk/go/tern/ui"
-)
-
-// MonoRole marks a badge whose text is a machine string (an Issue ref, a priority, a date); MonoCSS draws it in the mono
+// MonoRole marks an Issue-id badge (priority and date badges are sans); MonoCSS draws it in the mono
 // face, as the `mono` span token does for a span, since a badge takes no span styles.
 const MonoRole = "tern-kata.mono"
 
@@ -16,21 +11,3 @@ const MonoRole = "tern-kata.mono"
 const MonoCSS = `.sf-badge[data-role~='` + MonoRole + `'] { font-family: var(--mono); font-size: 10px; }`
 
 func mono(style string) string { return strings.TrimSpace(style + " mono") }
-
-var machineString = regexp.MustCompile(`\d{4}-\d\d-\d\d(?: \d\d:\d\d)?|\d+[smhd](?: \d+[smhd])*(?: ago)?|#?[\w.:/\-]*\d[\w.:/\-]*(?: ago)?`)
-
-func monoSpans(text, style string) []ui.Span {
-	var spans []ui.Span
-	at := 0
-	for _, loc := range machineString.FindAllStringIndex(text, -1) {
-		if loc[0] > at {
-			spans = append(spans, ui.Span{T: text[at:loc[0]], S: style})
-		}
-		spans = append(spans, ui.Span{T: text[loc[0]:loc[1]], S: mono(style)})
-		at = loc[1]
-	}
-	if at < len(text) {
-		spans = append(spans, ui.Span{T: text[at:], S: style})
-	}
-	return spans
-}

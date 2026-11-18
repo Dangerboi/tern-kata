@@ -30,7 +30,7 @@ func TestUnboundSidebarGoesWhenAProjectIsEntered(t *testing.T) {
 		t.Fatalf("Project entered: columns %v bound %v", got, entered.Bound)
 	}
 
-	reopened, _ := menuKeys(entered, "enter", "down", "enter")
+	reopened, _ := menuKeys(entered, "enter", "enter")
 	if reopened.Collection.View != "inbox" || reopened.Picker.Open || !reflect.DeepEqual(reopened.VisibleColumns(), sidebarShown) {
 		t.Fatalf("fixed Collection again: %+v columns %v", reopened.Collection, reopened.VisibleColumns())
 	}

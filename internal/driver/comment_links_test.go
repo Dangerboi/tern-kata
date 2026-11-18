@@ -30,8 +30,14 @@ func withLinks(t *testing.T) driver.State {
 func chosenLink(t *testing.T, s driver.State) string {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if text := wireText(n); strings.Contains(text, `"link `) && strings.Contains(text, "/") {
-			return text
+		spans, _ := n.P["spans"].([]any)
+		if text := wireText(n); !strings.Contains(text, `"Links: "`) {
+			continue
+		}
+		for _, span := range spans {
+			if fields, _ := span.(map[string]any); fields["s"] == "accent" {
+				return fields["t"].(string)
+			}
 		}
 	}
 	return ""
@@ -59,12 +65,12 @@ func TestBracketsStepThroughACommentsLinksAndWrap(t *testing.T) {
 
 func TestTheCommentRowMarksTheChosenLink(t *testing.T) {
 	s := withLinks(t)
-	if got := chosenLink(t, s); !strings.Contains(got, "link 1/2: eli confirms") {
-		t.Fatalf("marked link %q, want link 1/2: eli confirms", got)
+	if got := chosenLink(t, s); !strings.Contains(got, "eli confirms") {
+		t.Fatalf("marked link %q, want eli confirms", got)
 	}
 	s = feed(t, s, key("]")).State
-	if got := chosenLink(t, s); !strings.Contains(got, "link 2/2: fay refutes in #bbbb") {
-		t.Fatalf("marked link %q, want link 2/2: fay refutes in #bbbb", got)
+	if got := chosenLink(t, s); !strings.Contains(got, "fay refutes in #bbbb") {
+		t.Fatalf("marked link %q, want fay refutes in #bbbb", got)
 	}
 	if s = feed(t, s, key("j"), key("j")).State; chosenLink(t, s) != "" {
 		t.Fatalf("a comment without links marks %q", chosenLink(t, s))

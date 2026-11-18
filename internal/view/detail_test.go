@@ -27,7 +27,7 @@ func tabLabels(nodes shown) []string {
 	return labels
 }
 
-// detailWithActivity is alpha with 2 comments, 3 events and 1 Link.
+// detailWithActivity is alpha with 2 comments, 3 events (the created one is not listed, so Events shows 2) and 1 Link.
 func detailWithActivity(tab model.ActivityTab) model.Model {
 	at := time.Date(2026, 10, 8, 18, 5, 5, 0, time.UTC)
 	selected := &model.IssueDetailData{Issue: &alpha,
@@ -39,16 +39,16 @@ func detailWithActivity(tab model.ActivityTab) model.Model {
 }
 
 func TestActivityTabsShowCountsAndMarkTheActiveOne(t *testing.T) {
-	counts := [model.TabCount]int{model.TabComments: 2, model.TabEvents: 3, model.TabLinks: 1, model.TabAttachments: 0}
+	counts := [model.TabCount]int{model.TabComments: 2, model.TabEvents: 2, model.TabLinks: 1, model.TabAttachments: 0}
 	for active := range model.TabCount {
 		tt := struct {
 			tab  model.ActivityTab
 			want []string
 		}{active, nil}
 		for tab := range model.TabCount {
-			label := fmt.Sprintf("%s (%d)", tab, counts[tab])
-			if tab == active {
-				label = "[ " + label + " ]"
+			label := tab.String()
+			if counts[tab] > 0 {
+				label = fmt.Sprintf("%s %d", tab, counts[tab])
 			}
 			tt.want = append(tt.want, label)
 		}
@@ -56,14 +56,17 @@ func TestActivityTabsShowCountsAndMarkTheActiveOne(t *testing.T) {
 		if got := tabLabels(nodes); !slices.Equal(got, tt.want) {
 			t.Errorf("tab %v: labels %v, want %v", tt.tab, got, tt.want)
 		}
-		if text(nodes[view.DetailActivityID+".tabs.name"]) != "Activity" {
-			t.Error("no Activity heading")
+		if _, ok := nodes[view.DetailActivityID+".tabs.name"]; ok {
+			t.Error("the tab row still has an Activity heading")
 		}
 		for tab := range model.TabCount {
 			n := nodes[view.DetailActivityID+".tabs.tab"+strconv.Itoa(int(tab))]
 			style := spansOf(n.P)[0][1]
 			if (tab == tt.tab) != strings.Contains(style, "accent") {
 				t.Errorf("tab %v active=%v is styled %q", tab, tab == tt.tab, style)
+			}
+			if role, _ := n.P["role"].(string); (tab == tt.tab) != strings.Contains(role, view.ActiveTabRole) {
+				t.Errorf("tab %v active=%v has role %q", tab, tab == tt.tab, role)
 			}
 			if click := n.P["actions"].(map[string]any)["click"]; click != view.ActivityTabClick(tab) {
 				t.Errorf("tab %v click %v", tab, click)
@@ -78,7 +81,7 @@ func TestOnlyTheActiveTabsRowsRender(t *testing.T) {
 		rows []string
 	}{
 		{model.TabComments, []string{"c1", "c2"}},
-		{model.TabEvents, []string{"e3", "e2", "e1"}}, // the snapshot lists History newest first
+		{model.TabEvents, []string{"e3", "e2"}}, // the snapshot lists History newest first; the created event is not a row
 		{model.TabLinks, []string{"7"}},
 	} {
 		nodes := render(t, detailWithActivity(tt.tab))
@@ -96,9 +99,14 @@ func TestOnlyTheActiveTabsRowsRender(t *testing.T) {
 
 func TestEmptyActivityTabsSaySo(t *testing.T) {
 	for tab := range model.TabCount {
-		want := map[model.ActivityTab]string{model.TabComments: "No comments.", model.TabEvents: "No events.", model.TabLinks: "No links.", model.TabAttachments: "No attachments, @ to attach"}[tab]
+		want := map[model.ActivityTab]string{
+			model.TabComments:    "No comments" + "Press C to add one.",
+			model.TabEvents:      "No events" + "Events appear as the Issue changes.",
+			model.TabLinks:       "No links" + "Press B or L to add one.",
+			model.TabAttachments: "No attachments" + "Press @ to attach a file.",
+		}[tab]
 		nodes := render(t, apply(browsing(), model.ActivityTabMsg{Tab: tab}))
-		if got := text(nodes[view.DetailActivityID+".empty"]); got != want {
+		if got := text(nodes[view.DetailActivityID+".empty.title"]) + text(nodes[view.DetailActivityID+".empty.hint"]); got != want {
 			t.Errorf("tab %v says %q, want %q", tab, got, want)
 		}
 	}
@@ -111,14 +119,14 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 		issue            model.Issue
 		status, priority string
 	}{
-		{"open P1", model.Issue{UID: "a", ShortID: "aaaa", Title: "A", Status: "open", Priority: &p1, Labels: []string{"bug", "ui"}}, "accent", "warning"},
+		{"open P1", model.Issue{UID: "a", ShortID: "aaaa", Title: "A", Status: "open", Priority: &p1, Labels: []string{"bug", "ui"}}, "", "warning"},
 		{"closed P3", model.Issue{UID: "a", ShortID: "aaaa", Title: "A", Status: "closed", Priority: &p3, Labels: []string{"bug", "ui"}}, "muted", "muted"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &tt.issue}})
 			nodes := render(t, m)
 			props := view.DetailContentID + ".properties"
-			if n := nodes[view.DetailContentID+".heading.status"]; n.P["tone"] != tt.status || text(n) != tt.issue.Status {
+			if n := nodes[view.DetailContentID+".heading.status"]; fmt.Sprint(n.P["tone"]) != fmt.Sprint(orNil(tt.status)) || text(n) != tt.issue.Status {
 				t.Errorf("status badge: %v", n)
 			}
 			if n := nodes[props+".priority.v"]; n.P["tone"] != tt.priority || !strings.HasPrefix(text(n), "P") {
@@ -134,17 +142,25 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 	}
 }
 
+// orNil is the value a node's tone prop holds for tone: an empty tone is left out of the wire node.
+func orNil(tone string) any {
+	if tone == "" {
+		return nil
+	}
+	return tone
+}
+
 func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T) {
 	nodes := detailNodes(t, alpha)
-	if got := text(nodes[view.DetailContentID+".heading.title"]); got != "#aaaa - Alpha" {
-		t.Errorf("title %q, want %q", got, "#aaaa - Alpha")
+	if got := text(nodes[view.DetailContentID+".heading.title"]); got != "#aaaa Alpha" {
+		t.Errorf("title %q, want %q", got, "#aaaa Alpha")
 	}
-	if badge := nodes[view.DetailContentID+".heading.status"]; text(badge) != "open" || badge.P["tone"] != "accent" {
-		t.Errorf("status badge under the title: %v", badge)
+	if badge := nodes[view.DetailContentID+".heading.status"]; text(badge) != "open" || badge.P["tone"] != nil {
+		t.Errorf("status beside the title: %v", badge)
 	}
 	heading := nodes[view.DetailContentID+".heading"]
-	if len(heading.C) != 2 || text(heading.C[0]) != "#aaaa - Alpha" || text(heading.C[1]) != "open" {
-		t.Errorf("heading is not the title then the badge: %v", heading.C)
+	if len(heading.C) != 2 || text(heading.C[0]) != "#aaaa Alpha" || text(heading.C[1]) != "open" {
+		t.Errorf("heading is not the title then the status: %v", heading.C)
 	}
 	if ids := nodes.under(view.DetailID); slices.ContainsFunc(ids, func(id string) bool {
 		return strings.HasSuffix(id, ".navigation") || strings.Contains(id, ".navigation.") || strings.HasSuffix(id, ".back") || strings.HasSuffix(id, ".toggle")
@@ -167,15 +183,15 @@ func TestDetailHeadingNamesTheProjectOfAnIssueOutsideTheProjectOnScreen(t *testi
 	heading := func(m model.Model) string { return text(render(t, m)[view.DetailContentID+".heading.title"]) }
 	far := alpha
 	far.ProjectName = "kata"
-	if got := heading(apply(browsing(), detailOf(alpha))); got != "#aaaa - Alpha" {
+	if got := heading(apply(browsing(), detailOf(alpha))); got != "#aaaa Alpha" {
 		t.Errorf("an Issue of the Project on screen: %q", got)
 	}
-	if got := heading(apply(browsing(), detailOf(far))); got != "kata#aaaa - Alpha" {
+	if got := heading(apply(browsing(), detailOf(far))); got != "kata#aaaa Alpha" {
 		t.Errorf("an Issue of another Project: %q", got)
 	}
 	m := browsing()
 	m = apply(m, model.CollectionSelected{Collection: m.Collections[4]}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha, beta}}}}, detailOf(alpha))
-	if got := heading(m); got != "work#aaaa - Alpha" {
+	if got := heading(m); got != "work#aaaa Alpha" {
 		t.Errorf("in %s, which spans Projects: %q", m.Collection.Title, got)
 	}
 }
@@ -199,7 +215,8 @@ func TestDetailIsOneScrollContainerWithOneChild(t *testing.T) {
 	}
 }
 
-func TestDetailTitleShowsIDInItsLaneToneThenTitleStrong(t *testing.T) {
+// The id is muted mono whatever the Issue's Lane or status: a Lane colour or a state colour on the id would be a second use of that colour on one surface.
+func TestDetailTitleShowsTheIDMutedThenTheTitleStrong(t *testing.T) {
 	readyForHuman := alpha
 	readyForHuman.Labels = []string{"ready-for-human"}
 	closed := alpha
@@ -207,15 +224,14 @@ func TestDetailTitleShowsIDInItsLaneToneThenTitleStrong(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
 		issue model.Issue
-		style string
 	}{
-		{"in a Lane", readyForHuman, "accent mono"}, // user tone has no span style: the nearest, accent
-		{"closed", closed, "success mono"},
-		{"no Lane", alpha, "muted mono"},
+		{"in a Lane", readyForHuman},
+		{"closed", closed},
+		{"no Lane", alpha},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			title := detailNodes(t, tt.issue)[view.DetailID+".viewport.content.heading.title"]
-			want := [][2]string{{"#" + tt.issue.ShortID, tt.style}, {" - " + tt.issue.Title, "strong"}}
+			want := [][2]string{{"#" + tt.issue.ShortID, "muted mono"}, {" " + tt.issue.Title, "strong"}}
 			if got := styled(title); !slices.Equal(got, want) {
 				t.Errorf("title spans = %v, want %v", got, want)
 			}
@@ -223,25 +239,26 @@ func TestDetailTitleShowsIDInItsLaneToneThenTitleStrong(t *testing.T) {
 	}
 }
 
-func TestDetailOwnerAndLabelsAreBadgesInTheBoardTones(t *testing.T) {
+func TestDetailOwnerIsPlainTextAndLabelsAreNeutralChips(t *testing.T) {
 	owner := "dana"
 	issue := alpha
 	issue.Owner = &owner
 	issue.Labels = []string{"bug"}
 	props := view.DetailContentID + ".properties"
 	nodes := detailNodes(t, issue)
-	if n := nodes[props+".owner.v"]; n.P["tone"] != "user" || text(n) != "dana" {
+	if n := nodes[props+".owner.v"]; n.K != "text" || n.P["tone"] != nil || text(n) != "dana" {
 		t.Errorf("owner %v", n)
 	}
-	if n := nodes[props+".labels.v.label-bug"]; n.P["tone"] != "info" {
+	if n := nodes[props+".labels.v.label-bug"]; n.P["tone"] != "neutral" {
 		t.Errorf("label %v", n)
 	}
-	if n := detailNodes(t, alpha)[props+".owner.v"]; n.P["tone"] != "user" || text(n) != "Unassigned" {
+	n := detailNodes(t, alpha)[props+".owner.v"]
+	if got := styled(n); text(n) != "unassigned" || len(got) != 1 || got[0][1] != "muted" {
 		t.Errorf("unassigned owner %v", n)
 	}
 }
 
-func TestDetailDatesAreToneByTheirOwnDateAgainstThePaneCalendar(t *testing.T) {
+func TestDetailDatesAreMutedWhateverTheirDay(t *testing.T) {
 	today := "2026-10-20"
 	for _, tt := range []struct {
 		name                  string
@@ -249,9 +266,9 @@ func TestDetailDatesAreToneByTheirOwnDateAgainstThePaneCalendar(t *testing.T) {
 		scheduled, deadline   string
 		wantSched, wantDeadln string
 	}{
-		{"overdue and passed", "open", today, "2026-10-10", "2026-10-10", "warning", "error"},
-		{"today", "open", today, today, today, "accent", "warning"},
-		{"tomorrow", "open", today, "2026-10-21", "2026-10-21", "muted", "warning"},
+		{"overdue and passed", "open", today, "2026-10-10", "2026-10-10", "muted", "muted"},
+		{"today", "open", today, today, today, "muted", "muted"},
+		{"tomorrow", "open", today, "2026-10-21", "2026-10-21", "muted", "muted"},
 		{"later", "open", today, "2026-10-22", "2026-10-22", "muted", "muted"},
 		{"closed", "closed", today, "2026-10-10", "2026-10-10", "muted", "muted"},
 		{"calendar unknown", "open", "", "2026-10-10", "2026-10-10", "muted", "muted"},
@@ -280,7 +297,7 @@ func TestCommentsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
 	if card.K != "card" || card.P["variant"] != "bare" {
 		t.Fatalf("c1 is %s %v, want a bare card", card.K, card.P["variant"])
 	}
-	want := [][2]string{{"dana", "strong"}, {"  ", ""}, {"2026-10-09 03:05", "muted mono"}} // the model zone, not the process zone
+	want := [][2]string{{"dana", "strong"}, {" · ", "muted"}, {"2026-10-09 03:05", "muted mono"}} // the model zone, not the process zone
 	var got [][2]string
 	for _, span := range card.P["head"].([]any) {
 		f := span.(map[string]any)
@@ -294,12 +311,12 @@ func TestCommentsAreCardsWithTheAuthorAndTheTimeApart(t *testing.T) {
 
 func TestEventsAreOneCompactLine(t *testing.T) {
 	processZoneIsUTC(t)
-	card := render(t, detailWithActivity(model.TabEvents))[view.DetailActivityID+".e1"]
+	card := render(t, detailWithActivity(model.TabEvents))[view.DetailActivityID+".e2"]
 	if card.P["head"] != nil || len(card.C) != 1 {
 		t.Fatalf("event card head %v with %d children, want no head and one line", card.P["head"], len(card.C))
 	}
 	nodes := render(t, detailWithActivity(model.TabEvents))
-	if got, want := text(nodes[view.DetailActivityID+".e1.heading"]), "[issue.created] 2026-10-09 03:05 dana - created this Issue"; got != want {
+	if got, want := text(nodes[view.DetailActivityID+".e2.heading"]), "2026-10-09 03:05 dana reopened"; got != want {
 		t.Errorf("event line = %q, want %q", got, want)
 	}
 }
@@ -330,15 +347,20 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	props := nodes[view.DetailContentID+".properties"]
 	var keys []string
 	for _, row := range props.C {
-		keys = append(keys, text(nodes[row.ID+".k"]))
+		if key, ok := nodes[row.ID+".k"]; ok {
+			keys = append(keys, text(key))
+		}
 	}
-	want := []string{"Author:", "Created:", "Updated:", "Scheduled:", "Deadline:", "Owner:", "Priority:", "Labels:", "Parent:", "Children:"}
+	want := []string{"Owner", "Priority", "Scheduled", "Deadline", "Labels", "Parent"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("keys %v, want %v", keys, want)
 	}
 	when := at.In(tokyo).Format("2006-01-02 15:04")
-	if got := text(nodes[props.ID+".created.v"]); got != when {
-		t.Errorf("Created %q, want %q", got, when)
+	if got, want := text(nodes[props.ID+".meta"]), "ann created "+when+" · updated "+when; got != want {
+		t.Errorf("meta line %q, want %q", got, want)
+	}
+	if _, ok := nodes[props.ID+".children"]; ok {
+		t.Error("properties still have a Children row")
 	}
 	if got := text(nodes[props.ID+".deadline.v"]); got != day {
 		t.Errorf("metadata-only Deadline %q, want %q", got, day)
@@ -349,9 +371,11 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	bare := render(t, apply(browsing(), detailOf(model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "open", ProjectName: "work", Revision: 2})))
 	keys = nil
 	for _, row := range bare[view.DetailContentID+".properties"].C {
-		keys = append(keys, text(bare[row.ID+".k"]))
+		if key, ok := bare[row.ID+".k"]; ok {
+			keys = append(keys, text(key))
+		}
 	}
-	if want := []string{"Created:", "Updated:", "Owner:"}; !slices.Equal(keys, want) {
+	if want := []string{"Owner"}; !slices.Equal(keys, want) {
 		t.Errorf("bare keys %v, want %v", keys, want)
 	}
 }
@@ -385,10 +409,13 @@ func TestParentSectionMatchingAndEmptyBody(t *testing.T) {
 		issue := model.Issue{UID: "kid", ShortID: "kidd", Title: "K", Status: "open", ProjectName: "work", Revision: 1, Body: body}
 		nodes := render(t, apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}, Links: links}}},
 			model.DetailLoaded{UID: "kid", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
+		if _, ok := nodes[view.DetailContentID+".body.title"]; ok {
+			return text(nodes[view.DetailContentID+".body.title"]) + text(nodes[view.DetailContentID+".body.hint"])
+		}
 		return text(nodes[view.DetailContentID+".body"])
 	}
 	for body, want := range map[string]string{
-		"## Parent\n\nupup":                    "No body yet.",
+		"## Parent\n\nupup":                    "No bodyPress E to write one.",
 		"## Parent\n\n#upup\n\n## What\n\nx":   "## What\n\nx",
 		"## Parent\n\nwork#upup\n\n## What":    "## What",
 		"## Parent\n\nupupxyz\n\n## What\n\nx": "## Parent\n\nupupxyz\n\n## What\n\nx",
@@ -450,17 +477,17 @@ func attachmentsTab(t *testing.T, metadata map[string]any) shown {
 
 func TestAttachmentsTabIsFourthWithItsCount(t *testing.T) {
 	nodes := attachmentsTab(t, map[string]any{"attachment.A1": ref("a.png", "image/png", 5), "note": "x", "tern-kata.attachment.old": map[string]any{"host": "box", "path": "/a"}})
-	if got := text(nodes[view.DetailActivityID+".tabs.tab3"]); got != "[ Attachments (1) ]" {
+	if got := text(nodes[view.DetailActivityID+".tabs.tab3"]); got != "Attachments 1" {
 		t.Errorf("fourth tab = %q", got)
 	}
-	if got := text(nodes[view.DetailActivityID+".tabs.tab2"]); got != "Links (0)" {
+	if got := text(nodes[view.DetailActivityID+".tabs.tab2"]); got != "Links" {
 		t.Errorf("third tab = %q", got)
 	}
 }
 
 func TestEmptyAttachmentsTabOfADaemonWithoutDocbankSaysSo(t *testing.T) {
 	m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha, AttachmentsOff: true}}, model.ActivityTabMsg{Tab: model.TabAttachments})
-	if got := text(render(t, m)[view.DetailActivityID+".empty"]); got != model.DocbankOffMessage {
+	if got := text(render(t, m)[view.DetailActivityID+".empty.hint"]); got != model.DocbankOffMessage {
 		t.Errorf("empty text = %q", got)
 	}
 }
@@ -515,7 +542,7 @@ func TestAttachmentRowsShowNameMediaTypeAndSizeByName(t *testing.T) {
 	if want := []string{model.AttachmentRowKey("A"), model.AttachmentRowKey("M"), model.AttachmentRowKey("Z")}; !slices.Equal(order, want) {
 		t.Fatalf("rows %v, want %v", order, want)
 	}
-	for id, want := range map[string]string{"A": "a.log  text/plain, 5.0 MB", "M": "my pic.jpg  image/jpeg, 12 B", "Z": "z.png  image/png, 2.0 KB"} {
+	for id, want := range map[string]string{"A": "a.log · text · 5.0 MB", "M": "my pic.jpg · image · 12 B", "Z": "z.png · image · 2.0 KB"} {
 		if got := text(nodes[view.DetailActivityID+"."+model.AttachmentRowKey(id)]); got != want {
 			t.Errorf("row %s = %q, want %q", id, got, want)
 		}

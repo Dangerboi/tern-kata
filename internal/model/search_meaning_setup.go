@@ -82,29 +82,29 @@ func (s EmbeddingsStatus) RestartOwed() bool { return s.Job != nil && s.Job.Stat
 // megabytes is a size as kata words it: decimal megabytes, rounded.
 func megabytes(bytes int64) string { return strconv.FormatInt((bytes+500_000)/1_000_000, 10) }
 
-// Words is the Config row's text for the status.
+// Words is the Config row's text for the status: the state, then what it means, separated by " · ".
 func (s EmbeddingsStatus) Words() string {
 	if s.Job != nil {
 		switch s.Job.State {
 		case EmbeddingsDownloading:
 			if s.Job.Total > 0 {
-				return "downloading " + megabytes(s.Job.Downloaded) + " / " + megabytes(s.Job.Total) + " MB"
+				return "turning on · downloading " + megabytes(s.Job.Downloaded) + " / " + megabytes(s.Job.Total) + " MB"
 			}
-			return "downloading " + megabytes(s.Job.Downloaded) + " MB"
+			return "turning on · downloading " + megabytes(s.Job.Downloaded) + " MB"
 		case EmbeddingsRestart:
 			if s.Remote {
-				return "set up: needs a kata daemon restart · " + s.remoteRestartWords()
+				return "set up · needs a kata daemon restart · " + s.remoteRestartWords()
 			}
-			return "set up: needs a kata daemon restart"
+			return "set up · needs a kata daemon restart"
 		case EmbeddingsFailed:
 			if reason := oneLine(s.Job.Error); reason != "" {
-				return "turning it on failed: " + reason
+				return "not turned on · " + reason
 			}
-			return "turning it on failed"
+			return "not turned on"
 		}
 	}
 	if s.Provider != EmbeddingsOff && s.Indexing != nil {
-		return s.Indexing.words()
+		return "on · " + s.Indexing.words()
 	}
 	switch s.Provider {
 	case EmbeddingsBuiltIn:
@@ -115,15 +115,15 @@ func (s EmbeddingsStatus) Words() string {
 		return "on · another provider (kata's config.toml)"
 	}
 	if !s.CanChange {
-		return "off: turning it on needs a daemon administrator"
+		return "off · turning it on needs a daemon administrator"
 	}
 	switch {
 	case s.OllamaAvailable:
-		return "off: kata searches by words · your Ollama will be used"
+		return "off · searches by words · your Ollama will be used"
 	case s.DownloadBytes > 0:
-		return "off: kata searches by words · about " + megabytes(s.DownloadBytes) + " MB to download"
+		return "off · searches by words · about " + megabytes(s.DownloadBytes) + " MB to download"
 	}
-	return "off: kata searches by words"
+	return "off · searches by words"
 }
 
 func (i EmbeddingsIndexing) words() string {
@@ -190,18 +190,18 @@ func (s EmbeddingsStatus) TurnOnOffered() bool {
 	return s.CanChange && s.Provider == EmbeddingsOff && (s.Job == nil || s.Job.State == EmbeddingsFailed)
 }
 
-// embeddingsRow is the Config Page's Search by meaning row. It reads the daemon the Pane is connected to, so it is titled with that
-// daemon's name and holds no path. enter opens the card; s turns it on where kata allows it.
-func embeddingsRow(daemon string, s EmbeddingsSetup) ConfigFile {
-	row := ConfigFile{Key: ConfigEmbeddings, Title: "Search by meaning (" + daemonTitle(daemon) + ")", Actions: []ConfigAction{ConfigOpen}}
+// embeddingsRow is the Config Page's Search by meaning row. It reads the daemon the Pane is connected to, which the card names,
+// and holds no path. enter opens the card; s turns it on where kata allows it.
+func embeddingsRow(s EmbeddingsSetup) ConfigFile {
+	row := ConfigFile{Key: ConfigEmbeddings, Title: "Search by meaning", Actions: []ConfigAction{ConfigOpen}}
 	if s.Restarting {
-		row.Summary = "restarting the kata daemon…"
+		row.Summary = "restarting · the kata daemon is coming back"
 		return row
 	}
 	switch {
 	case s.Err != nil:
 		row.Status, row.Err = ConfigBroken, s.Err.Error()
-		row.Summary = "kata cannot report search by meaning here: " + oneLine(s.Err.Error())
+		row.Summary = "unavailable · kata cannot report it here: " + oneLine(s.Err.Error())
 	default:
 		row.Summary = s.Status.Words()
 		switch {
@@ -236,7 +236,7 @@ func (s EmbeddingsStatus) remoteRestartWords() string {
 // withEmbeddingsRow words the Config row again from the status last read, when the rows are listed.
 func (m Model) withEmbeddingsRow() Model {
 	if len(m.ConfigPage.Files) > 0 {
-		m.ConfigPage.setFiles(m.Daemon.Name, m.Embeddings, m.ConfigPage.Files)
+		m.ConfigPage.setFiles(m.Embeddings, m.ConfigPage.Files)
 	}
 	return m
 }

@@ -2,7 +2,6 @@ package model
 
 import (
 	"cmp"
-	"fmt"
 	"slices"
 	"strings"
 )
@@ -100,11 +99,11 @@ type Highlight string
 
 // Highlights, in ring precedence: the first one an Issue has gives its ring.
 const (
-	HighlightBlocksThis    Highlight = "blocks this"
-	HighlightBlockedByThis Highlight = "blocked by this"
-	HighlightParent        Highlight = "parent"
-	HighlightChild         Highlight = "child"
-	HighlightRelated       Highlight = "related"
+	HighlightBlocksThis    Highlight = "blocks selected"
+	HighlightBlockedByThis Highlight = "blocked by selected"
+	HighlightParent        Highlight = "parent of selected"
+	HighlightChild         Highlight = "child of selected"
+	HighlightRelated       Highlight = "related to selected"
 )
 
 // HighlightsOf are the Relationships of uid to the Issue these Relationships belong to, in ring precedence, nil when unrelated.
@@ -166,7 +165,7 @@ func selectParent(m Model) (Model, []Cmd) {
 	}
 	parent := m.Relationships.Of(issue.UID).Parent
 	if parent == nil {
-		m.Notice = fmt.Sprintf("%s has no parent.", issue.ShortID)
+		m = m.say(m.RefName(issue.ProjectName, issue.ShortID) + " has no parent.")
 		return m, nil
 	}
 	return showCard(m, parent.UID)

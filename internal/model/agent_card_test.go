@@ -363,7 +363,7 @@ func TestStopAnsweredForAnAgentAlreadyGoneWritesNoHandOff(t *testing.T) {
 
 func TestAFailedHandOffIsANoticeNotACrash(t *testing.T) {
 	after, cmds := model.Update(model.Model{}, model.AgentHandedOff{UID: "u1", Err: errors.New("kata is down")})
-	if len(cmds) != 0 || after.Notice != "Cannot hand the Issue to a human after the stop: kata is down" {
+	if len(cmds) != 0 || after.Notice != "Cannot hand the Issue to a human after the stop: kata is down." {
 		t.Errorf("cmds %#v, notice %q", cmds, after.Notice)
 	}
 }
@@ -371,14 +371,14 @@ func TestAFailedHandOffIsANoticeNotACrash(t *testing.T) {
 func TestAFailedStopKeepsTheMappingAndSaysWhy(t *testing.T) {
 	m := openCard("open", st("11", model.AgentWorking, ""))
 	after, cmds := model.Update(m, model.AgentStopped{Block: "11", Err: errors.New("tern: no such block")})
-	if len(cmds) != 0 || !reflect.DeepEqual(after.AgentMapping, m.AgentMapping) || after.Notice != "Cannot stop the agent: tern: no such block" {
+	if len(cmds) != 0 || !reflect.DeepEqual(after.AgentMapping, m.AgentMapping) || after.Notice != "Cannot stop the agent: tern: no such block." {
 		t.Errorf("cmds %#v, mapping %+v, notice %q", cmds, after.AgentMapping, after.Notice)
 	}
 }
 
 func TestAFailedInterruptSaysWhy(t *testing.T) {
 	after, _ := model.Update(model.Model{}, model.AgentInterrupted{Block: "11", Err: errors.New("no title")})
-	if after.Notice != "Cannot interrupt the agent: no title" {
+	if after.Notice != "Cannot interrupt the agent: no title." {
 		t.Errorf("notice %q", after.Notice)
 	}
 }

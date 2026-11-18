@@ -18,21 +18,21 @@ ctl --file "$tmp/fp-launch.ctl"
 expect_tree "[data-id\$='.$fp_here']" '.ok and .count == 1'
 ctl key 5
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
-expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("Project: follow-a"))'
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("follow-a"))'
 ctl click "[data-id\$='.cards.$fp_here']"
 expect_tree "[data-id\$='.cards.$fp_here']" '.ok and (.nodes[0].class | contains("selected"))'
 
 # The related id of the other Project is on the selected card; a click on it switches the Pane to that Project's Board.
-expect_tree "[data-id*='.relationships.'][data-id\$='.$fp_there']" '.ok and .count == 1'
-ctl click "[data-id*='.relationships.'][data-id\$='.$fp_there']"
-expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("Project: follow-b"))'
+expect_tree "[data-id*='.facts.'][data-id\$='.$fp_there']" '.ok and .count == 1'
+ctl click "[data-id*='.facts.'][data-id\$='.$fp_there']"
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("follow-b"))'
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
 expect_tree "[data-id\$='.cards.$fp_there']" '.ok and (.nodes[0].class | contains("selected"))'
 expect_tree "[data-id\$='.cards.$fp_here']" '.ok and .count == 0'
 
 # Esc returns to the first Project's Board with the card that was selected.
 ctl key esc
-expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("Project: follow-a"))'
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("follow-a"))'
 expect_tree "[data-id='main.columns.list.board']" '.count == 1'
 expect_tree "[data-id\$='.cards.$fp_here']" '.ok and (.nodes[0].class | contains("selected"))'
 expect_tree "[data-id\$='.cards.$fp_there']" '.ok and .count == 0'

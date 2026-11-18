@@ -138,7 +138,7 @@ func TestAQuickReplyOverAnUnreadMessageAsksBeforeReplacingIt(t *testing.T) {
 			if asking.Model.CurrentMode() != model.ModeAgentMessageReplace {
 				t.Fatalf("mode %s, want the replace question", asking.Model.CurrentMode())
 			}
-			wantShown(t, "the replace question", asking, "has not cleared its last message", "use the second table", "Replace it")
+			wantShown(t, "the replace question", asking, "has an unread message", "use the second table", "Replace")
 			replaced := sentMessage(t, step(t, asking, key("enter")).Cmds)
 			if replaced.Message != quickReplyTexts["2"] || replaced.Replacing != held {
 				t.Errorf("sent %+v, want the wrap-up replacing the value held", replaced)

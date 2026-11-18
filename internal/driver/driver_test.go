@@ -151,7 +151,7 @@ func TestTextFocusIsClearedWhileSavingOrConfirming(t *testing.T) {
 func TestOpeningACardFocusesItsField(t *testing.T) {
 	out := step(t, browsing(t, 160), key("n"))
 	wantOps(t, out, tern.OpFocus(fieldLabeled(t, out.State.Model, "Title")))
-	labels := fieldLabeled(t, out.State.Model, "Labels (optional, comma-separated)")
+	labels := fieldLabeled(t, out.State.Model, "Labels")
 	out = step(t, out.State, &tern.Focus{ID: labels})
 	wantOps(t, out, tern.OpFocus(labels))
 }

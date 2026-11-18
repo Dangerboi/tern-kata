@@ -3,7 +3,8 @@ package model
 import (
 	"errors"
 	"fmt"
-	"strconv"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/Dangerboi/tern-kata/internal/worker"
@@ -79,8 +80,8 @@ func WorkerPrompt(name Field) string { return workerFieldTitles[name] }
 var workerHints = map[Field]string{
 	WorkerFieldActor:    "who the runs are attributed to",
 	WorkerFieldCommand:  worker.DefaultCommand,
-	WorkerFieldModel:    "blank: the agent's own default",
-	WorkerFieldThinking: "blank: the agent's own default",
+	WorkerFieldModel:    "agent default",
+	WorkerFieldThinking: "agent default",
 }
 
 func WorkerHint(name Field) string { return workerHints[name] }
@@ -276,52 +277,69 @@ func (m Model) WorkerInFlight() []LocalRun {
 
 func (m Model) WorkerInFlightCount() int { return max(len(m.WorkerInFlight()), m.Worker.InFlight) }
 
-// WorkerInFlightWords is the runs in flight in words: how many, and which jobs.
+// WorkerInFlightWords is the runs in flight in words: how many, or that none is.
 func (m Model) WorkerInFlightWords() string {
-	runs, n := m.WorkerInFlight(), m.WorkerInFlightCount()
+	n := m.WorkerInFlightCount()
 	if n == 0 {
 		return "no run in flight"
 	}
-	var names []string
-	for _, r := range runs {
-		name := r.Job
-		if name == "" {
-			name = r.UID
-		}
-		names = append(names, name)
-	}
-	text := strconv.Itoa(n) + " run"
-	if n != 1 {
-		text += "s"
-	}
-	text += " in flight"
-	if len(names) > 0 {
-		text += " (" + strings.Join(names, ", ") + ")"
-	}
-	return text
+	return Count(n, "run", "runs") + " in flight"
 }
 
-// WorkerStopWords are what the two stops do to the running worker, for the card's restart and supervision questions: when
-// idle it finishes its runs in flight first, now it interrupts them.
+// WorkerBusyWords is what the worker row says about its runs: the count in flight, or that it is idle.
+func (m Model) WorkerBusyWords() string {
+	if m.WorkerInFlightCount() == 0 {
+		return "idle"
+	}
+	return m.WorkerInFlightWords()
+}
+
+// WorkerStopWords are what the two stops do to the running worker, as clauses that follow a button's name: when idle it
+// finishes its runs in flight first, now it holds them to resume later.
 func (m Model) WorkerStopWords() (idle, now string) {
 	n := m.WorkerInFlightCount()
 	if n == 0 {
-		return "Takes no new run and exits; no run is in flight.", "Exits at once; no run is in flight, so none is interrupted."
+		return "takes no new run and exits; no run is in flight", "exits at once; no run is in flight, so none is held"
 	}
-	runs, verb := m.WorkerInFlightWords(), "is"
-	if n != 1 {
-		verb = "are"
+	return "takes no new run and exits after its " + m.WorkerInFlightWords(), "exits at once and holds the " + Noun(n, "run", "runs")
+}
+
+// WorkerStopLine is the one line under a stop question: what each of the two answers does.
+func (m Model) WorkerStopLine(idleLabel, nowLabel string) string {
+	idle, now := m.WorkerStopWords()
+	return idleLabel + ": " + idle + ". " + nowLabel + ": " + now + "."
+}
+
+// tomlProblem is why a config text does not load, without the path of the file, the parser's "toml: " and its "(last key …)"
+// tail, which only repeat what the card shows or mean nothing to a person.
+func tomlProblem(problem, path string) string {
+	problem = strings.TrimSpace(problem)
+	for _, prefix := range []string{path + ": ", filepath.Base(path) + ": ", "toml: "} {
+		if prefix != ": " {
+			problem = strings.TrimPrefix(problem, prefix)
+		}
 	}
-	return "Takes no new run, finishes its " + runs + ", then exits.",
-		"Exits at once; its " + runs + " " + verb + " interrupted and held `interrupted`, to resume later."
+	problem = lastKeyTail.ReplaceAllString(problem, "")
+	return strings.TrimSuffix(strings.TrimSpace(problem), ".")
+}
+
+var lastKeyTail = regexp.MustCompile(` ?\(last key "[^"]*"\)`)
+
+// Problem is why worker.toml does not load, in the words the card shows; empty when it loads.
+func (s WorkerSetup) Problem() string { return tomlProblem(s.LoadErr, s.Path) }
+
+// workerFailure is the card's error for a write of worker.toml that was refused: the refusal without the file's path, which the
+// card shows once.
+func (m Model) workerFailure(err error) error {
+	return errors.New(Cannot("save", "worker.toml", errors.New(tomlProblem(Reason(err), m.Worker.Setup.Path))))
 }
 
 // startSentence is what happens next when no worker runs: the plugin starts one, or nothing does under the supervision marker.
 func (m Model) startSentence() string {
 	if m.Worker.Setup.Manual {
-		return manualFile + " is present, so the plugin does not start the worker: run `tern-kata worker`."
+		return manualFile + " is present, so the plugin does not start the worker. Run tern-kata worker to start one."
 	}
-	return "The plugin's host half starts the worker within 10 seconds (else run `tern-kata worker`); `tern-kata worker doctor` checks the setup."
+	return "The plugin starts the worker within 10 seconds; tern-kata worker doctor checks the setup."
 }
 
 // openWorkerCard is `W` on the Jobs Page. The setup is read again and the status asked again; the Command field starts blank.
@@ -368,13 +386,13 @@ func (m Model) workerSaveRefusal() error {
 	if m.WorkerCardKind() == WorkerSetUp {
 		switch executor := strings.TrimSpace(f.Executor); {
 		case executor == "":
-			return workerFieldError{WorkerFieldExecutor, "Executor: must not be blank."}
+			return workerFieldError{WorkerFieldExecutor, Cannot("save", "worker.toml", errors.New("Executor must not be blank"))}
 		case len(executor) > 256 || strings.ContainsAny(executor, " \t\r\n"):
-			return workerFieldError{WorkerFieldExecutor, "Executor: at most 256 bytes with no whitespace."}
+			return workerFieldError{WorkerFieldExecutor, Cannot("save", "worker.toml", errors.New("Executor takes at most 256 bytes and no whitespace"))}
 		}
 	}
 	if !f.Trusted {
-		return workerFieldError{WorkerFieldTrust, "Trust: choose Yes to list the Project. " + WorkerTrustNote}
+		return workerFieldError{WorkerFieldTrust, Cannot("save", "worker.toml", errors.New("Trust must be Yes to list the Project"))}
 	}
 	return nil
 }
@@ -382,7 +400,7 @@ func (m Model) workerSaveRefusal() error {
 func submitWorker(m Model) (Model, []Cmd) {
 	f := &m.WorkerCard
 	if !m.WorkerCardSaves() {
-		f.Err = errors.New("Nothing to save here.")
+		f.Err = cardFailure("save", "worker.toml", errors.New("there is nothing to save"))
 		return m, nil
 	}
 	if err := m.workerSaveRefusal(); err != nil {
@@ -412,18 +430,14 @@ func workerSetupSaved(m Model, msg WorkerSetupSaved) (Model, []Cmd) {
 	}
 	f.Saving = false
 	if msg.Err != nil {
-		f.Err = msg.Err
+		f.Err = m.workerFailure(msg.Err)
 		if msg.Field != "" && m.WorkerCardShows(msg.Field) {
 			f.Field = msg.Field
 		}
 		return m, nil
 	}
 	f.Err, f.Trusted = nil, false
-	verb := "Set up the worker"
-	if msg.Serve {
-		verb = "Now serving " + msg.Project
-	}
-	return m.workerWritten(verb + ": worker.toml written (checkout " + msg.Key + ").")
+	return m.workerWritten("worker.toml written.")
 }
 
 // workerWritten is the card after worker.toml was written: what was saved, what happens to the worker, and the setup read again.
@@ -452,7 +466,7 @@ func workerEditorClosed(m Model, in Msg) (Model, []Cmd, bool) {
 		return m, nil, true
 	}
 	if msg.Err != nil {
-		f.Err = msg.Err
+		f.Err = cardFailure("open", "the editor", msg.Err)
 		return m, nil, true
 	}
 	text := normalizeLineBreaks(msg.Text)
@@ -478,16 +492,16 @@ func workerEdited(m Model, msg WorkerEdited) (Model, []Cmd) {
 	f.Saving = false
 	if errors.Is(msg.Err, worker.ErrConfigChanged) {
 		f.EditText = msg.Text
-		f.Err = errors.New("worker.toml changed while you edited it, so nothing was saved. Your text is kept but lacks that change; press e to edit it and save to replace the file with it.")
+		f.Err = errors.New("Cannot save worker.toml: it changed since you opened it. Your text is kept.")
 		return m, []Cmd{LoadWorkerSetup{Workspace: m.Workspace}}
 	}
 	if msg.Err != nil {
 		f.EditText = msg.Text
-		f.Err = fmt.Errorf("The edit was not saved and the file is as it was: %w. Press e to keep editing; your text is kept.", msg.Err)
+		f.Err = errors.New(m.workerFailure(msg.Err).Error() + " Your text is kept.")
 		return m, nil
 	}
 	f.EditText, f.Err = "", nil
-	return m.workerWritten("Edited the worker: worker.toml written.")
+	return m.workerWritten("worker.toml written.")
 }
 
 func workerStopped(m Model, msg WorkerStopped) (Model, []Cmd) {
@@ -497,36 +511,29 @@ func workerStopped(m Model, msg WorkerStopped) (Model, []Cmd) {
 	}
 	f.Stopping = false
 	if msg.Err != nil {
-		f.Err = fmt.Errorf("The stop was refused: %w", msg.Err)
+		f.Err = cardFailure("stop", "the worker", msg.Err)
 		return m, nil
 	}
 	m.WorkerCard = WorkerCardState{}
 	tail := "the plugin then starts a fresh one with the new worker.toml."
 	switch {
 	case msg.Gone:
-		m.Notice = "No worker is running now. " + m.startSentence()
+		m = m.say("No worker is running now. " + m.startSentence())
 	default:
 		if !msg.Restarts {
-			tail = "nothing starts it again: run `tern-kata worker`."
+			tail = "nothing starts it again: run tern-kata worker."
 		}
 		switch {
 		case msg.Mode == worker.StopNow:
-			m.Notice = "The worker is ending now; runs in flight are held `interrupted`; " + tail
+			m = m.say("The worker is ending now and holds its runs in flight to resume later; " + tail)
 		case msg.InFlight > 0:
-			m.Notice = fmt.Sprintf("The worker finishes its %d run%s in flight, then exits; %s", msg.InFlight, plural(msg.InFlight), tail)
+			m = m.say(fmt.Sprintf("The worker finishes its %s in flight, then exits; %s", Count(msg.InFlight, "run", "runs"), tail))
 		default:
-			m.Notice = "The worker is exiting; " + tail
+			m = m.say("The worker is exiting; " + tail)
 		}
 	}
 	m, ask := m.askWorker(workerPollEvery)
 	return m, []Cmd{ask}
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }
 
 // workerCardKey is one key for the Worker card on top. Left, right and space move through the trust choice, and in a text field
@@ -591,7 +598,7 @@ func workerRestartKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		return m, []Cmd{StopWorker{Mode: mode}}
 	case WorkerLeave:
 		m.WorkerCard = WorkerCardState{}
-		m.Notice = "Left the worker running; it reads the new worker.toml when it next starts."
+		m = m.say("Left the worker running; it reads the new worker.toml when it next starts.")
 	}
 	return m, nil
 }
@@ -649,30 +656,30 @@ func workerSupervisionSet(m Model, msg WorkerSupervisionSet) (Model, []Cmd) {
 	}
 	f.Switching, f.Supervision = false, ""
 	if msg.Err != nil {
-		f.Err = msg.Err
+		f.Err = cardFailure("change", "supervision", msg.Err)
 		return m, nil
 	}
 	m.Worker.Setup.Manual = msg.Manual
 	switch stop := msg.Stop; {
 	case !msg.Manual && m.workerRunning():
-		f.Supervision = "Supervision is on: " + manualFile + " is removed. The running worker stays; the plugin starts it again whenever it exits."
+		f.Supervision = "Supervision is on: the running worker stays, and the plugin starts it again whenever it exits."
 	case !msg.Manual:
-		f.Supervision = "Supervision is on: " + manualFile + " is removed. The plugin starts the worker within 10 seconds."
+		f.Supervision = "Supervision is on: the plugin starts the worker within 10 seconds."
 	case stop == nil:
-		f.Supervision = "Supervision is off: " + manualFile + " is created, so the plugin starts no worker. Run `tern-kata worker` to start one by hand."
+		f.Supervision = "Supervision is off: the plugin starts no worker. Run tern-kata worker to start one by hand."
 	case stop.Err != nil:
-		f.Supervision = "Supervision is off: " + manualFile + " is created, so the plugin starts no new worker."
-		f.Err = fmt.Errorf("The stop was refused: %w", stop.Err)
+		f.Supervision = "Supervision is off: the plugin starts no new worker."
+		f.Err = cardFailure("stop", "the worker", stop.Err)
 	case stop.Gone:
-		f.Supervision = "Supervision is off: " + manualFile + " is created. No worker is running now, and the plugin starts none."
+		f.Supervision = "Supervision is off: no worker is running now, and the plugin starts none."
 	case stop.Mode == worker.StopNow && flight != "":
-		f.Supervision = "Supervision is off: " + manualFile + " is created. The worker is ending now (" + flight + "; held `interrupted`), and nothing starts it again."
+		f.Supervision = "Supervision is off: the worker is ending now (" + flight + ", held to resume later), and nothing starts it again."
 	case stop.Mode == worker.StopNow:
-		f.Supervision = "Supervision is off: " + manualFile + " is created. The worker is ending now, and nothing starts it again."
+		f.Supervision = "Supervision is off: the worker is ending now, and nothing starts it again."
 	case stop.InFlight > 0:
-		f.Supervision = fmt.Sprintf("Supervision is off: "+manualFile+" is created. The worker finishes its %d run%s in flight, then exits, and nothing starts it again.", stop.InFlight, plural(stop.InFlight))
+		f.Supervision = fmt.Sprintf("Supervision is off: the worker finishes its %s in flight, then exits, and nothing starts it again.", Count(stop.InFlight, "run", "runs"))
 	default:
-		f.Supervision = "Supervision is off: " + manualFile + " is created. The worker is exiting, and nothing starts it again."
+		f.Supervision = "Supervision is off: the worker is exiting, and nothing starts it again."
 	}
 	m, ask := m.askWorker(workerPollEvery)
 	return m, []Cmd{LoadWorkerSetup{Workspace: m.Workspace}, ask}
@@ -690,5 +697,5 @@ const manualFile = worker.ManualFileName
 
 // ManualPresentWords is the Worker card's words for a present supervision marker; the view shows them as the model words them.
 func ManualPresentWords() string {
-	return manualFile + " is present: the plugin neither starts nor restarts the worker"
+	return manualFile + " is present, so the plugin neither starts nor restarts the worker"
 }

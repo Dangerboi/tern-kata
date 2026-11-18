@@ -22,7 +22,7 @@ end
 -- The palette toggle: the new choice and its toast.
 function M.toggle(sidePanel: boolean): (boolean, string)
     local side = not sidePanel
-    return side, if side then "kata Attachments open in the side panel beside the Pane" else "kata Attachments open floating over the tab"
+    return side, if side then "tern-kata Attachments open in the side panel beside the Pane." else "tern-kata Attachments open floating over the tab."
 end
 
 return M

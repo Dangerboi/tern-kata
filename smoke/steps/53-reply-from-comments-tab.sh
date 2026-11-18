@@ -25,7 +25,7 @@ ctl key R
 expect_tree "[data-id='layer.editor']" '.ok and .count == 1'
 expect_tree "[data-id='layer.editor']" '.nodes[0].text | startswith("Reply to dangerboi'"'"'s comment")'
 ctl key Ctrl+r
-expect_tree "[data-id='layer.editor']" '.nodes[0].text | startswith("Confirm dangerboi'"'"'s comment")'
+expect_tree "[data-id='layer.editor']" '.nodes[0].text | startswith("Reply to dangerboi'"'"'s comment")'
 ctl type '"It reproduces on a clean checkout every time."'
 ctl key Ctrl+o
 expect_tree "[data-id='layer.editor']" '.ok and .count == 0'

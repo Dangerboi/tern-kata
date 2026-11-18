@@ -293,7 +293,7 @@ func (m Model) settleLocalRun() (Model, []Cmd) {
 func localRunLoaded(m Model, msg LocalRunLoaded) Model {
 	if msg.Err != nil {
 		if msg.UID == m.Runs.Selected {
-			m.Notice = "Reading the run from the worker failed: " + msg.Err.Error()
+			m = m.fail(Cannot("read", "the run from the worker", msg.Err))
 		}
 		return m
 	}
@@ -350,80 +350,98 @@ func (m Model) JobPause(job CronJob) PauseReason {
 	return PauseFailedRuns
 }
 
+// workerPauseWords is why this machine's worker admits none of the job's runs, empty when it does.
 func (m Model) workerPauseWords(uid string) string {
 	n := m.workerPausedJobs(uid)
 	if n == 0 {
 		return ""
 	}
-	return fmt.Sprintf("paused after %d failed run%s in a row", n, plural(n))
+	return fmt.Sprintf("Paused after %d failed %s in a row", n, Noun(n, "run", ""))
 }
 
-// WorkerLine is the Jobs Page's line about this machine's worker, and whether it is good news: whether the worker is running and
-// serves this Pane's Project. Where worker.toml was read for this Project, each state points at W. It is empty until the first
-// answer arrives.
-func (m Model) WorkerLine() (text string, ok bool) {
-	text, ok = m.workerLine()
-	if w := m.Worker; w.Running && w.Err == nil && w.SetupRead && w.SetupErr == nil && w.Setup.Manual && text != "" {
-		text += " Supervision is off (" + manualFile + "): the plugin does not restart it."
+// WorkerBanner is the Jobs Page's line about this machine's worker: a badge, then a muted detail. Good says the worker runs and
+// serves this Pane's Project, Pending that one is about to start, Failed that the line is an error with no badge.
+type WorkerBanner struct {
+	Badge   string
+	Good    bool
+	Pending bool
+	Failed  bool
+	Detail  string
+}
+
+// Empty says there is nothing to show yet: the first answer has not arrived.
+func (b WorkerBanner) Empty() bool { return b.Badge == "" && b.Detail == "" }
+
+// Refusal is the banner as the reason a job cannot run now.
+func (b WorkerBanner) Refusal() string {
+	switch {
+	case b.Failed:
+		return strings.TrimSuffix(strings.TrimPrefix(b.Detail, "Cannot "), ".")
+	case b.Badge == "No worker":
+		return "no worker: " + b.Detail
 	}
-	return text, ok
+	return b.Badge + " " + b.Detail
 }
 
-func (m Model) workerLine() (text string, ok bool) {
+// WorkerBanner words this machine's worker for the Jobs Page: whether it runs and serves this Pane's Project, and what is missing
+// when it does not. It is empty until the first answer arrives.
+func (m Model) WorkerBanner() WorkerBanner {
 	w := m.Worker
 	project := m.workerProjectName()
 	known := w.SetupRead && w.SetupErr == nil && w.Setup.Project == project
 	switch {
 	case !w.Read:
-		return "", false
+		return WorkerBanner{}
 	case w.Err != nil:
-		return "Worker: " + w.Err.Error(), false
+		return WorkerBanner{Failed: true, Detail: Cannot("read", "the worker", w.Err)}
 	case !w.Running && known:
-		return m.stoppedWorkerLine(project), false
+		return m.stoppedWorkerBanner(project)
 	case !w.Running:
-		return "No worker is running on this machine; start one with `tern-kata worker`. Adapter jobs run only when one serves the Project.", false
+		return WorkerBanner{Badge: "No worker", Detail: "none is running on this machine"}
+	}
+	badge := "Worker " + w.Executor
+	manual := ""
+	if w.SetupRead && w.SetupErr == nil && w.Setup.Manual {
+		manual = " · supervision is off"
 	}
 	for _, p := range w.Projects {
 		if p.Name != project {
 			continue
 		}
 		if !p.Admitting {
-			return fmt.Sprintf("Worker %s serves %s but admits nothing: %s", w.Executor, project, p.Why), false
+			return WorkerBanner{Badge: badge, Detail: "admits nothing: " + p.Why + manual}
 		}
-		return fmt.Sprintf("Worker %s running and serving %s: %d of %d slots in use (W: worker)", w.Executor, project, p.InUse, p.Capacity), true
+		return WorkerBanner{Badge: badge, Good: true, Detail: fmt.Sprintf("%d of %d slots in use", p.InUse, p.Capacity) + manual}
 	}
-	if known && !w.Setup.Lists {
-		return fmt.Sprintf("Worker %s is running but does not serve %s; press W to serve it, then restart the worker.", w.Executor, project), false
+	if known && w.Setup.Lists {
+		return WorkerBanner{Badge: badge, Detail: "does not serve " + project + "; restart it to pick up worker.toml" + manual}
 	}
-	if known {
-		return fmt.Sprintf("Worker %s is running but does not serve %s, though worker.toml lists it; restart the worker to pick that up (W).", w.Executor, project), false
-	}
-	return fmt.Sprintf("Worker %s is running but does not serve %s; list the Project under [[projects]] in worker.toml.", w.Executor, project), false
+	return WorkerBanner{Badge: badge, Detail: "does not serve " + project + "; not listed in worker.toml" + manual}
 }
 
-// stoppedWorkerLine is the banner while no worker runs and worker.toml was read for the Project: what is missing, and W.
-func (m Model) stoppedWorkerLine(project string) string {
+// stoppedWorkerBanner is the banner while no worker runs and worker.toml was read for the Project: what is missing.
+func (m Model) stoppedWorkerBanner(project string) WorkerBanner {
 	s := m.Worker.Setup
 	switch {
 	case !s.Exists:
-		return fmt.Sprintf("No worker is set up on this machine: press W to set one up for %s. Adapter jobs run only when a worker serves the Project.", project)
+		return WorkerBanner{Badge: "No worker", Detail: "none set up for " + project}
 	case s.LoadErr != "":
-		return "worker.toml does not load, so no worker can start: press W to see why."
+		return WorkerBanner{Badge: "No worker", Detail: "worker.toml does not load"}
 	case !s.Lists:
-		return fmt.Sprintf("worker.toml does not list %s, so no worker serves it: press W to serve it.", project)
+		return WorkerBanner{Badge: "No worker", Detail: "worker.toml does not list " + project}
 	case s.Manual:
-		return "No worker is running on this machine and " + manualFile + " keeps the plugin from starting one: run `tern-kata worker` (W shows the setup)."
+		return WorkerBanner{Badge: "No worker", Detail: "supervision is off, so none starts by itself"}
 	}
-	return "No worker is running on this machine yet; the plugin starts one within 10 seconds (W shows the setup)."
+	return WorkerBanner{Badge: "Starting", Pending: true, Detail: "the plugin starts one within 10 seconds"}
 }
 
 // runNowRefusal is why a job cannot be run now, from what the Pane already knows; empty when nothing is known against it.
 func (m Model) runNowRefusal(job CronJob) string {
 	if job.Native() {
-		return fmt.Sprintf("%q is a native job: kata runs it, and nothing here can run it now. Only adapter jobs run on this machine's worker.", job.Name)
+		return fmt.Sprintf("Cannot run %q now: kata runs a native job itself.", job.Name)
 	}
-	if text, ok := m.WorkerLine(); !ok && text != "" {
-		return fmt.Sprintf("Cannot run %q now. %s", job.Name, text)
+	if b := m.WorkerBanner(); !b.Empty() && !b.Good {
+		return fmt.Sprintf("Cannot run %q now: %s.", job.Name, b.Refusal())
 	}
 	return ""
 }
@@ -436,15 +454,12 @@ func runJobNow(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if job.Archived() {
-		m.Notice = fmt.Sprintf("%q is archived; restore it with x before running it.", job.Name)
-		return m, nil
+		return m.fail(fmt.Sprintf("%q is archived. Restore it before running it.", job.Name)), nil
 	}
 	if reason := m.runNowRefusal(*job); reason != "" {
-		m.Notice = reason
-		return m, nil
+		return m.fail(reason), nil
 	}
-	m.Notice = fmt.Sprintf("Asking the worker to run %q…", job.Name)
-	return m, []Cmd{RunJobNow{JobUID: job.UID, JobName: job.Name}}
+	return m.say(Progress("Asking the worker to run", fmt.Sprintf("%q", job.Name))), []Cmd{RunJobNow{JobUID: job.UID, JobName: job.Name}}
 }
 
 type ResumeJob struct{ JobUID, JobName string }
@@ -466,29 +481,25 @@ func resumePausedJob(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.workerPausedJobs(job.UID) == 0 {
-		m.Notice = fmt.Sprintf("%q is not paused by this machine's worker; p pauses or resumes it at kata.", job.Name)
-		return m, nil
+		return m.fail(fmt.Sprintf("%q is not paused by this machine's worker.", job.Name)), nil
 	}
-	m.Notice = fmt.Sprintf("Asking the worker to resume %q…", job.Name)
-	return m, []Cmd{ResumeJob{JobUID: job.UID, JobName: job.Name}}
+	return m.say(Progress("Asking the worker to resume", fmt.Sprintf("%q", job.Name))), []Cmd{ResumeJob{JobUID: job.UID, JobName: job.Name}}
 }
 
 func jobResumed(m Model, msg JobResumed) (Model, []Cmd) {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot resume %q: %s", msg.JobName, msg.Err)
-		return m, nil
+		return m.fail(Cannot("resume", fmt.Sprintf("%q", msg.JobName), msg.Err)), nil
 	}
-	m.Notice = fmt.Sprintf("Resumed %q: the worker admits its runs again and counts failed runs from none.", msg.JobName)
+	m = m.say(fmt.Sprintf("Resumed %q: the worker admits its runs again.", msg.JobName))
 	m, cmd := m.askWorker(0)
 	return m, []Cmd{cmd}
 }
 
 func jobRunRequested(m Model, msg JobRunRequested) (Model, []Cmd) {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot run %q now: %s", msg.JobName, msg.Err)
-		return m, nil
+		return m.fail(Cannot("run", fmt.Sprintf("%q now", msg.JobName), msg.Err)), nil
 	}
-	m.Notice = fmt.Sprintf("Running %q now as %s; it is on the Runs Page (3).", msg.JobName, msg.RunUID)
+	m = m.say(fmt.Sprintf("Started %q. It is on the Runs Page.", msg.JobName))
 	m, cmd := m.askWorker(0)
 	return m, []Cmd{cmd}
 }
@@ -500,20 +511,16 @@ func openRunSession(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if reason := m.notLocal(*run, "open its session"); reason != "" {
-		m.Notice = reason
-		return m, nil
+		return m.fail(reason), nil
 	}
 	d := m.LocalDetail()
 	switch {
 	case d == nil:
-		m.Notice = "The worker has not read this run yet; try again in a moment."
-		return m, nil
+		return m.fail("Cannot open the session: the worker has not read this run yet."), nil
 	case !d.Held && !d.Settled():
-		m.Notice = "This run is still running; open its session once it has finished or is held."
-		return m, nil
+		return m.fail("Cannot open the session: the run is still running."), nil
 	case d.SessionID == "":
-		m.Notice = "The agent recorded no omp session for this run."
-		return m, nil
+		return m.fail("Cannot open the session: the agent recorded none for this run."), nil
 	}
 	return m, []Cmd{OpenRunSession{Cwd: d.Cwd, SessionDir: d.SessionDir, SessionID: d.SessionID}}
 }
@@ -541,13 +548,11 @@ func moveHeldRun(resume bool) func(Model) (Model, []Cmd) {
 			return m, nil
 		}
 		if reason := m.notLocal(*run, verb+" it"); reason != "" {
-			m.Notice = reason
-			return m, nil
+			return m.fail(reason), nil
 		}
 		local, ok := m.LocalRunOf(run.UID)
 		if !ok || !(local.Held || !resume && local.Abandonable) {
-			m.Notice = "This run is not held, so there is nothing to " + verb + "."
-			return m, nil
+			return m.fail("This run is not held, so there is nothing to " + verb + "."), nil
 		}
 		if resume {
 			return m, []Cmd{ResumeLocalRun{UID: run.UID}}
@@ -562,15 +567,15 @@ func localRunMoved(m Model, msg LocalRunMoved) (Model, []Cmd) {
 		verb = "resume"
 	}
 	if msg.Err != nil {
-		m.Notice = "Cannot " + verb + " the run: " + msg.Err.Error()
-		return m, nil
+		return m.fail(Cannot(verb, "the run", msg.Err)), nil
 	}
-	if msg.Resumed {
-		m.Notice = "Resuming the run: its omp session continues as a new attempt."
-	} else if msg.State == "cancelling" {
-		m.Notice = "Cancelling the run: the worker stops its agent and records it cancelled at kata."
-	} else {
-		m.Notice = "Abandoned the run; the worker cancels it at kata."
+	switch {
+	case msg.Resumed:
+		m = m.say(Progress("Resuming", "the run"))
+	case msg.State == "cancelling":
+		m = m.say(Progress("Cancelling", "the run"))
+	default:
+		m = m.say("Abandoned the run.")
 	}
 	m.Runs.stale = true
 	m.Worker.detailStale = true
@@ -580,40 +585,52 @@ func localRunMoved(m Model, msg LocalRunMoved) (Model, []Cmd) {
 
 func runSessionOpened(m Model, msg RunSessionOpened) Model {
 	if msg.Err != nil {
-		m.Notice = "Opening the session failed: " + msg.Err.Error()
-		return m
+		return m.fail(Cannot("open", "the session", msg.Err))
 	}
-	m.Notice = "Opened the run's omp session in a new Tern tab."
-	return m
+	return m.say("Opened the run's session in a new Tern tab.")
 }
 
-// localFacts are the inspector's lines that only the worker knows, for a Run of this machine: why it is held and which verbs
-// would work, its steps, and the tail of what the agent said.
-func (m Model) localFacts(run Run) (hold, rest runFacts) {
+// RunNotice is why the selected held Run cannot be resumed now, as a sentence; empty when it can, or when it is not held here.
+func (m Model) RunNotice() string {
+	run := m.SelectedRun()
+	if run == nil {
+		return ""
+	}
+	local, ok := m.LocalRunOf(run.UID)
+	if !ok || !local.Held || local.Resumable || local.ResumeRefusal == "" {
+		return ""
+	}
+	if strings.Contains(local.ResumeRefusal, "being reported") {
+		return "Cannot resume yet: its hold is still being reported to kata."
+	}
+	return "Cannot resume: " + strings.TrimSuffix(local.ResumeRefusal, ".") + "."
+}
+
+// pendingWords is what a Run's worker has not yet told kata, in words; an unknown value is shown as it is.
+func pendingWords(pending string) string {
+	if pending == "notify" {
+		return "the notification"
+	}
+	return pending
+}
+
+// localFacts are the inspector's lines that only the worker knows, for a Run of this machine: the worker's own state when it
+// differs from kata's, what it has not yet reported, its steps, and the tail of what the agent said.
+func (m Model) localFacts(run Run) (state, rest runFacts) {
 	local, ok := m.LocalRunOf(run.UID)
 	if !ok {
 		return nil, nil
 	}
-	hold.add("Worker state", local.State)
-	if local.Held {
-		hold.add("Held because", holdWords(local.Hold))
-		hold.add("Hold detail", local.Detail)
-		if local.Resumable {
-			hold.add("Resume", "u continues the agent's session as a new attempt")
-		} else {
-			hold.add("Resume", "not now: "+local.ResumeRefusal)
-		}
-	}
-	if local.Abandonable {
-		hold.add("Abandon", "A cancels the run")
+	if !local.Held && local.State != string(run.Status) {
+		state.add("Worker", local.State)
 	}
 	if local.Attempt > 1 {
-		hold.add("Attempt", strconv.Itoa(local.Attempt))
+		state.add("Attempt", strconv.Itoa(local.Attempt))
 	}
-	hold.add("Unreported", local.Pending)
+	state.add("Not yet reported to kata", pendingWords(local.Pending))
 	d := m.LocalDetail()
 	if d == nil || d.UID != run.UID {
-		return hold, nil
+		return state, nil
 	}
 	for _, s := range d.Steps {
 		rest.add("Step "+strconv.Itoa(s.Index), stepWords(s))
@@ -622,16 +639,42 @@ func (m Model) localFacts(run Run) (hold, rest runFacts) {
 	if !local.Settled() || local.Held || d.StderrTail != "" && run.Status != cronjob.RunSucceeded {
 		rest.add("Stderr", strings.TrimSpace(d.StderrTail))
 	}
-	if d.SessionID != "" {
-		rest.add("Session", d.SessionID+" (o opens it)")
-	}
-	return hold, rest
+	return state, rest
 }
 
-func holdWords(hold string) string { return strings.ReplaceAll(hold, "_", " ") }
+// IDFact is one id a person may need to copy, such as a run's UID for `tern-kata worker resume`. The inspector keeps them in the
+// hovercard of its title, never as rows.
+type IDFact struct{ Label, Value string }
 
+// RunIDs are the ids of the selected Run, for the hovercard of the inspector's title.
+func (m Model) RunIDs() []IDFact {
+	run := m.SelectedRun()
+	if run == nil {
+		return nil
+	}
+	var ids []IDFact
+	add := func(label, value string) {
+		if value != "" {
+			ids = append(ids, IDFact{label, value})
+		}
+	}
+	add("Run", run.UID)
+	add("Occurrence", run.OccurrenceKey)
+	add("Job", run.JobUID)
+	add("Job version", run.DefinitionEventUID)
+	add("Workflow", run.WorkflowUID)
+	add("Workflow version", run.WorkflowDefinitionEventUID)
+	add("Issue", run.IssueUID)
+	if d := m.LocalDetail(); d != nil {
+		add("Session", d.SessionID)
+	}
+	return ids
+}
+
+// stepWords is a step in a line: its kind, state and how it ended. A held state reads "held" alone: the Why row names the reason.
 func stepWords(s LocalStep) string {
-	parts := []string{s.Kind, s.State}
+	state, _, _ := strings.Cut(s.State, ":")
+	parts := []string{s.Kind, state}
 	if s.Attempt > 1 {
 		parts = append(parts[:1], append([]string{"attempt " + strconv.Itoa(s.Attempt)}, parts[1:]...)...)
 	}

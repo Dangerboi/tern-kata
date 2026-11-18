@@ -11,21 +11,22 @@ func projectLayer(m model.Model) tern.Element {
 	if !form.Open {
 		return nil
 	}
-	note := "Creates the Project and binds this directory to it."
-	if !form.Bind {
-		note = "Creates the Project. This directory stays bound to " + m.Project.Name + "."
+	note := "This directory stays on " + m.Project.Name + "."
+	if form.Bind {
+		note = "This directory will use it."
 	}
-	children := []tern.Element{
-		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Project name"}, Field: ui.Field{Text: form.Name, Cursor: caretAt(form.Caret, "", form.Name), Mode: "insert", Placeholder: ui.T("Project name"), Readonly: form.Saving}},
-		toneText("note", ui.ToneMuted, note),
-	}
+	children := labelledInput(inputLeaf, "Name", "", true, ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Name"}, Field: ui.Field{Text: form.Name, Cursor: caretAt(form.Caret, "", form.Name), Mode: "insert", Placeholder: ui.T("Project name"), Readonly: form.Saving}})
+	children = append(children, toneText("note", ui.ToneMuted, note))
+	busy := ""
 	if form.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
 	if form.Saving {
-		children = append(children, toneText("saving", ui.TonePending, "Creating Project…"))
-	} else {
-		children = append(children, buttonRow(cardButton("create", model.ModeProjectForm, model.ProjectSubmit, "Create Project", true), cardButton("cancel", model.ModeProjectForm, model.ProjectCancel, "Cancel", false)))
+		busy = model.Progress("Creating", "Project")
+		children = append(children, toneText("saving", ui.TonePending, busy))
 	}
+	create := unavailable(cardButton("create", model.ModeProjectForm, model.ProjectSubmit, "Create", true), busy)
+	cancel := unavailable(exitButton("cancel", model.ModeProjectForm, model.ProjectCancel, "Cancel"), busy)
+	children = append(children, buttonRow(create, cancel))
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardProject)}, Head: ui.T(model.NewProjectTitle), Icon: ui.IconFolderPlus, Modal: true, Size: ui.SizeMD}, children))
 }

@@ -28,7 +28,7 @@ cat >"$tmp/runs-second.json" <<JSON
  "summary":{"version":1,"message":"triaged nine items","input_tokens":777,"output_tokens":55}}
 JSON
 kata --workspace "$rn_dir" cron run observe "$rn_second" --json-input "$tmp/runs-second.json" --json >/dev/null
-# A summary that leads with kata's `reason: <code>` line shows the code and the line after it; so does a hold an earlier
+# A summary that leads with kata's `reason: <code>` line shows the reason in words and the line after it; so does a hold an earlier
 # tern-kata wrote as `<code>: <detail>`.
 rn_reason=01H5MK0000000000000000R003
 rn_legacy=01H5MK0000000000000000R004
@@ -44,12 +44,12 @@ rn_held "$rn_reason" 11 'reason: agent_quota\nthe provider answered 429'
 rn_held "$rn_legacy" 12 'interrupted: the worker stopped while the agent ran'
 
 ctl key 3
-expect_tree "[data-id='main.columns.list.runs.$rn_reason']" '.ok and .count == 1 and (.nodes[0].text | contains("unknown") and contains("reason: agent_quota") and contains("the provider answered 429"))'
-expect_tree "[data-id='main.columns.list.runs.$rn_legacy']" '.ok and .count == 1 and (.nodes[0].text | contains("reason: interrupted") and contains("the worker stopped while the agent ran") and (contains("interrupted: ") | not))'
+expect_tree "[data-id='main.columns.list.runs.$rn_reason']" '.ok and .count == 1 and (.nodes[0].text | contains("unknown") and contains("Quota reached") and contains("the provider answered 429"))'
+expect_tree "[data-id='main.columns.list.runs.$rn_legacy']" '.ok and .count == 1 and (.nodes[0].text | contains("Interrupted") and contains("the worker stopped while the agent ran") and (contains("interrupted: ") | not))'
 expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and .count == 1 and (.nodes[0].text | contains("succeeded") and contains("Smoke triage job") and contains("Smoke run Issue") and contains("smoke-laptop") and contains("1m 35s") and contains("triaged four items"))'
 ctl click "[data-id='main.columns.list.runs.$rn_run']"
 ctl key enter
-expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Input tokens1200"))) and ([.nodes[].text] | any(. == "340")) and ([.nodes[].text] | any(. == "'"$rn_job"'"))'
+expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Tokens in1200"))) and ([.nodes[].text] | any(. == "340"))'
 # A double click on a run that is not selected does what selecting it and pressing Enter does: the keys move to its
 # detail, which shows that run, and Esc gives them back to the list.
 ctl key escape
@@ -60,7 +60,7 @@ expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and (.nodes[0].cla
 ctl dblclick "[data-id='main.columns.list.runs.$rn_second']"
 expect_tree "[data-id='main.columns.list.runs.$rn_second']" '.ok and (.nodes[0].class | contains("selected"))'
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("back"))'
-expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Input tokens777"))) and ([.nodes[].text] | any(. == "55"))'
+expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Tokens in777"))) and ([.nodes[].text] | any(. == "55"))'
 ctl key escape
 expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("back") | not)'
 ctl key i
@@ -82,7 +82,7 @@ expect_tree "[data-id='main.columns.list.runs.now']" '.ok and .count == 1'
 expect_tree "[data-id^='main.columns.list.runs.']" '.nodes as $n | def y(f): [$n[] | select(.text | f)][0].rect[1]; y(contains("the worker stopped")) as $a | y(contains("the provider answered")) as $b | y(contains("triaged nine items")) as $c | y(contains("triaged four items")) as $d | y(. == "Now") as $now | $a != null and $d != null and $now != null and $a < $b and $b < $c and $c < $d and $d < $now'
 # s refuses while the job filter `r` set is on, since the mark would also cover runs it hides; f lifts the filter.
 ctl key s
-expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("Clear the job filter"))'
+expect_tree "[data-id='main.notice']" '.ok and .count == 1 and (.nodes[0].text | contains("job filter"))'
 expect_tree "[data-id='main.columns.list.runs.$rn_run']" '.ok and .count == 1'
 ctl key f
 # The filter lifting reloads every run; s marks only the runs loaded, so it waits for the one the filter hid.

@@ -44,22 +44,24 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 	activity := view.DetailActivityID
 
 	for id, n := range nodes {
-		if strings.HasPrefix(id, activity+".") && strings.Contains(text(n), "```") {
-			t.Errorf("%s shows a code block: %q", id, text(n))
+		if strings.HasPrefix(id, activity+".") && (strings.Contains(text(n), "```") || strings.Contains(text(n), "[issue.")) {
+			t.Errorf("%s shows code: %q", id, text(n))
 		}
+	}
+	if _, ok := nodes[activity+".e1.heading"]; ok {
+		t.Errorf("the created event is listed; the Issue's meta line says it")
 	}
 	for _, tt := range []struct {
 		event, sentence string
 		verb, style     string
 	}{
-		{"e1", "created this Issue", "created", "accent"},
-		{"e2", "closed: done", "closed:", "success"},
-		{"e3", "reopened", "reopened", "warning"},
+		{"e2", "closed as done", "closed", "success"},
+		{"e3", "reopened", "reopened", ""},
 		{"e4", "assigned to alice", "assigned", ""},
 	} {
 		heading := nodes[activity+"."+tt.event+".heading"]
-		if !strings.Contains(text(heading), " dana - "+tt.sentence) {
-			t.Errorf("%s reads %q, want it to contain %q", tt.event, text(heading), " dana - "+tt.sentence)
+		if !strings.HasSuffix(text(heading), " dana "+tt.sentence) || strings.Contains(text(heading), " - ") {
+			t.Errorf("%s reads %q, want it to end with %q and have no dash", tt.event, text(heading), " dana "+tt.sentence)
 		}
 		var got string
 		found := false

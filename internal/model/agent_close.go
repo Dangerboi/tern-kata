@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"maps"
 	"slices"
 )
@@ -140,8 +139,7 @@ func agentIssueRead(m Model, msg AgentIssueRead) (Model, []Cmd) {
 
 func agentClosed(m Model, msg AgentClosed) (Model, []Cmd) {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot close the agent: %s", msg.Err)
-		return m, nil
+		return m.fail(Cannot("close", "the agent", msg.Err)), nil
 	}
 	if msg.Kept {
 		// An agent the file does not call background is refused until the mapping shows it as one.
@@ -218,7 +216,7 @@ func (AgentHandedOff) msg() {}
 
 func agentHandedOff(m Model, msg AgentHandedOff) Model {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot hand the Issue to a human after the stop: %s", msg.Err)
+		return m.fail(Cannot("hand", "the Issue to a human after the stop", msg.Err))
 	}
 	return m
 }
@@ -228,8 +226,7 @@ func agentHandedOff(m Model, msg AgentHandedOff) Model {
 // writes what the agent would have written itself on stopping, since a stopped agent cannot: the hand-off to a human.
 func agentStopped(m Model, msg AgentStopped) (Model, []Cmd) {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot stop the agent: %s", msg.Err)
-		return m, nil
+		return m.fail(Cannot("stop", "the agent", msg.Err)), nil
 	}
 	var entry *AgentEntry
 	for i, e := range m.AgentMapping {
@@ -249,7 +246,7 @@ func agentStopped(m Model, msg AgentStopped) (Model, []Cmd) {
 	m = m.noteGoneAgents(msg.Agents)
 	m.AgentMapping = msg.Agents
 	m.Agents = m.Agents.trimmed(m.agentMapped)
-	m.Notice = "Stopped " + stopped + "."
+	m = m.say("Stopped " + stopped + ".")
 	m, raised := raiseAgentAttention(m, false)
 	if freed {
 		var driven []Cmd
@@ -288,7 +285,7 @@ func (m Model) stopHandOff(e AgentEntry) []Cmd {
 
 func agentInterrupted(m Model, msg AgentInterrupted) Model {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot interrupt the agent: %s", msg.Err)
+		return m.fail(Cannot("interrupt", "the agent", msg.Err))
 	}
 	return m
 }

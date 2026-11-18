@@ -11,13 +11,13 @@ ctl click "[data-id='main.columns.list.issues.$at_uid']"
 expect_tree "[data-id='main.columns.list.issues.$at_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.nodes[0].text | contains("Smoke attachments Issue") and (contains("loading") | not)'
 ctl click "$at_tab"
-expect_tree "[data-id='main.columns.detail.viewport.content.activity.empty']" '.ok and .count == 1 and (.nodes[0].text | startswith("This kata daemon has no Docbank configured")) and (.nodes[0].text | contains("kata docbank setup"))'
-expect_tree "$at_tab" '.ok and (.nodes[0].text | contains("Attachments (0)"))'
+expect_tree "[data-id='main.columns.detail.viewport.content.activity.empty.hint']" '.ok and .count == 1 and (.nodes[0].text | startswith("This kata daemon has no Docbank configured")) and (.nodes[0].text | contains("kata docbank setup"))'
+expect_tree "$at_tab" '.ok and (.nodes[0].text | . == "Attachments")'
 
 # @ opens the path form with the reason as its error; Escape closes it and nothing was sent.
 ctl key '@'
 expect_tree "[data-id='layer.fields.input']" '.ok and .count == 1'
-expect_tree "[data-id='layer.fields.error']" '.ok and .count == 1 and (.nodes[0].text | contains("no Docbank configured") and contains("kata docbank setup"))'
+expect_tree "[data-id='layer.fields.foot.error']" '.ok and .count == 1 and (.nodes[0].text | contains("no Docbank configured") and contains("kata docbank setup"))'
 ctl key Escape
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
 

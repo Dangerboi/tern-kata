@@ -13,20 +13,6 @@ import (
 
 const RunListID = "main.columns.list.runs"
 
-func runTone(status cronjob.RunStatus) ui.Tone {
-	switch status {
-	case cronjob.RunRunning:
-		return ui.ToneInfo
-	case cronjob.RunSucceeded:
-		return ui.ToneSuccess
-	case cronjob.RunFailed:
-		return ui.ToneError
-	case cronjob.RunCancelled:
-		return ui.ToneMuted
-	}
-	return ui.ToneWarning
-}
-
 func runs(m model.Model, now time.Time) tern.Element {
 	if m.Runs.Timeline {
 		return runsTimeline(m, now)
@@ -38,17 +24,17 @@ func runs(m model.Model, now time.Time) tern.Element {
 		cards = append(cards, skippedJob(m, s, now))
 	}
 	for _, row := range rows {
-		cards = append(cards, runCard(row, row.Run.UID == m.Runs.Selected, false))
+		cards = append(cards, runCard(row, row.Run.UID == m.Runs.Selected))
 	}
-	scope := "all jobs and workflows"
+	var scope []string
 	if m.Runs.JobUID != "" {
-		scope = runsJobWords(m)
+		scope = append(scope, runsJobWords(m))
 	}
-	children := runsHeading(m, ui.Span{T: " " + strconv.Itoa(len(rows)), S: mono("muted")}, ui.Span{T: " · " + scope, S: "muted"})
+	children := runsHeading(m, strconv.Itoa(len(rows)), scope...)
 	children = append(children, runsNotices(m)...)
-	empty := emptyState("No runs", "An executor reports a run to kata when it starts one.")
+	empty := emptyState("No runs", "Runs from jobs and workflows appear here.")
 	if m.Runs.JobUID != "" {
-		empty = emptyState("No runs for this job", "It has not run yet.", emptyButton(m, "all-runs", model.FilterRunsByJob, "Every run", false)...)
+		empty = emptyState("No runs", "This job has not run yet.", emptyButton(m, "all-runs", model.FilterRunsByJob, "All runs", false)...)
 	}
 	if m.PageSearchShown() {
 		children = append(children, pageSearchInput(m))
@@ -68,27 +54,29 @@ func runsJobWords(m model.Model) string {
 	return "job " + m.Runs.JobName
 }
 
-func runsHeading(m model.Model, spans ...ui.Span) []tern.Element {
-	spans = append([]ui.Span{{T: "Runs", S: "strong"}}, spans...)
+// runsHeading is the Page head: the title, the count and the scope clauses, then a note that older runs are not read yet and the
+// loading marker while a read is in flight.
+func runsHeading(m model.Model, count string, scope ...string) []tern.Element {
+	facts := append([]string{count}, scope...)
 	if m.Runs.More != "" {
-		spans = append(spans, ui.Span{T: " · older runs: m", S: "muted"})
+		facts = append(facts, "older runs not shown")
 	}
 	if m.Runs.Loading {
-		spans = append(spans, loadingMarker)
+		facts = append(facts, "loading…")
 	}
-	return ui.Nodes(heading(spans...))
+	return ui.Nodes(pageHead("heading", "Runs", facts...))
 }
 
 func runsNotices(m model.Model) []tern.Element {
 	var notices []tern.Element
 	if m.Runs.ProjectArchived {
-		notices = append(notices, plainText("archived-project", ui.ToneWarning, "This Project is archived: kata answers none of its runs."))
+		notices = append(notices, toneText("archived-project", ui.ToneWarning, "This Project is archived: kata answers none of its runs."))
 	}
 	if m.Runs.Err != nil {
-		notices = append(notices, plainText("error", ui.ToneError, m.Runs.Err.Error()))
+		notices = append(notices, toneText("error", ui.ToneError, model.Cannot("load", "runs", m.Runs.Err)))
 	}
 	if m.Runs.SeenErr != nil {
-		notices = append(notices, plainText("seen-error", ui.ToneError, m.Runs.SeenErr.Error()))
+		notices = append(notices, toneText("seen-error", ui.ToneError, model.Cannot("read", "seen.toml", m.Runs.SeenErr)))
 	}
 	return notices
 }
@@ -97,76 +85,88 @@ func runsPanel(m model.Model, children []tern.Element) tern.Element {
 	return listPanel(m, 0.5, children)
 }
 
-func runCard(row model.RunRow, selected, fresh bool) tern.Element {
-	tone := runTone(row.Run.Status)
-	if row.Held {
-		tone = ui.ToneWarning
-	}
+func runCard(row model.RunRow, selected bool) tern.Element {
 	head := headRow(
-		ui.Badge{Common: ui.Common{Key: "status", Tone: tone}, Text: row.State},
+		ui.Badge{Common: ui.Common{Key: "status", Tone: runStateTone(row.State)}, Text: row.State},
 		ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: row.Name, S: "strong"}}},
 	)
-	body := ui.Nodes(head)
-	var who []string
-	if row.Issue != "" {
-		who = append(who, row.Issue)
-	}
 	if row.Executor != "" {
-		who = append(who, "on "+row.Executor)
+		head.Children = append(head.Children, ui.Text{Common: ui.Common{Key: "executor"}, Spans: []ui.Span{{T: row.Executor, S: "muted"}}})
 	}
-	if len(who) > 0 {
-		body = append(body, ui.Text{Common: ui.Common{Key: "who"}, Spans: []ui.Span{{T: strings.Join(who, " · "), S: mono(toneStyle(ui.ToneInfo))}}})
+	body := ui.Nodes(head)
+	if row.IssueRef != "" {
+		who := []ui.Span{refSpan(row.IssueRef, true)}
+		if row.IssueTitle != "" {
+			who = append(who, ui.Span{T: " " + row.IssueTitle})
+		}
+		body = append(body, ui.Text{Common: ui.Common{Key: "who"}, Spans: who})
 	}
-	switch {
-	case row.Held:
-		body = append(body, plainText("hold", ui.ToneWarning, "held: "+row.Hold))
-	case row.Reason != "":
-		body = append(body, plainText("reason", tone, "reason: "+row.Reason))
+	why := row.Reason
+	if row.Held {
+		why = row.Hold
 	}
-	when := []ui.Span{{T: "started ", S: "muted"}, {T: row.Start, S: mono("muted")}}
+	if line := joinWords(why, row.Summary); line != "" {
+		body = append(body, ui.Text{Common: ui.Common{Key: "reason"}, Spans: []ui.Span{{T: line, S: "muted"}}})
+	}
+	when := []ui.Span{timeSpan(row.Start)}
 	if row.Duration != "" {
-		when = append(when, ui.Span{T: " · ", S: "muted"}, ui.Span{T: row.Duration, S: mono("muted")})
-	}
-	if row.Summary != "" {
-		when = append(when, ui.Span{T: " · " + row.Summary, S: "muted"})
+		when = append(when, ui.Span{T: " · ", S: "muted"}, timeSpan(row.Duration))
 	}
 	body = append(body, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})
 	cardTone := ui.ToneNeutral
-	switch {
-	case fresh:
-		cardTone = ui.ToneInfo
-	case row.Run.Status == cronjob.RunCancelled:
+	if row.Run.Status == cronjob.RunCancelled {
 		cardTone = ui.ToneMuted
 	}
 	return ui.Card{Common: ui.Common{Key: row.Run.UID, Tone: cardTone, Actions: &ui.Actions{Click: RunClick(row.Run.UID), DblClick: RunOpenClick(row.Run.UID)}}, Selected: selected, Children: body}
 }
 
+// joinWords joins the parts that are not empty with the middle dot.
+func joinWords(parts ...string) string {
+	var shown []string
+	for _, p := range parts {
+		if p != "" {
+			shown = append(shown, p)
+		}
+	}
+	return strings.Join(shown, " · ")
+}
+
 func runInspector(m model.Model, now time.Time) tern.Element {
 	facts := m.RunFacts(now)
-	if len(facts) == 0 {
-		return emptyInspector(m, "Select a run to read its detail.")
+	run := m.SelectedRun()
+	if len(facts) == 0 || run == nil {
+		return emptyInspector(m, "Select a run to read it.")
 	}
 	lines := make([]factLine, len(facts))
 	for i, fact := range facts {
 		lines[i] = factLine{Label: fact.Label, Value: fact.Value}
-		switch fact.Label {
-		case "Status":
-			lines[i].Style = toneStyle(runTone(cronjob.RunStatus(fact.Value)))
-		case "Held because":
-			lines[i].Style = toneStyle(ui.ToneWarning)
+		switch {
+		case fact.Label == "Status":
+			lines[i].Style = toneStyle(runStateTone(fact.Value))
+		case fact.Detail != "":
+			lines[i].Spans = []ui.Span{{T: fact.Value}, {T: " · " + fact.Detail, S: "muted"}}
+		case isTimeFact(fact.Label):
+			lines[i].Spans = []ui.Span{monoSpan(fact.Value, "")}
 		}
 	}
-	return factInspector(m, lines)
+	title := tern.Element(inspectorTitle(run.Name(), m.RunIDs()))
+	if notice := m.RunNotice(); notice != "" {
+		title = ui.Col{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Children: ui.Nodes(title, toneText("notice", ui.ToneWarning, notice))}
+	}
+	return factInspector(m, title, lines)
 }
 
 func runsTimeline(m model.Model, now time.Time) tern.Element {
 	t := m.Timeline(now)
 	loadingRuns, loadingNext := m.TimelineLoading()
-	scope := "since you last looked"
-	if m.Runs.JobUID != "" {
-		scope += " · " + runsJobWords(m)
+	scope := []string{"new"}
+	if !t.Seen.IsZero() {
+		scope = []string{"new since " + m.Calendar.Read(t.Seen, now)}
 	}
-	children := runsHeading(m, ui.Span{T: " " + strconv.Itoa(t.RunCount), S: mono("muted")}, ui.Span{T: " new · " + scope, S: "muted"})
+	if m.Runs.JobUID != "" {
+		scope = append(scope, runsJobWords(m))
+	}
+	children := runsHeading(m, strconv.Itoa(t.RunCount), scope...)
 	children = append(children, runsNotices(m)...)
 	if m.PageSearchShown() {
 		children = append(children, pageSearchInput(m))
@@ -180,13 +180,13 @@ func runsTimeline(m model.Model, now time.Time) tern.Element {
 			items = append(items, foldedRuns(m, entry.Group, now))
 			continue
 		}
-		items = append(items, runCard(entry.Row, entry.Row.Run.UID == m.Runs.Selected, true))
+		items = append(items, runCard(entry.Row, entry.Row.Run.UID == m.Runs.Selected))
 	}
 	if t.RunCount == 0 {
 		words := "Nothing new yet."
 		switch {
 		case loadingRuns:
-			words = "Loading runs…"
+			words = model.Progress("Loading", "runs")
 		case m.PageSearching():
 			words = "No new run matches the search."
 		case !t.Seen.IsZero():
@@ -199,9 +199,9 @@ func runsTimeline(m model.Model, now time.Time) tern.Element {
 		items = append(items, upcomingRun(next))
 	}
 	if len(t.Upcoming) == 0 {
-		words := "No next runs. Native jobs show their next time; adapter jobs show only that the worker starts them."
+		words := "No scheduled runs."
 		if loadingNext {
-			words = "Loading next runs…"
+			words = model.Progress("Loading", "next runs")
 		}
 		items = append(items, plainText("nothing-next", ui.ToneMuted, words))
 	}
@@ -213,34 +213,40 @@ func foldedRuns(m model.Model, group model.RunGroup, now time.Time) tern.Element
 	latest := group.Latest()
 	ended, _ := latest.Ended()
 	head := headRow(
-		ui.Badge{Common: ui.Common{Key: "count", Tone: ui.ToneInfo}, Text: strconv.Itoa(len(group.Runs)) + " runs"},
+		ui.Badge{Common: ui.Common{Key: "count", Tone: ui.ToneNeutral}, Text: strconv.Itoa(len(group.Runs)) + " runs"},
 		ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: latest.Name(), S: "strong"}}},
 	)
-	when := []ui.Span{{T: group.Counts(), S: "muted"}, {T: " · last ended ", S: "muted"}, {T: m.Calendar.Read(ended, now), S: mono("muted")}}
-	return ui.Card{Common: ui.Common{Key: "fold-" + latest.UID, Tone: ui.ToneInfo}, Children: ui.Nodes(head, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})}
+	when := []ui.Span{{T: group.Counts() + " · last ended ", S: "muted"}, timeSpan(m.Calendar.Read(ended, now))}
+	return ui.Card{Common: ui.Common{Key: "fold-" + latest.UID, Tone: ui.ToneNeutral}, Children: ui.Nodes(head, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})}
 }
 
 // skippedJob is one job's recent skips as a single row: the job, how many occurrences the worker skipped, the condition and reason
 // of the latest and when it was skipped. The worker's status holds it, not kata, so it is no Run: it can't be selected or opened.
 func skippedJob(m model.Model, s model.JobSkips, now time.Time) tern.Element {
-	noun := " skips"
-	if s.Count == 1 {
-		noun = " skip"
-	}
 	head := headRow(
-		ui.Badge{Common: ui.Common{Key: "count", Tone: ui.ToneWarning}, Text: strconv.Itoa(s.Count) + noun},
+		ui.Badge{Common: ui.Common{Key: "count", Tone: ui.ToneWarning}, Text: model.Count(s.Count, "skip", "skips")},
 		ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: s.Name, S: "strong"}}},
 	)
-	latest := []ui.Span{{T: "latest ", S: "muted"}, {T: s.LatestCondition, S: mono("muted")}, {T: ": " + s.LatestReason, S: "muted"}}
-	when := []ui.Span{{T: "not run · skipped ", S: "muted"}, {T: m.Calendar.Read(s.LatestAt, now), S: mono("muted")}}
+	latest := []ui.Span{{T: joinWords(model.ConditionWords(s.LatestCondition), s.LatestReason), S: "muted"}}
+	when := []ui.Span{{T: "Not run · ", S: "muted"}, timeSpan(m.Calendar.Read(s.LatestAt, now))}
 	return ui.Card{Common: ui.Common{Key: "skips-" + s.UID, Tone: ui.ToneWarning}, Children: ui.Nodes(head,
 		ui.Text{Common: ui.Common{Key: "latest"}, Spans: latest}, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})}
 }
 
+// upcomingRun is a next run: its time in a fixed cell, then the job. An adapter job has no time, as only the worker knows when it
+// starts it.
 func upcomingRun(next model.UpcomingRun) tern.Element {
-	when := "started by the worker"
+	noShrink := 0.0
+	when := model.None
 	if next.Next != "" {
 		when = next.Next
 	}
-	return ui.Text{Common: ui.Common{Key: "next-" + next.Job.UID}, Spans: []ui.Span{{T: next.Job.Name, S: "strong"}, {T: " · ", S: "muted"}, {T: when, S: mono("muted")}}}
+	name := []ui.Span{{T: next.Job.Name, S: "strong"}}
+	if next.Next == "" {
+		name = append(name, ui.Span{T: " the worker starts it", S: "muted"})
+	}
+	return ui.Row{Common: ui.Common{Key: "next-" + next.Job.UID}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
+		ui.Text{Common: ui.Common{Key: "time", Shrink: &noShrink, Min: &ui.Bounds{W: ui.Ch(16)}}, Spans: []ui.Span{timeSpan(when)}, Wrap: ui.WrapNone},
+		ui.Text{Common: ui.Common{Key: "name"}, Spans: name},
+	)}
 }

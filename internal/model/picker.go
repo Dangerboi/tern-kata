@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 	"strings"
@@ -10,6 +11,9 @@ import (
 const (
 	ModePicker Mode   = "picker"
 	OpenPicker Action = "open-picker"
+	// MenuOnNotice is the value of an OpenPicker click that opens the Menu with the cursor on the first version notice, as the
+	// top bar's update chip does.
+	MenuOnNotice = "notice"
 	// ShowMenu is the key that opens the Menu from the list; a click on the top bar's Menu button is OpenPicker.
 	ShowMenu       Action = "show-menu"
 	OpenProjects   Action = "open-projects"
@@ -67,7 +71,17 @@ const (
 	EntryRestore
 	EntryNewView
 	EntrySavedView // a saved view: Title is its name and Index its place in SavedViews
-	EntryNotice    // a version notice: Title is its headline and Index its NoticeKind
+	EntryNotice    // a version notice: Title is its headline and Index its VersionNoticeKind
+	EntryRetry     // the daemon error screen's Menu: read from the daemon again
+	EntryQuit      // the daemon error screen's Menu: quit the Pane
+)
+
+// The Sections of the Menu's top level: each one after the first is drawn under a labelled divider. The unlabelled section holds
+// the bound Project, Views and Projects.
+const (
+	SectionPages   = "Pages"
+	SectionActions = "Actions"
+	SectionUpdates = "Updates"
 )
 
 type PickerEntry struct {
@@ -75,6 +89,10 @@ type PickerEntry struct {
 	Kind  EntryKind
 	Index int
 	Page  Page
+	// Section names the divider the row sits under at the top level; "" for the unlabelled rows.
+	Section string
+	// Hint is the keycap letter that opens a Lettered Page, "" for every other row.
+	Hint string
 }
 
 func (e PickerEntry) Key() string {
@@ -89,6 +107,10 @@ func (e PickerEntry) Key() string {
 		return viewKeyPrefix + strconv.Itoa(e.Index)
 	case EntryNotice:
 		return noticeKeyPrefix + strconv.Itoa(e.Index)
+	case EntryRetry:
+		return "retry"
+	case EntryQuit:
+		return "quit"
 	case EntryNewProject:
 		return NewProjectKey
 	case EntryProjects:
@@ -103,8 +125,12 @@ func (e PickerEntry) Key() string {
 
 func (e PickerEntry) IsCollection() bool { return e.Kind == EntryCollection }
 
-// A filter ignores the level and lists every matching title flat (any case).
-func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
+// A filter ignores the level and lists every matching title flat (any case). The sidebar keeps a Back row on its sublevels, as it has
+// no button for it; the popup has the button and esc, so it lists none, and puts the current Project first on the Projects level.
+func (m Model) menuEntries(level MenuLevel, filter string, popup bool) []PickerEntry {
+	if m.Err != nil && !m.OnDaemons() {
+		return m.errorMenuEntries(filter)
+	}
 	if len(m.Collections) == 0 {
 		return nil
 	}
@@ -112,11 +138,18 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 	match := func(title string) bool { return strings.Contains(strings.ToLower(title), filter) }
 	entries := make([]PickerEntry, 0, len(m.Collections)+8)
 	if level != MenuTop && filter == "" {
-		entries = append(entries, PickerEntry{Collection: Collection{Title: BackTitle}, Kind: EntryBack})
+		if !popup {
+			entries = append(entries, PickerEntry{Collection: Collection{Title: BackTitle}, Kind: EntryBack})
+		}
 		for _, c := range m.Collections {
 			if c.IsProject() == (level == MenuProjects) {
 				entries = append(entries, PickerEntry{Collection: c})
 			}
+		}
+		if popup && level == MenuProjects {
+			slices.SortStableFunc(entries, func(a, b PickerEntry) int {
+				return cmp.Compare(boolRank(b.Collection == m.Collection), boolRank(a.Collection == m.Collection))
+			})
 		}
 		if level == MenuViews {
 			entries = append(entries, m.savedViewEntries(func(string) bool { return true })...)
@@ -144,23 +177,39 @@ func (m Model) menuEntries(level MenuLevel, filter string) []PickerEntry {
 	}
 	for _, def := range pageDefs {
 		if def.lettered && match(def.label) {
-			entries = append(entries, PickerEntry{Collection: Collection{Title: def.label}, Kind: EntryLettered, Page: def.page})
+			entries = append(entries, PickerEntry{Collection: Collection{Title: def.label}, Kind: EntryLettered, Page: def.page, Section: SectionPages, Hint: def.chord})
 		}
 	}
 	if match(RestoreTitle) && !m.IssueScoped {
-		entries = append(entries, PickerEntry{Collection: Collection{Title: RestoreTitle}, Kind: EntryRestore})
+		entries = append(entries, PickerEntry{Collection: Collection{Title: RestoreTitle}, Kind: EntryRestore, Section: SectionActions})
 	}
 	if match(NewProjectTitle) {
-		entries = append(entries, PickerEntry{Collection: Collection{Title: NewProjectTitle}, Kind: EntryNewProject})
+		entries = append(entries, PickerEntry{Collection: Collection{Title: NewProjectTitle}, Kind: EntryNewProject, Section: SectionActions})
 	}
 	if filter != "" && match(NewViewTitle) {
 		entries = append(entries, PickerEntry{Collection: Collection{Title: NewViewTitle}, Kind: EntryNewView})
 	}
 	for _, notice := range m.VersionNotices() {
 		if match(notice.Headline) {
-			entries = append(entries, PickerEntry{Collection: Collection{Title: notice.Headline}, Kind: EntryNotice, Index: int(notice.Kind)})
+			entries = append(entries, PickerEntry{Collection: Collection{Title: notice.Headline}, Kind: EntryNotice, Index: int(notice.Kind), Section: SectionUpdates})
 		}
 	}
+	return entries
+}
+
+// errorMenuEntries is the Menu while a daemon error stands: no Collection is known, so it offers what works without one, the
+// Daemons Page, a retry and quit.
+func (m Model) errorMenuEntries(filter string) []PickerEntry {
+	filter = strings.ToLower(filter)
+	var entries []PickerEntry
+	add := func(e PickerEntry) {
+		if strings.Contains(strings.ToLower(e.Title), filter) {
+			entries = append(entries, e)
+		}
+	}
+	add(PickerEntry{Collection: Collection{Title: pageDefs[PageDaemons].label}, Kind: EntryLettered, Page: PageDaemons, Hint: pageDefs[PageDaemons].chord})
+	add(PickerEntry{Collection: Collection{Title: "Retry"}, Kind: EntryRetry})
+	add(PickerEntry{Collection: Collection{Title: "Quit"}, Kind: EntryQuit})
 	return entries
 }
 
@@ -175,10 +224,24 @@ func (m Model) savedViewEntries(match func(string) bool) []PickerEntry {
 }
 
 func (m Model) PickerEntries() []PickerEntry {
-	return m.menuEntries(m.Picker.Level, m.Picker.Filter)
+	return m.menuEntries(m.Picker.Level, m.Picker.Filter, true)
 }
 
-func (m Model) SidebarEntries() []PickerEntry { return m.menuEntries(m.SidebarLevel, "") }
+func (m Model) SidebarEntries() []PickerEntry { return m.menuEntries(m.SidebarLevel, "", false) }
+
+func boolRank(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// CursorOnSavedView reports whether the Menu's cursor, in the popup or the sidebar, is on a saved view: the only row F2 and
+// ctrl+d act on.
+func (m Model) CursorOnSavedView() bool {
+	_, ok := m.selectedSavedView(m.Picker.Open)
+	return ok
+}
 
 func (m Model) CurrentView() string {
 	if m.Collection.IsProject() {
@@ -201,7 +264,7 @@ func (m Model) syncSidebarCursor() Model {
 }
 
 func openPicker(m Model) Model {
-	if slices.Contains(pageModes, m.CurrentMode()) {
+	if slices.Contains(pageModes, m.CurrentMode()) || m.CurrentMode() == ModeError {
 		m.Picker = PickerState{Open: true}
 		if m.CurrentView() != "" {
 			m.Picker.Cursor = entryIndex(m.PickerEntries(), ViewsKey)
@@ -275,11 +338,17 @@ func openEntry(m Model, entry PickerEntry, popup bool) (Model, []Cmd) {
 	switch entry.Kind {
 	case EntryNotice:
 		m.Picker, m.Focus = PickerState{}, ColumnList
-		return openNotice(leaveSidebarLevel(m), NoticeKind(entry.Index))
+		return openNotice(leaveSidebarLevel(m), VersionNoticeKind(entry.Index))
 	case EntryLettered:
 		m.Picker, m.Focus = PickerState{}, ColumnList
 		m = leaveSidebarLevel(m)
 		return showPage(entry.Page)(m)
+	case EntryRetry:
+		m.Picker = PickerState{}
+		return updateLive(m, Retry{})
+	case EntryQuit:
+		m.Picker = PickerState{}
+		return askQuit(m), nil
 	case EntryRestore:
 		m.Picker, m.Focus = PickerState{}, ColumnList
 		m = leaveSidebarLevel(m)
@@ -362,13 +431,4 @@ func updatePicker(m Model, msg KeyMsg) (Model, []Cmd) {
 		moveCursor(&m.Picker.Cursor, last+1, binding.Action)
 	}
 	return m, nil
-}
-
-// MenuKeys are the bindings that open the Menu from where the Pane is now, which the top bar's Menu button shows as keycaps: esc, only
-// where esc opens the Menu rather than going back or to the sidebar. None elsewhere.
-func (m Model) MenuKeys() []Binding {
-	if m.Focus != ColumnList || m.SidebarShown() || m.EscGoesBack() {
-		return nil
-	}
-	return CardKeys(m.CurrentMode(), ShowMenu)
 }

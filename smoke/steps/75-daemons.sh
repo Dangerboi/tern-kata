@@ -1,4 +1,4 @@
-# The Daemons Page (D) lists the daemons kata's config.toml names with kata tui's columns, and Enter switches this Pane to one:
+# The Daemons Page (D) lists the daemons kata's config.toml names in a table of name, endpoint, auth and state, and Enter switches this Pane to one:
 # another running daemon (a remote entry), a stopped local profile (started first), and back to the current home. A daemon that
 # cannot be reached leaves the Pane where it was. Own daemons and homes; the catalog is restored and every daemon stopped.
 dm_home="$tmp/daemons-home"
@@ -41,43 +41,43 @@ allow_insecure = true
 EOF
 
 ctl key D
-expect_tree "[data-id='main.columns.list.summary']" '.ok and (.nodes[0].text == "4 daemons")'
-expect_tree "[data-id='main.columns.list.header']" '.ok and (.nodes[0].text | startswith("Daemon") and contains("Endpoint") and contains("Auth") and contains("State"))'
-expect_tree "[data-id='main.columns.list.daemons.smoke-home.row']" '.ok and (.nodes[0].text | contains("local") and contains("no token"))'
-expect_tree "[data-id='main.columns.list.daemons.smoke-other.row']" '.ok and (.nodes[0].text | contains("127.0.0.1:'"$dm_port"'") and contains("no token"))'
-expect_tree "[data-id='main.columns.list.footer']" '.ok and (.nodes[0].text == "smoke-home · local")'
+expect_tree "[data-id='main.columns.list.heading.facts']" '.ok and (.nodes[0].text == "4")'
+expect_tree "[data-id='main.columns.list.daemons']" '.ok and (.nodes[0].text | startswith("NameEndpointAuthState"))'
+expect_tree "[data-id='main.columns.list.daemons']" '.ok and (.nodes[0].text | contains("smoke-homelocalno token") and contains("smoke-other127.0.0.1:'"$dm_port"'no token"))'
 
 # An unreachable daemon: the Pane says why and stays on the daemon it was on.
 ctl key j
 ctl key j
 ctl key j
-expect_tree "[data-id='main.columns.list.footer']" '.ok and (.nodes[0].text | startswith("smoke-broken · 127.0.0.1:1") and endswith("allow_insecure"))'
+expect_tree "[data-id='main.columns.list.footer']" '.ok and (.nodes[0].text == "Insecure connection allowed.")'
 ctl key enter
-expect_tree "[data-id\$='.notice']" '.ok and .count == 1 and (.nodes[0].text | startswith("daemon \"smoke-broken\": "))'
-expect_tree "[data-id='main.topbar.right.daemon']" '.ok and (.nodes[0].text | startswith("Daemon: local"))'
+expect_tree "[data-id\$='.notice']" '.ok and .count == 1 and (.nodes[0].text | startswith("Cannot connect to smoke-broken: "))'
+expect_tree "[data-id^='main.topbar.right.facts.fact']" '.ok and ([.nodes[].text] | join("") | startswith("local"))'
 
 # A second running daemon: a successful switch leaves the Page, starts the Pane over on that daemon (its own Projects, not the
 # smoke Project) and names it in the top bar.
 ctl key k
 ctl key k
 ctl key enter
-expect_tree "[data-id='main.topbar.right.daemon']" '.ok and (.nodes[0].text | startswith("Daemon: smoke-other · remote"))'
+expect_tree "[data-id^='main.topbar.right.facts.fact']" '.ok and ([.nodes[].text] | join("") | startswith("smoke-other· remote"))'
 expect_tree "[data-id='main.columns.list.issues']" '.count == 1'
-expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text != "Project: smoke")'
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text != "smoke")'
 ctl key D
-expect_tree "[data-id='main.columns.list.daemons.smoke-other.row']" '.ok and (.nodes[0].text | endswith("current"))'
+expect_tree "[data-id='main.columns.list.daemons']" '.ok and (.nodes[0].text | contains("smoke-other127.0.0.1:'"$dm_port"'no tokencurrent"))'
 
 # A stopped local profile is started by the switch: the cursor starts on the current daemon, so j is the profile.
 ctl key j
 ctl key enter
-expect_tree "[data-id='main.topbar.right.daemon']" '.ok and (.nodes[0].text | startswith("Daemon: smoke-profile · local"))'
+expect_tree "[data-id^='main.topbar.right.facts.fact']" '.ok and ([.nodes[].text] | join("") | startswith("smoke-profile· local"))'
 
 # Back to the current home: the workspace's Project is bound again.
 ctl key D
+# The catalog is read again on every entry: keys sent while it loads would be dropped.
+expect_tree "[data-id='main.columns.list.daemons']" '.ok and (.nodes[0].text | contains("smoke-profile") and contains("current"))'
 ctl key g
 ctl key enter
-expect_tree "[data-id='main.topbar.right.daemon']" '.ok and (.nodes[0].text | startswith("Daemon: smoke-home · local"))'
-expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "[data-id^='main.topbar.right.facts.fact']" '.ok and ([.nodes[].text] | join("") | startswith("smoke-home· local"))'
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 3'
 
 cp "$dm_home.config" "$KATA_HOME/config.toml"

@@ -91,7 +91,7 @@ func TestFollowingARelatedIdOfAnotherProjectOnTheBoardSwitchesTheProjectAndEscCo
 	if m.Collection != model.ProjectCollection("q", "infra") || !m.BoardShown() || m.SelectedUID != "far" || m.Focus != model.ColumnList {
 		t.Fatalf("collection %v board %v selected %q focus %v; want infra's Board with far selected", m.Collection, m.BoardShown(), m.SelectedUID, m.Focus)
 	}
-	if !strings.Contains(topBarText(t, s), "Project: infra") {
+	if !strings.Contains(topBarText(t, s), "infra") {
 		t.Errorf("top bar %s does not name infra", topBarText(t, s))
 	}
 
@@ -104,7 +104,7 @@ func TestFollowingARelatedIdOfAnotherProjectOnTheBoardSwitchesTheProjectAndEscCo
 	if m := s.Model; m.Collection != model.ProjectCollection("p", "work") || !m.BoardShown() || m.SelectedUID != "task" || m.Focus != model.ColumnList {
 		t.Errorf("after esc: collection %v board %v selected %q focus %v; want work's Board with task selected", m.Collection, m.BoardShown(), m.SelectedUID, m.Focus)
 	}
-	if !strings.Contains(topBarText(t, s), "Project: work") {
+	if !strings.Contains(topBarText(t, s), "work") {
 		t.Errorf("top bar %s does not name work after esc", topBarText(t, s))
 	}
 }
@@ -191,7 +191,7 @@ func TestFollowingALinksRowOfAnotherProjectSwitchesTheProjectAndEscComesBack(t *
 	if m.Collection != model.ProjectCollection("q", "infra") || m.SelectedUID != "far" || m.Focus != model.ColumnDetail || m.OnBoard() {
 		t.Fatalf("collection %v selected %q focus %v; want infra's Issues with far's detail focused", m.Collection, m.SelectedUID, m.Focus)
 	}
-	if !strings.Contains(topBarText(t, s), "Project: infra") {
+	if !strings.Contains(topBarText(t, s), "infra") {
 		t.Errorf("top bar %s does not name infra", topBarText(t, s))
 	}
 	back := step(t, s, key("escape"))

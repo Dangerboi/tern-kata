@@ -35,7 +35,7 @@ func TestTheJobInspectorListsTheNextThreeRunsOfACronJob(t *testing.T) {
 	for _, f := range facts {
 		got = append(got, f.Value)
 	}
-	want := []string{"Fri 2026-10-09 09:00 UTC", "Sat 2026-10-10 09:00 UTC", "Sun 2026-10-11 09:00 UTC"}
+	want := []string{"2026-10-09 09:00", "2026-10-10 09:00", "2026-10-11 09:00"}
 	if !slices.Equal(got, want) {
 		t.Errorf("runs %v, want %v", got, want)
 	}
@@ -50,7 +50,7 @@ func TestTheJobInspectorListsRunsOfAQuotedZoneDirectiveInThatZone(t *testing.T) 
 	for _, f := range facts {
 		got = append(got, f.Value)
 	}
-	want := []string{"Thu 2026-10-08 09:00 EDT", "Fri 2026-10-09 09:00 EDT", "Sat 2026-10-10 09:00 EDT"}
+	want := []string{"09:00", "2026-10-09 09:00", "2026-10-10 09:00"}
 	if !slices.Equal(got, want) {
 		t.Errorf("runs %v, want %v", got, want)
 	}
@@ -60,7 +60,7 @@ func TestTheJobInspectorCountsAnAdapterEveryJobFromItsCreation(t *testing.T) {
 	job := cronJob(true, cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "@every 1h", Timezone: "UTC"}, nil)
 	job.CreatedAt = time.Date(2026, 10, 8, 11, 20, 0, 0, time.UTC)
 	facts := nextRunsFacts(job)
-	if len(facts) == 0 || facts[0].Value != "Thu 2026-10-08 12:20 UTC" {
+	if len(facts) == 0 || facts[0].Value != "12:20" {
 		t.Errorf("facts %+v, want the first run at 12:20, as the list row has it", facts)
 	}
 }
@@ -73,9 +73,15 @@ func TestTheJobInspectorSaysWhyAJobHasNoNextRuns(t *testing.T) {
 	}{
 		"paused":        {cronJob(false, cron, nil), "none while paused"},
 		"closed parent": {cronJob(true, cron, &model.CronJobParent{Status: "closed"}), "none while the parent is closed"},
-		"manual":        {cronJob(true, cronjob.Trigger{Kind: cronjob.TriggerManual}, nil), "none: runs only when started"},
+		"manual":        {cronJob(true, cronjob.Trigger{Kind: cronjob.TriggerManual}, nil), ""},
 	} {
 		facts := nextRunsFacts(c.job)
+		if c.want == "" {
+			if len(facts) != 0 {
+				t.Errorf("%s: facts %+v, want no Next runs fact", name, facts)
+			}
+			continue
+		}
 		if len(facts) != 1 || facts[0].Label != "Next runs" || facts[0].Value != c.want {
 			t.Errorf("%s: facts %+v, want one Next runs fact %q", name, facts, c.want)
 		}

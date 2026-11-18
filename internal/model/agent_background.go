@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"slices"
 )
 
@@ -40,11 +39,11 @@ func agentPlaced(m Model, msg AgentPlaced) Model {
 		}
 	}
 	if msg.Err != nil {
-		what := "open the agent"
+		verb, thing := "open", "the agent"
 		if msg.Back {
-			what = "move the agent back"
+			verb, thing = "move", "the agent back"
 		}
-		m.Notice = fmt.Sprintf("Cannot %s: %s", what, msg.Err)
+		return m.fail(Cannot(verb, thing, msg.Err))
 	}
 	return m
 }
@@ -112,8 +111,7 @@ func (AgentOpenSet) msg() {}
 func agentOpenSet(m Model, msg AgentOpenSet) Model {
 	m.Agents.flagging = slices.DeleteFunc(slices.Clone(m.Agents.flagging), func(b string) bool { return b == msg.Block })
 	if msg.Err != nil {
-		m.Notice = "Cannot record where the agent is: " + msg.Err.Error()
-		return m
+		return m.fail(Cannot("record", "where the agent is", msg.Err))
 	}
 	m.AgentMapping = slices.Clone(m.AgentMapping)
 	for i := range m.AgentMapping {

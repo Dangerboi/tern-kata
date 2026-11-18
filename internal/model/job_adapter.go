@@ -85,11 +85,11 @@ func (f JobFormState) WorkflowsNote() string {
 	case len(f.options(JobFieldWorkflow)) > 0:
 		return ""
 	case f.WorkflowsErr != nil:
-		return "the Project's workflows could not be read: " + f.WorkflowsErr.Error()
+		return Cannot("read", "the Project's workflows", f.WorkflowsErr)
 	case !f.WorkflowsRead:
-		return "reading the Project's workflows…"
+		return Progress("Loading", "the Project's workflows")
 	}
-	return "this Project has no workflow; make one on the Workflows Page."
+	return "This Project has no workflow. Make one on the Workflows Page."
 }
 
 // maxJobSeconds is the longest span kata accepts for an interval, a lead, an offset, a grace or a timeout.
@@ -208,9 +208,9 @@ func catchupApplies(trigger cronjob.TriggerKind) bool {
 	return trigger == cronjob.TriggerCron || trigger == cronjob.TriggerInterval || trigger == cronjob.TriggerOnce
 }
 
-var promptJobKind = executeKind("prompt", "Agent prompt", KindAgentPrompt, false)
+var promptJobKind = executeKind("prompt", KindAgentPrompt, KindAgentPrompt, false)
 
-var workflowJobKind = executeKind("workflow", "Workflow", KindWorkflow, true)
+var workflowJobKind = executeKind("workflow", KindWorkflow, KindWorkflow, true)
 
 func executeKind(id, label, kind string, workflow bool) jobKind {
 	return jobKind{
@@ -393,7 +393,7 @@ func executePolicy(f JobFormState) (*cronjob.IssuePolicy, error) {
 }
 
 var notifyJobKind = jobKind{
-	id: "notify", label: "Notify", triggers: cronjob.TriggersFor(cronjob.ActionNotify),
+	id: "notify", label: KindNotify, triggers: cronjob.TriggersFor(cronjob.ActionNotify),
 	owns: func(j CronJob) bool { return j.Kind() == KindNotify },
 	shown: func(f JobFormState, name Field) bool {
 		switch name {
@@ -479,7 +479,7 @@ func (f JobFormState) ConditionLines() (lines []string, shown bool, err error) {
 		lines = append(lines, l.Wording())
 	}
 	if c.NewCommits {
-		line := "Only with new commits since the last succeeded run"
+		line := "New commits since the last succeeded run"
 		if len(c.Folders) > 0 {
 			line += " in folders " + strings.Join(c.Folders, ", ")
 		}

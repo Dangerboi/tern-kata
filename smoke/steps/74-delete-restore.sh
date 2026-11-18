@@ -14,11 +14,11 @@ expect_tree "$dl_row" '.ok and .nodes[0]["aria-selected"] == "true"'
 
 # The card names the Issue and says it can be restored. A wrong id is refused and nothing is deleted.
 ctl key X
-expect_tree "[data-id='layer.delete.issue']" ".ok and .count == 1 and (.nodes[0].text | startswith(\"$dl_ref \"))"
-expect_tree "[data-id='layer.delete.note']" '.ok and .count == 1 and (.nodes[0].text | contains("can be restored"))'
+expect_tree "[data-id='layer.delete.issue']" ".ok and .count == 1 and (.nodes[0].text == \"Smoke delete Issue\")"
+expect_tree "[data-id='layer.delete.note']" '.ok and .count == 1 and (.nodes[0].text | startswith("Restore it with"))'
 ctl type '"smoke#wrong"'
 ctl key enter
-expect_tree "[data-id='layer.delete.error']" ".ok and .count == 1 and (.nodes[0].text | contains(\"$dl_ref\"))"
+expect_tree "[data-id='layer.delete.foot.error']" ".ok and .count == 1 and (.nodes[0].text | startswith(\"Cannot delete \") and endswith(\"type its id to confirm.\"))"
 kata --workspace "$dl_dir" show "$dl_uid" --json | jq -e '.issue.deleted_at == null' >/dev/null
 expect_tree "$dl_row" '.ok and .count == 1'
 
@@ -31,7 +31,7 @@ ctl key enter
 expect_tree "[data-id='layer.delete']" '.ok and .count == 0'
 # The delete is a toast with an Undo button, not a Notice line: the toast node has no data-id, so it is found by class,
 # and its text is the message followed by the button label.
-expect_tree ".toast" ".ok and .count == 1 and (.nodes[0].text == \"Deleted $dl_ref. Press u to restore it.Undo\")"
+expect_tree ".toast" ".ok and .count == 1 and (.nodes[0].text | test(\"^Deleted (smoke)?#$dl_short\\\\.\") and contains(\"Undo\"))"
 expect_tree "$dl_notice" '.ok and .count == 0'
 expect_tree "$dl_row" '.ok and .count == 0'
 if kata --workspace "$dl_dir" show "$dl_uid" --json >/dev/null 2>&1; then
@@ -41,7 +41,7 @@ fi
 
 # u right after restores it.
 ctl key u
-expect_tree "$dl_notice" ".ok and .count == 1 and (.nodes[0].text | startswith(\"undid delete on \"))"
+expect_tree "$dl_notice" ".ok and .count == 1 and (.nodes[0].text | startswith(\"Undid the delete on \"))"
 expect_tree "$dl_row" '.ok and .count == 1'
 kata --workspace "$dl_dir" show "$dl_uid" --json | jq -e '.issue.deleted_at == null' >/dev/null
 
@@ -63,7 +63,7 @@ expect_tree "[data-id='layer.fields.found']" '.ok and .count == 1 and (.nodes[0]
 expect_tree "[data-id='layer.fields.found-state']" '.ok and .count == 1 and (.nodes[0].text | contains("is deleted"))'
 ctl key enter
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
-expect_tree "$dl_notice" ".ok and .count == 1 and (.nodes[0].text == \"Restored $dl_ref.\")"
+expect_tree "$dl_notice" ".ok and .count == 1 and (.nodes[0].text == \"Restored #$dl_short.\")"
 expect_tree "$dl_row" '.ok and .count == 1'
 kata --workspace "$dl_dir" show "$dl_uid" --json | jq -e '.issue.deleted_at == null' >/dev/null
 

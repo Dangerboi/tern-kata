@@ -10,7 +10,7 @@ import (
 // host's Panes started, on whatever Issue each runs, through the broadcast's write (each agent at its own address, an unread
 // message never replaced), and keeps the broadcast's outcome card open to show which agents have finished since.
 
-const NoAgentsToSweepRefusal = "No agent is running."
+const NoAgentsToSweepRefusal = "Nothing to sweep: no running agents."
 
 // Where an agent of a sweep stands, as the outcome card words it.
 const (
@@ -31,8 +31,7 @@ type SweepStanding struct {
 // cannot take it, or holds an unread message, is listed with why; the write is the broadcast's.
 func sweepAgents(m Model) (Model, []Cmd) {
 	if m.Stale {
-		m.Notice = "Daemon disconnected; reconnect before sweeping."
-		return m, nil
+		return m.fail(Cannot("sweep", "", ErrDisconnected)), nil
 	}
 	if !m.agentsKnown() {
 		m.sweepPending = true
@@ -62,8 +61,7 @@ func sweepKnownAgents(m Model) (Model, []Cmd) {
 		targets = append(targets, m.remoteTargets(issue.UID, issue.QualifiedID)...)
 	}
 	if len(targets) == 0 {
-		m.Notice = NoAgentsToSweepRefusal
-		return m, nil
+		return m.fail(NoAgentsToSweepRefusal), nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, Broadcast: true, Sweep: true, SweepSince: m.Now}
 	return writeBroadcast(m, targets, QuickReplyWrapUp)
@@ -180,13 +178,13 @@ func (m Model) SweepStatus(t BroadcastTarget) (standing SweepStanding, last stri
 	return standing, m.AgentLastLine(t.Block)
 }
 
-// remoteSweepStatus is where the sweep stands with an agent on another host: "on <host>: finished" once it has commented on its
-// Issue since the sweep or its record is gone, else "on <host>: not yet".
+// remoteSweepStatus is where the sweep stands with an agent on another host: "finished" once it has commented on its
+// Issue since the sweep or its record is gone, else "not yet". The card names the host beside it.
 func (m Model) remoteSweepStatus(t BroadcastTarget) SweepStanding {
 	if t.Commented || m.remoteRecordGone(t) {
-		return SweepStanding{true, "on " + t.Host + ": finished"}
+		return SweepStanding{true, "finished"}
 	}
-	return SweepStanding{false, "on " + t.Host + ": not yet"}
+	return SweepStanding{false, "not yet"}
 }
 
 func (m Model) remoteRecordGone(t BroadcastTarget) bool {

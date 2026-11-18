@@ -44,7 +44,7 @@ func undoCmd(t *testing.T, out driver.Output) model.UndoChange {
 func TestUWithNothingDoneSaysSo(t *testing.T) {
 	for name, s := range map[string]driver.State{"list": browsing(t, 160), "detail": onAlphaDetail(t)} {
 		out := pressU(t, s)
-		if got := out.State.Model.Notice; got != "nothing to undo" || len(out.Cmds) != 0 {
+		if got := out.State.Model.Notice; got != "Nothing to undo." || len(out.Cmds) != 0 {
 			t.Errorf("%s: notice %q, cmds %#v", name, got, out.Cmds)
 		}
 	}
@@ -74,11 +74,11 @@ func TestTheHistoryHoldsTwentyChangesAndUndoesNewestFirst(t *testing.T) {
 			t.Fatalf("undid change %d, want %d", cmd.Entry.Revision, want)
 		}
 		s = feed(t, out.State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoChanged}).State
-		if got, want := s.Model.Notice, "undid priority.set on #aaaa"; got != want {
+		if got, want := s.Model.Notice, "Undid the priority change on #aaaa."; got != want {
 			t.Fatalf("notice %q, want %q", got, want)
 		}
 	}
-	if got := pressU(t, s).State.Model.Notice; got != "nothing to undo" {
+	if got := pressU(t, s).State.Model.Notice; got != "Nothing to undo." {
 		t.Fatalf("after the twentieth: %q", got)
 	}
 }
@@ -97,7 +97,7 @@ func TestASecondUWhileOneUndoIsOutIsRefused(t *testing.T) {
 	s := undoable(t, 2)
 	out := pressU(t, s)
 	again := pressU(t, out.State)
-	if len(again.Cmds) != 0 || again.State.Model.Notice != "undo already in progress" {
+	if len(again.Cmds) != 0 || again.State.Model.Notice != "Cannot undo: another undo is in progress." {
 		t.Fatalf("second u: %q, cmds %#v", again.State.Model.Notice, again.Cmds)
 	}
 }
@@ -123,15 +123,15 @@ func TestEachGuardsMessageAndWhatItDoesToTheHistory(t *testing.T) {
 		cmd := undoCmd(t, out)
 		got := feed(t, out.State, model.ChangeUndone{EntryID: cmd.Entry.ID, Result: model.UndoConflict, Conflict: tt.conflict, Ref: "aaaa"}).State.Model
 		if tt.clears {
-			if want := "cannot undo #aaaa: " + tt.conflict; got.Notice != want || len(got.Undo.Entries) != 0 {
+			if want := "Cannot undo #aaaa: " + tt.conflict + "."; got.Notice != want || len(got.Undo.Entries) != 0 {
 				t.Errorf("%s: notice %q, %d entries", tt.conflict, got.Notice, len(got.Undo.Entries))
 			}
-			if next, _ := model.Update(got, model.KeyMsg{Chord: "u"}); next.Notice != "nothing to undo: "+tt.conflict {
+			if next, _ := model.Update(got, model.KeyMsg{Chord: "u"}); next.Notice != "Nothing to undo: "+tt.conflict+"." {
 				t.Errorf("%s: next u says %q", tt.conflict, next.Notice)
 			}
 			continue
 		}
-		if want := "skipped undo for #aaaa: " + tt.conflict; got.Notice != want || len(got.Undo.Entries) != 1 {
+		if want := "Cannot undo #aaaa: " + tt.conflict + "."; got.Notice != want || len(got.Undo.Entries) != 1 {
 			t.Errorf("%s: notice %q, %d entries, want the refused one dropped and the older one kept", tt.conflict, got.Notice, len(got.Undo.Entries))
 		}
 	}
@@ -144,9 +144,9 @@ func TestOtherEndsOfAnUndo(t *testing.T) {
 		notice  string
 		entries int
 	}{
-		{"already restored", model.ChangeUndone{Result: model.UndoAlready, Ref: "aaaa"}, "#aaaa already restored; no change made", 1},
-		{"failed", model.ChangeUndone{Result: model.UndoFailed, Ref: "aaaa", Err: errors.New("boom")}, "undo failed for #aaaa: boom", 2},
-		{"unknown", model.ChangeUndone{Result: model.UndoUnknown, Ref: "aaaa", Err: errors.New("deadline")}, "undo outcome unknown; refreshed issue state", 0},
+		{"already restored", model.ChangeUndone{Result: model.UndoAlready, Ref: "aaaa"}, "#aaaa is already restored.", 1},
+		{"failed", model.ChangeUndone{Result: model.UndoFailed, Ref: "aaaa", Err: errors.New("boom")}, "Cannot undo #aaaa: boom.", 2},
+		{"unknown", model.ChangeUndone{Result: model.UndoUnknown, Ref: "aaaa", Err: errors.New("deadline")}, "Cannot undo #aaaa: the outcome is unknown, so the Issue was read again.", 0},
 	} {
 		s := undoable(t, 2)
 		out := pressU(t, s)
@@ -160,7 +160,7 @@ func TestOtherEndsOfAnUndo(t *testing.T) {
 	s := undoable(t, 2)
 	out := pressU(t, s)
 	s = feed(t, out.State, model.ChangeUndone{EntryID: undoCmd(t, out).Entry.ID, Result: model.UndoUnknown}).State
-	if got := pressU(t, s).State.Model.Notice; got != "nothing to undo: undo outcome is unknown" {
+	if got := pressU(t, s).State.Model.Notice; got != "Nothing to undo: undo outcome is unknown." {
 		t.Fatalf("after an unknown undo: %q", got)
 	}
 }
@@ -168,7 +168,7 @@ func TestOtherEndsOfAnUndo(t *testing.T) {
 func TestAWriteWithAnUnknownOutcomeClearsTheHistory(t *testing.T) {
 	s := undoable(t, 3)
 	s = feed(t, s, model.FieldWritten{UID: "alpha", Err: errors.New("deadline exceeded"), Record: model.WriteRecord{Unknown: true}}).State
-	if got := pressU(t, s).State.Model.Notice; got != "nothing to undo: previous action's outcome is unknown" {
+	if got := pressU(t, s).State.Model.Notice; got != "Nothing to undo: previous action's outcome is unknown." {
 		t.Fatalf("notice %q", got)
 	}
 }
@@ -176,7 +176,7 @@ func TestAWriteWithAnUnknownOutcomeClearsTheHistory(t *testing.T) {
 func TestAWriteThatCannotBeUndoneClearsTheHistoryWithItsReason(t *testing.T) {
 	s := undoable(t, 3)
 	s = feed(t, s, model.FieldWritten{UID: "alpha", Record: model.WriteRecord{Boundary: "closing a recurring issue cannot be undone"}}).State
-	if got := pressU(t, s).State.Model.Notice; got != "nothing to undo: closing a recurring issue cannot be undone" {
+	if got := pressU(t, s).State.Model.Notice; got != "Nothing to undo: closing a recurring issue cannot be undone." {
 		t.Fatalf("notice %q", got)
 	}
 }
@@ -184,7 +184,7 @@ func TestAWriteThatCannotBeUndoneClearsTheHistoryWithItsReason(t *testing.T) {
 func TestATimedAssignmentClearsTheHistory(t *testing.T) {
 	s := undoable(t, 3)
 	s = feed(t, s, key("t"), key("1"), key("h"), key("enter"), model.FieldWritten{UID: "alpha"}).State
-	if got := pressU(t, s).State.Model.Notice; got != "nothing to undo: timed assignment cannot be undone" {
+	if got := pressU(t, s).State.Model.Notice; got != "Nothing to undo: timed assignment cannot be undone." {
 		t.Fatalf("notice %q", got)
 	}
 }
@@ -265,7 +265,7 @@ func TestAnUndoAnsweredAfterAnotherChangeLandedRemovesItsOwnEntry(t *testing.T) 
 	first := undoCmd(t, out).Entry
 	s := feed(t, out.State, done(3)).State
 	got := feed(t, s, model.ChangeUndone{EntryID: first.ID, Result: model.UndoChanged, Ref: "aaaa"}).State.Model
-	if want := "undid priority.set on #aaaa"; got.Notice != want {
+	if want := "Undid the priority change on #aaaa."; got.Notice != want {
 		t.Fatalf("notice %q, want %q", got.Notice, want)
 	}
 	if n := len(got.Undo.Entries); n != 2 || got.Undo.Entries[0].Revision != 1 || got.Undo.Entries[1].Revision != 3 {
@@ -278,7 +278,7 @@ func TestAnUndoAnsweredAfterTheHistoryWasClearedStillShowsAndReadsAgain(t *testi
 	first := undoCmd(t, out).Entry
 	s := feed(t, out.State, model.FieldWritten{UID: "alpha", Record: model.WriteRecord{Boundary: "closing a recurring issue cannot be undone"}}).State
 	answered := feed(t, s, model.ChangeUndone{EntryID: first.ID, Result: model.UndoChanged, Ref: "aaaa"})
-	if want := "undid priority.set on #aaaa"; answered.State.Model.Notice != want {
+	if want := "Undid the priority change on #aaaa."; answered.State.Model.Notice != want {
 		t.Fatalf("notice %q, want %q", answered.State.Model.Notice, want)
 	}
 	if answered.State.Model.Undo.InFlight {

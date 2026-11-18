@@ -103,7 +103,7 @@ func TestLoadAttentionCountsASlotThatDoesNotReadAsSkipped(t *testing.T) {
 	if got.Err != nil || got.Skipped != 2 || len(got.Requests) != 1 || got.Requests[0].IssueUID != good {
 		t.Fatalf("answer %+v, want the good request and two skipped", got)
 	}
-	if got.Requests[0].Tag() != "request" {
+	if got.Requests[0].Tag() != "" {
 		t.Errorf("a malformed optional field kept in the tag: %q", got.Requests[0].Tag())
 	}
 }

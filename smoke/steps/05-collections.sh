@@ -3,8 +3,7 @@ ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 ctl key Down
 ctl key enter
-expect_tree "[data-id='layer.collections.list.back']" '.ok and .count == 1'
-ctl key Down
+expect_tree "[data-id='layer.collections.list.back']" '.ok and .count == 0'
 ctl key enter
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "Inbox"'
@@ -12,5 +11,5 @@ expect_tree "[data-id='main.columns.list.issues']" '.ok and ([.nodes[] | .. | ob
 ctl key esc
 ctl key Home
 ctl key enter
-expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'

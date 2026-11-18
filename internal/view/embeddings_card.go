@@ -14,7 +14,7 @@ func embeddingsLayer(m model.Model) tern.Element {
 		return nil
 	}
 	body := m.EmbeddingsCardBody()
-	children := []tern.Element{toneText("daemon", ui.ToneMuted, m.EmbeddingsCardTitle())}
+	var children []tern.Element
 	if body.Question != "" {
 		children = append(children, toneText("question", ui.ToneNeutral, body.Question))
 	}
@@ -42,21 +42,21 @@ func embeddingsLayer(m model.Model) tern.Element {
 	}
 	switch mode := m.EmbeddingsCardMode(); mode {
 	case model.ModeEmbeddingsAsk:
-		children = append(children, buttonRow(
+		children = append(children, formFoot(
 			cardButton("turn-on", mode, model.TurnOnEmbeddingsConfirm, "Turn on", true),
-			cardButton("decline", mode, model.TurnOnEmbeddingsDecline, "Not now", false)))
+			exitButton("decline", mode, model.TurnOnEmbeddingsDecline, "Not now")))
 	case model.ModeEmbeddingsRestart:
-		children = append(children, buttonRow(
+		children = append(children, formFoot(
 			cardButton("restart", mode, model.RestartDaemonConfirm, "Restart now", true),
-			cardButton("decline", mode, model.RestartDaemonDecline, "Not now", false)))
+			exitButton("decline", mode, model.RestartDaemonDecline, "Not now")))
 	case model.ModeEmbeddingsOff:
-		children = append(children, buttonRow(
+		children = append(children, formFoot(
 			cardButton("turn-on", mode, model.TurnOnEmbeddingsAsk, "Turn on…", true),
-			cardButton("close", mode, model.EmbeddingsCardClose, "Close", false)))
+			exitButton("close", mode, model.EmbeddingsCardClose, "Close")))
 	default:
-		children = append(children, buttonRow(cardButton("close", mode, model.EmbeddingsCardClose, "Close", false)))
+		children = append(children, buttonRow(exitButton("close", mode, model.EmbeddingsCardClose, "Close")))
 	}
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardEmbeddings)}, Modal: true, Size: ui.SizeLG, Head: ui.T("Search by meaning"), Icon: ui.IconSearch}, children))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardEmbeddings)}, Modal: true, Size: ui.SizeLG, Head: ui.T("Search by meaning"), Meta: ui.T(m.EmbeddingsCardTitle()), Icon: ui.IconSearch}, children))
 }
 
 // progressBar is kata's progress as a bar; a total kata does not give draws one that sweeps.

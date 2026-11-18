@@ -75,7 +75,7 @@ func TestWorkflowCardSavesWhatTheWorkerWouldRefuseAndSaysWhy(t *testing.T) {
 				t.Fatalf("typing sent %#v, want an ask after a pause", typed.Cmds)
 			}
 			answered := step(t, typed.State, workersAnswer(ask, &two, "", false)).State
-			mustShow(t, answered, "note", "This machine's Worker will not run it", tc.why)
+			mustShow(t, answered, "note", "This machine's worker will not run it", tc.why)
 			if got := toneOfLine(t, answered, 0); got != "warning" {
 				t.Errorf("the refusal is drawn in tone %q", got)
 			}
@@ -96,8 +96,8 @@ func TestWorkflowCardSaysQuietlyThatTheWorkerWouldRunWhatItAccepts(t *testing.T)
 	typed := typeWorkflow(t, s, workflowText(`{"key":"a","kind":"prompt","prompt":"p","options":{"mystery":true}}`))
 	ask, _ := readingAsk(t, typed)
 	answered := step(t, typed.State, workersAnswer(ask, &five, "", false)).State
-	mustShow(t, answered, "note", "This machine's Worker would run it.")
-	if got := toneOfLine(t, answered, 0); got != "muted" {
+	mustShow(t, answered, "note", "This machine's worker can run it.")
+	if got := toneOfLine(t, answered, 0); got != "success" {
 		t.Errorf("the quiet note is drawn in tone %q", got)
 	}
 }
@@ -111,7 +111,7 @@ func TestWorkflowCardShowsOnlyKatasProblemForTextKataRefuses(t *testing.T) {
 	mustShow(t, typed.State, "kata's problem while editing", "must be")
 	saved := step(t, typed.State, key("ctrl+o")).State
 	mustShow(t, saved, "kata's problem", "must be")
-	if strings.Contains(screen(t, saved), "Worker") {
+	if strings.Contains(screen(t, saved), "This machine's worker") {
 		t.Error("a Worker note is drawn under text kata refuses")
 	}
 }
@@ -127,16 +127,16 @@ func TestWorkflowCardIgnoresTheAnswerForTextTheUserHasSinceEdited(t *testing.T) 
 		t.Fatal("two asks share a request number")
 	}
 	stale := step(t, second.State, workersAnswer(older, &five, "", false)).State
-	if strings.Contains(screen(t, stale), "Worker") {
+	if strings.Contains(screen(t, stale), "This machine's worker") {
 		t.Error("the answer for the older text was drawn")
 	}
 	fresh := step(t, stale, workersAnswer(newer, &five, "", false)).State
-	mustShow(t, fresh, "note", "would run it")
+	mustShow(t, fresh, "note", "can run it")
 
 	// Text kata then refuses drops an answer still on its way.
 	third := typeWorkflow(t, fresh, workflowText(`{"key":"a","kind":"prompt","prompt":"p"`))
 	late := step(t, third.State, workersAnswer(newer, &five, "", false)).State
-	if strings.Contains(screen(t, late), "Worker") {
+	if strings.Contains(screen(t, late), "This machine's worker") {
 		t.Error("an answer was drawn under text that no longer passes kata's rules")
 	}
 }
@@ -171,7 +171,7 @@ func TestWorkflowCardNamesWhatNeedsNoWorkerTomlAndWhyTheBudgetWasNotChecked(t *t
 			typed := typeWorkflow(t, s, text)
 			ask, _ := readingAsk(t, typed)
 			answered := step(t, typed.State, workersAnswer(ask, nil, tc.why, tc.missing)).State
-			mustShow(t, answered, "note", "names a profile", "The prompt budget could not be checked: "+tc.why)
+			mustShow(t, answered, "note", "names a profile", "Cannot check the prompt budget: "+tc.why)
 			if got := toneOfLine(t, answered, 2); got != tc.tone {
 				t.Errorf("the budget line is drawn in tone %q, want %q", got, tc.tone)
 			}
@@ -186,7 +186,7 @@ func TestWorkflowsPageInspectorShowsTheWorkersReadingAndKeepsItThroughArchiveAnd
 		"W2": {},
 	}}).State
 	opened := step(t, loaded, key("enter")).State
-	mustShow(t, opened, "W1 reading", "This machine's Worker will not run it", "options.on_fail")
+	mustShow(t, opened, "W1 reading", "This machine's worker will not run it", "options.on_fail")
 
 	flow := reviewFlow()
 	flow.EventUID, flow.Archived = "E9", true
@@ -199,7 +199,7 @@ func TestWorkflowsPageInspectorShowsTheWorkersReadingAndKeepsItThroughArchiveAnd
 	saved := reviewFlow()
 	saved.EventUID = "E11"
 	after := step(t, restored, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, UID: "W1", Workflow: &saved, Reading: &model.WorkerReading{}}).State
-	mustShow(t, after, "replaced by a save", "This machine's Worker would run it.")
+	mustShow(t, after, "replaced by a save", "This machine's worker can run it.")
 	if strings.Contains(screen(t, after), "options.on_fail") {
 		t.Error("the saved Workflow still shows the old reading")
 	}
@@ -221,7 +221,7 @@ func TestWorkflowCardShowsKatasProblemWhileEditingAndClearsItWhenTheTextIsValid(
 	s := step(t, workflowsPane(t, 160), key("n")).State
 	broken := typeWorkflow(t, s, workflowText(`{"key":"a","kind":"shell"}`))
 	mustShow(t, broken.State, "the problem before any save", "must be")
-	if strings.Contains(screen(t, broken.State), "Worker") {
+	if strings.Contains(screen(t, broken.State), "This machine's worker") {
 		t.Error("a Worker note is drawn under text kata refuses")
 	}
 	fixed := typeWorkflow(t, broken.State, workflowText(`{"key":"a","kind":"prompt","prompt":"p"}`))
@@ -232,7 +232,7 @@ func TestWorkflowCardShowsKatasProblemWhileEditingAndClearsItWhenTheTextIsValid(
 	if strings.Contains(screen(t, fixed.State), "must be") {
 		t.Error("the problem is still drawn once the text is valid")
 	}
-	mustShow(t, step(t, fixed.State, workersAnswer(ask, &five, "", false)).State, "the Worker note", "would run it")
+	mustShow(t, step(t, fixed.State, workersAnswer(ask, &five, "", false)).State, "the worker note", "can run it")
 }
 
 func TestWorkflowCardRefusesOptionsWrittenAsNullAndTakesOptionsLeftOut(t *testing.T) {
@@ -284,7 +284,7 @@ func TestADiscardedDraftAfterAConflictLeavesTheCurrentVersionWithItsReading(t *t
 	if discarded.Model.Workflows.Card.Open {
 		t.Fatal("Discard Draft left the card open")
 	}
-	mustShow(t, step(t, discarded, key("enter")).State, "the current version's reading", "This machine's Worker will not run it", "options.on_fail")
+	mustShow(t, step(t, discarded, key("enter")).State, "the current version's reading", "This machine's worker will not run it", "options.on_fail")
 
 	// A write refused while no card is saving keeps the reading of the version it found too.
 	archived := step(t, s, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpArchive, UID: "W1", Current: &newer, Reading: &refusal}).State

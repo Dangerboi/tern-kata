@@ -11,24 +11,25 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// from are the Pages the card opens from, the only ones whose sheet lists the line.
+// cardHelp are the lines of the Cards and Filter and search groups that the card modes add, by group title. from are the Pages the
+// card opens from, the only ones whose sheet lists the line.
 var cardHelp = map[string][]struct {
 	text    string
 	mode    model.Mode
 	actions []model.Action
 	from    []model.Page
 }{
-	"Forms": {
-		{"save or apply", model.ModeCreate, []model.Action{model.SaveDraftAction}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
-		{"cancel", model.ModeCreate, []model.Action{model.CancelDraft}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
-		{"change field", model.ModeCreate, []model.Action{model.NextField, model.PreviousField}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
-		{"open editor", model.ModeEditor, []model.Action{model.ExternalEditorAction}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
-		{"cycle reply kind", model.ModeEditor, []model.Action{model.CycleReplyKind}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
-		{"send reply anyway", model.ModeEditor, []model.Action{model.SendReplyAnyway}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
+	"Cards": {
+		{"Save or apply", model.ModeCreate, []model.Action{model.SaveDraftAction}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
+		{"Cancel", model.ModeCreate, []model.Action{model.CancelDraft}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
+		{"Change field", model.ModeCreate, []model.Action{model.NextField, model.PreviousField}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
+		{"Open editor", model.ModeEditor, []model.Action{model.ExternalEditorAction}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
+		{"Cycle reply kind", model.ModeEditor, []model.Action{model.CycleReplyKind}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
+		{"Send reply anyway", model.ModeEditor, []model.Action{model.SendReplyAnyway}, []model.Page{model.PageIssues, model.PageBoard, model.PageWorkflows}},
 	},
-	"Filters": {
-		{"reset filter form", model.ModeFilterForm, []model.Action{model.ResetFilterForm}, []model.Page{model.PageIssues, model.PageBoard}},
-		{"save as default filter", model.ModeFilterForm, []model.Action{model.SaveFilterDefault}, []model.Page{model.PageIssues, model.PageBoard}},
+	"Filter and search": {
+		{"Reset the form", model.ModeFilterForm, []model.Action{model.ResetFilterForm}, []model.Page{model.PageIssues, model.PageBoard}},
+		{"Save as default filter", model.ModeFilterForm, []model.Action{model.SaveFilterDefault}, []model.Page{model.PageIssues, model.PageBoard}},
 	},
 }
 
@@ -63,6 +64,55 @@ func helpGroups(m model.Model) []model.SheetGroup {
 
 const helpColumnCols = 64
 
+// emacsNote is named once on the Everywhere card: the Emacs aliases carry no key of their own in the rows.
+const emacsNote = "Emacs keys also work: {ctrl+n}, {ctrl+p}, {ctrl+v}, {alt+v}, {ctrl+alt+<} and {ctrl+alt+>}."
+
+// shownKeys is what a sheet row draws for its keys: a run of three or more consecutive digits collapses to "a-b" (1-6), and a
+// row of aliases shows its primary key and one alias. Single characters are sibling keys, not aliases (the letters of the More
+// Pages), so a row made only of them keeps every key.
+func shownKeys(keys []string) []string {
+	var out []string
+	for i := 0; i < len(keys); {
+		j := i
+		for j+1 < len(keys) && isDigit(keys[j]) && isDigit(keys[j+1]) && keys[j+1][0] == keys[j][0]+1 {
+			j++
+		}
+		if j-i >= 2 {
+			out = append(out, keys[i]+"-"+keys[j])
+		} else {
+			out = append(out, keys[i:j+1]...)
+		}
+		i = j + 1
+	}
+	if len(out) > 2 && slices.ContainsFunc(out, func(k string) bool { return utf8.RuneCountInString(k) > 1 }) {
+		out = out[:2]
+	}
+	return out
+}
+
+func isDigit(key string) bool { return len(key) == 1 && key[0] >= '0' && key[0] <= '9' }
+
+// keySpans draws keys as keycaps with a space between them.
+func keySpans(keys []string) []ui.Span {
+	spans := make([]ui.Span, 0, 2*len(keys))
+	for i, k := range keys {
+		if i > 0 {
+			spans = append(spans, ui.Span{T: " "})
+		}
+		spans = append(spans, keySpan(k))
+	}
+	return spans
+}
+
+// keysWidth is the cells keySpans takes for keys, with each keycap's padding left to the renderer.
+func keysWidth(keys []string) int {
+	width := len(keys) - 1
+	for _, k := range keys {
+		width += utf8.RuneCountInString(k)
+	}
+	return max(width, 0)
+}
+
 func help(m model.Model) tern.Nodes {
 	var groups []model.SheetGroup
 	for _, group := range helpGroups(m) {
@@ -84,7 +134,7 @@ func help(m model.Model) tern.Nodes {
 		stacks[shortest] = append(stacks[shortest], gi)
 		heights[shortest] += len(group.Lines) + 2 // the head and the gap below the card
 		for _, l := range group.Lines {
-			widths[shortest] = max(widths[shortest], utf8.RuneCountInString(strings.Join(l.Keys, "/")))
+			widths[shortest] = max(widths[shortest], keysWidth(shownKeys(l.Keys)))
 		}
 	}
 	columns := make([]tern.Element, count)
@@ -95,24 +145,29 @@ func help(m model.Model) tern.Nodes {
 		}
 		columns[i] = ui.Col{Common: ui.Common{Key: "col-" + strconv.Itoa(i), Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0)}}, Gap: ui.GapMD, Align: ui.AlignStretch, Children: cards}
 	}
-	return ui.Nodes(ui.List{CommonWithoutMax: scrollerCommon("help"), Max: ui.MaxFrac(1), Children: ui.Nodes(ui.Col{
-		Common: ui.Common{Key: "sheet"},
-		Gap:    ui.GapMD,
-		Children: ui.Nodes(
-			ui.Text{Common: ui.Common{Key: "title"}, Text: "tern-kata — keybindings"},
-			ui.Row{Common: ui.Common{Key: "groups"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: columns},
-			ui.Text{Common: ui.Common{Key: "return"}, Spans: []ui.Span{{T: "press ? or esc to return", S: "muted"}}},
-		),
+	// The head sits outside the scroller so Close stays in reach however far the sheet is scrolled.
+	head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapMD, Align: ui.AlignCenter, Children: ui.Nodes(
+		ui.Text{Common: ui.Common{Key: "title", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Spans: []ui.Span{{T: "Keyboard shortcuts", S: "strong"}}},
+		exitButton("close", model.ModeHelp, model.CloseHelp, "Close"),
+	)}
+	return ui.Nodes(head, ui.List{CommonWithoutMax: scrollerCommon("help"), Max: ui.MaxFrac(1), Children: ui.Nodes(ui.Col{
+		Common:   ui.Common{Key: "sheet"},
+		Gap:      ui.GapMD,
+		Children: ui.Nodes(ui.Row{Common: ui.Common{Key: "groups"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: columns}),
 	})})
 }
 
 func helpCard(key string, group model.SheetGroup, keyCols int) tern.Element {
 	rows := make([]tern.Element, len(group.Lines))
 	for i, l := range group.Lines {
+		keys := shownKeys(l.Keys)
 		rows[i] = ui.Row{Common: ui.Common{Key: "row-" + strconv.Itoa(i)}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
-			ui.Text{Common: ui.Common{Key: "keys", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(float64(keyCols))}}, Spans: []ui.Span{{T: strings.Join(l.Keys, "/"), S: mono("accent")}}, Wrap: ui.WrapNone},
+			ui.Text{Common: ui.Common{Key: "keys", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(float64(keyCols))}}, Spans: keySpans(keys), Wrap: ui.WrapNone},
 			ui.Text{Common: ui.Common{Key: "action", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Text: l.Text},
 		)}
+	}
+	if group.Title == model.SheetEverywhere {
+		rows = append(rows, ui.Text{Common: ui.Common{Key: "emacs"}, Spans: prose(emacsNote, "muted")})
 	}
 	return ui.Card{Common: ui.Common{Key: key}, Head: ui.T(group.Title), Children: rows}
 }

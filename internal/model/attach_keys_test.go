@@ -121,7 +121,7 @@ func TestShiftUNamesAnAttachmentTypedInFull(t *testing.T) {
 
 func TestShiftUWithNoAttachmentsSaysSoWithoutOpeningAForm(t *testing.T) {
 	m, cmds := model.Update(attachPane(model.ColumnList, map[string]any{"other": 1, "tern-kata.attachment.old": map[string]any{"host": "h", "path": "/p"}}), model.KeyMsg{Chord: "shift+u"})
-	if m.FieldForm.Open || slices.ContainsFunc(cmds, func(c model.Cmd) bool { _, ok := c.(model.UnlinkAttachment); return ok }) || m.Notice != "abcd has no attachments." {
+	if m.FieldForm.Open || slices.ContainsFunc(cmds, func(c model.Cmd) bool { _, ok := c.(model.UnlinkAttachment); return ok }) || m.Notice != "#abcd has no attachments." {
 		t.Fatalf("U with none: form %+v notice %q", m.FieldForm, m.Notice)
 	}
 }
@@ -154,7 +154,7 @@ func TestUnlinkSaysTheBytesStayAndShowsAsANoticeUntilTheNextKey(t *testing.T) {
 	m, _ := model.Update(attachPane(model.ColumnList, refs("a.png")), model.KeyMsg{Chord: "shift+u"})
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
 	m, _ = model.Update(m, model.AttachmentUnlinked{UID: "issue", Name: "a.png"})
-	if m.FieldForm.Open || m.Notice != "Unlinked a.png from abcd; its bytes stay in Docbank" {
+	if m.FieldForm.Open || m.Notice != "Unlinked a.png from abcd. Its bytes stay in Docbank." {
 		t.Fatalf("form %+v notice %q", m.FieldForm, m.Notice)
 	}
 	m, _ = model.Update(m, model.KeyMsg{Chord: "down"})
@@ -186,7 +186,7 @@ func TestAttachKeysAreInTheFooterAndHelpSheet(t *testing.T) {
 		}
 	}
 	all := strings.Join(lines, "\n")
-	for _, want := range []string{"attach file (upload to Docbank)|@", "unlink attachment|U"} {
+	for _, want := range []string{"attach file (upload to Docbank)|@", "unlink attachment|⇧U"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("help sheet lacks %q:\n%s", want, all)
 		}

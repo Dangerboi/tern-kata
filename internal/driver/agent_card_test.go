@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -85,18 +86,18 @@ func TestTheAgentCardWithNoAgentsStillStartsOneAndIgnoresEnterAndB(t *testing.T)
 func TestTheAgentCardRowsShowStateStartAndWhere(t *testing.T) {
 	s := step(t, withAgentRows(agentPanes(t, agentIssue("t1"))["list"]), key("w")).State
 	for block, want := range map[string]string{
-		"31": "agent working · started 2026-10-30 09:05 · split",
-		"32": "agent waiting for you · started 2026-10-30 10:05 · tab",
-		"33": "agent idle · started 2026-10-30 11:05 · split",
+		"31": "working · 2026-10-30 09:05 · split",
+		"32": "waiting for you · 2026-10-30 10:05 · tab",
+		"33": "idle · 2026-10-30 11:05 · split",
 	} {
-		if rows := rowsNamed(t, s.Model, view.AgentListID, want); len(rows) != 1 || rows[0] != view.AgentItemID(block) {
+		if rows := agentRowsReading(t, s.Model, want); len(rows) != 1 || rows[0] != view.AgentItemID(block) {
 			t.Errorf("rows reading %q: %v, want only %s", want, rows, view.AgentItemID(block))
 		}
 	}
 	at := time.Date(2026, 10, 30, 9, 5, 0, 0, time.UTC)
 	for want, entry := range map[string]model.AgentEntry{
-		"agent working · started 2026-10-30 09:05 · background": {Block: "41", StartedAt: at, Background: true},
-		"agent working · started 2026-10-30 09:05 · open":       {Block: "42", StartedAt: at, Background: true, Open: true},
+		"working · 2026-10-30 09:05 · background": {Block: "41", StartedAt: at, Background: true},
+		"working · 2026-10-30 09:05 · open":       {Block: "42", StartedAt: at, Background: true, Open: true},
 	} {
 		if got := view.AgentRowText(s.Model, model.IssueAgent{AgentEntry: entry, State: model.AgentWorking}); got != want {
 			t.Errorf("row %q, want %q", got, want)
@@ -128,13 +129,13 @@ func TestTheAgentRowShowsTheFirstLineOfAnUnclearedMessageAndLosesItWhenTheSlotCl
 		model.NotificationKey("me/omp-31"): map[string]any{"from": "me", "message": "rebase first\nthen test"},
 	}}}}
 	m.Agents = model.AgentStatesRelay{Received: true, States: []model.AgentState{{Block: "31", State: "working"}}}
-	row := view.AgentRowText(m, m.IssueAgents("t1")[0])
-	if !strings.HasSuffix(row, " · message unread: rebase first") || !strings.HasPrefix(row, "agent working · started ") {
-		t.Errorf("row %q", row)
+	agent := m.IssueAgents("t1")[0]
+	if row := view.AgentRowText(m, agent); agent.Unread != "rebase first" || !strings.HasPrefix(row, "working · ") || strings.Contains(row, "unread") {
+		t.Errorf("row %q, unread %q; want the message on its own detail line, not in the row", row, agent.Unread)
 	}
 	m.Issues[0].Metadata = map[string]any{}
-	if row := view.AgentRowText(m, m.IssueAgents("t1")[0]); strings.Contains(row, "unread") {
-		t.Errorf("cleared row %q", row)
+	if agent := m.IssueAgents("t1")[0]; agent.Unread != "" {
+		t.Errorf("cleared unread %q", agent.Unread)
 	}
 }
 
@@ -242,7 +243,7 @@ func teamCardPane(t *testing.T, state model.TeamState) driver.State {
 func TestTheParentsCardShowsTheTeamUnderItsAgents(t *testing.T) {
 	s := teamCardPane(t, model.TeamRunning)
 	text := wireTextOf(t, s)
-	wantText(t, "the team section", text, "Team: running · 3 at once")
+	wantText(t, "the team section", text, "running · 3 at once")
 	for uid, want := range map[string]string{
 		"c1": "work#c1 · agent working",
 		"c2": "work#c2 · ran: closed",
@@ -257,10 +258,10 @@ func TestTheParentsCardShowsTheTeamUnderItsAgents(t *testing.T) {
 }
 
 func TestTheTeamSectionSaysPausedCoordinatorExitedAndEnding(t *testing.T) {
-	for state, want := range map[model.TeamState]string{model.TeamPaused: "Team: paused · 3 at once", model.TeamStopping: "Team: coordinator exited · 3 at once", model.TeamEnding: "Team: ending · 3 at once"} {
+	for state, want := range map[model.TeamState]string{model.TeamPaused: "paused · 3 at once", model.TeamStopping: "coordinator exited · 3 at once", model.TeamEnding: "ending · 3 at once"} {
 		wantText(t, string(state), wireTextOf(t, teamCardPane(t, state)), want)
 	}
-	if text := wireTextOf(t, step(t, agentPanes(t, agentIssue("t1"))["list"], key("w")).State); strings.Contains(text, "Team:") {
+	if text := wireTextOf(t, step(t, agentPanes(t, agentIssue("t1"))["list"], key("w")).State); strings.Contains(text, " at once") {
 		t.Errorf("an Issue without a team shows a team section: %q", text)
 	}
 }
@@ -269,7 +270,7 @@ func TestAChildsCardNamesItsTeamsParentAndCoordinator(t *testing.T) {
 	s := teamCardPane(t, model.TeamRunning)
 	s.Model.AgentCard.IssueUID, s.Model.AgentCard.IssueRef = "c1", "work#c1"
 	text := wireTextOf(t, s)
-	wantText(t, "the child's card", text, "a child of the team on work#t1", "coordinator dana/omp-30")
+	wantText(t, "the child's card", text, "Part of the team on work#t1.")
 	if strings.Contains(text, "at once") {
 		t.Errorf("a child's card shows the parent's team section: %q", text)
 	}
@@ -294,4 +295,18 @@ func TestPOnTheParentsCardPausesAndResumesAndIsOffWithoutATeam(t *testing.T) {
 	if off := step(t, open, key("p")); len(off.Cmds) != 0 || off.State.Model.Notice != model.TeamNoneReason {
 		t.Errorf("without a team: cmds %#v, notice %q", off.Cmds, off.State.Model.Notice)
 	}
+}
+
+// agentRowsReading are the ids of the agent rows whose drawn pieces, joined with spaces, read name: a row is several spans.
+func agentRowsReading(t *testing.T, m model.Model, name string) []string {
+	t.Helper()
+	var found []string
+	for _, n := range wireNodes(t, view.Render(m, now)) {
+		if strings.HasPrefix(n.ID, view.AgentListID+".") && strings.Join(drawnPieces(n), " ") == name {
+			found = append(found, n.ID)
+		}
+	}
+	return slices.DeleteFunc(found, func(id string) bool {
+		return slices.ContainsFunc(found, func(outer string) bool { return strings.HasPrefix(id, outer+".") })
+	})
 }

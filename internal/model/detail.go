@@ -54,48 +54,60 @@ type DetailItemMsg struct {
 
 func (DetailItemMsg) msg() {}
 
+// tabSpec is one Activity tab: its label, the kind of row it lists, and what it says when empty: a title, a sentence with one %s
+// per action (hint), and the actions whose keys the view draws as keycaps in the sentence.
 type tabSpec struct {
-	label string
-	kind  RowKind
-	empty string
+	label   string
+	kind    RowKind
+	empty   string
+	hint    string
+	actions []Action
 }
 
 // tabTable lists the Activity tabs in order: the label, the kind of row it lists and what it says when empty. The label, a
 // row kind's tab and the empty text all come from it; a test fails for a tab left out.
 var tabTable = [TabCount]tabSpec{
-	TabComments:    {"Comments", RowComment, "No comments."},
-	TabEvents:      {"Events", RowEvent, "No events."},
-	TabLinks:       {"Links", RowLink, "No links."},
-	TabAttachments: {"Attachments", RowAttachment, "No attachments, @ to attach"},
+	TabComments:    {"Comments", RowComment, "No comments", "Press %s to add one.", []Action{AddComment}},
+	TabEvents:      {"Events", RowEvent, "No events", "Events appear as the Issue changes.", nil},
+	TabLinks:       {"Links", RowLink, "No links", "Press %s or %s to add one.", []Action{AddBlockerAction, AddRelatedAction}},
+	TabAttachments: {"Attachments", RowAttachment, "No attachments", "Press %s to attach a file.", []Action{AttachFileAction}},
 }
 
 func (s ActivityTab) String() string { return tabTable[s].label }
 
-func (s ActivityTab) EmptyText() string { return tabTable[s].empty }
-
-// EmptyDetailText is what the active tab says when it has no rows: the Attachments tab of an Issue on a daemon without Docbank
-// says why nothing can be attached.
-func (m Model) EmptyDetailText() string {
-	if m.tab == TabAttachments && m.authority != nil && m.authority.AttachmentsOff {
-		return DocbankOffMessage
-	}
-	return m.tab.EmptyText()
+// EmptyDetail is what a tab with no rows says: a Title, and a Hint sentence with one %s for each of Actions, in order, where the
+// view draws that action's key as a keycap.
+type EmptyDetail struct {
+	Title, Hint string
+	Actions     []Action
 }
 
-// DetailRow is one row of an Activity tab (Type is a history event's kata type). A Comment or Event row has its Author and Time (Model.DetailTime); a Link row has Relation and Ref
-// instead; a history row also carries its sentence in parts.
+// EmptyDetail is what the active tab says when it has no rows: the Attachments tab of an Issue on a daemon without Docbank
+// says why nothing can be attached.
+func (m Model) EmptyDetail() EmptyDetail {
+	spec := tabTable[m.tab]
+	if m.tab == TabAttachments && m.authority != nil && m.authority.AttachmentsOff {
+		return EmptyDetail{Title: spec.empty, Hint: DocbankOffMessage}
+	}
+	return EmptyDetail{Title: spec.empty, Hint: spec.hint, Actions: spec.actions}
+}
+
+// DetailRow is one row of an Activity tab (Type is a history event's kata type). A Comment or Event row has its Author and Time (Model.DetailTime); a Link row has Relation (the code),
+// RelationLabel (its words) and Ref instead; a history row also carries its sentence in parts.
 type DetailRow struct {
 	Key, Type, Author, Time, Body, ReferenceUID string
 	// Creation is a comment row's creation line, empty when kata gave no verification state.
 	Creation string
 	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
-	Relation, Ref, RefTitle string
+	Relation, RelationLabel, Ref, RefTitle string
+	// RelationRepeat says the row above has the same relation, so the view draws the label once.
+	RelationRepeat bool
 	// Qualified and Status are the referenced Issue's qualified id and status as its Link carries them (empty for an event row).
 	Qualified, Status string
 	File              Attachment
 	History           *HistorySentence
-	// Reply says what a comment answers ("confirms dana's comment in #bbbb") and Replies how many comments answer it; both
+	// Reply says what a comment answers ("confirming dana in #bbbb") and Replies how many comments answer it; both
 	// are empty without reply information.
 	Reply, Replies string
 	Head           []RowSpan
@@ -113,6 +125,7 @@ type SpanStyle string
 const (
 	SpanStrong SpanStyle = "strong"
 	SpanTime   SpanStyle = "muted mono"
+	SpanMuted  SpanStyle = "muted"
 	SpanAccent SpanStyle = "accent"
 )
 
@@ -129,17 +142,40 @@ func (m Model) DetailRowCount(tab ActivityTab) int {
 	}
 	switch tab {
 	case TabLinks:
-		return len(m.authority.Links)
+		return len(m.authority.Links) - m.hierarchyLinkCount()
 	case TabComments:
 		return len(m.authority.Comments)
 	case TabEvents:
-		return len(m.authority.History)
+		return len(m.authority.History) - m.hiddenEventCount()
 	case TabAttachments:
 		if m.authority.Issue != nil {
 			return len(Attachments(m.authority.Issue.Metadata))
 		}
 	}
 	return 0
+}
+
+// hierarchyLinkCount is the Links that are the Issue's parent or children: the Links tab leaves them to the Parent property and the
+// Children table.
+func (m Model) hierarchyLinkCount() int {
+	n := 0
+	for _, link := range m.authority.Links {
+		if link.Type == "parent" || link.Type == "child" {
+			n++
+		}
+	}
+	return n
+}
+
+// hiddenEventCount is the History events the Events tab does not list (see EventHidden).
+func (m Model) hiddenEventCount() int {
+	n := 0
+	for _, event := range m.authority.History {
+		if EventHidden(event) {
+			n++
+		}
+	}
+	return n
 }
 
 // Width tiers, in Pane columns. MinCols fits a phone held upright (about 47 columns) and sideways beside an agent (43);

@@ -19,15 +19,17 @@ expect_tree "[data-id='layer.fields']" '.ok and .count == 1'
 ctl type "\"#$(jq -r '.issue.short_id' "$tmp/sp-epic.json")\""
 ctl key enter
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
-# The task now sits under the epic: hidden while the epic is folded, under a connector once unfolded.
+# The task now sits under the epic: hidden while the epic is folded, indented under it once unfolded.
 expect_tree "[data-id='main.columns.list.issues.$sp_task']" '.ok and .count == 0'
 ctl click "[data-id='main.columns.list.issues.$sp_epic']"
 ctl key Right
-expect_tree "[data-id='main.columns.list.issues.$sp_task']" '.ok and .count == 1 and (.nodes[0].text | startswith("└─"))'
+expect_tree "[data-id='main.columns.list.issues.$sp_task']" '.ok and .count == 1'
+# The tree text drops leading spaces, so the indent is not asserted; the epic's open fold mark is.
+expect_tree "[data-id='main.columns.list.issues.$sp_epic']" '.ok and .count == 1 and (.nodes[0].text | startswith("▾"))'
 
 ctl key P
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
-expect_tree "[data-id^='layer.collections.list.']" '.ok and .nodes[0].text == "Back"'
+expect_tree "[data-id^='layer.collections.list.']" '.ok and (.nodes[0].text | endswith("current"))'
 expect_tree "[data-id='layer.collections.list.project.$sp_project']" '.ok and .count == 1'
 ctl key esc
 ctl key esc

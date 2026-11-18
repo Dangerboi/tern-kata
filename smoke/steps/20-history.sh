@@ -16,7 +16,7 @@ expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.n
 ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab1']"
 history_rows="[data-id^='main.columns.detail.viewport.content.activity.']"
 history_text() { printf '[.nodes[] | .text? // empty] | join(" | ") | %s' "$1"; }
-expect_tree "$history_rows" "$(history_text 'contains("assigned to alice") and contains("closed: done") and contains("reopened") and contains("set priority to 1") and contains("added label `history`") and contains("dana")')"
+expect_tree "$history_rows" "$(history_text 'contains("assigned to alice") and contains("closed as done") and contains("reopened") and contains("set priority to 1") and contains("added label history") and contains("dana")')"
 expect_tree "$history_rows" "$(history_text 'contains("Finished the history fixture") and contains("commit abc1234") and (contains("```") | not) and (contains("{\"") | not) and (contains("old_priority") | not)')"
 
 quit_app

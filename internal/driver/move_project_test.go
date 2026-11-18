@@ -48,7 +48,7 @@ func moveListed(t *testing.T, s driver.State) []string {
 
 func moveText(t *testing.T, s driver.State, leaf string) string {
 	t.Helper()
-	text, _ := nodeText(t, s, view.LayerID(model.CardMove)+"."+leaf)
+	text, _ := nodeText(t, s, view.LayerID(model.CardMove)+"."+statusLeaf(leaf))
 	return text
 }
 
@@ -182,7 +182,7 @@ func TestMoveCardConflictKeepsTheCardOpenAndOffersAFreshPreview(t *testing.T) {
 	if conflict.State.Model.TopCard() != model.CardMove || len(conflict.Cmds) != 0 {
 		t.Fatalf("card %v cmds %v, want the card open and nothing sent", conflict.State.Model.TopCard(), conflict.Cmds)
 	}
-	if got := moveText(t, conflict.State, "preview"); !strings.Contains(got, "changed since") || !strings.Contains(got, "nothing was moved") {
+	if got := moveText(t, conflict.State, "error"); !strings.Contains(got, "Cannot move") || !strings.Contains(got, "it changed since this card opened") {
 		t.Errorf("conflict text %q", got)
 	}
 
@@ -323,7 +323,7 @@ func TestMoveClearsTheUndoHistoryOnlyWhenTheIssueMoves(t *testing.T) {
 	if len(sent.State.Model.Undo.Entries) != 0 || len(done.Model.Undo.Entries) != 0 {
 		t.Fatalf("history after the move %+v, want it cleared", done.Model.Undo)
 	}
-	if got := pressU(t, done).State.Model.Notice; got != "nothing to undo: moving an Issue cannot be undone" {
+	if got := pressU(t, done).State.Model.Notice; got != "Nothing to undo: moving an Issue cannot be undone." {
 		t.Errorf("u says %q", got)
 	}
 }
@@ -333,7 +333,7 @@ func TestMoveCardPreviewNamesTheDescendantsAndTheSwitchSendsSingle(t *testing.T)
 	answer := model.ProjectMoveAnswer{UID: "a", ToProjectUID: "s", DryRun: true, Revision: 3, Count: 3,
 		Descendants: []model.MovedIssue{{ShortID: "b"}, {ShortID: "c", ProjectUID: "h"}}}
 	previewed := step(t, preview.State, answer).State
-	want := "#a and 2 descendants move to shop and get new ids there: #b, home#c."
+	want := "#a and 2 descendants (#b, home#c) move to shop and get new ids there."
 	if text := moveText(t, previewed, "preview"); text != want {
 		t.Fatalf("preview %q, want %q", text, want)
 	}

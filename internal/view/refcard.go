@@ -12,36 +12,58 @@ import (
 
 type refFacts struct{ UID, Qualified, Status string }
 
+// refSummary is what a hovercard, a tooltip and a child's cell say about an Issue. Ref is the id as the Pane reads it: "#id"
+// inside the Project on screen, "project#id" otherwise. Meta is the owner (when there is one) and the time of the last update,
+// as the facts of the one muted line.
 type refSummary struct{ Ref, Title, Status, Owner, Updated string }
 
 func summarize(m model.Model, f refFacts, now time.Time) refSummary {
 	if issue, ok := m.LoadedIssue(f.UID); ok {
 		s := refSummary{
-			Ref: cmp.Or(issue.Qualified(), f.Qualified), Title: issue.Title, Status: issue.Status,
+			Ref: m.RefName(issue.ProjectName, issue.ShortID), Title: issue.Title, Status: issue.Status,
 			Owner: m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String(),
 		}
 		if !issue.UpdatedAt.IsZero() {
-			s.Updated = model.RelativeTime(issue.UpdatedAt, now)
+			s.Updated = m.Calendar.Read(issue.UpdatedAt, now)
+		}
+		if s.Ref == "#" {
+			s.Ref = cmp.Or(issue.Qualified(), f.Qualified)
 		}
 		return s
 	}
-	return refSummary{Ref: f.Qualified, Status: f.Status}
+	return refSummary{Ref: relativeRef(m, f.Qualified), Status: f.Status}
+}
+
+// relativeRef names an Issue given as "project#id" the way the Pane's Collection does.
+func relativeRef(m model.Model, qualified string) string {
+	project, short, ok := strings.Cut(qualified, "#")
+	if !ok || short == "" {
+		return qualified
+	}
+	return m.RefName(project, short)
 }
 
 func refCardBody(s refSummary) tern.Element {
-	head := ui.Nodes(ui.Text{Common: ui.Common{Key: "ref"}, Spans: []ui.Span{{T: s.Ref, S: "accent strong"}}})
+	head := ui.Nodes(ui.Text{Common: ui.Common{Key: "ref"}, Spans: []ui.Span{monoSpan(s.Ref, "strong")}})
 	if s.Status != "" {
-		head = append(head, ui.Badge{Common: ui.Common{Key: "status", Tone: statusTone(s.Status)}, Text: s.Status})
+		head = append(head, ui.Text{Common: ui.Common{Key: "status"}, Spans: []ui.Span{{T: s.Status, S: toneStyle(issueStateTone(s.Status != "open"))}}})
 	}
 	lines := ui.Nodes(ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Children: head})
 	if s.Title != "" {
 		lines = append(lines, ui.Text{Common: ui.Common{Key: "title"}, Text: s.Title})
 	}
+	var meta []ui.Span
 	if s.Owner != "" {
-		lines = append(lines, ui.Text{Common: ui.Common{Key: "owner"}, Spans: []ui.Span{{T: "owner ", S: "muted"}, {T: s.Owner}}})
+		meta = append(meta, ui.Span{T: s.Owner, S: "muted"})
 	}
 	if s.Updated != "" {
-		lines = append(lines, ui.Text{Common: ui.Common{Key: "updated"}, Spans: []ui.Span{{T: "updated ", S: "muted"}, {T: s.Updated}}})
+		if meta != nil {
+			meta = append(meta, ui.Span{T: " · ", S: "muted"})
+		}
+		meta = append(meta, timeSpan(s.Updated))
+	}
+	if meta != nil {
+		lines = append(lines, ui.Text{Common: ui.Common{Key: "meta"}, Spans: meta})
 	}
 	return ui.Col{Common: ui.Common{Key: "card"}, Gap: ui.GapXS, Children: lines}
 }
@@ -70,12 +92,12 @@ func refTooltip(s refSummary) string {
 		}
 	}
 	if s.Owner != "" {
-		parts = append(parts, "owner "+s.Owner)
+		parts = append(parts, s.Owner)
 	}
 	if s.Updated != "" {
-		parts = append(parts, "updated "+s.Updated)
+		parts = append(parts, s.Updated)
 	}
-	return strings.Join(parts, " - ")
+	return strings.Join(parts, " · ")
 }
 
 func relFacts(r model.RelationshipRef) refFacts {

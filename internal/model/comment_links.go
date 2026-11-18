@@ -67,6 +67,14 @@ func (m Model) commentLinks(uid string) []commentLink {
 	return links
 }
 
+// answeredAuthor names the author of the comment a reply answers; a target with no author is "a comment".
+func answeredAuthor(author *string) string {
+	if author == nil {
+		return "a comment"
+	}
+	return *author
+}
+
 func answeredComment(author *string) string {
 	if author == nil {
 		return "a comment"
@@ -81,6 +89,14 @@ func replyVerb(kind string) string {
 	return "replies to"
 }
 
+// replyingTo is the reply kind as a participle for a reply's own head: "replying to dana", "confirming dana".
+func replyingTo(kind string) string {
+	if verb := map[string]string{"confirm": "confirming", "refute": "refuting", "supersede": "superseding"}[kind]; verb != "" {
+		return verb
+	}
+	return "replying to"
+}
+
 func wrapIndex(i, n int) int { return (i%n + n) % n }
 
 // chosenLink is the index of the link the cursor comment has chosen among n links: the first until `]` or `[` stepped.
@@ -89,6 +105,17 @@ func (m Model) chosenLink(row rowID, n int) int {
 		return 0
 	}
 	return wrapIndex(m.link, n)
+}
+
+// CommentLinkLabels are the labels of the links of the comment with the uid, in the order ] and [ step them; none for a comment
+// without links.
+func (m Model) CommentLinkLabels(uid string) []string {
+	links := m.commentLinks(uid)
+	labels := make([]string, len(links))
+	for i, l := range links {
+		labels[i] = l.label
+	}
+	return labels
 }
 
 func (m Model) DetailCommentLink() (CommentLinkChoice, bool) {

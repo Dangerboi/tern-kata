@@ -22,8 +22,8 @@ func askedEmbeddings(cmds []model.Cmd) (model.LoadEmbeddingsStatus, bool) {
 
 var embeddingsFilesFixture = []model.ConfigFile{
 	{Key: model.ConfigLanes, Title: "lanes.toml", Path: "/cfg/tern-kata/lanes.toml", Summary: "no lanes"},
-	{Key: model.ConfigDocbank, Title: "Docbank (kata's config.toml)", Path: "/kata/config.toml", Summary: "not set up"},
-	{Key: model.ConfigKata, Title: "config.toml (kata's, read-only)", Path: "/kata/config.toml", Summary: "1 daemon"},
+	{Key: model.ConfigDocbank, Title: "Docbank", Path: "/kata/config.toml", Summary: "not set up"},
+	{Key: model.ConfigKata, Title: "kata config.toml", Path: "/kata/config.toml", Summary: "read-only · 1 daemon"},
 }
 
 // embeddingsPane is the Config Page opened on a Pane connected to daemon "home", its rows answered with rows and its status read
@@ -51,15 +51,15 @@ func TestConfigPageSearchByMeaningRowSaysWhatKataReportsForTheConnectedDaemon(t 
 		status model.EmbeddingsStatus
 		want   string
 	}{
-		"off with a download":         {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true}, "off: kata searches by words · about 290 MB to download"},
-		"off with Ollama":             {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, OllamaAvailable: true, DownloadBytes: 290_400_000, CanChange: true}, "off: kata searches by words · your Ollama will be used"},
-		"off for a non-administrator": {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000}, "off: turning it on needs a daemon administrator"},
-		"downloading":                 {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading, Downloaded: 120_000_000, Total: 290_000_000}}, "downloading 120 / 290 MB"},
-		"restart owed":                {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, "set up: needs a kata daemon restart"},
-		"job failed":                  {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsFailed, Error: "disk full\nfree some space"}}, "turning it on failed: disk full free some space"},
-		"indexing with an ETA":        {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, Indexing: &model.EmbeddingsIndexing{Done: 40, Total: 200, ETA: 150 * time.Second}}, "indexing 40 / 200 Issues · about 3 min"},
-		"indexing without an ETA":     {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, Indexing: &model.EmbeddingsIndexing{Done: 40, Total: 200}}, "indexing 40 / 200 Issues"},
-		"indexing failed":             {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, Indexing: &model.EmbeddingsIndexing{Done: 40, Total: 200, Failed: true}}, "indexing failed"},
+		"off with a download":         {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true}, "off · searches by words · about 290 MB to download"},
+		"off with Ollama":             {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, OllamaAvailable: true, DownloadBytes: 290_400_000, CanChange: true}, "off · searches by words · your Ollama will be used"},
+		"off for a non-administrator": {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000}, "off · turning it on needs a daemon administrator"},
+		"downloading":                 {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsDownloading, Downloaded: 120_000_000, Total: 290_000_000}}, "turning on · downloading 120 / 290 MB"},
+		"restart owed":                {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, Job: &model.EmbeddingsJob{State: model.EmbeddingsRestart}}, "set up · needs a kata daemon restart"},
+		"job failed":                  {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true, Job: &model.EmbeddingsJob{State: model.EmbeddingsFailed, Error: "disk full\nfree some space"}}, "not turned on · disk full free some space"},
+		"indexing with an ETA":        {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, Indexing: &model.EmbeddingsIndexing{Done: 40, Total: 200, ETA: 150 * time.Second}}, "on · indexing 40 / 200 Issues · about 3 min"},
+		"indexing without an ETA":     {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, Indexing: &model.EmbeddingsIndexing{Done: 40, Total: 200}}, "on · indexing 40 / 200 Issues"},
+		"indexing failed":             {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn, Indexing: &model.EmbeddingsIndexing{Done: 40, Total: 200, Failed: true}}, "on · indexing failed"},
 		"built-in":                    {model.EmbeddingsStatus{Provider: model.EmbeddingsBuiltIn}, "on · built-in model"},
 		"Ollama":                      {model.EmbeddingsStatus{Provider: model.EmbeddingsOllama}, "on · your Ollama"},
 		"another provider":            {model.EmbeddingsStatus{Provider: model.EmbeddingsOther}, "on · another provider (kata's config.toml)"},
@@ -71,10 +71,10 @@ func TestConfigPageSearchByMeaningRowSaysWhatKataReportsForTheConnectedDaemon(t 
 		var titled bool
 		for _, n := range wireNodes(t, view.Render(answered.Model, now)) {
 			switch n.ID {
-			case rowID + ".title":
+			case rowID + ".head.title":
 				titled = true
-				if got := wireText(n); !strings.Contains(got, `"spans":[{"s":"strong","t":"Search by meaning (kata daemon: home)"}]`) {
-					t.Errorf("%s: title node %s, want exactly the row's name and daemon", name, got)
+				if got := wireText(n); !strings.Contains(got, `"spans":[{"s":"strong","t":"Search by meaning"}]`) {
+					t.Errorf("%s: title node %s, want exactly the row's name", name, got)
 				}
 			case rowID + ".path":
 				t.Errorf("%s: the row is not a file but draws a path: %s", name, wireText(n))
@@ -83,8 +83,8 @@ func TestConfigPageSearchByMeaningRowSaysWhatKataReportsForTheConnectedDaemon(t 
 		if !titled {
 			t.Errorf("%s: no title node drawn for the row", name)
 		}
-		wantText(t, name, text, "Search by meaning (kata daemon: home)", tc.want, "3 files in /cfg/tern-kata")
-		docbank, row, kata := strings.Index(text, "Docbank (kata's"), strings.Index(text, "Search by meaning (kata daemon"), strings.Index(text, "config.toml (kata's, read-only)")
+		wantText(t, name, text, "Search by meaning", tc.want, "/cfg/tern-kata")
+		docbank, row, kata := strings.Index(text, "Docbank"), strings.Index(text, "Search by meaning"), strings.Index(text, "kata config.toml")
 		if !(docbank < row && row < kata) {
 			t.Errorf("%s: the row is not between the Docbank row and kata's config.toml row: %s", name, text)
 		}
@@ -94,7 +94,7 @@ func TestConfigPageSearchByMeaningRowSaysWhatKataReportsForTheConnectedDaemon(t 
 func TestConfigPageSearchByMeaningRowShowsKatasErrorWhenTheStatusCannotBeRead(t *testing.T) {
 	s, ask := embeddingsPane(t, embeddingsFilesFixture)
 	out := step(t, s, model.EmbeddingsStatusLoaded{Request: ask.Request, Err: errors.New("local embeddings setup is unavailable")})
-	wantText(t, "a failed read", wireTextOf(t, out.State), "kata cannot report search by meaning here: local embeddings setup is unavailable")
+	wantText(t, "a failed read", wireTextOf(t, out.State), "unavailable · kata cannot report it here: local embeddings setup is unavailable")
 	if _, again := askedEmbeddings(out.Cmds); again {
 		t.Errorf("a failed read asked again: %#v", out.Cmds)
 	}
@@ -145,7 +145,7 @@ func TestConfigPageDropsALateStatusAnswer(t *testing.T) {
 	stale := statusAnswered(t, s, first, model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true})
 	text := wireTextOf(t, stale.State)
 	wantText(t, "after a late answer", text, "on · your Ollama")
-	if strings.Contains(text, "off: kata searches by words") {
+	if strings.Contains(text, "off · searches by words") {
 		t.Errorf("a late answer replaced the newer one: %s", text)
 	}
 }
@@ -153,7 +153,7 @@ func TestConfigPageDropsALateStatusAnswer(t *testing.T) {
 func TestConfigPageSearchByMeaningRowFollowsADaemonSwitch(t *testing.T) {
 	s, ask := embeddingsPane(t, embeddingsFilesFixture)
 	s = statusAnswered(t, s, ask, model.EmbeddingsStatus{Provider: model.EmbeddingsOllama}).State
-	wantText(t, "before the switch", wireTextOf(t, s), "Search by meaning (kata daemon: home)", "on · your Ollama")
+	wantText(t, "before the switch", wireTextOf(t, s), "Search by meaning", "on · your Ollama")
 
 	daemons, asked := switchOut(t)
 	s.Model.Daemons = daemons
@@ -167,7 +167,7 @@ func TestConfigPageSearchByMeaningRowFollowsADaemonSwitch(t *testing.T) {
 	}
 	s = statusAnswered(t, s, status, model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_000_000, CanChange: true, Remote: true}).State
 	row, listed := embeddingsRowOf(s)
-	if !listed || row.Title != "Search by meaning (kata daemon: work)" || row.Summary != "off: kata searches by words · about 290 MB to download" {
+	if !listed || row.Title != "Search by meaning" || row.Summary != "off · searches by words · about 290 MB to download" {
 		t.Errorf("row %+v, want the new daemon's name and answer", row)
 	}
 }

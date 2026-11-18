@@ -33,10 +33,11 @@ func selectedBoard(t *testing.T, uid string, links []model.Link, issues ...model
 	return step(t, linkedBoard(t, links, issues...), model.SelectMsg{UID: uid}).State
 }
 
-// relationshipsText is the Relationships line drawn on uid's card, its parts joined by spaces, and whether the card draws one.
+// relationshipsText is the Relationship facts drawn in uid's facts row, joined by spaces (the owner, the other date, the reopen
+// fact and the separators left out), and whether the card draws a facts row.
 func relationshipsText(t *testing.T, s driver.State, uid string) (string, bool) {
 	t.Helper()
-	prefix := rowOf(t, s.Model, view.BoardID, uid) + ".relationships"
+	prefix := rowOf(t, s.Model, view.BoardID, uid) + ".facts"
 	var words []string
 	drawn := false
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
@@ -44,6 +45,10 @@ func relationshipsText(t *testing.T, s driver.State, uid string) (string, bool) 
 			drawn = true
 		}
 		if !strings.HasPrefix(n.ID, prefix+".") {
+			continue
+		}
+		switch first, _, _ := strings.Cut(strings.TrimPrefix(n.ID, prefix+"."), "."); {
+		case strings.HasPrefix(first, "sep"), first == "owner", first == "other-date", first == "reopen":
 			continue
 		}
 		spans, _ := n.P["spans"].([]any)
@@ -63,7 +68,7 @@ func refClick(t *testing.T, s driver.State, from, to string) string {
 	t.Helper()
 	nodes := wireNodes(t, view.Render(s.Model, now))
 	id := slices.IndexFunc(nodes, func(n tern.WireNode) bool {
-		return strings.HasPrefix(n.ID, rowOf(t, s.Model, view.BoardID, from)+".relationships.") && strings.HasSuffix(n.ID, "."+to)
+		return strings.HasPrefix(n.ID, rowOf(t, s.Model, view.BoardID, from)+".facts.") && strings.HasSuffix(n.ID, "."+to)
 	})
 	if id < 0 {
 		t.Fatalf("no clickable id for %s on %s", to, from)
@@ -83,7 +88,7 @@ func TestTheSelectedCardShowsEveryPartOfItsRelationships(t *testing.T) {
 		relatedTo(8, "task", "rel"),
 	}
 	s := selectedBoard(t, "task", links, boardCard("task"), boardCard("par"))
-	want := "parent par 2 children, 1 open blocks later blocked by gate related rel"
+	want := "parent par 1 of 2 children open blocks later related rel"
 	if got, _ := relationshipsText(t, s, "task"); got != want {
 		t.Errorf("line = %q, want %q", got, want)
 	}
@@ -91,8 +96,8 @@ func TestTheSelectedCardShowsEveryPartOfItsRelationships(t *testing.T) {
 
 func TestEmptyPartsAreLeftOutAndNoRelationshipsDrawNoLine(t *testing.T) {
 	s := selectedBoard(t, "task", []model.Link{childOf(1, "kid", "open", "task")}, boardCard("task"), boardCard("lone"))
-	if got, _ := relationshipsText(t, s, "task"); got != "1 child, 1 open" {
-		t.Errorf("line = %q, want %q", got, "1 child, 1 open")
+	if got, _ := relationshipsText(t, s, "task"); got != "1 of 1 child open" {
+		t.Errorf("line = %q, want %q", got, "1 of 1 child open")
 	}
 	s = step(t, s, model.SelectMsg{UID: "lone"}).State
 	if got, drawn := relationshipsText(t, s, "lone"); drawn || got != "" {
@@ -193,8 +198,8 @@ func TestCaretSelectsTheParentOrSaysThereIsNone(t *testing.T) {
 
 	s = step(t, s, model.SelectMsg{UID: "orphan"}).State
 	out = step(t, s, key("^"))
-	if m := out.State.Model; m.SelectedUID != "orphan" || m.Notice != "orphan has no parent." {
-		t.Errorf("selected %q, notice %q; want orphan and %q", m.SelectedUID, m.Notice, "orphan has no parent.")
+	if m := out.State.Model; m.SelectedUID != "orphan" || m.Notice != "#orphan has no parent." {
+		t.Errorf("selected %q, notice %q; want orphan and %q", m.SelectedUID, m.Notice, "#orphan has no parent.")
 	}
 
 	s = selectedBoard(t, "task", []model.Link{childOf(1, "task", "open", "missing")}, boardCard("task"))

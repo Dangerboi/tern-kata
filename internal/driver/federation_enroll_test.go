@@ -168,9 +168,9 @@ func TestNOpensTheLocalProjectStepWithTheNewReplicaFirstAndThePanesProjectSelect
 		t.Fatalf("n gave screen %v, mode %q and %#v, want the local Project step and no daemon call", m.Federation.Screen, m.CurrentMode(), out.Cmds)
 	}
 	text := shownText(t, out.State)
-	wantShown(t, "the local Project step", out.State, "Select local spoke project", "selected project: work", "create new local replica from hub project",
-		"Federation for active daemon: work https://spoke.example:7474")
-	order := []string{"create new local replica from hub project", "acme", "hubby", "work", "Zeta"}
+	wantShown(t, "the local Project step", out.State, "Pick the local Project", "Project", "work", "Create a local replica of a hub Project",
+		"work · https://spoke.example:7474")
+	order := []string{"Create a local replica of a hub Project", "acme", "hubby", "work", "Zeta"}
 	pos := 0
 	for _, name := range order {
 		at := strings.Index(text[pos:], "\n"+name)
@@ -185,7 +185,7 @@ func TestNOpensTheLocalProjectStepWithTheNewReplicaFirstAndThePanesProjectSelect
 	if sel, total := m.Position(); sel != rowWork+1 || total != 5 {
 		t.Errorf("the cursor is on row %d of %d, want the Pane's own Project, work, of the 5 rows", sel, total)
 	}
-	wantText(t, "the footer", footerText(t, out.State), "↵", "select", "back")
+	wantText(t, "the footer", footerText(t, out.State), "enter", "select", "back")
 
 	if moved := step(t, out.State, key("j")).State.Model.FederationChoiceCursor(); moved != rowZeta {
 		t.Errorf("j left the cursor on %d", moved)
@@ -223,30 +223,30 @@ func TestEnterOnALocalProjectReadsTheCatalogAndTheHubStepRefusesTheActiveAndLoca
 	if _, ok := asked[model.LoadFederationHubs](out.Cmds); !ok {
 		t.Fatalf("Enter asked %#v, want a read of the catalog", out.Cmds)
 	}
-	wantShown(t, "the hub step while the catalog is read", out.State, "Select hub daemon", "local spoke project: acme", "loading hub daemons...")
+	wantShown(t, "the hub step while the catalog is read", out.State, "Pick the hub daemon", "acme", "Loading hub daemons…")
 	load, _ := asked[model.LoadFederationHubs](out.Cmds)
 	hubs := step(t, out.State, hubsAnswer(load)).State
-	wantShown(t, "the hub step", hubs, "work https://spoke.example:7474 auth token (active spoke)", "laptop local auth no token",
-		"hub https://hub.example:7474 auth token allow_insecure")
+	wantShown(t, "the hub step", hubs, "work · https://spoke.example:7474 · auth token · this Pane's daemon", "laptop · local · auth no token",
+		"hub · https://hub.example:7474 · auth token · insecure connection allowed")
 
 	refused := step(t, hubs, key("enter"))
 	if len(refused.Cmds) != 0 || refused.State.Model.Federation.Screen != model.FederationPickHub {
 		t.Fatalf("Enter on the active daemon gave screen %v and %#v", refused.State.Model.Federation.Screen, refused.Cmds)
 	}
-	wantShown(t, "the active daemon's refusal", refused.State, "active daemon cannot be selected as hub")
+	wantShown(t, "the active daemon's refusal", refused.State, "Cannot use this hub: the daemon this Pane talks to cannot be its own hub.")
 
 	local := step(t, step(t, hubs, key("j")).State, key("enter"))
 	if len(local.Cmds) != 0 || local.State.Model.Federation.Screen != model.FederationPickHub {
 		t.Fatalf("Enter on a local entry gave screen %v and %#v", local.State.Model.Federation.Screen, local.Cmds)
 	}
-	wantShown(t, "the local entry's refusal", local.State, "local hub targets cannot be used for federation enrollment; select a hub daemon with a spoke-reachable URL")
+	wantShown(t, "the local entry's refusal", local.State, "Cannot use this hub: a local daemon cannot be a hub; pick one with a URL a spoke can reach.")
 
 	chosen := step(t, cursorOn(t, hubs, 2), key("enter"))
 	read, ok := asked[model.LoadFederationHubProjects](chosen.Cmds)
 	if !ok || read.Hub != "hub" || chosen.State.Model.Federation.Screen != model.FederationPickHubProject {
 		t.Fatalf("Enter on the hub gave screen %v and %#v, want a read of its Projects", chosen.State.Model.Federation.Screen, chosen.Cmds)
 	}
-	wantShown(t, "the hub Project step while the hub is read", chosen.State, "Select hub project", "hub daemon: hub https://hub.example:7474", "allow_insecure: true", "loading hub projects...")
+	wantShown(t, "the hub Project step while the hub is read", chosen.State, "Pick the hub Project", "Endpoint", "https://hub.example:7474", "Insecure connection", "allowed", "Loading hub Projects…")
 }
 
 func TestAnAnswerToAStepYouLeftIsDropped(t *testing.T) {
@@ -274,26 +274,26 @@ func TestACatalogThatCannotBeReadIsTheHubSteps(t *testing.T) {
 	load, _ := asked[model.LoadFederationHubs](out.Cmds)
 	failed := step(t, out.State, model.FederationHubsLoaded{Request: load.Request, Err: errors.New("parse /kata/config.toml: bad")}).State
 	wantShown(t, "the hub step", failed, "parse /kata/config.toml: bad")
-	wantNotShown(t, "the hub step", failed, "loading hub daemons...")
+	wantNotShown(t, "the hub step", failed, "Loading hub daemons…")
 
 	empty := step(t, out.State, model.FederationHubsLoaded{Request: load.Request}).State
-	wantShown(t, "an empty catalog", empty, "no daemons in kata's catalog")
+	wantShown(t, "an empty catalog", empty, "The catalog names no hub daemons.")
 }
 
 func TestTheHubProjectStepOffersTheSameNameRowAsUseOrCreateAndNeverListsTheSameNameProjectTwice(t *testing.T) {
 	existing := atHubProjectStep(t, enrollPane(t), rowAcme, hubAcme, hubBeta)
-	wantShown(t, "the step with the same-name Project on the hub", existing, `use existing hub project "acme"; enable federation if needed`, "\nbeta")
+	wantShown(t, "the step with the same-name Project on the hub", existing, `Use the hub Project "acme" and enable federation if needed`, "\nbeta")
 	text := shownText(t, existing)
-	if strings.Count(text, "\nacme") != 0 {
+	if strings.Count(text, "\nacme") != 1 {
 		t.Errorf("the same-name Project is listed as a row of its own:\n%s", text)
 	}
 	if _, total := existing.Model.Position(); total != 2 {
 		t.Errorf("%d rows, want the same-name row and beta", total)
 	}
-	wantShown(t, "the hub's reading", existing, "hub auth: token actor erin")
+	wantShown(t, "the hub's reading", existing, "Auth", "token actor erin")
 
 	creating := atHubProjectStep(t, enrollPane(t), rowAcme, hubBeta)
-	wantShown(t, "the step with no same-name Project", creating, `create hub project "acme" and enable federation`)
+	wantShown(t, "the step with no same-name Project", creating, `Create the hub Project "acme" and enable federation`)
 
 	replica := atHubProjectStep(t, enrollPane(t), rowReplica, hubAcme, hubBeta)
 	text = shownText(t, replica)
@@ -322,7 +322,7 @@ func TestAHubThatCannotBeReadKeepsTheStepOrReturnsToTheHubStepWhenNothingWasAske
 		t.Fatalf("a failed read left screen %v", failed.Model.Federation.Screen)
 	}
 	wantShown(t, "the hub Project step", failed, "hub unreachable")
-	wantNotShown(t, "the hub Project step", failed, "loading hub projects...")
+	wantNotShown(t, "the hub Project step", failed, "Loading hub Projects…")
 }
 
 // previewed presses Enter on the hub Project step and returns the preview.
@@ -337,22 +337,22 @@ func previewed(t *testing.T, s driver.State) driver.State {
 
 func TestThePreviewNamesWhatAnAdoptionOfTheSameNameProjectDoes(t *testing.T) {
 	s := previewed(t, atHubProjectStep(t, enrollPane(t), rowAcme, hubBeta))
-	wantShown(t, "the preview", s, "Enrollment Preview", "selected project: acme", "Operation: adopt existing local project", "local spoke project: acme",
-		"hub daemon: hub https://hub.example:7474", "hub auth: token actor erin", `hub project: create hub project "acme" and enable federation`,
-		"requested actor: erin", "capabilities: pull,push,lease", "push enabled: true", "allow_insecure: true",
-		`this federates local project "acme" INTO hub project "acme"`, "adoption warning: pre-adoption event history is replaced by snapshot events for federation")
+	wantShown(t, "the preview", s, "Enrollment preview", "Project", "acme", "Operation", "Adopt the local Project", "Local Project",
+		"Hub", "hub", "Endpoint", "https://hub.example:7474", "Auth", "token actor erin", `Create the hub Project "acme" and enable federation`,
+		"Actor", "erin", "Capabilities", "pull,push,lease", "Push", "on", "Insecure connection", "allowed",
+		`Adopting "acme" into the hub Project "acme".`, "Its local event history becomes snapshots.")
 	wantNotShown(t, "the preview", s, "Blocked")
-	wantText(t, "the footer", footerText(t, s), "↵", "confirm", "back")
+	wantText(t, "the footer", footerText(t, s), "enter", "confirm", "back")
 
 	existing := previewed(t, atHubProjectStep(t, enrollPane(t), rowAcme, hubAcme, hubBeta))
-	wantShown(t, "the preview with the Project on the hub", existing, `hub project: use existing hub project "acme"; enable federation if needed`)
+	wantShown(t, "the preview with the Project on the hub", existing, `Use the hub Project "acme" and enable federation if needed`)
 	if got := existing.Model.Federation.Draft.HubProjectID; got != 1 {
 		t.Errorf("the draft's hub Project is %d, want the same-name Project, 1", got)
 	}
 
 	selected := previewed(t, step(t, atHubProjectStep(t, enrollPane(t), rowAcme, hubBeta), key("j")).State)
-	wantShown(t, "the preview of a chosen hub Project", selected, "Operation: adopt existing local project into selected hub project", "hub project: beta",
-		`this federates local project "acme" INTO hub project "beta"`)
+	wantShown(t, "the preview of a chosen hub Project", selected, "Operation", "Adopt the local Project into the chosen hub Project", "Hub Project", "beta",
+		`Adopting "acme" into the hub Project "beta".`)
 }
 
 func TestTheRequestedActorIsThePanesUnlessTheHubSaysWhoItActedAs(t *testing.T) {
@@ -362,7 +362,7 @@ func TestTheRequestedActorIsThePanesUnlessTheHubSaysWhoItActedAs(t *testing.T) {
 	answer := hubProjectsAnswer(read, hubBeta)
 	answer.Actor = ""
 	s := previewed(t, step(t, chosen.State, answer).State)
-	wantShown(t, "the preview", s, "requested actor: dana")
+	wantShown(t, "the preview", s, "Actor", "dana")
 }
 
 func TestAHubThatReportsNoActorDoesNotInheritThePreviousHubs(t *testing.T) {
@@ -382,7 +382,7 @@ func TestAHubThatReportsNoActorDoesNotInheritThePreviousHubs(t *testing.T) {
 	answer := hubProjectsAnswer(read, hubBeta)
 	answer.Actor = ""
 	s = previewed(t, step(t, chosen.State, answer).State)
-	wantShown(t, "the preview", s, "requested actor: dana")
+	wantShown(t, "the preview", s, "Actor", "dana")
 }
 
 func TestTheNewReplicaPreviewBlocksWhenAProjectOfThatNameOrABindingIsThere(t *testing.T) {
@@ -390,11 +390,11 @@ func TestTheNewReplicaPreviewBlocksWhenAProjectOfThatNameOrABindingIsThere(t *te
 		hub     model.Project
 		blocked string
 	}{
-		"a local Project of that name":           {model.Project{ID: 8, UID: "H-ACME2", Name: "acme"}, `Blocked: local project "acme" already exists`},
-		"a bound local Project of that identity": {hubHubby, `Blocked: local project "hubby" already has federation binding as hub`},
+		"a local Project of that name":           {model.Project{ID: 8, UID: "H-ACME2", Name: "acme"}, `Cannot enroll: local project "acme" already exists`},
+		"a bound local Project of that identity": {hubHubby, `Cannot enroll: local project "hubby" already has federation binding as hub`},
 	} {
 		s := previewed(t, atHubProjectStep(t, enrollPane(t), rowReplica, c.hub))
-		wantShown(t, name, s, "Enrollment Preview", "Operation: create new local replica from hub project", c.blocked)
+		wantShown(t, name, s, "Enrollment preview", "Operation", "Create a local replica of a hub Project", c.blocked)
 		out := step(t, s, key("enter"))
 		if len(out.Cmds) != 0 || out.State.Model.TopCard() != model.NoCard || out.State.Model.Federation.Screen != model.FederationPreview {
 			t.Errorf("%s: Enter on a blocked preview gave screen %v, card %v and %#v", name, out.State.Model.Federation.Screen, out.State.Model.TopCard(), out.Cmds)
@@ -404,23 +404,23 @@ func TestTheNewReplicaPreviewBlocksWhenAProjectOfThatNameOrABindingIsThere(t *te
 
 func TestTheAdoptionPreviewBlocksWhenTheProjectIsBoundOrAnIdentityIsUnknown(t *testing.T) {
 	bound := previewed(t, atHubProjectStep(t, enrollPane(t), rowZeta, hubBeta))
-	wantShown(t, "a bound Project", bound, `Blocked: local project "Zeta" already has federation binding as spoke`)
+	wantShown(t, "a bound Project", bound, `Cannot enroll: local project "Zeta" already has federation binding as spoke`)
 	if out := step(t, bound, key("enter")); len(out.Cmds) != 0 || out.State.Model.TopCard() != model.NoCard {
 		t.Errorf("Enter on a blocked adoption gave card %v and %#v", out.State.Model.TopCard(), out.Cmds)
 	}
 
 	unknown := model.Project{ID: 2, Name: "beta"}
 	s := previewed(t, step(t, atHubProjectStep(t, enrollPane(t), rowAcme, unknown), key("j")).State)
-	wantShown(t, "a hub Project of unknown identity", s, `Blocked: hub project "beta" identity is unknown; refresh the hub project list and retry`)
+	wantShown(t, "a hub Project of unknown identity", s, `Cannot enroll: hub project "beta" identity is unknown; refresh the hub project list and retry`)
 }
 
 func TestAProjectThatLeftTheFederationRejoinsWithoutTypingItsName(t *testing.T) {
 	// Creating a replica of a hub Project whose identity a local Project holds.
 	replica := previewed(t, atHubProjectStep(t, enrollPane(t), rowReplica, model.Project{ID: 1, UID: "P-ACME", Name: "acme"}))
-	wantShown(t, "the new replica's preview", replica, "Operation: rejoin: resume syncing a local project that previously left this federation",
-		"selected project: acme (rejoin)", `local project "acme" previously left this federation and still shares the hub project's identity;`,
-		`rejoining resumes syncing with hub project "acme" (edits made while standalone sync to the hub)`)
-	wantNotShown(t, "the new replica's preview", replica, "adoption warning", "Blocked", "the local project keeps its name")
+	wantShown(t, "the new replica's preview", replica, "Operation", "Rejoin: resume syncing a Project that left this federation",
+		"acme (rejoin)", `The local Project "acme" left this federation earlier and still shares the hub Project's identity.`,
+		`Rejoining resumes syncing with the hub Project "acme"; edits made while it was standalone sync to the hub.`)
+	wantNotShown(t, "the new replica's preview", replica, "Its local event history becomes snapshots", "Cannot enroll", "The local Project keeps its name")
 	out := step(t, replica, key("enter"))
 	run, ok := asked[model.EnrollFederation](out.Cmds)
 	if !ok || out.State.Model.TopCard() != model.NoCard || run.Draft.Operation != model.FederationRejoin || run.Draft.SpokeProjectName != "acme" || run.Draft.AdoptExisting {
@@ -429,7 +429,7 @@ func TestAProjectThatLeftTheFederationRejoinsWithoutTypingItsName(t *testing.T) 
 
 	// Adopting into a hub Project of another name that has the local Project's identity.
 	adopt := previewed(t, step(t, atHubProjectStep(t, enrollPane(t), rowAcme, model.Project{ID: 2, UID: "P-ACME", Name: "other"}), key("j")).State)
-	wantShown(t, "the adoption's preview", adopt, "Operation: rejoin", "the local project keeps its name; spoke and hub project names do not need to match")
+	wantShown(t, "the adoption's preview", adopt, "Rejoin", "The local Project keeps its name; the two names do not need to match.")
 	if got := step(t, adopt, key("enter")); got.State.Model.TopCard() != model.NoCard {
 		t.Errorf("a rejoin asked to type the Project's name")
 	}
@@ -437,12 +437,12 @@ func TestAProjectThatLeftTheFederationRejoinsWithoutTypingItsName(t *testing.T) 
 
 func TestANewReplicaNeedsAHubProjectToReplicate(t *testing.T) {
 	s := atHubProjectStep(t, enrollPane(t), rowReplica)
-	wantShown(t, "the step", s, "no hub projects")
+	wantShown(t, "the step", s, "The hub has no Projects.")
 	out := step(t, s, key("enter"))
 	if out.State.Model.Federation.Screen != model.FederationPickHubProject || len(out.Cmds) != 0 {
 		t.Fatalf("Enter with no hub Project gave screen %v and %#v", out.State.Model.Federation.Screen, out.Cmds)
 	}
-	wantShown(t, "the step", out.State, "select an existing hub project to create a local replica")
+	wantShown(t, "the step", out.State, "Cannot enroll: pick an existing hub Project to create a local replica.")
 }
 
 func TestEscInThePreviewReturnsToTheHubProjectStepWithItsProjects(t *testing.T) {
@@ -451,7 +451,7 @@ func TestEscInThePreviewReturnsToTheHubProjectStepWithItsProjects(t *testing.T) 
 	if back.Model.Federation.Screen != model.FederationPickHubProject {
 		t.Fatalf("esc gave screen %v", back.Model.Federation.Screen)
 	}
-	wantShown(t, "the hub Project step", back, "Select hub project", `create hub project "acme" and enable federation`, "\nbeta")
+	wantShown(t, "the hub Project step", back, "Pick the hub Project", `Create the hub Project "acme" and enable federation`, "\nbeta")
 	if again := step(t, s, key("backspace")).State; again.Model.Federation.Screen != model.FederationPickHubProject {
 		t.Errorf("backspace gave screen %v", again.Model.Federation.Screen)
 	}
@@ -478,19 +478,21 @@ func typeText(t *testing.T, s driver.State, text string) driver.State {
 
 func TestAnAdoptionAsksToTypeTheLocalProjectsExactNameBeforeItRuns(t *testing.T) {
 	s := confirming(t)
-	wantShown(t, "the confirmation", s, "Confirm Adoption", `federate local project "acme" INTO hub project "acme"?`,
-		`"acme"'s issues will be adopted into the hub project and its local event history rewritten as snapshots`, `type "acme" to confirm:`)
-	if !strings.HasPrefix(s.Focus, layerTitled(t, s.Model, "Confirm Adoption")) {
+	wantShown(t, "the confirmation", s, "Adopt into hub", `Adopt "acme" into the hub Project "acme"?`,
+		"Its Issues move to the hub and the local event history becomes snapshots.", "Confirm name")
+	if !strings.HasPrefix(s.Focus, layerTitled(t, s.Model, "Adopt into hub")) {
 		t.Errorf("text focus %q is not on the confirmation", s.Focus)
 	}
-	wantText(t, "the footer", footerText(t, s), "enter", "adopt", "esc", "back")
+	if footer := footerText(t, s); strings.Contains(footer, "adopt") || strings.Contains(footer, "back") {
+		t.Errorf("the footer repeats the card's buttons: %q", footer)
+	}
 
 	for _, wrong := range []string{"", "ac", "ACME", "acmex"} {
 		attempt := step(t, typeText(t, s, wrong), key("enter"))
 		if len(attempt.Cmds) != 0 || attempt.State.Model.TopCard() != model.CardFederationAdopt {
 			t.Fatalf("Enter after %q gave card %v and %#v", wrong, attempt.State.Model.TopCard(), attempt.Cmds)
 		}
-		wantShown(t, "the refusal of "+wrong, attempt.State, `type "acme" to confirm adoption`)
+		wantShown(t, "the refusal of "+wrong, attempt.State, `Cannot adopt: type "acme" to confirm.`)
 	}
 	typedWrong := typeText(t, s, "acm")
 	if !slices.Contains(strings.Split(shownText(t, typedWrong), "\n"), "acm") {
@@ -513,7 +515,7 @@ func TestAnAdoptionAsksToTypeTheLocalProjectsExactNameBeforeItRuns(t *testing.T)
 	if exact.State.Model.TopCard() != model.NoCard {
 		t.Error("the confirmation stayed open while the enrollment runs")
 	}
-	wantShown(t, "the preview while it runs", exact.State, "Enrollment Preview", "enrolling...")
+	wantShown(t, "the preview while it runs", exact.State, "Enrollment preview", "Enrolling…")
 }
 
 func TestEscInTheConfirmationReturnsToThePreviewAndForgetsWhatWasTyped(t *testing.T) {
@@ -545,7 +547,7 @@ func running(t *testing.T) (driver.State, model.EnrollFederation) {
 
 func TestWhileAnEnrollmentRunsEnterAndEscDoNothing(t *testing.T) {
 	s, _ := running(t)
-	wantShown(t, "the preview", s, "enrolling...")
+	wantShown(t, "the preview", s, "Enrolling…")
 	if out := step(t, s, key("enter")); len(out.Cmds) != 0 || !out.State.Model.Federation.Enrolling {
 		t.Errorf("Enter while it runs asked %#v", out.Cmds)
 	}
@@ -562,9 +564,9 @@ func TestASuccessShowsTheResultReadsTheStatusAndEnterOrEscReturnToTheList(t *tes
 		want    []string
 	}{
 		"joined": {model.FederationEnrollOutcome{HubURL: "https://hub.example:7474", Actor: "erin", HubProjectID: 2, HubProjectUID: "H-BETA"},
-			[]string{"status: joined", "snapshot count: 0"}},
+			[]string{"Status", "Joined", "Snapshots", "0"}},
 		"adopted": {model.FederationEnrollOutcome{HubURL: "https://hub.example:7474", Actor: "erin", HubProjectID: 2, HubProjectUID: "H-BETA", Adopted: true, SnapshotCount: 4},
-			[]string{"status: adopted", "snapshot count: 4"}},
+			[]string{"Status", "Adopted", "Snapshots", "4"}},
 	} {
 		for _, leave := range []string{"enter", "escape", "backspace"} {
 			s, run := running(t)
@@ -576,7 +578,7 @@ func TestASuccessShowsTheResultReadsTheStatusAndEnterOrEscReturnToTheList(t *tes
 			if read, asked := askedFederation(done.Cmds); !asked || read.Workspace != "/repo" {
 				t.Errorf("%s: the result asked %#v, want a status read", name, done.Cmds)
 			}
-			wantShown(t, name+" result", done.State, append([]string{"Enrollment Result", "actor: erin", "hub URL: https://hub.example:7474", "hub project ID: 2", "hub project UID: H-BETA"}, c.want...)...)
+			wantShown(t, name+" result", done.State, append([]string{"Enrollment result", "Actor", "erin", "Hub", "https://hub.example:7474", "Hub Project", "2"}, c.want...)...)
 			wantText(t, name+" footer", footerText(t, done.State), "list")
 			back := step(t, done.State, key(leave)).State
 			if back.Model.Federation.Screen != model.FederationList || back.Model.CurrentMode() != model.ModeFederation {
@@ -601,8 +603,8 @@ func TestAFailureBeforeTheHubGrantedKeepsThePreviewWithTheErrorAndCanRunAgain(t 
 	if m.Federation.Screen != model.FederationPreview || m.Federation.Enrolling || len(failed.Cmds) != 0 {
 		t.Fatalf("a failure gave screen %v, enrolling %v and %#v", m.Federation.Screen, m.Federation.Enrolling, failed.Cmds)
 	}
-	wantShown(t, "the preview", failed.State, "Enrollment Preview", "hub refused: not allowed")
-	wantNotShown(t, "the preview", failed.State, "enrolling...", "Recovery")
+	wantShown(t, "the preview", failed.State, "Enrollment preview", "Cannot enroll: hub refused: not allowed.")
+	wantNotShown(t, "the preview", failed.State, "Enrolling…", "Recovery")
 	again := step(t, failed.State, key("enter"))
 	next, ok := asked[model.EnrollFederation](again.Cmds)
 	if !ok || next.Attempt == run.Attempt {
@@ -625,22 +627,22 @@ func TestAFailureAfterTheGrantKeepsARecoveryThatRevealsTheCommandOnlyOnR(t *test
 	if m.Federation.Screen != model.FederationRecovery || m.CurrentMode() != model.ModeFederationRecovery || m.Federation.Enrolling || len(lapsed.Cmds) != 0 {
 		t.Fatalf("the failure gave screen %v, mode %q and %#v, want the recovery", m.Federation.Screen, m.CurrentMode(), lapsed.Cmds)
 	}
-	wantShown(t, "the recovery", lapsed.State, "Enrollment Recovery", "hub: enrollment created", "spoke: join failed", "spoke: join failed: conflict", "token: hidden",
-		"the hub enrollment may be single-use, expired, revoked, or invalidated")
+	wantShown(t, "the recovery", lapsed.State, "Enrollment recovery", "The hub created the enrollment, but the spoke could not join.", "Cannot join the federation: spoke: join failed: conflict.", "Token", "Hidden",
+		"The hub enrollment may be single use, expired, revoked or invalidated.")
 	wire := wireTextOf(t, lapsed.State) + shownText(t, lapsed.State)
 	for _, secret := range []string{"s3cret-token", "spoke-token", "kata federation join", "secret-bearing"} {
 		if strings.Contains(wire, secret) {
 			t.Errorf("the recovery shows %q before R", secret)
 		}
 	}
-	wantText(t, "the footer", footerText(t, lapsed.State), "⇧R", "reveal recovery command", "back")
+	wantText(t, "the footer", footerText(t, lapsed.State), "R", "reveal recovery command", "back")
 
 	revealed := step(t, lapsed.State, key("shift+r"))
 	if len(revealed.Cmds) != 0 {
 		t.Errorf("R asked %#v", revealed.Cmds)
 	}
-	wantShown(t, "the revealed recovery", revealed.State, "single-use/secret-bearing recovery command", "works only while the hub enrollment remains valid and not revoked",
-		"spoke target: work https://spoke.example:7474",
+	wantShown(t, "the revealed recovery", revealed.State, "This recovery command holds a secret and works once.", "It works only while the hub enrollment is valid and not revoked.",
+		"Spoke", "work · https://spoke.example:7474",
 		"KATA_SERVER=https://spoke.example:7474 KATA_AUTH_TOKEN=spoke-token kata federation join --hub-url https://hub.example:7474 --hub-project-id 2 --project beta "+
 			"--token s3cret-token --actor erin --capabilities claim,pull,push --hub-project-uid H-BETA --replay-horizon 5 --baseline-through 4 --push --allow-insecure")
 
@@ -656,8 +658,8 @@ func TestAFailureAfterTheGrantKeepsARecoveryThatRevealsTheCommandOnlyOnR(t *test
 func TestTheRecoveryOfAMetadataFailureNamesTheHubAndOnlyGuessesTheTokenWhenItWasRefused(t *testing.T) {
 	s, run := running(t)
 	lapsed := step(t, s, model.FederationEnrolled{Attempt: run.Attempt, Err: errors.New("hub hub: enrollment metadata fetch failed: bad gateway"), Recovery: recovery("metadata", false)}).State
-	wantShown(t, "the recovery", lapsed, "hub hub: enrollment metadata fetch failed", "hub hub: enrollment metadata fetch failed: bad gateway", "token: hidden")
-	wantNotShown(t, "the recovery", lapsed, "spoke: join failed", "may be single-use")
+	wantShown(t, "the recovery", lapsed, "Hub hub created the enrollment, but its Project metadata could not be read.", "Cannot read the enrollment metadata: hub hub: enrollment metadata fetch failed: bad gateway.", "Token", "Hidden")
+	wantNotShown(t, "the recovery", lapsed, "the spoke could not join", "may be single use")
 }
 
 func TestBOpensTheReadOnlyBrowseOfTheHubsProjects(t *testing.T) {
@@ -668,16 +670,16 @@ func TestBOpensTheReadOnlyBrowseOfTheHubsProjects(t *testing.T) {
 	if !ok || read.Workspace != "/repo" || m.Federation.Screen != model.FederationBrowse || m.CurrentMode() != model.ModeFederationBrowse {
 		t.Fatalf("b gave screen %v, mode %q and %#v, want the browse and a read of the hubs", m.Federation.Screen, m.CurrentMode(), out.Cmds)
 	}
-	wantShown(t, "the browse while it is read", out.State, "Browse catalog hub projects", "mode: read-only", "loading hub projects...")
+	wantShown(t, "the browse while it is read", out.State, "Browse hub Projects", "Read only.", "Loading hub Projects…")
 
 	answer := model.FederationBrowsed{Request: read.Request, Hubs: []model.FederationHubProjects{
 		{Hub: model.FederationHub{Name: "east", Endpoint: "https://east.example"}, Auth: "token actor erin", Projects: []model.Project{hubAcme, hubBeta}},
 		{Hub: model.FederationHub{Name: "west", Endpoint: "https://west.example", AllowInsecure: true}, Auth: "token", Err: errors.New("hub down")},
 	}}
 	browsed := step(t, out.State, answer)
-	wantShown(t, "the browse", browsed.State, "catalog hub: east https://east.example · auth token actor erin · allow_insecure: false", "east  1 acme", "east  2 beta",
-		"catalog hub: west https://west.example · auth token · allow_insecure: true", "failed to load hub projects: hub down", "mode: read-only")
-	wantNotShown(t, "the browse", browsed.State, "loading hub projects...")
+	wantShown(t, "the browse", browsed.State, "https://east.example · auth token actor erin", "east · acme", "east · beta",
+		"https://west.example · auth token · insecure connection allowed", "Cannot read hub Projects: hub down.", "Read only.")
+	wantNotShown(t, "the browse", browsed.State, "Loading hub Projects…")
 	wantText(t, "the footer", footerText(t, browsed.State), "back")
 
 	if sel, total := browsed.State.Model.Position(); sel != 1 || total != 2 {
@@ -707,12 +709,12 @@ func TestTheBrowseSaysWhenTheCatalogHasNoHubsOrCannotBeRead(t *testing.T) {
 	out := step(t, enrollPane(t), key("b"))
 	read, _ := asked[model.BrowseFederationHubs](out.Cmds)
 	none := step(t, out.State, model.FederationBrowsed{Request: read.Request}).State
-	wantShown(t, "an empty browse", none, "failed to load hub projects: no catalog hub daemons configured")
-	wantNotShown(t, "an empty browse", none, "loading hub projects...")
+	wantShown(t, "an empty browse", none, "Cannot read hub Projects: the catalog names no hub daemons.")
+	wantNotShown(t, "an empty browse", none, "Loading hub Projects…")
 	broken := step(t, out.State, model.FederationBrowsed{Request: read.Request, Err: errors.New("parse /kata/config.toml: bad")}).State
-	wantShown(t, "an unreadable catalog", broken, "failed to load hub projects: parse /kata/config.toml: bad")
+	wantShown(t, "an unreadable catalog", broken, "Cannot read hub Projects: parse /kata/config.toml: bad.")
 	one := step(t, out.State, model.FederationBrowsed{Request: read.Request, Hubs: []model.FederationHubProjects{{Hub: model.FederationHub{Name: "east", Endpoint: "https://east.example"}}}}).State
-	wantShown(t, "a hub with no Projects", one, "no hub projects")
+	wantShown(t, "a hub with no Projects", one, "No hub Projects.")
 }
 
 func TestNAndBOnlyStartFromTheListNotFromASpokesDetail(t *testing.T) {
@@ -733,7 +735,7 @@ func TestTheFederationListFootersAndHelpNameEnrollAndBrowse(t *testing.T) {
 	wantText(t, "the footer", footerText(t, s), "n", "enroll", "b", "browse hubs")
 	help := step(t, s, key("?")).State
 	text := shownText(t, help)
-	for _, want := range []string{"enroll a Project in a hub's federation", "browse the Projects of the catalog's hubs (read only)"} {
+	for _, want := range []string{"Enroll a Project", "Browse hub Projects"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the help sheet lacks %q", want)
 		}

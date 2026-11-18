@@ -3,6 +3,7 @@ package model
 import (
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -194,75 +195,101 @@ func (m Model) SelectedCredential() *Credential {
 	return rowAt(m.Credentials.Tokens, m.Credentials.Cursor)
 }
 
-// CredentialsNotice is what the Page shows in place of the token list, with a line under it when there is a reason to give.
+// CredentialsNotice is what the Page shows in place of the token list. Err says a failure, Empty that there are no credentials (the
+// view draws an empty state) and Pending that the text is a line of progress; otherwise it is a plain statement.
 type CredentialsNotice struct {
-	Text, Detail string
-	Err          bool
+	Text                string
+	Err, Empty, Pending bool
 }
 
 // Notice is what stands in place of the token list, or false when the list is shown.
 func (c CredentialsState) Notice() (CredentialsNotice, bool) {
 	switch {
 	case c.Checking:
-		return CredentialsNotice{Text: "loading credential inventory..."}, true
+		return CredentialsNotice{Text: Progress("Loading", "credentials"), Pending: true}, true
 	case !c.Available && c.Err != nil:
-		return CredentialsNotice{Text: "failed to determine credential audit access: " + oneLine(c.Err.Error()), Err: true}, true
+		return CredentialsNotice{Text: Cannot("read", "credentials", c.Err), Err: true}, true
 	case !c.Available:
-		return CredentialsNotice{Text: "credential audit unavailable for this connection", Detail: "the active principal does not have token audit read capability", Err: true}, true
+		return CredentialsNotice{Text: "Credential audit is not available on this connection."}, true
 	case c.Loading && len(c.Tokens) == 0:
-		return CredentialsNotice{Text: "loading credential inventory..."}, true
+		return CredentialsNotice{Text: Progress("Loading", "credentials"), Pending: true}, true
 	case c.Err != nil && len(c.Tokens) == 0:
-		return CredentialsNotice{Text: "failed to load credentials: " + oneLine(c.Err.Error()), Err: true}, true
+		return CredentialsNotice{Text: Cannot("read", "credentials", c.Err), Err: true}, true
 	case len(c.Tokens) == 0:
-		return CredentialsNotice{Text: "no credentials"}, true
+		return CredentialsNotice{Text: "No credentials", Empty: true}, true
 	}
 	return CredentialsNotice{}, false
 }
 
+// RefreshError is the line under the list when a later read failed and the list shown is the last one that succeeded.
 func (c CredentialsState) RefreshError() string {
 	if c.Err != nil && c.Available && len(c.Tokens) > 0 {
-		return "refresh failed: " + oneLine(c.Err.Error())
+		return Cannot("refresh", "credentials", c.Err)
 	}
 	return ""
 }
 
-// Summary is the line under the title: the count and, once a list was read, when the daemon observed it.
-func (c CredentialsState) Summary() string {
-	count := strconv.Itoa(len(c.Tokens)) + " credentials"
+// AsOf is when the daemon classified the tokens' states, as the Page head words it ("as of 17:29"); "" before a list was read.
+func (c CredentialsState) AsOf(cal PaneCalendar, now time.Time) string {
 	if c.ObservedAt.IsZero() {
-		return count
+		return ""
 	}
-	return count + " · observed at " + credentialTime(c.ObservedAt)
+	return "as of " + cal.Read(c.ObservedAt, now)
 }
 
-// credentialTime words a time in UTC as kata tui does; "—" for none.
-func credentialTime(t time.Time) string {
-	if t.IsZero() {
-		return "—"
-	}
-	return t.UTC().Format("2006-01-02 15:04:05Z")
+// FactRow is one label→value row of a Page card: a credential, a spoke's detail or an enrollment step. A row with no Key is a
+// sentence. Mono says the value is an id, an endpoint or a path; Tone is FactWarning or FactError for a sentence that needs it.
+type FactRow struct {
+	Key, Value string
+	Mono       bool
+	Tone       string
 }
 
-func (c Credential) Lines() [4]string {
-	name := "—"
+// Rows are the credential card's rows after its State, which the view draws toned. A time kata did not set reads as None.
+// Kata's ids (the token's, the Project's and the root Issue's) are not rows: Title is the tooltip that holds them.
+func (c Credential) Rows(cal PaneCalendar, now time.Time) []FactRow {
+	name := None
 	if c.Name != "" {
 		name = oneLine(c.Name)
 	}
-	scope, project, root := "global", "—", "—"
-	if c.ScopeKind != "" {
-		scope, project, root = oneLine(c.ScopeKind), oneLine(c.ProjectUID), oneLine(c.RootIssueUID)
-	}
-	return [4]string{
-		"state " + oneLine(c.State) + "  ID " + strconv.FormatInt(c.ID, 10) + "  name " + name + "  actor " + oneLine(c.Actor),
-		"scope " + scope + "  project " + project + "  root " + root,
-		"created " + credentialTime(c.CreatedAt) + "  expires " + credentialTime(c.ExpiresAt),
-		"last observed use " + credentialTime(c.LastUsedAt) + "  revoked " + credentialTime(c.RevokedAt),
+	return []FactRow{
+		{Key: "Name", Value: name},
+		{Key: "Actor", Value: dashLine(c.Actor)},
+		{Key: "Scope", Value: c.Scope()},
+		{Key: "Created", Value: cal.Read(c.CreatedAt, now)},
+		{Key: "Expires", Value: cal.Read(c.ExpiresAt, now)},
+		{Key: "Last used", Value: cal.Read(c.LastUsedAt, now)},
+		{Key: "Revoked", Value: cal.Read(c.RevokedAt, now)},
 	}
 }
 
+// Scope is the token's scope in words: "Global", or "Issue subtree" for one limited to an Issue's subtree. A kind a newer kata
+// sends comes back as it is.
+func (c Credential) Scope() string {
+	switch c.ScopeKind {
+	case "":
+		return "Global"
+	case "issue_subtree":
+		return "Issue subtree"
+	}
+	return oneLine(c.ScopeKind)
+}
+
+// Title is the card's tooltip: the ids kata knows the token by, which no row shows.
+func (c Credential) Title() string {
+	parts := []string{"Token " + strconv.FormatInt(c.ID, 10)}
+	if c.ProjectUID != "" {
+		parts = append(parts, "Project "+oneLine(c.ProjectUID))
+	}
+	if c.RootIssueUID != "" {
+		parts = append(parts, "root Issue "+oneLine(c.RootIssueUID))
+	}
+	return strings.Join(parts, " · ")
+}
+
 var credentialsRows = []actionEntry{
-	{action: RefreshCredentials, modes: []Mode{ModeCredentials}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 3, "read the credentials again, or retry the check"}}, handle: refreshCredentials},
-	{action: NewToken, modes: []Mode{ModeCredentials}, keys: keys("n", "n"), help: "new token", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 20, "create an API token (Token card)"}}, handle: openTokenForm},
-	{action: RevokeToken, modes: []Mode{ModeCredentials}, keys: keys("x", "x"), help: "revoke", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 21, "revoke the selected token, after asking"}}, handle: openRevoke},
+	{action: RefreshCredentials, modes: []Mode{ModeCredentials}, keys: keys("r", "r"), help: "refresh", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 3, "Read again"}}, handle: refreshCredentials},
+	{action: NewToken, modes: []Mode{ModeCredentials}, keys: keys("n", "n"), help: "new token", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 20, "New token"}}, handle: openTokenForm},
+	{action: RevokeToken, modes: []Mode{ModeCredentials}, keys: keys("x", "x"), help: "revoke", footer: []Mode{ModeCredentials}, sheet: []sheetLine{{sheetLettered, 21, "Revoke token"}}, handle: openRevoke},
 	letteredBackRow(ModeCredentials, letteredBack),
 }

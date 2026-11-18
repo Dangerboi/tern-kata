@@ -118,7 +118,7 @@ func TestAttachmentRowsAreSortedByNameAndIgnoreOtherMeta(t *testing.T) {
 		t.Fatalf("count %d", n)
 	}
 	rows := m.DetailRows()
-	if rows[0].Activity.File.Name != "a.png" || rows[1].Activity.File.Description() != "image/png, 10 B" {
+	if rows[0].Activity.File.Name != "a.png" || rows[1].Activity.File.Kind() != "image" || model.FormatSize(rows[1].Activity.File.Size) != "10 B" {
 		t.Fatalf("rows %+v", rows)
 	}
 }
@@ -170,7 +170,7 @@ func TestClickingAnAttachmentRowSelectsAndOpensIt(t *testing.T) {
 func TestAnAttachmentOpenedByTheOSIsSaidToBeOutsideTern(t *testing.T) {
 	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5)})
 	m, _ = model.Update(m, model.AttachmentOpened{UID: "a", Name: "a.png", Path: "/cache/a.png", OutsideTern: true})
-	if m.Notice != "Opened a.png outside Tern (/cache/a.png)" {
+	if m.Notice != "Opened a.png outside Tern." {
 		t.Fatalf("notice %q", m.Notice)
 	}
 }
@@ -178,7 +178,7 @@ func TestAnAttachmentOpenedByTheOSIsSaidToBeOutsideTern(t *testing.T) {
 func TestAnOpenedAttachmentIsSaidAsANoticeAndAFailureToo(t *testing.T) {
 	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5)})
 	m, _ = model.Update(m, model.AttachmentOpened{UID: "a", Name: "a.png", Path: "/cache/a.png"})
-	if m.Notice != "Opened a.png (/cache/a.png)" {
+	if m.Notice != "Opened a.png." {
 		t.Fatalf("notice %q", m.Notice)
 	}
 	m, _ = model.Update(m, model.AttachmentOpened{UID: "a", Name: "a.png", Err: errors.New("kata has no Docbank")})
@@ -191,12 +191,12 @@ func TestTheAttachmentsTabSaysWhyWhenTheDaemonHasNoDocbank(t *testing.T) {
 	m := withDetail(model.Model{Workspace: "/repo", Cols: 160, Focus: model.ColumnDetail, SelectedUID: "a", Issues: []model.Issue{{UID: "a"}}},
 		&model.IssueDetailData{Issue: &model.Issue{UID: "a"}, AttachmentsOff: true})
 	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabAttachments})
-	if got := m.EmptyDetailText(); got != model.DocbankOffMessage {
-		t.Fatalf("empty text %q", got)
+	if got := m.EmptyDetail(); got.Title != "No attachments" || got.Hint != model.DocbankOffMessage || len(got.Actions) != 0 {
+		t.Fatalf("empty detail %+v", got)
 	}
 	m, _ = model.Update(m, model.ActivityTabMsg{Tab: model.TabLinks})
-	if got := m.EmptyDetailText(); got != "No links." {
-		t.Fatalf("Links empty text %q", got)
+	if got := m.EmptyDetail(); got.Title != "No links" || got.Hint != "Press %s or %s to add one." || len(got.Actions) != 2 {
+		t.Fatalf("Links empty detail %+v", got)
 	}
 }
 
@@ -233,7 +233,7 @@ func TestOSOpensOnlyViewingTypesWhoseWholeNameSaysSo(t *testing.T) {
 func TestAnAttachmentTernDidNotShowSaysWhyAfterTheOpenedLine(t *testing.T) {
 	m := attached(map[string]any{"attachment.A": reference("a.png", "image/png", 5)})
 	m, _ = model.Update(m, model.AttachmentOpened{UID: "a", Name: "a.png", Path: "/cache/a.png", OutsideTern: true, Note: "tern open: no window"})
-	if m.Notice != "Opened a.png outside Tern (/cache/a.png): tern open: no window" {
+	if m.Notice != "Opened a.png outside Tern. Tern open: no window." {
 		t.Fatalf("notice %q", m.Notice)
 	}
 }

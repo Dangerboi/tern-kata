@@ -141,10 +141,10 @@ func TestClickingAFieldMakesItTheFieldTheKeysEdit(t *testing.T) {
 		keys  []string
 		read  func(model.Model) model.Field
 	}{
-		{"Create", "n", "Owner (optional)", model.CreateOwner, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.Create.Field }},
-		{"Close", "x", "PR URL (optional)", model.ClosePR, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.CloseForm.Field }},
-		{"Recurrence", "shift+o", "Start date (YYYY-MM-DD)", model.RecurrenceStart, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.RecurrenceForm.Field }},
-		{"Filters", "f", "Label (comma-separated, any match)", model.FilterLabel, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.FilterForm.Field }},
+		{"Create", "n", "Owner", model.CreateOwner, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.Create.Field }},
+		{"Close", "x", "Pull request", model.ClosePR, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.CloseForm.Field }},
+		{"Recurrence", "shift+o", "Start date", model.RecurrenceStart, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.RecurrenceForm.Field }},
+		{"Filters", "f", "Label", model.FilterLabel, []string{"tab", "tab", "tab"}, func(m model.Model) model.Field { return m.FilterForm.Field }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			opened := feed(t, browsing(t, 160), key(tt.open)).State
@@ -221,7 +221,7 @@ func TestClickingAChoiceIsTheKeysThatReachIt(t *testing.T) {
 
 func TestTextTypedAfterClickingACloseFieldGoesToThatField(t *testing.T) {
 	opened := feed(t, browsing(t, 160), key("x")).State
-	s := feed(t, opened, &tern.Focus{ID: fieldLabeled(t, opened.Model, "Commit SHA (optional)")}, key("a")).State
+	s := feed(t, opened, &tern.Focus{ID: fieldLabeled(t, opened.Model, "Commit")}, key("a")).State
 	if values := s.Model.CloseForm.Values; values.Commit != "a" || values.Message != "" {
 		t.Fatalf("values = %+v", values)
 	}

@@ -1,6 +1,7 @@
 package view
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -13,21 +14,23 @@ func FederationChoiceID(index int) string {
 	return itemID(FederationListID, "choice"+strconv.Itoa(index))
 }
 
+// federationEnrollScreen is the screen of the enrollment, the browse or the recovery the Federation Page is on, after the Page
+// head; false when the Page is on none of them. Each screen has a title in strong text, then the Project being enrolled, then its
+// own rows or choices.
 func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 	f := m.Federation
 	title := func(text string) []tern.Element {
-		return ui.Nodes(
-			plainText("selected", ui.ToneMuted, "selected project: "+m.FederationSelectedProject()),
-			ui.Text{Common: ui.Common{Key: "title", Tone: ui.ToneMuted}, Spans: []ui.Span{{T: text, S: "strong"}}, Wrap: ui.WrapNone})
-	}
-	line := func(key, text string) tern.Element {
-		return ui.Text{Common: ui.Common{Key: key}, Text: text, Wrap: ui.WrapNone}
+		out := ui.Nodes(ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: text, S: "strong"}}, Wrap: ui.WrapNone})
+		if project := m.FederationSelectedProject(); project != "none" {
+			out = append(out, keyedGrid("selected", propRow("Project", ui.Text{Common: ui.Common{Key: "v"}, Text: project})))
+		}
+		return out
 	}
 	failure := func() []tern.Element {
-		if f.EnrollErr == nil {
-			return nil
+		if text := f.EnrollFailure(); text != "" {
+			return ui.Nodes(toneText("error", ui.ToneError, text))
 		}
-		return ui.Nodes(plainText("error", ui.ToneError, f.EnrollErr.Error()))
+		return nil
 	}
 	switch f.Screen {
 	case model.FederationPickLocal:
@@ -35,101 +38,98 @@ func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 		for _, c := range m.FederationLocalChoices() {
 			labels = append(labels, c.Label())
 		}
-		out := append(title("Select local spoke project"), choiceList(m, labels)...)
+		out := append(title("Pick the local Project"), choiceList(m, labels)...)
 		return append(out, failure()...), true
 	case model.FederationPickHub:
-		out := title("Select hub daemon")
-		if f.Draft.SpokeProjectName != "" {
-			out = append(out, line("local", "local spoke project: "+f.Draft.SpokeProjectName))
-		}
-		if f.Draft.CreateReplica {
-			out = append(out, line("local", "local spoke project: create after selecting hub project"))
-		}
+		out := title("Pick the hub daemon")
 		var labels []string
 		for _, h := range f.Hubs {
 			labels = append(labels, h.Label())
 		}
 		switch {
 		case f.HubsLoading:
-			out = append(out, plainText("notice", ui.TonePending, "loading hub daemons..."))
+			out = append(out, plainText("notice", ui.TonePending, model.Progress("Loading", "hub daemons")))
 		case len(labels) == 0 && f.EnrollErr == nil:
-			out = append(out, plainText("notice", ui.ToneMuted, "no daemons in kata's catalog"))
+			out = append(out, plainText("notice", ui.ToneMuted, "The catalog names no hub daemons."))
 		default:
 			out = append(out, choiceList(m, labels)...)
 		}
 		return append(out, failure()...), true
 	case model.FederationPickHubProject:
 		hub := f.Draft.Hub
-		auth := f.Draft.HubAuth
-		if auth == "" {
-			auth = hub.Auth
-		}
-		out := append(title("Select hub project"),
-			line("hub", "hub daemon: "+hub.Name+" "+hub.Endpoint),
-			line("auth", "hub auth: "+auth),
-			line("insecure", "allow_insecure: "+strconv.FormatBool(hub.AllowInsecure)))
+		out := append(title("Pick the hub Project"), keyedGrid("hub", factPropRows([]model.FactRow{
+			{Key: "Hub", Value: hub.Name},
+			{Key: "Endpoint", Value: hub.Endpoint, Mono: true},
+			{Key: "Auth", Value: authWords(f.Draft.HubAuth, hub.Auth)},
+			{Key: "Insecure connection", Value: model.InsecureWords(hub.AllowInsecure)},
+		})...))
 		var labels []string
 		for _, c := range m.FederationHubProjectChoices() {
 			labels = append(labels, c.Label)
 		}
 		switch {
 		case f.HubProjectsLoading:
-			out = append(out, plainText("notice", ui.TonePending, "loading hub projects..."))
+			out = append(out, plainText("notice", ui.TonePending, model.Progress("Loading", "hub Projects")))
 		case len(labels) == 0:
-			out = append(out, plainText("notice", ui.ToneMuted, "no hub projects"))
+			out = append(out, plainText("notice", ui.ToneMuted, "The hub has no Projects."))
 		default:
 			out = append(out, choiceList(m, labels)...)
 		}
 		return append(out, failure()...), true
 	case model.FederationBrowse:
-		out := title("Browse catalog hub projects")
+		out := title("Browse hub Projects")
 		for i, hub := range f.Browsed {
-			out = append(out,
-				line("hub"+strconv.Itoa(i), "catalog hub: "+hub.Hub.Name+" "+hub.Hub.Endpoint+" · auth "+hub.Auth+" · allow_insecure: "+strconv.FormatBool(hub.Hub.AllowInsecure)))
+			out = append(out, ui.Text{Common: ui.Common{Key: "hub" + strconv.Itoa(i)}, Spans: []ui.Span{
+				{T: hub.Hub.Name, S: "strong"}, {T: " · " + hub.Hub.Facts(hub.Auth), S: "muted"}}, Wrap: ui.WrapNone})
 			if hub.Err != nil {
-				out = append(out, ui.Text{Common: ui.Common{Key: "failed" + strconv.Itoa(i), Tone: ui.ToneError}, Text: "failed to load hub projects: " + hub.Err.Error()})
+				out = append(out, toneText("failed"+strconv.Itoa(i), ui.ToneError, model.Cannot("read", "hub Projects", hub.Err)))
 			}
 		}
-		out = append(out, line("mode", "mode: read-only"))
+		out = append(out, plainText("mode", ui.ToneMuted, "Read only."))
 		var labels []string
 		for _, row := range f.BrowseRows() {
-			labels = append(labels, f.Browsed[row.Hub].Hub.Name+"  "+row.Label())
+			labels = append(labels, f.Browsed[row.Hub].Hub.Name+" · "+row.Label())
 		}
 		switch {
 		case f.Browsing:
-			out = append(out, plainText("notice", ui.TonePending, "loading hub projects..."))
+			out = append(out, plainText("notice", ui.TonePending, model.Progress("Loading", "hub Projects")))
 		case f.EnrollErr != nil:
-			out = append(out, plainText("error", ui.ToneError, "failed to load hub projects: "+f.EnrollErr.Error()))
+			out = append(out, toneText("error", ui.ToneError, f.EnrollFailure()))
 		case len(labels) == 0:
-			out = append(out, plainText("notice", ui.ToneMuted, "no hub projects"))
+			out = append(out, plainText("notice", ui.ToneMuted, "No hub Projects."))
 		default:
 			out = append(out, choiceList(m, labels)...)
 		}
 		return out, true
 	case model.FederationPreview:
-		out := append(title("Enrollment Preview"), federationLines(f.Draft.PreviewLines(), -1)...)
+		out := append(title("Enrollment preview"), factRows("", f.Draft.PreviewRows())...)
 		if f.Draft.BlockedReason != "" {
-			out = append(out, plainText("blocked", ui.ToneError, "Blocked: "+f.Draft.BlockedReason))
+			out = append(out, toneText("blocked", ui.ToneError, model.Cannot("enroll", "", errors.New(f.Draft.BlockedReason))))
 		}
 		out = append(out, failure()...)
 		if f.Enrolling {
-			out = append(out, plainText("running", ui.TonePending, "enrolling..."))
+			out = append(out, plainText("running", ui.TonePending, model.Progress("Enrolling", "")))
 		}
 		return out, true
 	case model.FederationRecovery:
-		lines, errLine := f.Recovery.Lines()
-		out := append(title("Enrollment Recovery"), federationLines(lines, errLine)...)
+		out := append(title("Enrollment recovery"), factRows("", f.Recovery.Rows())...)
 		if f.Recovery.Reveal {
-			revealed := f.Recovery.RevealedLines()
-			out = append(out, plainText("reveal-warning", ui.ToneError, revealed[0]))
-			out = append(out, line("reveal-valid", revealed[1]), line("reveal-target", revealed[2]),
-				ui.Text{Common: ui.Common{Key: "reveal-command"}, Text: revealed[3]})
+			out = append(out, factRows("reveal-", f.Recovery.RevealedRows())...)
+			out = append(out, ui.Text{Common: ui.Common{Key: "reveal-command"}, Spans: []ui.Span{monoSpan(f.Recovery.Command.String(), "")}})
 		}
 		return out, true
 	case model.FederationEnrollDone:
-		return append(title("Enrollment Result"), federationLines(f.Enrolled.ResultLines(), -1)...), true
+		return append(title("Enrollment result"), factRows("", f.Enrolled.ResultRows())...), true
 	}
 	return nil, false
+}
+
+// authWords is how the hub words its authentication: the read's wording when it changed it, else the catalog's.
+func authWords(read, catalog string) string {
+	if read != "" {
+		return read
+	}
+	return catalog
 }
 
 func choiceList(m model.Model, labels []string) []tern.Element {
@@ -142,25 +142,27 @@ func choiceList(m model.Model, labels []string) []tern.Element {
 	return ui.Nodes(ui.List{CommonWithoutMax: scrollerCommon("federation"), Max: fillMax, Children: cards})
 }
 
+// federationAdoptLayer is the question that ends an adoption: it names both Projects, says what the adoption does to the local
+// Project's history, and asks to type the local Project's name.
 func federationAdoptLayer(m model.Model) tern.Element {
 	f := m.Federation
 	if !f.Adopting {
 		return nil
 	}
 	name, hub := f.Draft.SpokeProjectName, f.Draft.HubProjectName
+	input := ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Confirm name"}, Field: ui.Field{Text: f.AdoptInput, Cursor: caretAt(f.AdoptCaret, "", f.AdoptInput), Mode: "insert", Placeholder: ui.T("Project name")}}
 	children := []tern.Element{
-		ui.Text{Common: ui.Common{Key: "question"}, Text: fmt.Sprintf("federate local project %q INTO hub project %q?", name, hub)},
-		toneText("consequence", ui.ToneMuted, fmt.Sprintf("%q's issues will be adopted into the hub project and its local event history rewritten as snapshots", name)),
-		ui.Text{Common: ui.Common{Key: "prompt"}, Text: fmt.Sprintf("type %q to confirm:", name)},
-		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Local Project name"}, Field: ui.Field{Text: f.AdoptInput, Cursor: caretAt(f.AdoptCaret, "", f.AdoptInput), Mode: "insert", Placeholder: ui.T("Project name")}},
+		toneText("question", ui.ToneWarning, fmt.Sprintf("Adopt %q into the hub Project %q?", name, hub)),
+		toneText("consequence", ui.ToneMuted, "Its Issues move to the hub and the local event history becomes snapshots."),
 	}
+	children = append(children, labelledInput(inputLeaf, "Confirm name", fmt.Sprintf("Type the Project name, %q.", name), true, input)...)
 	if f.AdoptErr != nil {
-		children = append(children, toneText("error", ui.ToneError, f.AdoptErr.Error()))
+		children = append(children, toneText("error", ui.ToneError, model.Cannot("adopt", "", f.AdoptErr)))
 	}
-	children = append(children, buttonRow(
-		cardButton("adopt", model.ModeFederationAdopt, model.FederationAdoptConfirm, "Adopt", true),
-		cardButton("back", model.ModeFederationAdopt, model.FederationAdoptCancel, "Back", false)))
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFederationAdopt)}, Head: ui.T("Confirm Adoption"), Modal: true, Size: ui.SizeMD}, children))
+	children = append(children, confirmFoot(
+		cardButton("adopt", model.ModeFederationAdopt, model.FederationAdoptConfirm, "Adopt", false),
+		exitButton("cancel", model.ModeFederationAdopt, model.FederationAdoptCancel, "Cancel"), true))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFederationAdopt)}, Head: ui.T("Adopt into hub"), Modal: true, Size: ui.SizeMD}, children))
 }
 
 // federationNameLayer is the card asking for a spoke's name: for the enrollment being previewed, or for an enrolled spoke, where
@@ -170,23 +172,20 @@ func federationNameLayer(m model.Model) tern.Element {
 	if !n.Open {
 		return nil
 	}
-	prompt, head, save := "name for the spoke (empty for none):", "Name Spoke", "Save"
+	head, hint := "Name spoke", "A letter, then up to 31 lowercase letters, digits or hyphens. Empty names none."
 	if n.Rename {
-		prompt, head = "name for this spoke on its hub (empty clears it):", "Rename Spoke"
+		head, hint = "Rename spoke", "A letter, then up to 31 lowercase letters, digits or hyphens. Empty clears it."
 	}
-	children := []tern.Element{
-		ui.Text{Common: ui.Common{Key: "prompt"}, Text: prompt},
-		toneText("rules", ui.ToneMuted, "a letter, then up to 31 lowercase letters, digits or hyphens; the card refuses any other"),
-		ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Spoke name"}, Field: ui.Field{Text: n.Input, Cursor: caretAt(n.Caret, "", n.Input), Mode: "insert", Placeholder: ui.T("spoke name")}},
-	}
+	input := ui.Input{Common: ui.Common{Key: inputLeaf, Tone: ui.ToneAccent, Aria: "Spoke name"}, Field: ui.Field{Text: n.Input, Cursor: caretAt(n.Caret, "", n.Input), Mode: "insert", Readonly: n.Saving}}
+	children := labelledInput(inputLeaf, "Spoke name", hint, true, input)
 	if n.Saving {
-		children = append(children, toneText("running", ui.TonePending, "saving..."))
+		children = append(children, toneText("saving", ui.TonePending, model.Progress("Saving", "")))
 	}
-	if n.Err != nil {
-		children = append(children, toneText("error", ui.ToneError, n.Err.Error()))
+	if failure := n.Failure(); failure != "" {
+		children = append(children, toneText("error", ui.ToneError, failure))
 	}
-	children = append(children, buttonRow(
-		cardButton("save", model.ModeFederationName, model.FederationNameSave, save, true),
-		cardButton("cancel", model.ModeFederationName, model.FederationNameCancel, "Cancel", false)))
+	children = append(children, formFoot(
+		cardButton("save", model.ModeFederationName, model.FederationNameSave, "Save", true),
+		exitButton("cancel", model.ModeFederationName, model.FederationNameCancel, "Cancel")))
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardFederationName)}, Head: ui.T(head), Modal: true, Size: ui.SizeMD}, children))
 }

@@ -8,9 +8,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Install and update
 
-- The Pane's top bar shows its tern-kata version after the Daemon, and says when a restart or an update is owed on the session host.
-  - "↑ update" follows the title at every Pane width while a notice holds; the Menu lists each notice, and the Pane toasts it once.
-  - After `tern-kata update`, or a new build copied over the binary, a running Pane says within a minute that the new version is installed and the Pane must be reopened to use it.
+- The Pane's top bar shows a muted facts line (`local · kata v0.23.0 · tern-kata v0.16.0`), and a warning chip says when a restart or an update is owed on the session host.
+  - "↑ kata v0.24.0" (or "↑ 2 updates") follows the title at every Pane width while a notice holds; the Menu lists each notice under Updates, and there is no toast.
+  - After `tern-kata update`, or a new build copied over the binary, a running Pane says within a minute that the new version is available and the Pane must be reopened to use it.
   - A local kata daemon older than the kata on PATH gets a Menu entry that restarts the daemon after asking.
   - A newer kata release is named after a check made once an hour per machine (`kata update --check`); `TERN_KATA_NO_UPDATE_CHECK` turns that check off.
 - The first Pane of a new tern-kata version opens its release notes in a split beside it, once per machine.
@@ -49,12 +49,38 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Agents
 
 - An agent waiting on a closed Issue no longer raises an Attention request, as kata refuses requests on closed Issues.
+- The Agent card, its cards and the Agent badge follow the Pane's design.
+  - Agent rows read `working · 18:30 · split`, and the selected agent's Session and Last message are labelled rows.
+  - The buttons sit in two labelled groups, New agent and Selected, with **Start a team…** opening a card with a Coordinator choice and a Children at once stepper.
+  - An unread message shows as a second warning badge, `message unread`, beside the Agent badge, and the working badge is drawn in the pending tone.
+  - Stop, Forget and the Message card ask in the warning tone with one muted line, and the Message card's head names the agent.
+  - Notices name the Issue ("Started an agent on #12 in a split.") and failures read "Cannot …"; the Wrap-up sweep card heads "2 of 3 agents finished the wrap-up."
 
 #### Attachments
 
 - `enter` on a video (`.mp4`, `.mov`, `.m4v`, `.webm`), audio (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`) or `.pdf` Attachment shows it in Tern's preview on Tern 0.9.26 and later, and Open beside takes them.
   - `.avi` and `.mkv` still go to the system app, as do all of them on an older Tern.
   - On a Windows window with Tern-managed ABKit installed the preview cannot play media and says it plays in the default app; Open with the system app (`o`) opens it.
+- The Attachments tab lists each Attachment as `name · kind · size` (image, text, audio, video, PDF or file), with the media type in a hover.
+  - The Copy card is headed Copy attachment, with the file's name, a Downloaded file field and a Command field.
+  - The Notices for opening an Attachment say how it opened ("Opened shot.png beside the Pane.") and leave out its path, which stays behind Copy.
+
+#### Issues and Pages
+
+- The Issues Page, the Board and their Popup cards follow one design: the same tones, wording, dates and keys everywhere.
+  - Dates read `2026-11-18 18:21` (`18:21` today) in the Pane's zone, a missing value reads `—`, and narrow cells show a compact age such as `4m ago`; the Date badge reads "overdue 3d", "due 2026-11-25" or "scheduled 2026-12-01".
+  - Failures are drawn in the error tone, and every Notice that reports one starts with "Cannot"; the selected row is filled with the accent colour, which marks nothing else.
+  - A button shows one keycap, the footer of every Page ends with `esc`, `?` and `q`, and keys are written as lowercase words (`esc`, `ctrl+o`).
+  - A Popup card keeps its error or pending line above its buttons, so a failure stays in view; the Create, Close, Delete Issue, Move to Project, Dates, Recurrence and View cards word their fields, hints and buttons alike.
+  - The top bar shows the Project's name and a muted facts line with no prefixes, and the line under it is the context line, with the counts "5 open · 0 closed" and each active filter.
+  - The Issue detail shows the Issue's id, title and status, one grid of properties, a muted line saying who created it and when, and a Children table headed "Children 3 of 4 open".
+  - The Events tab no longer shows kata event codes and hides created and commented events; each tab shows its row count, and a close line reads `closed as done` with `Evidence: attachment report.pdf`.
+  - The list draws only the columns a row has a value for and shows an empty state with its action ("No Issues" with a New Issue button).
+  - Board cards show a muted "also in" line, the Relationship as a line under the title and one muted row of facts on the selected card; each Lane keeps one identity colour on its header and card ids, and the Lanes card names the list in use ("Using this machine's list").
+  - The Menu groups its top level under Pages, Actions and Updates, and the right-click menu gains Owner…, Labels… and New child….
+  - The Attention Page shows cards with the Issue's title, the sender and the age; the Credentials and Config Pages show label and value cards under a Page head (`Credentials 3 · as of 17:29`, `Config 8 · ~/.config/tern-kata`).
+  - The help sheet opens with "Keyboard shortcuts" and a Close button, shows at most two keys per row and names the Emacs keys once.
+  - When kata cannot be reached the Pane shows "Cannot reach kata" with **Retry** and **Daemons** buttons.
 
 #### Jobs and worker
 
@@ -62,10 +88,26 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - On Tern 0.9.24 the worker's own log lines appear in Tern's daemon log as `tern-kata worker: <line>` within a second.
   - They include a job paused after repeated failures, Project lease changes and a quarantined journal.
   - A worker a plugin reload left running logs only its last line, in its exit message.
+- The Jobs, Runs and Workflows Pages, the Job card, the Worker card and the Backfill card follow the same design.
+  - The Jobs Page shows `Jobs 4` and one line about this machine's worker (`Worker smoke-box` with `0 of 3 slots in use`); a job is a Recurring Issue, an Agent prompt, a Workflow or a Notification, and its schedule reads "on demand" for a manual trigger.
+  - The Job card gives each field a one- or two-word label with a hint under the focused field, previews "Runs every day at 09:00 UTC" with a Next runs row, and names the field in a refusal ("Cannot save the job: Interval: …").
+  - The Runs Page shows a run's reason in words ("Quota reached · the provider answered 429"), with ids and kata's internal rows behind a hovercard.
+  - The Workflows Page shows cards (`Workflows 2`, `Used by Hourly report +1`) instead of rows.
+  - The Worker card lists Project, Checkout, Config, Worker and Supervision as rows, and its restart question describes each choice in one muted line.
+  - The Backfill card asks "Create 4 missed Issues?" with **Only the latest** first, **Create all** second and **Cancel** last.
+
+#### Daemons and Federation
+
+- The Daemons Page is a table (Name, Endpoint, Auth, State) and the Federation Page shows cards under a Page head (`Federation 2 · work · auth token`); the enrolling and leaving steps are headed and worded alike.
+  - Insecure connections, quarantines, reset blockers and claim violations read as words in the warning tone.
+  - The Name spoke and Adopt into hub cards ask in the warning tone with one muted line, and refusals read "Cannot …".
 
 #### Tern window
 
-- The palette command that places tern-kata's widget is now **Add the kata worker widget to the widget bar**, as the worker widget is the only one left.
+- The palette commands carry shorter titles: **Open tern-kata**, **Show held runs**, **Go to waiting agent**, **Wrap up all agents**, **Add worker widget** (the worker widget is the only widget left), **Toggle update checks** and **Toggle Attachments panel**.
+  - Key bindings name command ids, not titles, so existing bindings keep working.
+- The update-available toast reads "tern-kata v0.7.0 is available (this window has v0.6.0). Run Update tern-kata."
+- The kata worker widget shows a held run's hold in words ("Quota reached") and its age as `review · 2h`; the Resume and Abandon toasts read "Resumed the run." and "Abandoned the run.", and a failure reads "Cannot resume the run" with the reason.
 - The window plugin checks for a new tern-kata release every hour instead of once a day; each release is still toasted once per machine.
 
 ### Removed
@@ -74,7 +116,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - **Breaking:** The Waiting kata agents widget and the "N waiting" entry in the Plugin segments widget are gone: Tern's own Agents widget (on Tern 0.9.23) lists the waiting agents, with each one's question, how long it has waited and its tab.
   - If you placed the widget, remove `tern-kata/waiting` from the bar with the palette's Edit widgets….
-  - **Go to the agent waiting for you** (`shift+F9`) still goes to the kata agent that began waiting last.
+  - **Go to waiting agent** (`shift+F9`) still goes to the kata agent that began waiting last.
 
 ### Fixed
 

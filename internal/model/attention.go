@@ -30,15 +30,12 @@ func (r AttentionRequest) Sender() string {
 	return r.Slot.From + "/" + r.Slot.Teammate
 }
 
-// Tag tells what the slot is: "request" for a plain request, the reply kind for a reply notice, and "broadcast" for one sent to
-// everyone on an Issue tree.
+// Tag names what is special about the slot: the reply kind for a reply notice, "broadcast" for one sent to everyone on an Issue
+// tree. A plain request has no tag, since a request is what the Page lists.
 func (r AttentionRequest) Tag() string {
 	var tags []string
-	switch {
-	case r.Slot.Kind != "":
+	if r.Slot.Kind != "" {
 		tags = append(tags, r.Slot.Kind)
-	case !r.Slot.Broadcast:
-		tags = append(tags, "request")
 	}
 	if r.Slot.Broadcast {
 		tags = append(tags, "broadcast")
@@ -122,7 +119,7 @@ type AttentionCleared struct {
 
 func (AttentionCleared) msg() {}
 
-const AttentionChangedNotice = "The request changed meanwhile; nothing was cleared"
+const AttentionChangedNotice = "Cannot clear the request: it changed meanwhile."
 
 type AttentionSelectMsg struct{ UID string }
 
@@ -159,20 +156,16 @@ func (m Model) InboxAddress() (string, error) {
 	return NormalizeRecipient(raw)
 }
 
-// AttentionHeader is the Page's heading: whose requests these are, how many, and how many slots did not read. It is empty when
-// the address is refused.
+// AttentionHeader is the scope the Page's heading adds to its count: whose requests these are, and how many slots could not be
+// read. It is empty when the address is refused.
 func (m Model) AttentionHeader() string {
 	address, err := m.InboxAddress()
 	if err != nil {
 		return ""
 	}
-	noun := "requests"
-	if len(m.Attention.Requests) == 1 {
-		noun = "request"
-	}
-	header := fmt.Sprintf("for %s · %d %s", address, len(m.Attention.Requests), noun)
+	header := "for " + address
 	if m.Attention.Skipped > 0 {
-		header += fmt.Sprintf(" · %d skipped", m.Attention.Skipped)
+		header += fmt.Sprintf(" · %d unreadable", m.Attention.Skipped)
 	}
 	return header
 }
@@ -270,9 +263,9 @@ func attentionCleared(m Model, msg AttentionCleared) (Model, []Cmd) {
 	m.Attention.Clearing = slices.DeleteFunc(slices.Clone(m.Attention.Clearing), func(uid string) bool { return uid == msg.UID })
 	switch {
 	case msg.Err != nil:
-		m.Notice = msg.Err.Error()
+		m = m.fail(Cannot("clear", "the request", msg.Err))
 	case msg.Changed:
-		m.Notice = AttentionChangedNotice
+		m = m.fail(AttentionChangedNotice)
 	default:
 		row := max(m.attentionIndex(), 0)
 		m.Attention.Requests = slices.DeleteFunc(slices.Clone(m.Attention.Requests), func(r AttentionRequest) bool { return r.IssueUID == msg.UID })
@@ -363,7 +356,7 @@ func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 }
 
 var attentionRows = []actionEntry{
-	{action: OpenAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("enter", "↵"), help: "open", footer: []Mode{ModeAttention}, footerKey: "↵", sheet: []sheetLine{{sheetAttention, 3, "open the request's Issue, in any Project"}}, handle: openAttention},
+	{action: OpenAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("enter", "enter"), help: "open", footer: []Mode{ModeAttention}, footerKey: "enter", sheet: []sheetLine{{sheetAttention, 3, "open the request's Issue, in any Project"}}, handle: openAttention},
 	{action: ClearAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("c", "c"), help: "clear", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 4, "clear the request, if it still reads as shown"}}, handle: clearAttention},
 	{action: MessageAgent, modes: []Mode{ModeAttention}, keys: keys("m", "m"), help: "message agent", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 5, "message the agent that raised the request"}}, handle: openAgentMessage},
 	{action: QuickReplyAgent, modes: []Mode{ModeAttention}, keys: keys("r", "r"), help: "quick reply", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 6, "send the agent a canned reply: continue, wrap up, or commit and close"}}, handle: openAgentQuickReply},

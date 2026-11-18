@@ -84,7 +84,7 @@ func TestMoveResultAsksForAFreshSnapshotAndFreesTheNextMove(t *testing.T) {
 func TestFailedMoveLeavesKatasReasonAndTheSnapshotPutsTheCardBack(t *testing.T) {
 	out := step(t, boardPane(t, boardCard("a")), key(">"))
 	failed := answered(t, out.State, model.MoveResultMsg{UID: "a", Err: errors.New("label is archived")}, boardCard("a"))
-	if failed.State.Model.Notice != "label is archived" {
+	if failed.State.Model.Notice != "Cannot move: label is archived." {
 		t.Errorf("Notice = %q", failed.State.Model.Notice)
 	}
 	wantLane(t, failed.State, 0, "No lane", "a")

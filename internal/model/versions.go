@@ -3,7 +3,7 @@ package model
 import (
 	"errors"
 	"slices"
-	"strings"
+	"strconv"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -18,8 +18,6 @@ type Versions struct {
 	// KataCLI is the version of the kata on PATH, KataLatest the newest kata release the hourly check found ("" when none is newer).
 	KataCLI, KataLatest string
 	checks              Latest
-	// toasted are the notices already toasted, by text, so each version is toasted once.
-	toasted []string
 	// askRestart says the daemon notice's restart question is shown.
 	askRestart bool
 	// restarting says the daemon notice's restart is out.
@@ -60,24 +58,34 @@ type VersionsChecked struct {
 
 func (VersionsChecked) msg() {}
 
-// NoticeKind names a version notice.
-type NoticeKind int
+// VersionNoticeKind names a version notice.
+type VersionNoticeKind int
 
 const (
-	NoticeOldBinary NoticeKind = iota
+	NoticeOldBinary VersionNoticeKind = iota
 	NoticeOldDaemon
 	NoticeKataRelease
 )
 
-// VersionNotice is a fact about the session host the user should act on. Headline names it and Action what to do, as the Menu
-// entry shows them; Text says both, as the toast and the Notice line do.
+// VersionNotice is a fact about the session host the user should act on. Subject names what has a new version, as the top bar's
+// chip does; Headline says it and Action what to do, as the Menu entry shows them; Text says both, as the Notice line does.
 type VersionNotice struct {
-	Kind                   NoticeKind
-	Headline, Action, Text string
+	Kind                            VersionNoticeKind
+	Subject, Headline, Action, Text string
 }
 
-// NoticeMarker ends the top bar's title while any version notice holds.
-const NoticeMarker = "  ↑ update"
+// VersionChip is the top bar's one marker for the notices that hold: "↑ kata v0.24.0" for one, "↑ 2 updates" for several, empty
+// for none. A click on it opens the Menu, which names each notice.
+func (m Model) VersionChip() string {
+	notices := m.VersionNotices()
+	switch len(notices) {
+	case 0:
+		return ""
+	case 1:
+		return "↑ " + notices[0].Subject
+	}
+	return "↑ " + strconv.Itoa(len(notices)) + " updates"
+}
 
 // stamped reports whether version is one the Pane can compare: a build without a stamped version ("dev") is not.
 func stamped(version string) bool { return semver.IsValid(version) }
@@ -91,16 +99,18 @@ func (m Model) VersionNotices() []VersionNotice {
 	v := m.Versions
 	var notices []VersionNotice
 	if stamped(v.Running) && stamped(v.Installed) && v.Installed != v.Running {
-		notices = append(notices, VersionNotice{Kind: NoticeOldBinary, Headline: "tern-kata " + v.Installed + " is installed", Action: "reopen this Pane",
-			Text: "tern-kata " + v.Installed + " is installed: reopen this Pane to use it."})
+		subject := "tern-kata " + v.Installed
+		notices = append(notices, VersionNotice{Kind: NoticeOldBinary, Subject: subject, Headline: subject + " is available", Action: "Reopen this Pane",
+			Text: subject + " is available. Reopen this Pane to use it."})
 	}
 	if d := m.Daemon; d.Kind == DaemonLocal && newer(v.KataCLI, d.Version) {
-		notices = append(notices, VersionNotice{Kind: NoticeOldDaemon, Headline: "kata daemon " + d.Version + " is older than kata " + v.KataCLI, Action: "restart the daemon…",
-			Text: "The kata daemon runs " + d.Version + " and kata " + v.KataCLI + " is installed: restart the daemon from the Menu to use it."})
+		notices = append(notices, VersionNotice{Kind: NoticeOldDaemon, Subject: "kata daemon", Headline: "kata daemon " + d.Version + " is older than kata " + v.KataCLI, Action: "Restart the daemon…",
+			Text: "The kata daemon runs " + d.Version + " and kata " + v.KataCLI + " is installed. Restart the daemon from the Menu to use it."})
 	}
 	if newer(v.KataLatest, v.KataCLI) {
-		notices = append(notices, VersionNotice{Kind: NoticeKataRelease, Headline: "kata " + v.KataLatest + " is out", Action: "run kata update",
-			Text: "kata " + v.KataLatest + " is out: run kata update to install it."})
+		subject := "kata " + v.KataLatest
+		notices = append(notices, VersionNotice{Kind: NoticeKataRelease, Subject: subject, Headline: subject + " is available", Action: "kata update",
+			Text: subject + " is available. Run kata update to install it."})
 	}
 	return notices
 }
@@ -110,7 +120,7 @@ func askVersions(m *Model, after time.Duration) Cmd {
 	return CheckVersions{Workspace: m.Workspace, Request: m.Versions.checks.Ask(), Connection: m.Connection, After: after}
 }
 
-// versionsChecked takes a check's answer, toasts each notice the first time it holds, and asks for the next check. The daemon's
+// versionsChecked takes a check's answer and asks for the next check; the top bar's chip shows the notices that now hold. The daemon's
 // version is taken only from the connection it was read on.
 func versionsChecked(m Model, msg VersionsChecked) (Model, []Cmd) {
 	v := &m.Versions
@@ -121,27 +131,14 @@ func versionsChecked(m Model, msg VersionsChecked) (Model, []Cmd) {
 	if msg.Daemon != "" && msg.Connection == m.Connection && m.Daemon.Kind != "" {
 		m.Daemon.Version = msg.Daemon
 	}
-	cmds := []Cmd{askVersions(&m, VersionCheckEvery)}
-	var fresh []string
-	for _, notice := range m.VersionNotices() {
-		if text := notice.Text; !slices.Contains(v.toasted, text) {
-			v.toasted = append(slices.Clip(v.toasted), text)
-			fresh = append(fresh, text)
-		}
-	}
-	if len(fresh) > 0 {
-		var wait Cmd
-		m, wait = m.raiseToast(Toast{Text: strings.Join(fresh, " ")})
-		cmds = append(cmds, wait)
-	}
-	return m, cmds
+	return m, []Cmd{askVersions(&m, VersionCheckEvery)}
 }
 
-// noticeKeyPrefix keys a notice's Menu entry, followed by its NoticeKind.
+// noticeKeyPrefix keys a notice's Menu entry, followed by its VersionNoticeKind.
 const noticeKeyPrefix = "notice."
 
 // NoticeOf is the notice of kind that holds now.
-func (m Model) NoticeOf(kind NoticeKind) (VersionNotice, bool) {
+func (m Model) NoticeOf(kind VersionNoticeKind) (VersionNotice, bool) {
 	notices := m.VersionNotices()
 	if i := slices.IndexFunc(notices, func(n VersionNotice) bool { return n.Kind == kind }); i >= 0 {
 		return notices[i], true
@@ -151,23 +148,23 @@ func (m Model) NoticeOf(kind NoticeKind) (VersionNotice, bool) {
 
 // openNotice is a pick of a notice's Menu entry. The daemon's asks before it restarts the daemon; the others can only be done
 // outside the Pane, so the Notice line repeats what to do.
-func openNotice(m Model, kind NoticeKind) (Model, []Cmd) {
+func openNotice(m Model, kind VersionNoticeKind) (Model, []Cmd) {
 	notice, ok := m.NoticeOf(kind)
 	switch {
 	case !ok:
 	case kind == NoticeOldDaemon:
 		m.Versions.askRestart, m.HelpOpen = true, false
 	default:
-		m.Notice = notice.Text
+		m = m.say(notice.Text)
 	}
 	return m, nil
 }
 
-// restartOutNotice is the refusal of a second restart while one is out; errRestartOut is the same on the search by meaning card,
-// which the notice's restart clears when it ends.
-const restartOutNotice = "The kata daemon is restarting; wait for it."
+// errRestartOut is the refusal of a second restart while one is out, as the search by meaning card says it; the notice's restart
+// clears it when it ends. The Notice line words the same refusal with errRestartPending.
+var errRestartOut = errors.New("The kata daemon is restarting; wait for it.")
 
-var errRestartOut = errors.New(restartOutNotice)
+var errRestartPending = errors.New("a restart is already out")
 
 // forDaemon is what a daemon switch keeps: everything but the daemon notice's question and restart, whose answer the switch
 // drops.
@@ -182,14 +179,12 @@ func confirmNoticeRestart(m Model) (Model, []Cmd) {
 	m.Versions.askRestart = false
 	switch {
 	case m.Versions.restarting || m.Embeddings.Restarting:
-		m.Notice = restartOutNotice
-		return m, nil
+		return m.fail(Cannot("restart", "the kata daemon", errRestartPending)), nil
 	case m.Stale:
-		m.Notice = "Daemon disconnected; reconnect before restarting the kata daemon."
-		return m, nil
+		return m.fail(Cannot("restart", "the kata daemon", ErrDisconnected)), nil
 	}
 	m.Versions.restarting = true
-	m.Notice = "Restarting the kata daemon…"
+	m = m.say(Progress("Restarting", "the kata daemon"))
 	return m, []Cmd{RestartKataDaemon{Workspace: m.Workspace, Connection: m.Connection}}
 }
 
@@ -202,10 +197,9 @@ func noticeRestartDone(m Model, msg KataDaemonRestarted) (Model, []Cmd) {
 		m.EmbeddingsCard.Err = nil
 	}
 	if msg.Err != nil {
-		m.Notice = "The kata daemon was not restarted: " + oneLine(msg.Err.Error())
-		return m, nil
+		return m.fail(Cannot("restart", "the kata daemon", msg.Err)), nil
 	}
-	m.Notice = "The kata daemon restarted."
+	m = m.say("The kata daemon restarted.")
 	cmds := []Cmd{askVersions(&m, 0)}
 	if m.Embeddings.Read {
 		m.Embeddings.returning = true

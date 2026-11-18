@@ -244,8 +244,8 @@ func TestLayerClicksEndWhereTheirKeysEnd(t *testing.T) {
 		keys  []string
 	}{
 		{"filters field", "f", "Owner", []string{"tab", "tab"}},
-		{"create field", "n", "Owner (optional)", []string{"tab", "tab", "tab"}},
-		{"close field", "x", "PR URL (optional)", []string{"tab", "tab", "tab"}},
+		{"create field", "n", "Owner", []string{"tab", "tab", "tab"}},
+		{"close field", "x", "Pull request", []string{"tab", "tab", "tab"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			open := pressed(clickAt(model.ColumnList), tt.open)
@@ -396,10 +396,9 @@ func TestCardButtonsClickLikeTheirKeys(t *testing.T) {
 				keyboard, keyCmds := keys(chord)(tt.start)
 				pointer, clickCmds := clicked(tt.start, click(id, act))
 				sameAs(t, id+" differs from its key", pointer, clickCmds, keyboard, keyCmds)
-				var labelKeys []string
-				for _, b := range model.CardKeys(tt.mode, binding.Action) {
-					labelKeys = append(labelKeys, b.Key)
-				}
+				// A button shows one keycap: the label of the action's first binding.
+				first := model.CardKeys(tt.mode, binding.Action)[0]
+				labelKeys := []string{view.Keycap(first.Chord, first.Key)}
 				if want := " (" + strings.Join(labelKeys, " / ") + ")"; !strings.HasSuffix(labels[id], want) || labels[id] == want {
 					t.Errorf("%s label %q is not words followed by %q", id, labels[id], want)
 				}
@@ -422,7 +421,7 @@ func TestCardButtonsOfTheCommonCardsClickLikeTheChordTheyName(t *testing.T) {
 	}{
 		{"Close", pressed(issue, "x"), model.ModeCloseForm, []string{"layer.close.foot.save", "layer.close.foot.quick", "layer.close.foot.cancel"}},
 		{"Create", titled, model.ModeCreate, []string{"layer.create.foot.save", "layer.create.foot.cancel"}},
-		{"Draft editor", pressed(driver.State{Model: draftModel}, "enter", "e"), model.ModeEditor, []string{"layer.editor.foot.save", "layer.editor.foot.editor", "layer.editor.foot.discard"}},
+		{"Draft editor", pressed(driver.State{Model: draftModel}, "enter", "e"), model.ModeEditor, []string{"layer.editor.foot.save", "layer.editor.foot.editor", "layer.editor.foot.cancel"}},
 		{"Filter", pressed(issue, "f"), model.ModeFilterForm, []string{"layer.filters.foot.apply", "layer.filters.foot.default", "layer.filters.foot.cancel"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -437,7 +436,7 @@ func TestCardButtonsOfTheCommonCardsClickLikeTheChordTheyName(t *testing.T) {
 			for _, id := range drawn {
 				chord := strings.TrimPrefix(buttons[id], view.ButtonClick(""))
 				binding, ok := model.LookupBindingForMode(chord, tt.mode)
-				if !ok || !strings.Contains(labels[id], binding.Key) {
+				if !ok || !strings.Contains(labels[id], view.Keycap(binding.Chord, binding.Key)) {
 					t.Errorf("%s sends %q, which its label %q does not name", id, chord, labels[id])
 				}
 				keyboard, keyCmds := keys(chord)(tt.start)

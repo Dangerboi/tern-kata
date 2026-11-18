@@ -583,7 +583,7 @@ func TestCloseCitingAnAttachmentRecordsItAndTheHistoryNamesItEvenAfterUnlinking(
 		t.Fatalf("stored evidence %v", stored)
 	}
 	has := func(bodies []string, want string) bool {
-		return slices.ContainsFunc(bodies, func(b string) bool { return strings.Contains(b, "(attachment "+want+")") })
+		return slices.ContainsFunc(bodies, func(b string) bool { return strings.Contains(b, "attachment "+want) })
 	}
 	if bodies := f.closeEvents(t); !has(bodies, "report.pdf") {
 		t.Fatalf("Events rows %q do not name the attachment", bodies)
@@ -593,7 +593,7 @@ func TestCloseCitingAnAttachmentRecordsItAndTheHistoryNamesItEvenAfterUnlinking(
 	if detached.Err != nil {
 		t.Fatalf("detach %+v", detached)
 	}
-	if bodies := f.closeEvents(t); !has(bodies, "report.pdf [removed]") {
+	if bodies := f.closeEvents(t); !has(bodies, "report.pdf (removed)") {
 		t.Fatalf("after unlinking, Events rows %q do not name the removed attachment", bodies)
 	}
 }

@@ -41,18 +41,21 @@ func popups() []popup {
 		{"Create", keyOpen("n"), func(dst *model.Model, src model.Model) { dst.Create = src.Create },
 			model.ModeCreate, "Create Issue", func(m model.Model) string { return m.Create.Title }},
 		{"Draft editor", keyOpen("e"), func(dst *model.Model, src model.Model) { dst.Drafts, dst.EditorUID = src.Drafts, src.EditorUID },
-			model.ModeEditor, "Edit Issue body", func(m model.Model) string { d, _ := m.ActiveDraft(); return d.Editor.Text }},
+			model.ModeEditor, "Edit Issue body #aaaa", func(m model.Model) string { d, _ := m.ActiveDraft(); return d.Editor.Text }},
 		{"single-field form", keyOpen("+"), func(dst *model.Model, src model.Model) { dst.FieldForm = src.FieldForm },
-			model.ModeFieldForm, "Add label", func(m model.Model) string { return m.FieldForm.Value }},
-		{"Close", keyOpen("x"), func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
-			model.ModeCloseForm, "Close Issue", func(m model.Model) string {
+			model.ModeFieldForm, "Add label #aaaa", func(m model.Model) string { return m.FieldForm.Value }},
+		{"Close", func(t *testing.T, s driver.State) model.Model {
+			// The card opens on its Reason, a choice; the keys under test are typed into the Message after it.
+			return feed(t, s, key("x"), key("tab")).State.Model
+		}, func(dst *model.Model, src model.Model) { dst.CloseForm = src.CloseForm },
+			model.ModeCloseForm, "Close Issue #aaaa", func(m model.Model) string {
 				values := m.CloseForm.Values
 				return values.Reason + values.Message + values.Commit + values.PR + values.Test + values.Reviewed + values.External + values.Reference + values.Rationale
 			}},
 		{"Dates", keyOpen("d"), func(dst *model.Model, src model.Model) { dst.DatesForm = src.DatesForm },
-			model.ModeDatesForm, "Dates", func(m model.Model) string { return m.DatesForm.Text.Scheduled }},
+			model.ModeDatesForm, "Dates #aaaa", func(m model.Model) string { return m.DatesForm.Text.Scheduled }},
 		{"Move", keyOpen("shift+m"), func(dst *model.Model, src model.Model) { dst.MoveProject = src.MoveProject },
-			model.ModeMoveProject, "Move to another Project #aaaa", func(m model.Model) string { return m.MoveProject.Filter }},
+			model.ModeMoveProject, "Move to Project #aaaa", func(m model.Model) string { return m.MoveProject.Filter }},
 		{"Agent", func(t *testing.T, s driver.State) model.Model {
 			s.Model.AgentMapping = []model.AgentEntry{{IssueUID: "alpha", IssueRef: "work#alpha", Block: "31"}}
 			m := keyOpen("w")(t, s)
@@ -61,26 +64,26 @@ func popups() []popup {
 		}, func(dst *model.Model, src model.Model) {
 			dst.AgentCard, dst.AgentMapping = src.AgentCard, src.AgentMapping
 		},
-			model.ModeAgentCard, "Agents work#alpha", func(model.Model) string { return "" }},
+			model.ModeAgentCard, "Agents #alpha", func(model.Model) string { return "" }},
 		{"Message", func(t *testing.T, _ driver.State) model.Model {
 			return step(t, messagePane(t, agentRaised(t), nil, ompAgent), key("m")).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.AgentMessage = src.AgentMessage },
-			model.ModeAgentMessage, "Message omp work#aa11", func(m model.Model) string { return m.AgentMessage.Text }},
+			model.ModeAgentMessage, "Message omp #aa11", func(m model.Model) string { return m.AgentMessage.Text }},
 		{"Delete", keyOpen("shift+x"), func(dst *model.Model, src model.Model) { dst.DeleteForm = src.DeleteForm },
-			model.ModeDeleteForm, "Delete #aaaa", func(m model.Model) string { return m.DeleteForm.ID }},
+			model.ModeDeleteForm, "Delete Issue #aaaa", func(m model.Model) string { return m.DeleteForm.ID }},
 		{"Federation adoption", func(t *testing.T, _ driver.State) model.Model { return confirming(t).Model },
 			func(dst *model.Model, src model.Model) { dst.Federation = src.Federation },
-			model.ModeFederationAdopt, "Confirm Adoption", func(m model.Model) string { return m.Federation.AdoptInput }},
+			model.ModeFederationAdopt, "Adopt into hub", func(m model.Model) string { return m.Federation.AdoptInput }},
 		{"Federation spoke name", func(t *testing.T, _ driver.State) model.Model {
 			return step(t, previewed(t, atHubProjectStep(t, enrollPane(t), rowAcme, hubBeta)), key("shift+n")).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.Federation.Name = src.Federation.Name },
-			model.ModeFederationName, "Name Spoke", func(m model.Model) string { return m.Federation.Name.Input }},
+			model.ModeFederationName, "Name spoke", func(m model.Model) string { return m.Federation.Name.Input }},
 		{"Recurrence", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("shift+o")(t, s)
 			m.RecurrenceForm.Field = model.RecurrenceZone // a text field
 			return m
 		}, func(dst *model.Model, src model.Model) { dst.RecurrenceForm = src.RecurrenceForm },
-			model.ModeRecurrenceForm, "Make recurring", func(m model.Model) string { return m.RecurrenceForm.Zone }},
+			model.ModeRecurrenceForm, "Make recurring #aaaa", func(m model.Model) string { return m.RecurrenceForm.Zone }},
 		{"Job", keyOpen("shift+j"), func(dst *model.Model, src model.Model) { dst.JobForm = src.JobForm },
 			model.ModeJobForm, "New job", func(m model.Model) string { return m.JobForm.Name }},
 		{"New Project", func(t *testing.T, s driver.State) model.Model {
@@ -90,7 +93,7 @@ func popups() []popup {
 		{"Lanes", func(t *testing.T, s driver.State) model.Model {
 			return feed(t, s, key("b"), newestLanes{ProjectUID: "p"}, key("shift+b")).State.Model
 		}, func(dst *model.Model, src model.Model) { dst.LanesForm = src.LanesForm },
-			model.ModeLanesForm, "Lanes", func(m model.Model) string { return m.LanesForm.Text }},
+			model.ModeLanesForm, "Lanes Using the built-in list", func(m model.Model) string { return m.LanesForm.Text }},
 		{"Filter form", func(t *testing.T, s driver.State) model.Model {
 			m := keyOpen("f")(t, s)
 			m.FilterForm.Field = model.FilterOwner // a text field
@@ -170,7 +173,7 @@ func TestPopupCardPrecedenceIsOneOrder(t *testing.T) {
 // Tern names a body editor by node id; the model hears which card's body it is.
 func TestBodyEditsAndUndoReachTheirCard(t *testing.T) {
 	create := feed(t, browsing(t, 160), key("n"))
-	createBody := fieldLabeled(t, create.State.Model, "Body (optional)")
+	createBody := fieldLabeled(t, create.State.Model, "Body")
 	create = step(t, create.State, &tern.Focus{ID: createBody})
 	draft := feed(t, browsing(t, 160), key("e"))
 	for _, tt := range []struct {

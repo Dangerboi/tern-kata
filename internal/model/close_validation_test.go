@@ -17,10 +17,10 @@ func TestCloseSequences(t *testing.T) {
 		submit, reopen bool
 	}{
 		{name: "missing message", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, closeSave}, wantError: "at least 40"},
-		{name: "missing evidence", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: model.CloseMessage, Value: "Implemented the requested change and verified the result."}, closeSave}, wantError: "requires commit"},
+		{name: "missing evidence", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: model.CloseMessage, Value: "Implemented the requested change and verified the result."}, closeSave}, wantError: "Done needs a commit"},
 		{name: "bad sha", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: model.CloseMessage, Value: "Implemented the requested change and verified the result."}, model.CloseFieldMsg{Field: model.CloseCommit, Value: "invalid"}, closeSave}, wantError: "hexadecimal"},
 		{name: "valid close", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: model.CloseMessage, Value: "Implemented the requested change and verified the result."}, model.CloseFieldMsg{Field: model.CloseTest, Value: "go test ./model"}, closeSave}, submit: true},
-		{name: "invalid reason", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: model.CloseReason, Value: "other"}, closeSave}, wantError: "Reason must"},
+		{name: "invalid reason", msgs: []model.Msg{model.KeyMsg{Chord: "x"}, model.CloseFieldMsg{Field: model.CloseReason, Value: "other"}, closeSave}, wantError: "Choose a reason"},
 		{name: "reopen", msgs: []model.Msg{model.KeyMsg{Chord: "r"}}, reopen: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestACloseRefusalKeepsTheFormOpenWithTheDaemonsWords(t *testing.T) {
 	message := "refusing: issue has 1 open children:\n  abcd Child\nClose children first\nReview and retry"
 	m := model.Model{CloseForm: model.CloseFormState{Open: true, Saving: true, UID: "issue"}}
 	m, _ = model.Update(m, model.CloseResultMsg{UID: "issue", Err: errors.New(message)})
-	if !m.CloseForm.Open || m.CloseForm.Saving || m.CloseForm.Err.Error() != message {
+	if !m.CloseForm.Open || m.CloseForm.Saving || m.CloseForm.Err.Error() != "R"+message[1:]+"." {
 		t.Fatalf("refusal: %+v", m.CloseForm)
 	}
 }

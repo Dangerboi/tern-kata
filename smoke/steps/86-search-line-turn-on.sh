@@ -13,7 +13,7 @@ expect_tree "[data-id='main.columns.list.search-turn-on']" '.ok and .count == 1'
 
 ctl key ctrl+o
 expect_tree "$embeddings_card" '.ok and .count == 1'
-expect_tree "[data-id='layer.embeddings.question']" '.ok and .count == 1 and (.nodes[0].text | startswith("Turn on search by meaning? kata ") and endswith(" y/n"))'
+expect_tree "[data-id='layer.embeddings.foot.question']" '.ok and .count == 1 and (.nodes[0].text | startswith("Turn on search by meaning? kata "))'
 
 # n sends nothing: the card goes and the search line and its button stay.
 ctl key n

@@ -78,34 +78,40 @@ func TestDaemonsPageOpensFromEveryPageAndTheMenu(t *testing.T) {
 	}
 }
 
-func TestDaemonsPageListsTheCatalogInKataTuisColumnsAndMarksTheCurrentOne(t *testing.T) {
+func TestDaemonsPageListsTheCatalogInATableAndMarksTheCurrentOne(t *testing.T) {
 	s := daemonsListed(t)
-	wantText(t, "the list", wireTextOf(t, s), "3 daemons", "Daemon", "Endpoint", "Auth", "State",
-		"kata.example.com:7474", "10.0.0.5:7474", "no token", "current")
+	text := wireTextOf(t, s)
+	wantText(t, "the list", text, "Daemons", "Name", "Endpoint", "Auth", "State", "kata.example.com:7474", "10.0.0.5:7474", "no token", "current")
+	if strings.Contains(text, "3 daemons") {
+		t.Errorf("the head repeats the count as a sentence: %s", text)
+	}
 	if sel, total := s.Model.Position(); sel != 2 || total != 3 {
 		t.Errorf("the cursor starts at %d of %d, want the current daemon, 2 of 3", sel, total)
 	}
-	if text := wireTextOf(t, s); !strings.Contains(text, catalogEntries[1].Row()) || strings.Contains(text, catalogEntries[0].Row()+"current") || catalogEntries[1].State() != "current" {
-		t.Errorf("only the current daemon's row ends in current: %s", text)
+	if !strings.Contains(text, `"state":[{"s":"success","t":"current"}]},"id":"work"`) || catalogEntries[1].State() != "current" || catalogEntries[0].State() != "" {
+		t.Errorf("only the current daemon's row says current: %s", text)
 	}
-	wantText(t, "the footer of the current daemon", wireTextOf(t, s), "work · kata.example.com:7474")
+	wantText(t, "the selected row", text, `"selected":"work"`)
+	if strings.Contains(text, "Insecure connection allowed.") {
+		t.Errorf("a daemon that refuses insecure connections is marked insecure: %s", text)
+	}
 	moved := step(t, s, key("j")).State
-	wantText(t, "the footer of an insecure daemon", wireTextOf(t, moved), "lab · 10.0.0.5:7474 · allow_insecure")
+	wantText(t, "an insecure daemon", wireTextOf(t, moved), `"selected":"lab"`, "Insecure connection allowed.")
 	top := step(t, s, key("g")).State
-	wantText(t, "the footer of a local daemon", wireTextOf(t, top), "home · local")
+	wantText(t, "a local daemon", wireTextOf(t, top), `"selected":"home"`)
 }
 
 func TestDaemonsPageSaysWhenThereIsNoCatalogAndHowToAddADaemon(t *testing.T) {
 	out := daemonsOpened(t, projectPane(t, 160, boardCard("a")))
 	load, _ := askedDaemons(out.Cmds)
-	wantText(t, "while the read is out", wireTextOf(t, out.State), "loading daemons...")
+	wantText(t, "while the read is out", wireTextOf(t, out.State), "Loading daemons…")
 	empty := step(t, out.State, model.DaemonsLoaded{Request: load.Request, ConfigPath: "/kata/config.toml"}).State
-	wantText(t, "an empty catalog", wireTextOf(t, empty), "no named daemons", "add a [[daemon]] entry to /kata/config.toml")
+	wantText(t, "an empty catalog", wireTextOf(t, empty), "No named daemons", "Add a [[daemon]] entry to config.toml.")
 	if out := step(t, empty, key("enter")); len(out.Cmds) != 0 {
 		t.Errorf("Enter on an empty catalog sent %#v", out.Cmds)
 	}
 	failed := step(t, out.State, model.DaemonsLoaded{Request: load.Request, Err: errors.New("parse config.toml: bad\nline 3")}).State
-	wantText(t, "an unreadable catalog", wireTextOf(t, failed), "failed to read the daemon catalog: parse config.toml: bad line 3")
+	wantText(t, "an unreadable catalog", wireTextOf(t, failed), "Cannot read the daemon catalog: parse config.toml: bad.")
 }
 
 func TestEnterSwitchesToTheSelectedDaemonAndTheOldAnswersOfTheOldDaemonAreIgnored(t *testing.T) {
@@ -115,7 +121,7 @@ func TestEnterSwitchesToTheSelectedDaemonAndTheOldAnswersOfTheOldDaemonAreIgnore
 	if !ok || switched.Name != "home" || switched.Workspace != "/repo" {
 		t.Fatalf("Enter sent %#v, want a switch to home", out.Cmds)
 	}
-	wantText(t, "while connecting", wireTextOf(t, out.State), "connecting to daemon home...")
+	wantText(t, "while connecting", wireTextOf(t, out.State), "Connecting to home…")
 	if again := step(t, out.State, key("enter")); len(again.Cmds) != 0 {
 		t.Errorf("a second Enter while one switch is out sent %#v", again.Cmds)
 	}
@@ -166,10 +172,10 @@ func TestASuccessfulSwitchResetsThePaneAndFollowsTheNewDaemonsEvents(t *testing.
 		t.Errorf("page %v, %d Issues, selected %q, search %q, loading %v: the Pane keeps what it held of the old daemon",
 			m.Page, len(m.Issues), m.SelectedUID, m.Filters.Search, m.Loading)
 	}
-	if m.Daemon.Name != "home" || !strings.Contains(m.Notice, `daemon "home": connected`) {
+	if m.Daemon.Name != "home" || !strings.Contains(m.Notice, "Connected to home") {
 		t.Errorf("daemon %+v, notice %q", m.Daemon, m.Notice)
 	}
-	if u := step(t, out.State, key("u")).State.Model.Notice; u != "nothing to undo: connected to a different daemon" {
+	if u := step(t, out.State, key("u")).State.Model.Notice; u != "Nothing to undo: connected to a different daemon." {
 		t.Errorf("u after a switch said %q", u)
 	}
 	// The old daemon's events no longer reach the Pane.
@@ -198,7 +204,7 @@ func TestASuccessfulSwitchResetsThePaneAndFollowsTheNewDaemonsEvents(t *testing.
 	if got := first.State.Model.Issues; len(got) != 1 || got[0].UID != "z" {
 		t.Errorf("Issues %+v, want the new daemon's", got)
 	}
-	wantText(t, "the top bar", wireTextOf(t, first.State), "Daemon: home · local · kata 0.21.0 · as alice")
+	wantText(t, "the top bar", wireTextOf(t, first.State), "home", "local", "kata ", "0.21.0", "as alice")
 }
 
 func TestAFailedSwitchSaysWhyAndKeepsTheConnection(t *testing.T) {
@@ -213,7 +219,7 @@ func TestAFailedSwitchSaysWhyAndKeepsTheConnection(t *testing.T) {
 		t.Errorf("a failed switch sent %#v", failed.Cmds)
 	}
 	m := failed.State.Model
-	if m.Notice != `daemon "home": kata daemon start: no space left` {
+	if m.Notice != "Cannot connect to home: kata daemon start: no space." {
 		t.Errorf("notice %q", m.Notice)
 	}
 	if m.Page != model.PageDaemons || len(m.Issues) != len(before.Issues) || len(m.Undo.Entries) != 1 || m.StreamGeneration != 1 || m.Daemon != before.Daemon || m.Project != before.Project {
@@ -284,7 +290,7 @@ func TestASuccessfulSwitchDropsTheDraftsAndSaysSo(t *testing.T) {
 	if len(m.Drafts) != 0 {
 		t.Errorf("%d drafts survived the switch", len(m.Drafts))
 	}
-	if !strings.Contains(m.Notice, "1 unsent draft dropped") {
+	if !strings.Contains(m.Notice, "dropped 1 unsent draft") {
 		t.Errorf("notice %q, want it to say the draft was dropped", m.Notice)
 	}
 }

@@ -55,18 +55,18 @@ func wantEmpty(t *testing.T, what string, s driver.State, id, variant string, wo
 }
 
 func TestAttentionPageEmptyIsAnEmptyState(t *testing.T) {
-	wantEmpty(t, "attention", attentionPageWith(t, nil, 0), "main.columns.list.attention"+"-empty", "", "No requests")
+	wantEmpty(t, "attention", attentionPageWith(t, nil, 0), "main.columns.list.attention"+"-empty", "", "No requests", "Requests addressed to")
 }
 
 func TestRunsPageEmptyIsAnEmptyStateAndOffersEveryRunForAJob(t *testing.T) {
 	wantEmpty(t, "runs", runsPane(t, 160), "main.columns.list.runs"+"-empty", "", "No runs")
 	s := runsPane(t, 160)
 	s.Model.Runs.JobUID = "J1"
-	wantEmpty(t, "job runs", s, "main.columns.list.runs"+"-empty", "", "No runs for this job", "press=f", `"keys"`, `"k":"button"`)
+	wantEmpty(t, "job runs", s, "main.columns.list.runs"+"-empty", "", "No runs", "This job has not run yet.", "All runs", "press=f", `"keys"`, `"k":"button"`)
 }
 
 func TestJobsPageEmptyIsAnEmptyState(t *testing.T) {
-	wantEmpty(t, "jobs", jobsPane(t, 160), "main.columns.list.jobs"+"-empty", "", "No Cron jobs")
+	wantEmpty(t, "jobs", jobsPane(t, 160), "main.columns.list.jobs"+"-empty", "", "No jobs", "A job makes an Issue or runs an agent on a schedule.")
 }
 
 func TestWorkflowsPageEmptyIsAnEmptyStateWithAKeyButton(t *testing.T) {
@@ -97,12 +97,11 @@ func TestIssueListEmptyOffersNoButtonWhileSearching(t *testing.T) {
 	}
 }
 
-func TestDetailWithNoIssueSelectedIsAnEmptyState(t *testing.T) {
-	wantEmpty(t, "detail", projectPane(t, 160), "main.columns.detail.empty", "", "No Issue selected")
-}
-
-func TestBoardLaneWithNoCardsIsAnInlineEmptyState(t *testing.T) {
-	wantEmpty(t, "lane", boardPane(t, boardCard("a")), view.BoardID+".lane1.cards"+"-empty", "inline", "No cards")
+// An empty list says so itself, so the detail column beside it draws no empty state that would repeat it.
+func TestDetailBesideAnEmptyListDrawsNoEmptyState(t *testing.T) {
+	if n := emptyNode(t, projectPane(t, 160), "main.columns.detail.empty"); n != nil {
+		t.Errorf("the detail repeats the empty list: %s", wireText(*n))
+	}
 }
 
 // emptyListButton is the id and click of the first button the empty Issue list draws; ok is false when it draws none.

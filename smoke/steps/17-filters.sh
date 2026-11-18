@@ -8,7 +8,9 @@ expect_tree "[data-id$='.$search_beta']" '.count == 1'
 
 ctl key /
 for letter in S e a r c h space t a r g e t; do ctl key "$letter"; done
-expect_tree "[data-id='main.filters.search']" '.nodes[0].text == "search Search target"'
+# The chip is left out while the search input is open: the input already shows the query.
+expect_tree "[data-id='main.columns.list.search']" '.ok and .count == 1'
+expect_tree "[data-id='main.filters.search']" '.ok and .count == 0'
 # Rows follow update order: Down opens the results, then lands on Beta whichever row comes first.
 expect_tree "[data-id\$='.$search_alpha']" '.count == 1'
 search_selected() { ctl tree "[data-id\$='.$search_alpha'],[data-id\$='.$search_beta'],[data-id\$='.$search_gamma']" | jq -c '[.nodes[] | select(.["aria-selected"] == "true") | .text | capture("Search target (?<name>[A-Za-z]+)").name]'; }
@@ -25,15 +27,15 @@ expect_tree "[data-id='main.columns.list.search']" '.count == 0'
 # Query Escape restores the committed query, not the temporary text.
 ctl key /
 ctl key z
-expect_tree "[data-id='main.filters.search']" '.nodes[0].text == "search Search targetz"'
+expect_tree "[data-id='main.filters.search']" '.ok and .count == 0'
 ctl key escape
-expect_tree "[data-id='main.filters.search']" '.nodes[0].text == "search Search target"'
+expect_tree "[data-id='main.filters.search']" '.nodes[0].text == "Search Search target"'
 expect_tree "[data-id$='.$search_beta']" '.count == 1 and .nodes[0]["aria-selected"] == "true"'
 
 ctl key s
-expect_tree "[data-id='main.filters.status']" '.nodes[0].text == "status open"'
+expect_tree "[data-id='main.filters.status']" '.nodes[0].text == "Status open"'
 ctl key s
-expect_tree "[data-id='main.filters.status']" '.nodes[0].text == "status closed"'
+expect_tree "[data-id='main.filters.status']" '.nodes[0].text == "Status closed"'
 expect_tree "[data-id='main.columns.list.issues-empty']" '.nodes[0].text | contains("No Issues match")'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.count == 0'
 ctl key s
@@ -52,7 +54,7 @@ ctl key tab
 ctl key Right
 ctl click "[data-id='layer.filters.foot.apply']"
 expect_tree "[data-id='layer.filters']" '.count == 0'
-expect_tree "[data-id^='main.filters.']" '["project smoke", "status open", "owner filter-owner", "label filter-label", "relationship has parent"] - [.nodes[].text] == []'
+expect_tree "[data-id^='main.filters.']" '["Project smoke", "Status open", "Owner filter-owner", "Label filter-label", "Relationship Has parent"] - [.nodes[].text] == []'
 expect_tree "[data-id$='.$search_gamma']" '.count == 1'
 expect_tree "[data-id$='.$search_alpha']" '.count == 0'
 
@@ -60,11 +62,11 @@ expect_tree "[data-id$='.$search_alpha']" '.count == 0'
 kata --workspace "$tmp/workspace" create "Search target Delta" --owner filter-owner --label filter-label --parent "$search_alpha" --json >"$tmp/search-delta.json"
 search_delta=$(jq -r '.issue.uid' "$tmp/search-delta.json")
 expect_tree "[data-id$='.$search_delta']" '.count == 1'
-expect_tree "[data-id^='main.filters.']" '["owner filter-owner", "label filter-label", "relationship has parent", "search Search target"] - [.nodes[].text] == []'
+expect_tree "[data-id^='main.filters.']" '["Owner filter-owner", "Label filter-label", "Relationship Has parent", "Search Search target"] - [.nodes[].text] == []'
 
 ctl key c
-expect_tree "[data-id='main.topbar.left.heading']" '.nodes[0].text == "Project: smoke"'
-expect_tree "[data-id='main.filters']" '.ok and .count == 0'
+expect_tree "[data-id='main.topbar.left.heading']" '.nodes[0].text == "smoke"'
+expect_tree "[data-id='main.filters.icon']" '.ok and .count == 0'
 expect_tree "[data-id$='.$hierarchy_parent']" '.count == 1'
 ctl key f
 expect_tree "[data-id='layer.filters']" '.count == 1 and (.nodes[0].text | contains("Filter") and contains("smoke"))'

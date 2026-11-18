@@ -14,20 +14,22 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 	if !f.Open {
 		return nil
 	}
-	title, save, pending := "New job", "Create job", "Creating the job…"
+	title, save := "New job", "Create job"
 	if f.Change {
-		title, save, pending = "Edit job", "Save job", "Saving the job…"
+		title, save = "Edit job", "Save job"
 	}
 	if f.Conflict != nil {
 		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardJob)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconTimer}, jobConflict(m)))
 	}
 	children := make([]tern.Element, 0, len(model.JobFields)+6)
 	if p := f.Opened.Parent; f.Change && p != nil {
-		ref := p.UID
+		parent := []ui.Span{refSpan(p.UID, false)}
 		if p.ShortID != "" {
-			ref = "#" + p.ShortID + " " + p.Title
+			parent = []ui.Span{refSpan("#"+p.ShortID, false), {T: p.Title}}
 		}
-		children = append(children, toneText("parent-fixed", ui.ToneMuted, "Parent: "+ref+" (a job keeps its parent)"))
+		children = append(children, ui.Col{Common: ui.Common{Key: "parent-fixed"}, Gap: ui.GapXS, Children: ui.Nodes(
+			propRow("Parent", ui.Text{Common: ui.Common{Key: "value"}, Spans: parent}),
+			toneText("hint", ui.ToneMuted, "A job keeps its parent."))})
 	}
 	previewed := false
 	for _, field := range model.JobFields {
@@ -38,36 +40,40 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 			children = append(children, jobPreview(f, m.Calendar, now))
 			previewed = true
 		}
-		tone := ui.ToneNeutral
-		prompt := model.JobPrompt(field.Name) + ": "
-		if field.Name == f.Field {
-			tone = ui.ToneAccent
-			prompt = "> " + prompt
-		}
+		focused := field.Name == f.Field
+		label := model.JobPrompt(field.Name)
 		if !field.Text {
 			hint := ""
 			if field.Name == model.JobFieldWorkflow {
 				hint = f.WorkflowsNote()
 			}
-			children = append(children, choiceControl(m, model.CardJob, field.Name, model.JobPrompt(field.Name), field.Name == f.Field, hint, ""))
+			children = append(children, choiceControl(m, model.CardJob, field.Name, label, focused, hint, ""))
 			continue
 		}
 		if field.Name == model.JobFieldProfile && f.Worker.Note != "" {
-			children = append(children, toneText("worker-note", ui.ToneWarning, "The worker's config could not be read, so profile and checkout are free text: "+f.Worker.Note))
+			children = append(children, toneText("worker-note", ui.ToneWarning, "Cannot read the worker's config, so profile and checkout are free text: "+strings.TrimSuffix(f.Worker.Note, ".")+"."))
 		}
+		tone, labelStyle := ui.ToneNeutral, "muted"
+		if focused {
+			tone, labelStyle = ui.ToneAccent, "accent"
+		}
+		children = append(children, ui.Text{Common: ui.Common{Key: string(field.Name) + "-label"}, Spans: []ui.Span{{T: label, S: labelStyle}}, Wrap: ui.WrapNone})
 		text := f.Text(field.Name)
 		if field.Name == model.JobFieldPrompt {
 			children = append(children, ui.Editor{
-				Common:   ui.Common{Key: string(field.Name), Tone: tone, Aria: model.JobPrompt(field.Name)},
-				Field:    ui.Field{Text: text, Cursor: caretAt(f.Caret, field.Name, text), Mode: "insert", Readonly: f.Saving, Prompt: []ui.Span{{T: prompt}}},
+				Common:   ui.Common{Key: string(field.Name), Tone: tone, Aria: label},
+				Field:    ui.Field{Text: text, Cursor: caretAt(f.Caret, field.Name, text), Mode: "insert", Readonly: f.Saving},
 				MaxLines: 8,
 			})
-			continue
+		} else {
+			children = append(children, ui.Input{
+				Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: label},
+				Field:  ui.Field{Text: text, Cursor: caretAt(f.Caret, field.Name, text), Mode: "insert", Readonly: f.Saving},
+			})
 		}
-		children = append(children, ui.Input{
-			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: model.JobPrompt(field.Name)},
-			Field:  ui.Field{Text: text, Cursor: caretAt(f.Caret, field.Name, text), Mode: "insert", Readonly: f.Saving, Prompt: []ui.Span{{T: prompt}}},
-		})
+		if hint := model.JobHint(field.Name); focused && hint != "" {
+			children = append(children, toneText(string(field.Name)+"-hint", ui.ToneMuted, hint))
+		}
 	}
 	if !previewed {
 		children = append(children, jobPreview(f, m.Calendar, now))
@@ -76,56 +82,66 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 		children = append(children, conditions)
 	}
 	if f.Err != nil {
-		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
+		children = append(children, toneText("error", ui.ToneError, model.Cannot("save", "the job", f.Err)))
 	}
 	if f.Saving {
-		children = append(children, toneText("pending", ui.TonePending, pending))
+		children = append(children, toneText("pending", ui.TonePending, model.Progress("Saving", "")))
 	} else {
-		children = append(children, buttonRow(cardButton("save", model.ModeJobForm, model.JobSave, save, true), cardButton("cancel", model.ModeJobForm, model.JobCancel, "Cancel", false)))
+		children = append(children, formFoot(cardButton("save", model.ModeJobForm, model.JobSave, save, true), exitButton("cancel", model.ModeJobForm, model.JobCancel, "Cancel")))
 	}
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardJob)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconTimer}, children))
 }
 
+// jobPreview is what the trigger as typed means: its words, then the next runs it lists, or why it reads as no schedule.
 func jobPreview(f model.JobFormState, cal model.PaneCalendar, now time.Time) tern.Element {
 	preview := f.Preview(cal, now)
 	if preview.Err != nil {
-		return toneText("preview", ui.ToneWarning, "Schedule: not yet; "+preview.Err.Error())
+		return toneText("preview", ui.ToneWarning, "Not a valid schedule: "+model.Reason(preview.Err)+".")
 	}
-	lines := []tern.Element{toneText("words", ui.ToneInfo, "Schedule: "+preview.Words)}
+	lines := []tern.Element{ui.Text{Common: ui.Common{Key: "words"}, Text: "Runs " + preview.Words}}
 	if len(preview.Runs) > 0 {
-		lines = append(lines, toneText("runs", ui.ToneMuted, "Next runs: "+strings.Join(preview.Runs, " · ")))
+		runs := make([]tern.Element, len(preview.Runs))
+		for i, run := range preview.Runs {
+			runs[i] = ui.Text{Common: ui.Common{Key: "run" + string(rune('a'+i))}, Spans: []ui.Span{timeSpan(run)}}
+		}
+		lines = append(lines, propRow("Next runs", ui.Col{Common: ui.Common{Key: "values"}, Gap: ui.GapXS, Children: ui.Nodes(runs...)}))
 	}
 	if preview.Note != "" {
 		lines = append(lines, toneText("note", ui.ToneMuted, preview.Note))
 	}
-	return ui.Col{Common: ui.Common{Key: "preview"}, Children: ui.Nodes(lines...)}
+	return ui.Col{Common: ui.Common{Key: "preview", Tone: ui.ToneMuted}, Gap: ui.GapXS, Children: ui.Nodes(lines...)}
 }
 
+// jobConditions lists what the job's conditions hold it back for. They are set with kata, so the card only reads them.
 func jobConditions(f model.JobFormState) tern.Element {
 	lines, shown, err := f.ConditionLines()
 	if !shown {
 		return nil
 	}
 	if err != nil {
-		return toneText("conditions", ui.ToneError, "Conditions: not readable; "+err.Error()+". The worker holds every due occurrence of this job, and lists the job as blocked, until options.conditions is fixed.")
+		return toneText("conditions", ui.ToneError, "Cannot read the conditions: "+model.Reason(err)+". The worker holds every due run of this job until they are fixed.")
 	}
-	rows := []tern.Element{toneText("conditions-head", ui.ToneInfo, "Only when (set in options.conditions with kata):")}
+	rows := []tern.Element{toneText("conditions-head", ui.ToneMuted, "Only runs when")}
 	for i, line := range lines {
 		rows = append(rows, toneText("condition"+string(rune('a'+i)), ui.ToneNeutral, line))
 	}
-	rows = append(rows, toneText("conditions-note", ui.ToneMuted, "A worker that does not know conditions ignores them."))
 	return ui.Col{Common: ui.Common{Key: "conditions"}, Children: ui.Nodes(rows...)}
 }
 
+// jobConflict is the card while the job changed since it was opened: what the newer job holds, and the three ways out. The
+// newer job is the primary answer, and the safe exit is last.
 func jobConflict(m model.Model) []tern.Element {
-	rows := []tern.Element{toneText("conflict", ui.ToneWarning, "The job changed meanwhile; nothing was written. Your draft is kept. The newer job:")}
-	for i, fact := range m.JobConflictFacts() {
-		label := ui.Text{Common: ui.Common{Key: "label", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(14)}}, Spans: []ui.Span{{T: fact.Label, S: "muted"}}, Wrap: ui.WrapNone}
-		value := ui.Text{Common: ui.Common{Key: "value", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Text: fact.Value}
-		rows = append(rows, ui.Row{Common: ui.Common{Key: "fact" + string(rune('a'+i))}, Gap: ui.GapSM, Align: ui.AlignStart, Children: ui.Nodes(label, value)})
+	rows := []tern.Element{toneText("conflict", ui.ToneWarning, "Changed since you opened it. Nothing was written; your Draft is kept.")}
+	facts := m.JobConflictFacts()
+	props := make([]tern.Element, len(facts))
+	for i, fact := range facts {
+		props[i] = propRow(fact.Label, ui.Text{Common: ui.Common{Key: "value", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Text: fact.Value})
 	}
-	return append(rows, buttonRow(
-		cardButton("overwrite", model.ModeJobConflict, model.JobOverwrite, "Save my draft over it", false),
-		cardButton("newer", model.ModeJobConflict, model.JobTakeNewer, "Use the newer job", true),
-		cardButton("discard", model.ModeJobConflict, model.JobDiscard, "Discard draft", false)))
+	if len(props) > 0 {
+		rows = append(rows, propGrid(props...))
+	}
+	return append(rows, formFoot(
+		cardButton("newer", model.ModeJobConflict, model.JobTakeNewer, "Use theirs", true),
+		exitButton("discard", model.ModeJobConflict, model.JobDiscard, "Discard mine"),
+		cardButton("overwrite", model.ModeJobConflict, model.JobOverwrite, "Keep mine", false)))
 }

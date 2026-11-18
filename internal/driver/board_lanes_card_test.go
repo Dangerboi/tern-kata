@@ -42,7 +42,7 @@ func nodeText(t *testing.T, s driver.State, id string) (string, bool) {
 
 func lanesField(t *testing.T, s driver.State) string {
 	t.Helper()
-	text, _ := nodeText(t, s, fieldLabeled(t, s.Model, "Lane list"))
+	text, _ := nodeText(t, s, fieldLabeled(t, s.Model, "Lanes"))
 	return text
 }
 
@@ -56,7 +56,7 @@ func TestBOpensTheLanesCardPrefilledAndEscClosesItUnchanged(t *testing.T) {
 	if got := lanesField(t, open.State); got != "in-review, shipping" {
 		t.Errorf("field = %q, want the current Lane list", got)
 	}
-	if !strings.HasPrefix(open.State.Focus, layerTitled(t, open.State.Model, "Lanes")) {
+	if !strings.HasPrefix(open.State.Focus, layerTitled(t, open.State.Model, "Lanes Using this machine's list")) {
 		t.Errorf("text focus %q is not on the Lanes card", open.State.Focus)
 	}
 	edited := typed(t, open.State, "x")
@@ -105,7 +105,7 @@ func TestLanesCardRefusesBadNamesNamingTheEntry(t *testing.T) {
 			if len(out.Cmds) != 0 || out.State.Model.TopCard() != model.CardLanes {
 				t.Fatalf("cmds %v card %v, want a refusal with the card open", out.Cmds, out.State.Model.TopCard())
 			}
-			msg, ok := errorOnCard(t, out.State.Model)
+			msg, ok := nodeText(t, out.State, "layer.lanes.names-error") // under the Lanes field, whose label turns to the error tone too
 			if !ok || !strings.Contains(msg, tt.want) {
 				t.Errorf("error = %q (drawn %v), want it to name %q", msg, ok, tt.want)
 			}
@@ -125,14 +125,14 @@ func TestEmptyLanesFieldSavesNoLanesWhichRestoresTheDefault(t *testing.T) {
 	}
 }
 
-func TestLanesCardHintListsLabelsThatAreNotLanesYet(t *testing.T) {
+func TestLanesCardListsLabelsThatAreNotLanesYet(t *testing.T) {
 	s := lanesCard(t, boardCard("a", "needs-triage", "bug"), boardCard("b", "docs", "bug"))
-	hint, ok := textOnCard(t, s.Model, "Not Lanes yet")
+	hint, ok := textOnCard(t, s.Model, "Other labels")
 	if !ok || !strings.Contains(hint, "bug, docs") || strings.Contains(hint, "needs-triage") {
 		t.Fatalf("hint = %q (drawn %v), want bug and docs only", hint, ok)
 	}
 	s = step(t, lanesCard(t, boardCard("a", "needs-triage")), key("a")).State
-	if _, ok := textOnCard(t, s.Model, "Not Lanes yet"); ok {
+	if _, ok := textOnCard(t, s.Model, "Other labels"); ok {
 		t.Error("the hint is drawn although every label is a Lane")
 	}
 }

@@ -229,8 +229,7 @@ func AgentAddressActor(address string) string {
 // its block is, or the reason there is none in a Notice. The Agent card closes as it does when going to an agent.
 func openAgentCardMessage(m Model, picking bool) (Model, []Cmd) {
 	if reason := m.AgentCardUnavailable(AgentCardMessage); reason != "" {
-		m.Notice = reason
-		return m, nil
+		return m.fail(reason), nil
 	}
 	card := m.AgentCard
 	if r, ok := m.AgentCardSelectedRemote(); ok {
@@ -259,8 +258,7 @@ func openAgentMessageFor(m Model, picking bool) (Model, []Cmd) {
 	}
 	target, reason := m.messageTarget(request)
 	if reason != "" {
-		m.Notice = reason
-		return m, nil
+		return m.fail(reason), nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, Picking: picking, IssueUID: request.IssueUID, IssueRef: request.QualifiedID(), ProjectID: request.ProjectID,
 		Agent: target.Teammate, Address: target.Address}
@@ -285,8 +283,7 @@ func askAgentAboutComment(m Model) (Model, []Cmd) {
 		reason = m.agentMessageRefusal(target)
 	}
 	if reason != "" {
-		m.Notice = reason
-		return m, nil
+		return m.fail(reason), nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, IssueUID: issue.UID, IssueRef: issue.QualifiedID, ProjectID: issue.ProjectID,
 		Agent: target.Teammate, Address: target.Address, Re: row.Key}
@@ -346,7 +343,7 @@ func (m *Model) messageText() (string, bool) {
 	case err != nil:
 		f.Err = err
 	case m.Stale:
-		f.Err = errors.New("Daemon disconnected; reconnect before sending.")
+		f.Err = errors.New(Cannot("send", "", ErrDisconnected))
 	default:
 		return text, true
 	}
@@ -381,7 +378,7 @@ func agentMessageSent(m Model, msg AgentMessageSent) (Model, []Cmd) {
 	case msg.Held != "":
 		f.Held, f.Unread, f.UnreadFrom = msg.Held, msg.Unread, msg.UnreadFrom
 	default:
-		m.Notice = fmt.Sprintf("Sent the message to %s on %s.", f.Agent, f.IssueRef)
+		m = m.say(fmt.Sprintf("Sent the message to %s on %s.", f.Agent, m.RefOf(f.IssueRef)))
 		m.AgentMessage = AgentMessageState{}
 	}
 	return m, nil
@@ -441,7 +438,7 @@ func agentAddressCleared(m Model, msg AgentAddressCleared) Model {
 	switch {
 	case msg.Err != nil:
 		delete(clears, msg.Block)
-		m.Notice = fmt.Sprintf("Cannot clear the message left for an agent that exited: %s", msg.Err)
+		m = m.fail(Cannot("clear", "the message left for an agent that exited", msg.Err))
 	case msg.Block != "":
 		clears[msg.Block] = clearDone
 	}

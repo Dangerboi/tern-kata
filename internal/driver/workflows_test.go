@@ -110,7 +110,7 @@ func TestWorkflowsPageSaysWhyItIsEmpty(t *testing.T) {
 	mustShow(t, workflowsPane(t, 160), "no workflows", "No workflows", "New workflow")
 	archived := nightlyFlow()
 	archived.Archived = true
-	mustShow(t, workflowsPane(t, 160, archived), "only archived", "Every workflow is archived", "Show archived")
+	mustShow(t, workflowsPane(t, 160, archived), "only archived", "No workflows", "All of them are archived.", "Show archived")
 	failed := step(t, feed(t, projectPane(t, 160, boardCard("a")), key("4")).State, model.WorkflowsLoaded{ProjectUID: "p", Err: errText("kata server not responding")}).State
 	mustShow(t, failed, "load failure", "kata server not responding")
 }
@@ -168,7 +168,7 @@ func TestWorkflowCardSavesAndShowsAConflictBesideTheKeptText(t *testing.T) {
 	newer.EventUID, newer.Revision = "E2", 4
 	newer.Steps[0].Prompt = "Review it twice."
 	conflict := step(t, saved.State, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, UID: "W1", Current: &newer}).State
-	mustShow(t, conflict, "conflict", "Workflow changed: your text is kept", "make check", "Review it twice.", "revision 4", "Overwrite", "overwrite new version")
+	mustShow(t, conflict, "conflict", "Edit workflow", "Changed since you opened it. Nothing was written; your Draft is kept.", "make check", "Review it twice.", "Yours", "Current", "Keep mine", "Discard mine")
 	if got := conflict.Model.Workflows.Card.Editor.Text; got != edited {
 		t.Errorf("the conflict lost the edited text: %q", got)
 	}
@@ -195,12 +195,12 @@ func TestWorkflowConflictOnAnArchivedWorkflowOffersNoOverwrite(t *testing.T) {
 	gone := reviewFlow()
 	gone.EventUID, gone.Revision, gone.Archived = "E2", 4, true
 	conflict := step(t, s, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, UID: "W1", Current: &gone}).State
-	mustShow(t, conflict, "archived conflict", "Workflow changed: your text is kept", "archived", "Discard Draft")
+	mustShow(t, conflict, "archived conflict", "Archived since you opened it, so your text cannot be saved over it.", "Discard mine")
 	drawn := screen(t, conflict)
-	if strings.Contains(drawn, "Overwrite") {
-		t.Errorf("the archived conflict still draws Overwrite:\n%s", drawn)
+	if strings.Contains(drawn, "Keep mine") {
+		t.Errorf("the archived conflict still draws Keep mine:\n%s", drawn)
 	}
-	if strings.Contains(drawn, "overwrite new version") || !strings.Contains(drawn, "discard Draft") {
+	if strings.Contains(drawn, "overwrite new version") {
 		t.Errorf("the archived conflict's footer hints are wrong:\n%s", drawn)
 	}
 }

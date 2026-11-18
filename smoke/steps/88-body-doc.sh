@@ -52,7 +52,7 @@ else
   expect_tree "[data-id='layer.editor']" '.ok and .count == 0'
 
   # A modal drawn over a doc is above it. A body long enough to run behind the Edit Issue body card is a doc under the card's
-  # Discard button: a click there asks to discard the Draft. (On a doc Tern lifts above the layer the click lands on the doc and
+  # Cancel button: a click there asks to discard the Draft. (On a doc Tern lifts above the layer the click lands on the doc and
   # nothing happens, unless the plugin's stylesheet isolates the doc.) Its own Issue, which the Project's removal below takes.
   kata --workspace "$bd_dir" create "Doc long body Issue" --body "$(printf 'Long body line %s\n\n' $(seq 1 24))" --json >"$tmp/bd-long.json"
   bd_long_uid=$(jq -r '.issue.uid' "$tmp/bd-long.json")
@@ -63,7 +63,8 @@ else
   expect_tree "$bd_body .sf-doc-card" '.ok and .count == 0'
   ctl key e
   expect_tree "[data-id='layer.editor.input']" '.ok and .count == 1'
-  ctl click "[data-id^='layer.editor.'][data-id\$='.discard']"
+  ctl type '"edit"'
+  ctl click "[data-id^='layer.editor.'][data-id\$='.cancel']"
   expect_tree "[data-id^='layer.editor.'][data-id\$='.keep']" '.ok and .count == 1'
   ctl key y
   expect_tree "[data-id='layer.editor']" '.ok and .count == 0'

@@ -20,23 +20,23 @@ func jumpLink(uid, ref string, card ui.Hovercard) ui.Text {
 func referenceText(key, uid, ref, title string, card ui.Hovercard) ui.Text {
 	spans := []ui.Span{{T: ref, S: mono("accent link")}}
 	if title != "" {
-		spans = append(spans, ui.Span{T: " - " + title})
+		spans = append(spans, ui.Span{T: " " + title})
 	}
 	return ui.Text{Common: ui.Common{Key: key, Hovercard: card, Actions: &ui.Actions{Click: JumpClick(uid)}}, Spans: spans}
 }
 
 func linkRow(m model.Model, row model.DetailRow, click *ui.Actions, now time.Time) tern.Element {
 	noShrink := 0.0
-	lead := ui.Text{Common: ui.Common{Key: "heading", Actions: click, Shrink: &noShrink}, Spans: []ui.Span{{T: row.Relation + " |\u00a0", S: "muted"}}, Wrap: ui.WrapNone}
-	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapNone, Align: ui.AlignStart, Children: ui.Nodes(lead, referenceText("jump", row.ReferenceUID, row.Ref, row.RefTitle, refCard(m, rowFacts(row), now)))}
+	label := ui.Text{Common: ui.Common{Key: "heading", Role: PropertyKeyRole, Actions: click, Shrink: &noShrink}, Wrap: ui.WrapNone}
+	if !row.RelationRepeat {
+		label.Spans = []ui.Span{{T: row.RelationLabel, S: "muted"}}
+	}
+	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(label, referenceText("jump", row.ReferenceUID, row.Ref, row.RefTitle, refCard(m, rowFacts(row), now)))}
 }
 
 func historySentence(m model.Model, row model.DetailRow, action string, now time.Time) tern.Element {
 	sentence := row.History
-	spans := []ui.Span{
-		{T: "[" + row.Type + "]", S: "muted"}, {T: " " + row.Time, S: mono("muted")}, {T: " "}, {T: row.Author, S: "strong"}, {T: " - "},
-		{T: sentence.Verb, S: string(sentence.Tone)},
-	}
+	spans := []ui.Span{timeSpan(row.Time), {T: " "}, {T: row.Author, S: "strong"}, {T: " "}, {T: sentence.Verb, S: string(sentence.Tone)}}
 	if object := strings.TrimRight(sentence.Object, " "); object != "" {
 		spans = append(spans, ui.Span{T: " " + object})
 	}

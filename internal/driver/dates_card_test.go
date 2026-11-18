@@ -30,7 +30,7 @@ func datesField(t *testing.T, s driver.State, label string) string {
 	return text
 }
 
-// datesPreview is the line the Dates card draws under its field labelled label: "no date" or the day the text resolves to.
+// datesPreview is the text the Dates card draws beside its field labelled label: the weekday of a typed date, the day and weekday of a relative one, nothing for blank.
 func datesPreview(t *testing.T, s driver.State, label string) string {
 	t.Helper()
 	return textAfterField(t, s.Model, label)
@@ -61,7 +61,7 @@ func TestDOpensTheDatesCardPrefilledInEveryModeAndEscClosesItUnchanged(t *testin
 			if got := datesField(t, open.State, "Deadline"); got != "2026-11-02T17:30:00" {
 				t.Errorf("Deadline = %q, want the value as kata holds it", got)
 			}
-			if !strings.HasPrefix(open.State.Focus, layerTitled(t, open.State.Model, "Dates")) {
+			if !strings.HasPrefix(open.State.Focus, layerTitled(t, open.State.Model, "Dates "+m.DatesForm.Ref)) {
 				t.Errorf("text focus %q is not on the Dates card", open.State.Focus)
 			}
 			typedIn := typed(t, open.State, "x")
@@ -75,16 +75,16 @@ func TestDOpensTheDatesCardPrefilledInEveryModeAndEscClosesItUnchanged(t *testin
 
 func TestDatesCardResolvesEachFormAgainstThePaneCalendarAndPreviewsIt(t *testing.T) {
 	for _, tt := range []struct{ input, want string }{
-		{"2026-10-24", "2026-10-24 Sat"},
+		{"2026-10-24", "Sat"},
 		{"today", "2026-10-08 Thu"},
 		{"tomorrow", "2026-10-09 Fri"},
 		{"+3d", "2026-10-11 Sun"},
 		{"+2w", "2026-10-22 Thu"},
 		{"+30d", "2026-11-07 Sat"},
-		{"2026-10-24T09:00", "2026-10-24 Sat 09:00"},
-		{"2026-10-24T09:00:30", "2026-10-24 Sat 09:00:30"},
-		{"2026-10-24T09:00:30Z", "2026-10-24T09:00:30Z"},
-		{"", "no date"},
+		{"2026-10-24T09:00", "Sat 09:00"},
+		{"2026-10-24T09:00:30", "Sat 09:00:30"},
+		{"2026-10-24T09:00:30Z", ""},
+		{"", ""},
 	} {
 		s := emptied(t, step(t, projectPane(t, 160, withDates("a", "2026-10-12", "")), key("d")).State)
 		s = typed(t, s, tt.input)

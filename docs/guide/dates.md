@@ -2,9 +2,9 @@
 
 `d` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Dates card**: a Scheduled field and a Deadline field holding the Issue's current dates.
 
-![The Dates card over the Board, with "+1w" typed in Scheduled and the date it resolves to below it](../images/dates-card.png)
+![The Dates card over the Board, with "+1w" typed in Scheduled and the weekday of the date it resolves to beside it](../images/dates-card.png)
 
-`tab` moves between the fields, `enter` saves and `esc` cancels. `ctrl+d` in a field opens a calendar beside it: the arrow keys move by a day or a week, `enter` or a click picks the date and `esc` closes the calendar. Typing a date works as before. A field takes:
+The card's head reads Dates, with the Issue's ref (`#tga6`, or `project#tga6` across Projects) as a muted line; its buttons are **Save** and **Cancel**, and each field's placeholder is `YYYY-MM-DD`. While a field has focus, one muted line under it reads "Date like 2026-11-20, today, tomorrow or +3d. Blank clears it." `tab` moves between the fields, `enter` saves and `esc` cancels. `ctrl+d` in a field opens a calendar beside it (the footer shows `ctrl+d calendar`) on the month of the field's date, else of the other date, else today: the arrow keys move by a day or a week, `enter` or a click picks the date and `esc` closes the calendar. Typing a date works as before. A field takes:
 
 | Input | Meaning |
 |---|---|
@@ -16,14 +16,20 @@
 | `+Nw` | N weeks on |
 | blank | clears the date |
 
-A muted line under the field shows the date it resolves to with its weekday (`2026-10-24 Sat`), followed by the time for a local time (`2026-10-24 Sat 09:00`); a UTC instant is shown as typed, since its calendar day depends on the time zone. The same forms kata's own `d` form takes are accepted, and the time forms need the `T` and, for UTC, a capital `Z`. Anything else is refused with a message naming the field. A date kata holds with a time (`2026-11-02T17:30:00`) is shown as it is and left alone unless you edit that field.
+A muted text beside the field shows the weekday of a typed date (`Sat`, with the time for a local time: `Sat 09:00`) and the day and weekday of a date that resolves from `today` or `+3d` (`2026-10-24 Sat`); a blank field, a UTC instant and text that is not a date show nothing, since a UTC instant's calendar day depends on the time zone. The same forms kata's own `d` form takes are accepted, and the time forms need the `T` and, for UTC, a capital `Z`; the forms with a time and `Z` are listed in the table above, not in the hint. Anything else is refused with a message naming the field: "Scheduled must be a date like 2026-11-20, today, tomorrow or +3d." A date kata holds with a time (`2026-11-02T17:30:00`) is shown as it is and left alone unless you edit that field.
 
 ## In the Create card
 
-The Create card (`n`, and `N` for a child Issue) has the same two fields after Priority, in tab order, with the same input forms, the same `ctrl+d` calendar, weekday preview and refusal naming the field (nothing is created). The dates go into the one create request as the new Issue's `scheduled_on` and `deadline_on` metadata; a field left blank sends none. Retrying a failed create reuses its idempotency key, and editing a date makes a new request.
+The Create card (`n`, and `N` for a child Issue) has the same two fields after Priority, in tab order, with the same input forms, the same `ctrl+d` calendar, weekday hint and refusal naming the field (nothing is created). The dates go into the one create request as the new Issue's `scheduled_on` and `deadline_on` metadata; a field left blank sends none. Retrying a failed create reuses its idempotency key, and editing a date makes a new request.
 
 ## Saving
 
 Saving writes the changed dates only, as the Issue's `scheduled_on` and `deadline_on` metadata, in one write guarded on the Issue's revision. First it checks the dates against the value the card opened with: a date changed elsewhere (the kata CLI, an agent, another Pane) since then is reported and not overwritten, and the card stays open with the reason. On that conflict the changed field is refilled with the value kata holds now and your other edits stay, so saving again writes only what you still change. The message reads "The Issue changed since the card opened; nothing was written. The <Field> field now shows the current date." If the Issue changes during the save for another reason, the save reads it again and goes on; if a date changed, it is refused the same way, so a refused save never keeps half of it. It is refused while the daemon is disconnected.
 
-Dated cards on the Board and open Issue rows in the list show a badge such as "overdue 1d" or "due tomorrow"; the full list is in [the Board guide](pages-and-board.md#relationships-blockers-and-dates-on-cards). A list row shows the badge after its title, as `kata tui` shows its dates, and drops it when the whole title and the badge do not fit the list, as when it sits beside the detail (the title is never cut for it); closed and undated rows show none.
+Dated cards on the Board and open Issue rows in the list show a badge such as "overdue 1d" or "due tomorrow"; the full list is in [the Board guide](pages-and-board.md#relationships-blockers-and-dates-on-cards). A list row shows the badge in a column of its own, as `kata tui` shows its dates, and never drops it for width (a long title is cut instead); closed and undated rows show none.
+
+## How dates and ages read
+
+- Absolute times read `2026-11-18 18:21` (the Pane's zone, no seconds, no `Z`), or `18:21` when the time is today. Date-only fields read `2026-11-18`. A missing time or date reads `—`, never `-`.
+- Narrow list and table cells (Updated, children, related Issues) show a compact age with `ago`: `7s ago`, `4m ago`, `2h ago`, `3d ago`, `1w ago`; the hovercard carries the absolute time. Ages elsewhere are compact with no space: `7s`, `2h`.
+- The date badge words are "due today", "due tomorrow", "due 2026-11-25", "overdue 3d" and "scheduled 2026-12-01".

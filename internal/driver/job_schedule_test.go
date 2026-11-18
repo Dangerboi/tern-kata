@@ -24,7 +24,7 @@ func TestJobsPageRowsPutTheScheduleInWordsForEveryTriggerKind(t *testing.T) {
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "Europe/Berlin"}, "every day at 09:00 Europe/Berlin"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "30 6 * * 1-5"}, "every weekday at 06:30 UTC"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 18 * * Mon,Thu", Timezone: "UTC"}, "every Mon, Thu at 18:00 UTC"},
-		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "*/15 * * * *", Timezone: "UTC"}, "every 15 minutes UTC"},
+		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "*/15 * * * *", Timezone: "UTC"}, "every 15 minutes"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "*/40 * * * *", Timezone: "UTC"}, "cron */40 * * * * UTC"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 8 1 * *", Timezone: "UTC"}, "on day 1 of every month at 08:00 UTC"},
 		{cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "@daily", Timezone: "Europe/Berlin"}, "every day at 00:00 Europe/Berlin"},
@@ -48,7 +48,7 @@ func TestJobsPageRowsPutTheScheduleInWordsForEveryTriggerKind(t *testing.T) {
 		{cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "2026-11-01T08:00:00Z"}, "once at 2026-11-01 08:00 UTC"},
 		{cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "2026-11-01T09:30:00+01:00"}, "once at 2026-11-01 09:30 +01:00"},
 		{cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "tomorrow"}, ""},
-		{cronjob.Trigger{Kind: cronjob.TriggerManual}, "manual"},
+		{cronjob.Trigger{Kind: cronjob.TriggerManual}, "on demand"},
 		{cronjob.Trigger{Kind: cronjob.TriggerIssueScheduled, IssueUID: "I"}, "at the Issue's scheduled date"},
 		{cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline, IssueUID: "I"}, "at the Issue's deadline"},
 		{cronjob.Trigger{Kind: cronjob.TriggerIssueDeadline, IssueUID: "I", LeadSeconds: 2 * 86400}, "2 days before the Issue's deadline"},
@@ -62,12 +62,12 @@ func TestJobsPageRowsPutTheScheduleInWordsForEveryTriggerKind(t *testing.T) {
 	for i, tc := range cases {
 		text := jobCardText(t, s, jobs[i].UID)
 		if tc.want == "" {
-			if strings.Contains(text, "agent prompt ·") {
+			if strings.Contains(text, "Agent prompt ·") {
 				t.Errorf("%+v: the row words a schedule it can't read: %s", tc.trigger, text)
 			}
 			continue
 		}
-		wantText(t, fmt.Sprintf("%+v", tc.trigger), text, "agent prompt · "+tc.want)
+		wantText(t, fmt.Sprintf("%+v", tc.trigger), text, "Agent prompt · "+tc.want)
 	}
 }
 
@@ -78,9 +78,9 @@ func TestJobsPageRowsLeaveOutTheNextRunWhereItCannotBeWorkedOut(t *testing.T) {
 		job  model.CronJob
 		want string // "" is no next run
 	}{
-		{"cron in its zone", adapterJobOn("J1", cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "Europe/Berlin"}), "next 2026-10-09 07:00"},
-		{"native interval counts from the anchor", nativeJob("J2", "Hourly", jobParent("open", false)), "next 13:00"},
-		{"once in the future", adapterJobOn("J3", cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "2026-11-01T08:00:00Z"}), "next 2026-11-01 08:00"},
+		{"cron in its zone", adapterJobOn("J1", cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 9 * * *", Timezone: "Europe/Berlin"}), "Next run 2026-10-09 07:00"},
+		{"native interval counts from the anchor", nativeJob("J2", "Hourly", jobParent("open", false)), "Next run 13:00"},
+		{"once in the future", adapterJobOn("J3", cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "2026-11-01T08:00:00Z"}), "Next run 2026-11-01 08:00"},
 		{"once in the past", adapterJobOn("J4", cronjob.Trigger{Kind: cronjob.TriggerOnce, At: "2026-10-01T08:00:00Z"}), ""},
 		{"unparseable cron", adapterJobOn("J5", cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "nope"}), ""},
 		{"manual", adapterJobOn("J6", cronjob.Trigger{Kind: cronjob.TriggerManual}), ""},
@@ -94,7 +94,7 @@ func TestJobsPageRowsLeaveOutTheNextRunWhereItCannotBeWorkedOut(t *testing.T) {
 	s := jobsPane(t, 160, jobs...)
 	for _, tc := range cases {
 		text := jobCardText(t, s, tc.job.UID)
-		if tc.want == "" && strings.Contains(text, "next ") {
+		if tc.want == "" && strings.Contains(text, "Next run ") {
 			t.Errorf("%s: draws a next run: %s", tc.name, text)
 		} else if tc.want != "" {
 			wantText(t, tc.name, text, tc.want)
@@ -107,5 +107,5 @@ func TestResumingACronJobCountsTheOccurrencesItMissedInItsZone(t *testing.T) {
 	job := disabled(owing("J1", "open", "all"))
 	job.Definition.Trigger = cronjob.Trigger{Kind: cronjob.TriggerCron, Cron: "0 * * * *", Timezone: "UTC"}
 	out := step(t, jobsPane(t, 160, job), key("p"))
-	wantText(t, "card", backfillText(t, out.State), "4 child Issues", "4 missed runs")
+	wantText(t, "card", backfillText(t, out.State), "Create 4 missed Issues?", "missed 4 runs")
 }

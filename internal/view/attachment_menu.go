@@ -2,6 +2,7 @@ package view
 
 import (
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -40,12 +41,12 @@ func attachmentCopyLayer(m model.Model) tern.Element {
 		return []tern.Element{
 			toneText(key+"-label", ui.ToneNeutral, label),
 			ui.Input{Common: ui.Common{Key: key, Aria: label}, Field: ui.Field{Text: text, Readonly: true,
-				Buttons: []ui.FieldButton{{Act: "copy", Icon: ui.IconCopy, Title: "Copy " + label}}}},
+				Buttons: []ui.FieldButton{{Act: "copy", Icon: ui.IconCopy, Title: "Copy " + strings.ToLower(label)}}}},
 		}
 	}
-	children := []tern.Element{toneText("name", ui.ToneMuted, c.Name)}
+	var children []tern.Element
 	children = append(children, copyField("path", "Downloaded file", c.Path)...)
-	children = append(children, copyField("command", "kata command", c.Command)...)
-	children = append(children, buttonRow(cardButton("close", model.ModeAttachmentCopy, model.AttachmentCopyClose, "Close", false)))
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAttachmentCopy)}, Modal: true, Size: ui.SizeLG, Head: ui.T("Copy"), Icon: ui.IconCopy}, children))
+	children = append(children, copyField("command", "Command", c.Command)...)
+	children = append(children, buttonRow(exitButton("close", model.ModeAttachmentCopy, model.AttachmentCopyClose, "Close")))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAttachmentCopy)}, Modal: true, Size: ui.SizeLG, Head: ui.T("Copy attachment"), Meta: ui.Spans(monoSpan(c.Name, "")), Icon: ui.IconCopy}, children))
 }

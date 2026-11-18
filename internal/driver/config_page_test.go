@@ -30,10 +30,10 @@ func configOpened(t *testing.T, s driver.State) driver.Output {
 
 var configRowsFixture = []model.ConfigFile{
 	{Key: model.ConfigLanes, Title: "lanes.toml", Path: "/cfg/tern-kata/lanes.toml", Status: model.ConfigLoads, Summary: "2 Projects with a Lane list"},
-	{Key: model.ConfigFilters, Title: "filters.toml", Path: "/cfg/tern-kata/filters.toml", Summary: "not created: no Project has a default filter"},
+	{Key: model.ConfigFilters, Title: "filters.toml", Path: "/cfg/tern-kata/filters.toml", Summary: "Not created: no Project has a default filter"},
 	{Key: model.ConfigViews, Title: "views.toml", Path: "/cfg/tern-kata/views.toml", Status: model.ConfigBroken,
 		Err: "/cfg/tern-kata/views.toml: toml: line 3: expected value, found newline"},
-	{Key: model.ConfigKata, Title: "config.toml (kata's, read-only)", Path: "/kata/config.toml", Status: model.ConfigLoads, Summary: "1 daemon · q asks before quitting"},
+	{Key: model.ConfigKata, Title: "kata config.toml", Path: "/kata/config.toml", Status: model.ConfigLoads, Summary: "read-only · 1 daemon · asks before quitting"},
 }
 
 func configListed(t *testing.T) driver.State {
@@ -75,12 +75,12 @@ func TestConfigPageBackReturnsToThePageShownBefore(t *testing.T) {
 
 func TestConfigPageListsEveryRowWithPathStatusAndSummaryAndTheSelectedRowsFullError(t *testing.T) {
 	s := configListed(t)
-	wantText(t, "the list", wireTextOf(t, s), "4 files in /cfg/tern-kata",
-		"lanes.toml", "/cfg/tern-kata/lanes.toml", "loads", "2 Projects with a Lane list",
-		"filters.toml", "missing", "not created: no Project has a default filter",
-		"views.toml", "does not load", "config.toml (kata's, read-only)", "/kata/config.toml", "1 daemon · q asks before quitting")
-	if text := wireTextOf(t, s); strings.Contains(text, "expected value, found newline") {
-		t.Errorf("an error shows before its row is selected: %s", text)
+	wantText(t, "the list", wireTextOf(t, s), "Config", "4", "/cfg/tern-kata",
+		"lanes.toml", "ok", "2 Projects with a Lane list",
+		"filters.toml", "not created", "Not created: no Project has a default filter",
+		"views.toml", "broken", "kata config.toml", "/kata/config.toml", "read-only · 1 daemon · asks before quitting")
+	if text := wireTextOf(t, s); strings.Contains(text, "expected value, found newline") || strings.Contains(text, "/cfg/tern-kata/lanes.toml") {
+		t.Errorf("an error shows before its row is selected, or a path inside the folder is drawn again: %s", text)
 	}
 	moved := step(t, step(t, s, key("j")).State, key("j")).State
 	wantText(t, "the broken row selected", wireTextOf(t, moved), "/cfg/tern-kata/views.toml: toml: line 3: expected value, found newline")
@@ -95,9 +95,9 @@ func TestConfigPageListsEveryRowWithPathStatusAndSummaryAndTheSelectedRowsFullEr
 func TestConfigPageSaysWhenTheConfigFolderCannotBeFoundAndListsNoRows(t *testing.T) {
 	out := configOpened(t, projectPane(t, 160, boardCard("a")))
 	load, _ := askedConfigFiles(out.Cmds)
-	wantText(t, "while the read is out", wireTextOf(t, out.State), "loading config files...")
+	wantText(t, "while the read is out", wireTextOf(t, out.State), "Loading config…")
 	failed := step(t, out.State, model.ConfigFilesLoaded{Request: load.Request, Err: errors.New("neither $XDG_CONFIG_HOME nor $HOME are defined")}).State
-	wantText(t, "a missing folder", wireTextOf(t, failed), "tern-kata's config folder could not be found: neither $XDG_CONFIG_HOME nor $HOME are defined")
+	wantText(t, "a missing folder", wireTextOf(t, failed), "Cannot find tern-kata's config folder: neither $XDG_CONFIG_HOME nor $HOME are defined.")
 	if len(failed.Model.ConfigPage.Files) != 0 {
 		t.Errorf("rows listed without a folder: %v", failed.Model.ConfigPage.Files)
 	}

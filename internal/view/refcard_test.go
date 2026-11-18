@@ -48,12 +48,12 @@ func wantCard(t *testing.T, where, card string, want ...string) {
 func relating() model.Model {
 	dana := "dana"
 	main := model.Issue{UID: "main", ShortID: "main", QualifiedID: "work#main", Title: "Main", Status: "open", ProjectName: "work"}
-	peer := model.Issue{UID: "peer", ShortID: "peer", QualifiedID: "work#peer", Title: "Peer title", Status: "open", ProjectName: "work", Owner: &dana, AssignmentExpiresOn: ptr(testNow.Add(time.Hour)), UpdatedAt: testNow.Add(-38 * time.Minute)}
-	root := model.Issue{UID: "root", ShortID: "root", QualifiedID: "work#root", Title: "Root title", Status: "open", ProjectName: "work", UpdatedAt: testNow.Add(-3 * time.Hour)}
+	peer := model.Issue{UID: "peer", ShortID: "peer", QualifiedID: "#peer", Title: "Peer title", Status: "open", ProjectName: "work", Owner: &dana, AssignmentExpiresOn: ptr(testNow.Add(time.Hour)), UpdatedAt: testNow.Add(-38 * time.Minute)}
+	root := model.Issue{UID: "root", ShortID: "root", QualifiedID: "#root", Title: "Root title", Status: "open", ProjectName: "work", UpdatedAt: testNow.Add(-3 * time.Hour)}
 	links := []model.Link{
-		{ID: 1, Type: "blocks", FromIssueUID: "peer", FromQualifiedID: "work#peer", FromStatus: "open", ToIssueUID: "main", ToQualifiedID: "work#main", ToStatus: "open"},
+		{ID: 1, Type: "blocks", FromIssueUID: "peer", FromQualifiedID: "#peer", FromStatus: "open", ToIssueUID: "main", ToQualifiedID: "work#main", ToStatus: "open"},
 		{ID: 2, Type: "blocks", FromIssueUID: "ghost", FromQualifiedID: "other#ghst", FromStatus: "open", ToIssueUID: "main", ToQualifiedID: "work#main", ToStatus: "open"},
-		{ID: 3, Type: "parent", FromIssueUID: "main", FromQualifiedID: "work#main", FromStatus: "open", ToIssueUID: "root", ToQualifiedID: "work#root", ToStatus: "open"},
+		{ID: 3, Type: "parent", FromIssueUID: "main", FromQualifiedID: "work#main", FromStatus: "open", ToIssueUID: "root", ToQualifiedID: "#root", ToStatus: "open"},
 	}
 	return apply(model.Model{},
 		model.Start{Workspace: "/repo"},
@@ -68,12 +68,12 @@ func relating() model.Model {
 func TestLinkAndParentReferencesCarryTheIssuesCard(t *testing.T) {
 	nodes := render(t, relating())
 	parent := hovercardOf(t, nodes, view.DetailContentID+".properties.parent.v")
-	wantCard(t, "parent property", parent, "work#root", "Root title", "open", "updated", "3h ago")
+	wantCard(t, "parent property", parent, "#root", "Root title", "open", model.PaneCalendar{}.Read(testNow.Add(-3*time.Hour), testNow))
 	if strings.Contains(parent, "owner") {
 		t.Errorf("unowned parent shows an owner: %s", parent)
 	}
 	peer := hovercardOf(t, nodes, view.DetailActivityID+".1.row.jump")
-	wantCard(t, "loaded link", peer, "work#peer", "Peer title", "open", "dana until", "38m ago")
+	wantCard(t, "loaded link", peer, "#peer", "Peer title", "open", "dana until", model.PaneCalendar{}.Read(testNow.Add(-38*time.Minute), testNow))
 	ghost := hovercardOf(t, nodes, view.DetailActivityID+".2.row.jump")
 	wantCard(t, "unloaded link", ghost, "other#ghst", "open")
 	for _, invented := range []string{"title", "owner", "updated"} {
@@ -89,10 +89,10 @@ func TestLinkAndParentReferencesCarryTheIssuesCard(t *testing.T) {
 func TestEventReferenceCarriesTheIssuesCard(t *testing.T) {
 	m, _ := referencing(model.TabEvents)
 	nodes := render(t, m)
-	wantCard(t, "event reference", hovercardOf(t, nodes, view.DetailActivityID+".linked.row.jump"), "work#peer", "Peer")
+	wantCard(t, "event reference", hovercardOf(t, nodes, view.DetailActivityID+".linked.row.jump"), "#peer", "Peer")
 }
 
-func TestBoardRelationshipsLineAndBlockedMarkerCarryTheIssuesCard(t *testing.T) {
+func TestBoardFactsRowAndBlockedMarkerCarryTheIssuesCard(t *testing.T) {
 	m := apply(relating(), model.FocusColumnMsg{Column: model.ColumnList}, model.KeyMsg{Chord: "b"})
 	nodes := render(t, m)
 	var line, marker int
@@ -101,21 +101,16 @@ func TestBoardRelationshipsLineAndBlockedMarkerCarryTheIssuesCard(t *testing.T) 
 			continue
 		}
 		switch {
-		case strings.HasSuffix(id, ".relationships.blocked-by.peer"):
-			line++
-			wantCard(t, id, hovercardOf(t, nodes, id), "work#peer", "Peer title", "dana until")
-		case strings.HasSuffix(id, ".relationships.blocked-by.ghost"):
-			line++
-			wantCard(t, id, hovercardOf(t, nodes, id), "other#ghst", "open")
 		case strings.HasSuffix(id, ".blocked"):
 			marker++
-			wantCard(t, id, hovercardOf(t, nodes, id), "work#peer", "Peer title", "other#ghst")
-		case strings.HasSuffix(id, ".relationships.parent.root"):
+			wantCard(t, id, hovercardOf(t, nodes, id), "#peer", "Peer title", "other#ghst")
+		case strings.HasSuffix(id, ".facts.parent.root"):
 			line++
-			wantCard(t, id, hovercardOf(t, nodes, id), "work#root", "Root title")
+			wantCard(t, id, hovercardOf(t, nodes, id), "#root", "Root title")
 		}
 	}
-	if line != 3 || marker != 1 {
+	// Blockers are named by the marker alone; the facts row carries the parent.
+	if line != 1 || marker != 1 {
 		t.Errorf("relationship refs with a card = %d, blocked markers = %d; nodes %v", line, marker, nodes.under("main.columns.list.board"))
 	}
 }
@@ -127,12 +122,12 @@ func TestChildTicketCellsCarryTheCardsFactsAsATooltip(t *testing.T) {
 		s, _ := cell["title"].(string)
 		return s
 	}
-	for _, want := range []string{"work#kid", "open", "Open kid", "owner dana until", "updated 38m ago"} {
+	for _, want := range []string{"#kidd", "open", "Open kid", "dana until"} {
 		if !strings.Contains(title("kid"), want) {
 			t.Errorf("loaded child tooltip %q lacks %q", title("kid"), want)
 		}
 	}
-	if got := title("ghost"); got != "work#ghost - closed" {
+	if got := title("ghost"); got != "#ghost · closed" {
 		t.Errorf("unloaded child tooltip = %q, want its qualified ref and status only", got)
 	}
 }
@@ -141,7 +136,7 @@ func TestChildTicketCellsCarryTheCardsFactsAsATooltip(t *testing.T) {
 // "peer" and is confirmed by one in the unloaded Issue "ghost".
 func commenting() model.Model {
 	main := model.Issue{UID: "main", ShortID: "main", QualifiedID: "work#main", Title: "Main", Status: "open", ProjectName: "work"}
-	peer := model.Issue{UID: "peer", ShortID: "peer", QualifiedID: "work#peer", Title: "Peer title", Status: "open", ProjectName: "work"}
+	peer := model.Issue{UID: "peer", ShortID: "peer", QualifiedID: "#peer", Title: "Peer title", Status: "open", ProjectName: "work"}
 	comment := model.Comment{UID: "c1", Author: "dana", CreatedAt: testNow.Add(-time.Hour), Body: "claim", ReplyKind: ptr("refute"),
 		Reply:     &model.CommentLink{UID: ptr("p1"), Kind: "refute", Author: ptr("eli"), IssueUID: ptr("peer"), IssueShortID: ptr("peer")},
 		Backlinks: []model.CommentLink{{UID: ptr("g1"), Kind: "confirm", Author: ptr("fay"), IssueUID: ptr("ghost"), IssueShortID: ptr("ghst")}}}
@@ -158,8 +153,8 @@ func commenting() model.Model {
 func TestCommentLinksCarryTheIssuesCard(t *testing.T) {
 	m := commenting()
 	nodes := render(t, m)
-	wantCard(t, "comment head", hovercardOf(t, nodes, view.DetailActivityID+".c1.head"), "work#peer", "Peer title")
-	wantCard(t, "chosen link", hovercardOf(t, nodes, view.DetailActivityID+".c1.link"), "work#peer", "Peer title")
+	wantCard(t, "comment head", hovercardOf(t, nodes, view.DetailActivityID+".c1.head"), "#peer", "Peer title")
+	wantCard(t, "chosen link", hovercardOf(t, nodes, view.DetailActivityID+".c1.link"), "#peer", "Peer title")
 	nodes = render(t, apply(m, model.KeyMsg{Chord: "]"}))
 	wantCard(t, "chosen link to an unloaded Issue", hovercardOf(t, nodes, view.DetailActivityID+".c1.link"), "#ghst")
 }

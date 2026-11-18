@@ -97,10 +97,10 @@ func writableJob(m Model) (Model, CronJob, bool) {
 	switch {
 	case !m.OnJobs() || job == nil:
 	case m.Stale:
-		m.Notice = "Daemon disconnected; reconnect before changing a job."
+		m = m.fail(Cannot("change", "the job", ErrDisconnected))
 	case m.Jobs.Writing != "":
 	case m.Jobs.ProjectArchived:
-		m.Notice = "This Project is archived; its jobs can't be changed."
+		m = m.fail("This Project is archived, so its jobs cannot be changed.")
 	default:
 		return m, *job, true
 	}
@@ -108,8 +108,7 @@ func writableJob(m Model) (Model, CronJob, bool) {
 }
 
 func refuse(m Model, why string) (Model, []Cmd) {
-	m.Notice = why
-	return m, nil
+	return m.fail(why), nil
 }
 
 // toggleJob is `p`: pause a job that runs, resume one that does not.
@@ -120,7 +119,7 @@ func toggleJob(m Model) (Model, []Cmd) {
 	}
 	switch {
 	case job.Archived():
-		return refuse(m, "The job is archived; restore it first.")
+		return refuse(m, "The job is archived. Restore it first.")
 	case job.Definition.Enabled:
 		return writeJobEnabled(m, job, false)
 	}
@@ -179,7 +178,7 @@ func jobWritten(m Model, msg JobWritten) Model {
 	case msg.Err != nil && fromCard:
 		m.JobForm.Err = msg.Err
 	case msg.Err != nil:
-		m.Notice = msg.Err.Error()
+		m = m.fail(Cannot("change", "the job", msg.Err))
 	case msg.Changed != nil:
 		m = m.putJob(msg.ProjectID, *msg.Changed)
 		if fromCard {
@@ -187,7 +186,7 @@ func jobWritten(m Model, msg JobWritten) Model {
 			m.JobForm.Conflict = &newer
 			return m
 		}
-		m.Notice = fmt.Sprintf("Job %q changed meanwhile; nothing was written. The list shows it now: %s.", msg.Changed.Name, jobState(m, *msg.Changed))
+		m = m.fail(fmt.Sprintf("Cannot save %q: it changed since you opened it.", msg.Changed.Name))
 	case msg.Job != nil:
 		m = m.putJob(msg.ProjectID, *msg.Job)
 		if fromCard {
@@ -197,7 +196,7 @@ func jobWritten(m Model, msg JobWritten) Model {
 			m.Jobs.Selected = msg.Job.UID
 			m = m.settleJobSelection()
 		}
-		m.Notice = jobWrittenNotice(m, msg, fromCard)
+		m = m.say(jobWrittenNotice(m, msg, fromCard))
 	}
 	return m
 }

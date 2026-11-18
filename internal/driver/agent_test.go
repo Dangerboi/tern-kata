@@ -90,15 +90,15 @@ func TestTheStartAndItsResultsReachTheModel(t *testing.T) {
 	s := agentPanes(t, agentIssue("t1"))["list"]
 	entry := model.AgentEntry{IssueUID: "t1", IssueRef: "work#t1", Block: "31"}
 	got := step(t, s, model.AgentStarted{Placement: model.AgentTab, IssueRef: "work#t1", Entry: entry})
-	if len(got.State.Model.AgentMapping) != 1 || got.State.Model.AgentMapping[0] != entry || got.State.Model.Notice != "Started an agent on work#t1 in a new tab." {
+	if len(got.State.Model.AgentMapping) != 1 || got.State.Model.AgentMapping[0] != entry || got.State.Model.Notice != "Started an agent on #t1 in a new tab." {
 		t.Fatalf("agents %+v, notice %q", got.State.Model.AgentMapping, got.State.Model.Notice)
 	}
 	background := step(t, s, model.AgentStarted{Placement: model.AgentBackground, IssueRef: "work#t1", Entry: entry})
-	if background.State.Model.Notice != "Started an agent on work#t1 in the background (open it from its badge)." {
+	if background.State.Model.Notice != "Started an agent on #t1 in the background." {
 		t.Fatalf("notice %q", background.State.Model.Notice)
 	}
 	failed := step(t, s, model.AgentStarted{IssueRef: "work#t1", Err: errString("no checkout")})
-	if failed.State.Model.Notice != "Cannot start an agent on work#t1: no checkout" || len(failed.State.Model.AgentMapping) != 0 {
+	if failed.State.Model.Notice != "Cannot start an agent on #t1: no checkout." || len(failed.State.Model.AgentMapping) != 0 {
 		t.Fatalf("notice %q", failed.State.Model.Notice)
 	}
 	// An answer to a request asked before the start may have read the file before the entry was written, so it keeps the entry;

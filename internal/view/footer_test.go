@@ -54,8 +54,7 @@ func TestFooterHintReadsKeyAndLabelTogether(t *testing.T) {
 	}
 }
 
-// A shifted letter key is drawn apart from the plain one: Tern draws a letter keycap in capitals, so "u" and "shift+u" must
-// not both read "U".
+// A shifted letter key is drawn apart from the plain one: letters read as typed, so "u" and "shift+u" read "u" and "U".
 func TestFooterDrawsShiftedLettersApartFromPlainOnes(t *testing.T) {
 	for name, m := range map[string]model.Model{
 		"list":   apply(browsing(), model.FocusColumnMsg{Column: model.ColumnList}),
@@ -67,7 +66,7 @@ func TestFooterDrawsShiftedLettersApartFromPlainOnes(t *testing.T) {
 				continue
 			}
 			spans, _ := n.P["spans"].([]any)
-			key := strings.ToUpper(spans[0].(map[string]any)["t"].(string))
+			key := spans[0].(map[string]any)["t"].(string)
 			if other, dup := seen[key]; dup {
 				t.Errorf("%s: hints %s and %s both draw the key %q", name, other, id, key)
 			}

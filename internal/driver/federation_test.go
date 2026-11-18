@@ -91,28 +91,29 @@ func TestFederationPageOpensFromEveryPageAndTheMenu(t *testing.T) {
 func TestFederationPageStatesFromLoadingToTheList(t *testing.T) {
 	out := federationOpened(t, projectPane(t, 160, boardCard("a")))
 	load, _ := askedFederation(out.Cmds)
-	wantText(t, "while the read is out", wireTextOf(t, out.State), "loading federation status...", "0 spoke federations")
+	wantText(t, "while the read is out", wireTextOf(t, out.State), "Loading federation status…")
 
 	empty := step(t, out.State, federationAnswer(load)).State
-	wantText(t, "an unfederated daemon", wireTextOf(t, empty), "no spoke federation enrollments", "0 spoke federations",
-		"Federation for active daemon: work https://spoke.example:7474 instance INSTANCE-1 auth token actor alice")
+	wantText(t, "an unfederated daemon", wireTextOf(t, empty), "No spoke federations", "Enroll a Project to sync it with a hub.",
+		"work · https://spoke.example:7474 · auth token actor alice")
+	wantNotShown(t, "an unfederated daemon", empty, "INSTANCE-1", "0 spoke federations")
 
 	failed := step(t, out.State, model.FederationLoaded{Request: load.Request, Err: errors.New("daemon down\nretry later")}).State
-	wantText(t, "a failed read", wireTextOf(t, failed), "failed to load federation: daemon down retry later")
-	if strings.Contains(wireTextOf(t, failed), "no spoke federation enrollments") {
+	wantText(t, "a failed read", wireTextOf(t, failed), "Cannot read federation status: daemon down.")
+	if strings.Contains(wireTextOf(t, failed), "No spoke federations") {
 		t.Error("a failed read says there are no enrollments")
 	}
 
 	bare := step(t, out.State, model.FederationLoaded{Request: load.Request, Daemon: "local", Endpoint: "local", Auth: "no token"}).State
-	wantText(t, "a daemon without an instance uid", wireTextOf(t, bare), "Federation for active daemon: local local instance - auth no token")
+	wantText(t, "a daemon named by its endpoint", wireTextOf(t, bare), "local · auth no token")
 }
 
 func TestFederationPageListsEachSpokeAndNamesTheSelectedOnesHub(t *testing.T) {
 	s := federationListed(t, healthySpoke("acme"), troubledSpoke("zeta"))
-	wantText(t, "the list", wireTextOf(t, s), "2 spoke federations",
-		"acme  Hub hub.example:7474  Actor alice", "Push push  Pending 3  Sync 5m ago  Badges -",
-		"zeta  Hub hub.example:7474  Actor bob", "Push off  Pending 0  Sync error  Badges insecure,quarantine,reset,violations",
-		"hub https://hub.example:7474/project 12 · actor alice · credential valid")
+	wantText(t, "the list", wireTextOf(t, s), "2 · work · https://spoke.example:7474",
+		"acme", "hub.example:7474", "Actor alice", "Push on · 3 pending · Synced 5m ago",
+		"zeta", "Actor bob", "Push off · 0 pending · Synced error", "Insecure connection, quarantined, reset blocked, claim violations.",
+		"https://hub.example:7474", "Credential valid")
 	if sel, total := s.Model.Position(); sel != 1 || total != 2 {
 		t.Errorf("position %d of %d", sel, total)
 	}
@@ -120,10 +121,10 @@ func TestFederationPageListsEachSpokeAndNamesTheSelectedOnesHub(t *testing.T) {
 	if moved.Model.Federation.Cursor != 1 || moved.Model.SelectedSpoke().ProjectName != "zeta" {
 		t.Errorf("j left the cursor on %+v", moved.Model.SelectedSpoke())
 	}
-	wantText(t, "the footer of the second", wireTextOf(t, moved), "hub https://hub.example:7474/project 7 · actor bob · credential -")
+	wantText(t, "the footer of the second", wireTextOf(t, moved), "https://hub.example:7474", "Credential —")
 }
 
-func TestFederationSyncColumnSaysNeverErrorOrHowLongAgo(t *testing.T) {
+func TestFederationSyncWordsSayNeverErrorOrHowLongAgo(t *testing.T) {
 	never := model.FederationSpoke{ProjectName: "n", HubURL: "https://h.example"}
 	failing := model.FederationSpoke{ProjectName: "f", HubURL: "https://h.example", HasLastError: true, LastError: "x"}
 	synced := healthySpoke("s")
@@ -131,14 +132,14 @@ func TestFederationSyncColumnSaysNeverErrorOrHowLongAgo(t *testing.T) {
 		spoke model.FederationSpoke
 		want  string
 	}{{never, "never"}, {failing, "error"}, {synced, "5m ago"}} {
-		if got := c.spoke.Sync(now); got != c.want {
+		if got := c.spoke.SyncWords(now); got != c.want {
 			t.Errorf("%s: sync %q, want %q", c.spoke.ProjectName, got, c.want)
 		}
 	}
 	if got := (model.FederationSpoke{HubURL: "not a url"}).HubHost(); got != "not a url" {
 		t.Errorf("hub of a URL without a host: %q", got)
 	}
-	if got := (model.FederationSpoke{}).HubHost(); got != "-" {
+	if got := (model.FederationSpoke{}).HubHost(); got != model.None {
 		t.Errorf("hub of none: %q", got)
 	}
 }
@@ -150,12 +151,12 @@ func TestEnterShowsASpokesDetailAndEscReturnsToTheList(t *testing.T) {
 		t.Fatal("Enter shows no detail")
 	}
 	text := wireTextOf(t, detail)
-	wantText(t, "the first spoke's detail", text, "acme", "hub URL: https://hub.example:7474", "hub project ID: 12", "hub project UID: HUB-UID", "actor: alice",
-		"capabilities: pull,push", "push enabled: true", "credential: valid", "allow_insecure: false",
-		"pull cursor: 40", "push cursor: 38", "pending push: 3", "pending push high water: 41", "pending claims: 1", "live claims: 2",
-		"quarantine count: 0", "reset blocker: -", "claim violations: 0 unresolved, 0 recent", "last pull success: 2026-10-08 11:54:00Z",
-		"last push success: 2026-10-08 11:55:00Z", "last sync success: 2026-10-08 11:55:00Z", "last error: -",
-		"Federation for active daemon: work")
+	wantText(t, "the first spoke's detail", text, "Project", "acme", "Hub", "https://hub.example:7474", "Hub Project", "12", "Actor", "alice",
+		"Capabilities", "pull,push", "Push", "on", "Credential", "valid", "Insecure connection", "not allowed",
+		"Pull cursor", "40", "Push cursor", "38", "Pending push", "3", "Push high water", "41", "Pending claims", "1", "Live claims", "2",
+		"Quarantines", "0", "Reset blocker", "—", "Claim violations", "0 unresolved, 0 recent", "Last pull", "11:54",
+		"Last push", "11:55", "Last sync", "11:55", "Last error", "work · https://spoke.example:7474")
+	wantNotShown(t, "the first spoke's detail", detail, "HUB-UID", "allow_insecure")
 	if strings.Contains(text, "spoke federations") {
 		t.Error("the detail still shows the list's summary")
 	}
@@ -175,9 +176,9 @@ func TestEnterShowsASpokesDetailAndEscReturnsToTheList(t *testing.T) {
 	}
 
 	second := step(t, step(t, s, key("j")).State, key("enter")).State
-	wantText(t, "the second spoke's detail", wireTextOf(t, second), "zeta", "allow_insecure: true", "quarantine count: 1",
-		"quarantine #4: pull events 5-9 at 2026-10-07 08:00:00Z: bad signature", "reset blocker: pending push",
-		"claim violations: 2 unresolved, 3 recent", "last error: 2026-10-08 11:00:00Z hub unreachable", "last pull success: -", "capabilities: ")
+	wantText(t, "the second spoke's detail", wireTextOf(t, second), "zeta", "Insecure connection", "allowed", "Quarantines", "1",
+		"Quarantine #4: pull events 5 to 9 at 2026-10-07 08:00: bad signature", "Reset blocker", "pending push",
+		"2 unresolved, 3 recent", "11:00 hub unreachable", "Last pull", "—")
 	if back := step(t, step(t, second, key("backspace")).State, key("backspace")).State; back.Model.Page != model.PageIssues {
 		t.Errorf("two backspaces gave page %v, want the Issues Page", back.Model.Page)
 	}
@@ -224,9 +225,9 @@ func TestRRefreshesTheStatusFromTheListAndFromADetail(t *testing.T) {
 	if !ok || read.Workspace != "/repo" {
 		t.Fatalf("r asked %#v, want a status read", out.Cmds)
 	}
-	wantText(t, "while refreshing", wireTextOf(t, out.State), "loading federation status...")
+	wantText(t, "while refreshing", wireTextOf(t, out.State), "Loading federation status…")
 	refreshed := step(t, out.State, federationAnswer(read, healthySpoke("acme"), healthySpoke("beta"))).State
-	wantText(t, "after the refresh", wireTextOf(t, refreshed), "2 spoke federations", "beta  Hub")
+	wantText(t, "after the refresh", wireTextOf(t, refreshed), "2 · work", "beta")
 
 	detail := step(t, s, key("enter")).State
 	again := step(t, detail, key("r"))
@@ -245,12 +246,12 @@ func TestAStaleFederationAnswerIsDropped(t *testing.T) {
 		t.Fatal("two refreshes share a request number")
 	}
 	late := step(t, second.State, federationAnswer(older, healthySpoke("stale")))
-	wantText(t, "after the older answer", wireTextOf(t, late.State), "loading federation status...")
+	wantText(t, "after the older answer", wireTextOf(t, late.State), "Loading federation status…")
 	if strings.Contains(wireTextOf(t, late.State), "stale") {
 		t.Error("an answer to an older read was drawn")
 	}
 	current := step(t, late.State, federationAnswer(newer, healthySpoke("fresh")))
-	wantText(t, "after the current answer", wireTextOf(t, current.State), "fresh  Hub")
+	wantText(t, "after the current answer", wireTextOf(t, current.State), "fresh")
 }
 
 func TestAFailedRefreshShowsKatasErrorInPlaceOfTheListUntilTheNextRead(t *testing.T) {
@@ -258,12 +259,12 @@ func TestAFailedRefreshShowsKatasErrorInPlaceOfTheListUntilTheNextRead(t *testin
 	out := step(t, s, key("r"))
 	read, _ := askedFederation(out.Cmds)
 	failed := step(t, out.State, model.FederationLoaded{Request: read.Request, Err: errors.New("timeout")}).State
-	if text := wireTextOf(t, failed); !strings.Contains(text, "failed to load federation: timeout") || strings.Contains(text, "acme") {
+	if text := wireTextOf(t, failed); !strings.Contains(text, "Cannot read federation status: timeout.") || strings.Contains(text, "acme") {
 		t.Errorf("a failed refresh drew %s", text)
 	}
 	retry := step(t, failed, key("r"))
 	again, _ := askedFederation(retry.Cmds)
-	wantText(t, "after the answer", wireTextOf(t, step(t, retry.State, federationAnswer(again, healthySpoke("acme"))).State), "acme  Hub")
+	wantText(t, "after the answer", wireTextOf(t, step(t, retry.State, federationAnswer(again, healthySpoke("acme"))).State), "acme")
 }
 
 func TestFederationCursorStaysOnARowThatRemainsAfterARefresh(t *testing.T) {
@@ -289,7 +290,7 @@ func TestLeavingTheFederationPageDropsAnswersStillOutAndReadsAgainOnReturn(t *te
 		t.Errorf("an answer after leaving asked %#v on page %v", late.Cmds, late.State.Model.Page)
 	}
 	reopened := federationOpened(t, late.State).State
-	wantText(t, "reopened", wireTextOf(t, reopened), "loading federation status...")
+	wantText(t, "reopened", wireTextOf(t, reopened), "Loading federation status…")
 }
 
 func TestFederationPageKeepsThePageKeysAndTheMenu(t *testing.T) {

@@ -22,9 +22,9 @@ func configAllRows() []model.ConfigFile {
 		{Key: model.ConfigSeen, Title: "seen.toml", Path: "/cfg/tern-kata/seen.toml", Actions: enter},
 		{Key: model.ConfigWorker, Title: "worker.toml", Path: "/cfg/tern-kata/worker.toml", Actions: enter},
 		{Key: model.ConfigAgent, Title: "agent.toml", Path: "/cfg/tern-kata/agent.toml", Actions: []model.ConfigAction{model.ConfigEdit}},
-		{Key: model.ConfigDocbank, Title: "Docbank (the [docbank] section of kata's config.toml)", Path: "/kata/config.toml", Status: model.ConfigLoads,
-			Summary: "not set up: `kata docbank setup` sets Docbank up"},
-		{Key: model.ConfigKata, Title: "config.toml (kata's, read-only)", Path: "/kata/config.toml", Status: model.ConfigLoads, Actions: enter},
+		{Key: model.ConfigDocbank, Title: "Docbank", Path: "/kata/config.toml", Status: model.ConfigLoads,
+			Summary: "Not set up: run kata docbank setup"},
+		{Key: model.ConfigKata, Title: "kata config.toml", Path: "/kata/config.toml", Status: model.ConfigLoads, Actions: enter},
 	}
 }
 
@@ -147,7 +147,7 @@ func TestConfigJumpsThatNeedAProjectShowThePagesRefusalAndOpenNoCard(t *testing.
 		s.Model = loadFirst(s.Model, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha}}})
 		return s
 	}
-	for key_, want := range map[model.ConfigFileKey]string{model.ConfigLanes: "Board needs a Project", model.ConfigWorker: "Jobs Page needs a Project", model.ConfigSeen: "Runs Page needs a Project"} {
+	for key_, want := range map[model.ConfigFileKey]string{model.ConfigLanes: "Cannot open the Board: it needs a Project.", model.ConfigWorker: "Cannot open the Jobs Page: it needs a Project.", model.ConfigSeen: "Cannot open the Runs Page: it needs a Project."} {
 		m := step(t, configOn(t, unbound(), configAllRows(), key_), key("enter")).State.Model
 		if m.Page != model.PageIssues || !strings.Contains(m.Notice, want) || m.LanesForm.Open || m.WorkerCard.Open {
 			t.Errorf("%s: page %v, notice %q, Lanes card %v, Worker card %v", key_, m.Page, m.Notice, m.LanesForm.Open, m.WorkerCard.Open)
@@ -157,8 +157,8 @@ func TestConfigJumpsThatNeedAProjectShowThePagesRefusalAndOpenNoCard(t *testing.
 
 func TestConfigFooterAndHelpSheetNameWhatEnterOpensAndNothingForAgent(t *testing.T) {
 	labels := map[model.ConfigFileKey]string{
-		model.ConfigLanes: "open Lanes card", model.ConfigFilters: "open Filter card", model.ConfigViews: "open Views",
-		model.ConfigWorker: "open Worker card", model.ConfigSeen: "open Runs Page", model.ConfigKata: "open Daemons Page",
+		model.ConfigLanes: "Open Lanes", model.ConfigFilters: "Open filters", model.ConfigViews: "Open Saved views",
+		model.ConfigWorker: "Open worker", model.ConfigSeen: "Open Runs", model.ConfigKata: "Open Daemons",
 	}
 	enterHint := func(m model.Model) (string, bool) {
 		for b := range model.BindingsForMode(m.CurrentMode(), true) {
@@ -171,7 +171,7 @@ func TestConfigFooterAndHelpSheetNameWhatEnterOpensAndNothingForAgent(t *testing
 	sheetHas := func(m model.Model, text string) bool {
 		for _, g := range model.HelpSheetOn(model.PageConfig, m) {
 			for _, l := range g.Lines {
-				if l.Text == text && slices.Contains(l.Keys, "↵") {
+				if l.Text == text && slices.Contains(l.Keys, "enter") {
 					return true
 				}
 			}
@@ -193,7 +193,7 @@ func TestConfigFooterAndHelpSheetNameWhatEnterOpensAndNothingForAgent(t *testing
 	}
 	for _, g := range model.HelpSheetOn(model.PageConfig, agent) {
 		for _, l := range g.Lines {
-			if slices.Contains(l.Keys, "↵") {
+			if slices.Contains(l.Keys, "enter") {
 				t.Errorf("the help sheet lists enter (%q) on agent.toml", l.Text)
 			}
 		}
@@ -216,16 +216,16 @@ func TestConfigDocbankRowShowsEachFormsTextAndOffersNoS(t *testing.T) {
 		row  model.ConfigFile
 		want []string
 	}{
-		"not set up": {model.ConfigFile{Status: model.ConfigMissing, Summary: "not set up: `kata docbank setup` sets Docbank up"},
-			[]string{"missing", "not set up: `kata docbank setup` sets Docbank up"}},
-		"local": {model.ConfigFile{Status: model.ConfigLoads, Summary: "the Docbank on this machine: kata starts it when needed and follows its port and key"},
-			[]string{"loads", "the Docbank on this machine: kata starts it when needed and follows its port and key"}},
-		"url": {model.ConfigFile{Status: model.ConfigLoads, Summary: "Docbank at https://docbank.example"},
-			[]string{"loads", "Docbank at https://docbank.example"}},
-		"old pinned form": {model.ConfigFile{Status: model.ConfigLoads, Summary: "pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"},
-			[]string{"loads", "pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"}},
+		"not set up": {model.ConfigFile{Status: model.ConfigMissing, Summary: "Not set up: run kata docbank setup"},
+			[]string{"not created", "Not set up: run kata docbank setup"}},
+		"local": {model.ConfigFile{Status: model.ConfigLoads, Summary: "On this machine: kata starts it when needed and follows its port and key"},
+			[]string{"ok", "On this machine: kata starts it when needed and follows its port and key"}},
+		"url": {model.ConfigFile{Status: model.ConfigLoads, Summary: "At https://docbank.example"},
+			[]string{"ok", "At https://docbank.example"}},
+		"old pinned form": {model.ConfigFile{Status: model.ConfigLoads, Summary: "Pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"},
+			[]string{"ok", "Pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"}},
 		"unreadable": {model.ConfigFile{Status: model.ConfigBroken, Err: "read /kata/config.toml: is a directory"},
-			[]string{"does not load", "read /kata/config.toml: is a directory"}},
+			[]string{"broken", "read /kata/config.toml: is a directory"}},
 	} {
 		rows := configAllRows()
 		i := slices.IndexFunc(rows, func(f model.ConfigFile) bool { return f.Key == model.ConfigDocbank })
@@ -233,7 +233,7 @@ func TestConfigDocbankRowShowsEachFormsTextAndOffersNoS(t *testing.T) {
 		rows[i] = tc.row
 		s := configOn(t, projectPane(t, 160, boardCard("a")), rows, model.ConfigDocbank)
 		text := wireTextOf(t, s)
-		wantText(t, name, text, append(tc.want, "/kata/config.toml", "the [docbank] section of kata's config.toml")...)
+		wantText(t, name, text, append(tc.want, "/kata/config.toml", "Docbank")...)
 		if out := step(t, s, key("s")); len(out.Cmds) != 0 || out.State.Model.ConfigPage.Message != "" || out.State.Model.ConfigPage.AskSwitch {
 			t.Errorf("%s: s sent %#v and said %q", name, out.Cmds, out.State.Model.ConfigPage.Message)
 		}
@@ -257,7 +257,7 @@ func TestConfigSDoesNothingOnOtherRows(t *testing.T) {
 func pinnedDocbankRows() []model.ConfigFile {
 	rows := configAllRows()
 	i := slices.IndexFunc(rows, func(f model.ConfigFile) bool { return f.Key == model.ConfigDocbank })
-	rows[i].Summary = "pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"
+	rows[i].Summary = "Pinned to http://127.0.0.1:8080 by tern-kata's old setup: kata does not start it"
 	rows[i].Actions = []model.ConfigAction{model.ConfigSwitchDocbank}
 	return rows
 }
@@ -268,7 +268,7 @@ func TestConfigSOnThePinnedDocbankRowAsksAndNSendsNothing(t *testing.T) {
 	if len(asked.Cmds) != 0 || !asked.State.Model.ConfigPage.AskSwitch || asked.State.Model.CurrentMode() != model.ModeSwitchDocbank {
 		t.Fatalf("s sent %#v, asking %v, mode %v", asked.Cmds, asked.State.Model.ConfigPage.AskSwitch, asked.State.Model.CurrentMode())
 	}
-	wantText(t, "question", wireTextOf(t, asked.State), "Switch to kata's local Docbank? kata restarts its daemon. y/n")
+	wantText(t, "question", wireTextOf(t, asked.State), "Switch to kata's local Docbank? kata restarts its daemon.")
 	kept := step(t, asked.State, key("n"))
 	if len(kept.Cmds) != 0 || kept.State.Model.ConfigPage.AskSwitch || kept.State.Model.ConfigPage.Switching || kept.State.Model.ConfigPage.Message != "" {
 		t.Errorf("n sent %#v, state %+v", kept.Cmds, kept.State.Model.ConfigPage)
@@ -344,11 +344,11 @@ func TestConfigSwitchAnswerIsReportedAfterLeavingThePage(t *testing.T) {
 	}
 	failed := step(t, left, model.DocbankSwitched{Err: errors.New("kata failed; /x was not restored")})
 	m := failed.State.Model
-	if m.ConfigPage.Switching || !strings.Contains(m.Notice, "Docbank was not switched: kata failed; /x was not restored") {
+	if m.ConfigPage.Switching || !strings.Contains(m.Notice, "Cannot switch Docbank: kata failed; /x was not restored.") {
 		t.Errorf("answer off the Page: switching %v, notice %q", m.ConfigPage.Switching, m.Notice)
 	}
 	back := step(t, left, key("shift+k")).State.Model
-	if !back.OnConfig() || !back.ConfigPage.Switching || back.ConfigPage.Message != "switching Docbank..." {
+	if !back.OnConfig() || !back.ConfigPage.Switching || back.ConfigPage.Message != "Switching Docbank…" {
 		t.Errorf("re-entering: switching %v, message %q", back.ConfigPage.Switching, back.ConfigPage.Message)
 	}
 }

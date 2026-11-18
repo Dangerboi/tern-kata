@@ -481,13 +481,13 @@ local function settle_held(verb: string, uid: string, cx: EffectCx)
     local failed = "Cannot " .. verb .. " the run"
     local binary = find_binary()
     if binary == nil then
-        cx:toast("error", failed .. ": tern-kata is not installed on the session host")
+        cx:toast("error", failed, "tern-kata is not installed on the session host.")
         return
     end
     local ok, err = pcall(function()
         tern.process.run({binary, "worker", verb, uid}, process_options(ASK_LIMIT_MS), function(result: ProcessResult)
             if result.status == 0 and not result.timed_out then
-                cx:toast("success", if verb == "resume" then "Resuming the run" else "Abandoned the run", last_line(result.stdout))
+                cx:toast("success", if verb == "resume" then "Resumed the run." else "Abandoned the run.", last_line(result.stdout))
             else
                 cx:toast("error", failed, if result.timed_out then "The worker did not answer." else last_line(result.stderr))
             end

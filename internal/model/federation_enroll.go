@@ -25,18 +25,19 @@ const (
 	FederationRejoin FederationOperation = "rejoin"
 )
 
+// Label is the operation in words, as the preview and the local step name it.
 func (o FederationOperation) Label() string {
 	switch o {
 	case FederationAdoptSameName:
-		return "adopt existing local project"
+		return "Adopt the local Project"
 	case FederationAdoptSelectedHub:
-		return "adopt existing local project into selected hub project"
+		return "Adopt the local Project into the chosen hub Project"
 	case FederationCreateReplica:
-		return "create new local replica from hub project"
+		return "Create a local replica of a hub Project"
 	case FederationRejoin:
-		return "rejoin: resume syncing a local project that previously left this federation"
+		return "Rejoin: resume syncing a Project that left this federation"
 	}
-	return "-"
+	return None
 }
 
 // FederationHub is a daemon of kata's catalog as the hub step lists it. Endpoint is its URL, "local" for a local entry.
@@ -47,16 +48,24 @@ type FederationHub struct {
 	Active, Local bool
 }
 
-func (h FederationHub) Label() string {
-	label := oneLine(h.Name) + " " + oneLine(h.Endpoint) + " auth " + oneLine(h.Auth)
+// Facts are what follows the hub's name in the hub step and the browse: its endpoint, how it is authenticated, and whether an
+// insecure connection or the Pane's own daemon is involved. auth is how the hub words it when the read changed it.
+func (h FederationHub) Facts(auth string) string {
+	if auth == "" {
+		auth = h.Auth
+	}
+	facts := oneLine(h.Endpoint) + " · auth " + oneLine(auth)
 	if h.AllowInsecure {
-		label += " allow_insecure"
+		facts += " · insecure connection allowed"
 	}
 	if h.Active {
-		label += " (active spoke)"
+		facts += " · this Pane's daemon"
 	}
-	return label
+	return facts
 }
+
+// Label is the hub as one row of the hub step: its name, then Facts.
+func (h FederationHub) Label() string { return oneLine(h.Name) + " · " + h.Facts("") }
 
 type FederationBinding struct {
 	ProjectID   int64
@@ -103,9 +112,9 @@ func newFederationEnrollDraft(actor string) FederationEnrollDraft {
 
 func sameNameHubProjectWords(name string, exists bool) string {
 	if exists {
-		return fmt.Sprintf("use existing hub project %q; enable federation if needed", oneLine(name))
+		return fmt.Sprintf("Use the hub Project %q and enable federation if needed", oneLine(name))
 	}
-	return fmt.Sprintf("create hub project %q and enable federation", oneLine(name))
+	return fmt.Sprintf("Create the hub Project %q and enable federation", oneLine(name))
 }
 
 func (d FederationEnrollDraft) HubProjectBehavior() string {
@@ -118,41 +127,43 @@ func (d FederationEnrollDraft) HubProjectBehavior() string {
 	if d.HubProjectName != "" {
 		return oneLine(d.HubProjectName)
 	}
-	return "-"
+	return None
 }
 
-// PreviewLines are the enrollment preview's lines as kata tui words them; "" is a blank line. The blocking reason is not among them.
-func (d FederationEnrollDraft) PreviewLines() []string {
+// PreviewRows are the enrollment preview as label→value rows, then the sentences about an adoption or a rejoin after an empty row. The
+// blocking reason is not among them.
+func (d FederationEnrollDraft) PreviewRows() []FactRow {
 	auth := d.HubAuth
 	if auth == "" {
 		auth = d.Hub.Auth
 	}
-	lines := []string{
-		"Operation: " + d.Operation.Label(),
-		"local spoke project: " + dashLine(d.SpokeProjectName),
-		"hub daemon: " + oneLine(d.Hub.Name) + " " + oneLine(d.Hub.Endpoint),
-		"hub auth: " + oneLine(auth),
-		"hub project: " + d.HubProjectBehavior(),
-		"requested actor: " + dashLine(d.RequestedActor),
-		"capabilities: " + oneLine(d.DisplayCapabilities),
-		"push enabled: " + strconv.FormatBool(d.PushEnabled),
-		"allow_insecure: " + strconv.FormatBool(d.AllowInsecure),
-		"spoke name: " + dashLine(d.SpokeName),
+	rows := []FactRow{
+		{Key: "Operation", Value: d.Operation.Label()},
+		{Key: "Local Project", Value: dashLine(d.SpokeProjectName)},
+		{Key: "Hub", Value: oneLine(d.Hub.Name)},
+		{Key: "Endpoint", Value: oneLine(d.Hub.Endpoint), Mono: true},
+		{Key: "Auth", Value: oneLine(auth)},
+		{Key: "Hub Project", Value: d.HubProjectBehavior()},
+		{Key: "Actor", Value: dashLine(d.RequestedActor)},
+		{Key: "Capabilities", Value: oneLine(d.DisplayCapabilities)},
+		{Key: "Push", Value: onOff(d.PushEnabled)},
+		{Key: "Insecure connection", Value: InsecureWords(d.AllowInsecure)},
+		{Key: "Spoke name", Value: dashLine(d.SpokeName)},
 	}
 	if d.AdoptExisting {
-		lines = append(lines, "",
-			fmt.Sprintf("this federates local project %q INTO hub project %q", dashLine(d.SpokeProjectName), dashLine(d.HubProjectName)),
-			"adoption warning: pre-adoption event history is replaced by snapshot events for federation")
+		rows = append(rows, FactRow{},
+			FactRow{Value: fmt.Sprintf("Adopting %q into the hub Project %q.", dashLine(d.SpokeProjectName), dashLine(d.HubProjectName))},
+			FactRow{Value: "Its local event history becomes snapshots.", Tone: FactWarning})
 	}
 	if d.Operation == FederationRejoin {
-		lines = append(lines, "",
-			fmt.Sprintf("local project %q previously left this federation and still shares the hub project's identity;", oneLine(d.SpokeProjectName)),
-			fmt.Sprintf("rejoining resumes syncing with hub project %q (edits made while standalone sync to the hub)", oneLine(d.HubProjectName)))
+		rows = append(rows, FactRow{},
+			FactRow{Value: fmt.Sprintf("The local Project %q left this federation earlier and still shares the hub Project's identity.", oneLine(d.SpokeProjectName))},
+			FactRow{Value: fmt.Sprintf("Rejoining resumes syncing with the hub Project %q; edits made while it was standalone sync to the hub.", oneLine(d.HubProjectName))})
 		if d.SpokeProjectName != d.HubProjectName {
-			lines = append(lines, "the local project keeps its name; spoke and hub project names do not need to match")
+			rows = append(rows, FactRow{Value: "The local Project keeps its name; the two names do not need to match."})
 		}
 	}
-	return lines
+	return rows
 }
 
 type FederationEnrollOutcome struct {
@@ -166,19 +177,19 @@ type FederationEnrollOutcome struct {
 	HubProjectUID string
 }
 
-func (o FederationEnrollOutcome) ResultLines() []string {
-	status := "joined"
+// ResultRows are the enrollment's result as label→value rows. The hub Project's uid is not a row: it names no one.
+func (o FederationEnrollOutcome) ResultRows() []FactRow {
+	status := "Joined"
 	if o.Adopted {
-		status = "adopted"
+		status = "Adopted"
 	}
-	return []string{
-		"status: " + status,
-		"actor: " + dashLine(o.Actor),
-		"spoke name: " + dashLine(o.Draft.SpokeName),
-		"snapshot count: " + strconv.FormatInt(o.SnapshotCount, 10),
-		"hub URL: " + oneLine(o.HubURL),
-		"hub project ID: " + strconv.FormatInt(o.HubProjectID, 10),
-		"hub project UID: " + dashLine(o.HubProjectUID),
+	return []FactRow{
+		{Key: "Status", Value: status},
+		{Key: "Actor", Value: dashLine(o.Actor)},
+		{Key: "Spoke name", Value: dashLine(o.Draft.SpokeName)},
+		{Key: "Snapshots", Value: strconv.FormatInt(o.SnapshotCount, 10), Mono: true},
+		{Key: "Hub", Value: oneLine(o.HubURL), Mono: true},
+		{Key: "Hub Project", Value: strconv.FormatInt(o.HubProjectID, 10), Mono: true},
 	}
 }
 
@@ -268,31 +279,34 @@ type FederationEnrollRecovery struct {
 	Reveal     bool
 }
 
-// Lines are the recovery screen's lines as kata tui words them, the revealed command not among them. The failure is lines[ErrLine].
-func (r FederationEnrollRecovery) Lines() (lines []string, errLine int) {
-	errLine = -1
+// Rows are the recovery screen as sentences and label→value rows, the revealed command not among them. The failure is a row in the
+// error tone.
+func (r FederationEnrollRecovery) Rows() []FactRow {
+	var rows []FactRow
+	failure := Cannot("join", "the federation", r.Err)
 	if r.Stage == "metadata" {
-		lines = append(lines, fmt.Sprintf("hub %s: enrollment metadata fetch failed", oneLine(r.HubName)))
+		rows = append(rows, FactRow{Value: fmt.Sprintf("Hub %s created the enrollment, but its Project metadata could not be read.", oneLine(r.HubName))})
+		failure = Cannot("read", "the enrollment metadata", r.Err)
 	} else {
-		lines = append(lines, "hub: enrollment created", "spoke: join failed")
+		rows = append(rows, FactRow{Value: "The hub created the enrollment, but the spoke could not join."})
 	}
 	if r.Err != nil {
-		errLine = len(lines)
-		lines = append(lines, oneLine(r.Err.Error()))
+		rows = append(rows, FactRow{Value: failure, Tone: FactError})
 	}
-	lines = append(lines, "token: hidden")
+	rows = append(rows, FactRow{Key: "Token", Value: "Hidden"})
 	if r.TokenGuess {
-		lines = append(lines, "the hub enrollment may be single-use, expired, revoked, or invalidated")
+		rows = append(rows, FactRow{Value: "The hub enrollment may be single use, expired, revoked or invalidated."})
 	}
-	return lines, errLine
+	return rows
 }
 
-func (r FederationEnrollRecovery) RevealedLines() []string {
-	return []string{
-		"single-use/secret-bearing recovery command",
-		"works only while the hub enrollment remains valid and not revoked",
-		"spoke target: " + oneLine(r.SpokeName) + " " + oneLine(r.SpokeEndpoint),
-		r.Command.String(),
+// RevealedRows are the recovery screen's revealed part: the warning, what the command needs, then the spoke it targets. The command
+// itself is Command.String(), which the view draws apart.
+func (r FederationEnrollRecovery) RevealedRows() []FactRow {
+	return []FactRow{
+		{Value: "This recovery command holds a secret and works once.", Tone: FactWarning},
+		{Value: "It works only while the hub enrollment is valid and not revoked."},
+		{Key: "Spoke", Value: oneLine(r.SpokeName) + " · " + oneLine(r.SpokeEndpoint)},
 	}
 }
 
@@ -442,9 +456,8 @@ type FederationBrowseRow struct {
 	Project Project
 }
 
-func (r FederationBrowseRow) Label() string {
-	return strconv.FormatInt(r.Project.ID, 10) + " " + oneLine(r.Project.Name)
-}
+// Label is the hub Project as one row of the browse: its name. The hub it belongs to is named by the view.
+func (r FederationBrowseRow) Label() string { return oneLine(r.Project.Name) }
 
 func (f FederationState) BrowseRows() []FederationBrowseRow {
 	var rows []FederationBrowseRow
@@ -499,8 +512,8 @@ func (f FederationState) binding(projectID int64, name string) (FederationBindin
 	return FederationBinding{}, false
 }
 
-// FederationSelectedProject is the line "selected project: ..." the enrollment screens carry: the Project being enrolled, else the
-// Pane's own.
+// FederationSelectedProject is the Project the enrollment screens name: the one being enrolled, else the Pane's own; "none" when
+// there is neither.
 func (m Model) FederationSelectedProject() string {
 	d := m.Federation.Draft
 	switch {
@@ -516,6 +529,21 @@ func (m Model) FederationSelectedProject() string {
 		return oneLine(m.Project.Name)
 	}
 	return "none"
+}
+
+// EnrollFailure is the sentence for the last failure of a choice, a browse or a run, "" when there is none. The verb follows the
+// screen it is drawn on.
+func (f FederationState) EnrollFailure() string {
+	if f.EnrollErr == nil {
+		return ""
+	}
+	switch f.Screen {
+	case FederationPickHub:
+		return Cannot("use", "this hub", f.EnrollErr)
+	case FederationBrowse:
+		return Cannot("read", "hub Projects", f.EnrollErr)
+	}
+	return Cannot("enroll", "", f.EnrollErr)
 }
 
 // federationCursorCount is the cursor of the screen shown and how many rows it lists: none while the read that fills the step is out,
@@ -657,10 +685,10 @@ func chooseFederationHub(m Model) (Model, []Cmd) {
 	f.EnrollErr = nil
 	switch {
 	case hub.Active:
-		f.EnrollErr = errors.New("active daemon cannot be selected as hub")
+		f.EnrollErr = errors.New("the daemon this Pane talks to cannot be its own hub")
 		return m, nil
 	case hub.Local:
-		f.EnrollErr = errors.New("local hub targets cannot be used for federation enrollment; select a hub daemon with a spoke-reachable URL")
+		f.EnrollErr = errors.New("a local daemon cannot be a hub; pick one with a URL a spoke can reach")
 		return m, nil
 	}
 	f.Draft.Hub, f.Draft.HubAuth = hub, ""
@@ -718,7 +746,7 @@ func federationBrowsed(m Model, msg FederationBrowsed) Model {
 	case msg.Err != nil:
 		f.EnrollErr = msg.Err
 	case len(msg.Hubs) == 0:
-		f.EnrollErr = errors.New("no catalog hub daemons configured")
+		f.EnrollErr = errors.New("the catalog names no hub daemons")
 	default:
 		f.Browsed = slices.Clone(msg.Hubs)
 	}
@@ -769,7 +797,7 @@ func previewFederationEnroll(m Model) (Model, []Cmd) {
 	hasProject := hasRow && !choice.Sentinel
 	if d.CreateReplica {
 		if !hasProject {
-			f.EnrollErr = errors.New("select an existing hub project to create a local replica")
+			f.EnrollErr = errors.New("pick an existing hub Project to create a local replica")
 			return m, nil
 		}
 		d.Operation = FederationCreateReplica
@@ -879,7 +907,7 @@ func federationAdoptKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	switch {
 	case bound && binding.Action == FederationAdoptConfirm:
 		if f.AdoptInput != f.Draft.SpokeProjectName {
-			f.AdoptErr = fmt.Errorf("type %q to confirm adoption", f.Draft.SpokeProjectName)
+			f.AdoptErr = fmt.Errorf("type %q to confirm", f.Draft.SpokeProjectName)
 			return m, nil
 		}
 		f.Adopting, f.AdoptInput, f.AdoptCaret, f.AdoptErr = false, "", Caret{}, nil
@@ -931,12 +959,12 @@ func federationRecoveryBack(m Model) (Model, []Cmd) {
 }
 
 var federationEnrollRows = []actionEntry{
-	{action: FederationChoose, modes: []Mode{ModeFederationPick}, keys: keys("enter", "↵"), help: "select", footer: []Mode{ModeFederationPick}, footerKey: "↵", handle: chooseFederation},
+	{action: FederationChoose, modes: []Mode{ModeFederationPick}, keys: keys("enter", "enter"), help: "select", footer: []Mode{ModeFederationPick}, footerKey: "enter", handle: chooseFederation},
 	{action: FederationChoiceBack, modes: []Mode{ModeFederationPick}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationPick}, handle: federationChoiceBack},
 	{action: FederationBrowseBack, modes: []Mode{ModeFederationBrowse}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationBrowse}, handle: federationBrowseBack},
-	{action: RunFederationEnroll, modes: []Mode{ModeFederationPreview}, keys: keys("enter", "↵"), help: "confirm", footer: []Mode{ModeFederationPreview}, footerKey: "↵", handle: confirmFederationPreview},
-	{action: NameFederationEnroll, modes: []Mode{ModeFederationPreview}, keys: keys("shift+n", "N"), help: "name spoke", footer: []Mode{ModeFederationPreview}, handle: openFederationNameForEnroll},
+	{action: RunFederationEnroll, modes: []Mode{ModeFederationPreview}, keys: keys("enter", "enter"), help: "confirm", footer: []Mode{ModeFederationPreview}, footerKey: "enter", handle: confirmFederationPreview},
+	{action: NameFederationEnroll, modes: []Mode{ModeFederationPreview}, keys: keys("shift+n", "⇧N"), help: "name spoke", footer: []Mode{ModeFederationPreview}, handle: openFederationNameForEnroll},
 	{action: FederationPreviewBack, modes: []Mode{ModeFederationPreview}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationPreview}, handle: federationPreviewBack},
-	{action: RevealFederationJoin, modes: []Mode{ModeFederationRecovery}, keys: keys("shift+r", "R"), help: "reveal recovery command", footer: []Mode{ModeFederationRecovery}, handle: revealFederationJoin},
+	{action: RevealFederationJoin, modes: []Mode{ModeFederationRecovery}, keys: keys("shift+r", "⇧R"), help: "reveal recovery command", footer: []Mode{ModeFederationRecovery}, handle: revealFederationJoin},
 	{action: FederationRecoveryBack, modes: []Mode{ModeFederationRecovery}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationRecovery}, handle: federationRecoveryBack},
 }

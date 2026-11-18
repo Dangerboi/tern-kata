@@ -185,13 +185,13 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.AgentCard = AgentCardState{}
 	case AgentCardGo, AgentCardBackground, AgentCardInterrupt, AgentCardStop:
 		if onRemote {
-			m.Notice = RemoteAgentRefusal(remote.HostLabel())
+			m = m.fail(RemoteAgentRefusal(remote.HostLabel()))
 			return m, nil
 		}
 		return updateLocalAgentKey(m, binding.Action)
 	case AgentCardForget:
 		if reason := m.AgentCardUnavailable(AgentCardForget); reason != "" {
-			m.Notice = reason
+			m = m.fail(reason)
 			return m, nil
 		}
 		m.AgentCard.Forgetting = remote.Key()
@@ -245,7 +245,7 @@ func updateLocalAgentKey(m Model, action Action) (Model, []Cmd) {
 		}
 		if reason := m.AgentCardUnavailable(AgentCardStop); reason != "" {
 			m.AgentCard = AgentCardState{}
-			m.Notice = reason
+			m = m.fail(reason)
 			return m, nil
 		}
 		m.AgentCard.Stopping = rows[cursor].Block
@@ -259,7 +259,7 @@ func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
 	reason := m.AgentCardUnavailable(AgentCardBackground)
 	m.AgentCard = AgentCardState{}
 	if reason != "" {
-		m.Notice = reason
+		m = m.fail(reason)
 		return m, nil
 	}
 	return placeAgent(m, e.Block), []Cmd{SendAgentBack{Block: e.Block, IssueRef: e.IssueRef}}
@@ -270,10 +270,10 @@ func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
 func interruptAgent(m Model, e AgentEntry) (Model, []Cmd) {
 	if reason := m.AgentCardUnavailable(AgentCardInterrupt); reason != "" {
 		m.AgentCard = AgentCardState{}
-		m.Notice = reason
+		m = m.fail(reason)
 		return m, nil
 	}
-	m.Notice = agentCardInterruptSent
+	m = m.say(agentCardInterruptSent)
 	return m, []Cmd{InterruptAgent{Block: e.Block}}
 }
 
@@ -361,3 +361,43 @@ func (m Model) AgentCardUnavailable(action Action) string {
 }
 
 const noAgentReason = "No agent on this Issue yet."
+
+// AgentCardStateWords is the state word of an agent's row on the card: what the relay last said of it, in the words a person
+// uses. An agent the relay has not listed reads "running", the one thing known of it.
+func AgentCardStateWords(state AgentStateWord) string {
+	switch state {
+	case AgentWorking:
+		return "working"
+	case AgentWaitingInput:
+		return "waiting for you"
+	case AgentIdle:
+		return "idle"
+	case AgentExited:
+		return "exited"
+	}
+	return "running"
+}
+
+// AgentCardFact is one labelled row under the Agent card's list for the selected agent.
+type AgentCardFact struct {
+	Label, Text string
+	Muted       bool
+}
+
+// AgentCardFacts are the facts the card shows for the agent in block, each only when there is something to say: the session's
+// model, tool calls, current tool and cost under Session, and the first line of the agent's last message under Last message. An
+// agent whose session is not read yet, or is not omp, has no Session row; the card's disabled buttons say why.
+func (m Model) AgentCardFacts(block string) []AgentCardFact {
+	var facts []AgentCardFact
+	if s, ok := m.AgentSessionFor(block); ok {
+		if s.Reason != "" {
+			facts = append(facts, AgentCardFact{Label: "Session", Text: s.Reason, Muted: true})
+		} else {
+			facts = append(facts, AgentCardFact{Label: "Session", Text: sessionSummary(s)})
+		}
+	}
+	if last := m.AgentLastLine(block); last != "" {
+		facts = append(facts, AgentCardFact{Label: "Last message", Text: last})
+	}
+	return facts
+}

@@ -40,22 +40,22 @@ func leavePreviewed(t *testing.T, s driver.State) driver.State {
 
 func TestXOpensTheLeavePreviewOfTheSelectedSpokeAndSendsNothing(t *testing.T) {
 	s := leavePreviewed(t, leavingPane(t))
-	wantText(t, "the preview", wireTextOf(t, s), "Leave Federation", "local spoke project: acme", "hub: hub.example:7474", "hub project ID: 12",
-		"local project: keep (detach) — standalone with all issues", "local-only: false",
-		"will revoke the enrollment(s) on the hub, then detach locally (keep the project standalone)")
-	if text := wireTextOf(t, s); strings.Contains(text, "skipping hub revoke") {
+	wantText(t, "the preview", wireTextOf(t, s), "Leave federation", "Project", "acme", "Hub", "hub.example:7474", "Hub Project", "12",
+		"Stays as a standalone Project with all its Issues", "Revoked on the hub",
+		"Revokes the enrollment on the hub, then detaches the Project locally.")
+	if text := wireTextOf(t, s); strings.Contains(text, "The hub revoke is skipped") {
 		t.Errorf("the default preview warns of a local-only leave: %s", text)
 	}
 	if mode := s.Model.CurrentMode(); mode != model.ModeFederationLeave {
 		t.Errorf("mode %q, want the leave preview's", mode)
 	}
-	wantText(t, "the footer", footerText(t, s), "↵", "confirm", "d", "keep / archive", "l", "local-only", "back")
+	wantText(t, "the footer", footerText(t, s), "enter", "confirm", "d", "keep / archive", "l", "local-only", "back")
 
 	second := leavePreviewed(t, step(t, leavingPane(t), key("j")).State)
-	wantText(t, "the second spoke's preview", wireTextOf(t, second), "local spoke project: zeta", "hub project ID: 7")
+	wantText(t, "the second spoke's preview", wireTextOf(t, second), "zeta", "Hub Project", "7")
 
 	detail := step(t, leavingPane(t), key("enter")).State
-	if got := leavePreviewed(t, detail); !strings.Contains(wireTextOf(t, got), "local spoke project: acme") {
+	if got := leavePreviewed(t, detail); !strings.Contains(wireTextOf(t, got), "Leave federation") {
 		t.Error("x in a detail did not preview the shown spoke")
 	}
 
@@ -68,21 +68,21 @@ func TestXOpensTheLeavePreviewOfTheSelectedSpokeAndSendsNothing(t *testing.T) {
 func TestDAndLToggleTheLeaveAndTheFooterAndPreviewFollow(t *testing.T) {
 	s := leavePreviewed(t, leavingPane(t))
 	archive := step(t, s, key("d")).State
-	wantText(t, "archiving", wireTextOf(t, archive), "local project: archive — remove the replica (reversible via kata projects restore)",
-		"will revoke the enrollment(s) on the hub, then archive the local replica")
-	if back := step(t, archive, key("d")).State; !strings.Contains(wireTextOf(t, back), "keep (detach)") {
+	wantText(t, "archiving", wireTextOf(t, archive), "Archived; restore it with kata projects restore",
+		"Revokes the enrollment on the hub, then archives the local replica.")
+	if back := step(t, archive, key("d")).State; !strings.Contains(wireTextOf(t, back), "Stays as a standalone Project") {
 		t.Error("a second d did not switch back to detaching")
 	}
 
 	local := step(t, s, key("l")).State
-	wantText(t, "local-only", wireTextOf(t, local), "local-only: true",
-		"local-only: skipping hub revoke; the enrollment token stays valid until manually revoked", "local teardown only: detach locally (keep the project standalone)")
-	if strings.Contains(wireTextOf(t, local), "will revoke") {
+	wantText(t, "local-only", wireTextOf(t, local), "Skipped (local only)",
+		"The hub revoke is skipped: the enrollment token stays valid until you revoke it by hand, and the leave only detaches the Project locally.")
+	if strings.Contains(wireTextOf(t, local), "Revokes the enrollment") {
 		t.Error("a local-only preview still says it will revoke")
 	}
 	both := step(t, local, key("d")).State
-	wantText(t, "local-only archive", wireTextOf(t, both), "local teardown only: archive the local replica")
-	if off := step(t, both, key("l")).State; !strings.Contains(wireTextOf(t, off), "local-only: false") {
+	wantText(t, "local-only archive", wireTextOf(t, both), "the leave only archives the local replica.")
+	if off := step(t, both, key("l")).State; !strings.Contains(wireTextOf(t, off), "Revoked on the hub") {
 		t.Error("a second l did not turn local-only off")
 	}
 }
@@ -125,7 +125,7 @@ func TestEnterRunsTheLeaveWithTheChoicesAndTheSpokesIdentity(t *testing.T) {
 	if !out.State.Model.Federation.Leaving || out.State.Model.Federation.Screen != model.FederationLeavePreview {
 		t.Error("the preview is not marked as running")
 	}
-	wantText(t, "while leaving", wireTextOf(t, out.State), "leaving...")
+	wantText(t, "while leaving", wireTextOf(t, out.State), "Leaving…")
 
 	// An insecure binding is passed on to the hub step.
 	zeta := step(t, leavePreviewed(t, step(t, leavingPane(t), key("j")).State), key("enter"))
@@ -180,8 +180,8 @@ func TestAFailedLeaveKeepsThePreviewWithKatasErrorAndEnterTriesAgain(t *testing.
 			t.Errorf("%s: screen %v, leaving %v, cmds %#v", name, failed.State.Model.Federation.Screen, failed.State.Model.Federation.Leaving, failed.Cmds)
 		}
 		text := wireTextOf(t, failed.State)
-		wantText(t, name+" failure", text, failure, "local spoke project: acme", "local-only: true")
-		if strings.Contains(text, "leaving...") {
+		wantText(t, name+" failure", text, "Cannot leave the federation: "+strings.TrimSuffix(strings.SplitN(failure, "\n", 2)[0], "."), "Project", "acme", "Skipped (local only)")
+		if strings.Contains(text, "Leaving…") {
 			t.Errorf("%s: still marked as leaving", name)
 		}
 
@@ -206,32 +206,32 @@ func TestALeaveThatSucceededShowsTheResultAndReadsTheStatusAgain(t *testing.T) {
 			func(d model.FederationLeaveDraft) model.FederationLeaveOutcome {
 				return model.FederationLeaveOutcome{Draft: d, Revoked: 2}
 			},
-			[]string{"Leave Result", "status: detached", "local spoke project: acme", "hub: hub.example:7474", "revoked 2 enrollment(s) on the hub"},
-			[]string{"warning:", "skipped"},
+			[]string{"Leave result", "Result", "Detached", "Project", "acme", "Hub", "hub.example:7474", "Revoked 2 enrollments on the hub"},
+			[]string{"Global enrollment", "Skipped"},
 		},
 		"archived": {
 			func(d model.FederationLeaveDraft) model.FederationLeaveOutcome {
 				return model.FederationLeaveOutcome{Draft: d, Archived: true, Revoked: 1}
 			},
-			[]string{"status: archived", "revoked 1 enrollment(s) on the hub"}, nil,
+			[]string{"Archived", "Revoked 1 enrollment on the hub"}, nil,
 		},
 		"local-only": {
 			func(d model.FederationLeaveDraft) model.FederationLeaveOutcome {
 				return model.FederationLeaveOutcome{Draft: d, SkippedRevoke: true}
 			},
-			[]string{"hub revoke skipped (local-only): the enrollment token remains valid until manually revoked"}, []string{"revoked 0"},
+			[]string{"Skipped (local only); the enrollment token stays valid until you revoke it"}, []string{"Revoked 0"},
 		},
 		"provider managed": {
 			func(d model.FederationLeaveDraft) model.FederationLeaveOutcome {
 				return model.FederationLeaveOutcome{Draft: d, ProviderReleased: true}
 			},
-			[]string{"credential provider confirmed release"}, []string{"revoked 0"},
+			[]string{"The credential provider confirmed the release"}, []string{"Revoked 0"},
 		},
 		"global enrollments": {
 			func(d model.FederationLeaveDraft) model.FederationLeaveOutcome {
 				return model.FederationLeaveOutcome{Draft: d, Revoked: 1, GlobalEnrollmentIDs: []int64{8, 11}}
 			},
-			[]string{"warning: global enrollment(s) #8, #11 for this spoke remain active and still authorize this project; revoke manually if intended"}, nil,
+			[]string{"Global enrollments #8, #11 for this spoke are still active and still authorize this Project; revoke them by hand if you mean to."}, nil,
 		},
 	} {
 		out := step(t, leavePreviewed(t, leavingPane(t)), key("enter"))
@@ -264,7 +264,7 @@ func TestEnterAndEscOnTheResultReturnToTheListWithoutTheLeftProject(t *testing.T
 
 		// The read answers while the result is still shown: it does not replace the result.
 		answered := step(t, done.State, federationAnswer(read, troubledSpoke("zeta"))).State
-		if answered.Model.Federation.Screen != model.FederationLeaveDone || !strings.Contains(wireTextOf(t, answered), "Leave Result") {
+		if answered.Model.Federation.Screen != model.FederationLeaveDone || !strings.Contains(wireTextOf(t, answered), "Leave result") {
 			t.Fatalf("%s: the status answer left the result: screen %v", back, answered.Model.Federation.Screen)
 		}
 		list := step(t, answered, key(back))
@@ -272,7 +272,7 @@ func TestEnterAndEscOnTheResultReturnToTheListWithoutTheLeftProject(t *testing.T
 			t.Errorf("%s: screen %v on page %v with %#v, want the list", back, list.State.Model.Federation.Screen, list.State.Model.Page, list.Cmds)
 		}
 		text := wireTextOf(t, list.State)
-		wantText(t, back+" list", text, "1 spoke federations", "zeta  Hub")
+		wantText(t, back+" list", text, "zeta", "hub.example:7474", "Synced")
 		if strings.Contains(text, "acme") {
 			t.Errorf("%s: the left Project is still listed: %s", back, text)
 		}

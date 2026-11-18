@@ -128,11 +128,9 @@ func (AgentRecordForgotten) msg() {}
 
 func agentRecordForgotten(m Model, msg AgentRecordForgotten) Model {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot forget the agent on %s: %s", msg.Host, msg.Err)
-		return m
+		return m.fail(Cannot("forget", "the agent on "+msg.Host, msg.Err))
 	}
-	m.Notice = "Forgot the agent on " + msg.Host + "."
-	return m
+	return m.say("Forgot the agent on " + msg.Host + ".")
 }
 
 // ErrNoRemoteScope is why agents on other hosts cannot be listed without an Issue: no KATA_REF and no Project the workspace is

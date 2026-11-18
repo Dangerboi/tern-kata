@@ -28,23 +28,25 @@ func listCell(t *testing.T, s driver.State, uid, text string) string {
 	return ""
 }
 
+// The list draws every id muted, whatever its Lane: a Lane's identity colour is for the Board's header rule and card id, so on
+// the list it would read as a state. The owner is plain text.
 func TestListIdAndOwnerTakeTheBoardsColours(t *testing.T) {
 	custom := boardCard("cust", "in-review")
 	closed := closedAt("done", time.October, 7, "needs-info")
 	issues := []model.Issue{ownedBy(boardCard("triage", "needs-triage"), "ada"), ownedBy(custom, "bo"), ownedBy(closed, "cy"), ownedBy(boardCard("none"), "di")}
 	s := step(t, projectPane(t, 160, issues...), key("shift+l")).State
 	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"needs-triage", "in-review"}}).State
-	for _, c := range []struct{ uid, owner, id, want string }{
-		{"triage", "ada", "triage", "warning mono"},
-		{"cust", "bo", "cust", "accent mono"},
-		{"done", "cy", "done", "success mono"},
-		{"none", "di", "none", "muted mono"},
+	for _, c := range []struct{ uid, owner, id string }{
+		{"triage", "ada", "triage"},
+		{"cust", "bo", "cust"},
+		{"done", "cy", "done"},
+		{"none", "di", "none"},
 	} {
-		if got := listCell(t, s, c.uid, c.id); got != c.want {
-			t.Errorf("%s id style = %q, want %q", c.uid, got, c.want)
+		if got := listCell(t, s, c.uid, c.id); got != "muted mono" {
+			t.Errorf("%s id style = %q, want muted mono", c.uid, got)
 		}
-		if got := listCell(t, s, c.uid, c.owner); got != "accent" {
-			t.Errorf("%s owner style = %q, want accent, the nearest text colour to the user tone", c.uid, got)
+		if got := listCell(t, s, c.uid, c.owner); got != "em" {
+			t.Errorf("%s owner style = %q, want the plain em token, a real style so the cell is an element", c.uid, got)
 		}
 		if got := listCell(t, s, c.uid, "ago"); got != "muted mono" {
 			t.Errorf("%s updated style = %q, want muted mono", c.uid, got)

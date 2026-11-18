@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 type AgentPlacement string
@@ -24,9 +26,9 @@ func (p AgentPlacement) words() (name, notice string) {
 	case AgentTab:
 		return string(AgentTab), "a new tab"
 	case AgentBackground:
-		return string(AgentBackground), "the background (open it from its badge)"
+		return string(AgentBackground), "the background"
 	}
-	return string(AgentSplit), "a split beside this Pane"
+	return string(AgentSplit), "a split"
 }
 
 const AgentSession = "kata agents"
@@ -187,30 +189,44 @@ func startAgent(m Model, action Action, placement AgentPlacement) (Model, []Cmd)
 	issue := m.issueByUID(m.AgentCard.IssueUID)
 	m.AgentCard = AgentCardState{}
 	if reason != "" {
-		m.Notice = reason
-		return m, nil
+		return m.fail(reason), nil
 	}
 	cmd := StartAgent{Placement: placement, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,
 		ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock, Actor: m.MessageActor()}
 	if m.Bound && issue.ProjectID == m.Project.ID {
 		cmd.Workspace = m.Workspace
 	}
-	m.Notice = fmt.Sprintf("Starting an agent on %s…", issue.QualifiedID)
+	m = m.say(Progress("Starting", "an agent on "+m.RefOf(issue.QualifiedID)))
 	return m, []Cmd{cmd}
 }
 
 func agentStarted(m Model, msg AgentStarted) Model {
 	if msg.Err != nil {
-		m.Notice = fmt.Sprintf("Cannot start an agent on %s: %s", msg.IssueRef, msg.Err)
-		return m
+		return m.fail(Cannot("start", "an agent on "+m.RefOf(msg.IssueRef), msg.Err))
 	}
 	m = m.mapStarted(msg.Entry)
 	_, where := msg.Placement.words()
-	m.Notice = fmt.Sprintf("Started an agent on %s in %s.", msg.IssueRef, where)
+	text := fmt.Sprintf("Started an agent on %s in %s.", m.RefOf(msg.IssueRef), where)
 	if msg.Note != "" {
-		m.Notice += " But " + msg.Note
+		return m.fail(text + " " + noteSentence(msg.Note))
 	}
-	return m
+	return m.say(text)
+}
+
+// noteSentence is a note the gateway wrote in lower case, as a sentence: its first letter capital and a period at the end.
+func noteSentence(note string) string {
+	note = strings.TrimSuffix(strings.TrimSpace(note), ".")
+	r, size := utf8.DecodeRuneInString(note)
+	return string(unicode.ToUpper(r)) + note[size:] + "."
+}
+
+// RefOf names an Issue given as "project#short", as RefName does; text with no "#" is returned as it is.
+func (m Model) RefOf(qualified string) string {
+	project, short, found := strings.Cut(qualified, "#")
+	if !found {
+		return qualified
+	}
+	return m.RefName(project, short)
 }
 
 // agentsPruned takes in the entries even when tern could not be asked: they are the file as read, as a later refresh keeps them.

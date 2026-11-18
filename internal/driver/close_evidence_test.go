@@ -52,9 +52,9 @@ func TestCloseCardRefusesAnEmptyReviewedPathsOrExternalValue(t *testing.T) {
 		value string
 		want  string
 	}{
-		{"reviewed paths blank", model.CloseReviewed, "  ", "requires commit"},
+		{"reviewed paths blank", model.CloseReviewed, "  ", "Done needs a commit"},
 		{"reviewed paths only commas", model.CloseReviewed, " , ,", "at least one path"},
-		{"external blank", model.CloseExternal, "  ", "requires commit"},
+		{"external blank", model.CloseExternal, "  ", "Done needs a commit"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := feed(t, browsing(t, 160), key("x")).State

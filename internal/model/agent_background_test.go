@@ -93,11 +93,11 @@ func TestAPlacementAnswerMarksTheEntryAndShowsTheFailure(t *testing.T) {
 		t.Fatalf("after opening %+v (the old mapping %+v)", opened.AgentMapping, m.AgentMapping)
 	}
 	back, _ := model.Update(opened, model.AgentPlaced{Block: "5", Back: true, Moved: true, Err: errors.New("cannot name its tab")})
-	if back.AgentMapping[0].Open || back.Notice != "Cannot move the agent back: cannot name its tab" {
+	if back.AgentMapping[0].Open || back.Notice != "Cannot move the agent back: cannot name its tab." {
 		t.Fatalf("after going back %+v, notice %q", back.AgentMapping, back.Notice)
 	}
 	refused, _ := model.Update(m, model.AgentPlaced{Block: "5", Err: errors.New("exit status 1: no block")})
-	if refused.AgentMapping[0].Open || refused.Notice != "Cannot open the agent: exit status 1: no block" {
+	if refused.AgentMapping[0].Open || refused.Notice != "Cannot open the agent: exit status 1: no block." {
 		t.Fatalf("after a refusal %+v, notice %q", refused.AgentMapping, refused.Notice)
 	}
 }

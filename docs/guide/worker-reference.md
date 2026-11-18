@@ -252,7 +252,7 @@ A job's `options` can hold **conditions**: what a due scheduled run must meet, o
 - **An occurrence that already has a run journal is never skipped.** After a crash between the journal and the checkpoint save the occurrence is admitted again, and the journal that covers it answers, even when the limit is now reached.
 - **A condition that cannot be checked blocks the run.** Options that do not parse (a run limit that is not a whole number, a spend limit that is not an amount above 0, an unknown condition name, `conditions` that is not an object) or a run count or spend that cannot be read leave the occurrence waiting and the job unstarted. The worker logs the reason once until the cause changes, and `worker status` lists the job as blocked.
 - **Seeing skips.** `tern-kata worker status` lists, per job, how many skips are on record and the latest reason; the same fields are in `worker status --json` (`Skipped`, and `Blocked` for the blocked jobs).
-- **Which worker holds the lease matters.** The conditions are read by the worker that holds the Project's lease. A worker on another machine that does not know them runs the job anyway, as it does for any option it does not read. Skip records are local to the machine that held the lease.
+- **Which worker holds the lease matters.** The conditions are read by the worker that holds the Project's lease. A worker on another machine that does not know them runs the job anyway, as it does for any option it does not read: a worker that does not know conditions ignores them. Skip records are local to the machine that held the lease.
 
 ## Workflow runs
 

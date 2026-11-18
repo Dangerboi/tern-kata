@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -148,8 +147,25 @@ type JobRow struct {
 	Unsupported string
 	// WorkerPause is why this machine's worker admits none of the job's runs, empty when it does.
 	WorkerPause string
-	Last        string
-	Warning     string
+	// LastStatus is the status of the job's latest run, empty when its latest activity is a child Issue or there is none. Last is
+	// the rest of the line: for a run its start, then its Brief; for a child the whole line, "Last Issue #ab12 Tick · open · 18:00".
+	LastStatus cronjob.RunStatus
+	Last       string
+	Warning    string
+}
+
+// HiddenArchivedJobs is how many archived jobs the list holds but does not show.
+func (m Model) HiddenArchivedJobs() int {
+	if m.Jobs.ShowArchived {
+		return 0
+	}
+	n := 0
+	for _, job := range m.Jobs.Jobs {
+		if job.Archived() {
+			n++
+		}
+	}
+	return n
 }
 
 func (m Model) visibleJobs() []CronJob {
@@ -173,7 +189,7 @@ func (m Model) JobRows(now time.Time) []JobRow {
 		if next, ok := job.NextRun(now, m.Jobs.ProjectArchived); ok && pause != PauseFailedRuns {
 			row.Next = m.Calendar.Read(next, now)
 		}
-		row.Last = m.lastActivity(job, now)
+		row.LastStatus, row.Last = m.lastActivityParts(job, now)
 		if !job.Archived() {
 			row.Warning = m.highRateWarning(job, now)
 		}
@@ -182,22 +198,31 @@ func (m Model) JobRows(now time.Time) []JobRow {
 	return rows
 }
 
-// lastActivity is the job's latest run or child in words, "" when none is on record.
-func (m Model) lastActivity(job CronJob, now time.Time) string {
+// lastActivityParts is the job's latest run or child as a status and the rest of the line, both empty when none is on record.
+func (m Model) lastActivityParts(job CronJob, now time.Time) (cronjob.RunStatus, string) {
 	activity := m.Jobs.Activity[job.UID]
 	switch {
 	case len(activity.Runs) > 0:
-		return "last run " + m.runWords(activity.Runs[0], now)
+		return activity.Runs[0].Status, m.runWords(activity.Runs[0], now)
 	case len(activity.Children) > 0:
 		c := activity.Children[0]
-		return "last child " + c.Words() + " · " + m.Calendar.Read(c.When(), now)
+		return "", "Last Issue " + c.Words() + " · " + m.Calendar.Read(c.When(), now)
 	}
-	return ""
+	return "", ""
 }
 
-// runWords is a Run in a line, as the Jobs Page words it: its status, when it started, and its summary's Brief.
+// lastActivity is the job's latest run or child in one line, "" when none is on record; the Page search reads it.
+func (m Model) lastActivity(job CronJob, now time.Time) string {
+	status, rest := m.lastActivityParts(job, now)
+	if status == "" {
+		return rest
+	}
+	return "last run " + string(status) + " · " + rest
+}
+
+// runWords is a Run as the Jobs Page words it after its status: when it started, then its summary's Brief.
 func (m Model) runWords(r Run, now time.Time) string {
-	words := string(r.Status) + " · " + m.Calendar.Read(r.Started(), now)
+	words := m.Calendar.Read(r.Started(), now)
 	if brief := r.Brief(); brief != "" {
 		words += " · " + brief
 	}
@@ -263,16 +288,21 @@ func (m Model) CurrentSelection() string {
 	if m.OnJobs() {
 		return m.Jobs.Selected
 	}
+	if m.OnWorkflows() {
+		return m.Workflows.Selected
+	}
 	return m.SelectedUID
 }
 
+// JobFact is one line of the inspector. Status, when set, is a run status drawn in its tone before Value.
 type JobFact struct {
 	Label, Value string
 	Parent       bool
+	Status       cronjob.RunStatus
 }
 
 // JobFacts are the inspector's lines for the selected job: its state, what it does and when, the Issue policy, and for a
-// native job its parent with the delivery progress. Lines that don't apply to the job are left out.
+// native job its parent with the delivery progress. Lines that don't apply to the job are left out. Ids are JobIDs.
 func (m Model) JobFacts(now time.Time) []JobFact {
 	job := m.SelectedJob()
 	if job == nil {
@@ -285,56 +315,67 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 			facts = append(facts, JobFact{Label: label, Value: value})
 		}
 	}
-	addList := func(label string, values []string) {
+	addList := func(label string, values []string, status func(i int) cronjob.RunStatus) {
 		for i, v := range values {
 			if i > 0 {
 				label = ""
 			}
-			facts = append(facts, JobFact{Label: label, Value: v})
+			fact := JobFact{Label: label, Value: v}
+			if status != nil {
+				fact.Status = status(i)
+			}
+			facts = append(facts, fact)
 		}
 	}
 	pause := m.JobPause(*job)
-	add("Name", job.Name)
 	add("State", pause.StateText())
 	add("Worker", m.workerPauseWords(job.UID))
 	add("Set aside", m.workerUnsupported(job.UID))
 	add("Kind", job.Kind())
-	add("Schedule", triggerWords(t))
+	schedule := triggerWords(t)
+	add("Schedule", schedule)
 	if runs, reason := m.NextRuns(*job, now); reason != "" {
-		add("Next runs", reason)
+		add("Next runs", strings.TrimPrefix(reason, "none: "))
 	} else {
-		addList("Next runs", runs)
+		addList("Next runs", runs, nil)
 	}
 	if !job.Archived() {
 		add("Warning", m.highRateWarning(*job, now))
 	}
 	activity := m.Jobs.Activity[job.UID]
-	var recent []string
-	for _, r := range activity.Runs[:min(len(activity.Runs), JobActivityShown)] {
-		recent = append(recent, m.runWords(r, now))
+	runs := activity.Runs[:min(len(activity.Runs), JobActivityShown)]
+	recent := make([]string, len(runs))
+	for i, r := range runs {
+		recent[i] = m.runWords(r, now)
 	}
-	addList("Recent runs", recent)
+	addList("Recent runs", recent, func(i int) cronjob.RunStatus { return runs[i].Status })
 	recent = nil
 	for _, c := range activity.Children[:min(len(activity.Children), JobActivityShown)] {
 		recent = append(recent, c.Words()+" · "+m.Calendar.Read(c.When(), now))
 	}
-	addList("Recent children", recent)
-	switch t.Kind {
-	case cronjob.TriggerCron:
-		zone, expression := cronjob.Zone(t.Cron, t.Timezone)
-		add("Cron", expression)
-		add("Time zone", zone)
-	case cronjob.TriggerInterval:
-		add("Interval", strconv.FormatInt(t.IntervalSeconds, 10)+" s")
-		add("Time zone", t.Timezone)
-	case cronjob.TriggerOnce:
-		add("At", t.At)
-	case cronjob.TriggerIssueScheduled, cronjob.TriggerIssueDeadline:
-		add("Trigger Issue", t.IssueUID)
+	addList("Recent children", recent, nil)
+	if schedule == "" { // a schedule that cannot be worded shows the fields it is made of
+		switch t.Kind {
+		case cronjob.TriggerCron:
+			zone, expression := cronjob.Zone(t.Cron, t.Timezone)
+			add("Cron", expression)
+			add("Time zone", zone)
+		case cronjob.TriggerInterval:
+			add("Interval", strconv.FormatInt(t.IntervalSeconds, 10)+" s")
+			add("Time zone", t.Timezone)
+		case cronjob.TriggerOnce:
+			add("At", t.At)
+		}
 	}
 	add("Prompt", d.Action.Prompt)
-	add("Workflow", d.Action.WorkflowUID)
-	add("Recipient", d.Action.Recipient)
+	if d.Action.WorkflowUID != "" {
+		add("Workflow", m.workflowName(d.Action.WorkflowUID))
+	}
+	recipient := d.Action.Recipient
+	if recipient == recipientDefault {
+		recipient = "The Issue's owner or author"
+	}
+	add("Recipient", recipient)
 	add("Message", d.Action.Message)
 	add("Adapter", job.Adapter())
 	add("Profile", d.Profile)
@@ -348,26 +389,25 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 		add("Secrets", strings.Join(names, ", "))
 	}
 	if p := d.Issue; p != nil {
-		add("Issue", map[cronjob.IssuePolicyKind]string{cronjob.IssuePerRun: "a new Issue per run", cronjob.IssueExisting: "an existing Issue"}[p.Kind])
-		add("Existing Issue", p.UID)
+		add("Issue", map[cronjob.IssuePolicyKind]string{cronjob.IssuePerRun: "New Issue per run", cronjob.IssueExisting: "Existing Issue"}[p.Kind])
 		add("Child title", p.Title)
 		add("Child body", p.Body)
 		if p.ScheduledOffsetSeconds != nil {
-			add("Scheduled offset", strconv.FormatInt(*p.ScheduledOffsetSeconds, 10)+" s")
+			add("Scheduled offset", durationWords(*p.ScheduledOffsetSeconds, false))
 		}
 		if p.DeadlineOffsetSeconds != nil {
-			add("Deadline offset", strconv.FormatInt(*p.DeadlineOffsetSeconds, 10)+" s")
+			add("Deadline offset", durationWords(*p.DeadlineOffsetSeconds, false))
 		}
 	}
-	add("Overlap", d.Overlap)
-	catchup := d.Catchup
-	if d.GraceSeconds > 0 {
-		catchup += fmt.Sprintf(", grace %d s", d.GraceSeconds)
-	}
-	add("Catchup", catchup)
 	if d.TimeoutSeconds > 0 {
-		add("Timeout", strconv.FormatInt(d.TimeoutSeconds, 10)+" s")
+		add("Timeout", durationWords(d.TimeoutSeconds, false))
 	}
+	add("Overlap", OverlapLabel(d.Overlap))
+	catchup := CatchupLabel(d.Catchup)
+	if d.GraceSeconds > 0 {
+		catchup += " · grace " + durationWords(d.GraceSeconds, false)
+	}
+	add("Catch up", catchup)
 	if p := job.Parent; p != nil {
 		ref, status := p.UID, p.Status
 		if p.ShortID != "" {
@@ -376,22 +416,53 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 		if p.Deleted {
 			status = "deleted"
 		}
-		value := ref + " · " + status
-		facts = append(facts, JobFact{Label: "Parent", Value: value, Parent: true})
+		facts = append(facts, JobFact{Label: "Parent", Value: ref + " · " + status, Parent: true})
 		if p.Progress != nil {
-			add("Anchor", m.Calendar.Stamp(p.Progress.Anchor))
 			add("Delivered through", m.Calendar.Stamp(p.Progress.Through))
 		}
 		if missed := job.Missed(now); missed > 0 {
 			add("Missed", strconv.Itoa(missed))
 		}
 	}
-	add("Author", job.Author)
-	add("Revision", strconv.FormatInt(job.Revision, 10))
-	add("Created", m.Calendar.Stamp(job.CreatedAt))
+	created := m.Calendar.Stamp(job.CreatedAt)
+	if job.Author != "" {
+		created += " · " + job.Author
+	}
+	add("Created", created)
 	add("Updated", m.Calendar.Stamp(job.UpdatedAt))
-	add("UID", job.UID)
 	return facts
+}
+
+// workflowName is the name of the workflow with uid when the Workflows Page has read it, else empty.
+func (m Model) workflowName(uid string) string {
+	for _, w := range m.Workflows.List {
+		if w.UID == uid {
+			return w.Name
+		}
+	}
+	return ""
+}
+
+// JobIDs are the ids of the selected job, for the hovercard of the inspector's title.
+func (m Model) JobIDs() []IDFact {
+	job := m.SelectedJob()
+	if job == nil {
+		return nil
+	}
+	var ids []IDFact
+	add := func(label, value string) {
+		if value != "" {
+			ids = append(ids, IDFact{label, value})
+		}
+	}
+	add("Job", job.UID)
+	add("Version", job.DefinitionEventUID)
+	add("Workflow", job.Definition.Action.WorkflowUID)
+	add("Trigger Issue", job.Definition.Trigger.IssueUID)
+	if p := job.Definition.Issue; p != nil && p.Kind == cronjob.IssueExisting {
+		add("Existing Issue", p.UID)
+	}
+	return ids
 }
 
 // jobsProjectID is the id of the Project the Jobs Page shows: the Project Collection's, from the catalog, else the Binding's.
@@ -421,7 +492,7 @@ func enterProjectPage(m Model, name string) (Model, []Cmd, bool) {
 		m.Loading, m.Err = true, nil
 		m, cmds = collectionSwitched(m)
 	default:
-		m.Notice = "The " + name + " needs a Project: choose one in the Menu."
+		m = m.fail("Cannot open the " + name + ": it needs a Project.")
 		m, cmds = openProjects(m)
 		return m, cmds, false
 	}
@@ -531,8 +602,7 @@ func openJobParent(m Model) Model {
 	case job == nil || job.Parent == nil:
 		return m
 	case job.Parent.Deleted:
-		m.Notice = "The parent Issue is deleted."
-		return m
+		return m.fail("Cannot open the parent Issue: it is deleted.")
 	}
 	uid := job.Parent.UID
 	m = m.leavePage()

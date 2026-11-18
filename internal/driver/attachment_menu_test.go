@@ -86,7 +86,7 @@ func TestEachAttachmentMenuItemPressesItsKey(t *testing.T) {
 		key   string
 		check func(*testing.T, driver.Output)
 	}{
-		{"Open", "↵", want(model.WayOpen)},
+		{"Open", "enter", want(model.WayOpen)},
 		{"Open beside", "v", want(model.WayBeside)},
 		{"Open with the system app", "o", want(model.WaySystem)},
 		{"Save to Downloads", "s", want(model.WaySave)},
@@ -101,7 +101,7 @@ func TestEachAttachmentMenuItemPressesItsKey(t *testing.T) {
 		t.Run(tc.label, func(t *testing.T) {
 			s := attachmentsPane(t)
 			_, menu := attachmentRow(t, s, "A1")
-			if keys, _ := menuItem(t, menu, tc.label)["keys"].([]any); len(keys) != 1 || keys[0] != tc.key {
+			if keys, _ := menuItem(t, menu, tc.label)["keys"].([]any); len(keys) != 1 || keys[0] != view.Keycap(tc.key, tc.key) {
 				t.Fatalf("the item shows keys %v, want %s", keys, tc.key)
 			}
 			tc.check(t, pick(t, s, "A1", tc.label))
@@ -186,11 +186,11 @@ func TestTheUnlinkQuestionsButtonsAnswerItToo(t *testing.T) {
 func TestAnUnlinkTheQuestionSentIsReportedAndReadsTheIssueAgain(t *testing.T) {
 	s := step(t, unlinkAsked(t), key("y")).State
 	out := step(t, s, model.AttachmentUnlinked{UID: "a", Name: "shot.png", FromQuestion: true})
-	if !strings.HasPrefix(out.State.Model.Notice, "Unlinked shot.png from a;") || !hasCmd[model.ReadSnapshot](out.Cmds) {
+	if !strings.HasPrefix(out.State.Model.Notice, "Unlinked shot.png from a.") || !hasCmd[model.ReadSnapshot](out.Cmds) {
 		t.Fatalf("notice %q, cmds %#v", out.State.Model.Notice, out.Cmds)
 	}
 	failed := step(t, s, model.AttachmentUnlinked{UID: "a", Name: "shot.png", FromQuestion: true, Err: errors.New("kata said no")})
-	if !strings.Contains(failed.State.Model.Notice, "Cannot unlink shot.png: kata said no") {
+	if !strings.Contains(failed.State.Model.Notice, "Cannot unlink shot.png: kata said no.") {
 		t.Fatalf("notice %q", failed.State.Model.Notice)
 	}
 }
@@ -225,7 +225,7 @@ func TestTheCopyCardHoldsThePathAndTheKataCommandEachWithACopyButton(t *testing.
 func TestASavedAttachmentIsToastedWithItsPath(t *testing.T) {
 	s := attachmentsPane(t)
 	out := step(t, s, model.AttachmentOpened{UID: "a", AttachmentID: "A1", Name: "shot.png", Path: "/home/me/Downloads/shot (1).png", Way: model.WaySave})
-	if toast := out.State.Model.Toast; toast == nil || toast.Text != "Saved /home/me/Downloads/shot (1).png" || toast.Label != "" {
+	if toast := out.State.Model.Toast; toast == nil || toast.Text != "Saved /home/me/Downloads/shot (1).png." || toast.Label != "" {
 		t.Fatalf("toast %+v", toast)
 	}
 }
@@ -246,13 +246,13 @@ func TestTwoUnlinksInFlightAreEachReportedAgainstTheirOwnRequest(t *testing.T) {
 	// The question's answer reports its own failure and leaves the saving U form alone.
 	failed := step(t, s, model.AttachmentUnlinked{UID: "a", Name: "shot.png", FromQuestion: true, Err: errors.New("kata said no")})
 	f := failed.State.Model.FieldForm
-	if !f.Open || !f.Saving || f.Err != nil || failed.State.Model.Notice != "Cannot unlink shot.png: kata said no" {
+	if !f.Open || !f.Saving || f.Err != nil || failed.State.Model.Notice != "Cannot unlink shot.png: kata said no." {
 		t.Fatalf("form %+v, notice %q", f, failed.State.Model.Notice)
 	}
 
 	// Only the U path's answer closes the form.
 	done := step(t, failed.State, model.AttachmentUnlinked{UID: "a", Name: "clip.mp4"})
-	if done.State.Model.FieldForm.Open || !strings.HasPrefix(done.State.Model.Notice, "Unlinked clip.mp4 from a;") {
+	if done.State.Model.FieldForm.Open || !strings.HasPrefix(done.State.Model.Notice, "Unlinked clip.mp4 from a.") {
 		t.Fatalf("form %+v, notice %q", done.State.Model.FieldForm, done.State.Model.Notice)
 	}
 }
@@ -268,8 +268,8 @@ func TestACopyAnswerWhileAQuestionIsAskedIsToastedAndLeavesTheQuestion(t *testin
 	if q, asking := m.Question(); !asking || q.Mode != model.ModeUnlinkAttachment {
 		t.Fatalf("question %+v (%v)", q, asking)
 	}
-	if m.Toast == nil || !strings.Contains(m.Toast.Text, "/cache/shot.png") || !strings.Contains(m.Toast.Text, "kata docbank attachments get work#a A1") {
-		t.Fatalf("toast %+v, want the path and the command", m.Toast)
+	if m.Toast == nil || m.Toast.Text != "Copied shot.png." {
+		t.Fatalf("toast %+v, want Copied shot.png.", m.Toast)
 	}
 	if kept := step(t, out.State, key("n")).State.Model; kept.AskUnlink != nil {
 		t.Error("n did not answer the question")
@@ -282,7 +282,7 @@ func TestACopyAnswerWhileHelpIsOpenIsToasted(t *testing.T) {
 		t.Fatal("? did not open help")
 	}
 	m := step(t, s, model.AttachmentOpened{UID: "a", AttachmentID: "A1", Name: "shot.png", Path: "/cache/shot.png", Way: model.WayCopy}).State.Model
-	if m.AttachmentCopy.Open || !m.HelpOpen || m.Toast == nil || !strings.Contains(m.Toast.Text, "/cache/shot.png") {
+	if m.AttachmentCopy.Open || !m.HelpOpen || m.Toast == nil || m.Toast.Text != "Copied shot.png." {
 		t.Fatalf("copy open %v, help %v, toast %+v", m.AttachmentCopy.Open, m.HelpOpen, m.Toast)
 	}
 }

@@ -1,5 +1,5 @@
-# A parent's detail shows `Children: N open / M total` row in its properties and its children as a table below the
-# body, above Activity: reference, status, title, owner and updated, the closed child muted. A child opens by click, and
+# A parent's detail shows `Children N of M open` heading and its children as a table below the
+# body, above Activity: reference, status, title, owner (when a child has one) and updated, the closed child muted. A child opens by click, and
 # by j/enter from the keys in the detail; esc comes back. Own Project and Issues; it cleans up.
 ch_dir="$tmp/children-workspace"
 mkdir -p "$ch_dir" "$tmp/children-unbound"
@@ -30,26 +30,26 @@ ctl click "[data-id^='main.columns.list.'][data-id\$='.$ch_parent']"
 ch_content="main.columns.detail.viewport.content"
 expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | contains("Children parent") and (contains("loading") | not))'
 
-# The properties block counts the children in one line and lists none of them.
-expect_tree "[data-id='$ch_content.properties.children.v']" '.ok and .count == 1 and (.nodes[0].text == "2 open / 3 total")'
+# The properties block lists no children; the table's heading counts them.
+expect_tree "[data-id='$ch_content.properties.children']" '.ok and .count == 0'
 expect_tree "[data-id^='$ch_content.properties.parent']" '.ok and .count == 0'
 
-# The table sits below the body and above Activity: Tern's own table, a header row, then one row per child with its five cells.
+# The table sits below the body and above Activity: Tern's own table, a header row, then one row per child with its four cells (no Owner column while no child has an owner).
 ch_table="$ch_content.children.table"
 ch_rows="[data-id='$ch_table'] .sf-tbl-body .sf-tbl-row"
 ch_heads="[data-id='$ch_table'] .sf-tbl > .sf-tbl-row.head > .sf-tbl-h"
-expect_tree "[data-id='$ch_content.children.heading']" '.ok and .count == 1 and (.nodes[0].text == "Children")'
-expect_tree "$ch_heads" '.ok and ([.nodes[].text] == ["ticket", "status", "title", "owner", "updated"])'
+expect_tree "[data-id='$ch_content.children.heading']" '.ok and .count == 1 and (.nodes[0].text == "Children 2 of 3 open")'
+expect_tree "$ch_heads" '.ok and ([.nodes[].text] == ["Id", "Status", "Title", "Updated"])'
 expect_tree "$ch_rows" '.ok and .count == 3'
-expect_tree "$ch_rows > .sf-tbl-c" '.ok and .count == 15'
-expect_tree "$ch_rows > .sf-tbl-c:nth-child(5)" '.ok and .count == 3 and ([.nodes[].text | select(test(" ago$"))] | length == 3)'
+expect_tree "$ch_rows > .sf-tbl-c" '.ok and .count == 12'
+expect_tree "$ch_rows > .sf-tbl-c:nth-child(4)" '.ok and .count == 3 and ([.nodes[].text | select(test(" ago$"))] | length == 3)'
 ch_y() { ctl tree "[data-id='$1']" | jq -r ".nodes[0].rect[${2:-1}]"; }
 ch_body=$(ctl tree "[data-id^='$ch_content.body']" | jq -r '.nodes[0].rect[1]')
 ch_heading=$(ch_y "$ch_content.children.heading")
 ch_activity=$(ch_y "$ch_content.activity")
 awk -v b="$ch_body" -v t="$ch_heading" -v a="$ch_activity" 'BEGIN { exit !(b < t && t < a) }' || { printf 'Children table is not between the body and Activity: body y=%s children y=%s activity y=%s\n' "$ch_body" "$ch_heading" "$ch_activity" >&2; return 1; }
 # The header cells sit over their columns: each header starts at the x of its column's cells and is as wide.
-for ch_col in 1 2 3 4 5; do
+for ch_col in 1 2 3 4; do
   expect_tree "$ch_heads:nth-child($ch_col), $ch_rows > .sf-tbl-c:nth-child($ch_col)" '.ok and .count == 4 and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
 done
 # The closed child's status and title are muted, the open child's are not (the dot has no text).

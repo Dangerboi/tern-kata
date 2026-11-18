@@ -28,8 +28,8 @@ func TestIssueRowsTakeTwoLinesUnderTwoLineRowCols(t *testing.T) {
 		t.Fatalf("row kind = %s, want one col holding both lines", row.K)
 	}
 	head, title := nodes[view.IssueID(alpha.UID)+".line.head"], nodes[view.IssueID(alpha.UID)+".title"]
-	if got := text(head); !strings.Contains(got, alpha.ShortID) || !strings.Contains(got, alpha.Status) || strings.Contains(got, alpha.Title) {
-		t.Errorf("line 1 = %q, want id and status without the title", got)
+	if got := text(head); !strings.Contains(got, alpha.ShortID) || strings.Contains(got, alpha.Status) || strings.Contains(got, alpha.Title) {
+		t.Errorf("line 1 = %q, want the id, no status for an open Issue and no title", got)
 	}
 	if got := text(title); got != alpha.Title {
 		t.Errorf("line 2 = %q, want the title %q", got, alpha.Title)

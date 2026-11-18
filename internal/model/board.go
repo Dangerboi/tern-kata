@@ -81,17 +81,17 @@ func (m Model) LaneList() []string {
 func (m Model) LaneSource() string {
 	switch {
 	case m.Board.Shared:
-		return "shared with the Project"
+		return "the Project"
 	case len(m.Board.Lanes) > 0 || m.Board.DoneDays > 0 || m.Board.DoneCards > 0:
 		return "this machine"
 	}
-	return "default"
+	return "the built-in list"
 }
 
 type BoardCard struct {
 	Issue  Issue
 	Labels []string
-	// Also are the other Lane labels of an open Issue, after the one that placed it.
+	// Also are the titles of the other Lanes an open Issue is labelled for, after the one that placed it.
 	Also   []string
 	Reopen string
 	// Relationships are the Issue's Relationships from the Collection snapshot's links, every linked Issue counted whether the Board draws it or not.
@@ -140,7 +140,9 @@ func (m Model) boardColumns() []BoardColumn {
 			card.Reopen = LaneTitle(LabelLane(issue, lanes))
 		} else {
 			if labelled := LaneLabels(issue, lanes); len(labelled) > 1 {
-				card.Also = labelled[1:]
+				for _, label := range labelled[1:] {
+					card.Also = append(card.Also, LaneTitle(label))
+				}
 			}
 		}
 		i := slices.Index(keys, lane)

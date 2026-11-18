@@ -34,6 +34,7 @@ const (
 	runOpenAct         = "run-open"
 	attentionOpenAct   = "attention-open"
 	workflowOpenAct    = "workflow-open"
+	workflowAct        = "workflow"
 	agentAct           = "agent"
 	configAct          = "config"
 	contextMenuPickAct = "pick"
@@ -79,6 +80,8 @@ func ContextMenuPickClick(uid string, mode model.Mode, row, chord string) string
 func JobClick(uid string) string { return click(jobAct, uid) }
 
 func RunClick(uid string) string { return click(runAct, uid) }
+
+func WorkflowClick(uid string) string { return click(workflowAct, uid) }
 
 func AttentionClick(uid string) string { return click(attentionAct, uid) }
 
@@ -129,6 +132,7 @@ var uidActs = map[string]func(value string) model.Msg{
 	runOpenAct:       func(v string) model.Msg { return model.RunOpenMsg{UID: v} },
 	attentionOpenAct: func(v string) model.Msg { return model.AttentionOpenMsg{UID: v} },
 	workflowOpenAct:  func(v string) model.Msg { return model.WorkflowOpenMsg{UID: v} },
+	workflowAct:      func(v string) model.Msg { return model.WorkflowSelectMsg{UID: v} },
 }
 
 func DecodeAction(id, act, value string) model.Msg {

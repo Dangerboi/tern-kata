@@ -8,15 +8,15 @@ expect_tree .sf-list '.count == 0'
 ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'
 ctl key Home
-expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[0]["aria-selected"] == "true"'
+expect_tree "[data-id^='main.columns.list.issues.01']" '[.nodes[] | select(.class | contains("sf-item"))] | .[0]["aria-selected"] == "true"'
 ctl key Down
-expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[1]["aria-selected"] == "true"'
+expect_tree "[data-id^='main.columns.list.issues.01']" '[.nodes[] | select(.class | contains("sf-item"))] | .[1]["aria-selected"] == "true"'
 ctl key End
-expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[-1]["aria-selected"] == "true"'
+expect_tree "[data-id^='main.columns.list.issues.01']" '[.nodes[] | select(.class | contains("sf-item"))] | .[-1]["aria-selected"] == "true"'
 ctl key Up
-expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[-2]["aria-selected"] == "true"'
+expect_tree "[data-id^='main.columns.list.issues.01']" '[.nodes[] | select(.class | contains("sf-item"))] | .[-2]["aria-selected"] == "true"'
 ctl key Home
-expect_tree "[data-id^='main.columns.list.issues.01']" '.nodes[0]["aria-selected"] == "true"'
+expect_tree "[data-id^='main.columns.list.issues.01']" '[.nodes[] | select(.class | contains("sf-item"))] | .[0]["aria-selected"] == "true"'
 
 # Collections sidebar: an unbound directory keeps it, and Escape focuses it.
 ctl key q
@@ -27,27 +27,27 @@ ctl --file "$tmp/arrows-unbound.ctl"
 expect_tree "[data-id^='main.columns.collections.']" '.ok and .count >= 7'
 ctl key Escape
 ctl key Home
-expect_tree "[data-id^='main.columns.collections.']" '.nodes[0]["aria-selected"] == "true"'
+expect_tree "[data-id^='main.columns.collections.']" '[.nodes[] | select(.class | contains("sf-item"))] | .[0]["aria-selected"] == "true"'
 ctl key Down
-expect_tree "[data-id^='main.columns.collections.']" '.nodes[1]["aria-selected"] == "true"'
+expect_tree "[data-id^='main.columns.collections.']" '[.nodes[] | select(.class | contains("sf-item"))] | .[1]["aria-selected"] == "true"'
 ctl key End
-expect_tree "[data-id^='main.columns.collections.']" '.nodes[-1]["aria-selected"] == "true"'
+expect_tree "[data-id^='main.columns.collections.']" '[.nodes[] | select(.class | contains("sf-item"))] | .[-1]["aria-selected"] == "true"'
 ctl key Up
-expect_tree "[data-id^='main.columns.collections.']" '.nodes[-2]["aria-selected"] == "true"'
+expect_tree "[data-id^='main.columns.collections.']" '[.nodes[] | select(.class | contains("sf-item"))] | .[-2]["aria-selected"] == "true"'
 ctl key Escape
 ctl key Down
 ctl key Enter
 ctl key End
 ctl key Enter
-expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'
 ctl key q
 expect_tree .sf-list '.count == 0'
 ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 4'
 
-# Detail: j/k move between the child rows and then the Links rows (the arrows scroll the detail), Left backs out like Escape.
-# A tab click puts the cursor on the tab's first row, so k from there climbs into the Children table's last row and Home reaches its first.
+# Detail: j/k move between the Children table's rows (the arrows scroll the detail), Enter jumps to the row under the cursor and Left backs out like Escape.
+# The parent has no Links rows, so the tab click leaves the cursor past the table's last row: Home reaches the first child and End the last.
 jump() {
   expect_tree "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']" '.ok and .count == 1'
   ctl click "[data-id='main.columns.detail.viewport.content.activity.tabs.tab2']"
@@ -68,7 +68,7 @@ back_to_parent() {
 ctl click "[data-id$='.$arrows_parent']"
 ctl key Enter
 expect_tree "$detail_title" '.ok and (.nodes[0].text | contains("Smoke arrows parent") and (contains("loading") | not))'
-jump
+jump Home
 expect_tree "$detail_title" '.ok and (.nodes[0].text | contains(" child"))'
 if jq -e '.nodes[0].text | contains("Smoke arrows first child")' "$tmp/assert-tree.json" >/dev/null; then
   ref_a=first ref_b=second
@@ -84,11 +84,11 @@ if jq -e '.nodes[0].text | contains("first child")' "$tmp/arrows-children.json" 
 else
   table_first=second table_last=first
 fi
-jump j
+jump Home j
 expect_detail "$ref_b" "$ref_a"
 back_to_parent
-jump k
-expect_detail "$table_last" "$table_first"
+jump End k
+expect_detail "$table_first" "$table_last"
 back_to_parent
 jump End
 expect_detail "$ref_b" "$ref_a"

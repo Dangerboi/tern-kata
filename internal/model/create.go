@@ -3,8 +3,9 @@ package model
 import (
 	"errors"
 	"maps"
-	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -72,6 +73,17 @@ func openCreate(m Model, child bool) (Model, []Cmd) {
 	}
 	return m, []Cmd{LoadFieldLabels{Workspace: m.Workspace, UID: CreateDraftUID, ProjectID: projectID}}
 }
+
+// CreateParentRef is the parent Issue's ref in the head of the child form, named as the Pane names it; "" for an Issue with no
+// parent or one the Pane no longer lists.
+func (m Model) CreateParentRef() string {
+	issue := m.issueByUID(m.Create.ParentUID)
+	if m.Create.ParentUID == "" || issue == nil {
+		return ""
+	}
+	return m.RefName(m.projectName(issue.ProjectID), issue.ShortID)
+}
+
 func (m Model) CreateSuggestions() []string {
 	f := m.Create.Completion
 	parts := strings.Split(m.Create.Labels, ",")
@@ -103,9 +115,24 @@ var createTable = fieldTable[CreateState]{
 		textField(CreateBody, func(*CreateState) *string { return nil }),
 		textField(CreateLabels, func(f *CreateState) *string { return &f.Labels }),
 		textField(CreateOwner, func(f *CreateState) *string { return &f.Owner }),
-		textField(CreatePriority, func(f *CreateState) *string { return &f.Priority }),
+		priorityField,
 		textField(CreateScheduled, func(f *CreateState) *string { return &f.Dates.Scheduled }),
 		textField(CreateDeadline, func(f *CreateState) *string { return &f.Dates.Deadline }),
+	},
+}
+
+// priorityField is the Create card's Priority: a choice of none and P0 to P4 that holds the number as kata takes it.
+var priorityField = formField[CreateState]{name: CreatePriority,
+	held: func(f *CreateState) *string { return &f.Priority },
+	step: func(_ *Model, f *CreateState, back bool) {
+		f.Priority = priorityValues[cycleIndex(max(priorityIndex(f.Priority), 0), len(priorityValues), back)]
+	},
+	choose: func(_ *Model, f *CreateState, index int) bool {
+		if index < 0 || index >= len(priorityValues) {
+			return false
+		}
+		f.Priority = priorityValues[index]
+		return true
 	},
 }
 
@@ -122,7 +149,7 @@ func submitCreate(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if strings.TrimSpace(f.Title) == "" {
-		f.Err = errors.New("Title is required.")
+		f.Err = errors.New(Cannot("create", "Issue", errors.New("enter a title")))
 		return m, nil
 	}
 	if f.ProjectID == 0 {
@@ -130,12 +157,8 @@ func submitCreate(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	var priority *int64
-	if p := strings.TrimSpace(f.Priority); p != "" && p != "-" {
-		n, e := strconv.ParseInt(p, 10, 64)
-		if e != nil || n < 0 || n > 4 {
-			f.Err = errors.New("Priority must be 0-4, or - to clear.")
-			return m, nil
-		}
+	if at := priorityIndex(f.Priority); at > 0 {
+		n := int64(at - 1)
 		priority = &n
 	}
 	scheduled, err := dateDay("Scheduled", f.Dates.Scheduled, m.Calendar.Date)
@@ -169,7 +192,7 @@ func updateCreate(m Model, msg Msg) (Model, []Cmd, bool) {
 			return m, nil, true
 		}
 		m.Create.Saving = false
-		m.Create.Err = msg.Err
+		m.Create.Err = sentenceError(msg.Err)
 		if msg.Err != nil {
 			return m, nil, true
 		}
@@ -235,7 +258,38 @@ var createCard = draftCardKeys{
 			} else {
 				*value, _ = editText(*value, &m.Create.Caret, m.Create.Field, ok, msg)
 			}
+		} else if typedText(msg) == " " {
+			// A choice has no text to type a space into: it moves on, as it does in the other cards.
+			createTable.stepFocused(&m, false)
 		}
 		return m
 	},
+}
+
+// sentenced is an error shown as a sentence; it still is the error it was made from.
+type sentenced struct {
+	text string
+	err  error
+}
+
+func (s sentenced) Error() string { return s.text }
+func (s sentenced) Unwrap() error { return s.err }
+
+// sentenceError is err as a sentence for a card's error line: the first letter upper case and a closing period. kata's own
+// message keeps every line it has, so a guard's list of open children still reads. A nil error stays nil.
+func sentenceError(err error) error {
+	if err == nil {
+		return nil
+	}
+	text := strings.TrimSpace(err.Error())
+	if text == "" {
+		return err
+	}
+	if first, size := utf8.DecodeRuneInString(text); unicode.IsLower(first) {
+		text = string(unicode.ToUpper(first)) + text[size:]
+	}
+	if last, _ := utf8.DecodeLastRuneInString(text); !strings.ContainsRune(".!?:", last) {
+		text += "."
+	}
+	return sentenced{text, err}
 }

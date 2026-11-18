@@ -22,7 +22,7 @@ expect_tree "[data-id\$='.$cr_main']" '.ok and .count == 1'
 ctl click "[data-id\$='.$cr_main']"
 ctl key enter
 expect_tree "[data-id='main.columns.detail.viewport.content.activity.$cr_first']" '.ok and (.nodes[0].text | contains("1 reply"))'
-expect_tree "[data-id^='main.columns.detail.viewport.content.activity.']" '.ok and ([.nodes[] | select(.text | contains("replies to dangerboi'"'"'s comment"))] | length >= 1)'
+expect_tree "[data-id^='main.columns.detail.viewport.content.activity.']" '.ok and ([.nodes[] | select(.text | contains("replying to dangerboi"))] | length >= 1)'
 
 quit_app
 kata projects remove replies --force --json >/dev/null

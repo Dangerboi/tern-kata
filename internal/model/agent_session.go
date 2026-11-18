@@ -133,11 +133,6 @@ func agentSessionTick(m Model, msg AgentSessionTick) (Model, []Cmd) {
 	return askAgentSessions(m)
 }
 
-type AgentFact struct {
-	Text  string
-	Muted bool
-}
-
 // agentLastLineMax bounds the last message's first line so a long one never widens the card.
 const agentLastLineMax = 100
 
@@ -161,29 +156,6 @@ func truncateRunes(s string, n int) string {
 		return s
 	}
 	return string([]rune(s)[:n-1]) + "…"
-}
-
-// AgentFacts is the detail the Agent card shows for the agent in block: the session's model, tool calls, current tool and cost, and
-// the first line of its last message. An agent whose session is not read yet, or has no session, gets the reason in muted words.
-func (m Model) AgentFacts(block string) []AgentFact {
-	s, ok := m.AgentSessionFor(block)
-	var facts []AgentFact
-	switch {
-	case !ok && m.agentNotOmp(block):
-		facts = append(facts, AgentFact{Text: AgentSessionNotOmpReason, Muted: true})
-	case !ok:
-		facts = append(facts, AgentFact{Text: "reading the session…", Muted: true})
-	case s.Reason != "":
-		facts = append(facts, AgentFact{Text: s.Reason, Muted: true})
-	default:
-		facts = append(facts, AgentFact{Text: sessionSummary(s)})
-	}
-	if last := m.AgentLastLine(block); last != "" {
-		facts = append(facts, AgentFact{Text: "last: " + last})
-	} else {
-		facts = append(facts, AgentFact{Text: "no message from the agent yet", Muted: true})
-	}
-	return facts
 }
 
 // sessionSummary is "model · N tool calls · running bash · $0.34". A tail that cut the file marks the count "at least" and the cost approximate.
@@ -218,10 +190,4 @@ func sessionSummary(s AgentSessionFacts) string {
 		parts = append(parts, cost)
 	}
 	return strings.Join(parts, " · ")
-}
-
-const AgentSessionNotOmpReason = "not an omp agent: no session to read"
-
-func (m Model) agentNotOmp(block string) bool {
-	return slices.ContainsFunc(m.AgentMapping, func(e AgentEntry) bool { return e.Block == block && e.NoAddress == AgentNotOmp })
 }

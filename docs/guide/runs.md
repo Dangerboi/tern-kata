@@ -4,22 +4,20 @@
 
 A Run is kata's record of one execution of a Cron job or workflow, written by whoever ran it: an adapter, a worker here or another machine's. The Pane shows what kata holds, whoever the executor was.
 
-![The Runs Page with an unknown run selected and its detail open](../images/runs.png)
+![The Runs Page with a held run selected and its detail open](../images/runs.png)
 
-Each card has:
+The heading reads `Runs 5`, with scope clauses `· job Nightly triage` while the list is narrowed to a job and `· older runs not shown` while `m` has more to read. With none, the Page reads "No runs" / "Runs from jobs and workflows appear here."; narrowed to a job it reads "No runs" / "This job has not run yet." with an **All runs** button. Each card has:
 
-- a status badge: `running`, `succeeded`, `failed`, `cancelled` or `unknown`;
-- the job's or workflow's name;
-- the Issue the run is for (`#short title`);
-- the executor (its label, else the actor);
-- when it started;
-- how long it took (so far, while it runs);
-- the first line of its summary;
-- the reason code, `reason: <code>`, when the summary leads with kata's `reason: <code>` line (or is a hold an earlier tern-kata wrote as `<code>: <detail>`); the summary shown is then the line after it.
+- a status badge, the job's or workflow's name and, muted, the executor (its label, else the actor); the badge is `running`, `succeeded`, `failed`, `cancelled`, `held` or `unknown`;
+- the Issue the run is for, as a link ref (mono) and its title;
+- a muted line with the reason in words and the first line of its summary, as in `Quota reached · the provider answered 429`; a held run shows its hold the same way, and a running run shows no summary line;
+- when it started (`18:21`, or the date when it was not today) and how long it took (so far, while it runs).
+
+Reason codes show as words: Quota reached, Login required, Interrupted, Launch not confirmed, No receipt from the agent, Process group not confirmed, Invalid prompt, Execution error, Admission rejected, Create rejected and Secret unavailable; a code a newer kata sends shows as it is. There are no `reason:` or `held:` prefixes.
 
 ## Skipped occurrences
 
-A job with [conditions](jobs.md#conditions) that skipped due occurrences shows them as **one row** at the top of the list, in both views: the job's name, how many occurrences were skipped (`3 skips`, however many there are), the latest skip's condition (`runs_per_day`, `new_commits` and so on) and its reason, and when that skip happened. The row comes from this machine's worker status (`tern-kata worker status` lists the same skips), not from kata: a skipped occurrence makes no Run, so the count is the skips the worker still holds, bounded by how long it keeps its run journals.
+A job with [conditions](jobs.md#conditions) that skipped due occurrences shows them as **one row** at the top of the list, in both views: a warning badge with how many occurrences were skipped (`2 skips`, however many there are), a line with the latest skip's condition in words and its reason (`Daily run limit · <reason>`; the conditions read `No new commits`, `Daily run limit` and `Weekly run limit`), and `Not run · 18:26` for when that skip happened. The row comes from this machine's worker status (`tern-kata worker status` lists the same skips), not from kata: a skipped occurrence makes no Run, so the count is the skips the worker still holds, bounded by how long it keeps its run journals.
 
 The row is not a Run. It cannot be selected or opened, and `Enter`, `i`, `o`, `u` and `A` leave it alone; `j` and `k` move through the runs below it. The job filter (`f`, or `r` from the Jobs Page) narrows it to its job like the runs, and `/` matches it by job, condition and reason. With no worker running on this machine, or one that does not serve the Project, the Page shows runs only.
 
@@ -48,12 +46,12 @@ The row is not a Run. It cannot be selected or opened, and `Enter`, `i`, `o`, `u
 
 In the mode the list has two halves around a **Now** line:
 
-- Above it, the runs that ended since you last looked on this machine, newest first and highlighted: succeeded, failed, cancelled, `unknown` and held runs alike. A run still running has not ended and is not listed. A run that ended without an end time counts from when kata last updated it. A Project never marked seen lists every ended run it has read, and says "Nothing new yet." when there is none. While the runs are still being read it says "Loading runs…".
-- Below it, the Project's next runs. A native job shows its next time, soonest first, worked out as on the [Jobs Page](jobs.md). An adapter job is listed with no time ("started by the worker"), because only the worker knows when it starts it. A paused, archived or manual job is left out. While the jobs are being read it says "Loading next runs…".
+- Above it, the runs that ended since you last looked on this machine, newest first and highlighted: succeeded, failed, cancelled, `unknown` and held runs alike, drawn in the normal tone. A run still running has not ended and is not listed. A run that ended without an end time counts from when kata last updated it. A Project never marked seen lists every ended run it has read, and says "Nothing new yet." when there is none. While the runs are still being read it says "Loading runs…".
+- Below it, the Project's next runs, the time first and then the job. A native job shows its next time, soonest first, worked out as on the [Jobs Page](jobs.md). An adapter job shows `—` and "the worker starts it": only the worker knows when it starts it, so the Pane cannot say. A paused, archived or manual job is left out. While the jobs are being read it says "Loading next runs…"; with none it says "No scheduled runs."
 
-With nothing new the top half is one line, "Nothing new since 08:00." (the time of the last mark, with the date when it was another day).
+The heading reads `Runs 6 · new since 2026-11-17 09:00` (with `· job <name>` while filtered). With nothing new the top half is one line, "Nothing new since 2026-11-17 09:00." (the time of the last mark, as `09:00` when it was today).
 
-`s` marks the runs read so far as seen: the highlighted runs leave the list and the mark moves to the end of the newest ended run among them, not to the clock, so a run that ended before the key but was not read yet, or whose executor's clock is behind, still shows as new. With no ended run read the mark stays. While a job filter or the Page search is on, `s` does nothing but say so in a Notice, because the mark is per Project and would also cover runs the list does not show; clear them first. The mark is per machine, as kata has nowhere to keep it, so two machines disagree. It is `seen.toml` in tern-kata's config folder, beside `filters.toml`: one table per Project UID.
+`s` marks the runs read so far as seen: the highlighted runs leave the list and the mark moves to the end of the newest ended run among them, not to the clock, so a run that ended before the key but was not read yet, or whose executor's clock is behind, still shows as new. With no ended run read the mark stays. While a job filter or the Page search is on, `s` does nothing but say "Cannot mark runs seen: clear the job filter and the search first, or it would also cover runs not shown.", because the mark is per Project and would also cover runs the list does not show. The mark is per machine, as kata has nowhere to keep it, so two machines disagree. It is `seen.toml` in tern-kata's config folder, beside `filters.toml`: one table per Project UID.
 
 ```toml
 ["01JABC..."]
@@ -65,31 +63,31 @@ timeline = true
 
 ### Folding
 
-Up to eight new results are listed one by one. With more than eight, one job's ended runs fold into a single row: the job's name, how many runs, their counts by status and when the newest ended. A failed run is never folded: it stays listed by itself, and so does a job's only run. A folded row cannot be selected; `n` brings back the list of every run, where each run can be opened.
+Up to eight new results are listed one by one. With more than eight, one job's ended runs fold into a single row: a neutral badge `3 runs` with the job's name, and a line with their counts by status and when the newest ended (`2 succeeded, 1 failed · last ended 18:26`). A failed run is never folded: it stays listed by itself, and so does a job's only run. A folded row cannot be selected; `n` brings back the list of every run, where each run can be opened.
 
 `f` narrows the mode to the selected run's job, like the list, and the next runs to that job. `/` searches the new runs (before they fold) and the next runs by job name. `m` still reads older runs.
 
 ## Detail
 
-Enter (or Tab) opens the **detail**: status, job and workflow, Issue, executor, actor and teammate, start, end, duration, the reason code, the summary's whole message after its reason line, input and output token counts, and the references kata holds (occurrence, job and workflow uids and the version of each the run used, Issue uid, run uid and revision). At 140 columns and wider the detail sits beside the list, narrower only the focused column shows.
+Enter (or Tab) opens the **detail** as label and value rows: Status (`held` for a run held on this machine, never kata's `unknown`), Why (`Interrupted · the worker stopped while the agent ran`), Job, Workflow, Issue, Executor, Actor, Teammate, Started, Ended, Duration, Attempt (only above 1), Worker (only when it differs from Status), Not yet reported to kata, Summary (when it is not the Why detail), Steps (`prompt · held`, no code), Output, Stderr, Tokens in and Tokens out. The ids kata holds (the run UID `tern-kata worker resume` takes, the occurrence, job and workflow ids and versions, the Issue UID and the session id) sit in a hovercard on the run's name. A resume the worker would refuse shows as a warning line above the rows: "Cannot resume yet: its hold is still being reported to kata." or "Cannot resume: <refusal>." At 140 columns and wider the detail sits beside the list, narrower only the focused column shows.
 
 ## Reading and filtering
 
 - On the Runs Page `f` narrows the list to the selected run's job, or shows every run again. The filter stays, like the selection and the older runs already read, while another Page is shown and until the Project changes. A run of a workflow alone has no job to narrow to.
 - kata lists at most 100 runs a page, filters them only by job (a run that names a workflow alone matches no job, and there is no filter by status or workflow) and names none of them by job or workflow. The Pane reads the newest 100, `m` reads the next older 100 and adds them, and it looks up each job's, workflow's and Issue's name itself. `ctrl+r` and daemon events read the newest page again.
-- The [Workflows Page](workflows.md) shows each workflow's latest run on its row and its latest runs in its inspector. It reads the Project's newest 100 runs and then older pages (up to 1000 runs) until every workflow has its latest run and the selected one the five its inspector lists: a workflow whose runs are all older than that shows none.
+- The [Workflows Page](workflows.md) shows each workflow's latest run on its card and its latest runs in its inspector. It reads the Project's newest 100 runs and then older pages (up to 1000 runs) until every workflow has its latest run and the selected one the five its inspector lists: a workflow whose runs are all older than that shows none.
 
 ## Runs of this machine
 
 A run whose executor label is this machine's worker's is also read from the worker's local state, over its control socket. A run of another executor shows only what kata holds.
 
-- A **held** run (the worker could not prove what its agent did) shows the badge `held` and its reason on its card. The detail says why it is held, what the worker knew, whether `u` would be accepted and, when not, why. See [held runs](worker-reference.md#recovery-and-held-runs).
-- The detail also lists the run's **steps** (kind, attempt, state, exit status), the **tail of the agent's output** (its last assistant messages, at most 4 KiB), the end of its stderr while it runs or is held, and the omp session id.
+- A **held** run (the worker could not prove what its agent did) shows the badge `held` and its hold in words on its card. The detail says why it is held, what the worker knew, whether `u` would be accepted and, when not, why. See [held runs](worker-reference.md#recovery-and-held-runs).
+- The detail also lists the run's **steps** (kind and state, as `prompt · held`), the **tail of the agent's output** (its last assistant messages, at most 4 KiB), the end of its stderr while it runs or is held, and the omp session id (in the hovercard).
 - While a run is running the page asks the worker every 2 seconds and reads the newest runs again, so the output grows and the status turns `succeeded` or `failed` without a key.
 
 ### Open the session, resume, abandon
 
 - `o` opens the omp session of a finished or held run of this machine in a new Tern tab: `tern new tab --cwd <the run's checkout> -- omp --resume <session id> --session-dir <the run's session folder>`. The tab opens in Tern's session daemon and is not focused; the Notice says it opened. It is refused for a run still running, a run with no session, and a run of another machine. Needs `tern` and `omp` on the Pane's `PATH`.
-- `u` resumes the selected **held** run through the worker and `A` abandons it, or cancels a run still running on this machine (the worker stops its agent's process group and records the run cancelled), like `tern-kata worker resume` and `abandon`. The worker's refusal (its Project's lease is held elsewhere, no free slot, the agent's process group is still present) is shown as the Notice. Both are refused for a run that is not held and for a run of another executor.
+- `u` resumes the selected **held** run through the worker and `A` abandons it, or cancels a run still running on this machine (the worker stops its agent's process group and records the run cancelled), like `tern-kata worker resume` and `abandon`. The worker's refusal (its Project's lease is held elsewhere, no free slot, the agent's process group is still present) is shown as the Notice, in the form "Cannot resume the run: <reason>." (the same for abandoning, running a job now and opening a session). Both are refused for a run that is not held and for a run of another executor.
 
 The Runs Page needs a Project like the Board Page and ends when you switch to a Collection that is not a Project.

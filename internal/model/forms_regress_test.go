@@ -40,7 +40,7 @@ func TestFieldCardRefusesWithAMessageWhenTheDaemonDropsMidEdit(t *testing.T) {
 	m, _ = model.Update(m, model.FieldValueMsg{Value: "2"})
 	m.Stale = true
 	m, cmds := clickPress(m, "enter")
-	if len(cmds) != 0 || m.FieldForm.Saving || m.FieldForm.Err == nil || !strings.HasPrefix(m.FieldForm.Err.Error(), "Daemon disconnected; reconnect before") {
+	if len(cmds) != 0 || m.FieldForm.Saving || m.FieldForm.Err == nil || !strings.HasPrefix(m.FieldForm.Err.Error(), "Cannot ") {
 		t.Fatalf("cmds %#v saving %v err %v", cmds, m.FieldForm.Saving, m.FieldForm.Err)
 	}
 }
@@ -52,7 +52,7 @@ func TestLanesCardRefusesToShareWhileTheDaemonIsGone(t *testing.T) {
 	m, _ = clickPress(m, "shift+b")
 	m.Stale = true
 	m, cmds := clickPress(m, "enter")
-	if len(cmds) != 0 || m.LanesForm.Saving || m.LanesForm.Err == nil || !strings.HasPrefix(m.LanesForm.Err.Error(), "Daemon disconnected; reconnect before") {
+	if len(cmds) != 0 || m.LanesForm.Saving || m.LanesForm.Err == nil || !strings.HasPrefix(m.LanesForm.Err.Error(), "Cannot ") {
 		t.Fatalf("cmds %#v saving %v err %v", cmds, m.LanesForm.Saving, m.LanesForm.Err)
 	}
 }

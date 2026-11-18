@@ -1,6 +1,8 @@
 package view
 
 import (
+	"strings"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
@@ -26,36 +28,32 @@ func viewLayer(m model.Model) tern.Element {
 	}
 	children := make([]tern.Element, 0, len(model.ViewFields)+3)
 	for _, field := range model.ViewFields {
-		tone := ui.ToneNeutral
+		focused := field.Name == form.Field
 		title := viewFieldTitle(field.Name)
-		prompt := title + ": "
-		if field.Name == form.Field {
-			tone = ui.ToneAccent
-			prompt = "> " + prompt
-		}
 		if !field.Text {
-			children = append(children, choiceControl(m, model.CardView, field.Name, title, field.Name == form.Field, "", ""))
+			children = append(children, choiceControl(m, model.CardView, field.Name, title, focused, "", ""))
 			continue
 		}
-		value := form.Name
-		placeholder := "Any"
-		if field.Name == model.ViewName {
-			placeholder = "required"
-		} else {
-			value = form.Values.Value(field.Name)
+		value, placeholder := form.Name, ""
+		if field.Name != model.ViewName {
+			value, placeholder = form.Values.Value(field.Name), "Any"
 		}
-		children = append(children, ui.Input{
+		tone := ui.ToneNeutral
+		if focused {
+			tone = ui.ToneAccent
+		}
+		children = append(children, labelledInput(string(field.Name), title, "", focused, ui.Input{
 			Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: title},
-			Field:  ui.Field{Text: value, Cursor: caretAt(form.Caret, field.Name, value), Mode: "insert", Prompt: []ui.Span{{T: prompt}}, Placeholder: ui.T(placeholder), Readonly: form.Saving},
-		})
+			Field:  ui.Field{Text: value, Cursor: caretAt(form.Caret, field.Name, value), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: form.Saving},
+		})...)
 	}
 	if form.Saving {
-		children = append(children, toneText("pending", ui.TonePending, "Saving view…"))
+		children = append(children, toneText("pending", ui.TonePending, model.Progress("Saving", "")))
 	}
 	if form.Err != nil {
-		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
+		children = append(children, toneText("error", ui.ToneError, model.Cannot("save", strings.TrimSpace("view "+form.Name), form.Err)))
 	}
-	children = append(children, buttonRow(cardButton("save", model.ModeViewForm, model.SaveViewForm, "Save view", true), cardButton("cancel", model.ModeViewForm, model.CancelViewForm, "Cancel", false)))
+	children = append(children, formFoot(cardButton("save", model.ModeViewForm, model.SaveViewForm, "Save", true), exitButton("cancel", model.ModeViewForm, model.CancelViewForm, "Cancel")))
 	head, meta := "New view", ui.Rich{}
 	if form.Self != "" {
 		head, meta = "Edit view", ui.T(form.Self)

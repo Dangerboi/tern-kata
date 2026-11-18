@@ -75,10 +75,10 @@ func TestTheSweepSkipsAHeldAgentAndListsTheOnesItCannotReach(t *testing.T) {
 	s = step(t, s, model.AgentMessageSent{UID: "p", Address: "dana/omp-31"}).State
 	s = step(t, s, model.AgentMessageSent{UID: "c1", Address: "dana/omp-33", Held: `{"from":"dana","message":"re-check"}`, Unread: "re-check"}).State
 
-	wantShown(t, "the sweep", s, "Wrap-up sweep", "omp on work#p: not yet",
-		"Skipped omp on work#c1: "+model.AgentHoldsMessageRefusal,
-		"Skipped omp on work#p: "+model.AgentNotOmpRefusal,
-		"Skipped omp on work#c1: "+model.AgentOtherActorRefusal)
+	wantShown(t, "the sweep", s, "Wrap-up sweep", "omp · #p · not yet",
+		"Skipped omp on #c1: "+model.AgentHoldsMessageRefusal,
+		"Skipped omp on #p: "+model.AgentNotOmpRefusal,
+		"Skipped omp on #c1: "+model.AgentOtherActorRefusal)
 	if held := s.Model.AgentMessage.Targets[1]; held.Address != "dana/omp-33" || held.Skipped == "" {
 		t.Errorf("the held agent %+v is not skipped", held)
 	}
@@ -91,7 +91,7 @@ func TestTheSweepFollowsAgentsToFinished(t *testing.T) {
 	for _, a := range []struct{ uid, address string }{{"p", "dana/omp-31"}, {"c1", "dana/omp-33"}, {"c1", "dana/omp-34"}} {
 		s = step(t, s, model.AgentMessageSent{UID: a.uid, Address: a.address}).State
 	}
-	wantShown(t, "just after sending", s, "0 of 3 agents have finished the wrap-up.")
+	wantShown(t, "just after sending", s, "0 of 3 agents finished the wrap-up.")
 	wantNotShown(t, "just after sending", s, "finished: ")
 
 	// 31 was idle and has not worked yet; 33 was working, so its idle is the wrap-up done, but it has not commented; 34 goes on working.
@@ -101,7 +101,7 @@ func TestTheSweepFollowsAgentsToFinished(t *testing.T) {
 	if reads := sweepReads(out.Cmds); len(reads) != 1 || reads[0] != wantRead {
 		t.Fatalf("reads %+v, want one: %+v", reads, wantRead)
 	}
-	wantShown(t, "after 33 idled", s, "0 of 3 agents have finished the wrap-up.", "omp on work#c1: not yet: idle, no status comment (Committed abc)")
+	wantShown(t, "after 33 idled", s, "0 of 3 agents finished the wrap-up.", "omp · #c1 · not yet: idle, no status comment · Committed abc")
 
 	// The read found no comment by omp-33; a new comment on the Issue asks again, and then it has commented.
 	s = step(t, s, model.SweepCommentsRead{UID: "c1", Address: "dana/omp-33"}).State
@@ -110,11 +110,11 @@ func TestTheSweepFollowsAgentsToFinished(t *testing.T) {
 		t.Fatalf("reads %+v after a comment event, want one: %+v", reads, wantRead)
 	}
 	s = step(t, out.State, model.SweepCommentsRead{UID: "c1", Address: "dana/omp-33", Commented: true}).State
-	wantShown(t, "after 33 commented", s, "1 of 3 agents have finished the wrap-up.", "omp on work#c1: finished: idle after the wrap-up (Committed abc)", "not yet")
+	wantShown(t, "after 33 commented", s, "1 of 3 agents finished the wrap-up.", "omp · #c1 · finished: idle after the wrap-up · Committed abc", "not yet")
 
 	s = step(t, s, model.AgentStatesMsg{States: []model.AgentState{{Block: "31", State: model.AgentWorking}}}).State
 	s = step(t, s, model.AgentStatesMsg{States: []model.AgentState{{Block: "31", State: model.AgentExited}, {Block: "34", State: model.AgentWaitingInput}}}).State
-	wantShown(t, "after 31 exited", s, "2 of 3 agents have finished the wrap-up.", "finished: exited", "not yet: waiting for you")
+	wantShown(t, "after 31 exited", s, "2 of 3 agents finished the wrap-up.", "finished: exited", "not yet: waiting for you")
 }
 
 func TestTheSweepWithNoRunningAgentOpensNoCard(t *testing.T) {

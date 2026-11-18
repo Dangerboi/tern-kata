@@ -24,13 +24,6 @@ func emptyButton(m model.Model, key string, action model.Action, words string, p
 	return ui.Nodes(cardButton(key, m.CurrentMode(), action, words, primary))
 }
 
-func emptyLane(title string) ui.Empty {
-	e := emptyState(title, "")
-	e.Variant = ui.EmptyInline
-	e.Grow = 0
-	return e
-}
-
 // listAndEmpty is list, followed by empty when list has no children and nothing is loading. The list stays mounted, hidden,
 // so a Collection switch only adds or removes the empty node and never remounts the list. A list that is loading keeps its
 // own Empty text, so the empty state never shows while rows are on their way.
@@ -38,7 +31,8 @@ func listAndEmpty(list ui.List, loading bool, empty ui.Empty) []tern.Element {
 	if len(list.Children) > 0 || loading {
 		return []tern.Element{list}
 	}
-	list.Hidden = true
+	// The settled empty list says nothing of its own: the empty state is the only text, with no loading line above it.
+	list.Hidden, list.Empty = true, ui.T("")
 	empty.Key = list.Key + "-empty"
 	return []tern.Element{list, empty}
 }

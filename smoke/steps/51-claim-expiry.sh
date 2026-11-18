@@ -8,10 +8,10 @@ expect_tree "[data-id$='.$expiry_uid']" '.ok and .count == 1'
 ctl click "[data-id$='.$expiry_uid']"
 ctl key enter
 owner="main.columns.detail.viewport.content.properties.owner.v"
-expect_tree "[data-id='$owner']" '.ok and .count == 1 and .nodes[0].text == "Unassigned"'
+expect_tree "[data-id='$owner']" '.ok and .count == 1 and .nodes[0].text == "unassigned"'
 kata --workspace "$tmp/workspace" claim "$expiry_uid" --ttl 1m --json >/dev/null
 expect_tree "[data-id='$owner']" '.ok and .count == 1 and (.nodes[0].text | test(" until [0-9]{2}:[0-9]{2}$"))'
 # The claim lasts a minute and the sweep runs about every 30 s; wait_for names claim_expired if the Pane never drops it.
-claim_expired() { ctl tree "[data-id='$owner']" | jq -e '.count == 1 and .nodes[0].text == "Unassigned"' >/dev/null; }
+claim_expired() { ctl tree "[data-id='$owner']" | jq -e '.count == 1 and .nodes[0].text == "unassigned"' >/dev/null; }
 wait_for claim_expired
 kata --workspace "$tmp/workspace" delete "$expiry_uid" --force --confirm "DELETE smoke#$expiry_short" --json

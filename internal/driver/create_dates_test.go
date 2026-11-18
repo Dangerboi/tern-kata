@@ -59,14 +59,14 @@ func TestCreateCardReachesScheduledThenDeadlineAfterPriorityByTab(t *testing.T) 
 func TestCreateCardPreviewsEachDateAgainstThePaneCalendar(t *testing.T) {
 	for _, tt := range []struct{ input, want string }{
 		{"tomorrow", "2026-10-09 Fri"},
-		{"", "no date"},
+		{"", ""},
 		{"someday", ""},
 	} {
 		s := typed(t, createCard(t), tt.input)
 		if got, _ := nodeText(t, s, "layer.create.scheduled-preview"); got != tt.want {
 			t.Errorf("Scheduled %q previews %q, want %q", tt.input, got, tt.want)
 		}
-		if got := createField(t, s, "Scheduled (optional, "+model.DateInputHint+")"); got != tt.input {
+		if got := createField(t, s, "Scheduled"); got != tt.input {
 			t.Errorf("Scheduled field holds %q, want %q", got, tt.input)
 		}
 	}

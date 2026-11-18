@@ -63,11 +63,11 @@ func TestGraphOrderTogglesBetweenCreationAndBlockingOrder(t *testing.T) {
 				t.Fatalf("creation order drawn as %q", got)
 			}
 			s = feed(t, s, key("o")).State
-			if got := drawnOrder(t, s, all...); got != tt.topological || s.Model.Notice != "graph order: topological" {
+			if got := drawnOrder(t, s, all...); got != tt.topological || s.Model.Notice != "Graph order is topological." {
 				t.Fatalf("after o: %q, notice %q, want %q", got, s.Model.Notice, tt.topological)
 			}
 			s = feed(t, s, key("o")).State
-			if got := drawnOrder(t, s, all...); got != "abcde" || s.Model.Notice != "graph order: temporal" {
+			if got := drawnOrder(t, s, all...); got != "abcde" || s.Model.Notice != "Graph order is temporal." {
 				t.Fatalf("after o again: %q, notice %q", got, s.Model.Notice)
 			}
 		})

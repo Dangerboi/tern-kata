@@ -6,7 +6,7 @@ columns_child=$(jq -r '.issue.uid' "$tmp/columns-child.json")
 kata --workspace "$tmp/workspace" create "Smoke columns closed child" --parent "$columns_parent" --json >"$tmp/columns-closed.json"
 columns_closed=$(jq -r '.issue.uid' "$tmp/columns-closed.json")
 kata --workspace "$tmp/workspace" close "$columns_closed" --done --message "Finished the columns fixture and verified it by hand" --commit abc1234def56 --json
-expect_tree "[data-id='main.columns.list.header']" '.ok and .count == 1 and (.nodes[0].text | test("#\\s+prio\\s+status\\s+title\\s+kids\\s+(owner\\s+)?updated"))'
+expect_tree "[data-id='main.columns.list.header']" '.ok and .count == 1 and (.nodes[0].text | gsub("\u200b";"") | test("ID\\s+(Priority\\s+)?Status\\s+Title\\s+Children\\s+(Owner\\s+)?Updated"))'
 expect_tree "[data-id$='.$columns_parent']" '.count == 1 and (.nodes[0].text | contains("1/2") and contains("ago"))'
 
 # The owner cell starts at the owner header's x on every row, whatever glyphs the names have: the fixed-width boxes
@@ -17,8 +17,8 @@ kata --workspace "$tmp/workspace" create "Smoke columns long owner" --owner colu
 columns_long=$(jq -r '.issue.uid' "$tmp/columns-long.json")
 expect_tree "[data-id\$='.$columns_wide']" '.count == 1'
 ctl key L
-columns_owner_cells="[data-id^='main.columns.list'] .sf-item[data-role~='tern-kata.row'] .sf-item-value > span:nth-child(2)"
-expect_tree "$columns_owner_cells" '.ok and .count >= 4 and ([.nodes[].rect[0] | floor] | unique | length) == 1'
+columns_owner_cells="[data-id^='main.columns.list'] .sf-item[data-role~='tern-kata.row'] .sf-item-value > span:nth-child(3)"
+expect_tree "$columns_owner_cells" '.ok and .count >= 4 and ([.nodes[].rect[0] | round] | unique | length) == 1'
 ctl key L
 kata --workspace "$tmp/workspace" delete "$columns_wide" --force --confirm "DELETE smoke#$(jq -r '.issue.short_id' "$tmp/columns-wide.json")" --json
 kata --workspace "$tmp/workspace" delete "$columns_long" --force --confirm "DELETE smoke#$(jq -r '.issue.short_id' "$tmp/columns-long.json")" --json

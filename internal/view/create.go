@@ -7,14 +7,24 @@ import (
 	"strings"
 )
 
+// createBodyLines caps the Body editor so the foot and any error stay in view; the Draft editor card keeps its taller one.
+const createBodyLines = 6
+
 var createLabels = map[model.Field]string{
 	model.CreateTitle:     "Title",
-	model.CreateBody:      "Body (optional)",
-	model.CreateLabels:    "Labels (optional, comma-separated)",
-	model.CreateOwner:     "Owner (optional)",
-	model.CreatePriority:  "Priority (optional, 0-4)",
-	model.CreateScheduled: "Scheduled (optional, " + model.DateInputHint + ")",
-	model.CreateDeadline:  "Deadline (optional, " + model.DateInputHint + ")",
+	model.CreateBody:      "Body",
+	model.CreateLabels:    "Labels",
+	model.CreateOwner:     "Owner",
+	model.CreatePriority:  "Priority",
+	model.CreateScheduled: "Scheduled",
+	model.CreateDeadline:  "Deadline",
+}
+
+// createHints are the one muted line under a field, shown while it has focus.
+var createHints = map[model.Field]string{
+	model.CreateLabels:    "Separate with commas.",
+	model.CreateScheduled: "Enter " + model.DateInputHint + ".",
+	model.CreateDeadline:  "Enter " + model.DateInputHint + ".",
 }
 
 func createLayer(m model.Model) tern.Element {
@@ -23,42 +33,57 @@ func createLayer(m model.Model) tern.Element {
 	if f.ParentUID != "" {
 		title = "Create child Issue"
 	}
-	values := map[model.Field]string{model.CreateTitle: f.Title, model.CreateLabels: f.Labels, model.CreateOwner: f.Owner, model.CreatePriority: f.Priority, model.CreateScheduled: f.Dates.Scheduled, model.CreateDeadline: f.Dates.Deadline}
+	values := map[model.Field]string{model.CreateTitle: f.Title, model.CreateLabels: f.Labels, model.CreateOwner: f.Owner, model.CreateScheduled: f.Dates.Scheduled, model.CreateDeadline: f.Dates.Deadline}
 	children := []tern.Element{}
-	for _, field := range model.CreateFields {
-		key := string(field.Name)
-		label := createLabels[field.Name]
-		tone := ui.ToneNeutral
-		if field.Name == f.Field {
-			tone = ui.ToneAccent
-		}
-		children = append(children, toneText(key+"-label", tone, label))
-		readonly := f.Saving || f.DiscardConfirm
-		if field.Name == model.CreateBody {
-			children = append(children, TextEditor(key, f.Editor, readonly))
-		} else {
-			children = append(children, ui.Input{Common: ui.Common{Key: key, Tone: tone, Aria: label}, Field: ui.Field{Text: values[field.Name], Cursor: caretAt(f.Caret, field.Name, values[field.Name]), Mode: "insert", Readonly: readonly}})
-		}
-		if field.Name == model.CreateScheduled || field.Name == model.CreateDeadline {
-			children = append(children, toneText(key+"-preview", ui.ToneMuted, m.CreatePreview(field.Name)))
-			if field.Name == f.Field {
-				children = append(children, calendarHint(key, model.ModeCreate))
+	readonly := f.Saving
+	if !f.DiscardConfirm {
+		for _, field := range model.CreateFields {
+			key := string(field.Name)
+			label := createLabels[field.Name]
+			focused := field.Name == f.Field
+			tone := ui.ToneNeutral
+			if focused {
+				tone = ui.ToneAccent
+			}
+			switch field.Name {
+			case model.CreatePriority:
+				children = append(children, choiceControl(m, model.CardCreate, field.Name, label, focused, "", ""))
+				continue
+			case model.CreateBody:
+				editor := ui.Editor{Common: ui.Common{Key: key, Tone: ui.ToneAccent}, Field: ui.Field{Text: f.Editor.Text, Cursor: &f.Editor.Cursor, Anchor: &f.Editor.Anchor, Readonly: readonly}, MaxLines: createBodyLines}
+				children = append(children, labelledInput(key, label, createHints[field.Name], focused, editor)...)
+				continue
+			}
+			input := ui.Input{Common: ui.Common{Key: key, Tone: tone, Aria: label}, Field: ui.Field{Text: values[field.Name], Cursor: caretAt(f.Caret, field.Name, values[field.Name]), Mode: "insert", Readonly: readonly}}
+			children = append(children, labelledInput(key, label, createHints[field.Name], focused, input)...)
+			if (field.Name == model.CreateScheduled || field.Name == model.CreateDeadline) && strings.TrimSpace(values[field.Name]) != "" {
+				children = append(children, toneText(key+"-preview", ui.ToneMuted, m.CreatePreview(field.Name)))
 			}
 		}
-	}
-	if f.Field == model.CreateLabels {
-		children = append(children, toneText("completion", ui.ToneMuted, strings.Join(m.CreateSuggestions(), ", ")))
+		if f.Field == model.CreateLabels {
+			if suggestions := m.CreateSuggestions(); len(suggestions) > 0 {
+				children = append(children, toneText("completion", ui.ToneMuted, strings.Join(suggestions, ", ")))
+			}
+		}
 	}
 	if f.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}
 	switch {
 	case f.Saving:
-		children = append(children, toneText("saving", ui.TonePending, "Creating Issue…"))
+		save := cardButton("save", model.ModeCreate, model.SaveDraftAction, title, true)
+		save.Disabled = ui.Because(model.Progress("Creating", "Issue"))
+		cancel := exitButton("cancel", model.ModeCreate, model.CancelDraft, "Cancel")
+		cancel.Disabled = ui.Because(model.Progress("Creating", "Issue"))
+		children = append(children, toneText("pending", ui.TonePending, model.Progress("Creating", "Issue")), formFoot(save, cancel))
 	case f.DiscardConfirm:
-		children = append(children, toneText("discard", ui.ToneWarning, "Discard this Draft? y discards; n or esc keeps editing."), discardButtons())
+		children = append(children, toneText("question", ui.ToneWarning, "Discard what you wrote?"), discardButtons())
 	default:
-		children = append(children, buttonRow(cardButton("save", model.ModeCreate, model.SaveDraftAction, title, true), cardButton("cancel", model.ModeCreate, model.CancelDraft, "Cancel", false)))
+		children = append(children, formFoot(cardButton("save", model.ModeCreate, model.SaveDraftAction, title, true), exitButton("cancel", model.ModeCreate, model.CancelDraft, "Cancel")))
 	}
-	return withCalendar(m, model.CardCreate, ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardCreate)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconPlus}, children)))
+	overlay := ui.Overlay{Common: ui.Common{Key: layerKey(model.CardCreate)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Icon: ui.IconPlus}
+	if ref := m.CreateParentRef(); ref != "" {
+		overlay.Meta = refMeta(ref)
+	}
+	return withCalendar(m, model.CardCreate, ui.Nodes(popup(overlay, children)))
 }

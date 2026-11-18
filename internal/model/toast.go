@@ -6,10 +6,12 @@ import "time"
 // when one is set; Ref, when set, is an Issue the button opens instead. Undoes, when set, is the deleted Issue whose delete the
 // button undoes: it presses Chord only while that delete is the newest Undo entry.
 type Toast struct {
-	Seq    int
-	Text   string
-	Label  string
-	Chord  string
+	Seq   int
+	Text  string
+	Label string
+	Chord string
+	// Key is the key label of Chord in the toast's Mode, which the view draws as the button's keycap.
+	Key    string
 	UID    string
 	Mode   Mode
 	Ref    string
@@ -33,8 +35,22 @@ func (ToastExpired) msg() {}
 func (m Model) raiseToast(t Toast) (Model, Cmd) {
 	m.ToastSeq++
 	t.Seq, t.Mode = m.ToastSeq, m.CurrentMode()
+	t.Key = chordLabel(t.Mode, t.Chord)
 	m.Toast = &t
 	return m, WaitToast{Seq: t.Seq}
+}
+
+// chordLabel is the key label of the first shown binding of chord in mode, "" when there is none.
+func chordLabel(mode Mode, chord string) string {
+	if chord == "" {
+		return ""
+	}
+	for _, b := range Keymap {
+		if b.Mode == mode && b.Chord == chord && !b.Headless() {
+			return b.Key
+		}
+	}
+	return ""
 }
 
 // toastExpired drops the toast the answer is for; a newer toast stays.

@@ -68,7 +68,7 @@ func TestCtrlDOpensACalendarBesideTheDateFieldAndTheKeyLineNamesIt(t *testing.T)
 				t.Errorf("calendar props %v", props)
 			}
 			footer := footerText(t, open)
-			for _, want := range []string{"close calendar", "pick day"} {
+			for _, want := range []string{"move", "pick", "close"} {
 				if !strings.Contains(footer, want) {
 					t.Errorf("the footer %q lacks %q", footer, want)
 				}
@@ -117,12 +117,12 @@ func TestClickingADayPicksItAndClosesTheCalendar(t *testing.T) {
 	}
 }
 
-func TestCalendarCursorStartsOnTodayForBlankOrRelativeTextAndMarksTheOtherDate(t *testing.T) {
+func TestCalendarCursorStartsOnTheFieldsDateElseTheOtherDateAndMarksTheOtherDate(t *testing.T) {
 	s := step(t, projectPane(t, 160, withDates("a", "", "2026-10-30")), key("d")).State
 	open := step(t, s, key("ctrl+d")).State
 	props := calendarProps(t, open, model.CardDates)
-	if props["cursor"] != boardToday || props["value"] != nil {
-		t.Errorf("blank field: props %v", props)
+	if props["cursor"] != "2026-10-30" || props["value"] != nil {
+		t.Errorf("blank field: props %v, want the cursor on the other date's day and no value", props)
 	}
 	marks, _ := props["marks"].([]any)
 	if len(marks) != 1 || !strings.Contains(fmt.Sprint(marks[0]), "2026-10-30") {
@@ -199,18 +199,4 @@ func TestAFooterChordClosesTheCalendarAndRuns(t *testing.T) {
 	if step(t, s, key("ctrl+d")).State.Model.DateCalendar.Open {
 		t.Error("ctrl+d on the open calendar did not close it")
 	}
-}
-
-// The hint under a date field names the key the keymap binds, not a literal.
-func TestTheCalendarHintNamesTheBoundKey(t *testing.T) {
-	want := model.CardKeys(model.ModeCreate, model.ShowCalendar)[0].Key + " opens a calendar"
-	for _, n := range wireNodes(t, view.Render(createCard(t).Model, now)) {
-		if strings.HasSuffix(n.ID, "-calendar-hint") {
-			if got := wireText(n); !strings.Contains(got, want) {
-				t.Errorf("hint %s, want it to read %q", got, want)
-			}
-			return
-		}
-	}
-	t.Error("no calendar hint is drawn")
 }

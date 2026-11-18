@@ -56,13 +56,13 @@ func TestSlotsDecodeThroughTheSharedReaderIntoAttentionRows(t *testing.T) {
 		handle  string
 		first   string
 	}{
-		{name: "a request", key: key, value: `{"from":"bob","message":"Need a decision\nsecond line"}`, sender: "bob", tag: "request", first: "Need a decision"},
-		{name: "a teammate sender", key: key, value: `{"from":"bob","teammate":"pip","message":"m"}`, sender: "bob/pip", tag: "request", first: "m"},
-		{name: "a request naming a comment", key: key, value: `{"from":"bob","message":"m","re":"` + comment + `"}`, sender: "bob", tag: "request", handle: "c:vwxyz0", first: "m"},
+		{name: "a request", key: key, value: `{"from":"bob","message":"Need a decision\nsecond line"}`, sender: "bob", tag: "", first: "Need a decision"},
+		{name: "a teammate sender", key: key, value: `{"from":"bob","teammate":"pip","message":"m"}`, sender: "bob/pip", tag: "", first: "m"},
+		{name: "a request naming a comment", key: key, value: `{"from":"bob","message":"m","re":"` + comment + `"}`, sender: "bob", tag: "", handle: "c:vwxyz0", first: "m"},
 		{name: "a reply kind", key: key, value: `{"from":"bob","message":"latest: confirm","kind":"confirm","re":"` + comment + `"}`, sender: "bob", tag: "confirm", handle: "c:" + strings.ToLower(comment[len(comment)-6:]), first: "latest: confirm"},
 		{name: "a broadcast", key: key, value: `{"from":"bob","message":"m","broadcast":true}`, sender: "bob", tag: "broadcast", first: "m"},
-		{name: "an invalid teammate is dropped", key: key, value: `{"from":"bob","teammate":"-bad","message":"m"}`, sender: "bob", tag: "request", first: "m"},
-		{name: "malformed optional fields are dropped", key: key, value: `{"from":"bob","message":"m","re":7,"kind":["x"],"broadcast":"yes","teammate":3}`, sender: "bob", tag: "request", first: "m"},
+		{name: "an invalid teammate is dropped", key: key, value: `{"from":"bob","teammate":"-bad","message":"m"}`, sender: "bob", tag: "", first: "m"},
+		{name: "malformed optional fields are dropped", key: key, value: `{"from":"bob","message":"m","re":7,"kind":["x"],"broadcast":"yes","teammate":3}`, sender: "bob", tag: "", first: "m"},
 		{name: "a missing sender", key: key, value: `{"message":"m"}`, invalid: true},
 		{name: "a blank message", key: key, value: `{"from":"bob","message":"  "}`, invalid: true},
 		{name: "not an object", key: key, value: `"text"`, invalid: true},

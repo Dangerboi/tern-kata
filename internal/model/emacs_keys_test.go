@@ -76,3 +76,17 @@ func TestEmacsKeysAreNotInTheFooter(t *testing.T) {
 		}
 	}
 }
+
+// The Emacs aliases carry no label, so no row of the footer or the help sheet names them, and their chords stay bound.
+func TestEmacsAliasLabelsAreHiddenAndTheirChordsStayBound(t *testing.T) {
+	for _, binding := range model.Keymap {
+		if strings.HasPrefix(binding.Key, "C-") || strings.HasPrefix(binding.Key, "M-") {
+			t.Errorf("%s binding %q is labelled %q", binding.Mode, binding.Chord, binding.Key)
+		}
+	}
+	for _, chord := range []string{"ctrl+n", "ctrl+p", "ctrl+v", "alt+v", "ctrl+alt+<", "ctrl+alt+>"} {
+		if _, ok := model.LookupBindingForMode(chord, model.ModeList); !ok {
+			t.Errorf("%s is no longer bound in the list", chord)
+		}
+	}
+}

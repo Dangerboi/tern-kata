@@ -34,23 +34,21 @@ func sentShare(t *testing.T, out driver.Output) model.ShareLanes {
 	return share
 }
 
-func TestTheBoardAndTheLanesCardNameTheListsSource(t *testing.T) {
+func TestTheLanesCardNamesTheListsSource(t *testing.T) {
 	for _, tt := range []struct {
 		loaded newestLanes
 		want   string
 	}{
-		{newestLanes{ProjectUID: "p"}, "default"},
-		{loadedAt([]string{"mine"}, false), "this machine"},
-		{loadedAt([]string{"ours"}, true), "shared with the Project"},
+		{newestLanes{ProjectUID: "p"}, "Using the built-in list"},
+		{loadedAt([]string{"mine"}, false), "Using this machine's list"},
+		{loadedAt([]string{"ours"}, true), "Using the Project's shared list"},
 	} {
 		s := step(t, boardPane(t, boardCard("a")), tt.loaded).State
-		if got, _ := nodeText(t, s, "main.columns.list.lane-source"); !strings.Contains(got, tt.want) {
-			t.Errorf("Board says %q, want %q", got, tt.want)
+		if got, _ := nodeText(t, s, "main.columns.list.lane-source"); got != "" {
+			t.Errorf("Board still says %q about the source", got)
 		}
 		card := step(t, s, key("shift+b")).State
-		if got, ok := textOnCard(t, card.Model, "In use"); !ok || !strings.Contains(got, tt.want) {
-			t.Errorf("Lanes card says %q (drawn %v), want %q", got, ok, tt.want)
-		}
+		layerTitled(t, card.Model, "Lanes "+tt.want) // fails when the head's meta says anything else
 	}
 }
 

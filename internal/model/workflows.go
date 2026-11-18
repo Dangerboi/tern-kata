@@ -77,6 +77,25 @@ const (
 	WorkflowOpRestore
 )
 
+// verb is the op in the word a Notice names it by.
+func (op WorkflowOp) verb() string {
+	switch op {
+	case WorkflowOpArchive:
+		return "archive"
+	case WorkflowOpRestore:
+		return "restore"
+	}
+	return "save"
+}
+
+// workflowOpVerb is the verb of the archive or restore the state keys ask for.
+func workflowOpVerb(restore bool) string {
+	if restore {
+		return WorkflowOpRestore.verb()
+	}
+	return WorkflowOpArchive.verb()
+}
+
 type LoadWorkflows struct {
 	Workspace  string
 	ProjectID  int64
@@ -348,7 +367,7 @@ func editWorkflow(m Model) Model {
 	switch {
 	case !ok:
 	case w.Archived:
-		m.Notice = w.Name + " is archived: restore it first."
+		m = m.say(fmt.Sprintf("%q is archived. Restore it first.", w.Name))
 	default:
 		text := w.Text()
 		m.Workflows.Card = WorkflowCard{Open: true, UID: w.UID, Name: w.Name, Base: w.EventUID, Start: text, Editor: NewTextEditor(text), askNow: true}
@@ -364,13 +383,13 @@ func changeWorkflowState(restore bool) func(Model) (Model, []Cmd) {
 		case !ok:
 			return m, nil
 		case m.Stale:
-			m.Notice = errDraftReadOnly.Error()
+			m = m.fail(Cannot(workflowOpVerb(restore), "the workflow", ErrDisconnected))
 			return m, nil
 		case restore && !w.Archived:
-			m.Notice = w.Name + " is not archived."
+			m = m.say(fmt.Sprintf("%q is not archived.", w.Name))
 			return m, nil
 		case !restore && w.Archived:
-			m.Notice = w.Name + " is already archived."
+			m = m.say(fmt.Sprintf("%q is already archived.", w.Name))
 			return m, nil
 		}
 		s := m.Workflows
@@ -500,7 +519,7 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 		}
 		if msg.Err != nil {
 			name := cmp.Or(msg.Name, msg.UID)
-			m.Notice = fmt.Sprintf("Workflow %s not written: %v", name, msg.Err)
+			m = m.fail(Cannot("save", fmt.Sprintf("workflow %q", name), msg.Err))
 		}
 		return m
 	}
@@ -508,7 +527,7 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 	case msg.Err != nil && saving:
 		card.Err = msg.Err
 	case msg.Err != nil:
-		m.Notice = msg.Err.Error()
+		m = m.fail(Cannot(msg.Op.verb(), fmt.Sprintf("%q", cmp.Or(msg.Name, msg.UID)), msg.Err))
 	case msg.Workflow == nil && msg.Current != nil:
 		if saving {
 			card.Conflict, card.Err = msg.Current, nil
@@ -517,7 +536,7 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 		}
 		m.Workflows = m.Workflows.withWorkflow(*msg.Current)
 		m.Workflows.readings = readingOf(m.Workflows.readings, msg.Current.UID, msg.Reading)
-		m.Notice = msg.Current.Name + " changed meanwhile: nothing was written."
+		m = m.fail(Cannot(msg.Op.verb(), fmt.Sprintf("%q", msg.Current.Name), errors.New("it changed since you opened it")))
 		return m.selectWorkflow(row)
 	case msg.Workflow != nil:
 		m.Workflows = m.Workflows.withWorkflow(*msg.Workflow)
@@ -546,7 +565,7 @@ func workflowCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		switch {
 		case ok && binding.Action == OverwriteDraft && c.Conflict.Archived:
 			// kata would save onto the tombstone and restore it.
-			m.Notice = c.Conflict.Name + " was archived meanwhile: it cannot be overwritten."
+			m = m.fail(Cannot("overwrite", fmt.Sprintf("%q", c.Conflict.Name), errors.New("it was archived since you opened it")))
 			return m, nil
 		case ok && binding.Action == OverwriteDraft:
 			c.Base, c.Conflict = c.Conflict.EventUID, nil
@@ -592,7 +611,7 @@ func workflowCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 func saveWorkflowCard(m Model) (Model, []Cmd) {
 	c := &m.Workflows.Card
 	if m.Stale {
-		c.Err = errDraftReadOnly
+		c.Err = errors.New(Cannot("save", "the workflow", errDraftReadOnly))
 		return m, nil
 	}
 	doc, err := ParseWorkflow(c.Editor.Text)
@@ -619,7 +638,7 @@ var workflowModes = []Mode{ModeWorkflows}
 
 func workflowActions() []actionEntry {
 	return []actionEntry{
-		{action: OpenWorkflow, modes: workflowModes, keys: keys("enter", "↵"), help: "steps", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 3, "show the steps"}}, handle: pure(inspectWorkflow)},
+		{action: OpenWorkflow, modes: workflowModes, keys: keys("enter", "enter"), help: "steps", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 3, "show the steps"}}, handle: pure(inspectWorkflow)},
 		{action: NewWorkflow, modes: workflowModes, keys: keys("n", "n"), help: "new", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 4, "new workflow (Workflow card)"}}, handle: pure(newWorkflow)},
 		{action: EditWorkflow, modes: workflowModes, keys: keys("e", "e"), help: "edit", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 5, "edit the workflow (Workflow card)"}}, handle: pure(editWorkflow)},
 		{action: ArchiveWorkflowAction, modes: workflowModes, keys: keys("x", "x"), help: "archive", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 6, "archive"}}, handle: changeWorkflowState(false)},

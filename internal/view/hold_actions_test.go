@@ -45,14 +45,14 @@ func TestIssueRowsAndBoardCardsHoldTheSameEntriesAsTheirMenu(t *testing.T) {
 			t.Errorf("%s: actions.hold\n got %v\nwant %v", tc.name, hold, menu)
 		}
 	}
-	closedHold := holdEntry(t, lists[view.IssueID(closed.UID)], "Close")
+	closedHold := holdEntry(t, lists[view.IssueID(closed.UID)], "Close…")
 	if closedHold["disabled"] != model.ClosedAlreadyRefusal {
 		t.Errorf("closed Issue's hold Close disabled = %v, want %q", closedHold["disabled"], model.ClosedAlreadyRefusal)
 	}
-	if got := holdEntry(t, boards[view.CardID(board, closed.UID)], "Close")["disabled"]; got != model.ClosedAlreadyRefusal {
+	if got := holdEntry(t, boards[view.CardID(board, closed.UID)], "Close…")["disabled"]; got != model.ClosedAlreadyRefusal {
 		t.Errorf("closed Board card's hold Close disabled = %v, want %q", got, model.ClosedAlreadyRefusal)
 	}
-	if got := holdEntry(t, lists[view.IssueID(alpha.UID)], "Close")["disabled"]; got != nil {
+	if got := holdEntry(t, lists[view.IssueID(alpha.UID)], "Close…")["disabled"]; got != nil {
 		t.Errorf("open Issue's hold Close disabled = %v, want enabled", got)
 	}
 }
@@ -62,7 +62,7 @@ func holdEntry(t *testing.T, node tern.WireNode, label string) map[string]any {
 	actions, _ := node.P["actions"].(map[string]any)
 	items, _ := actions["hold"].([]any)
 	for _, item := range items {
-		if fields := item.(map[string]any); fields["label"] == label {
+		if fields, ok := item.(map[string]any); ok && fields["label"] == label {
 			return fields
 		}
 	}

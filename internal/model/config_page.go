@@ -2,14 +2,14 @@ package model
 
 import (
 	"errors"
+	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 )
 
-// The Config Page is a Lettered Page: it lists tern-kata's config files on this machine, each with its absolute path, whether it
-// exists, whether it loads (the loader's own error when it does not) and a one-line summary of what it holds. It is read again on
-// every entry and acts on no Project, so it has no reset rule.
+// The Config Page is a Lettered Page: it lists tern-kata's config files on this machine, each with whether it exists, whether it
+// loads (the loader's own error when it does not), a one-line summary of what it holds and, for a file outside tern-kata's config
+// folder, its path. It is read again on every entry and acts on no Project, so it has no reset rule.
 
 // SwitchDocbank asks to move the default kata daemon's old pinned Docbank setup to kata's local one.
 type SwitchDocbank struct{}
@@ -82,17 +82,27 @@ type ConfigFile struct {
 
 func (f ConfigFile) Has(action ConfigAction) bool { return slices.Contains(f.Actions, action) }
 
+// StatusWords is the one word beside the row's title: "ok", "broken" or "not created". The Search by meaning row is no file and
+// has none.
 func (f ConfigFile) StatusWords() string {
 	if f.Key == ConfigEmbeddings {
 		return ""
 	}
 	switch f.Status {
 	case ConfigLoads:
-		return "loads"
+		return "ok"
 	case ConfigBroken:
-		return "does not load"
+		return "broken"
 	}
-	return "missing"
+	return "not created"
+}
+
+// ShownPath is the path the row draws under its summary: only one outside folder, since the Page's heading names the folder once.
+func (f ConfigFile) ShownPath(folder string) string {
+	if f.Path == "" || folder != "" && strings.HasPrefix(f.Path, folder+string(filepath.Separator)) {
+		return ""
+	}
+	return f.Path
 }
 
 // LoadConfigFiles asks for every row in one read. Request numbers the asks: an answer to an older one is dropped.
@@ -107,8 +117,10 @@ func (LoadConfigFiles) cmd() {}
 type ConfigFilesLoaded struct {
 	Request int64
 	Folder  string
-	Files   []ConfigFile
-	Err     error
+	// Home is the user's home folder, "" when it is not known: a path under it is drawn with a leading "~".
+	Home  string
+	Files []ConfigFile
+	Err   error
 }
 
 func (ConfigFilesLoaded) msg() {}
@@ -144,6 +156,7 @@ type ConfigPageState struct {
 	Loading bool
 	Err     error
 	Folder  string
+	Home    string
 	Files   []ConfigFile
 	Cursor  int
 	// AskSwitch says the question of the Docbank switch is shown; Switching says the switch is out, and s waits for its answer.
@@ -166,7 +179,7 @@ var configMode = sidebarMode(ModeConfig)
 func enterConfig(m Model) (Model, []Cmd) {
 	c := ConfigPageState{reads: m.ConfigPage.reads, Loading: true, Switching: m.ConfigPage.Switching}
 	if c.Switching {
-		c.Message = "switching Docbank..."
+		c.Message = Progress("Switching", "Docbank")
 	}
 	m.ConfigPage = c
 	load := LoadConfigFiles{Request: m.ConfigPage.reads.Ask()}
@@ -207,8 +220,8 @@ func updateConfig(m Model, msg Msg) (Model, []Cmd, bool) {
 	if loaded.Err != nil {
 		return m, nil, true
 	}
-	c.Folder = loaded.Folder
-	c.setFiles(m.Daemon.Name, m.Embeddings, loaded.Files)
+	c.Folder, c.Home = loaded.Folder, loaded.Home
+	c.setFiles(m.Embeddings, loaded.Files)
 	return m, nil, true
 }
 
@@ -223,24 +236,30 @@ func (m Model) SelectedConfigFile() *ConfigFile {
 
 // setFiles lists files and, once the status has been read, the Search by meaning row after the Docbank row. The cursor stays on the
 // row it was on.
-func (c *ConfigPageState) setFiles(daemon string, search EmbeddingsSetup, files []ConfigFile) {
+func (c *ConfigPageState) setFiles(search EmbeddingsSetup, files []ConfigFile) {
 	var kept ConfigFileKey
 	if f := rowAt(c.Files, c.Cursor); f != nil {
 		kept = f.Key
 	}
 	c.Files = slices.Clone(files)
 	if search.Read {
-		c.Files = withEmbeddingsRow(c.Files, embeddingsRow(daemon, search))
+		c.Files = withEmbeddingsRow(c.Files, embeddingsRow(search))
 	}
 	c.Cursor = max(0, slices.IndexFunc(c.Files, func(f ConfigFile) bool { return f.Key == kept }))
 }
 
-func (c ConfigPageState) Summary() string {
-	files := len(c.Files)
-	if slices.ContainsFunc(c.Files, func(f ConfigFile) bool { return f.Key == ConfigEmbeddings }) {
-		files--
+// Count is how many rows the Page lists, the Search by meaning row included: the heading's number.
+func (c ConfigPageState) Count() int { return len(c.Files) }
+
+// Summary is the folder the config files live in, which the heading names once; the home folder reads as "~".
+func (c ConfigPageState) Summary() string { return c.Short(oneLine(c.Folder)) }
+
+// Short is path with the home folder written as "~".
+func (c ConfigPageState) Short(path string) string {
+	if c.Home != "" && (path == c.Home || strings.HasPrefix(path, c.Home+string(filepath.Separator))) {
+		return "~" + path[len(c.Home):]
 	}
-	return strconv.Itoa(files) + " files in " + oneLine(c.Folder)
+	return path
 }
 
 type ConfigNotice struct {
@@ -252,9 +271,9 @@ type ConfigNotice struct {
 func (c ConfigPageState) Notice() (ConfigNotice, bool) {
 	switch {
 	case c.Loading:
-		return ConfigNotice{Text: "loading config files..."}, true
+		return ConfigNotice{Text: Progress("Loading", "config")}, true
 	case c.Err != nil:
-		return ConfigNotice{Text: "tern-kata's config folder could not be found: " + oneLine(c.Err.Error()), Err: true}, true
+		return ConfigNotice{Text: Cannot("find", "tern-kata's config folder", c.Err), Err: true}, true
 	}
 	return ConfigNotice{}, false
 }
@@ -263,38 +282,37 @@ func configOpenLabel(m Model) string {
 	if f := m.SelectedConfigFile(); f != nil {
 		return ConfigActionLabel(*f, ConfigOpen)
 	}
-	return "open"
+	return "Open"
 }
 
-// ConfigActionLabel is the words of the selected row's action, as the footer and the row's button say them.
+// ConfigActionLabel is the words of the selected row's action, as the footer and the row's button say them: a verb and the thing
+// it reaches, in sentence case.
 func ConfigActionLabel(f ConfigFile, action ConfigAction) string {
 	switch action {
 	case ConfigEdit:
-		return "edit " + f.Title
+		return "Edit " + f.Title
 	case ConfigSwitchDocbank:
-		return "switch to kata's local Docbank"
+		return "Switch to local Docbank"
 	case ConfigTurnOn:
-		return "turn on search by meaning"
+		return "Turn on"
 	case ConfigRestart:
-		return "restart the kata daemon…"
+		return "Restart kata daemon…"
 	}
 	switch f.Key {
 	case ConfigLanes:
-		return "open Lanes card"
+		return "Open Lanes"
 	case ConfigFilters:
-		return "open Filter card"
+		return "Open filters"
 	case ConfigViews:
-		return "open Views"
+		return "Open Saved views"
 	case ConfigSeen:
-		return "open Runs Page"
+		return "Open Runs"
 	case ConfigWorker:
-		return "open Worker card"
+		return "Open worker"
 	case ConfigKata:
-		return "open Daemons Page"
-	case ConfigEmbeddings:
-		return "open Search by meaning card"
+		return "Open Daemons"
 	}
-	return "open"
+	return "Open"
 }
 
 // selectedConfigOffers builds the condition of an entry that is on offer while the selected row has action.
@@ -409,14 +427,14 @@ func agentEditorClosed(m Model, msg DraftEditorClosed) (Model, []Cmd, bool) {
 		return m, nil, true
 	}
 	if msg.Err != nil {
-		c.Message, c.MessageErr = "agent.toml was not opened: "+oneLine(msg.Err.Error()), true
+		c.Message, c.MessageErr = Cannot("open", "agent.toml", msg.Err), true
 		return m, nil, true
 	}
 	text := normalizeLineBreaks(msg.Text)
 	if strings.TrimSpace(text) == "" || text == normalizeLineBreaks(m.agentEditStart()) {
 		return m, nil, true
 	}
-	c.Saving, c.Message, c.MessageErr = true, "saving agent.toml...", false
+	c.Saving, c.Message, c.MessageErr = true, Progress("Saving", "agent.toml"), false
 	return m, []Cmd{SaveAgentConfig{Text: text, Base: c.EditBase}}, true
 }
 
@@ -431,20 +449,20 @@ func agentConfigSaved(m Model, msg AgentConfigSaved) (Model, []Cmd) {
 	switch {
 	case errors.Is(msg.Err, ErrAgentConfigChanged):
 		c.EditText, c.MessageErr = msg.Text, true
-		c.Message = "agent.toml changed while you edited it, so nothing was saved. Your text is kept but lacks that change; press e to edit it and save to replace the file with it."
+		c.Message = Cannot("save", "agent.toml", ErrAgentConfigChanged) + " Your text is kept but lacks that change; press " + Key("e") + " to edit it and save it over the file."
 		return m, []Cmd{LoadConfigFiles{Request: c.reads.Ask()}}
 	case msg.Err != nil:
 		c.EditText, c.MessageErr = msg.Text, true
-		c.Message = "agent.toml was not saved and the file is as it was: " + oneLine(msg.Err.Error()) + ". Press e to keep editing; your text is kept."
+		c.Message = Cannot("save", "agent.toml", msg.Err) + " The file is as it was and your text is kept; press " + Key("e") + " to keep editing."
 		return m, nil
 	}
 	c.EditText, c.MessageErr = "", false
-	c.Message = "agent.toml saved; agents started from now on use it."
+	c.Message = "Saved agent.toml. Agents started from now on use it."
 	return m, []Cmd{LoadConfigFiles{Request: c.reads.Ask()}}
 }
 
 var configRows = []actionEntry{
-	{action: OpenConfigFile, modes: []Mode{ModeConfig}, keys: keys("enter", "↵"), help: "open", label: configOpenLabel, footer: []Mode{ModeConfig}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 40, "open the card or Page that edits the selected file"}}, handle: openConfigFile, when: selectedConfigOffers(ConfigOpen)},
+	{action: OpenConfigFile, modes: []Mode{ModeConfig}, keys: keys("enter", "enter"), help: "open", label: configOpenLabel, footer: []Mode{ModeConfig}, footerKey: "enter", sheet: []sheetLine{{sheetLettered, 40, "open the card or Page that edits the selected file"}}, handle: openConfigFile, when: selectedConfigOffers(ConfigOpen)},
 	{action: EditAgentConfig, modes: []Mode{ModeConfig}, keys: keys("e", "e"), help: "edit", label: configEditLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 42, "edit agent.toml in $EDITOR; it is checked before it is written"}}, handle: editAgentConfig, when: selectedConfigOffers(ConfigEdit)},
 	{action: ConfigSetUp, modes: []Mode{ModeConfig}, keys: keys("s", "s"), help: "set up", label: configSetUpLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 43, "set up the selected row: switch the old pinned Docbank to kata's local Docbank, or turn on search by meaning (both ask first)"}}, handle: configSetUp, when: selectedConfigSetsUp},
 	{action: ConfigRestartDaemon, modes: []Mode{ModeConfig}, keys: keys("r", "r"), help: "restart the kata daemon…", footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 44, "restart the kata daemon to finish setting up search by meaning (asks first; only while a restart is owed and the daemon is local)"}}, handle: openEmbeddingsCard, when: selectedConfigOffers(ConfigRestart)},
@@ -494,18 +512,18 @@ func confirmSwitchDocbank(m Model) (Model, []Cmd) {
 	if c.Switching {
 		return m, nil
 	}
-	c.Switching, c.Message, c.MessageErr = true, "switching Docbank...", false
+	c.Switching, c.Message, c.MessageErr = true, Progress("Switching", "Docbank"), false
 	return m, []Cmd{SwitchDocbank{}}
 }
 
 // DocbankSwitchQuitRefusal is why the Pane does not quit while the Docbank switch is out: quitting would leave config.toml
 // without its [docbank] section when kata then fails, as the restore runs after kata's answer.
-const DocbankSwitchQuitRefusal = "The Docbank switch is still running; wait for its answer before quitting."
+const DocbankSwitchQuitRefusal = "Cannot quit: the Docbank switch is still running."
 
 // refuseQuitDuringSwitch keeps the Pane open and says why, in a Notice and on the Config Page's message line when it is shown.
 func refuseQuitDuringSwitch(m Model) Model {
 	m.AskQuit = false
-	m.Notice = DocbankSwitchQuitRefusal
+	m = m.fail(DocbankSwitchQuitRefusal)
 	if m.OnConfig() {
 		m.ConfigPage.Message, m.ConfigPage.MessageErr = DocbankSwitchQuitRefusal, true
 	}
@@ -522,17 +540,19 @@ func docbankSwitched(m Model, msg DocbankSwitched) (Model, []Cmd) {
 	}
 	c.Switching = false
 	var cmds []Cmd
-	text, failed := "Switched to kata's local Docbank; kata restarted its daemon. docbank.key (in KATA_HOME) and docbank.manual (in tern-kata's config folder) are no longer used and can be deleted.", false
+	text, failed := "Switched to kata's local Docbank and restarted its daemon. docbank.key (in KATA_HOME) and docbank.manual (in tern-kata's config folder) are no longer used and can be deleted.", false
 	if msg.Err != nil {
-		text, failed = "Docbank was not switched: "+oneLine(msg.Err.Error()), true
+		text, failed = Cannot("switch", "Docbank", msg.Err), true
 	}
 	if msg.Err == nil {
 		// The switch restarted the daemon: a restart the status owed is gone.
 		cmds = append(cmds, askEmbeddings(&m, 0))
 	}
 	if !m.OnConfig() {
-		m.Notice = text
-		return m, cmds
+		if failed {
+			return m.fail(text), cmds
+		}
+		return m.say(text), cmds
 	}
 	c.Message, c.MessageErr = text, failed
 	if failed {

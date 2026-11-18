@@ -15,7 +15,7 @@ jb_job=$(jq -r '.job.uid' "$tmp/jobs-created.json")
 jb_event=$(jq -r '.job.definition_event_uid' "$tmp/jobs-created.json")
 
 ctl key 2
-expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.ok and .count == 1 and (.nodes[0].text | contains("active") and contains("Smoke hourly report") and contains("recurring child") and contains("every hour") and contains("next "))'
+expect_tree "[data-id='main.columns.list.jobs.$jb_job']" '.ok and .count == 1 and (.nodes[0].text | contains("active") and contains("Smoke hourly report") and contains("Recurring Issue") and contains("every hour") and contains("Next run"))'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke jobs parent")))'
 ctl key enter
 ctl key enter

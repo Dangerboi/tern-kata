@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -247,17 +248,51 @@ func (m Model) recordWrite(msg Msg) Model {
 	return m
 }
 
+var (
+	errUndoInFlight = errors.New("another undo is in progress")
+	errUndoUnknown  = errors.New("the outcome is unknown, so the Issue was read again")
+)
+
+// undoWords names a change in a notice: "close", "label addition". An unknown kind is named by its code.
+func undoWords(k UndoKind) string {
+	switch k {
+	case UndoClose:
+		return "close"
+	case UndoReopen:
+		return "reopen"
+	case UndoOwner:
+		return "owner change"
+	case UndoPriority:
+		return "priority change"
+	case UndoBody:
+		return "body edit"
+	case UndoLabelAdd:
+		return "label addition"
+	case UndoLabelRemove:
+		return "label removal"
+	case UndoLinkAdd:
+		return "link addition"
+	case UndoLaneMove:
+		return "Lane move"
+	case UndoDates:
+		return "dates change"
+	case UndoDelete:
+		return "delete"
+	}
+	return string(k)
+}
+
 func startUndo(m Model) (Model, []Cmd) {
 	h := m.Undo
 	switch {
 	case h.InFlight:
-		m.Notice = "undo already in progress"
+		m = m.fail(Cannot("undo", "", errUndoInFlight))
 	case len(h.Entries) == 0 && h.Boundary != "":
-		m.Notice = "nothing to undo: " + h.Boundary
+		m = m.say("Nothing to undo: " + h.Boundary + ".")
 	case len(h.Entries) == 0:
-		m.Notice = "nothing to undo"
+		m = m.say("Nothing to undo.")
 	case m.Stale:
-		m.Notice = "Daemon disconnected; reconnect before undoing."
+		m = m.fail(Cannot("undo", "", ErrDisconnected))
 	default:
 		return m.sendUndo(h.Entries[len(h.Entries)-1], nil)
 	}
@@ -292,8 +327,8 @@ func (m Model) undoTarget(e UndoEntry, ref string) string {
 	if strings.Contains(ref, "#") {
 		return ref
 	}
-	if issue := m.issueByUID(e.UID); issue != nil && issue.ProjectName != "" && issue.ProjectName != m.Project.Name {
-		return issue.ProjectName + "#" + ref
+	if issue := m.issueByUID(e.UID); issue != nil {
+		return m.RefName(issue.ProjectName, ref)
 	}
 	return "#" + ref
 }
@@ -334,7 +369,7 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 	}
 	if msg.Result == UndoConflict && (msg.Conflict == "daemon principal changed" || msg.Conflict == "daemon instance changed") {
 		m.Undo = h.cleared(msg.Conflict)
-		m.Notice = "cannot undo " + target + ": " + msg.Conflict
+		m = m.fail(Cannot("undo", target, errors.New(msg.Conflict)))
 		return m, nil
 	}
 	switch msg.Result {
@@ -342,18 +377,18 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 		return openUndoClose(m, entry), nil
 	case UndoConflict:
 		m.Undo = h.without(entry.ID)
-		m.Notice = "skipped undo for " + target + ": " + msg.Conflict
+		m = m.fail(Cannot("undo", target, errors.New(msg.Conflict)))
 		return m, nil
 	case UndoUnknown:
 		m.Undo = h.cleared("undo outcome is unknown")
-		m.Notice = "undo outcome unknown; refreshed issue state"
+		m = m.fail(Cannot("undo", target, errUndoUnknown))
 		return refreshAfterUndo(m, entry)
 	case UndoFailed:
-		m.Notice = "undo failed for " + target + ": " + msg.Err.Error()
+		m = m.fail(Cannot("undo", target, msg.Err))
 		return m, nil
 	case UndoAlready:
 		m.Undo = h.without(entry.ID)
-		m.Notice = target + " already restored; no change made"
+		m = m.say(target + " is already restored.")
 		return refreshAfterUndo(m, entry)
 	}
 	m.Undo = h.without(entry.ID)
@@ -367,7 +402,7 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 		}
 		m.Undo.Entries = entries
 	}
-	m.Notice = "undid " + string(entry.Kind) + " on " + target
+	m = m.say("Undid the " + undoWords(entry.Kind) + " on " + target + ".")
 	return refreshAfterUndo(m, entry)
 }
 

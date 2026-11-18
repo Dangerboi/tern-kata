@@ -53,7 +53,7 @@ func choiceControl(m model.Model, card model.Card, name model.Field, title strin
 	label := title
 	tone := ui.ToneNeutral
 	if focused {
-		label, tone = "> "+title, ui.ToneAccent
+		tone = ui.ToneAccent
 	}
 	field := ui.FormField{Common: ui.Common{Key: string(name), Tone: tone, Aria: title}, Label: ui.T(label)}
 	if hint != "" {
@@ -105,52 +105,75 @@ func choiceValue(index int) string {
 	return strconv.Itoa(index)
 }
 
-// The choices wrap in their own column, so a wrapped line never reads as another field.
+// The choices wrap in their own column, so a wrapped line never reads as another field. The chosen choice is accent and strong;
+// the cursor "▸" marks the focused choice only.
 func choiceField(name model.Field, tone ui.Tone, title, prompt string, labels []string, chosen func(int) bool, cursor int) tern.Element {
 	choices := make([]tern.Element, 0, len(labels))
 	for i, label := range labels {
 		style := ""
 		if chosen(i) {
-			label, style = "[ "+label+" ]", "accent strong"
+			style = "accent strong"
 		}
 		if i == cursor {
-			label = "▸" + label
+			label = "▸ " + label
 		}
 		choices = append(choices, ui.Text{Common: ui.Common{Key: strconv.Itoa(i), Actions: &ui.Actions{Click: ChooseClick(name, i)}}, Spans: []ui.Span{{T: label, S: style}}, Wrap: ui.WrapNone})
 	}
-	return ui.Row{Common: ui.Common{Key: string(name), Tone: tone, Aria: title}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
-		ui.Text{Common: ui.Common{Key: "prompt", Shrink: new(float64)}, Text: prompt, Wrap: ui.WrapNone},
-		ui.Row{Common: ui.Common{Key: "choices", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: choices})}
+	row := ui.Row{Common: ui.Common{Key: "choices", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: choices}
+	cells := ui.Nodes(row)
+	if prompt != "" {
+		cells = ui.Nodes(ui.Text{Common: ui.Common{Key: "prompt", Shrink: new(float64)}, Text: prompt, Wrap: ui.WrapNone}, row)
+	}
+	return ui.Row{Common: ui.Common{Key: string(name), Tone: tone, Aria: title}, Gap: ui.GapMD, Align: ui.AlignStart, Children: cells}
 }
 
-// An action with no binding in mode has no keys and no chord.
+// cardKeys is the chord and the keycap of an action's main binding in mode: its first binding. An action with no binding in
+// mode has no keys and no chord.
 func cardKeys(mode model.Mode, action model.Action) (keys []string, chord string) {
 	bindings := model.CardKeys(mode, action)
-	if len(bindings) > 0 {
-		chord = bindings[0].Chord
+	if len(bindings) == 0 {
+		return nil, ""
 	}
-	return keycaps(bindings), chord
+	return []string{keycap(bindings[0].Chord, bindings[0].Key)}, bindings[0].Chord
 }
 
-func keycaps(bindings []model.Binding) []string {
-	keys := make([]string, len(bindings))
-	for i, b := range bindings {
-		keys[i] = keycap(b.Chord, b.Key)
-	}
-	return keys
-}
-
-// keycap is the keycap text of a binding's key label. Tern draws letter keycaps in capitals, so a shifted letter is "⇧" and the
-// capital, matching the plain letter's keycap.
+// keycap is the keycap text of a binding in Tern's own notation, so a button reads as the footer does for the same chord: a
+// control chord is "^X", enter "⏎", tab "⇥", escape "esc", a letter its capital and a shifted letter "⇧" and the capital, which keeps
+// n and N apart. Arrows and other labels are drawn as the binding labels them.
 func keycap(chord, key string) string {
 	if letter, ok := strings.CutPrefix(chord, "shift+"); ok && utf8.RuneCountInString(letter) == 1 && unicode.IsLetter([]rune(letter)[0]) {
 		return "⇧" + strings.ToUpper(letter)
 	}
+	if rest, ok := strings.CutPrefix(chord, "ctrl+"); ok && utf8.RuneCountInString(rest) == 1 {
+		return "^" + strings.ToUpper(rest)
+	}
+	switch chord {
+	case "enter":
+		return "⏎"
+	case "tab":
+		return "⇥"
+	case "escape":
+		return "esc"
+	}
+	if utf8.RuneCountInString(key) == 1 && unicode.IsLetter([]rune(key)[0]) {
+		return strings.ToUpper(key)
+	}
+	switch key {
+	case "↵":
+		return "⏎"
+	case "⇥", "↹":
+		return "⇥"
+	case "escape":
+		return "esc"
+	}
 	return key
 }
 
-// cardButton is a card's Tern button for action in mode. Its click presses the action's first non-headless chord with the card's overlays closed
-// and its keycaps are every non-headless key label of the action, so a click and the key never disagree and a rebind moves
+// Keycap is keycap for the tests, which compare what a button shows with the binding it presses.
+func Keycap(chord, key string) string { return keycap(chord, key) }
+
+// cardButton is a card's Tern button for action in mode. Its click presses the action's first non-headless chord with the
+// card's overlays closed and its one keycap is that chord's label, so a click and the key never disagree and a rebind moves
 // both. An action with no binding in its mode gets no chord, which the driver's card test fails.
 func cardButton(key string, mode model.Mode, action model.Action, words string, primary bool) ui.Button {
 	keys, chord := cardKeys(mode, action)
@@ -177,8 +200,39 @@ func unavailable(button ui.Button, reason string) ui.Button {
 	return button
 }
 
-func menuButton(m model.Model) ui.Button {
-	return ui.Button{Common: ui.Common{Key: "menu", Shrink: new(float64), Actions: &ui.Actions{Click: MenuClick}}, Text: "Menu", Keys: keycaps(m.MenuKeys())}
+// menuButton opens the Menu. It never shows a keycap: the footer carries the esc hint, and esc only opens the Menu from some
+// places, so a keycap on the button would say it where it is false.
+func menuButton(model.Model) ui.Button {
+	return ui.Button{Common: ui.Common{Key: "menu", Shrink: new(float64), Actions: &ui.Actions{Click: MenuClick}}, Text: "Menu"}
+}
+
+// exitButton is the safe way out of a card: a default button, never primary. Its words are "Cancel" on a form that holds unsaved
+// input, "Close" on a read-only card and "Keep editing" on the discard question.
+func exitButton(key string, mode model.Mode, action model.Action, words string) ui.Button {
+	return cardButton(key, mode, action, words, false)
+}
+
+// formFoot is the foot of a form card: the primary button, the other actions, then the safe exit last.
+func formFoot(primary ui.Button, exit ui.Button, others ...ui.Button) tern.Element {
+	buttons := append([]ui.Button{primary}, others...)
+	return buttonRow(buttonElements(append(buttons, exit))...)
+}
+
+// confirmFoot is the foot of a question: the confirm button, in the danger variant when the answer destroys something, then the
+// safe exit last. The exit is never primary.
+func confirmFoot(confirm ui.Button, exit ui.Button, danger bool) tern.Element {
+	if danger {
+		confirm = destructive(confirm)
+	}
+	return buttonRow(confirm, exit)
+}
+
+func buttonElements(buttons []ui.Button) []tern.Element {
+	elements := make([]tern.Element, len(buttons))
+	for i, b := range buttons {
+		elements[i] = b
+	}
+	return elements
 }
 
 // footKey is the key of a card's button row while the card is built. Tern keys the footer slot itself, so the buttons' ids are
@@ -190,21 +244,73 @@ func buttonRow(buttons ...tern.Element) tern.Element {
 	return ui.Row{Common: ui.Common{Key: footKey}, Gap: ui.GapMD, Justify: ui.JustifyEnd, Wrap: true, Children: buttons}
 }
 
+// footStatusKeys are the card lines that must stay visible beside the buttons: an error, a pending line, a saving or sending
+// line and a question. popup moves them into the footer above the buttons, so a long card body scrolls under them.
+var footStatusKeys = map[string]bool{"error": true, "pending": true, "saving": true, "sending": true, "question": true, "discard": true}
+
+// cardMaxHeight is the share of the layer a card may take; the body scrolls under the fixed head and foot beyond it.
+const cardMaxHeight = 0.9
+
+func childKey(child tern.Element) string {
+	key, _ := child.Node().Props["key"].(string)
+	return key
+}
+
+// popup builds the card's overlay: the button row and the status lines (see footStatusKeys) go to the foot, every other child to
+// the body. A status line whose key a button already uses stays in the body.
 func popup(overlay ui.Overlay, children []tern.Element) ui.Overlay {
-	body := make([]tern.Element, 0, len(children))
+	if overlay.Max == nil {
+		overlay.Max = &ui.Bounds{H: ui.Frac(cardMaxHeight)}
+	}
+	if overlay.Foot != nil {
+		overlay.Children = children
+		return overlay
+	}
+	var foot ui.Row
+	hasFoot := false
 	for _, child := range children {
 		if row, ok := child.(ui.Row); ok && row.Key == footKey {
-			overlay.Foot = row
+			foot, hasFoot = row, true
+		}
+	}
+	taken := map[string]bool{}
+	for _, button := range foot.Children {
+		taken[childKey(button)] = true
+	}
+	body := make([]tern.Element, 0, len(children))
+	var statuses []tern.Element
+	for _, child := range children {
+		if row, ok := child.(ui.Row); ok && row.Key == footKey {
+			continue
+		}
+		if key := childKey(child); footStatusKeys[key] && !taken[key] {
+			if text, ok := child.(ui.Text); ok {
+				text.Basis, text.Grow = ui.BasisFrac(1), 1
+				child = text
+			}
+			statuses = append(statuses, child)
 			continue
 		}
 		body = append(body, child)
+	}
+	if len(statuses) > 0 {
+		if !hasFoot {
+			foot = ui.Row{Common: ui.Common{Key: footKey}, Gap: ui.GapMD, Justify: ui.JustifyEnd, Wrap: true}
+		}
+		foot.Children = append(statuses, foot.Children...)
+		hasFoot = true
+	}
+	if hasFoot {
+		overlay.Foot = foot
 	}
 	overlay.Children = body
 	return overlay
 }
 
+// discardButtons is the question that ends a Draft card asking to discard it: the destructive confirm in its own verb, and
+// the way back to editing, which is never primary.
 func discardButtons() tern.Element {
-	return buttonRow(destructive(cardButton("discard", model.ModeDiscard, model.DiscardDraft, "Discard", false)), cardButton("keep", model.ModeDiscard, model.KeepDraft, "Keep editing", true))
+	return confirmFoot(cardButton("discard", model.ModeDiscard, model.DiscardDraft, "Discard Draft", false), exitButton("keep", model.ModeDiscard, model.KeepDraft, "Keep editing"), true)
 }
 
 func refMeta(ref string) ui.Rich {

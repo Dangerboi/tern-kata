@@ -57,7 +57,7 @@ func TestABroadcastWritesOnceToEachRunningAgentOfTheIssueAndItsOpenChildren(t *t
 	if m := open.State.Model; m.TopCard() != model.CardAgentMessage || !m.AgentMessage.Broadcast || len(open.Cmds) != 0 {
 		t.Fatalf("card %v broadcast %v cmds %v, want the Message card as a broadcast", m.TopCard(), m.AgentMessage.Broadcast, open.Cmds)
 	}
-	wantShown(t, "the broadcast card", open.State, "Message the agents", "work#p", "open children")
+	wantShown(t, "the broadcast card", open.State, "Message the agents", "#p", "open children")
 
 	sending := step(t, step(t, open.State, tern.Key{Text: "schema changed"}).State, key("enter"))
 	got := sentMessages(sending.Cmds)
@@ -84,7 +84,7 @@ func TestABroadcastWritesOnceToEachRunningAgentOfTheIssueAndItsOpenChildren(t *t
 	if s.Model.CurrentMode() != model.ModeAgentBroadcastOutcome {
 		t.Fatalf("mode %s, want the outcome", s.Model.CurrentMode())
 	}
-	wantShown(t, "the outcome", s, "2 agents got the message.", "Skipped omp on work#c1: "+model.AgentHoldsMessageRefusal, "Skipped omp on work#p: "+model.AgentNotOmpRefusal)
+	wantShown(t, "the outcome", s, "2 agents got the message.", "Skipped omp on #c1: "+model.AgentHoldsMessageRefusal, "Skipped omp on #p: "+model.AgentNotOmpRefusal)
 	wantNotShown(t, "the outcome", s, "work#c2", "exited")
 
 	if closed := step(t, s, key("escape")).State; closed.Model.TopCard() != model.NoCard {
@@ -96,7 +96,7 @@ func TestABroadcastFailedWriteIsListedSkipped(t *testing.T) {
 	s := broadcastPane(t, nil, broadcastAgent("p", "31"))
 	s = step(t, step(t, step(t, s, tern.Key{Name: "s", Shift: true}).State, tern.Key{Text: "hello"}).State, key("enter")).State
 	s = step(t, s, model.AgentMessageSent{UID: "p", Address: "dana/omp-31", Err: errors.New("daemon down")}).State
-	wantShown(t, "the outcome", s, "No agent got the message.", "daemon down")
+	wantShown(t, "the outcome", s, "No agents got the message.", "daemon down")
 }
 
 func TestABroadcastWithNoRunningAgentOpensNoCard(t *testing.T) {

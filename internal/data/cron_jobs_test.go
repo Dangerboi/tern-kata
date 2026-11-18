@@ -107,7 +107,7 @@ func TestGatewayListsNativeAndAdapterJobsWithTheParentsStatusAndProgress(t *test
 		t.Fatalf("jobs %+v, want both in name order", jobs)
 	}
 	native, adapter := jobs[0], jobs[1]
-	if !native.Native() || native.Kind() != model.KindRecurringChild || native.UID != nativeWire.UID || native.DefinitionEventUID != nativeWire.DefinitionEventUID {
+	if !native.Native() || native.Kind() != model.KindRecurringIssue || native.UID != nativeWire.UID || native.DefinitionEventUID != nativeWire.DefinitionEventUID {
 		t.Fatalf("native job %+v", native)
 	}
 	p := native.Parent

@@ -30,13 +30,31 @@ func (c PaneCalendar) in(t time.Time) time.Time { return t.In(c.location()) }
 
 func (c PaneCalendar) DayOf(t time.Time) string { return c.in(t).Format("2006-01-02") }
 
-func (c PaneCalendar) Stamp(t time.Time) string { return c.in(t).Format("2006-01-02 15:04") }
+// Stamp is an absolute time as "2026-11-18 18:21": the Pane's zone, no seconds, no zone letter. None when t is unset.
+func (c PaneCalendar) Stamp(t time.Time) string {
+	if t.IsZero() {
+		return None
+	}
+	return c.in(t).Format("2006-01-02 15:04")
+}
 
+// Read is "18:21" when t is today in the Pane's zone, else Stamp. None when t is unset.
 func (c PaneCalendar) Read(t, now time.Time) string {
+	if t.IsZero() {
+		return None
+	}
 	if c.DayOf(t) == c.DayOf(now) {
 		return c.in(t).Format("15:04")
 	}
 	return c.Stamp(t)
+}
+
+// Day is a date-only field as "2026-11-18" in the Pane's zone. None when t is unset.
+func (c PaneCalendar) Day(t time.Time) string {
+	if t.IsZero() {
+		return None
+	}
+	return c.DayOf(t)
 }
 
 // DayEnds is the first instant of the local date after the one now falls on: local midnight, or where daylight-saving time

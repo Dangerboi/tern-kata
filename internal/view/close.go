@@ -4,19 +4,35 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
+	"strings"
 )
 
 var closeLabels = map[model.Field]string{
-	model.CloseReason:      "Reason (done / wontfix / duplicate / superseded / audit-no-change)",
+	model.CloseReason:      "Reason",
 	model.CloseMessage:     "Message",
-	model.CloseCommit:      "Commit SHA (optional)",
-	model.ClosePR:          "PR URL (optional)",
-	model.CloseTest:        "Test command (optional)",
-	model.CloseReviewed:    "Reviewed paths, comma-separated (optional)",
-	model.CloseExternal:    "External account (optional)",
-	model.CloseAttachments: "Attachments to cite (optional, done only)",
-	model.CloseReference:   "Issue reference (duplicate / superseded)",
-	model.CloseRationale:   "Rationale (audit-no-change)",
+	model.CloseCommit:      "Commit",
+	model.ClosePR:          "Pull request",
+	model.CloseTest:        "Test command",
+	model.CloseReviewed:    "Reviewed paths",
+	model.CloseExternal:    "External account",
+	model.CloseAttachments: "Attachments",
+	model.CloseReference:   "Duplicate of",
+	model.CloseRationale:   "Why nothing changed",
+}
+
+// closeHints are the one muted line under a field, shown while it has focus.
+var closeHints = map[model.Field]string{
+	model.CloseCommit:   "A commit SHA.",
+	model.ClosePR:       "A URL.",
+	model.CloseReviewed: "Separate with commas.",
+}
+
+// closeLabel is the word above a field. The reference reads by the reason: a superseding Issue replaces this one.
+func closeLabel(f model.CloseFormState, name model.Field) string {
+	if name == model.CloseReference && strings.TrimSpace(f.Values.Reason) == string(model.ReasonSuperseded) {
+		return "Replaced by"
+	}
+	return closeLabels[name]
 }
 
 // Like the Weekdays of the Recurrence card it takes several values at once, so it stays a row.
@@ -25,11 +41,7 @@ func attachmentPicker(f model.CloseFormState, tone ui.Tone, title string) tern.E
 	if f.Field == model.CloseAttachments {
 		cursor = f.AttachmentAt
 	}
-	prompt := title + ": "
-	if cursor >= 0 {
-		prompt = "> " + prompt
-	}
-	return choiceField(model.CloseAttachments, tone, title, prompt, model.AttachmentLabels(f.Attachments), func(i int) bool { return f.Cites(f.Attachments[i].ID) }, cursor)
+	return choiceField(model.CloseAttachments, tone, title, title, model.AttachmentLabels(f.Attachments), func(i int) bool { return f.Cites(f.Attachments[i].ID) }, cursor)
 }
 
 func closeLayer(m model.Model) tern.Element {
@@ -38,40 +50,51 @@ func closeLayer(m model.Model) tern.Element {
 	}
 	children := make([]tern.Element, 0, 12)
 	for _, field := range model.CloseFields {
-		label := closeLabels[field.Name]
-		tone := ui.ToneNeutral
-		if m.CloseForm.Field == field.Name {
-			tone = ui.ToneAccent
-		}
-		if field.Name == model.CloseAttachments {
-			if m.CloseForm.ShowsAttachments() {
-				children = append(children, attachmentPicker(m.CloseForm, tone, label))
-			}
+		if m.CloseForm.Hides(field.Name) {
 			continue
 		}
-		children = append(children,
-			toneText(string(field.Name)+"-label", tone, label),
-			ui.Input{Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: label}, Field: ui.Field{Text: m.CloseForm.Values.Value(field.Name), Cursor: caretAt(m.CloseForm.Caret, field.Name, m.CloseForm.Values.Value(field.Name)), Mode: "insert", Readonly: m.CloseForm.Saving}})
+		label := closeLabel(m.CloseForm, field.Name)
+		focused := m.CloseForm.Field == field.Name
+		tone := ui.ToneNeutral
+		if focused {
+			tone = ui.ToneAccent
+		}
+		switch field.Name {
+		case model.CloseReason:
+			children = append(children, choiceControl(m, model.CardClose, field.Name, label, focused, "", ""))
+			continue
+		case model.CloseAttachments:
+			children = append(children, attachmentPicker(m.CloseForm, tone, label))
+			continue
+		}
+		value := m.CloseForm.Values.Value(field.Name)
+		input := ui.Input{Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: label}, Field: ui.Field{Text: value, Cursor: caretAt(m.CloseForm.Caret, field.Name, value), Mode: "insert", Readonly: m.CloseForm.Saving}}
+		children = append(children, labelledInput(string(field.Name), label, closeHints[field.Name], focused, input)...)
 	}
 	if m.CloseForm.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, m.CloseForm.Err.Error()))
 	}
+	save := cardButton("save", model.ModeCloseForm, model.CloseSave, "Close Issue", true)
+	quick := unavailable(cardButton("quick", model.ModeCloseForm, model.CloseQuick, "Close without evidence", false), m.CloseQuickRefusal())
+	cancel := exitButton("cancel", model.ModeCloseForm, model.CloseCancel, "Cancel")
 	if m.CloseForm.Saving {
-		children = append(children, toneText("pending", ui.TonePending, "Closing Issue…"))
-	} else {
-		children = append(children,
-			toneText("exemption", ui.ToneMuted, "Quick done skips message/evidence only on the owner-local daemon. Parent and throttle guards still apply."),
-			buttonRow(
-				cardButton("save", model.ModeCloseForm, model.CloseSave, "Close Issue", true),
-				cardButton("quick", model.ModeCloseForm, model.CloseQuick, "Quick done", false),
-				cardButton("cancel", model.ModeCloseForm, model.CloseCancel, "Cancel", false)))
+		pending := model.Progress("Closing", "Issue")
+		for _, button := range []*ui.Button{&save, &quick, &cancel} {
+			button.Disabled = ui.Because(pending)
+		}
+		children = append(children, toneText("pending", ui.TonePending, pending))
 	}
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardClose)}, Modal: true, Size: ui.SizeLG, Head: ui.T(closeTitle(m)), Icon: ui.IconCheck}, children))
+	children = append(children, formFoot(save, cancel, quick))
+	overlay := ui.Overlay{Common: ui.Common{Key: layerKey(model.CardClose)}, Modal: true, Size: ui.SizeLG, Head: ui.T(closeTitle(m)), Icon: ui.IconCheck}
+	if ref := m.CloseIssueRef(); ref != "" {
+		overlay.Meta = refMeta(ref)
+	}
+	return ui.Nodes(popup(overlay, children))
 }
 
 func closeTitle(m model.Model) string {
 	if m.CloseForm.UndoEntry != 0 {
-		return "Undo reopen — complete as done"
+		return "Undo reopen"
 	}
 	return "Close Issue"
 }

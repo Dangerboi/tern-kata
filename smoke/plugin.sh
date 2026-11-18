@@ -54,12 +54,12 @@ expect_no_toast() {
   if tree_has "$1"; then echo "unexpected toast: $1" >&2; return 1; fi
 }
 # The startup-failure toasts, told apart by these fragments: which one shows is the contract with the binary.
-failed_start_toast='tern-kata failed to start'
-not_installed_toast='tern-kata is not installed'
-didnt_start_toast="tern-kata didn't start"
+failed_start_toast='It may be older than this plugin. Run Update tern-kata'
+not_installed_toast='It is not installed or not on PATH'
+didnt_start_toast='It may be older than this plugin or not installed'
 # Both install hints point to the palette command.
-install_hint='Install tern-kata from the command palette'
-update_hint='run Update tern-kata'
+install_hint='Run Install tern-kata'
+update_hint='Update tern-kata'
 expect_no_kata_toast() {
   expect_no_toast "$failed_start_toast"
   expect_no_toast "$not_installed_toast"
@@ -144,7 +144,7 @@ ctl ready
 read -r window_height < <(ctl stats | jq -r '.viewport[1]')
 ctl resize 1600 "$window_height"
 ctl plugins fixtures
-printf 'palette "Open kata"\nkey Enter\n' >"$tmp/palette.ctl"
+printf 'palette "Open tern-kata"\nkey Enter\n' >"$tmp/palette.ctl"
 ctl --file "$tmp/palette.ctl"
 ctl plugins expect smoke
 ctl state >"$tmp/palette-state.json"
@@ -171,16 +171,16 @@ expect_panes 1
 expect_no_kata_toast
 # With no agent waiting, the go-to-waiting palette command only toasts: no focus change, no Pane opened or closed.
 ctl state >"$tmp/waiting-before.json"
-printf 'palette "Go to the agent waiting for you"\nkey Enter\n' >"$tmp/waiting.ctl"
+printf 'palette "Go to waiting agent"\nkey Enter\n' >"$tmp/waiting.ctl"
 ctl --file "$tmp/waiting.ctl"
-expect_toast "No agent is waiting for you"
+expect_toast "No agent is waiting for you."
 ctl state >"$tmp/waiting-after.json"
 jq -e --slurpfile before "$tmp/waiting-before.json" '.tabs[0].panes == $before[0].tabs[0].panes and .focused.id == $before[0].focused.id' "$tmp/waiting-after.json" >/dev/null
 # The palette command that places the worker widget keeps the bar's other widgets first and in place, and a second run adds nothing.
 ctl widgets set clock
-printf 'palette "Add the kata worker widget to the widget bar"\nkey Enter\n' >"$tmp/widgets.ctl"
+printf 'palette "Add worker widget"\nkey Enter\n' >"$tmp/widgets.ctl"
 ctl --file "$tmp/widgets.ctl"
-expect_toast "Added the kata worker widget to the widget bar"
+expect_toast "Added the tern-kata worker widget to the widget bar."
 ctl state | jq -e '.widgets.ids == ["clock", "tern-kata/worker"]' >/dev/null
 ctl --file "$tmp/widgets.ctl"
 expect_toast "already in the widget bar"
@@ -391,7 +391,7 @@ end_hand_started_pane Enter
 start_hand_pane "$standin_dir/C:\\\\Tools\\\\tern-kata.exe"
 link_opens_new_pane
 end_hand_started_pane Enter
-start_hand_pane "$standin_dir/kata-pane" Daemon
+start_hand_pane "$standin_dir/kata-pane" '"local"'
 link_focuses_pane
 end_hand_started_pane q
 # The real binary starts on the other Issue, so the link's select-issue must arrive for the first one to show.
@@ -424,8 +424,8 @@ ctl click "$x" "$y" cmd
 ctl plugins expect '"Plugin first body"'
 wait_for panes_are 3
 ctl state | jq -e --argjson id "$quit_shell" '.focused.id != $id' >/dev/null
-expect_no_toast "did not take the action"
-expect_no_toast "tern-kata did not start"
+expect_no_toast "Cannot send the action to tern-kata"
+expect_no_toast "Cannot send the click"
 ctl key q
 wait_for panes_are 2
 read -r x y < <(ctl tree '.tv-grid' | jq -r '.nodes[1].rect | "\(.[0]+4) \(.[1]+8)"')
@@ -472,7 +472,7 @@ for status in 2 3; do
   expect_launch_toast "$failed_start_toast" "$update_hint"
 done
 printf '#!/bin/sh\nexit 1\n' >"$tmp/pane-bin/tern-kata"
-expect_launch_toast "$didnt_start_toast" 'run Install tern-kata' "$update_hint"
+expect_launch_toast "$didnt_start_toast" 'Install tern-kata' "$update_hint"
 printf '#!/bin/sh\nexit 127\n' >"$tmp/pane-bin/tern-kata"
 expect_launch_toast "$not_installed_toast" "$install_hint"
 # The real binary failing before it connects exits 3, which reads as a failed start.
@@ -519,7 +519,7 @@ expect_panes 1
 # The watcher polls once a second: 5 s let it act on the closed Pane.
 sleep 5 # proves a bound: the watcher (once a second) must not run a plugin step within 5 s of the closed Pane
 [[ ! -e "$tmp/plugin-step.log" ]]
-expect_no_toast 'tern-kata plugin updated'
+expect_no_toast 'Updated the tern-kata plugin'
 # A plugin reload while a second update Pane is open (a local update brings the plugin along) must not turn that Pane into a
 # kata Pane: a link opens a new kata Pane instead of focusing the update Pane.
 rm -f "$tmp/update-args.txt"
@@ -552,7 +552,7 @@ wait_for test -s "$tmp/update-args.txt"
 [[ $(cat "$tmp/update-args.txt") == "update --pause" ]]
 ctl expect Press
 ctl key Enter
-expect_toast 'tern-kata plugin was not updated'
+expect_toast 'Cannot update the tern-kata plugin'
 expect_toast 'curl: smoke stand-in refuses'
 [[ -s "$tmp/plugin-step.log" ]]
 ! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending left behind" >&2; exit 1; }
@@ -578,12 +578,12 @@ if tern_at_least 0.9.16; then
     wait_for pending_cleared
   }
   reload_during_step 'echo "exit 0"'
-  expect_toast 'tern-kata plugin updated to v9.9.9'
+  expect_toast 'Updated the tern-kata plugin to v9.9.9.'
   ! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending left behind after a reloaded success" >&2; exit 1; }
   wait_for second_tab_has_one_pane
   reload_during_step 'echo "curl: smoke stand-in refuses after a reload" >&2; exit 1'
   expect_toast 'curl: smoke stand-in refuses after a reload'
-  expect_toast 'tern-kata plugin was not updated'
+  expect_toast 'Cannot update the tern-kata plugin'
   ! grep -q 'update.pending' "$TERN_CONFIG_DIR/plugin-data/tern-kata/kv.json" || { echo "update.pending left behind after a reloaded failure" >&2; exit 1; }
   wait_for second_tab_has_one_pane
   # The original refusing stand-in again, for the checks below.
@@ -598,7 +598,7 @@ ctl --file "$tmp/update.ctl"
 wait_for test -s "$tmp/update-args.txt"
 ctl expect Press
 ctl key Enter
-expect_toast "tern-kata plugin v$own_version is up to date"
+expect_toast "The tern-kata plugin v$own_version is up to date."
 [[ ! -e "$tmp/plugin-step.log" ]]
 wait_for second_tab_has_one_pane
 # A linked window plugin is left as it is, as the install script would: no plugin step, and the toast says so.
@@ -610,7 +610,7 @@ ctl --file "$tmp/update.ctl"
 wait_for test -s "$tmp/update-args.txt"
 ctl expect Press
 ctl key Enter
-expect_toast 'tern-kata plugin is linked, left as it is'
+expect_toast 'The tern-kata plugin is linked, so it stays as it is.'
 [[ ! -e "$tmp/plugin-step.log" ]]
 wait_for second_tab_has_one_pane
 ctl remote disconnect loop
@@ -626,15 +626,15 @@ open_preview() {
   ctl --file "$tmp/attachment.ctl"
 }
 jq -e '.focused.prompt == true' <(ctl state) >/dev/null || { echo "attachment check needs a shell focused" >&2; exit 1; }
-printf 'palette "Switch kata Attachments between floating and the side panel"\nkey Enter\n' >"$tmp/attachment-toggle.ctl"
+printf 'palette "Toggle Attachments panel"\nkey Enter\n' >"$tmp/attachment-toggle.ctl"
 ctl --file "$tmp/attachment-toggle.ctl"
-expect_toast "kata Attachments open in the side panel beside the Pane"
+expect_toast "tern-kata Attachments open in the side panel beside the Pane."
 open_preview "$attachment_dir/note.md"
 wait_for tree_has Glimpseable
 ! glimpse_shown || { echo "the side panel choice still floated the Attachment" >&2; exit 1; }
 ctl focus left
 ctl --file "$tmp/attachment-toggle.ctl"
-expect_toast "kata Attachments open floating over the tab"
+expect_toast "tern-kata Attachments open floating over the tab."
 open_preview "$attachment_dir/note.md"
 wait_for tree_has "drag the header to keep it"
 printf 'Plugin smoke passed: Attachments floating by default and in the side panel by choice, consecutive palette/key splits without reload, real link open/focus/select, links reuse only the current tab'"'"'s kata Pane, shell-syntax Project link, links on a remote host'"'"'s Pane, quick quit without toast, the go-to-waiting command toasting with no agent waiting and moving nothing, links into Panes started by full path, backslash path and title alone, a longer name not matched, an agent tab opened right of the Pane'"'"'s tab and no other tab moved, startup-failure and not-installed toasts by exit status, Update tern-kata on a local session host running update --pause and no plugin step, the update Pane not a kata Pane after a plugin reload, a failed plugin step after Update tern-kata on a remote host toasting its last stderr line, no plugin step and an up-to-date toast when the window plugin is already at the release, no plugin step and a linked toast when the window plugin is linked, and (Tern 0.9.16 and later) a plugin step still running at a plugin reload ending as a process_exit in the reloaded window toasting its success with the pending key gone and its failure with the last stderr line\n'

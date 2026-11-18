@@ -35,7 +35,8 @@ func TestLaneHeadersTakeTheirOwnTonesAndCustomLanesTakeTheRestInTurn(t *testing.
 	s := boardPane(t)
 	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"needs-triage", "in-review", "ready-for-human", "qa", "blocked", "ship"}}).State
 	nodes := wireNodes(t, view.Render(s.Model, now))
-	want := []string{"muted", "warning", "accent", "user", "pending", "neutral", "accent", "success"}
+	// Custom Lanes take info, user and neutral in turn by their place among the Lanes; No lane and Done are muted.
+	want := []string{"muted", "info", "user", "neutral", "info", "user", "neutral", "muted"}
 	for i, tone := range want {
 		head := node(t, nodes, fmt.Sprintf("%s.lane%d.head.title", view.BoardID, i))
 		if got := head.P["tone"]; got != tone {
@@ -61,10 +62,9 @@ func TestCardPartsEachDrawInTheirTone(t *testing.T) {
 	for _, c := range []struct {
 		uid, part, tone string
 	}{
-		{"open", "id.short", "error"},
-		{"open", "owner", "user"},
-		{"open", "labels.bug", "info"},
-		{"done", "id.short", "success"},
+		{"open", "id.short", "user"},
+		{"open", "labels.bug", "neutral"},
+		{"done", "id.short", "muted"},
 	} {
 		if got := card(c.uid, c.part).P["tone"]; got != c.tone {
 			t.Errorf("%s %s tone = %v, want %s", c.uid, c.part, got, c.tone)
@@ -73,14 +73,19 @@ func TestCardPartsEachDrawInTheirTone(t *testing.T) {
 	if got := spanStyle(t, card("open", "title")); got != "" {
 		t.Errorf("an open card's title style = %q, want the normal text colour", got)
 	}
-	if got := spanStyle(t, card("open", "also")); got != "warning" {
-		t.Errorf("the also note style = %q, want warning", got)
+	if got := spanStyle(t, card("open", "also")); got != "muted" {
+		t.Errorf("the also note style = %q, want muted", got)
+	}
+	if got := spanStyle(t, card("open", "facts.owner")); got != "" {
+		t.Errorf("the owner style = %q, want the normal text colour", got)
 	}
 	if got := spanStyle(t, card("done", "title")); got != "muted" {
 		t.Errorf("a Done card's title style = %q, want muted", got)
 	}
-	if got := spanStyle(t, card("done", "reopen")); got != "muted" {
-		t.Errorf("the reopen hint style = %q, want muted", got)
+	s = step(t, s, model.SelectMsg{UID: "done"}).State
+	nodes = wireNodes(t, view.Render(s.Model, now))
+	if got := spanStyle(t, card("done", "facts.reopen")); got != "muted" {
+		t.Errorf("the reopen fact style = %q, want muted", got)
 	}
 	if got := card("done", "").P["tone"]; got != "muted" {
 		t.Errorf("a Done card's ring tone = %v, want muted", got)

@@ -36,26 +36,24 @@ func TestListRowsShowDateBadgeOfOpenDatedIssues(t *testing.T) {
 	}
 }
 
-func TestListRowDropsDateBadgeBeforeTitleWhenNarrow(t *testing.T) {
+func TestListRowKeepsDateBadgeWhenNarrow(t *testing.T) {
 	day, later := "2026-11-05", "2027-01-10"
 	issue := model.Issue{UID: "dated", ShortID: "dddd", Title: "A rather long Dated title", Status: "open", ProjectName: "work", ScheduledOnDate: &later}
-	load := func(cols int) model.Model {
-		m := apply(model.Model{},
-			model.Start{Workspace: "/repo"},
-			model.ResizeMsg{Cols: cols},
-			model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}},
-			snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}}}},
-		)
-		m.Calendar.Date = day
-		return m
-	}
-	// Beside the detail the list is about 71 columns (0.4 of the Pane plus half of the free tenth): the whole title and the 20-cell badge do not fit, so the badge goes and the title stays whole.
-	side := text(render(t, load(160))[view.IssueID("dated")])
-	if strings.Contains(side, "scheduled 2027-01-10") || !strings.Contains(side, "A rather long Dated title") {
-		t.Errorf("side by side row %q, want the title without the badge", side)
+	m := apply(model.Model{},
+		model.Start{Workspace: "/repo"},
+		model.ResizeMsg{Cols: 160},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}},
+		snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}}}},
+	)
+	m.Calendar.Date = day
+	// Beside the detail the list is about 71 columns: the Date badge is a column of its own and is never dropped for width; the title
+	// before it is left whole and Tern ellipsizes it where it overflows.
+	side := text(render(t, m)[view.IssueID("dated")])
+	if !strings.Contains(side, "scheduled 2027-01-10") {
+		t.Errorf("side by side row %q, want the badge", side)
 	}
 	// Alone in the Pane the list has room for both.
-	m, _ := model.Update(load(160), model.KeyMsg{Chord: "shift+l"})
+	m, _ = model.Update(m, model.KeyMsg{Chord: "shift+l"})
 	if got := text(render(t, m)[view.IssueID("dated")]); !strings.Contains(got, "scheduled 2027-01-10") || !strings.Contains(got, "A rather long Dated title") {
 		t.Errorf("list alone row %q, want badge and title", got)
 	}

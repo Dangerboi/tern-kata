@@ -187,20 +187,26 @@ func TestAnIssueWithTwoLaneLabelsShowsOnceWithAnAlsoNote(t *testing.T) {
 	s := boardPane(t, boardCard("both", "ready-for-human", "needs-info"))
 	wantLane(t, s, 2, "Needs info", "both")
 	wantLane(t, s, 4, "Ready for human")
-	if text := wireText(cardNode(t, s, "both")); !strings.Contains(text, "also: ready-for-human") {
+	if text := wireText(cardNode(t, s, "both")); !strings.Contains(text, "also in Ready for human") {
 		t.Errorf("card = %s, want an also note", text)
 	}
 }
 
-func TestDoneCardsNameTheLaneTheyReopenInto(t *testing.T) {
+func TestOnlyTheSelectedDoneCardNamesTheLaneItReopensIn(t *testing.T) {
 	s := boardPane(t, closedAt("labelled", time.October, 7, "needs-info"), closedAt("bare", time.October, 6), boardCard("open"))
-	if text := wireText(cardNode(t, s, "labelled")); !strings.Contains(text, "r → Needs info") {
-		t.Errorf("labelled card = %s", text)
+	s = step(t, s, model.SelectMsg{UID: "open"}).State
+	for _, uid := range []string{"labelled", "bare"} {
+		if text := wireText(cardNode(t, s, uid)); strings.Contains(text, "reopens in") || strings.Contains(text, "r →") {
+			t.Errorf("unselected card %s = %s, want no reopen note", uid, text)
+		}
 	}
-	if text := wireText(cardNode(t, s, "bare")); !strings.Contains(text, "r → No lane") {
-		t.Errorf("bare card = %s", text)
+	for uid, want := range map[string]string{"labelled": "reopens in Needs info", "bare": "reopens in No lane"} {
+		sel := step(t, s, model.SelectMsg{UID: uid}).State
+		if text := wireText(cardNode(t, sel, uid)); !strings.Contains(text, want) {
+			t.Errorf("selected card %s = %s, want %q", uid, text, want)
+		}
 	}
-	if text := wireText(cardNode(t, s, "open")); strings.Contains(text, "r →") {
+	if text := wireText(cardNode(t, step(t, s, model.SelectMsg{UID: "open"}).State, "open")); strings.Contains(text, "reopens in") {
 		t.Errorf("open card = %s, want no reopen note", text)
 	}
 }
@@ -213,7 +219,7 @@ func TestOnlyTheSelectedCardShowsItsFullTitleOwnerAndLabels(t *testing.T) {
 		t.Fatalf("fixture: selected %q", s.Model.SelectedUID)
 	}
 	sel, oth := wireText(cardNode(t, s, "sel")), wireText(cardNode(t, s, "oth"))
-	for _, want := range []string{"Title of sel", "dana", "ready-for-agent", "bug"} {
+	for _, want := range []string{"Title of sel", "dana", "bug"} {
 		if !strings.Contains(sel, want) {
 			t.Errorf("selected card lacks %q: %s", want, sel)
 		}
@@ -489,7 +495,7 @@ func TestBoardLanesShrinkAndTheirCardsWrap(t *testing.T) {
 	}
 }
 
-func TestBoardCardIdAndPriorityBadgesAreMono(t *testing.T) {
+func TestBoardCardIdAndPriorityBadgesAreMonoAndTheCountAndDateAreNot(t *testing.T) {
 	card := boardCard("a")
 	p := int64(1)
 	card.Priority = &p
@@ -502,7 +508,7 @@ func TestBoardCardIdAndPriorityBadgesAreMono(t *testing.T) {
 			t.Errorf("%s role = %q, want %q", part, role, view.MonoRole)
 		}
 	}
-	if heads, _ := lanes(t, s); len(heads) == 0 || !strings.Contains(heads[0], `mono`) {
-		t.Errorf("a Lane's card count is not mono: %v", heads)
+	if heads, _ := lanes(t, s); len(heads) == 0 || strings.Contains(heads[0], `mono`) {
+		t.Errorf("a Lane's card count is mono, want the UI font: %v", heads)
 	}
 }

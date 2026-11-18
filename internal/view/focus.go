@@ -38,12 +38,7 @@ var listNodes = map[model.ListNode]struct {
 		}
 		return ""
 	}},
-	model.ListNodeDaemons: {DaemonListID, func(m model.Model) string {
-		if e := m.SelectedDaemon(); e != nil {
-			return itemID(DaemonListID, e.Name)
-		}
-		return ""
-	}},
+	model.ListNodeDaemons:   {DaemonListID, func(model.Model) string { return "" }}, // the Table keeps its own Selected row
 	model.ListNodeRuns:      {RunListID, func(m model.Model) string { return selectedItem(RunListID, m.Runs.Selected) }},
 	model.ListNodeAttention: {AttentionListID, func(m model.Model) string { return selectedItem(AttentionListID, m.Attention.Selected) }},
 }

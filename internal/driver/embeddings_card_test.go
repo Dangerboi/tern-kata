@@ -106,14 +106,14 @@ func TestTheSearchByMeaningCardAsksInTheWordsOfWhatWillHappen(t *testing.T) {
 		status model.EmbeddingsStatus
 		want   string
 	}{
-		"your Ollama":     {offWithOllama, "Turn on search by meaning? kata will use your Ollama; nothing to download. y/n"},
-		"this machine":    {offWithDownload, "Turn on search by meaning? kata downloads about 290 MB (shared by all Kenn apps) to the kata daemon's machine (this machine). Search stays by words until the daemon restarts. y/n"},
-		"another machine": {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true, Remote: true}, "Turn on search by meaning? kata downloads about 290 MB (shared by all Kenn apps) to the kata daemon's machine (another machine). Search stays by words until the daemon restarts. y/n"},
-		"a named host":    {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true, Remote: true, Host: "kata.example:7474"}, "Turn on search by meaning? kata downloads about 290 MB (shared by all Kenn apps) to the kata daemon's machine (kata.example:7474). Search stays by words until the daemon restarts. y/n"},
-		"already there":   {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true}, "Turn on search by meaning? kata will use its built-in model, already on the kata daemon's machine; nothing to download. Search stays by words until the daemon restarts. y/n"},
+		"your Ollama":     {offWithOllama, "Turn on search by meaning? kata will use your Ollama; nothing to download."},
+		"this machine":    {offWithDownload, "Turn on search by meaning? kata downloads about 290 MB (shared by all Kenn apps) to the kata daemon's machine (this machine). Search stays by words until the daemon restarts."},
+		"another machine": {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true, Remote: true}, "Turn on search by meaning? kata downloads about 290 MB (shared by all Kenn apps) to the kata daemon's machine (another machine). Search stays by words until the daemon restarts."},
+		"a named host":    {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, DownloadBytes: 290_400_000, CanChange: true, Remote: true, Host: "kata.example:7474"}, "Turn on search by meaning? kata downloads about 290 MB (shared by all Kenn apps) to the kata daemon's machine (kata.example:7474). Search stays by words until the daemon restarts."},
+		"already there":   {model.EmbeddingsStatus{Provider: model.EmbeddingsOff, CanChange: true}, "Turn on search by meaning? kata will use its built-in model, already on the kata daemon's machine; nothing to download. Search stays by words until the daemon restarts."},
 	} {
 		s := step(t, embeddingsRowOn(t, tc.status), key("s")).State
-		wantText(t, name, wireTextOf(t, s), "Search by meaning", tc.want, "Turn on", "Not now")
+		wantText(t, name, wireTextOf(t, s), "Search by meaning", "kata daemon:", tc.want, "Turn on", "Not now")
 	}
 }
 
@@ -131,7 +131,7 @@ func TestYSendsExactlyOnePostAndTheCardWaitsForKatasAnswer(t *testing.T) {
 	if want := []model.Cmd{model.TurnOnEmbeddings{Workspace: out.State.Model.Workspace, Connection: out.State.Model.Connection}}; !equalCmds(out.Cmds, want) {
 		t.Fatalf("y sent %#v, want %#v", out.Cmds, want)
 	}
-	wantText(t, "waiting", wireTextOf(t, out.State), "Turning it on…")
+	wantText(t, "waiting", wireTextOf(t, out.State), "Turning on search by meaning…")
 	for _, chords := range [][]string{{"escape", "s", "y"}, {"escape", "enter", "y"}} {
 		inputs := make([]any, len(chords))
 		for i, c := range chords {
@@ -149,7 +149,7 @@ func TestYSendsExactlyOnePostAndTheCardWaitsForKatasAnswer(t *testing.T) {
 func TestTheCardFollowsTheJobWithTheRowsWordsABarAndPolling(t *testing.T) {
 	sent := turnedOn(t, embeddingsCardOpen(t))
 	started := step(t, sent.State, model.EmbeddingsTurnedOn{Status: downloading, Connection: sent.State.Model.Connection})
-	wantText(t, "download", wireTextOf(t, started.State), "downloading 120 / 290 MB", "kata keeps going if you close this.")
+	wantText(t, "download", wireTextOf(t, started.State), "turning on · downloading 120 / 290 MB", "kata keeps going if you close this.")
 	if !hasProgress(t, started.State, "layer.embeddings.download") {
 		t.Error("the download draws no progress bar")
 	}
@@ -193,12 +193,15 @@ func TestAFailedJobShowsKatasErrorAndSAsksAgain(t *testing.T) {
 	started := step(t, sent.State, model.EmbeddingsTurnedOn{Status: downloading, Connection: sent.State.Model.Connection})
 	poll := lastRead(t, started.Cmds)
 	failed := step(t, started.State, model.EmbeddingsStatusLoaded{Request: poll.Request, Status: jobFailed})
-	wantText(t, "failure", wireTextOf(t, failed.State), "turning it on failed: disk full", "Turn on…")
+	wantText(t, "failure", wireTextOf(t, failed.State), "not turned on · disk full", "Turn on…")
 	if failed.State.Model.CurrentMode() != model.ModeEmbeddingsOff {
 		t.Fatalf("mode %s, want the mode where s asks again", failed.State.Model.CurrentMode())
 	}
-	if footer, _ := offered(failed.State.Model, "s"); !footer {
-		t.Error("the footer does not list s on a failed job")
+	if text, ok := nodeText(t, failed.State, "layer.embeddings.foot.turn-on"); !ok || !strings.Contains(text, "Turn on…") {
+		t.Errorf("the card has no Turn on… button on a failed job: %q, %v", text, ok)
+	}
+	if footer, _ := offered(failed.State.Model, "s"); footer {
+		t.Error("the footer repeats s, which the Turn on… button presses")
 	}
 	asked := step(t, failed.State, key("s"))
 	if len(asked.Cmds) != 0 || asked.State.Model.CurrentMode() != model.ModeEmbeddingsAsk {
@@ -219,11 +222,11 @@ func TestClosingTheCardMidJobLeavesTheRowPollingAndANewCardPicksTheJobUp(t *test
 	}
 	more := step(t, closed.State, model.EmbeddingsStatusLoaded{Request: poll.Request, Status: downloading})
 	lastRead(t, more.Cmds)
-	wantText(t, "row", wireTextOf(t, more.State), "downloading 120 / 290 MB")
+	wantText(t, "row", wireTextOf(t, more.State), "turning on · downloading 120 / 290 MB")
 
 	reopened := step(t, more.State, key("enter"))
 	text := wireTextOf(t, reopened.State)
-	wantText(t, "reopened", text, "downloading 120 / 290 MB", "kata keeps going if you close this.")
+	wantText(t, "reopened", text, "turning on · downloading 120 / 290 MB", "kata keeps going if you close this.")
 	if strings.Contains(text, "Turn on search by meaning?") || reopened.State.Model.CurrentMode() != model.ModeEmbeddings {
 		t.Errorf("the reopened card asks again instead of following the job: mode %s, %s", reopened.State.Model.CurrentMode(), text)
 	}

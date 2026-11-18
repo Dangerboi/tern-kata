@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"cmp"
+	"time"
+)
 
 const (
 	ModeCalendar   Mode   = "calendar"
@@ -105,15 +108,13 @@ func showCalendar(m Model, entry cardEntry) Model {
 	if entry.busy(m) {
 		return m
 	}
-	text, _, ok := dateFieldOf(&m, entry.card)
+	text, other, ok := dateFieldOf(&m, entry.card)
 	if !ok {
 		return m
 	}
 	today := m.paneToday()
-	cursor := dayOf(*text, today)
-	if cursor == "" {
-		cursor = today
-	}
+	// The calendar opens on the month of the field's own date, else of the other date, since the two usually lie close together.
+	cursor := cmp.Or(dayOf(*text, today), dayOf(other, today), today)
 	if cursor == "" {
 		return m
 	}

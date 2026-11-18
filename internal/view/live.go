@@ -8,21 +8,24 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-const RetryID = "main.retry"
-
-func failureView(m model.Model) tern.Nodes {
-	return ui.Nodes(
-		plainText("error", ui.ToneError, m.Err.Error()),
-		ui.Button{Common: ui.Common{Key: "retry", Actions: &ui.Actions{Click: RetryClick}}, Text: "Retry daemon"},
-	)
-}
-
+// staleText is the one line for a Pane whose stream to kata is down: what is on screen, as of when, and what is off.
 func staleText(m model.Model) string {
-	text := "Read-only: reconnecting to kata; showing stale Issues."
-	if m.StreamErr != nil {
-		text += "\n" + m.StreamErr.Error()
+	text := "Disconnected from kata."
+	if !m.StaleSince.IsZero() {
+		text += " Showing Issues as of " + m.Calendar.Read(m.StaleSince, m.Now) + "; changes are off until it reconnects."
+	} else {
+		text += " Changes are off until it reconnects."
 	}
 	return text
+}
+
+// staleLine is the stale text in the pending tone. The error kata gave is in its Hovercard, not on the line.
+func staleLine(m model.Model) tern.Element {
+	line := plainText("stale", ui.TonePending, staleText(m))
+	if m.StreamErr != nil {
+		line.Hovercard = ui.Hovercard{Element: plainText("reason", ui.ToneNeutral, model.Reason(m.StreamErr))}
+	}
+	return line
 }
 
 // footerNodes is what the Pane draws under its columns: a question waiting for its answer, then the stale and notice lines.
@@ -33,10 +36,14 @@ func footerNodes(m model.Model) []tern.Element {
 		nodes = append(nodes, question(q))
 	}
 	if m.Stale && m.Err == nil && !m.FirstLoad() && !m.HelpOpen {
-		nodes = append(nodes, plainText("stale", ui.TonePending, staleText(m)))
+		nodes = append(nodes, staleLine(m))
 	}
 	if m.Notice != "" && !m.HelpOpen {
-		nodes = append(nodes, plainText("notice", ui.ToneAccent, m.Notice))
+		tone := ui.ToneNeutral
+		if m.NoticeKind == model.NoticeFail {
+			tone = ui.ToneError
+		}
+		nodes = append(nodes, ui.Text{Common: ui.Common{Key: "notice", Tone: tone}, Spans: prose(m.Notice, "")})
 	}
 	return nodes
 }
@@ -49,7 +56,15 @@ func question(q model.Question) tern.Element {
 		yes = destructive(yes)
 	}
 	return ui.Row{Common: ui.Common{Key: string(q.Mode)}, Gap: ui.GapMD, Align: ui.AlignCenter, Wrap: true, Children: ui.Nodes(
-		plainText("text", ui.ToneAccent, q.Text), yes, cardButton("no", q.Mode, q.No, q.NoWords, false))}
+		ui.Text{Common: ui.Common{Key: "text", Tone: questionTone(q)}, Spans: prose(q.Text, "")}, yes, cardButton("no", q.Mode, q.No, q.NoWords, false))}
+}
+
+// questionTone is warning for a destructive question and default text otherwise: accent marks where you are, not a question.
+func questionTone(q model.Question) ui.Tone {
+	if q.Danger {
+		return ui.ToneWarning
+	}
+	return ui.ToneNeutral
 }
 
 // toasts is the model's toast, drawn from the step that raised it until ToastExpired for its Seq, so a late client never gets a stale
@@ -60,9 +75,13 @@ func toasts(m model.Model) []tern.Element {
 	if t == nil {
 		return nil
 	}
-	toast := ui.Toast{Common: ui.Common{Key: "toast-" + strconv.Itoa(t.Seq), Tone: ui.ToneAccent}, Text: t.Text}
+	toast := ui.Toast{Common: ui.Common{Key: "toast-" + strconv.Itoa(t.Seq), Tone: ui.ToneSuccess}, Text: t.Text}
 	if t.Label != "" {
 		toast.Action, toast.Label = ToastClick(t.Seq), t.Label
+		if t.Key != "" {
+			// Tern's toast has no keycap slot, so the key follows the label.
+			toast.Label += " " + keycap(t.Chord, t.Key)
+		}
 	}
 	return []tern.Element{toast}
 }

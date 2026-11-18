@@ -12,8 +12,8 @@ func deleteLayer(m model.Model) tern.Element {
 		return nil
 	}
 	children := []tern.Element{
-		toneText("issue", ui.ToneAccent, form.QualifiedID+" "+form.Title),
-		toneText("note", ui.ToneMuted, "A deleted Issue can be restored: press u right after, or use Restore a deleted Issue in the Menu."),
+		ui.Text{Common: ui.Common{Key: "issue"}, Spans: []ui.Span{{T: form.Title, S: "strong"}}},
+		ui.Text{Common: ui.Common{Key: "note"}, Spans: prose("Restore it with "+model.Key("u")+" right after, or from the Menu.", "muted")},
 	}
 	for _, spec := range model.DeleteFields {
 		name := spec.Name
@@ -21,21 +21,26 @@ func deleteLayer(m model.Model) tern.Element {
 		if form.Field == name {
 			tone = ui.ToneAccent
 		}
-		label, placeholder, text := "Reason (optional)", "none", form.Reason
+		label, placeholder, text := "Reason", "", form.Reason
 		if name == model.DeleteID {
-			label, placeholder, text = "Type "+form.QualifiedID+" or DELETE "+form.QualifiedID+" to confirm", form.QualifiedID, form.ID
+			label, placeholder, text = "Confirm id", form.Ref, form.ID
 		}
-		children = append(children,
-			toneText(string(name)+"-label", tone, label),
-			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: form.Saving}})
+		input := ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Readonly: form.Saving}}
+		if placeholder != "" {
+			input.Placeholder = ui.T(placeholder)
+		}
+		children = append(children, labelledInput(string(name), label, "", form.Field == name, input)...)
 	}
+	busy := ""
 	if form.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
 	if form.Saving {
-		children = append(children, toneText("pending", ui.TonePending, "Deleting Issue…"))
-	} else {
-		children = append(children, buttonRow(destructive(cardButton("delete", model.ModeDeleteForm, model.DeleteSubmit, "Delete", false)), cardButton("cancel", model.ModeDeleteForm, model.DeleteCancel, "Cancel", false)))
+		busy = model.Progress("Deleting", "Issue")
+		children = append(children, toneText("pending", ui.TonePending, busy))
 	}
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDelete)}, Head: ui.T("Delete"), Meta: refMeta("#" + form.ShortID), Icon: ui.IconTrash, Modal: true, Size: ui.SizeLG}, children))
+	cancel := exitButton("cancel", model.ModeDeleteForm, model.DeleteCancel, "Cancel")
+	del := destructive(cardButton("delete", model.ModeDeleteForm, model.DeleteSubmit, "Delete", false))
+	children = append(children, buttonRow(unavailable(del, busy), unavailable(cancel, busy)))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardDelete)}, Head: ui.T("Delete Issue"), Meta: refMeta(form.Ref), Icon: ui.IconTrash, Modal: true, Size: ui.SizeMD}, children))
 }

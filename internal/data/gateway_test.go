@@ -565,7 +565,7 @@ func TestGatewayStoresReviewedPathsAndExternalEvidenceAndActivityNamesThem(t *te
 					bodies = append(bodies, item.Activity.Body)
 				}
 			}
-			if !slices.ContainsFunc(bodies, func(b string) bool { return strings.Contains(b, "("+tt.activity+")") }) {
+			if !slices.ContainsFunc(bodies, func(b string) bool { return strings.Contains(b, "Evidence: "+tt.activity) }) {
 				t.Fatalf("Activity rows %q do not name %q", bodies, tt.activity)
 			}
 		})

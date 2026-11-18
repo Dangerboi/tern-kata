@@ -47,7 +47,7 @@ var questions = []questionEntry{
 		return Question{Text: "Delete view " + m.Views.Deleting + "? y/n", Yes: ConfirmDeleteViewAction, No: KeepViewAction, YesWords: "Delete", NoWords: "Keep", Danger: true}, m.Views.Deleting != ""
 	}},
 	{ModeSwitchDocbank, func(m Model) (Question, bool) {
-		return Question{Text: "Switch to kata's local Docbank? kata restarts its daemon. y/n", Yes: ConfirmSwitchDocbankAction, No: KeepDocbankAction, YesWords: "Switch", NoWords: "Keep"}, m.ConfigPage.AskSwitch
+		return Question{Text: "Switch to kata's local Docbank? kata restarts its daemon.", Yes: ConfirmSwitchDocbankAction, No: KeepDocbankAction, YesWords: "Switch", NoWords: "Keep"}, m.ConfigPage.AskSwitch
 	}},
 	{ModeUnlinkAttachment, func(m Model) (Question, bool) {
 		a := m.AskUnlink
@@ -84,8 +84,9 @@ func (m Model) Question() (Question, bool) {
 func (m Model) covered() bool { return m.coverMode() != "" }
 
 // OnErrorScreen reports whether the Pane draws its daemon error in place of the Page: an error with no help sheet over it.
-// Cards and questions are still drawn over it; a search left open is not, as it lives in the list the error replaces.
-func (m Model) OnErrorScreen() bool { return m.Err != nil && !m.HelpOpen }
+// Cards and questions are still drawn over it; a search left open is not, as it lives in the list the error replaces. The Daemons
+// Page is the way out of the screen to another daemon, so it is drawn with the error still set.
+func (m Model) OnErrorScreen() bool { return m.Err != nil && !m.HelpOpen && !m.OnDaemons() }
 
 func (m Model) CurrentMode() Mode {
 	if mode := m.coverMode(); mode != "" {
@@ -100,7 +101,7 @@ func (m Model) CurrentMode() Mode {
 		}
 		return ModeSearch
 	}
-	if m.Err != nil {
+	if m.Err != nil && !m.OnDaemons() {
 		return ModeError
 	}
 	if mode := pageMode(m); mode != "" {
@@ -136,6 +137,9 @@ func LookupBindingForMode(chord string, mode Mode) (Binding, bool) {
 }
 
 func (b Binding) Described(m Model) string {
+	if b.entry != nil && b.entry.footerLabel != nil {
+		return b.entry.footerLabel(m)
+	}
 	if b.entry != nil && b.entry.label != nil {
 		return b.entry.label(m)
 	}
@@ -143,6 +147,10 @@ func (b Binding) Described(m Model) string {
 }
 
 func (b Binding) Offered(m Model) bool {
+	// The Menu popup's view keys act on a saved view only, so its footer names them only while the cursor is on one.
+	if b.Mode == ModePicker && (b.Action == EditViewAction || b.Action == AskDeleteView) && !m.CursorOnSavedView() {
+		return false
+	}
 	return b.entry == nil || b.entry.when == nil || b.entry.when(m)
 }
 
@@ -154,8 +162,23 @@ func (b Binding) run(m Model) (Model, []Cmd) {
 	return b.entry.handle(m)
 }
 
+// footerRank puts the keys every Page ends its footer with last: the escape key (Back or Menu), then help, then quit. Everything
+// else keeps the order of its entry.
+func footerRank(b Binding) int {
+	switch {
+	case b.Action == QuitAction:
+		return 3
+	case b.Action == ToggleHelp:
+		return 2
+	case b.Chord == "escape":
+		return 1
+	}
+	return 0
+}
+
 func BindingsForMode(mode Mode, footerOnly bool) iter.Seq[Binding] {
 	return func(yield func(Binding) bool) {
+		var active []Binding
 		for _, binding := range Keymap {
 			if binding.Mode != "" && binding.Mode != mode {
 				continue
@@ -163,10 +186,16 @@ func BindingsForMode(mode Mode, footerOnly bool) iter.Seq[Binding] {
 			if footerOnly && !binding.ShowInFooter {
 				continue
 			}
-			active, ok := LookupBindingForMode(binding.Chord, mode)
-			if !ok || active != binding {
+			found, ok := LookupBindingForMode(binding.Chord, mode)
+			if !ok || found != binding {
 				continue
 			}
+			active = append(active, binding)
+		}
+		if footerOnly {
+			slices.SortStableFunc(active, func(a, b Binding) int { return cmp.Compare(footerRank(a), footerRank(b)) })
+		}
+		for _, binding := range active {
 			if !yield(binding) {
 				return
 			}
@@ -183,6 +212,7 @@ const (
 	sheetChildren
 	sheetForms
 	sheetFilters
+	sheetMenu
 	sheetBoard
 	sheetJobs
 	sheetWorkflows
@@ -191,7 +221,12 @@ const (
 	sheetLettered
 )
 
-var sheetTitles = [...]string{"Global", "Graph", "Detail", "Children", "Forms", "Filters", "Board", "Jobs", "Workflows", "Runs", "Attention", "Lettered Pages"}
+// SheetEverywhere is the title of the group of keys that work on every Page, which the view adds the note on Emacs keys to.
+const SheetEverywhere = "Everywhere"
+
+// sheetTitles are the group titles the help sheet shows, in the order of the sheetGroup constants. The view reads "Cards" and
+// "Filter and search" for the card lines it adds itself.
+var sheetTitles = [...]string{SheetEverywhere, "Issue list", "Issue detail", "Children", "Cards", "Filter and search", "Menu", "Board", "Jobs", "Workflows", "Runs", "Attention", "More Pages"}
 
 // sheetLine places an entry's keys on one line of the help sheet. Rank orders the lines of a group; entries that
 // share a group and text share the line, their keys in rank order.

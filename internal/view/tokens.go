@@ -14,35 +14,45 @@ func tokenLayer(m model.Model) tern.Element {
 	if !form.Open {
 		return nil
 	}
-	children := make([]tern.Element, 0, 3*len(model.TokenFields)+4)
+	children := make([]tern.Element, 0, 3*len(model.TokenFields)+2)
 	if form.Done {
 		children = append(children,
-			toneText("done", ui.ToneSuccess, "Created token "+strconv.FormatInt(form.DoneID, 10)+"."),
-			ui.Text{Common: ui.Common{Key: "file"}, Text: "Its secret is in " + form.DoneFile + ", readable by you alone. It is not shown anywhere and cannot be read from kata again."},
-			buttonRow(cardButton("close", model.ModeTokenForm, model.TokenSubmit, "Close", true)))
-		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardToken)}, Head: ui.T("Token created"), Icon: ui.IconKey, Modal: true, Size: ui.SizeLG}, children))
+			ui.Text{Common: ui.Common{Key: "file"}, Spans: []ui.Span{{T: "The secret is in "}, monoSpan(form.DoneFile, ""), {T: ". Only you can read it; kata cannot show it again."}}},
+			buttonRow(exitButton("close", model.ModeTokenForm, model.TokenSubmit, "Close")))
+		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardToken)}, Head: ui.T("Token " + strconv.FormatInt(form.DoneID, 10) + " created"), Icon: ui.IconKey, Modal: true, Size: ui.SizeLG}, children))
 	}
 	for _, spec := range model.TokenFields {
 		name := spec.Name
+		focused := form.Field == name
 		tone := ui.ToneNeutral
-		if form.Field == name {
+		if focused {
 			tone = ui.ToneAccent
 		}
 		label := model.TokenLabel(name)
+		hint := ""
+		if focused {
+			hint = model.TokenHint(name)
+		}
+		if !spec.Text {
+			if control := choiceControl(m, model.CardToken, name, label, focused, hint, ""); control != nil {
+				children = append(children, control)
+			}
+			continue
+		}
 		text := form.Values.Value(name)
-		children = append(children,
-			toneText(string(name)+"-label", tone, label),
-			ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Readonly: form.Saving}})
+		children = append(children, labelledInput(string(name), label, hint, focused, ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Readonly: form.Saving}})...)
 	}
-	children = append(children, toneText("note", ui.ToneMuted, "The secret is written to a new file only you can read, and is never shown. The file must not exist yet."))
+	busy := ""
 	if form.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))
 	}
 	if form.Saving {
-		children = append(children, toneText("pending", ui.TonePending, "Creating token…"))
-	} else {
-		children = append(children, buttonRow(cardButton("save", model.ModeTokenForm, model.TokenSubmit, "Create token", true), cardButton("cancel", model.ModeTokenForm, model.TokenCancel, "Cancel", false)))
+		busy = model.Progress("Creating", "token")
+		children = append(children, toneText("pending", ui.TonePending, busy))
 	}
+	create := unavailable(cardButton("save", model.ModeTokenForm, model.TokenSubmit, "Create token", true), busy)
+	cancel := unavailable(exitButton("cancel", model.ModeTokenForm, model.TokenCancel, "Cancel"), busy)
+	children = append(children, buttonRow(create, cancel))
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardToken)}, Head: ui.T("New token"), Icon: ui.IconKey, Modal: true, Size: ui.SizeLG}, children))
 }
 
@@ -51,14 +61,20 @@ func revokeLayer(m model.Model) tern.Element {
 	if !r.Open {
 		return nil
 	}
-	children := []tern.Element{toneText("question", ui.ToneWarning, r.Question())}
+	children := []tern.Element{
+		toneText("question", ui.ToneWarning, r.Question()),
+		toneText("consequence", ui.ToneMuted, r.Consequence()),
+	}
+	busy := ""
 	if r.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, r.Err.Error()))
 	}
 	if r.Saving {
-		children = append(children, toneText("pending", ui.TonePending, "Revoking token…"))
-	} else {
-		children = append(children, buttonRow(destructive(cardButton("revoke", model.ModeRevokeToken, model.RevokeConfirm, "Revoke", false)), cardButton("keep", model.ModeRevokeToken, model.RevokeCancel, "Keep", true)))
+		busy = model.Progress("Revoking", "token")
+		children = append(children, toneText("pending", ui.TonePending, busy))
 	}
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRevoke)}, Head: ui.T("Revoke token"), Icon: ui.IconKeyRound, Modal: true, Size: ui.SizeLG}, children))
+	revoke := unavailable(destructive(cardButton("revoke", model.ModeRevokeToken, model.RevokeConfirm, "Revoke", false)), busy)
+	cancel := unavailable(exitButton("cancel", model.ModeRevokeToken, model.RevokeCancel, "Cancel"), busy)
+	children = append(children, buttonRow(revoke, cancel))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardRevoke)}, Head: ui.T("Revoke token"), Icon: ui.IconKeyRound, Modal: true, Size: ui.SizeMD}, children))
 }

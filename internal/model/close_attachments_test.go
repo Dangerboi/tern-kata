@@ -77,7 +77,7 @@ func TestClosePickerIsOnlyOfferedToADoneCloseOfAnIssueWithAttachments(t *testing
 		t.Fatal("a wontfix close is offered the picker")
 	}
 	m, _ = updated(m, model.FocusFieldMsg{Field: model.CloseExternal}, model.KeyMsg{Chord: "tab"})
-	if m.CloseForm.Field != model.CloseReference {
+	if m.CloseForm.Field != model.CloseReason {
 		t.Fatalf("tab went to %q, want the field after the hidden picker", m.CloseForm.Field)
 	}
 	// A pick made while the reason was done is not sent with another reason.
@@ -116,13 +116,13 @@ func TestEventsLineNamesAttachmentEvidenceAndHowItStands(t *testing.T) {
 		metadata      map[string]any
 		want          string
 	}{
-		{"present", withCopy, map[string]any{"attachment.A": now}, "shipped (attachment report.pdf)"},
-		{"unlinked", withCopy, nil, "shipped (attachment report.pdf [removed])"},
-		{"replaced", withCopy, map[string]any{"attachment.A": changed}, "shipped (attachment report.pdf [changed])"},
-		{"no copy, present", `{"reason":"done","evidence":[{"type":"attachment","attachment_id":"A"}]}`, map[string]any{"attachment.A": now}, "attachment report.pdf"},
-		{"no copy, gone", `{"reason":"done","evidence":[{"type":"attachment","attachment_id":"A"}]}`, nil, "Attachment removed"},
-		{"bad copy", `{"reason":"done","evidence":[{"type":"attachment","attachment_id":"A","attachment":{"name":"x/y"}}]}`, nil, "Invalid attachment"},
-		{"beside others", `{"reason":"done","evidence":[{"type":"commit","sha":"abc123def4"},{"type":"attachment","attachment_id":"A","attachment":` + frozen + `}]}`, map[string]any{"attachment.A": now}, "commit abc123d, attachment report.pdf"},
+		{"present", withCopy, map[string]any{"attachment.A": now}, "shipped\n\nEvidence: attachment report.pdf"},
+		{"unlinked", withCopy, nil, "shipped\n\nEvidence: attachment report.pdf (removed)"},
+		{"replaced", withCopy, map[string]any{"attachment.A": changed}, "shipped\n\nEvidence: attachment report.pdf (changed)"},
+		{"no copy, present", `{"reason":"done","evidence":[{"type":"attachment","attachment_id":"A"}]}`, map[string]any{"attachment.A": now}, "Evidence: attachment report.pdf"},
+		{"no copy, gone", `{"reason":"done","evidence":[{"type":"attachment","attachment_id":"A"}]}`, nil, "Evidence: Attachment removed"},
+		{"bad copy", `{"reason":"done","evidence":[{"type":"attachment","attachment_id":"A","attachment":{"name":"x/y"}}]}`, nil, "Evidence: Invalid attachment"},
+		{"beside others", `{"reason":"done","evidence":[{"type":"commit","sha":"abc123def4"},{"type":"attachment","attachment_id":"A","attachment":` + frozen + `}]}`, map[string]any{"attachment.A": now}, "Evidence: commit abc123d, attachment report.pdf"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := closeEventRow(t, tt.payload, tt.metadata); got != tt.want {

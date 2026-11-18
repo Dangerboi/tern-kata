@@ -103,7 +103,7 @@ func TestResumingANativeJobThatMissedRunsAsksBeforeWritingAndCountsThem(t *testi
 	if len(out.Cmds) != 0 || !backfillOpen(out.State) || out.State.Model.CurrentMode() != model.ModeBackfill {
 		t.Fatalf("p: cmds %#v, card on top %v, mode %s", out.Cmds, backfillOpen(out.State), out.State.Model.CurrentMode())
 	}
-	wantText(t, "card", backfillText(t, out.State), "Resume job?", "4 child Issues", "4 missed runs", "Weekly J1", "Create them", "Switch to latest and resume", "Cancel")
+	wantText(t, "card", backfillText(t, out.State), "Create 4 missed Issues?", "Weekly J1 missed 4 runs", "Resuming creates all of them now, or only the latest.", "Create all", "Only the latest", "Cancel")
 
 	create := step(t, out.State, key("c"))
 	save, ok := savedJob(create.Cmds)
@@ -136,7 +136,7 @@ func TestRestoringAnArchivedNativeJobThatMissedRunsAsksBeforeRestoring(t *testin
 	if len(out.Cmds) != 0 || !backfillOpen(out.State) {
 		t.Fatalf("x: cmds %#v, card on top %v", out.Cmds, backfillOpen(out.State))
 	}
-	wantText(t, "card", backfillText(t, out.State), "Restore job?", "4 child Issues", "Switch to latest and restore")
+	wantText(t, "card", backfillText(t, out.State), "Create 4 missed Issues?", "Restoring creates all of them now", "Only the latest")
 
 	create := step(t, out.State, key("c"))
 	restore, ok := sentRestore(create.Cmds)
@@ -163,7 +163,7 @@ func TestReopeningAParentWithAnEnabledNativeJobThatMissedRunsAsksBeforeReopening
 	if len(asked.Cmds) != 0 || !backfillOpen(asked.State) {
 		t.Fatalf("after the read: cmds %#v, card on top %v", asked.Cmds, backfillOpen(asked.State))
 	}
-	wantText(t, "card", backfillText(t, asked.State), "Reopen Issue?", "4 child Issues", "Weekly J1", "4 missed runs", "Switch to latest and reopen")
+	wantText(t, "card", backfillText(t, asked.State), "Create 4 missed Issues?", "Reopening #", "Weekly J1", "missed 4 runs", "Only the latest")
 
 	create := step(t, asked.State, key("c"))
 	reopen, ok := sentReopen(create.Cmds)
@@ -193,7 +193,7 @@ func TestReopeningAParentWithSeveralOwingJobsSwitchesEachBeforeReopening(t *test
 	jobs := []model.CronJob{owing("J1", "closed", "all"), owing("J2", "closed", "all"), owing("J3", "closed", "skip")}
 	asked := pressReopen(t, closedParentPane(t, jobs...), jobs...)
 	text := backfillText(t, asked.State)
-	wantText(t, "card", text, "8 child Issues", "Weekly J1", "Weekly J2")
+	wantText(t, "card", text, "Create 8 missed Issues?", "Weekly J1", "Weekly J2")
 	if strings.Contains(text, "Weekly J3") {
 		t.Error("a skip job is listed as owing a Backfill")
 	}
@@ -230,7 +230,7 @@ func TestASwitchToLatestThatFailsOrFindsTheJobChangedDoesNotGoOn(t *testing.T) {
 	newer := owing("J1", "open", "all")
 	newer.DefinitionEventUID = "EV9"
 	moved := step(t, latest.State, model.JobWritten{ProjectID: 7, UID: "J1", Changed: &newer})
-	if backfillOpen(moved.State) || len(moved.Cmds) != 0 || !strings.Contains(moved.State.Model.Notice, "changed meanwhile") {
+	if backfillOpen(moved.State) || len(moved.Cmds) != 0 || !strings.Contains(moved.State.Model.Notice, "changed since you opened it") {
 		t.Fatalf("a moved guard: card on top %v, cmds %#v, notice %q", backfillOpen(moved.State), moved.Cmds, moved.State.Model.Notice)
 	}
 
@@ -301,7 +301,7 @@ func TestEnablingAPausedJobThroughTheJobCardAsksAboutTheBackfillAndSendsTheCards
 	if len(out.Cmds) != 0 || !backfillOpen(out.State) || !out.State.Model.JobForm.Open {
 		t.Fatalf("saving sent %#v, Backfill card on top %v", out.Cmds, backfillOpen(out.State))
 	}
-	wantText(t, "card", backfillText(t, out.State), "4 child Issues", "4 missed runs", "Create them", "Switch to latest and save")
+	wantText(t, "card", backfillText(t, out.State), "Create 4 missed Issues?", "Weekly J1 missed 4 runs", "Saving creates all of them now", "Create all", "Only the latest")
 
 	create := step(t, out.State, key("c"))
 	save, ok := savedJob(create.Cmds)

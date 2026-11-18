@@ -37,7 +37,7 @@ func TestTheBadgeNamesTheMostPressingAgentWithTheCount(t *testing.T) {
 		tone    model.AgentTone
 		block   string
 	}{
-		{"working", []model.AgentEntry{entry("a", "1", 1)}, []model.AgentState{{Block: "1", State: "working"}}, "agent working", model.AgentToneAccent, "1"},
+		{"working", []model.AgentEntry{entry("a", "1", 1)}, []model.AgentState{{Block: "1", State: "working"}}, "agent working", model.AgentTonePending, "1"},
 		{"waiting", []model.AgentEntry{entry("a", "1", 1)}, []model.AgentState{{Block: "1", State: "waiting_input"}}, "agent waiting for you", model.AgentToneWarning, "1"},
 		{"idle", []model.AgentEntry{entry("a", "1", 1)}, []model.AgentState{{Block: "1", State: "idle"}}, "agent idle", model.AgentToneMuted, "1"},
 		{"exited", []model.AgentEntry{entry("a", "1", 1)}, []model.AgentState{{Block: "1", State: "exited"}}, "agent exited", model.AgentToneMuted, "1"},
@@ -45,7 +45,7 @@ func TestTheBadgeNamesTheMostPressingAgentWithTheCount(t *testing.T) {
 		{"block not listed", []model.AgentEntry{entry("a", "1", 1)}, []model.AgentState{{Block: "2", State: "working"}}, "agent", model.AgentToneMuted, "1"},
 		{"unknown word", []model.AgentEntry{entry("a", "1", 1)}, []model.AgentState{{Block: "1", State: "sleeping"}}, "agent", model.AgentToneMuted, "1"},
 		{"waiting beats working", []model.AgentEntry{entry("a", "1", 5), entry("a", "2", 1)}, []model.AgentState{{Block: "1", State: "working"}, {Block: "2", State: "waiting_input"}}, "agent waiting for you · 2", model.AgentToneWarning, "2"},
-		{"working beats idle", []model.AgentEntry{entry("a", "1", 5), entry("a", "2", 1)}, []model.AgentState{{Block: "1", State: "idle"}, {Block: "2", State: "working"}}, "agent working · 2", model.AgentToneAccent, "2"},
+		{"working beats idle", []model.AgentEntry{entry("a", "1", 5), entry("a", "2", 1)}, []model.AgentState{{Block: "1", State: "idle"}, {Block: "2", State: "working"}}, "agent working · 2", model.AgentTonePending, "2"},
 		{"idle beats exited", []model.AgentEntry{entry("a", "1", 5), entry("a", "2", 1)}, []model.AgentState{{Block: "1", State: "exited"}, {Block: "2", State: "idle"}}, "agent idle · 2", model.AgentToneMuted, "2"},
 		{"a state beats none", []model.AgentEntry{entry("a", "1", 5), entry("a", "2", 1)}, []model.AgentState{{Block: "2", State: "exited"}}, "agent exited · 2", model.AgentToneMuted, "2"},
 		{"tie goes to the newest", []model.AgentEntry{entry("a", "1", 1), entry("a", "2", 9), entry("a", "3", 4)}, []model.AgentState{{Block: "1", State: "idle"}, {Block: "2", State: "idle"}, {Block: "3", State: "idle"}}, "agent idle · 3", model.AgentToneMuted, "2"},
@@ -57,7 +57,7 @@ func TestTheBadgeNamesTheMostPressingAgentWithTheCount(t *testing.T) {
 			m.Agents = model.AgentStatesRelay{Received: true, States: tt.states}
 		}
 		got, ok := m.AgentBadgeFor("a")
-		want := model.AgentBadge{Text: tt.text, Tone: tt.tone, Block: tt.block}
+		want := model.AgentBadge{Text: tt.text, Word: got.Word, Tone: tt.tone, Block: tt.block}
 		if !ok || got != want {
 			t.Errorf("%s: %+v (%v), want %+v", tt.name, got, ok, want)
 		}
@@ -140,9 +140,9 @@ func TestTheBadgeIndexAnswersAsTheBadgePerIssue(t *testing.T) {
 		want model.AgentBadge
 		ok   bool
 	}{
-		{"a", model.AgentBadge{Text: "agent waiting for you · 3", Tone: model.AgentToneWarning, Block: "3"}, true},
-		{"b", model.AgentBadge{Text: "agent idle · 2", Tone: model.AgentToneMuted, Block: "6"}, true},
-		{"c", model.AgentBadge{Text: "agent", Tone: model.AgentToneMuted, Block: "5"}, true},
+		{"a", model.AgentBadge{Text: "agent waiting for you · 3", Word: "waiting for you · 3", Tone: model.AgentToneWarning, Block: "3"}, true},
+		{"b", model.AgentBadge{Text: "agent idle · 2", Word: "idle · 2", Tone: model.AgentToneMuted, Block: "6"}, true},
+		{"c", model.AgentBadge{Text: "agent", Word: "state unknown", Tone: model.AgentToneMuted, Block: "5"}, true},
 		{"none", model.AgentBadge{}, false},
 	} {
 		got, ok := index.For(tt.uid)
@@ -170,7 +170,7 @@ func unreadModel(address string, state string, slot any) model.Model {
 func TestAnUnclearedMessageAtTheAgentAddressShowsOnTheBadgeAndTheRowAndClearingRemovesIt(t *testing.T) {
 	slot := map[string]any{"from": "me", "message": "  look at this\nand that"}
 	m := unreadModel("me/omp-1", "working", slot)
-	want := model.AgentBadge{Text: "agent working · message unread", Tone: model.AgentToneWarning, Block: "1"}
+	want := model.AgentBadge{Text: "agent working", Word: "working", Tone: model.AgentTonePending, Block: "1", Unread: true}
 	if got, _ := m.AgentBadgeFor("a"); got != want {
 		t.Errorf("badge %+v, want %+v", got, want)
 	}
@@ -182,7 +182,7 @@ func TestAnUnclearedMessageAtTheAgentAddressShowsOnTheBadgeAndTheRowAndClearingR
 	}
 
 	cleared := unreadModel("me/omp-1", "working", nil)
-	plain := model.AgentBadge{Text: "agent working", Tone: model.AgentToneAccent, Block: "1"}
+	plain := model.AgentBadge{Text: "agent working", Word: "working", Tone: model.AgentTonePending, Block: "1"}
 	if got, _ := cleared.AgentBadgeFor("a"); got != plain {
 		t.Errorf("cleared badge %+v, want %+v", got, plain)
 	}
@@ -224,5 +224,14 @@ func TestTheBadgeIndexDropsARemoteBadgeTheShownIssueNoLongerCarries(t *testing.T
 	_, listed := m.AgentBadges().For("a")
 	if shown || listed {
 		t.Errorf("the emptied record still shows: badge for %v, row for %v", shown, listed)
+	}
+}
+
+func TestTheBadgeWordIsTheStateAloneForTheDetailAndRemoteOnlyBadgesNameTheHost(t *testing.T) {
+	for state, want := range map[string]string{"working": "working", "waiting_input": "waiting for you", "idle": "idle", "exited": "exited", "sleeping": "state unknown"} {
+		m := model.Model{AgentMapping: []model.AgentEntry{entry("a", "1", 1)}, Agents: model.AgentStatesRelay{Received: true, States: []model.AgentState{{Block: "1", State: model.AgentStateWord(state)}}}}
+		if got, _ := m.AgentBadgeFor("a"); got.Word != want {
+			t.Errorf("state %q: word %q, want %q", state, got.Word, want)
+		}
 	}
 }

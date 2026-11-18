@@ -234,7 +234,7 @@ func TestArchivingAndRestoringAreGuardedOnTheVersionOnScreen(t *testing.T) {
 		t.Fatalf("r sent %#v, want %#v", cmds, want)
 	}
 	m, cmds = model.Update(m, model.KeyMsg{Chord: "e"})
-	if m.Workflows.Card.Open || !strings.Contains(m.Notice, "restore") || len(cmds) != 0 {
+	if m.Workflows.Card.Open || !strings.Contains(m.Notice, "Restore it first") || len(cmds) != 0 {
 		t.Errorf("editing an archived workflow opened the card (%v) or said %q", m.Workflows.Card.Open, m.Notice)
 	}
 }
@@ -243,7 +243,7 @@ func TestArchiveRefusedByKataShowsItsMessageAndChangesNothing(t *testing.T) {
 	m := onWorkflows(t, reviewFlow())
 	refusal := "invalid cron document: workflow W1 is used by live job J1; update or delete that job first"
 	m, _ = model.Update(m, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpArchive, UID: "W1", Err: errString(refusal)})
-	if m.Notice != refusal || len(m.VisibleWorkflows()) != 1 {
+	if want := `Cannot archive "W1": ` + refusal + "."; m.Notice != want || m.NoticeKind != model.NoticeFail || len(m.VisibleWorkflows()) != 1 {
 		t.Errorf("notice %q, rows %d", m.Notice, len(m.VisibleWorkflows()))
 	}
 }
@@ -253,7 +253,7 @@ func TestAnArchiveOrRestoreOfAChangedWorkflowWritesNothingAndShowsTheCurrentOne(
 	newer := reviewFlow()
 	newer.EventUID, newer.Name = "E2", "Renamed"
 	m, _ = model.Update(m, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpArchive, UID: "W1", Current: &newer})
-	if w, _ := m.SelectedWorkflow(); w.EventUID != "E2" || !strings.Contains(m.Notice, "changed meanwhile") {
+	if w, _ := m.SelectedWorkflow(); w.EventUID != "E2" || !strings.Contains(m.Notice, "changed since you opened it") {
 		t.Errorf("selected %+v, notice %q", w, m.Notice)
 	}
 }

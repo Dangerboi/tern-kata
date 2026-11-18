@@ -28,7 +28,7 @@ func TestJobCardShowsTheConditionsOfAnAdapterJobReadOnly(t *testing.T) {
 		"new_commits": map[string]any{"folders": []any{"docs", "internal/model"}},
 	}})
 	wantText(t, "conditions", text, "At most 2 runs per day", "At most 5 runs per week", "At most $1.5 spent per day", "At most $10 spent per week",
-		"new commits since the last succeeded run in folders docs, internal/model", "A worker that does not know conditions ignores them.")
+		"New commits since the last succeeded run in folders docs, internal/model", "Only runs when")
 }
 
 func TestJobCardShowsNoConditionsForAJobWithout(t *testing.T) {
@@ -42,7 +42,7 @@ func TestJobCardShowsNoConditionsForAJobWithout(t *testing.T) {
 
 func TestJobCardShowsTheReadersErrorForConditionsThatDoNotParse(t *testing.T) {
 	text := conditionsCard(t, map[string]any{"conditions": map[string]any{"runs_per_day": float64(0)}})
-	wantText(t, "broken conditions", text, "not readable", "options.conditions.runs_per_day must be a whole number of at least 1")
+	wantText(t, "broken conditions", text, "Cannot read the conditions", "options.conditions.runs_per_day must be a whole number of at least 1", "The worker holds every due run of this job")
 	text = conditionsCard(t, map[string]any{"conditions": "often"})
 	wantText(t, "conditions of the wrong type", text, "options.conditions must be an object")
 }

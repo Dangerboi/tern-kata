@@ -93,7 +93,8 @@ func cardText(t *testing.T, s driver.State) string {
 
 func drawn(t *testing.T, s driver.State, field model.Field) bool {
 	t.Helper()
-	return fieldDrawn(t, s.Model, model.JobPrompt(field))
+	// The free-text and picker variants of a field share one label, so the field's node id tells them apart.
+	return drawnIDs(t, view.Render(s.Model, now))[view.FieldID(model.CardJob, field)]
 }
 
 var ulid = regexp.MustCompile(`^[0-7][0-9A-HJKMNP-TV-Z]{25}$`)
@@ -190,7 +191,7 @@ func TestEditOpensTheCardPrefilledAndSavesAGuardedReplaceKeepingTheParent(t *tes
 	if drawn(t, s, model.JobFieldParent) {
 		t.Error("a job's parent can be edited; it is fixed")
 	}
-	wantText(t, "card", cardText(t, s), "Parent: #pa11 Weekly report")
+	wantText(t, "card", cardText(t, s), "Parent", "#pa11", "Weekly report", "A job keeps its parent.")
 	s = set(t, s, model.JobFieldName, "Weekly digest")
 	out := step(t, s, key("ctrl+o"))
 	save, ok := savedJob(out.Cmds)
@@ -244,17 +245,17 @@ func TestJobCardShowsTheFieldsOfItsTriggerOnly(t *testing.T) {
 		t.Error("a skip catch-up draws no grace")
 	}
 	// The kind shows native only for now.
-	wantText(t, "kind field", cardText(t, s), "Recurring child")
+	wantText(t, "kind field", cardText(t, s), "Recurring Issue")
 }
 
 func TestJobCardPreviewsTheScheduleInWordsAndTheNextThreeRuns(t *testing.T) {
 	s := step(t, jobsPane(t, 160), key("n")).State
 	// The Pane's clock is Thursday 2026-10-08 12:00 UTC.
-	wantText(t, "cron preview", cardText(t, s), "every day at 09:00 UTC", "Fri 2026-10-09 09:00 UTC", "Sat 2026-10-10 09:00 UTC", "Sun 2026-10-11 09:00 UTC")
+	wantText(t, "cron preview", cardText(t, s), "Runs every day at 09:00 UTC", "Next runs", "2026-10-09 09:00", "2026-10-10 09:00", "2026-10-11 09:00")
 
 	s = set(t, s, model.JobFieldCron, "*/20 * * * *")
 	s = set(t, s, model.JobFieldZone, "Europe/Berlin")
-	wantText(t, "preview follows the fields", cardText(t, s), "every 20 minutes Europe/Berlin", "Thu 2026-10-08 14:20 CEST", "Thu 2026-10-08 14:40 CEST", "Thu 2026-10-08 15:00 CEST")
+	wantText(t, "preview follows the fields", cardText(t, s), "every 20 minutes", "14:20", "14:40", "15:00")
 
 	s = set(t, s, model.JobFieldCron, "*/40 * * * *")
 	wantText(t, "a step that does not divide an hour reads as its expression", cardText(t, s), "cron */40 * * * * Europe/Berlin")
@@ -264,10 +265,10 @@ func TestJobCardPreviewsTheScheduleInWordsAndTheNextThreeRuns(t *testing.T) {
 
 	s = choose(t, s, model.JobFieldTrigger, 1)
 	s = set(t, s, model.JobFieldInterval, "15m")
-	wantText(t, "interval preview", cardText(t, s), "every 15 minutes", "Thu 2026-10-08 12:15 UTC", "Thu 2026-10-08 12:30 UTC", "Thu 2026-10-08 12:45 UTC")
+	wantText(t, "interval preview", cardText(t, s), "every 15 minutes", "12:15", "12:30", "12:45")
 
 	s = set(t, s, model.JobFieldInterval, "30")
-	wantText(t, "interval below the minimum", cardText(t, s), "not yet", "Interval", "at least 60")
+	wantText(t, "interval below the minimum", cardText(t, s), "Not a valid schedule", "Interval", "at least 60")
 	if strings.Contains(cardText(t, s), "Next runs") {
 		t.Error("an interval below the minimum still lists runs")
 	}
@@ -339,7 +340,7 @@ func TestASaveAgainstAJobChangedMeanwhileWritesNothingShowsTheNewerJobAndKeepsTh
 	if m.CurrentMode() != model.ModeJobConflict || m.JobForm.Name != "My draft" || m.JobForm.Conflict == nil {
 		t.Fatalf("mode %s name %q conflict %v", m.CurrentMode(), m.JobForm.Name, m.JobForm.Conflict)
 	}
-	wantText(t, "conflict card", cardText(t, s), "changed meanwhile", "nothing was written", "Their name", "Their tick", "every hour")
+	wantText(t, "conflict card", cardText(t, s), "Changed since you opened it", "Nothing was written", "Their name", "Their tick", "every hour", "Use theirs", "Keep mine", "Discard mine")
 	// The list already shows the newer job.
 	if got := m.SelectedJob().Name; got != "Their name" {
 		t.Errorf("the list holds %q, want the newer job", got)
@@ -452,7 +453,7 @@ func TestAPauseAgainstAJobChangedMeanwhileWritesNothingAndShowsTheNewerJob(t *te
 	newer := guarded("J1", "Renamed", "EV2")
 	s = step(t, paused.State, model.JobWritten{ProjectID: 7, UID: "J1", Changed: &newer}).State
 	m := s.Model
-	if m.Jobs.Writing != "" || m.SelectedJob().Name != "Renamed" || !strings.Contains(m.Notice, "changed meanwhile") || !strings.Contains(m.Notice, "nothing was written") {
+	if m.Jobs.Writing != "" || m.SelectedJob().Name != "Renamed" || !strings.Contains(m.Notice, "changed since you opened it") || !strings.Contains(m.Notice, "Cannot save") {
 		t.Fatalf("writing %q selected %+v notice %q", m.Jobs.Writing, m.SelectedJob(), m.Notice)
 	}
 	// The next press is aimed at the newer version.
@@ -465,7 +466,10 @@ func TestJobKeysAreOnTheFooterAndTheHelpSheet(t *testing.T) {
 	s := jobsPane(t, 160, guarded("J1", "Weekly", "EV1"))
 	wantText(t, "Jobs Page footer", footerText(t, s), "new job", "edit job", "pause or resume", "archive")
 	help := wireTextOf(t, feed(t, s, key("?")).State)
-	wantText(t, "help sheet", help, "new job (Job card)", "edit the selected job", "pause or resume the selected job", "archive the selected job, or restore it")
+	wantText(t, "help sheet", help, "new job (Job card)", "edit the selected job", "pause or resume the selected job", "Archive or restore job")
 	card := step(t, s, key("n")).State
-	wantText(t, "card footer", footerText(t, card), "save job", "cancel", "next field")
+	wantText(t, "card footer", footerText(t, card), "next field")
+	if footer := footerText(t, card); strings.Contains(footer, "save job") {
+		t.Errorf("the card footer repeats the Save button: %q", footer)
+	}
 }

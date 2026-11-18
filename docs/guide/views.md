@@ -2,6 +2,8 @@
 
 A view is a Collection with filters: a fixed Collection (Inbox, Today, Upcoming, Deadlines, All Open, Logbook) or a Project, plus any of the Filter card's fields and a search. Saved views live in `views.toml` in tern-kata's config folder, on this machine only, and the Pane's Menu lists them under **Views**. `tern-kata views` lists, shows, adds and removes them without Tern, with the View card's rules and messages:
 
+In the Pane the View card's buttons are **Save** and **Cancel**, and each field carries its label above it. A saved view the Pane skipped because its entry does not load shows as one line in the Menu, "1 saved view skipped: name: reason." or "2 saved views skipped.", and there is no Notice for it when the Pane starts. A `views.toml` that cannot be read shows "Cannot read saved views: <reason>."
+
 ```sh
 tern-kata views                                    # the fixed Collections, then the saved views
 tern-kata views show today                         # a fixed Collection, by key or title

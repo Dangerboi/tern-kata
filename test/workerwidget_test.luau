@@ -110,7 +110,7 @@ test("every title line fits Tern's width for a long executor, Issue ref and reas
     end
     local lines = titleLines(long)
     assert(lines[1] == "Worker on the session host")
-    assert(lines[2]:sub(1, 19) == "secret_unavailable:" and lines[3]:sub(1, 13) == "agent_quota: ")
+    assert(lines[2]:sub(1, 19) == "Secret unavailable:" and lines[3]:sub(1, 15) == "Quota reached: ")
     assert(lines[4]:sub(1, 29) == "3 running, process 4242, eeee", lines[4])
 end)
 
@@ -121,9 +121,9 @@ test("each held run is its Issue heading, then its job, age and button, then its
     local head, byline = rows[1], rows[2]
     assert(head.label == "kata-a#a1b2" and head.text == "Review open pull requests" and head.tone == "accent", head.text)
     assert(head.href == "https://kata.invalid/kata-a/a1b2" and head.actions == nil, head.href)
-    assert(byline.label == "review · 2 h" and byline.text == "" and byline.tone == "muted", byline.label)
+    assert(byline.label == "review · 2h" and byline.text == "" and byline.tone == "muted", byline.label)
     assert(byline.id == "01RUN" and assert(byline.actions)[1].id == workerwidget.RESUME_ID)
-    assert(rows[3].label == nil and rows[3].text == "agent_quota: out of tokens" and rows[3].tone == "warn")
+    assert(rows[3].label == nil and rows[3].text == "Quota reached: out of tokens" and rows[3].tone == "warn")
     assert(rows[4].label == "box" and rows[4].text == "2 running · 2 of 4 slots", rows[4].text)
 end)
 
@@ -144,12 +144,12 @@ test("the footer names the worker, this machine on the window half's widget, and
 end)
 
 test("a held run's age is in its largest whole unit, and a run without a held time shows none", function()
-    assert(workerwidget.age(NOW - 59, NOW) == "<1 m" and workerwidget.age(NOW + 30, NOW) == "<1 m")
-    assert(workerwidget.age(NOW - 60, NOW) == "1 m" and workerwidget.age(NOW - 3599, NOW) == "59 m")
-    assert(workerwidget.age(NOW - 3600, NOW) == "1 h" and workerwidget.age(NOW - 86399, NOW) == "23 h")
-    assert(workerwidget.age(NOW - 3 * 86400, NOW) == "3 d")
+    assert(workerwidget.age(NOW - 59, NOW) == "<1m" and workerwidget.age(NOW + 30, NOW) == "<1m")
+    assert(workerwidget.age(NOW - 60, NOW) == "1m" and workerwidget.age(NOW - 3599, NOW) == "59m")
+    assert(workerwidget.age(NOW - 3600, NOW) == "1h" and workerwidget.age(NOW - 86399, NOW) == "23h")
+    assert(workerwidget.age(NOW - 3 * 86400, NOW) == "3d" and workerwidget.age(NOW - 7 * 86400, NOW) == "1w" and workerwidget.age(NOW - 20 * 86400, NOW) == "2w")
     assert(cardRows(summary(0, {held({job = "review"})}))[2].label == "review")
-    assert(cardRows(summary(0, {held({job = "", heldAt = NOW - 120})}))[2].label == "held · 2 m")
+    assert(cardRows(summary(0, {held({job = "", heldAt = NOW - 120})}))[2].label == "Held · 2m")
 end)
 
 test("the clock key changes each minute while runs are held, and never without any", function()
@@ -164,8 +164,8 @@ test("a long reason wraps by words on up to three full-width rows under its run,
     local reason = "agent_quota: the agent ran out of quota for this billing period; resume it once the quota resets at midnight, or switch the job to another agent"
     local rows = cardRows(summary(0, {held({reason = reason})}))
     assert(#rows == 6, #rows)
-    assert(rows[3].text == "agent_quota: the agent ran out of quota for", rows[3].text)
-    assert(rows[4].text == "this billing period; resume it once the", rows[4].text)
+    assert(rows[3].text == "Quota reached: the agent ran out of quota", rows[3].text)
+    assert(rows[4].text == "for this billing period; resume it once the", rows[4].text)
     assert(rows[5].text == "quota resets at midnight, or switch the job…" and rows[5].label == nil and rows[5].tone == "warn", rows[5].text)
     for index = 3, 5 do assert((utf8.len(rows[index].text) :: number) <= 44, rows[index].text) end
 end)
@@ -197,8 +197,8 @@ test("a run with no job, Issue or reason keeps its heading and byline, and a ref
         held({job = "", ref = "", reason = ""}),
         held({job = string.rep("j", 30), ref = "odd;$x&y#c1", title = "Odd"}),
     }))
-    assert(rows[1].href == nil and rows[1].text == "my project#a1" and rows[2].label == "held")
-    assert(rows[4].href == nil and rows[4].text == "no Issue" and rows[5].label == "held" and rows[6].tone == "accent")
+    assert(rows[1].href == nil and rows[1].text == "my project#a1" and rows[2].label == "Held")
+    assert(rows[4].href == nil and rows[4].text == "no Issue" and rows[5].label == "Held" and rows[6].tone == "accent")
     assert(rows[6].label == "odd;$x&y#c1" and rows[6].href == "https://kata.invalid/odd;$x&y/c1", rows[6].href)
     assert(rows[7].label == string.rep("j", 23) .. "…", rows[7].label)
 end)

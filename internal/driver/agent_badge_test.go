@@ -53,7 +53,7 @@ func TestTheAgentBadgeIsInTheListAndLaneRowsAsAStyledSpan(t *testing.T) {
 			state       model.AgentStateWord
 			text, style string
 		}{
-			{"working", "agent working", "accent"},
+			{"working", "agent working", "pending"},
 			{"waiting_input", "agent waiting for you", "warning"},
 			{"idle", "agent idle", "muted"},
 			{"exited", "agent exited", "muted"},
@@ -94,7 +94,7 @@ func TestTheBoardCardHasItsOwnClickableAgentBadge(t *testing.T) {
 	nodes := wireNodes(t, view.Render(s.Model, now))
 	card := rowOf(t, s.Model, view.BoardID, "t1")
 	badge := node(t, nodes, card+".agent")
-	if badge.P["text"] != "agent working" || badge.P["tone"] != "accent" {
+	if badge.P["text"] != "working" || badge.P["tone"] != "pending" {
 		t.Errorf("badge %v", badge.P)
 	}
 	if got := actionOf(badge)["click"]; got != view.AgentClick("18494129176578") {
@@ -129,7 +129,7 @@ func TestTheIssueDetailHasAnAgentPropertyWithItsOwnClick(t *testing.T) {
 	if badge.ID == "" {
 		t.Fatal("the detail has no Agent property")
 	}
-	if badge.P["text"] != "agent waiting for you · 2" || badge.P["tone"] != "warning" {
+	if badge.P["text"] != "waiting for you · 2" || badge.P["tone"] != "warning" {
 		t.Errorf("badge %v", badge.P)
 	}
 	// Both are waiting: the newest start is named.
@@ -144,7 +144,7 @@ func TestAClickOnTheAgentBadgeFocusesTheAgentItNames(t *testing.T) {
 		t.Fatalf("cmds %#v", out.Cmds)
 	}
 	failed := step(t, out.State, model.AgentFocused{Err: errString("exit status 1: tern: no such block")})
-	if failed.State.Model.Notice != "Cannot focus the agent: exit status 1: tern: no such block" {
+	if failed.State.Model.Notice != "Cannot focus the agent: exit status 1: tern: no such block." {
 		t.Errorf("notice %q", failed.State.Model.Notice)
 	}
 }

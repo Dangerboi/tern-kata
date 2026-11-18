@@ -140,7 +140,7 @@ func TestARefreshWhileAReadIsOutAsksNoSecondRead(t *testing.T) {
 	}
 }
 
-func TestAgentFactsSayWhatTheSessionAndTheRelayHold(t *testing.T) {
+func TestAgentCardFactsSayWhatTheSessionAndTheRelayHold(t *testing.T) {
 	base := cardModel(entry("a", "1", 1))
 	withRelay := func(m model.Model, last string) model.Model {
 		m, _ = model.Update(m, model.AgentStatesMsg{States: []model.AgentState{{Block: "1", State: model.AgentWorking, LastMessage: last}}})
@@ -154,38 +154,30 @@ func TestAgentFactsSayWhatTheSessionAndTheRelayHold(t *testing.T) {
 	for name, tt := range map[string]struct {
 		session model.AgentSessionFacts
 		last    string
-		want    []model.AgentFact
+		want    []model.AgentCardFact
 	}{
 		"a working agent": {
 			session: model.AgentSessionFacts{Block: "1", Model: "claude-x", ToolCalls: 40, CurrentTool: "bash", Cost: 1.234, HasCost: true},
 			last:    "\n  Running the tests\nthen more",
-			want: []model.AgentFact{
-				{Text: "claude-x · 40 tool calls · running bash · $1.23"},
-				{Text: "last: Running the tests"},
-			},
-		},
-		"an idle agent": {
-			session: model.AgentSessionFacts{Block: "1", Model: "claude-x", ToolCalls: 1, Cost: 0.5, HasCost: true},
-			last:    "Done.",
-			want:    []model.AgentFact{{Text: "claude-x · 1 tool call · no tool running · $0.50"}, {Text: "last: Done."}},
+			want:    []model.AgentCardFact{{Label: "Session", Text: "claude-x · 40 tool calls · running bash · $1.23"}, {Label: "Last message", Text: "Running the tests"}},
 		},
 		"a file the tail cut": {
 			session: model.AgentSessionFacts{Block: "1", Model: "m", ToolCalls: 9, Cost: 2, HasCost: true, Partial: true},
-			want:    []model.AgentFact{{Text: "m · at least 9 tool calls · no tool running · ~$2.00"}, {Text: "no message from the agent yet", Muted: true}},
+			want:    []model.AgentCardFact{{Label: "Session", Text: "m · at least 9 tool calls · no tool running · ~$2.00"}},
 		},
 		"no session": {
 			session: model.AgentSessionFacts{Block: "1", Reason: "no session file yet"},
 			last:    "Hi",
-			want:    []model.AgentFact{{Text: "no session file yet", Muted: true}, {Text: "last: Hi"}},
+			want:    []model.AgentCardFact{{Label: "Session", Text: "no session file yet", Muted: true}, {Label: "Last message", Text: "Hi"}},
 		},
 	} {
 		m := answered(withRelay(base, tt.last), tt.session)
-		if got := m.AgentFacts("1"); !reflect.DeepEqual(got, tt.want) {
+		if got := m.AgentCardFacts("1"); !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("%s: facts %#v, want %#v", name, got, tt.want)
 		}
 	}
 	m, _ := press(base, "w")
-	if got := m.AgentFacts("1"); len(got) == 0 || !got[0].Muted {
-		t.Errorf("before the first read: %#v, want a muted line", got)
+	if got := m.AgentCardFacts("1"); len(got) != 0 {
+		t.Errorf("before the first read: %#v, want no rows", got)
 	}
 }

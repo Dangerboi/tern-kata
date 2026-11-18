@@ -132,6 +132,10 @@ func (m Model) withRows() Model {
 	switch m.tab {
 	case TabLinks:
 		for _, link := range links {
+			if link.Relation == "parent" || link.Relation == "child" {
+				continue
+			}
+			link.RelationRepeat = len(m.rows.items) > 0 && m.rows.items[len(m.rows.items)-1].Kind == RowLink && m.rows.items[len(m.rows.items)-1].Activity.Relation == link.Relation
 			m.rows.items = append(m.rows.items, DetailItem{Kind: RowLink, Key: link.Key, ReferenceUID: link.ReferenceUID, Activity: link})
 		}
 	case TabAttachments:
@@ -153,6 +157,9 @@ func (m Model) withRows() Model {
 	case TabEvents:
 		// The snapshot lists History newest first; rows read oldest first, like Comments.
 		for _, event := range slices.Backward(m.authority.History) {
+			if EventHidden(event) {
+				continue
+			}
 			row := m.historyRow(event)
 			m.rows.items = append(m.rows.items, DetailItem{Kind: RowEvent, Key: row.Key, ReferenceUID: row.ReferenceUID, Activity: row})
 		}
@@ -170,7 +177,7 @@ func (m Model) commentItem(comment Comment) DetailItem {
 		row.Replies = fmt.Sprintf("%d replies", n)
 	}
 	if target := comment.Reply; target != nil && comment.ReplyKind != nil {
-		row.Reply = replyVerb(*comment.ReplyKind) + " " + answeredComment(target.Author)
+		row.Reply = replyingTo(*comment.ReplyKind) + " " + answeredAuthor(target.Author)
 		switch {
 		case target.IssueUID != nil && *target.IssueUID != m.DetailIssueUID():
 			if target.IssueShortID != nil {
@@ -189,10 +196,10 @@ func (m Model) commentItem(comment Comment) DetailItem {
 		}
 	}
 	row.Tags = commentTags(comment.Backlinks)
-	row.Head = []RowSpan{{row.Author, SpanStrong}, {"  ", ""}, {row.Time, SpanTime}}
+	row.Head = []RowSpan{{row.Author, SpanStrong}, {" · ", SpanMuted}, {row.Time, SpanTime}}
 	for _, note := range []string{row.Reply, row.Replies} {
 		if note != "" {
-			row.Head = append(row.Head, RowSpan{"  " + note, SpanAccent})
+			row.Head = append(row.Head, RowSpan{" · ", SpanMuted}, RowSpan{note, SpanAccent})
 		}
 	}
 	item.Activity = row
@@ -220,7 +227,7 @@ func (m Model) linkRow(link Link) DetailRow {
 	if project, short, ok := strings.Cut(ref, "#"); ok && m.authority.Issue != nil && project == m.authority.Issue.ProjectName {
 		ref = "#" + short
 	}
-	row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, Ref: ref, ReferenceUID: uid, Qualified: qualified, Status: status}
+	row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, RelationLabel: relationLabel(relation), Ref: ref, ReferenceUID: uid, Qualified: qualified, Status: status}
 	if i := slices.IndexFunc(m.Issues, func(issue Issue) bool { return issue.UID == uid }); i >= 0 {
 		row.RefTitle = m.Issues[i].Title
 	}

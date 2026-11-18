@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 )
 
-var errDraftReadOnly = errors.New("Read-only: reconnecting to kata; Draft kept")
+var errDraftReadOnly = fmt.Errorf("%w; your Draft is kept", ErrDisconnected)
 
 // DraftKeptHint is what follows the error of a failed save of a doc edit or comment: that the Draft is kept (unless the error says so
 // itself) and how to open it. where is the phrase that places the Issue when the user may be on another one (" on that Issue"), "" when
@@ -80,6 +80,15 @@ func baseOf(issue Issue) DraftBase {
 	return DraftBase{BaseText: issue.Body, ProjectID: issue.ProjectID, BaseRevision: issue.Revision}
 }
 
+// Unedited reports whether the buffer holds what the Draft began with: nothing for a comment, the Issue's body for an edit of it.
+// Leaving such a Draft loses nothing, so it closes without asking.
+func (d Draft) Unedited() bool {
+	if d.Comment {
+		return d.Editor.Text == ""
+	}
+	return d.Editor.Text == normalizeLineBreaks(d.BaseText)
+}
+
 // InPlaceEdit reports whether the Draft is an edit of the Issue body made in the doc, as against a comment from it or a Draft of the overlay.
 func (d Draft) InPlaceEdit() bool { return d.Doc != nil && !d.Comment }
 
@@ -130,12 +139,28 @@ func (d Draft) Duplicate() bool {
 // minEvidence is the length kata asks of a confirm or refute, counted in characters once whitespace collapses.
 const minEvidence = 40
 
+// Failure is the sentence for the Draft's error as its card shows it: what could not be saved, or sent when the Draft is a Reply,
+// and why. It is "" when the Draft has no error.
+func (d Draft) Failure() string {
+	if d.Err == nil {
+		return ""
+	}
+	verb, thing := "save", "your edit"
+	switch {
+	case d.ReplyTo != "":
+		verb, thing = "send", "your reply"
+	case d.Comment:
+		thing = "your comment"
+	}
+	return Cannot(verb, thing, d.Err)
+}
+
 func (d Draft) validReply() error {
 	if d.ReplyTo == "" || (d.ReplyKind != ReplyConfirm && d.ReplyKind != ReplyRefute) {
 		return nil
 	}
 	if utf8.RuneCountInString(strings.Join(strings.Fields(d.Editor.Text), " ")) < minEvidence {
-		return fmt.Errorf("A %s needs at least %d characters, not counting extra whitespace. Nothing was sent.", d.ReplyKind, minEvidence)
+		return fmt.Errorf("a %s needs at least %d characters, not counting extra whitespace", d.ReplyKind, minEvidence)
 	}
 	return nil
 }
@@ -290,7 +315,7 @@ func draftRefused(m Model, uid string, draft Draft, err error) Model {
 	m = putDraft(m, uid, draft.withShown())
 	if draft.Doc != nil && m.EditorUID != uid {
 		kept := DraftKeptHint(err, " on that Issue")
-		m.Notice = fmt.Sprintf("Cannot save your %s: %s%s", draftWhat(draft), err, kept)
+		m = m.fail(strings.TrimSuffix(Cannot("save your", draftWhat(draft), err), ".") + kept)
 	}
 	return m
 }
@@ -391,7 +416,7 @@ func updateEditor(m Model, msg Msg) (Model, []Cmd, bool) {
 				m.EditorUID = msg.UID
 				m = m.focusDetail()
 			case m.EditorUID != msg.UID: // another Issue's card is open: it stays, and a Notice says where the conflict is
-				m.Notice = ConflictSentence(draftWhat(draft), " on that Issue")
+				m = m.fail(ConflictSentence(draftWhat(draft), " on that Issue"))
 			}
 		}
 		return m, nil, true
@@ -423,7 +448,7 @@ var draftCard = draftCardKeys{
 	set:   func(m Model, d Draft) Model { return putDraft(m, m.EditorUID, d) },
 	close: func(m Model) Model { return dropDraft(m, m.EditorUID) },
 	save:  saveDraft,
-	empty: func(m Model) bool { d, _ := m.ActiveDraft(); return d.Editor.Text == "" },
+	empty: func(m Model) bool { d, _ := m.ActiveDraft(); return d.Unedited() },
 	own: func(m Model, b Binding, _ KeyMsg) (Model, []Cmd, bool) {
 		if b.Action != ExternalEditorAction {
 			return replyKey(m, b)

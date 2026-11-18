@@ -10,51 +10,48 @@ kata --workspace "$bar_dir" create "Top bar Issue" --json >/dev/null
 quit_app
 printf 'ready\nrun "(cd %s && env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s %s/tern-kata)"\n' "$bar_dir" "$KATA_HOME" "$tmp" >"$tmp/topbar-launch.ctl"
 ctl --file "$tmp/topbar-launch.ctl"
-expect_tree "[data-id='main.topbar.left.heading']" ".ok and .count == 1 and .nodes[0].text == \"Project: $bar_name\""
-bar_cells="[data-id='main.topbar'],[data-id='main.topbar.left'],[data-id='main.topbar.counts'],[data-id='main.topbar.right'],[data-id='main.topbar.right.menu']"
+expect_tree "[data-id='main.topbar.left.heading']" ".ok and .count == 1 and .nodes[0].text == \"$bar_name\""
+bar_cells="[data-id='main.topbar'],[data-id='main.topbar.left'],[data-id='main.topbar.right'],[data-id='main.topbar.right.menu']"
 
-# Wide: the cells share one line (the bar is no taller than its tallest single-line cell, so a wrapped
-# counts cell fails; the left cell is shorter than two lines of counts and the Menu button than 1.75, so a wrapped
-# title or button label fails; each cell lies inside the bar's vertical range and the text cells are centred
-# on it), the Menu button ends where the bar does, the counts sit between.
-expect_tree "$bar_cells" '.ok and .count == 5
-  and (.nodes[0].rect as $bar | .nodes[1].rect as $h | .nodes[2].rect as $c | .nodes[4].rect as $d
+# Wide: the cells share one line (the bar is no taller than its tallest single-line cell, so a wrapped title or button label
+# makes it taller; the Menu button is shorter than 1.75 lines of the facts cell), each cell lies inside the bar's vertical
+# range and the left cell and the button are centred on it, the Menu button ends where the bar does, and the left cell ends
+# before the right one begins.
+expect_tree "$bar_cells" '.ok and .count == 4
+  and (.nodes[0].rect as $bar | .nodes[1].rect as $h | .nodes[2].rect as $r | .nodes[3].rect as $d
     | ($bar[1] + $bar[3] / 2) as $mid
     | $bar[3] <= ([$h[3], $d[3]] | max) + 1
       and ([.nodes[1:][].rect | .[1] >= $bar[1] - 1 and .[1] + .[3] <= $bar[1] + $bar[3] + 1] | all)
-      and ([$h, $c | (.[1] + .[3] / 2 - $mid) | fabs <= 1] | all)
-      and $h[3] < 2 * $c[3] and $d[3] < 1.75 * $c[3]
-      and (($d[0] + $d[2] - $bar[0] - $bar[2]) | fabs) <= 1 and $h[0] + $h[2] < $c[0] and $c[0] + $c[2] < $d[0])
+      and ([$h, $d | (.[1] + .[3] / 2 - $mid) | fabs <= 1] | all)
+      and (($d[0] + $d[2] - $bar[0] - $bar[2]) | fabs) <= 1 and $h[0] + $h[2] <= $r[0])
 '
 # The long name and the five-Page Page bar squeeze the Daemon at the default width; a wider Pane shows it whole.
 ctl resize 3200 "$bar_height"
-expect_tree "[data-id='main.topbar.right.daemon']" '.nodes[0].text | startswith("Daemon: local")'
+expect_tree "[data-id^='main.topbar.right.facts.fact']" '[.nodes[].text] | join("") | startswith("local")'
 ctl resize "$bar_full" "$bar_height"
-expect_tree "[data-id='main.filters']" '.ok and .count == 0'
+expect_tree "[data-id='main.filters.icon']" '.ok and .count == 0'
 
-# One column (80-139): the Daemon gives way first, then the counts, the title is cut last.
+# One column (80-139): the facts give way, this binary's version first; the title is cut last.
 ctl resize 980 "$bar_height"
 expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1'
-expect_tree "[data-id='main.topbar.right.daemon']" '.ok and .count == 1 and (.nodes[0].text | endswith("…"))'
-expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
+expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"$bar_name\""
 ctl resize 680 "$bar_height"
 expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1'
-# The Page bar is compact: only the current Page keeps its label, every Page stays a tab (a count badge is its own node and stays).
-expect_tree "[data-id^='main.topbar.left.pages.'][data-id$='.label'],[data-id^='main.pagebar.'][data-id$='.label']" '.ok and .count == 6 and ([.nodes[].text] | map(select(length > 1)) | length) <= 1'
-expect_tree "[data-id='main.topbar.counts']" '.nodes[0].text | endswith("…")'
-expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
+# The Page bar is compact: only the current Page keeps its label, the other Pages are icons.
+expect_tree "[data-id^='main.topbar.left.pages.'][data-id$='.label'],[data-id^='main.pagebar.'][data-id$='.label']" '.ok and .count == 1'
+expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"$bar_name\""
 ctl resize "$bar_full" "$bar_height"
 
 # A filter adds its line; clearing it takes the line away. The title never carries filters.
 ctl key s
-expect_tree "[data-id^='main.filters.']" '.ok and ([.nodes[] | select(.text) | .text] == ["status open"])'
-expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"Project: $bar_name\""
+expect_tree "[data-id^='main.filters.']" '.ok and ([.nodes[] | select(.text) | .text] | any(. == "Status open"))'
+expect_tree "[data-id='main.topbar.left.heading']" ".nodes[0].text == \"$bar_name\""
 ctl key s
 ctl key s
-expect_tree "[data-id='main.filters']" '.ok and .count == 0'
+expect_tree "[data-id='main.filters.icon']" '.ok and .count == 0'
 
-# The Menu button sits after the Daemon at the default width; a click opens the Menu, Close (esc) closes it.
-expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1 and (.nodes[0].text | startswith("Menu") and endswith("esc"))'
+# The Menu button sits after the Daemon at the default width and shows no keycap; a click opens the Menu, Close (esc) closes it.
+expect_tree "[data-id='main.topbar.right.menu']" '.ok and .count == 1 and .nodes[0].text == "Menu"'
 expect_tree "[data-id='main.topbar.left.heading'],[data-id='main.topbar.right.menu']" '.nodes[0].rect[0] < .nodes[1].rect[0]'
 ctl click "[data-id='main.topbar.right.menu']"
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'

@@ -4,6 +4,9 @@
 # also while the pointer hovers the row, and the highlight moves with `j` and back with `k`. Colours settle
 # after Tern's transition, so each check polls (`accent_expect first`, `same RECT` and `other RECT` also wait for the
 # selected row to be the top row, or to be, or not be, at RECT). accent_expect prints the selected row's rect.
+# The text comes from the --kata-sel-text token, the style sheet holds no literal white: white computed on the row (and on every
+# descendant of a closed row below) means the token resolved, and stays white in both measured themes (dark-catppuccin and Tern
+# light, 5.05 and 4.80 against the accent fill).
 accent_expect() {
   local mode=${1:-} want=${2:-}
   local program='[.elements[] | select(.path | split(">") | last | test("^div\\.sf\\.sf-item")) | {rect: .rect, sel: (.path | split(">") | last | contains(".sel")), bg: (.backgroundColor | [scan("[0-9.]+")] | map(tonumber)), fg: (.color | [scan("[0-9.]+")] | map(tonumber))}] as $r

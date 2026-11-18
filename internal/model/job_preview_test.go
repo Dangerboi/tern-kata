@@ -37,7 +37,7 @@ func TestThePreviewOfAnExistingIntervalJobWithAStartPointCountsFromIt(t *testing
 	if len(p.Runs) != 3 || p.Note != "" {
 		t.Fatalf("runs %v, note %q", p.Runs, p.Note)
 	}
-	if want := "Thu 2026-10-08 12:10 UTC"; p.Runs[0] != want {
+	if want := "12:10"; p.Runs[0] != want {
 		t.Errorf("first run %q, want %q", p.Runs[0], want)
 	}
 }
@@ -47,7 +47,7 @@ func TestThePreviewOfANewJobCountsAnIntervalFromNow(t *testing.T) {
 	for _, kind := range []string{"native", "prompt"} {
 		card := model.JobFormState{Kind: kind, Trigger: cronjob.TriggerInterval, Interval: "900"}
 		p := card.Preview(model.PaneCalendar{}, now)
-		if len(p.Runs) != 3 || p.Runs[0] != "Thu 2026-10-08 12:15 UTC" {
+		if len(p.Runs) != 3 || p.Runs[0] != "12:15" {
 			t.Errorf("%s: runs %v, want three from 12:15", kind, p.Runs)
 		}
 	}
@@ -61,7 +61,7 @@ func TestThePreviewOfAnExistingNativeIntervalJobCountsFromItsParentsDeliveryAnch
 	}}
 	opened := model.CronJob{Job: native, Parent: &model.CronJobParent{Progress: &cronjob.Progress{Anchor: time.Date(2026, 10, 8, 11, 50, 0, 0, time.UTC)}}}
 	p := intervalCard(opened).Preview(model.PaneCalendar{}, now)
-	if len(p.Runs) != 3 || p.Runs[0] != "Thu 2026-10-08 12:05 UTC" {
+	if len(p.Runs) != 3 || p.Runs[0] != "12:05" {
 		t.Errorf("runs %v, want three from 12:05", p.Runs)
 	}
 }
@@ -70,8 +70,8 @@ func TestThePreviewOfACronJobListsRunsInItsZone(t *testing.T) {
 	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 	card := model.JobFormState{Trigger: cronjob.TriggerCron, Cron: "0 9 * * *", Zone: "America/New_York"}
 	p := card.Preview(model.PaneCalendar{}, now)
-	if len(p.Runs) != 3 || p.Runs[0] != "Thu 2026-10-08 09:00 EDT" {
-		t.Errorf("runs %v, want three from Thu 09:00 EDT", p.Runs)
+	if len(p.Runs) != 3 || p.Runs[0] != "09:00" || p.Runs[1] != "2026-10-09 09:00" {
+		t.Errorf("runs %v, want 09:00 today, then dated runs", p.Runs)
 	}
 }
 

@@ -104,12 +104,12 @@ func TestDetailReturnsToFirstRowOnlyForADifferentIssueAndKeepsItsTab(t *testing.
 }
 
 func TestPreviousDetailLinksStayRelativeToTheirOwnIssue(t *testing.T) {
-	link := model.Link{ID: 1, Type: "parent", FromIssueUID: "child", ToIssueUID: "a", FromQualifiedID: "work#child", ToQualifiedID: "work#a"}
+	link := model.Link{ID: 1, Type: "blocks", FromIssueUID: "child", ToIssueUID: "a", FromQualifiedID: "work#child", ToQualifiedID: "work#a"}
 	m, _ := model.Update(projectOf("a", "b"), model.DetailLoaded{UID: "a", Selected: &model.IssueDetailData{Issue: &model.Issue{UID: "a"}, Links: []model.Link{link}}})
 	m, _ = model.Update(m, model.SelectMsg{UID: "b"})
 
 	row, ok := activityRow(m, model.TabLinks, 0)
-	if !ok || row.Relation != "child" || row.Ref != "work#child" || row.ReferenceUID != "child" {
+	if !ok || row.Relation != "blocked_by" || row.Ref != "work#child" || row.ReferenceUID != "child" {
 		t.Fatalf("link row while another Issue loads: %+v", row)
 	}
 }

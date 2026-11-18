@@ -13,16 +13,16 @@ stream_target=$(kata daemon locate --json | jq -r .address)
 stop_live_daemon
 printf 'ready\nrun "env -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP KATA_HOME=%s KATA_SERVER=http://%s %s/tern-kata"\n' "$KATA_HOME" "$stream_target" "$tmp" >"$tmp/live-launch.ctl"
 ctl --file "$tmp/live-launch.ctl"
-expect_tree "[data-id='main.error']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("start the kata daemon"))'
-expect_tree "[data-id='main.retry']" '.ok and .count == 1'
+expect_tree "[data-id='main.error']" '.ok and .count == 1 and (.nodes[0].text | startswith("Cannot reach kata"))'
+expect_tree "[data-id='main.error.retry']" '.ok and .count == 1'
 kata daemon start --listen "$stream_target"
-ctl click "[data-id='main.retry']"
+ctl click "[data-id='main.error.retry']"
 expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Smoke live Issue"))'
 
 stop_live_daemon
-expect_tree "[data-id='main.stale']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Read-only: reconnecting"))'
+expect_tree "[data-id='main.stale']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Disconnected from kata"))'
 expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Smoke live Issue"))'
 kata daemon start --listen "$stream_target"
 kata --workspace "$tmp/workspace" create "Smoke reconnected Issue" --json
-expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Smoke reconnected Issue"))'
+expect_tree "[data-id^='main.columns.list.issues.']" '[.nodes[] | .. | objects | .text? // empty] | any(contains("Smoke reconnected"))'
 expect_tree "[data-id='main.stale']" '.ok and .count == 0'

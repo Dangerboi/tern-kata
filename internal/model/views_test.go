@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -34,7 +35,7 @@ func viewsPane() model.Model {
 func TestViewsLevelListsSavedViewsByNameAfterTheFixedCollections(t *testing.T) {
 	m := viewsPane()
 	m, _ = menuKeys(m, "down", "enter")
-	want := []string{"Back", "Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Mine", "Old", "work bugs", "New view"}
+	want := []string{"Inbox", "Today", "Upcoming", "Deadlines", "All Open", "Logbook", "Mine", "Old", "work bugs", "New view"}
 	if got := pickerTitles(m); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Views level = %q, want %q", got, want)
 	}
@@ -95,7 +96,7 @@ func TestOpeningASavedViewSetsBaseAndFiltersTogetherAndNamesItOnTheFilterLine(t 
 	if read == nil || !reflect.DeepEqual(read.Query.Label, []string{"bug"}) {
 		t.Fatalf("no read with the view's filters: %#v", cmds)
 	}
-	if got := filterLine(opened); got != "status=open · label=bug (view work bugs)" {
+	if got := filterLine(opened); got != "status=open · label=bug (Saved view work bugs)" {
 		t.Fatalf("filter line = %q", got)
 	}
 	changed := opened
@@ -119,7 +120,7 @@ func TestAtMeResolvesToThePanesActorWhenTheViewOpens(t *testing.T) {
 	if opened.Filters.Owner != "ann" || opened.Collection.View != "today" {
 		t.Fatalf("opened: %+v %+v", opened.Collection, opened.Filters)
 	}
-	if got := filterLine(opened); got != "owner=ann (view Mine)" {
+	if got := filterLine(opened); got != "owner=ann (Saved view Mine)" {
 		t.Fatalf("line = %q", got)
 	}
 	if m.Views.List[1].Filters.Owner != model.OwnerMe {
@@ -202,8 +203,8 @@ func TestViewCardRefusesAProjectFilterThatIsNotTheProjectBase(t *testing.T) {
 func TestViewCardRefusesAnUnreadFile(t *testing.T) {
 	m := viewsPane()
 	m, _ = model.Update(m, model.ViewsLoaded{Err: errors.New("views.toml: bad")})
-	if !strings.Contains(m.Notice, "views.toml: bad") {
-		t.Fatalf("the unreadable file is not reported: notice %q", m.Notice)
+	if note, failed := m.ViewsNote(); !failed || note != "Cannot read saved views: views.toml: bad." || m.Notice != "" {
+		t.Fatalf("the unreadable file is not reported: note %q failed %v notice %q", note, failed, m.Notice)
 	}
 	m = newViewCard(t, m)
 	m = typeText(m, "fresh")
@@ -383,10 +384,10 @@ func containsCmd(cmds []model.Cmd, want model.Cmd) bool {
 func TestAnUnreadableFileIsReportedAndTheFixedCollectionsStillOpen(t *testing.T) {
 	m := pickerStart(120, true)
 	m, _ = model.Update(m, model.ViewsLoaded{Err: errors.New("/x/views.toml: expected a table")})
-	if !strings.Contains(m.Notice, "views.toml") || m.Views.Err == nil {
-		t.Fatalf("notice %q err %v", m.Notice, m.Views.Err)
+	if note, failed := m.ViewsNote(); !strings.Contains(note, "views.toml") || !failed || m.Notice != "" || m.Views.Err == nil {
+		t.Fatalf("note %q notice %q err %v", note, m.Notice, m.Views.Err)
 	}
-	m, _ = menuKeys(m, "down", "enter", "down", "down", "enter")
+	m, _ = menuKeys(m, "down", "enter", "down", "enter")
 	if m.Collection.Title != "Today" {
 		t.Fatalf("collection = %+v", m.Collection)
 	}
@@ -473,4 +474,24 @@ func TestDeletingAViewForgetsItWhenALaterDuplicateOfItsNameDiffers(t *testing.T)
 func questionText(m model.Model) string {
 	q, _ := m.Question()
 	return q.Text
+}
+
+func TestTheMenuNoteCountsTheSkippedSavedViewsAndNamesAOne(t *testing.T) {
+	one := model.ViewFieldError{Field: model.ViewBase, Err: errors.New("Base needs a Project")}
+	problem := func(name string) error {
+		return fmt.Errorf("/x/views.toml: [[view]] 2 (%q): %w", name, one)
+	}
+	m := viewsPane()
+	m, _ = model.Update(m, model.ViewsLoaded{Problems: []error{problem("openbugs")}})
+	if note, failed := m.ViewsNote(); failed || note != "1 saved view skipped: openbugs: base needs a Project." || m.Notice != "" {
+		t.Errorf("one skipped: %q failed %v notice %q", note, failed, m.Notice)
+	}
+	m, _ = model.Update(m, model.ViewsLoaded{Problems: []error{problem("a"), problem("b")}})
+	if note, _ := m.ViewsNote(); note != "2 saved views skipped." {
+		t.Errorf("two skipped: %q", note)
+	}
+	m, _ = model.Update(m, model.ViewsLoaded{})
+	if note, _ := m.ViewsNote(); note != "" {
+		t.Errorf("none skipped: %q", note)
+	}
 }

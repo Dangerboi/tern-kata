@@ -33,8 +33,8 @@ const (
 	badgeGapCols = 1
 )
 
-// pageIcons name the Pages that are not current on a Pane narrower than FoldedLegendCols, where a bare chord says nothing on a
-// touch screen.
+// pageIcons name the numbered Pages in the compact bar, where only the current Page keeps its label and no keycap is drawn.
+// Lettered Pages show only while current and need no icon.
 var pageIcons = map[string]ui.IconName{
 	"issues": ui.IconInbox, "jobs": ui.IconTimer, "runs": ui.IconPlay,
 	"workflows": ui.IconBranch, "board": ui.IconColumns, "attention": ui.IconBell,
@@ -42,19 +42,27 @@ var pageIcons = map[string]ui.IconName{
 
 const iconCols = 2
 
-// iconOnly is a compact Page chip that is only an icon: below FoldedLegendCols the other Pages' chords are dropped for their
-// icons.
-func iconOnly(m model.Model, entry model.PageBarEntry, compact bool) bool {
-	return compact && !entry.Current && m.NarrowerThan(model.FoldedLegendCols)
+// iconOnly is a compact Page chip that is only an icon: every numbered Page but the current one in the compact bar.
+func iconOnly(entry model.PageBarEntry, compact bool) bool {
+	_, icon := pageIcons[entry.ID]
+	return compact && icon && !entry.Current
 }
 
-func entryCols(m model.Model, entry model.PageBarEntry, compact bool) int {
-	cols := iconCols
-	if !iconOnly(m, entry, compact) {
-		cols = utf8.RuneCountInString(entry.Chord) + keycapPadCols
-		if !compact || entry.Current {
-			cols += 1 + displayWidth(entry.Label)
-		}
+// iconLabel is the current numbered Page in the compact bar: its icon and its label, with no keycap.
+func iconLabel(entry model.PageBarEntry, compact bool) bool {
+	_, icon := pageIcons[entry.ID]
+	return compact && icon && entry.Current
+}
+
+func entryCols(_ model.Model, entry model.PageBarEntry, compact bool) int {
+	var cols int
+	switch {
+	case iconOnly(entry, compact):
+		cols = iconCols
+	case iconLabel(entry, compact):
+		cols = iconCols + 1 + displayWidth(entry.Label)
+	default:
+		cols = utf8.RuneCountInString(entry.Chord) + keycapPadCols + 1 + displayWidth(entry.Label)
 	}
 	if entry.Count > 0 {
 		cols += badgeGapCols + len(strconv.Itoa(entry.Count)) + badgePadCols
@@ -98,15 +106,19 @@ func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, c
 			tone, style = ui.ToneAccent, "accent strong"
 		}
 		cell := flexCell(entry.ID, tone, 0)
-		cell.Title, cell.Actions = entry.Label+" page", &ui.Actions{Click: KeyClick(entry.Press)}
+		cell.Title, cell.Actions = entry.Label, &ui.Actions{Click: KeyClick(entry.Press)}
+		if entry.Count > 0 {
+			cell.Title += " · " + strconv.Itoa(entry.Count)
+		}
+		icon := ui.Icon{Common: ui.Common{Key: "icon", Tone: tone, Aria: entry.Label}, Name: pageIcons[entry.ID]}
 		var parts tern.Nodes
-		if iconOnly(m, entry, compact) {
-			parts = ui.Nodes(ui.Icon{Common: ui.Common{Key: "icon", Tone: tone, Aria: entry.Label}, Name: pageIcons[entry.ID]})
-		} else {
-			spans := []ui.Span{{T: keycap(entry.Chord, entry.Chord), S: "key"}}
-			if !compact || entry.Current {
-				spans = append(spans, ui.Span{T: " " + entry.Label, S: style})
-			}
+		switch {
+		case iconOnly(entry, compact):
+			parts = ui.Nodes(icon)
+		case iconLabel(entry, compact):
+			parts = ui.Nodes(icon, ui.Text{Common: ui.Common{Key: "label", Tone: tone}, Spans: []ui.Span{{T: entry.Label, S: style}}, Wrap: ui.WrapNone})
+		default:
+			spans := []ui.Span{{T: keycap(entry.Chord, entry.Chord), S: "key"}, {T: " " + entry.Label, S: style}}
 			parts = ui.Nodes(ui.Text{Common: ui.Common{Key: "label", Tone: tone}, Spans: spans, Wrap: ui.WrapNone})
 		}
 		if entry.Count > 0 {
@@ -117,20 +129,17 @@ func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, c
 	return ui.Row{Common: flexCell("pages", ui.ToneNeutral, 0), Gap: ui.GapMD, Children: cells}
 }
 
-func barTitle(m model.Model) string {
-	if m.Collection.IsProject() {
-		return "Project: " + m.Collection.Title
-	}
-	return m.Collection.Title
-}
+// barTitle is the Collection's title, bare: the Menu already marks the current entry, so no prefix or icon says what it is.
+func barTitle(m model.Model) string { return m.Collection.Title }
 
+// topBarFit measures the title cell, which never shrinks: the title, the loading marker and the update chip.
 func topBarFit(m model.Model) barFit {
 	cols := displayWidth(barTitle(m))
 	if m.Loading {
 		cols += displayWidth(loadingMarker.T)
 	}
-	if len(m.VersionNotices()) > 0 {
-		cols += displayWidth(noticeMarker.T)
+	if chip := m.VersionChip(); chip != "" {
+		cols += entryGap + displayWidth(chip)
 	}
 	return pageBarFit(m, cols)
 }

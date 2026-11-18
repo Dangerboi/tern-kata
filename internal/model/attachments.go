@@ -135,4 +135,20 @@ func FormatSize(n int64) string {
 	return fmt.Sprintf("%.1f %s", size, suffix)
 }
 
-func (a Attachment) Description() string { return a.MediaType + ", " + FormatSize(a.Size) }
+// Kind is the one word for what the file is, read from its media type: image, text, audio, video, PDF, else file. The raw media
+// type is for a tooltip, not for people to read in a row.
+func (a Attachment) Kind() string {
+	switch {
+	case strings.HasPrefix(a.MediaType, "image/"):
+		return "image"
+	case strings.HasPrefix(a.MediaType, "text/"):
+		return "text"
+	case strings.HasPrefix(a.MediaType, "audio/"):
+		return "audio"
+	case strings.HasPrefix(a.MediaType, "video/"):
+		return "video"
+	case a.MediaType == "application/pdf":
+		return "PDF"
+	}
+	return "file"
+}

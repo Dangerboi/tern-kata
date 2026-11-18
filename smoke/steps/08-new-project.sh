@@ -6,7 +6,7 @@ kata projects remove workspace-archived --force --json >/dev/null
 np_heading="[data-id='main.topbar.left.heading']"
 np_form="[data-id='layer.project']"
 np_input="[data-id='layer.project.input']"
-np_error="[data-id='layer.project.error']"
+np_error="[data-id='layer.project.foot.error']"
 np_picker_rows="[data-id^='layer.collections.list.']"
 np_sidebar_rows="[data-id^='main.columns.collections.']"
 np_issue_rows="[data-id^='main.columns.list.issues.01']"
@@ -19,7 +19,7 @@ np_projects() { kata projects list --json | jq -r '[.projects[].name] | join(","
 # Bound directory: the picker ends with New Project, whose form opens over it with the directory's name.
 quit_app
 ctl --file "$tmp/launch.ctl"
-expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "smoke"'
 ctl click "[data-id='main.topbar.right.menu']"
 ctl key End
 expect_tree "$np_picker_rows" '.ok and .nodes[-1].text == "New Project" and .nodes[-1]["aria-selected"] == "true"'
@@ -27,7 +27,8 @@ ctl key enter
 expect_tree "$np_form" '.ok and .count == 1'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 expect_tree "$np_input" '.ok and .count == 1 and (.nodes[0].text | startswith("workspace"))'
-expect_tree "[data-id='dock.hints']" '.ok and (.nodes[0].text | contains("create Project") and contains("esc cancel"))'
+expect_tree "[data-id='layer.project.foot.create']" '.ok and .count == 1 and (.nodes[0].text | startswith("Create"))'
+expect_tree "[data-id='layer.project.foot.cancel']" '.ok and .count == 1 and (.nodes[0].text | startswith("Cancel") and endswith("esc"))'
 
 # kata's rejection stays in the form with the name; editing the name clears it.
 ctl type '"-archived"'
@@ -51,7 +52,7 @@ ctl type '"-extra"'
 ctl key enter
 expect_tree "$np_form" '.ok and .count == 0'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
-expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: workspace-extra"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "workspace-extra"'
 [[ $(np_projects) == *workspace-extra* ]]
 grep -qx 'name = "smoke"' "$tmp/workspace/.kata.toml"
 ctl click "[data-id='main.topbar.right.menu']"
@@ -61,7 +62,7 @@ expect_tree "$np_picker_rows" '.ok and ([.nodes[] | select(.text == "workspace-e
 ctl key esc
 ctl key Home
 ctl key enter
-expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: smoke"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "smoke"'
 
 # Unbound directory: the sidebar ends with New Project; the click opens the form and esc closes it, leaving the cursor on the row.
 quit_app
@@ -80,7 +81,7 @@ expect_tree "$np_sidebar_rows" '.ok and .nodes[-1]["aria-selected"] == "true"'
 # enter on the row, then enter on the directory's name: kata creates the Project, the directory is bound to it, and the sidebar goes.
 ctl key enter
 ctl key enter
-expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: np-unbound"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "np-unbound"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "$np_form" '.ok and .count == 0'
 grep -qx 'name = "np-unbound"' "$tmp/np-unbound/.kata.toml"
@@ -91,7 +92,7 @@ expect_tree "$np_issue_rows" '.ok and .count == 1 and (.nodes[0].text | contains
 # The binding is what kata finds next time: it opens project-first.
 quit_app
 np_launch "$tmp/np-unbound"
-expect_tree "$np_heading" '.ok and .nodes[0].text == "Project: np-unbound"'
+expect_tree "$np_heading" '.ok and .nodes[0].text == "np-unbound"'
 expect_tree "[data-id='main.columns.collections']" '.ok and .count == 0'
 expect_tree "$np_issue_rows" '.ok and .count == 1'
 

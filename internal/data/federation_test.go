@@ -55,7 +55,7 @@ func TestGatewayReadsAReplicaAsASpokeRow(t *testing.T) {
 	if spoke.BoundActor != "alice" || spoke.Capabilities != "pull,push,lease" || !spoke.PushEnabled || spoke.AllowInsecure {
 		t.Errorf("spoke grant %+v, want alice with pull,push,lease and push on", spoke)
 	}
-	if spoke.PullCursorEventID != 8 || spoke.PendingPushCount != 0 || spoke.Badges() != "-" || spoke.Sync(time.Now()) != "never" {
+	if spoke.PullCursorEventID != 8 || spoke.PendingPushCount != 0 || len(spoke.Warnings()) != 0 || spoke.SyncWords(time.Now()) != "never" {
 		t.Errorf("spoke sync state %+v, want a pull cursor one behind the replay horizon and nothing pending, synced or wrong", spoke)
 	}
 }

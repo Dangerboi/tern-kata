@@ -94,11 +94,11 @@ func TestRunsPageKeyAsksForTheProjectsRunsAndThePageBarShowsThePage(t *testing.T
 func TestRunsPageRowsShowStatusNameIssueExecutorStartDurationAndSummary(t *testing.T) {
 	s := runsPane(t, 160, workflowRun("R2"), finishedRun("R1"))
 
-	wantText(t, "job run row", runCardText(t, s, "R1"), "succeeded", "Triage", "#pa11 Weekly report", "on laptop", "started", "1m 35s", "triaged 4 items")
+	wantText(t, "job run row", runCardText(t, s, "R1"), "succeeded", "Triage", "#pa11", "Weekly report", "laptop", "1m 35s", "triaged 4 items")
 	if strings.Contains(runCardText(t, s, "R1"), "second line") {
 		t.Error("a row draws more than the summary's first line")
 	}
-	wantText(t, "workflow run row", runCardText(t, s, "R2"), "running", "Nightly build", "on worker", "30s")
+	wantText(t, "workflow run row", runCardText(t, s, "R2"), "running", "Nightly build", "worker", "30s")
 	// Newest first: the list keeps the order kata gave.
 	rows := s.Model.RunRows(now)
 	if len(rows) != 2 || rows[0].Run.UID != "R2" || rows[1].Run.UID != "R1" {
@@ -114,13 +114,13 @@ func TestRunsPageShowsTheReasonCodeOfBothSummaryShapes(t *testing.T) {
 	bad.Summary = "reason: Not A Code\nstill the summary" // outside the code grammar: the whole message is summary
 	s := runsPane(t, 160, quota, legacy, plain, bad)
 
-	for _, c := range []struct{ uid, code, summary string }{
-		{"R1", "agent_quota", "the provider answered 429"},
-		{"R2", "interrupted", "the worker stopped while the agent ran"},
+	for _, c := range []struct{ uid, words, summary string }{
+		{"R1", "Quota reached", "the provider answered 429"},
+		{"R2", "Interrupted", "the worker stopped while the agent ran"},
 	} {
 		text := runCardText(t, s, c.uid)
-		wantText(t, c.uid+" row", text, "unknown", "reason: "+c.code, c.summary)
-		if strings.Contains(text, "more") || strings.Contains(text, c.code+": ") {
+		wantText(t, c.uid+" row", text, "unknown", c.words+" · "+c.summary)
+		if strings.Contains(text, "more") || strings.Contains(text, "reason:") {
 			t.Errorf("%s row %q draws more than the code and the detail's first line", c.uid, text)
 		}
 	}
@@ -132,7 +132,7 @@ func TestRunsPageShowsTheReasonCodeOfBothSummaryShapes(t *testing.T) {
 	}
 
 	detail := inspectorText(t, step(t, s, key("enter")).State)
-	wantText(t, "detail of a run with a reason", detail, "Reason", "agent_quota", "the provider answered 429")
+	wantText(t, "detail of a run with a reason", detail, "Why", "Quota reached", "the provider answered 429")
 	if strings.Contains(detail, "reason: agent_quota") {
 		t.Errorf("the detail's summary keeps the reason line: %q", detail)
 	}
@@ -155,7 +155,16 @@ func TestEnterShowsTheRunsDetailWithSummaryTokensAndReferences(t *testing.T) {
 	}
 	wantText(t, "run detail", inspectorText(t, out.State),
 		"succeeded", "Triage", "#pa11 Weekly report", "laptop", "pip", "1m 35s", "triaged 4 items", "second line",
-		"1200", "340", "2026-10-08T09:00:00Z", "J1", "E1", "parent-a", "R1")
+		"1200", "340")
+	ids := ""
+	for _, id := range out.State.Model.RunIDs() {
+		ids += id.Value + " "
+	}
+	for _, want := range []string{"J1", "E1", "parent-a", "R1"} {
+		if !strings.Contains(ids, want) {
+			t.Errorf("the title hovercard lacks the id %q: %s", want, ids)
+		}
+	}
 
 	// The answer replaces the run held.
 	changed := finishedRun("R1")
@@ -171,7 +180,7 @@ func TestEnterShowsTheRunsDetailWithSummaryTokensAndReferences(t *testing.T) {
 func TestRunDetailLeavesOutWhatTheRunDoesNotHold(t *testing.T) {
 	s := feed(t, runsPane(t, 160, workflowRun("R2")), key("enter")).State
 	text := inspectorText(t, s)
-	for _, left := range []string{"Input tokens", "Output tokens", "Issue", "Job UID", "Ended", "Occurrence"} {
+	for _, left := range []string{"Tokens in", "Tokens out", "Issue", "Ended", "Occurrence"} {
 		if strings.Contains(text, left) {
 			t.Errorf("a run without it still draws %q: %s", left, text)
 		}
@@ -337,7 +346,7 @@ func TestRunsPageNeedsAProject(t *testing.T) {
 	s := feed(t, driver.State{}, model.Start{Workspace: "/repo"}, resize(160)).State
 	s.Model = loadFirst(s.Model, model.ProjectLoaded{}, model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha}}})
 	out := step(t, s, key("3"))
-	if out.State.Model.Page != model.PageIssues || !strings.Contains(out.State.Model.Notice, "Runs Page needs a Project") {
+	if out.State.Model.Page != model.PageIssues || !strings.Contains(out.State.Model.Notice, "Cannot open the Runs Page") {
 		t.Fatalf("page %v notice %q", out.State.Model.Page, out.State.Model.Notice)
 	}
 }

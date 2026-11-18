@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ var tokenTable = fieldTable[TokenFormState]{
 		textField(TokenActor, func(f *TokenFormState) *string { return &f.Values.Actor }),
 		textField(TokenName, func(f *TokenFormState) *string { return &f.Values.Name }),
 		textField(TokenExpires, func(f *TokenFormState) *string { return &f.Values.Expires }),
-		textField(TokenScope, func(f *TokenFormState) *string { return &f.Values.Scope }),
+		tokenScopeField(),
 		textField(TokenIssue, func(f *TokenFormState) *string { return &f.Values.Issue }),
 		textField(TokenTeams, func(f *TokenFormState) *string { return &f.Values.Teams }),
 		textField(TokenFile, func(f *TokenFormState) *string { return &f.Values.File }),
@@ -52,6 +53,23 @@ var tokenTable = fieldTable[TokenFormState]{
 
 var TokenFields = tokenTable.specs()
 
+// tokenScopeField is the Scope choice: it steps and picks among tokenScopes and holds the chosen one as the value's text.
+func tokenScopeField() formField[TokenFormState] {
+	return formField[TokenFormState]{name: TokenScope,
+		step: func(_ *Model, f *TokenFormState, back bool) {
+			f.Values.Scope = tokenScopes[cycleIndex(max(slices.Index(tokenScopes, f.Values.Scope), 0), len(tokenScopes), back)]
+		},
+		choose: func(_ *Model, f *TokenFormState, index int) bool {
+			if index < 0 || index >= len(tokenScopes) {
+				return false
+			}
+			f.Values.Scope = tokenScopes[index]
+			return true
+		},
+		held: func(f *TokenFormState) *string { return &f.Values.Scope },
+	}
+}
+
 const (
 	TokenScopeAccount = "account"
 	TokenScopeIssue   = "issue"
@@ -59,24 +77,40 @@ const (
 
 const maxTokenTeams = 256
 
+// TokenLabel is the word above a Token card's field: one or two words, a noun.
 func TokenLabel(field Field) string {
 	switch field {
 	case TokenActor:
 		return "Actor"
 	case TokenName:
-		return "Name (optional)"
+		return "Name"
 	case TokenExpires:
-		return "Expires in (e.g. 720h; required for an Issue subtree)"
+		return "Expires in"
 	case TokenScope:
-		return "Scope (account or issue)"
+		return "Scope"
 	case TokenIssue:
-		return "Issue (for an Issue subtree: short id, #id or project#id)"
+		return "Issue"
 	case TokenTeams:
-		return "Teams (optional, comma-separated names or uids)"
+		return "Teams"
 	case TokenFile:
-		return "Token file (a new file for the secret)"
+		return "Token file"
 	}
 	return string(field)
+}
+
+// TokenHint is the one muted line under a field while it has focus, "" for a field that needs none.
+func TokenHint(field Field) string {
+	switch field {
+	case TokenExpires:
+		return "For example 720h. Required for an Issue."
+	case TokenIssue:
+		return "Short id, #id or project#id."
+	case TokenTeams:
+		return "Names, separated by commas."
+	case TokenFile:
+		return "A new file that receives the secret. It must not exist yet."
+	}
+	return ""
 }
 
 type TokenValues struct{ Actor, Name, Expires, Scope, Issue, Teams, File string }
@@ -100,12 +134,18 @@ type RevokeState struct {
 	Err          error
 }
 
+// Question is the line that asks, which names the token by its id alone.
 func (r RevokeState) Question() string {
-	name := "—"
+	return "Revoke token " + strconv.FormatInt(r.Token.ID, 10) + "?"
+}
+
+// Consequence is the muted line under the question: which credential it is and that the revoke is final.
+func (r RevokeState) Consequence() string {
+	name := None
 	if r.Token.Name != "" {
 		name = oneLine(r.Token.Name)
 	}
-	return "Revoke token " + strconv.FormatInt(r.Token.ID, 10) + " (" + name + ", " + oneLine(r.Token.Actor) + ")? This cannot be undone."
+	return name + " · " + oneLine(r.Token.Actor) + ". This cannot be undone."
 }
 
 // CreateTokenCmd describes a token to make in plain values; the Daemon gateway turns it into kata's request. A subtree token's
@@ -164,7 +204,7 @@ func openRevoke(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if token.State == "revoked" {
-		m.Notice = "token " + strconv.FormatInt(token.ID, 10) + " is already revoked"
+		m = m.say("Token " + strconv.FormatInt(token.ID, 10) + " is already revoked.")
 		return m, nil
 	}
 	m.RevokeCard = RevokeState{Open: true, Token: *token}
@@ -205,11 +245,11 @@ func (m Model) tokenIssue(ref string) (projectID int64, shortID string, err erro
 		project, shortID = ref[:i], ref[i+1:]
 	}
 	if shortID == "" || strings.ContainsAny(shortID, "#/?%\\ \t\r\n\x00") || strings.ContainsAny(project, "?%\\\x00\r\n") {
-		return 0, "", fmt.Errorf("Issue reference must be a short id, #id or project#id: %q", ref)
+		return 0, "", fmt.Errorf("the Issue must be a short id, #id or project#id, not %q", ref)
 	}
 	if project == "" || (m.Project.ID != 0 && project == m.Project.Name) {
 		if m.Project.ID == 0 {
-			return 0, "", errors.New("name the Issue's Project as project#id: this Pane has no Project")
+			return 0, "", errors.New("this Pane has no Project, so name the Issue as project#id")
 		}
 		return m.Project.ID, shortID, nil
 	}
@@ -218,7 +258,7 @@ func (m Model) tokenIssue(ref string) (projectID int64, shortID string, err erro
 			return entry.Project.ID, shortID, nil
 		}
 	}
-	return 0, "", fmt.Errorf("kata Project %q not found", project)
+	return 0, "", fmt.Errorf("kata has no Project %q", project)
 }
 
 func (m Model) tokenRequest() (CreateTokenCmd, error) {
@@ -234,15 +274,15 @@ func (m Model) tokenRequest() (CreateTokenCmd, error) {
 	switch strings.ToLower(strings.TrimSpace(v.Scope)) {
 	case TokenScopeAccount, "":
 		if strings.TrimSpace(v.Issue) != "" {
-			return cmd, errors.New("an account token covers no Issue: set the scope to issue, or clear the Issue")
+			return cmd, errors.New("an Account token covers no Issue; choose the Issue scope or clear the Issue")
 		}
 	case TokenScopeIssue:
 		cmd.Subtree = true
 		if strings.TrimSpace(v.Issue) == "" {
-			return cmd, errors.New("an Issue-subtree token needs an Issue")
+			return cmd, errors.New("a token with the Issue scope needs an Issue")
 		}
 		if cmd.ExpiresInSeconds == 0 {
-			return cmd, errors.New("an Issue-subtree token needs an expiry")
+			return cmd, errors.New("a token with the Issue scope needs an expiry")
 		}
 		if cmd.ProjectID, cmd.ShortID, err = m.tokenIssue(v.Issue); err != nil {
 			return cmd, err
@@ -254,7 +294,7 @@ func (m Model) tokenRequest() (CreateTokenCmd, error) {
 		return cmd, err
 	}
 	if cmd.File == "" {
-		return cmd, errors.New("token file is required: the secret is written there and never shown")
+		return cmd, errors.New("the token file is required, since the secret is written there and never shown")
 	}
 	return cmd, nil
 }
@@ -269,12 +309,12 @@ func submitToken(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.Stale {
-		f.Err = errors.New("Daemon disconnected; reconnect before creating a token.")
+		f.Err = cardFailure("create", "token", ErrDisconnected)
 		return m, nil
 	}
 	cmd, err := m.tokenRequest()
 	if err != nil {
-		f.Err = err
+		f.Err = cardFailure("create", "token", err)
 		return m, nil
 	}
 	f.Saving, f.Err = true, nil
@@ -293,11 +333,17 @@ func updateTokenFormKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	case bound && binding.Action == TokenCancel:
 		m.TokenForm = TokenFormState{}
 	case form.Done:
+	case bound && binding.Action == InputSpace && tokenTable.textAt(form, form.Field) == nil:
+		tokenTable.stepFocused(&m, false)
 	default:
-		text := tokenTable.textAt(form, form.Field)
-		var edited bool
-		if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
-			form.Err = nil
+		if text := tokenTable.textAt(form, form.Field); text != nil {
+			if bound && binding.Action == InputSpace {
+				bound = false // space is a typed character in a text field
+			}
+			var edited bool
+			if *text, edited = editText(*text, &form.Caret, form.Field, bound, msg); edited {
+				form.Err = nil
+			}
 		}
 	}
 	return m, nil
@@ -314,7 +360,7 @@ func updateRevokeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.RevokeCard = RevokeState{}
 	case bound && binding.Action == RevokeConfirm:
 		if m.Stale {
-			r.Err = errors.New("Daemon disconnected; reconnect before revoking a token.")
+			r.Err = cardFailure("revoke", m.tokenName(r.Token.ID), ErrDisconnected)
 			return m, nil
 		}
 		r.Saving, r.Err = true, nil
@@ -322,6 +368,9 @@ func updateRevokeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	}
 	return m, nil
 }
+
+// tokenName is how a failure or confirmation names a token: "token 3".
+func (m Model) tokenName(id int64) string { return "token " + strconv.FormatInt(id, 10) }
 
 func readAgain(m Model) (Model, []Cmd) {
 	if m.OnCredentials() && m.Credentials.Available {
@@ -339,7 +388,7 @@ func updateTokens(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		f.Saving = false
 		if msg.Err != nil {
-			f.Err = msg.Err
+			f.Err = cardFailure("create", "token", msg.Err)
 		} else {
 			f.Done, f.DoneID, f.DoneFile, f.Err = true, msg.ID, msg.File, nil
 		}
@@ -352,11 +401,11 @@ func updateTokens(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		r.Saving = false
 		if msg.Err != nil {
-			r.Err = msg.Err
+			r.Err = cardFailure("revoke", m.tokenName(msg.ID), msg.Err)
 			return m, nil, true
 		}
 		m.RevokeCard = RevokeState{}
-		m.Notice = "Revoked token " + strconv.FormatInt(msg.ID, 10)
+		m = m.say("Revoked " + m.tokenName(msg.ID) + ".")
 		next, cmds := readAgain(m)
 		return next, cmds, true
 	}

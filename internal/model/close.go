@@ -34,7 +34,7 @@ const (
 var closeTable = fieldTable[CloseFormState]{
 	form: func(m *Model) *CloseFormState { return &m.CloseForm },
 	fields: []formField[CloseFormState]{
-		textField(CloseReason, func(f *CloseFormState) *string { return &f.Values.Reason }),
+		closeReasonField(),
 		textField(CloseMessage, func(f *CloseFormState) *string { return &f.Values.Message }),
 		textField(CloseCommit, func(f *CloseFormState) *string { return &f.Values.Commit }),
 		textField(ClosePR, func(f *CloseFormState) *string { return &f.Values.PR }),
@@ -45,7 +45,58 @@ var closeTable = fieldTable[CloseFormState]{
 		textField(CloseReference, func(f *CloseFormState) *string { return &f.Values.Reference }),
 		textField(CloseRationale, func(f *CloseFormState) *string { return &f.Values.Rationale }),
 	},
-	hidden: func(m Model, name Field) bool { return name == CloseAttachments && !m.CloseForm.ShowsAttachments() },
+	hidden: func(m Model, name Field) bool { return m.CloseForm.Hides(name) },
+}
+
+// closeReasonField is the Reason: a choice of the five reasons that holds kata's code. A code kata sends that the card does not
+// list is stepped past to the first reason.
+func closeReasonField() formField[CloseFormState] {
+	return formField[CloseFormState]{name: CloseReason,
+		held: func(f *CloseFormState) *string { return &f.Values.Reason },
+		step: func(_ *Model, f *CloseFormState, back bool) {
+			at := slices.Index(closeReasons, CloseReasonKind(strings.TrimSpace(f.Values.Reason)))
+			f.Values.Reason = string(closeReasons[cycleIndex(max(at, 0), len(closeReasons), back)])
+		},
+		choose: func(_ *Model, f *CloseFormState, index int) bool {
+			if index < 0 || index >= len(closeReasons) {
+				return false
+			}
+			f.Values.Reason = string(closeReasons[index])
+			return true
+		},
+	}
+}
+
+// Hides says the card leaves out the field called name for the reason it holds: the reference only for a duplicate or a
+// superseded close, the rationale only for one that needs no change, and the Attachments only where they can be cited.
+func (f CloseFormState) Hides(name Field) bool {
+	reason := CloseReasonKind(strings.TrimSpace(f.Values.Reason))
+	switch name {
+	case CloseAttachments:
+		return !f.ShowsAttachments()
+	case CloseReference:
+		return reason != ReasonDuplicate && reason != ReasonSuperseded
+	case CloseRationale:
+		return reason != ReasonAuditNoChange
+	}
+	return false
+}
+
+// CloseIssueRef is the Issue the card closes, named as the Pane names it; "" when the Pane no longer lists it.
+func (m Model) CloseIssueRef() string {
+	if issue := m.issueByUID(m.CloseForm.UID); issue != nil {
+		return m.RefName(m.projectName(issue.ProjectID), issue.ShortID)
+	}
+	return ""
+}
+
+// CloseQuickRefusal is why Close without evidence is off, "" when it is on: kata takes the close without a message or evidence
+// only from a daemon that runs on this machine, and the Pane learns which one it talks to at discovery.
+func (m Model) CloseQuickRefusal() string {
+	if m.Daemon.Kind == DaemonRemote {
+		return "Needs the owner-local daemon."
+	}
+	return ""
 }
 
 // closeAttachmentsField is the picker of the Issue's Attachments. It takes several values at once: left and right (or the
@@ -200,8 +251,7 @@ func openClose(m Model) Model {
 		return m
 	}
 	if reason := IssueRefusal(*issue, OpenClose); reason != "" {
-		m.Notice = reason
-		return m
+		return m.fail(reason)
 	}
 	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Attachments: Attachments(issue.Metadata)}
 	m.CloseForm.Values.Reason = string(ReasonDone)
@@ -210,7 +260,7 @@ func openClose(m Model) Model {
 
 func submitClose(m Model, quick bool) (Model, []Cmd) {
 	f := &m.CloseForm
-	if f.refuseSubmit(m, "closing") {
+	if f.refuseSubmit(m, "close", "") {
 		return m, nil
 	}
 	cmd := CloseIssueCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, Quick: quick, Reason: CloseReasonKind(strings.TrimSpace(f.Values.Reason))}
@@ -227,6 +277,10 @@ func submitClose(m Model, quick bool) (Model, []Cmd) {
 			{referenceKind(cmd.Reason), f.Values.Reference},
 			{EvidenceAudit, f.Values.Rationale},
 		} {
+			// A field the card hides for this reason is not sent, whatever it held before the reason changed.
+			if f.Hides(closeEvidenceField[e.Kind]) {
+				continue
+			}
 			if e.Value = strings.TrimSpace(e.Value); e.Value != "" {
 				cmd.Evidence = append(cmd.Evidence, e)
 			}
@@ -256,11 +310,18 @@ func submitUndoClose(m Model, cmd CloseIssueCmd, quick bool) (Model, []Cmd) {
 	case quick || cmd.Reason != ReasonDone:
 		f.Saving, f.Err = false, errors.New("Undo completes the Issue as done, with evidence.")
 	case !found:
-		f.Saving, f.Err = false, errors.New("undo action is no longer available")
+		f.Saving, f.Err = false, errors.New(Cannot("undo", "", errors.New("that undo is no longer available")))
 	default:
 		return m.sendUndo(entry, &cmd)
 	}
 	return m, nil
+}
+
+// closeEvidenceField is the field of the card that holds each kind of evidence it hides for some reasons.
+var closeEvidenceField = map[CloseEvidenceKind]Field{
+	EvidenceDuplicateOf:  CloseReference,
+	EvidenceSupersededBy: CloseReference,
+	EvidenceAudit:        CloseRationale,
 }
 
 var closeSHA = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
@@ -282,7 +343,7 @@ func validateClose(cmd CloseIssueCmd) error {
 	case ReasonDuplicate, ReasonSuperseded:
 		floor = 20
 	default:
-		return errors.New("Reason must be done, wontfix, duplicate, superseded, or audit-no-change.")
+		return errors.New("Choose a reason.")
 	}
 	message := strings.TrimRight(strings.ToLower(strings.Join(strings.Fields(cmd.Message), " ")), ".?!")
 	if utf8.RuneCountInString(message) < floor {
@@ -306,7 +367,7 @@ func validateClose(cmd CloseIssueCmd) error {
 	switch reason {
 	case ReasonDone:
 		if kinds[EvidenceCommit]+kinds[EvidencePR]+kinds[EvidenceTest]+kinds[EvidenceReviewed]+kinds[EvidenceExternal]+kinds[EvidenceAttachment] == 0 {
-			return errors.New("Done requires commit, PR, test, reviewed paths, external or attachment evidence; use Quick done for owner-local interactive closing.")
+			return errors.New("Done needs a commit, pull request, test, reviewed paths, external account or attachment. Use Close without evidence on the owner-local daemon.")
 		}
 		if kinds[EvidenceDuplicateOf]+kinds[EvidenceAudit] > 0 {
 			return errors.New("Done accepts commit, PR, test, reviewed paths, external or attachment evidence, not reference or audit evidence.")
@@ -341,7 +402,10 @@ func ReviewedPaths(value string) []string {
 func updateClose(m Model, msg Msg) (Model, []Cmd) {
 	switch msg := msg.(type) {
 	case CloseFieldMsg:
-		if value := closeTable.textAt(&m.CloseForm, msg.Field); value != nil && m.CloseForm.Open && !m.CloseForm.Saving {
+		if value := closeTable.textAt(&m.CloseForm, msg.Field); value == nil && msg.Field == CloseReason && m.CloseForm.Open && !m.CloseForm.Saving {
+			m.CloseForm.Values.Reason = msg.Value
+			m.CloseForm.Err = nil
+		} else if value != nil && m.CloseForm.Open && !m.CloseForm.Saving {
 			*value = msg.Value
 			m.CloseForm.Caret = Caret{}
 			m.CloseForm.Err = nil
@@ -351,7 +415,7 @@ func updateClose(m Model, msg Msg) (Model, []Cmd) {
 			return m, nil
 		}
 		m.CloseForm.Saving = false
-		m.CloseForm.Err = msg.Err
+		m.CloseForm.Err = sentenceError(msg.Err)
 		if msg.Err == nil {
 			m.CloseForm.Open = false
 			m = m.issueWritten(msg.UID)
@@ -375,6 +439,8 @@ func closeKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		if toggleCited(f, f.AttachmentAt) {
 			f.Err = nil
 		}
+	case bound && binding.Action == InputSpace && closeTable.textAt(f, f.Field) == nil:
+		closeTable.stepFocused(&m, false)
 	default:
 		closeTable.typeKey(&m, binding, bound, msg)
 	}

@@ -15,7 +15,7 @@ ctl key enter
 
 # With nothing done yet there is nothing to undo.
 ctl key u
-expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text | startswith("nothing to undo"))'
+expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text | startswith("Nothing to undo"))'
 
 # A label, a link to the peer and a close.
 ctl key +
@@ -36,13 +36,13 @@ kata --workspace "$ud_dir" show "$ud_uid" --json | jq -e '.issue.status == "clos
 
 # u reopens it, then removes the link, then removes the label; each leaves kata as it was before the change.
 ctl key u
-expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text | startswith("undid close on "))'
+expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text | startswith("Undid the close on "))'
 kata --workspace "$ud_dir" show "$ud_uid" --json | jq -e '.issue.status == "open"' >/dev/null
 ctl key u
-expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text | startswith("undid link.add on "))'
+expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text | startswith("Undid the link addition on "))'
 kata --workspace "$ud_dir" show "$ud_uid" --json | jq -e '(.links | length) == 0' >/dev/null
 ctl key u
-expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text | startswith("undid label.add on "))'
+expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text | startswith("Undid the label addition on "))'
 kata --workspace "$ud_dir" show "$ud_uid" --json | jq -e '(.labels | map(.label) | index("undo-me")) == null' >/dev/null
 
 # A timed assignment is a boundary: u says why instead of undoing the label before it.
@@ -55,7 +55,7 @@ ctl type '"1h"'
 ctl key enter
 expect_tree "[data-id='layer.fields']" '.ok and .count == 0'
 ctl key u
-expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text == "nothing to undo: timed assignment cannot be undone")'
+expect_tree "$ud_notice" '.ok and .count == 1 and (.nodes[0].text == "Nothing to undo: timed assignment cannot be undone.")'
 
 for uid_short in "$ud_uid $ud_short" "$ud_peer_uid $ud_peer"; do
   set -- $uid_short

@@ -23,24 +23,37 @@ func (m Model) OwnerText(owner *string, expires *time.Time, now time.Time) Owner
 	return OwnerText{Name: *owner, Until: " until " + m.Calendar.Read(*expires, now)}
 }
 
-// RelativeTime is kata's TUI "updated" cell: "2h ago", "3d ago", "-" when unset.
-func RelativeTime(t, now time.Time) string {
+// None is the one "no value" glyph, an em dash.
+const None = "—"
+
+// Age is how long ago t was, compact and without a space: "7s", "4m", "2h", "3d", "1w". A t ahead of now reads "0s".
+// None when t is unset.
+func Age(t, now time.Time) string {
 	if t.IsZero() {
-		return "-"
+		return None
 	}
 	d := max(now.Sub(t), 0)
 	switch {
 	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+		return fmt.Sprintf("%ds", int(d.Seconds()))
 	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+		return fmt.Sprintf("%dm", int(d.Minutes()))
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
+		return fmt.Sprintf("%dh", int(d.Hours()))
 	case d < 7*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	default:
-		return fmt.Sprintf("%dw ago", int(d.Hours()/(24*7)))
+		return fmt.Sprintf("%dw", int(d.Hours()/(24*7)))
 	}
+}
+
+// RelativeTime is the "updated" cell of a narrow list or table: "2h ago", "3d ago", None when unset. Its hovercard
+// carries the absolute time.
+func RelativeTime(t, now time.Time) string {
+	if t.IsZero() {
+		return None
+	}
+	return Age(t, now) + " ago"
 }
 
 type ChildCells struct{ Status, Title, Owner, Updated string }

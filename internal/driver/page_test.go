@@ -127,7 +127,7 @@ func TestPageBarCompactsThenMovesToItsOwnLineBeforeAnythingLeavesTheTopBar(t *te
 		if got := strings.Contains(texts["workflows"], `"t":" Workflows"`); got == tt.compact {
 			t.Errorf("%d columns: Workflows entry %s, compact %v", tt.cols, texts["workflows"], tt.compact)
 		}
-		if !strings.Contains(texts["issues"], `"t":" Issues"`) {
+		if !strings.Contains(texts["issues"], `Issues"`) {
 			t.Errorf("%d columns: the current Page lost its label: %s", tt.cols, texts["issues"])
 		}
 		_, own := drawnIDs(t, view.Render(s.Model, now))["main.pagebar"]

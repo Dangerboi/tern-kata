@@ -188,9 +188,28 @@ func DescribeFilters(f Filters, projectName func(uid string) string) string {
 	return strings.Join(parts, " · ")
 }
 
-// FilterLine is what the filter line under the top bar shows: the active filters, and a note naming where they came from,
-// "view <name>" while they are the saved view's this Pane opened or "default" while they equal the Project's default. The
-// Board leaves the status filter out. With no terms and no note there is no line.
+// FilterFieldLabel is a filter field's name as the context line and the Filter card show it: a word of the form's own label.
+func FilterFieldLabel(field Field) string {
+	switch field {
+	case FilterProject:
+		return "Project"
+	case FilterStatus:
+		return "Status"
+	case FilterOwner:
+		return "Owner"
+	case FilterLabel:
+		return "Label"
+	case FilterRelationship:
+		return "Relationship"
+	case FilterSearch:
+		return "Search"
+	}
+	return string(field)
+}
+
+// FilterLine is what the context line under the top bar shows: the active filters, and a note naming where they came from,
+// "Saved view <name>" while they are the saved view's this Pane opened or "Default filter" while they equal the Project's
+// default. The Board leaves the status filter out. With no terms and no note there is no line.
 func (m Model) FilterLine() (terms []FilterTerm, note string) {
 	shown := m.Filters
 	if m.OnBoard() {
@@ -198,10 +217,10 @@ func (m Model) FilterLine() (terms []FilterTerm, note string) {
 	}
 	terms = ActiveFilters(shown, m.ProjectFilterName)
 	if name := m.CurrentSavedView(); name != "" {
-		return terms, "view " + name
+		return terms, "Saved view " + name
 	}
 	if len(terms) > 0 && m.Filters == m.DefaultFilters {
-		note = "default"
+		note = "Default filter"
 	}
 	return terms, note
 }

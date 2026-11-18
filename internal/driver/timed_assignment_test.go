@@ -12,7 +12,7 @@ func TestTOpensTheDurationFormNamingTheIssue(t *testing.T) {
 	if !s.Model.FieldForm.Open || s.Model.FieldForm.Action != model.TimedAssignAction || s.Model.FieldForm.UID != "alpha" {
 		t.Fatalf("t opened %+v", s.Model.FieldForm)
 	}
-	if got, want := s.Model.FieldFormTitle(), "Assignment duration (1m..24h, e.g. 1h)"; got != want {
+	if got, want := s.Model.FieldFormTitle(), "Assign for a time"; got != want {
 		t.Fatalf("title %q, want %q", got, want)
 	}
 	if got, want := s.Model.FieldFormMeta(), "#aaaa"; got != want {
@@ -38,7 +38,7 @@ func TestAnInvalidDurationIsRefusedWithoutASend(t *testing.T) {
 		if len(out.Cmds) != 0 || !out.State.Model.FieldForm.Open || out.State.Model.FieldForm.Err == nil {
 			t.Fatalf("%q: cmds %#v form %+v", text, out.Cmds, out.State.Model.FieldForm)
 		}
-		if text != "" && out.State.Model.FieldForm.Err.Error() != "duration must be a whole number of seconds from 1m through 24h" {
+		if text != "" && out.State.Model.FieldForm.Err.Error() != "Use a whole number of seconds from 1m to 24h." {
 			t.Fatalf("%q: error %q", text, out.State.Model.FieldForm.Err)
 		}
 	}

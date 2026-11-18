@@ -23,7 +23,7 @@ func TestCardShowsItsPriorityAsABadgeToneLikeTheList(t *testing.T) {
 	s := boardPane(t, issues...)
 	nodes := wireNodes(t, view.Render(s.Model, now))
 
-	for p, tone := range []string{"error", "warning", "info", "muted", "muted"} {
+	for p, tone := range []string{"error", "warning", "muted", "muted", "muted"} {
 		n := node(t, nodes, rowOf(t, s.Model, view.BoardID, fmt.Sprintf("p%d", p))+".id.prio")
 		if got := n.P["text"]; got != fmt.Sprintf("P%d", p) {
 			t.Errorf("P%d card badge text = %v", p, got)

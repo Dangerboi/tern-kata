@@ -37,14 +37,14 @@ func TestDateBadgeWordsAndTonesFollowTheSixRules(t *testing.T) {
 		{"overdue deadline", "", "2026-10-06", "overdue 2d", "error"},
 		{"overdue yesterday", "", "2026-10-07", "overdue 1d", "error"},
 		{"deadline today", "", "2026-10-08", "due today", "warning"},
-		{"scheduled passed", "2026-10-05", "", "scheduled 3d ago", "warning"},
-		{"scheduled today", "2026-10-08", "", "scheduled today", "accent"},
+		{"scheduled passed", "2026-10-05", "", "scheduled 2026-10-05", "muted"},
+		{"scheduled today", "2026-10-08", "", "scheduled today", "muted"},
 		{"deadline tomorrow", "", "2026-10-09", "due tomorrow", "warning"},
-		{"deadline later", "", "2026-10-24", "due 10-24", "muted"},
-		{"deadline other year", "", "2027-01-05", "due 2027-01-05", "muted"},
+		{"deadline later", "", "2026-10-24", "due 2026-10-24", "muted"},
 		{"scheduled tomorrow", "2026-10-09", "", "scheduled tomorrow", "muted"},
-		{"scheduled later", "2026-10-28", "", "scheduled 10-28", "muted"},
+		{"scheduled later", "2026-10-28", "", "scheduled 2026-10-28", "muted"},
 		{"scheduled later other year", "2028-01-02", "", "scheduled 2028-01-02", "muted"},
+		{"deadline other year", "", "2027-01-05", "due 2027-01-05", "muted"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := boardPane(t, dated("a", c.scheduled, c.deadline))
@@ -64,10 +64,10 @@ func TestDateBadgePrecedenceDecidesEveryPairing(t *testing.T) {
 		{"deadline today beats passed schedule", "2026-10-01", "2026-10-08", "due today"},
 		{"deadline today beats schedule today", "2026-10-08", "2026-10-08", "due today"},
 		{"deadline today beats later schedule", "2026-10-20", "2026-10-08", "due today"},
-		{"passed schedule beats later deadline", "2026-10-05", "2026-10-09", "scheduled 3d ago"},
+		{"passed schedule beats later deadline", "2026-10-05", "2026-10-09", "scheduled 2026-10-05"},
 		{"schedule today beats later deadline", "2026-10-08", "2026-10-09", "scheduled today"},
-		{"later deadline beats later schedule", "2026-10-09", "2026-10-30", "due 10-30"},
-		{"later deadline beats earlier later schedule", "2026-10-20", "2026-10-21", "due 10-21"},
+		{"later deadline beats later schedule", "2026-10-09", "2026-10-30", "due 2026-10-30"},
+		{"later deadline beats earlier later schedule", "2026-10-20", "2026-10-21", "due 2026-10-21"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := boardPane(t, dated("a", c.scheduled, c.deadline))
@@ -92,8 +92,8 @@ func TestDateBadgeIsAbsentOnDoneAndUndatedCardsAndReadsMetadataDates(t *testing.
 			t.Errorf("card %s draws a Date badge", uid)
 		}
 	}
-	if got := node(t, nodes, rowOf(t, s.Model, view.BoardID, "meta")+".id.date").P["text"]; got != "due 10-20" {
-		t.Errorf("metadata-only deadline badge = %v, want due 10-20", got)
+	if got := node(t, nodes, rowOf(t, s.Model, view.BoardID, "meta")+".id.date").P["text"]; got != "due 2026-10-20" {
+		t.Errorf("metadata-only deadline badge = %v, want due 2026-10-20", got)
 	}
 }
 
@@ -153,29 +153,31 @@ func TestAMidnightSnapshotTurnsDueTodayIntoOverdueWithoutAKey(t *testing.T) {
 	}
 }
 
-func TestSelectedCardShowsTheDatesLine(t *testing.T) {
-	for _, c := range []struct{ name, scheduled, deadline, line string }{
-		{"both", "2026-10-28", "2026-11-02", "scheduled 2026-10-28 · due 2026-11-02"},
-		{"scheduled only", "2026-10-28", "", "scheduled 2026-10-28"},
-		{"deadline only", "", "2026-11-02", "due 2026-11-02"},
+// A selected card never repeats the date its badge shows: its facts row carries the other date, when the Issue has two.
+func TestSelectedCardShowsOnlyTheDateTheBadgeLeavesOut(t *testing.T) {
+	for _, c := range []struct{ name, scheduled, deadline, other string }{
+		{"both", "2026-10-28", "2026-11-02", "scheduled 2026-10-28"},
+		{"both, the schedule shows", "2026-10-05", "2026-11-02", "due 2026-11-02"},
+		{"scheduled only", "2026-10-28", "", ""},
+		{"deadline only", "", "2026-11-02", ""},
 		{"none", "", "", ""},
-		{"unreadable deadline skipped", "2026-10-28", "soon", "scheduled 2026-10-28"},
+		{"unreadable deadline skipped", "2026-10-28", "soon", ""},
 		{"only unreadable", "", "soon", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := boardPane(t, dated("a", c.scheduled, c.deadline), dated("b", "2026-10-28", "2026-11-02"))
 			s = step(t, s, model.SelectMsg{UID: "a"}).State
 			nodes := wireNodes(t, view.Render(s.Model, now))
-			id := rowOf(t, s.Model, view.BoardID, "a") + ".dates"
-			if c.line == "" {
+			id := rowOf(t, s.Model, view.BoardID, "a") + ".facts.other-date"
+			if c.other == "" {
 				if hasNode(nodes, id) {
-					t.Errorf("a card without dates draws a Dates line")
+					t.Errorf("a card without a second date draws one in its facts")
 				}
-			} else if got := spanText(t, node(t, nodes, id)); got != c.line {
-				t.Errorf("Dates line = %q, want %q", got, c.line)
+			} else if got := spanText(t, node(t, nodes, id)); got != c.other {
+				t.Errorf("other date = %q, want %q", got, c.other)
 			}
-			if hasNode(nodes, rowOf(t, s.Model, view.BoardID, "b")+".dates") {
-				t.Errorf("an unselected card draws a Dates line")
+			if hasNode(nodes, rowOf(t, s.Model, view.BoardID, "a")+".dates") || hasNode(nodes, rowOf(t, s.Model, view.BoardID, "b")+".facts") {
+				t.Errorf("a Dates line is drawn, or an unselected card draws facts")
 			}
 		})
 	}

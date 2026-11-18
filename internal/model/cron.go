@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -28,18 +29,18 @@ type CronJob struct {
 }
 
 const (
-	KindRecurringChild = "recurring child"
-	KindAgentPrompt    = "agent prompt"
-	KindWorkflow       = "workflow"
-	KindNotify         = "notify"
+	KindRecurringIssue = "Recurring Issue"
+	KindAgentPrompt    = "Agent prompt"
+	KindWorkflow       = "Workflow"
+	KindNotify         = "Notification"
 )
 
-// Kind is what the job does, in words: a native job makes a recurring child, an execute job runs a prompt or a workflow, any
+// Kind is what the job does, in words: a native job makes a recurring Issue, an execute job runs a prompt or a workflow, any
 // other notify job notifies.
 func (j CronJob) Kind() string {
 	switch {
 	case j.Native():
-		return KindRecurringChild
+		return KindRecurringIssue
 	case j.Notifies():
 		return KindNotify
 	case j.RunsWorkflow():
@@ -140,19 +141,23 @@ func (j CronJob) deliveryAnchor() time.Time {
 	return j.Parent.Progress.Anchor
 }
 
-// Words reads the trigger as a phrase: "every day at 09:00 Europe/Berlin", "every 15 minutes", "once at 2026-11-01 09:00 UTC",
-// "manual", "at the Issue's scheduled date", "2 days before the Issue's deadline". It is empty where the trigger can't be read:
+// triggerWords reads the trigger as a phrase: "every day at 09:00 Europe/Berlin", "every 15 minutes", "once at 2026-11-01 09:00 UTC",
+// "on demand", "at the Issue's scheduled date", "2 days before the Issue's deadline". It is empty where the trigger can't be read:
 // an expression that does not parse, a once trigger without a valid instant.
 func triggerWords(t cronjob.Trigger) string {
 	switch t.Kind {
 	case cronjob.TriggerManual:
-		return "manual"
+		return "on demand"
 	case cronjob.TriggerCron:
 		if _, err := cronjob.Cron(t.Cron, t.Timezone, time.Time{}); err != nil {
 			return ""
 		}
 		zone, expression := cronjob.Zone(t.Cron, t.Timezone)
-		return cronWords(expression) + " " + zone
+		words := cronWords(expression)
+		if clockTime.MatchString(words) || strings.HasPrefix(words, "cron ") {
+			words += " " + zone // a phrase that names a clock time or is a raw expression needs the zone it is read in
+		}
+		return words
 	case cronjob.TriggerInterval:
 		if t.IntervalSeconds <= 0 {
 			return ""
@@ -184,6 +189,9 @@ func triggerWords(t cronjob.Trigger) string {
 	}
 	return ""
 }
+
+// clockTime matches the "09:00" of a phrase that names a time of day.
+var clockTime = regexp.MustCompile(`\d\d:\d\d`)
 
 // durationWords reads seconds in the largest unit that divides them: "90 minutes", "2 days". A single unit reads as "day" when
 // bare is set (after "every") and "1 day" otherwise.

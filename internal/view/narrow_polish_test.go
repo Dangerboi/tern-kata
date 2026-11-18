@@ -57,7 +57,7 @@ func TestNarrowPageBarKeepsEachChipsClickAndTitle(t *testing.T) {
 	}
 	for _, entry := range m.PageBar() {
 		chip := nodes[root+"."+entry.ID]
-		if chip.P["title"] != entry.Label+" page" || chip.P["actions"] == nil {
+		if chip.P["title"] != entry.Label || chip.P["actions"] == nil {
 			t.Errorf("%s chip props = %v", entry.ID, chip.P)
 		}
 	}
@@ -73,16 +73,17 @@ func TestNarrowPageBarKeepsTheAttentionCountBesideItsIcon(t *testing.T) {
 	}
 }
 
-func TestEightyColumnPageBarKeepsKeycapsAndLabels(t *testing.T) {
+// Where the full bar does not fit, the compact bar is one form at every width: an icon per Page, and the label only on the current
+// Page.
+func TestCompactPageBarKeepsTheCurrentPagesLabel(t *testing.T) {
 	m := atCols(browsing(), model.FoldedLegendCols)
 	nodes := render(t, m)
 	if len(nodes.under("main.topbar")) == 0 {
 		t.Fatal("no top bar")
 	}
-	for _, id := range nodes.under("main") {
-		if nodes[id].K == "icon" && strings.Contains(id, "pages.") {
-			t.Errorf("%s is an icon chip at %d columns", id, model.FoldedLegendCols)
-		}
+	chips := pageChips(t, nodes, m)
+	if label := chips["issues"]; !strings.Contains(label, "Issues") {
+		t.Errorf("current Page chip %q, want its label", label)
 	}
 }
 
@@ -110,16 +111,16 @@ func TestNarrowActivityTabsAreOneLineOfUnbrokenLabels(t *testing.T) {
 		if tab.P["wrap"] != "none" || fmt.Sprint(tab.P["shrink"]) != "0" {
 			t.Errorf("%s props = %v, want wrap none and no shrink", tab.ID, tab.P)
 		}
-		if strings.Contains(text(tab), "(") {
-			t.Errorf("%s shows a count: %q", tab.ID, text(tab))
+		if strings.ContainsAny(text(tab), "([") {
+			t.Errorf("%s has brackets: %q", tab.ID, text(tab))
 		}
 	}
 }
 
-func TestEightyColumnActivityTabsKeepCounts(t *testing.T) {
+func TestEightyColumnActivityTabsAreNotForcedToOneLine(t *testing.T) {
 	nodes := render(t, detailAt(model.FoldedLegendCols))
 	tabs := tabNodes(nodes)
-	if len(tabs) != int(model.TabCount) || !strings.Contains(text(tabs[0]), "Comments (0)") {
+	if len(tabs) != int(model.TabCount) || text(tabs[0]) != "Comments" {
 		t.Fatalf("tabs = %v", tabs)
 	}
 	if _, ok := tabs[0].P["wrap"]; ok {
@@ -139,9 +140,10 @@ func TestNarrowHeaderDropsCountsAndDaemonKeepsMenu(t *testing.T) {
 	}
 }
 
-func TestEightyColumnHeaderKeepsCountsAndDaemon(t *testing.T) {
-	nodes := render(t, atCols(browsing(), model.FoldedLegendCols))
-	for _, id := range []string{"main.topbar.counts", "main.topbar.right.daemon", "main.topbar.right.menu"} {
+func TestEightyColumnHeaderKeepsTheDaemonAndTheCounts(t *testing.T) {
+	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Kind: model.DaemonLocal, Version: "v0.18.0"}})
+	nodes := render(t, atCols(m, model.FoldedLegendCols))
+	for _, id := range []string{"main.topbar.right.facts.fact0", "main.topbar.right.menu", "main.filters.counts"} {
 		if _, ok := nodes[id]; !ok {
 			t.Errorf("%s is gone at %d columns", id, model.FoldedLegendCols)
 		}
@@ -149,7 +151,8 @@ func TestEightyColumnHeaderKeepsCountsAndDaemon(t *testing.T) {
 }
 
 func TestNarrowAgentCardButtonsWrapInOrderWithCancelLast(t *testing.T) {
-	m := model.Model{Cols: phoneCols, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
+	m := model.Model{Cols: phoneCols, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a",
+		AgentMapping: []model.AgentEntry{{IssueUID: "a", Block: "31", Teammate: "builder"}}}
 	m = press(m, "w")
 	nodes := pickerNodes(t, m)
 	foot := nodes["layer.agent.foot"]
@@ -163,7 +166,7 @@ func TestNarrowAgentCardButtonsWrapInOrderWithCancelLast(t *testing.T) {
 			}
 		}
 	}
-	want := []string{"split", "tab", "new-background", "team", "pause", "go", "background", "message", "quick-reply", "interrupt", "stop", "cancel"}
+	want := []string{"split", "tab", "new-background", "team", "go", "background", "message", "quick-reply", "interrupt", "stop", "cancel"}
 	if strings.Join(keys, " ") != strings.Join(want, " ") {
 		t.Errorf("buttons = %v, want %v", keys, want)
 	}

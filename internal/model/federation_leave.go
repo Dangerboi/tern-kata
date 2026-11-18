@@ -136,59 +136,70 @@ func federationLeft(m Model, msg FederationLeft) (Model, []Cmd) {
 	return askFederation(m)
 }
 
-// PreviewLines are the leave preview's lines as kata tui words them; "" is a blank line. Warning is the index of the line that warns,
-// -1 when none does. The error of a failed run is not among them.
-func (d FederationLeaveDraft) PreviewLines() (lines []string, warning int) {
-	hubProject := strconv.FormatInt(d.HubProjectID, 10)
-	local := "keep (detach) — standalone with all issues"
-	teardown := "detach locally (keep the project standalone)"
+// PreviewRows are the leave preview as label→value rows, then the sentence that says what running it does, in the warning tone when
+// the hub revoke is skipped. The error of a failed run is not among them.
+func (d FederationLeaveDraft) PreviewRows() []FactRow {
+	local := "Stays as a standalone Project with all its Issues"
+	teardown := "detaches the Project locally"
 	if d.Archive {
-		local = "archive — remove the replica (reversible via kata projects restore)"
-		teardown = "archive the local replica"
+		local = "Archived; restore it with kata projects restore"
+		teardown = "archives the local replica"
 	}
-	lines = []string{
-		"local spoke project: " + dashLine(d.ProjectName),
-		"hub: " + FederationSpoke{HubURL: d.HubURL}.HubHost(),
-		"hub project ID: " + hubProject,
-		"local project: " + local,
-		"local-only: " + strconv.FormatBool(d.LocalOnly),
-		"",
+	revoke := "Revoked on the hub"
+	if d.LocalOnly {
+		revoke = "Skipped (local only)"
+	}
+	rows := []FactRow{
+		{Key: "Project", Value: dashLine(d.ProjectName)},
+		{Key: "Hub", Value: FederationSpoke{HubURL: d.HubURL}.HubHost(), Mono: true},
+		{Key: "Hub Project", Value: strconv.FormatInt(d.HubProjectID, 10), Mono: true},
+		{Key: "Local copy", Value: local},
+		{Key: "Hub revoke", Value: revoke},
+		{},
 	}
 	if d.LocalOnly {
-		return append(lines, "local-only: skipping hub revoke; the enrollment token stays valid until manually revoked", "local teardown only: "+teardown), len(lines)
+		return append(rows, FactRow{Value: "The hub revoke is skipped: the enrollment token stays valid until you revoke it by hand, and the leave only " + teardown + ".", Tone: FactWarning})
 	}
-	return append(lines, "will revoke the enrollment(s) on the hub, then "+teardown), -1
+	return append(rows, FactRow{Value: "Revokes the enrollment on the hub, then " + teardown + "."})
 }
 
-// ResultLines are the leave result's lines as kata tui words them. Warning is the index of the line that warns, -1 when none does.
-func (o FederationLeaveOutcome) ResultLines() (lines []string, warning int) {
-	status := "detached"
+// ResultRows are the leave result as label→value rows, then a warning sentence when a global enrollment still authorizes the left
+// Project.
+func (o FederationLeaveOutcome) ResultRows() []FactRow {
+	status := "Detached"
 	if o.Archived {
-		status = "archived"
+		status = "Archived"
 	}
-	revoke := "revoked " + strconv.Itoa(o.Revoked) + " enrollment(s) on the hub"
+	revoke := "Revoked " + Count(o.Revoked, "enrollment", "") + " on the hub"
 	if o.SkippedRevoke {
-		revoke = "hub revoke skipped (local-only): the enrollment token remains valid until manually revoked"
+		revoke = "Skipped (local only); the enrollment token stays valid until you revoke it"
 	} else if o.ProviderReleased {
-		revoke = "credential provider confirmed release"
+		revoke = "The credential provider confirmed the release"
 	}
-	lines = []string{"status: " + status, "local spoke project: " + dashLine(o.Draft.ProjectName), "hub: " + FederationSpoke{HubURL: o.Draft.HubURL}.HubHost(), revoke}
-	warning = -1
+	rows := []FactRow{
+		{Key: "Result", Value: status},
+		{Key: "Project", Value: dashLine(o.Draft.ProjectName)},
+		{Key: "Hub", Value: FederationSpoke{HubURL: o.Draft.HubURL}.HubHost(), Mono: true},
+		{Key: "Hub revoke", Value: revoke},
+	}
 	if len(o.GlobalEnrollmentIDs) > 0 {
 		ids := make([]string, len(o.GlobalEnrollmentIDs))
 		for i, id := range o.GlobalEnrollmentIDs {
 			ids[i] = "#" + strconv.FormatInt(id, 10)
 		}
-		warning = len(lines)
-		lines = append(lines, "warning: global enrollment(s) "+strings.Join(ids, ", ")+" for this spoke remain active and still authorize this project; revoke manually if intended")
+		warning := "Global enrollments " + strings.Join(ids, ", ") + " for this spoke are still active and still authorize this Project; revoke them by hand if you mean to."
+		if len(ids) == 1 {
+			warning = "Global enrollment " + ids[0] + " for this spoke is still active and still authorizes this Project; revoke it by hand if you mean to."
+		}
+		rows = append(rows, FactRow{Value: warning, Tone: FactWarning})
 	}
-	return lines, warning
+	return rows
 }
 
 var federationLeaveRows = []actionEntry{
-	{action: RunFederationLeave, modes: []Mode{ModeFederationLeave}, keys: keys("enter", "↵"), help: "confirm", footer: []Mode{ModeFederationLeave}, footerKey: "↵", sheet: []sheetLine{{sheetLettered, 7, "run the leave in its preview"}}, handle: runFederationLeave},
-	{action: ToggleFederationArchive, modes: []Mode{ModeFederationLeave}, keys: keys("d", "d"), help: "keep / archive", footer: []Mode{ModeFederationLeave}, sheet: []sheetLine{{sheetLettered, 8, "switch the leave between detaching and archiving"}}, handle: toggleFederationArchive},
-	{action: ToggleFederationLocal, modes: []Mode{ModeFederationLeave}, keys: keys("l", "l"), help: "local-only", footer: []Mode{ModeFederationLeave}, sheet: []sheetLine{{sheetLettered, 9, "leave without revoking on the hub"}}, handle: toggleFederationLocalOnly},
+	{action: RunFederationLeave, modes: []Mode{ModeFederationLeave}, keys: keys("enter", "enter"), help: "confirm", footer: []Mode{ModeFederationLeave}, footerKey: "enter", sheet: []sheetLine{{sheetLettered, 7, "Run the leave"}}, handle: runFederationLeave},
+	{action: ToggleFederationArchive, modes: []Mode{ModeFederationLeave}, keys: keys("d", "d"), help: "keep / archive", footer: []Mode{ModeFederationLeave}, sheet: []sheetLine{{sheetLettered, 8, "Switch between keeping and archiving"}}, handle: toggleFederationArchive},
+	{action: ToggleFederationLocal, modes: []Mode{ModeFederationLeave}, keys: keys("l", "l"), help: "local-only", footer: []Mode{ModeFederationLeave}, sheet: []sheetLine{{sheetLettered, 9, "Leave without revoking on the hub"}}, handle: toggleFederationLocalOnly},
 	{action: CancelFederationLeave, modes: []Mode{ModeFederationLeave}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeFederationLeave}, handle: cancelFederationLeave},
-	{action: FederationLeaveDismiss, modes: []Mode{ModeFederationResult}, keys: keys("enter", "↵", "escape", "esc", "backspace", "⌫"), help: "list", footer: []Mode{ModeFederationResult}, footerKey: "↵", handle: dismissFederationLeave},
+	{action: FederationLeaveDismiss, modes: []Mode{ModeFederationResult}, keys: keys("enter", "enter", "escape", "esc", "backspace", "⌫"), help: "list", footer: []Mode{ModeFederationResult}, footerKey: "enter", handle: dismissFederationLeave},
 }

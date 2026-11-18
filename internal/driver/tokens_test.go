@@ -32,9 +32,14 @@ func tokenCard(t *testing.T) driver.State {
 	return out.State
 }
 
-// setToken puts text in the field of the open Token card the way a user does: focus it, clear it, type.
+// setToken puts text in the field of the open Token card the way a user does: focus it, clear it, type. The Scope is a choice, so
+// it is picked by its tab instead.
 func setToken(t *testing.T, s driver.State, field model.Field, text string) driver.State {
 	t.Helper()
+	if field == model.TokenScope {
+		index := map[string]int{model.TokenScopeAccount: 0, model.TokenScopeIssue: 1}[text]
+		return step(t, s, model.ChooseMsg{Field: field, Index: index}).State
+	}
 	s = step(t, s, model.FocusFieldMsg{Field: field}).State
 	s = step(t, s, key("ctrl+u")).State
 	return typed(t, s, text)
@@ -89,13 +94,12 @@ func TestTokenCardRefusesWhatKataWouldRefuseBeforeSendingAnything(t *testing.T) 
 		{"a duration of a fraction of a second", map[model.Field]string{model.TokenExpires: "1500ms"}, "positive whole-second duration"},
 		{"a duration of nothing", map[model.Field]string{model.TokenExpires: "0s"}, "positive whole-second duration"},
 		{"a negative duration", map[model.Field]string{model.TokenExpires: "-1h"}, "positive whole-second duration"},
-		{"a scope that is neither", map[model.Field]string{model.TokenScope: "team"}, "scope must be account or issue"},
 		{"a subtree token without an Issue", map[model.Field]string{model.TokenScope: "issue", model.TokenExpires: "24h"}, "needs an Issue"},
 		{"a subtree token without an expiry", map[model.Field]string{model.TokenScope: "issue", model.TokenIssue: "a12"}, "needs an expiry"},
 		{"an account token with an Issue", map[model.Field]string{model.TokenIssue: "a12"}, "covers no Issue"},
 		{"an Issue in a Project that is not there", map[model.Field]string{model.TokenScope: "issue", model.TokenIssue: "nowhere#a12", model.TokenExpires: "24h"}, "nowhere"},
 		{"too many teams", map[model.Field]string{model.TokenTeams: tooMany}, "at most 256 teams"},
-		{"no file", map[model.Field]string{model.TokenFile: ""}, "token file is required"},
+		{"no file", map[model.Field]string{model.TokenFile: ""}, "the token file is required"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := setToken(t, tokenCard(t), model.TokenFile, "/secrets/ci.token")
@@ -149,7 +153,7 @@ func TestTokenCardResolvesAnIssueSubtreeToItsProject(t *testing.T) {
 func TestACreatedTokenIsReportedByIdAndFileAndTheListIsReadAgain(t *testing.T) {
 	out := step(t, validToken(t), key("enter"))
 	done := step(t, out.State, model.TokenCreated{ID: 11, File: "/secrets/ci.token"})
-	wantText(t, "the card", wireTextOf(t, done.State), "Created token 11", "/secrets/ci.token", "not shown")
+	wantText(t, "the card", wireTextOf(t, done.State), "Token 11 created", "/secrets/ci.token", "cannot show it again")
 	if strings.Contains(wireTextOf(t, done.State), "kata_") {
 		t.Error("the card draws something that looks like a secret")
 	}
@@ -201,7 +205,7 @@ func TestXAsksBeforeRevokingAndYRevokes(t *testing.T) {
 	if asked.State.Model.CurrentMode() != model.ModeRevokeToken || len(asked.Cmds) != 0 {
 		t.Fatalf("x gave mode %q and %#v, want the question and no request", asked.State.Model.CurrentMode(), asked.Cmds)
 	}
-	wantText(t, "the question", wireTextOf(t, asked.State), "Revoke token 3 (laptop, alice)? This cannot be undone.")
+	wantText(t, "the question", wireTextOf(t, asked.State), "Revoke token 3?", "laptop · alice. This cannot be undone.")
 
 	for _, answer := range []string{"n", "escape"} {
 		kept := step(t, asked.State, key(answer))
@@ -238,7 +242,7 @@ func TestXAsksBeforeRevokingAndYRevokes(t *testing.T) {
 func TestKatasRefusalToRevokeShowsOnTheQuestion(t *testing.T) {
 	sent := step(t, step(t, tokenList(t), key("x")).State, key("y"))
 	failed := step(t, sent.State, model.TokenRevoked{ID: 3, Err: errors.New("token not found")})
-	wantText(t, "the question", wireTextOf(t, failed.State), "token not found", "Revoke token 3")
+	wantText(t, "the question", wireTextOf(t, failed.State), "Cannot revoke token 3: token not found.", "Revoke token 3?")
 	if !failed.State.Model.RevokeCard.Open || failed.State.Model.RevokeCard.Saving {
 		t.Errorf("after a refusal the question is %+v, want it open to answer again", failed.State.Model.RevokeCard)
 	}

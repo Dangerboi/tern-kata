@@ -33,9 +33,9 @@ ps_labels=$(ctl tree "[data-id='$ps_content.properties.labels']" | jq -r '.nodes
 ps_parent_y=$(ctl tree "[data-id='$ps_content.properties.parent']" | jq -r '.nodes[0].rect[1]')
 awk -v a="$ps_labels" -v b="$ps_parent_y" 'BEGIN { exit !(a < b) }' || { printf 'Parent: is not below Labels: (%s, %s)\n' "$ps_labels" "$ps_parent_y" >&2; return 1; }
 # Every key sits at one left edge and width, and the wrapped Parent value starts on the key's line.
-expect_tree "[data-id^='$ps_content.properties.'][data-id\$='.k']" '.ok and .count > 3 and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
+expect_tree "[data-id^='$ps_content.properties.'][data-id\$='.k']" '.ok and .count >= 3 and ([.nodes[].rect[0]] | unique | length == 1) and ([.nodes[].rect[2]] | unique | length == 1)'
 ps_key_y=$(ctl tree "[data-id='$ps_content.properties.parent.k']" | jq -r '.nodes[0].rect[1]')
-expect_tree "[data-id='$ps_content.properties.parent.v']" ".ok and .nodes[0].rect[1] == $ps_key_y and (.nodes[0].text | startswith(\"#$ps_short - Parentsec parent\"))"
+expect_tree "[data-id='$ps_content.properties.parent.v']" ".ok and .nodes[0].rect[1] == $ps_key_y and (.nodes[0].text | startswith(\"#$ps_short Parentsec parent\"))"
 
 quit_app
 kata projects remove parentsec --force --json >/dev/null

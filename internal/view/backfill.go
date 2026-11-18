@@ -13,51 +13,34 @@ func backfillLayer(m model.Model) tern.Element {
 	if !b.Open {
 		return nil
 	}
-	head, step, latest := "Resume job?", "Resuming", "Switch to latest and resume"
-	switch b.For {
-	case model.BackfillRestore:
-		head, step, latest = "Restore job?", "Restoring", "Switch to latest and restore"
-	case model.BackfillSave:
-		head, step, latest = "Save and resume job?", "Resuming", "Switch to latest and save"
-	case model.BackfillReopen:
-		head, step, latest = "Reopen Issue?", "Reopening", "Switch to latest and reopen"
+	children := []tern.Element{toneText("warning", ui.ToneWarning, m.BackfillSentence())}
+	// A single job is named in the sentence; a reopen names none there, so its jobs are always listed.
+	if len(b.Jobs) > 1 || b.For == model.BackfillReopen {
+		for i, j := range b.Jobs {
+			name := ui.Text{Common: ui.Common{Key: "name", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Text: j.Job.Name}
+			count := toneText("count", ui.ToneMuted, model.MissedWords(j.Missed))
+			count.Shrink = new(float64)
+			count.Wrap = ui.WrapNone
+			children = append(children, ui.Row{Common: ui.Common{Key: fmt.Sprintf("job%d", i)}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(name, count)})
+		}
 	}
-	subject := "the job"
-	if b.For == model.BackfillReopen {
-		subject = "#" + b.Issue.ShortID + " " + b.Issue.Title
-	} else if len(b.Jobs) == 1 {
-		subject = fmt.Sprintf("job %q", b.Jobs[0].Job.Name)
-	}
-	children := []tern.Element{
-		toneText("warning", ui.ToneWarning, fmt.Sprintf("%s %s would create %s at once: its catch-up is every missed run.", step, subject, missedIssues(b.Total()))),
-	}
-	for i, j := range b.Jobs {
-		name := ui.Text{Common: ui.Common{Key: "name", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Text: j.Job.Name}
-		count := toneText("count", ui.ToneInfo, model.MissedWords(j.Missed))
-		count.Shrink = new(float64)
-		count.Wrap = ui.WrapNone
-		children = append(children, ui.Row{Common: ui.Common{Key: fmt.Sprintf("job%d", i)}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(name, count)})
+	create := cardButton("create", model.ModeBackfill, model.BackfillCreate, "Create all", false)
+	latest := cardButton("latest", model.ModeBackfill, model.BackfillLatest, "Only the latest", true)
+	cancel := exitButton("cancel", model.ModeBackfill, model.BackfillCancel, "Cancel")
+	var status []tern.Element
+	if b.Saving {
+		pending := model.Progress(b.Verb(), "")
+		create, latest, cancel = unavailable(create, pending), unavailable(latest, pending), unavailable(cancel, pending)
+		status = append(status, toneText("pending", ui.TonePending, pending))
 	}
 	if b.Err != nil {
-		children = append(children, toneText("error", ui.ToneError, b.Err.Error()))
+		status = append(status, toneText("error", ui.ToneError, b.Err.Error()))
 	}
-	if b.Saving {
-		return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardBackfill)}, Modal: true, Size: ui.SizeLG, Head: ui.T(head), Icon: ui.IconHistory},
-			append(children, toneText("pending", ui.TonePending, "Switching to latest…"))))
+	children = append(children, status...)
+	children = append(children, formFoot(latest, cancel, create))
+	overlay := ui.Overlay{Common: ui.Common{Key: layerKey(model.CardBackfill)}, Modal: true, Size: ui.SizeLG, Head: ui.T(b.Head()), Icon: ui.IconHistory}
+	if b.For == model.BackfillReopen {
+		overlay.Meta = refMeta(m.RefName(b.Issue.ProjectName, b.Issue.ShortID))
 	}
-	children = append(children, buttonRow(
-		cardButton("create", model.ModeBackfill, model.BackfillCreate, "Create them", false),
-		cardButton("latest", model.ModeBackfill, model.BackfillLatest, latest, true),
-		cardButton("cancel", model.ModeBackfill, model.BackfillCancel, "Cancel", false)))
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardBackfill)}, Modal: true, Size: ui.SizeLG, Head: ui.T(head), Icon: ui.IconHistory}, children))
-}
-
-func missedIssues(n int) string {
-	switch {
-	case n >= 10000:
-		return "10000 or more child Issues"
-	case n == 1:
-		return "1 child Issue"
-	}
-	return fmt.Sprintf("%d child Issues", n)
+	return ui.Nodes(popup(overlay, children))
 }

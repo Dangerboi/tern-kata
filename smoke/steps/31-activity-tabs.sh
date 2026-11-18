@@ -45,29 +45,29 @@ at_cards="[data-id^='main.columns.detail.viewport.content.activity.'].sf-card"
 at_label() { expect_tree "[data-id='$at_tab$1']" ".ok and (.nodes[0].text | $2)"; }
 ctl key enter
 
-# Comments (2) is the default, bracketed; the Events, Links and Attachments tabs carry their counts.
-at_label 0 'startswith("[ Comments (2) ]")'
-at_label 1 'test("^Events \\([0-9]+\\)$")'
-at_label 2 'startswith("Links (1)")'
-at_label 3 'startswith("Attachments (0)")'
+# Comments 2 is the default and carries the accent; the Events, Links and Attachments tabs carry their counts, and a tab with none shows no count.
+at_label 0 '. == "Comments 2"'
+at_label 1 'test("^Events( [0-9]+)?$")'
+at_label 2 '. == "Links 1"'
+at_label 3 '. == "Attachments"'
 expect_tree "$at_cards .sf-t-strong" '.ok and .count == 2 and ([.nodes[].text] | all(. == "dana"))'
-expect_tree "$at_cards .sf-t-muted" '.ok and .count == 2 and ([.nodes[].text] | all(test("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$")))'
+expect_tree "$at_cards .sf-t-muted.sf-t-mono" '.ok and .count == 2 and ([.nodes[].text] | all(test("^([0-9]{4}-[0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}$")))'
 
 # tab and shift+tab cycle Comments -> Events -> Links -> Attachments -> Comments.
 ctl key Tab
-at_label 1 'startswith("[ Events (")'
+at_label 1 'test("^Events( [0-9]+)?$")'
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 0'
 ctl key Tab
-at_label 2 'startswith("[ Links (1) ]")'
+at_label 2 '. == "Links 1"'
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 1'
 ctl key Tab
-at_label 3 'startswith("[ Attachments (0) ]")'
+at_label 3 '. == "Attachments"'
 ctl key Tab
-at_label 0 'startswith("[ Comments (2) ]")'
+at_label 0 '. == "Comments 2"'
 ctl key shift+Tab
-at_label 3 'startswith("[ Attachments (0) ]")'
+at_label 3 '. == "Attachments"'
 ctl key shift+Tab
-at_label 2 'startswith("[ Links (1) ]")'
+at_label 2 '. == "Links 1"'
 ctl key Tab
 ctl key Tab
 
@@ -87,11 +87,11 @@ at_wait "pgup returns to the top after j/k" '$a == 0'
 at_wheel 300 12
 at_wait "the tabs are in view" '$b <= 1'
 ctl click "[data-id='${at_tab}1']"
-at_label 1 'startswith("[ Events (")'
+at_label 1 'test("^Events( [0-9]+)?$")'
 ctl click "[data-id\$='.$at_peer']"
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Tabs peer"))'
-at_label 1 'startswith("[ Events (")'
-at_label 0 'startswith("Comments (0)")'
+at_label 1 'test("^Events( [0-9]+)?$")'
+at_label 0 '. == "Comments"'
 
 quit_app
 kata projects remove tabs-detail --force --json >/dev/null

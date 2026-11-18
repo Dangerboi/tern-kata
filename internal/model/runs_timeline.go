@@ -93,7 +93,7 @@ func (g RunGroup) Folded() bool { return len(g.Runs) > 1 }
 
 func (g RunGroup) Latest() Run { return g.Runs[0] }
 
-// Counts words the folded Runs by status, "3 succeeded · 1 cancelled".
+// Counts words the folded Runs by status, "3 succeeded, 1 cancelled".
 func (g RunGroup) Counts() string {
 	var parts []string
 	for _, status := range []cronjob.RunStatus{cronjob.RunSucceeded, cronjob.RunFailed, cronjob.RunCancelled, cronjob.RunUnknown} {
@@ -107,7 +107,7 @@ func (g RunGroup) Counts() string {
 			parts = append(parts, strconv.Itoa(n)+" "+string(status))
 		}
 	}
-	return strings.Join(parts, " · ")
+	return strings.Join(parts, ", ")
 }
 
 // foldKey is what a Run folds with: its job, else its workflow. A Run of neither never folds.
@@ -271,8 +271,7 @@ func canMarkRunsSeen(m Model) bool {
 // behind, still shows as new. With no ended Run loaded the mark stays.
 func markRunsSeen(m Model) (Model, []Cmd) {
 	if m.Runs.JobUID != "" || m.searchingPage(PageRuns) {
-		m.Notice = "Clear the job filter and the search before marking seen: it would also cover runs not shown."
-		return m, nil
+		return m.fail("Cannot mark runs seen: clear the job filter and the search first, or it would also cover runs not shown."), nil
 	}
 	seen := newestEnd(m.Runs.Runs, m.Runs.Seen)
 	if seen.Equal(m.Runs.Seen) {
@@ -302,7 +301,20 @@ func seenLoaded(m Model, msg SeenLoaded) Model {
 
 func seenSaved(m Model, msg SeenSaved) Model {
 	if msg.Err != nil {
-		m.Notice = "Not saved to seen.toml: " + msg.Err.Error()
+		return m.fail(Cannot("save", "seen.toml", msg.Err))
 	}
 	return m
+}
+
+// ConditionWords is the words of a skip condition's name; a condition a newer worker sends comes back as it is.
+func ConditionWords(code string) string {
+	switch code {
+	case "new_commits":
+		return "No new commits"
+	case "runs_per_day":
+		return "Daily run limit"
+	case "runs_per_week":
+		return "Weekly run limit"
+	}
+	return code
 }

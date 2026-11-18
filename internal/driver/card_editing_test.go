@@ -43,7 +43,7 @@ func editingCards() []editingCard {
 			lap:     []model.Field{model.CreateBody, model.CreateLabels, model.CreateOwner, model.CreatePriority, model.CreateScheduled, model.CreateDeadline, model.CreateTitle}},
 		{name: "Close", card: model.CardClose, open: popupOpener("Close"),
 			focused: func(m model.Model) model.Field { return m.CloseForm.Field },
-			lap:     []model.Field{model.CloseMessage, model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReviewed, model.CloseExternal, model.CloseReference, model.CloseRationale, model.CloseReason}},
+			lap:     []model.Field{model.CloseCommit, model.ClosePR, model.CloseTest, model.CloseReviewed, model.CloseExternal, model.CloseReason, model.CloseMessage}},
 		{name: "Dates", card: model.CardDates, open: popupOpener("Dates"),
 			focused: func(m model.Model) model.Field { return m.DatesForm.Field },
 			lap:     []model.Field{model.DatesDeadline, model.DatesScheduled}},
@@ -304,7 +304,7 @@ func TestArrowKeysMoveTheCaretInATextFieldAndSpaceIsTyped(t *testing.T) {
 			s := c.seekField(t, c.open(t), model.RecurrenceEvery)
 			before := s.Model.RecurrenceForm.Frequency
 			s = feed(t, s, key("a"), key("b"), key("left"), key("right"), key("space")).State
-			if text, _ := nodeText(t, s, fieldLabeled(t, s.Model, "Every (weeks)")); text != "1ab " || s.Model.RecurrenceForm.Frequency != before {
+			if text, _ := nodeText(t, s, fieldLabeled(t, s.Model, "Every")); text != "1ab " || s.Model.RecurrenceForm.Frequency != before {
 				t.Errorf("Recurrence Every draws %q (frequency %q, was %q), want \"1ab \" and the frequency kept", text, s.Model.RecurrenceForm.Frequency, before)
 			}
 		case "Filter":

@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"strings"
 )
 
 // Daemon is the kata daemon this Pane talks to, read at discovery. Name is the daemon's name in kata's catalog, empty when the
@@ -22,46 +21,57 @@ const (
 	DaemonRemote DaemonKind = "remote"
 )
 
-const DaemonSeparator = " · "
+// Fact is one cell of the top bar's muted line. Version, when set, follows Text and is drawn in the mono face.
+type Fact struct{ Text, Version string }
 
-func (m Model) DaemonLine() string {
-	var parts []string
+// DaemonFacts are the cells that describe the Daemon, in bar order: its catalog name when it has one, local or remote, the kata
+// version, and the account the Pane acts as. The view appends the Pane's own `tern-kata` cell. Cells the Daemon has not
+// reported yet are left out.
+func (m Model) DaemonFacts() []Fact {
+	var facts []Fact
 	if m.Daemon.Name != "" {
-		parts = append(parts, oneLine(m.Daemon.Name))
+		facts = append(facts, Fact{Text: oneLine(m.Daemon.Name)})
 	}
 	if m.Daemon.Kind != "" {
-		parts = append(parts, string(m.Daemon.Kind))
+		facts = append(facts, Fact{Text: string(m.Daemon.Kind)})
 	}
 	if m.Daemon.Version != "" {
-		parts = append(parts, "kata "+m.Daemon.Version)
+		facts = append(facts, Fact{Text: "kata", Version: m.Daemon.Version})
 	}
 	if m.Daemon.Account != "" {
-		parts = append(parts, "as "+oneLine(m.Daemon.Account))
+		facts = append(facts, Fact{Text: "as " + oneLine(m.Daemon.Account)})
 	}
-	return "Daemon: " + strings.Join(parts, DaemonSeparator)
+	return facts
 }
 
-// CountsLine is the top bar's counts line. A Project Collection (bound or picked)
-// shows the Project's catalog stats, which no filter narrows. Any other
-// Collection counts the Issues it lists, which the status, search, owner and
-// label filters have already narrowed: the snapshot carries stats for Projects
-// only, so there is no cheap unfiltered count for a named view.
-func (m Model) CountsLine() string {
-	var open, closed int
-	counted := false
+// issueCounts are the open and closed Issues the top bar counts, and whether they are known. A Project Collection (bound or
+// picked) uses the Project's catalog stats, which no filter narrows. Any other Collection counts the Issues it lists, which the
+// status, search, owner and label filters have already narrowed: the snapshot carries stats for Projects only, so there is no
+// cheap unfiltered count for a named view. Those are known only once the snapshot has loaded.
+func (m Model) issueCounts() (open, closed int, known bool) {
 	if m.Collection.IsProject() {
 		if entry, ok := CatalogEntry(m.Snapshot, m.Collection.ProjectUID); ok && entry.Stats != nil {
-			open, closed, counted = entry.Stats.Open, entry.Stats.Closed, true
+			return entry.Stats.Open, entry.Stats.Closed, true
 		}
 	}
-	if !counted {
-		for _, issue := range m.Issues {
-			if IsClosed(issue) {
-				closed++
-			} else {
-				open++
-			}
+	for _, issue := range m.Issues {
+		if IsClosed(issue) {
+			closed++
+		} else {
+			open++
 		}
 	}
-	return fmt.Sprintf("open: %d · closed: %d · all: %d", open, closed, open+closed)
+	return open, closed, true
+}
+
+// ShowCounts is whether the top bar carries the Issue counts: on the Issues Page only, and not while there is nothing to count.
+func (m Model) ShowCounts() bool {
+	open, closed, known := m.issueCounts()
+	return m.Page == PageIssues && known && open+closed > 0
+}
+
+// CountsLine is the top bar's counts line, "5 open · 7 closed".
+func (m Model) CountsLine() string {
+	open, closed, _ := m.issueCounts()
+	return fmt.Sprintf("%d open · %d closed", open, closed)
 }

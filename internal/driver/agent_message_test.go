@@ -53,7 +53,7 @@ func TestAMessageToTheAgentThatRaisedARequestIsWrittenToItsOwnAddress(t *testing
 	if m := open.State.Model; m.TopCard() != model.CardAgentMessage || m.CurrentMode() != model.ModeAgentMessage || len(open.Cmds) != 0 {
 		t.Fatalf("card %v mode %s cmds %v, want the Message card", m.TopCard(), m.CurrentMode(), open.Cmds)
 	}
-	wantShown(t, "the Message card", open.State, "Message omp", "work#aa11", "stays on work#aa11 until the agent clears it")
+	wantShown(t, "the Message card", open.State, "Message omp", "#aa11", "it stays until the agent clears it")
 	if !strings.HasPrefix(open.State.Focus, view.LayerID(model.CardAgentMessage)) {
 		t.Errorf("text focus %q is not on the Message card", open.State.Focus)
 	}
@@ -69,7 +69,7 @@ func TestAMessageToTheAgentThatRaisedARequestIsWrittenToItsOwnAddress(t *testing
 	}
 
 	sent := step(t, sending.State, model.AgentMessageSent{UID: "work-aa11"}).State
-	if sent.Model.TopCard() != model.NoCard || sent.Model.Notice != "Sent the message to omp on work#aa11." {
+	if sent.Model.TopCard() != model.NoCard || sent.Model.Notice != "Sent the message to omp on #aa11." {
 		t.Fatalf("card %v notice %q, want the card closed and the send confirmed", sent.Model.TopCard(), sent.Model.Notice)
 	}
 }
@@ -82,7 +82,7 @@ func TestAMessageOverOneTheAgentHasNotClearedAsksBeforeReplacingIt(t *testing.T)
 	if asking.Model.CurrentMode() != model.ModeAgentMessageReplace {
 		t.Fatalf("mode %s, want the replace question", asking.Model.CurrentMode())
 	}
-	wantShown(t, "the replace question", asking, "has not cleared its last message", "use the second table", "Replace it", "Keep editing")
+	wantShown(t, "the replace question", asking, "has an unread message", "use the second table", "Replace", "Keep editing")
 
 	kept := step(t, asking, key("escape"))
 	if kept.State.Model.CurrentMode() != model.ModeAgentMessage || kept.State.Model.AgentMessage.Text != "no, the third" || len(kept.Cmds) != 0 {
@@ -187,7 +187,16 @@ func TestAskingTheAgentAboutACommentSendsTheMessageNamingItsHandle(t *testing.T)
 	if m := open.State.Model; m.TopCard() != model.CardAgentMessage || len(open.Cmds) != 0 {
 		t.Fatalf("card %v cmds %v, want the Message card", m.TopCard(), open.Cmds)
 	}
-	wantShown(t, "the Message card", open.State, "Message omp", "work#aa11", "answer comment c:vwxyz0")
+	wantShown(t, "the Message card", open.State, "Message omp", "answer comment c:vwxyz0")
+	var meta []any
+	for _, n := range wireNodes(t, view.Render(open.State.Model, now)) {
+		if n.ID == view.LayerID(model.CardAgentMessage) {
+			meta, _ = n.P["meta"].([]any)
+		}
+	}
+	if len(meta) != 1 || meta[0].(map[string]any)["t"] != "#aa11" {
+		t.Errorf("the Message card's meta is %v, want the Issue's ref #aa11", meta)
+	}
 	sending := step(t, step(t, open.State, tern.Key{Text: "is this still true?"}).State, key("enter"))
 	want := model.SendAgentMessage{Workspace: "/repo", ProjectID: 7, UID: "work-aa11", Actor: "dana", Address: "dana/omp-31", Message: "is this still true?", Re: namedComment}
 	if got := sentMessage(t, sending.Cmds); got != want {

@@ -22,13 +22,15 @@ func firstRead(t *testing.T, cmds []model.Cmd) model.ReadSnapshot {
 	return model.ReadSnapshot{}
 }
 
-// filterLineText is what the filter line draws: its chips joined by " · ", then its note in parentheses; "" with no line.
+// filterLineText is what the filter line draws: its chips (not the counts) joined by " · ", then its note in parentheses; "" with no line.
 func filterLineText(t *testing.T, s driver.State) string {
 	t.Helper()
 	var chips []string
 	note := ""
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		switch {
+		case n.ID == "main.filters.counts":
+			// the counts are not a filter
 		case n.ID == "main.filters.note":
 			note = " (" + nodeTextOf(n) + ")"
 		case strings.HasPrefix(n.ID, "main.filters.") && nodeTextOf(n) != "":
@@ -48,7 +50,7 @@ func TestAPaneStartsWithTheProjectsSavedDefaultAndCClearsIt(t *testing.T) {
 	}
 	m, _ = model.Update(m, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Issues: []model.Issue{alpha}}})
 	s.Model = m
-	if got := filterLineText(t, s); got != "status open · owner me (default)" {
+	if got := filterLineText(t, s); got != "Status open · Owner me (Default filter)" {
 		t.Fatalf("filter line = %q", got)
 	}
 	out := step(t, s, key("c"))
@@ -91,11 +93,11 @@ func TestCtrlDInTheFilterCardSavesTheDefaultAndAppliesItOnSuccess(t *testing.T) 
 	}
 	done := step(t, out.State, model.FiltersSaved{ProjectUID: "p", Default: model.Filters{Status: "open"}})
 	m := done.State.Model
-	if m.FilterForm.Open || m.Filters.Status != "open" || m.Notice != "Saved as work's default filter" || !readsSnapshot(done) {
+	if m.FilterForm.Open || m.Filters.Status != "open" || m.Notice != "Saved as work's default filter." || !readsSnapshot(done) {
 		t.Fatalf("after success: open %v filters %#v notice %q reads %v", m.FilterForm.Open, m.Filters, m.Notice, readsSnapshot(done))
 	}
-	if got := filterLineText(t, done.State); !strings.HasSuffix(got, "(default)") {
-		t.Errorf("filter line %q lacks (default)", got)
+	if got := filterLineText(t, done.State); !strings.HasSuffix(got, "(Default filter)") {
+		t.Errorf("filter line %q lacks (Default filter)", got)
 	}
 }
 
@@ -106,7 +108,7 @@ func TestAFailedDefaultSaveKeepsTheCardValuesAndError(t *testing.T) {
 	if !m.FilterForm.Open || m.FilterForm.Saving || m.FilterForm.Values.Status != "open" || m.Filters != (model.Filters{}) || readsSnapshot(failed) {
 		t.Fatalf("after failure: open %v saving %v values %#v filters %#v", m.FilterForm.Open, m.FilterForm.Saving, m.FilterForm.Values, m.Filters)
 	}
-	if text, ok := nodeText(t, failed.State, "layer.filters.error"); !ok || !strings.Contains(text, "disk full") {
+	if text, ok := nodeText(t, failed.State, "layer.filters.foot.error"); !ok || !strings.Contains(text, "disk full") {
 		t.Errorf("card error = %q, %v", text, ok)
 	}
 }
@@ -137,7 +139,7 @@ func TestSavingAnEmptyCardRemovesTheDefault(t *testing.T) {
 		t.Fatalf("cmds %#v, want %#v", out.Cmds, want)
 	}
 	done := step(t, out.State, model.FiltersSaved{ProjectUID: "p"})
-	if done.State.Model.FilterForm.Open || done.State.Model.Notice != "Removed work's default filter" {
+	if done.State.Model.FilterForm.Open || done.State.Model.Notice != "Removed work's default filter." {
 		t.Fatalf("open %v notice %q", done.State.Model.FilterForm.Open, done.State.Model.Notice)
 	}
 }
@@ -158,26 +160,22 @@ func TestCtrlDWithNoBoundProjectSaysWhyAndSavesNothing(t *testing.T) {
 	if len(out.Cmds) != 0 || !out.State.Model.FilterForm.Open || out.State.Model.FilterForm.Saving {
 		t.Fatalf("cmds %#v open %v", out.Cmds, out.State.Model.FilterForm.Open)
 	}
-	if text, ok := nodeText(t, out.State, "layer.filters.error"); !ok || !strings.Contains(text, "Project") {
+	if text, ok := nodeText(t, out.State, "layer.filters.foot.error"); !ok || !strings.Contains(text, "Project") {
 		t.Errorf("card error = %q, %v", text, ok)
 	}
 }
 
 func TestTheFilterCardListsSaveAsDefaultInFooterAndHelp(t *testing.T) {
 	s := feed(t, browsing(t, 160), key("f")).State
-	footer := ""
-	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		footer += wireText(n)
-	}
-	if !strings.Contains(footer, "save as default") {
-		t.Error("the footer lacks save as default")
+	if text, ok := nodeText(t, s, "layer.filters.foot.default"); !ok || !strings.Contains(text, "Save as default") {
+		t.Errorf("the card has no Save as default button: %q, %v", text, ok)
 	}
 	help := ""
 	for _, n := range wireNodes(t, view.Render(feed(t, browsing(t, 160), key("?")).State.Model, now)) {
 		help += wireText(n)
 	}
-	if !strings.Contains(help, "save as default filter") {
-		t.Error("the help sheet lacks save as default filter")
+	if !strings.Contains(help, "Save as default filter") {
+		t.Error("the help sheet lacks Save as default filter")
 	}
 }
 

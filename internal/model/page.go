@@ -62,7 +62,7 @@ type pageDef struct {
 	// lettered marks a Lettered Page: it has a letter for its chord and no number, is listed in the Menu, and is drawn in the Page
 	// bar only while shown. It does not act on the Pane's Project and has no reset rule. Its back key returns to the Page shown before.
 	lettered bool
-	also     []Key
+	also     []KeyLabel
 	action   Action
 	second   SecondColumn
 	// needs is the Page as the notice words it when the Pane has no Project; "" for the Issues Page, which needs none.
@@ -153,7 +153,7 @@ func init() {
 		{page: PageBoard, id: "board", label: "Board", chord: "5", action: ShowBoardPage, needs: "Board", second: SecondIssueDetail, enter: enterBoard, clear: clearBoard,
 			mode: boardMode, update: updateBoard, moves: issueMoves(ModeLane),
 			keymap: []keySegment{pageMoveActions, rowsOf(listRows)}},
-		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, also: keys("shift+t", "T"), second: SecondInspector, enter: askAttention,
+		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, also: keys("shift+t", "⇧T"), second: SecondInspector, enter: askAttention,
 			mode: func(Model) Mode { return ModeAttention }, update: updateAttention, list: ListNodeAttention,
 			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "next request"}, {sheetAttention, 2, "previous request"}}},
 			keymap: []keySegment{pageMoveActions, rowsOf(attentionRows)}},
@@ -229,13 +229,13 @@ func pageMoveActions(def pageDef) []actionEntry {
 	modes := []Mode{p.mode}
 	rows := [6]struct {
 		action Action
-		keys   []Key
+		keys   []KeyLabel
 		help   string
 	}{
 		{MoveDown, slices.Concat(keys("j", "j/↓", "down", "↓"), emacsDown), "move"},
 		{MoveUp, slices.Concat(keys("k", "k/↑", "up", "↑"), emacsUp), "previous " + p.noun},
 		{MoveFirst, slices.Concat(keys("g", "g", "home", "home"), firstRowKeys), "first " + p.noun},
-		{MoveLast, slices.Concat(keys("shift+g", "G", "end", "end"), lastRowKeys), "last " + p.noun},
+		{MoveLast, slices.Concat(keys("shift+g", "⇧G", "end", "end"), lastRowKeys), "last " + p.noun},
 		{PageUp, pageUpKeys, "page up"},
 		{PageDown, pageDownKeys, "page down"},
 	}

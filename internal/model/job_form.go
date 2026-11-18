@@ -75,39 +75,63 @@ const (
 
 var JobFields = jobTable.specs()
 
-// jobFieldTitles are the prompts of the fields. The part before the first " (" is the field's name in a message.
-var jobFieldTitles = map[Field]string{ //nolint:gosec // G101: field prompts ("Secrets (ENV=source, ...)"), not credentials
+// jobFieldTitles are the labels of the fields: one or two words, which are also the field's name in a message. What a field
+// takes is in jobFieldHints.
+var jobFieldTitles = map[Field]string{
 	JobFieldKind:         "Kind",
 	JobFieldName:         "Name",
 	JobFieldTrigger:      "Trigger",
-	JobFieldCron:         "Cron expression (5 fields, or @daily)",
-	JobFieldZone:         "Time zone (IANA name, blank is UTC)",
-	JobFieldInterval:     "Interval (seconds, or 15m, 2h; a recurring child needs 60 s or more)",
-	JobFieldAt:           "Once at (full RFC 3339 instant, like 2026-11-01T09:00:00+01:00)",
-	JobFieldIssue:        "Target Issue (short id)",
-	JobFieldReport:       "Other Issue to notify about (short id, blank: the trigger's Issue)",
-	JobFieldLead:         "Lead before the deadline (seconds, or 2h, 1d; blank: at the deadline)",
-	JobFieldParent:       "Parent Issue (short id)",
-	JobFieldPrompt:       "Prompt (Enter adds a line)",
+	JobFieldCron:         "Cron expression",
+	JobFieldZone:         "Time zone",
+	JobFieldInterval:     "Interval",
+	JobFieldAt:           "Once at",
+	JobFieldIssue:        "Target Issue",
+	JobFieldReport:       "Notify about",
+	JobFieldLead:         "Lead",
+	JobFieldParent:       "Parent Issue",
+	JobFieldPrompt:       "Prompt",
 	JobFieldWorkflow:     "Workflow",
-	JobFieldProfile:      "Agent profile (blank: the worker's default)",
+	JobFieldProfile:      "Agent profile",
 	JobFieldProfilePick:  "Agent profile",
-	JobFieldCheckout:     "Checkout (key in the worker's config, blank: none)",
+	JobFieldCheckout:     "Checkout",
 	JobFieldCheckoutPick: "Checkout",
-	JobFieldSecrets:      "Secrets (ENV=source, ...; sources are named in the worker's config)",
-	JobFieldAdapter:      "Adapter (options.adapter; tern-kata runs the job, another name leaves it to that adapter)",
+	JobFieldSecrets:      "Secrets",
+	JobFieldAdapter:      "Adapter",
 	JobFieldPolicy:       "Run Issue",
 	JobFieldTitle:        "Child title",
-	JobFieldBody:         "Child body (one line)",
-	JobFieldScheduled:    "Scheduled offset (from the run: 1d, -2h; blank: none)",
-	JobFieldDeadline:     "Deadline offset (from the run: 3d; blank: none)",
-	JobFieldRecipient:    "Inbox recipient (blank: current owner or author)",
+	JobFieldBody:         "Child body",
+	JobFieldScheduled:    "Scheduled offset",
+	JobFieldDeadline:     "Deadline offset",
+	JobFieldRecipient:    "Inbox recipient",
 	JobFieldMessage:      "Inbox message",
 	JobFieldOverlap:      "Overlap",
-	JobFieldTimeout:      "Timeout (seconds, or 30m, 2h; blank: the worker's default)",
+	JobFieldTimeout:      "Timeout",
 	JobFieldCatchup:      "Catch up",
-	JobFieldGrace:        "Grace (seconds)",
+	JobFieldGrace:        "Grace",
 	JobFieldEnabled:      "Enabled",
+}
+
+// jobFieldHints are the one muted line under a field while it has focus: the format it reads, and what a blank value means. A
+// field with no entry has no hint.
+var jobFieldHints = map[Field]string{ //nolint:gosec // G101: field hints ("ENV=source"), not credentials
+	JobFieldCron:      "5 fields, or @daily",
+	JobFieldZone:      "IANA name; blank is UTC",
+	JobFieldInterval:  "seconds, or 15m, 2h; a " + KindRecurringIssue + " needs at least 1m",
+	JobFieldAt:        "RFC 3339, like 2026-11-01T09:00:00+01:00",
+	JobFieldIssue:     "short id",
+	JobFieldParent:    "short id",
+	JobFieldReport:    "short id; blank is the trigger's Issue",
+	JobFieldLead:      "seconds, or 2h, 1d; blank is at the deadline",
+	JobFieldProfile:   "blank is the worker's default",
+	JobFieldCheckout:  "key in the worker's config; blank is none",
+	JobFieldSecrets:   "ENV=source, …; sources are named in the worker's config",
+	JobFieldAdapter:   "tern-kata runs the job; another name leaves it to that adapter",
+	JobFieldBody:      "one line",
+	JobFieldScheduled: "from the run: 1d, -2h; blank is none",
+	JobFieldDeadline:  "from the run: 3d; blank is none",
+	JobFieldRecipient: "blank is the Issue's owner or author",
+	JobFieldTimeout:   "seconds, or 30m, 2h; blank is the worker's default",
+	JobFieldGrace:     "seconds",
 }
 
 // positiveText is n as form text, empty when n is not above zero.
@@ -120,10 +144,10 @@ func positiveText(n int64) string {
 
 func JobPrompt(name Field) string { return jobFieldTitles[name] }
 
-func jobFieldName(name Field) string {
-	title, _, _ := strings.Cut(jobFieldTitles[name], " (")
-	return title
-}
+// JobHint is the line under the field called name while it has focus, "" when it has none.
+func JobHint(name Field) string { return jobFieldHints[name] }
+
+func jobFieldName(name Field) string { return jobFieldTitles[name] }
 
 // jobFieldError is a refusal that names the field: the card puts focus there.
 type jobFieldError struct {
@@ -147,6 +171,32 @@ const (
 // jobCatchups are the choices of the Catch up field in the order the card shows them.
 var jobCatchups = []struct{ id, label string }{
 	{CatchupLatest, "Latest missed run"}, {CatchupAll, "Every missed run"}, {CatchupSkip, "Skip runs older than the grace"},
+}
+
+// jobOverlaps are the choices of the Overlap field in the order the card shows them.
+var jobOverlaps = []struct{ id, label string }{
+	{"forbid", "Wait for the running one"}, {"allow", "Run alongside it"},
+}
+
+// OverlapLabel is the words of an overlap policy, as the Job card offers it. An id it does not know is returned as it is, so a
+// policy from a newer kata still reads.
+func OverlapLabel(id string) string {
+	for _, o := range jobOverlaps {
+		if o.id == id {
+			return o.label
+		}
+	}
+	return id
+}
+
+// CatchupLabel is the words of a catch-up policy, as the Job card offers it. An id it does not know is returned as it is.
+func CatchupLabel(id string) string {
+	for _, c := range jobCatchups {
+		if c.id == id {
+			return c.label
+		}
+	}
+	return id
 }
 
 type jobKind struct {
@@ -183,7 +233,7 @@ const nativeMinInterval = 60
 const nativeChildTitleMax = 991
 
 var nativeJobKind = jobKind{
-	id: "native", label: "Recurring child",
+	id: "native", label: KindRecurringIssue,
 	triggers: []cronjob.TriggerKind{cronjob.TriggerCron, cronjob.TriggerInterval},
 	owns:     CronJob.Native,
 	shown: func(f JobFormState, name Field) bool {
@@ -481,7 +531,9 @@ func (f JobFormState) options(name Field) []jobOption {
 	case JobFieldPolicy:
 		opts = []jobOption{{string(cronjob.IssuePerRun), "A new Issue per run"}, {string(cronjob.IssueExisting), "An existing Issue"}}
 	case JobFieldOverlap:
-		opts = []jobOption{{"forbid", "Wait for the running one"}, {"allow", "Run alongside it"}}
+		for _, o := range jobOverlaps {
+			opts = append(opts, jobOption{o.id, o.label})
+		}
 	case JobFieldCatchup:
 		for _, c := range jobCatchups {
 			opts = append(opts, jobOption{c.id, c.label})
@@ -614,9 +666,9 @@ func openNewJob(m Model) (Model, []Cmd) {
 	case !m.OnJobs() || m.Jobs.ProjectID == 0:
 		return m, nil
 	case m.Stale:
-		return refuse(m, "Daemon disconnected; reconnect before making a job.")
+		return refuse(m, Cannot("create", "a job", ErrDisconnected))
 	case m.Jobs.ProjectArchived:
-		return refuse(m, "This Project is archived; it can't get a job.")
+		return refuse(m, Cannot("create", "a job", errors.New("this Project is archived")))
 	}
 	return newJobForm(m, m.Jobs.ProjectID, "")
 }
@@ -625,7 +677,7 @@ func openIssueJob(m Model) (Model, []Cmd) {
 	issue := closeIssue(m)
 	switch {
 	case m.Stale:
-		return refuse(m, "Daemon disconnected; reconnect before making a job.")
+		return refuse(m, Cannot("create", "a job", ErrDisconnected))
 	case issue == nil:
 		return m, nil
 	}
@@ -638,11 +690,11 @@ func openEditJob(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if job.Archived() {
-		return refuse(m, "The job is archived; restore it before editing.")
+		return refuse(m, Cannot("edit", "the job", errors.New("it is archived; restore it first")))
 	}
 	f, editable := changeJobForm(m.Jobs.ProjectID, job)
 	if !editable {
-		return refuse(m, fmt.Sprintf("The Job card can't edit this %s job: it has a %s trigger.", job.Kind(), job.Definition.Trigger.Kind))
+		return refuse(m, Cannot("edit", "the job", fmt.Errorf("the card does not edit a %s job that runs %s", job.Kind(), triggerWords(job.Definition.Trigger))))
 	}
 	m.JobForm = f
 	return m, jobChoiceCmds(m, m.Jobs.ProjectID)
@@ -737,7 +789,7 @@ func (f JobFormState) Preview(cal PaneCalendar, now time.Time) JobPreview {
 		if ok {
 			preview.Runs = listRuns(schedule, now, cal)
 		} else {
-			preview.Note = "Next runs unknown: this job's start point is not known yet."
+			preview.Note = "Next runs are unknown until its start point is known."
 		}
 	case cronjob.TriggerOnce:
 		preview.Runs = onceRuns(t, now, cal)
@@ -760,18 +812,25 @@ func (f JobFormState) previewJob(t cronjob.Trigger, now time.Time) (cronjob.Job,
 	return cronjob.Job{CreatedAt: now, Definition: cronjob.Definition{Trigger: t}}, now
 }
 
-const runLayout = "Mon 2006-01-02 15:04 MST"
+// runClock is at in the Pane calendar's zone, or in loc when the schedule has its own: the time only when it is today there,
+// the date and time otherwise, with no weekday and no zone letters (the words of a schedule name its zone once).
+func runClock(cal PaneCalendar, loc *time.Location, at, now time.Time) string {
+	if loc != nil {
+		cal.loc = loc
+	}
+	return cal.Read(at, now)
+}
 
 // listRuns steps a schedule from now for the next previewRuns instants, each shown in the schedule's own zone, or in the Pane
 // calendar's when it has none.
 func listRuns(schedule cronjob.Schedule, now time.Time, cal PaneCalendar) []string {
-	in := cal.in
-	if loc, ok := schedule.Zone(); ok {
-		in = func(at time.Time) time.Time { return at.In(loc) }
+	var loc *time.Location
+	if zone, ok := schedule.Zone(); ok {
+		loc = zone
 	}
 	var runs []string
 	for next := schedule.Next(now); len(runs) < previewRuns && !next.IsZero(); next = schedule.Next(next) {
-		runs = append(runs, in(next).Format(runLayout))
+		runs = append(runs, runClock(cal, loc, next, now))
 	}
 	return runs
 }
@@ -779,7 +838,7 @@ func listRuns(schedule cronjob.Schedule, now time.Time, cal PaneCalendar) []stri
 // onceRuns is the single run of a once trigger still ahead, in the Pane calendar's zone.
 func onceRuns(t cronjob.Trigger, now time.Time, cal PaneCalendar) []string {
 	if at, err := time.Parse(time.RFC3339, t.At); err == nil && at.After(now) {
-		return []string{cal.in(at).Format(runLayout)}
+		return []string{runClock(cal, nil, at, now)}
 	}
 	return nil
 }
@@ -801,7 +860,7 @@ func (m Model) NextRuns(job CronJob, now time.Time) (runs []string, reason strin
 	t := job.Definition.Trigger
 	switch t.Kind {
 	case cronjob.TriggerManual:
-		return nil, "none: runs only when started"
+		return nil, "" // the Schedule row says "on demand"
 	case cronjob.TriggerIssueScheduled, cronjob.TriggerIssueDeadline:
 		return nil, "unavailable: follows the Issue's date"
 	}
@@ -821,8 +880,6 @@ func (m Model) NextRuns(job CronJob, now time.Time) (runs []string, reason strin
 	return runs, ""
 }
 
-var errJobDaemonGone = errors.New("Daemon disconnected; reconnect before saving this job.")
-
 // submitJob is the card's save: the terms that read clean go out as one write, and anything else stays in the card.
 func submitJob(m Model) (Model, []Cmd) {
 	f := &m.JobForm
@@ -830,7 +887,7 @@ func submitJob(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.Stale {
-		f.Err = errJobDaemonGone
+		f.Err = ErrDisconnected
 		return m, nil
 	}
 	terms, err := f.terms()
@@ -917,7 +974,7 @@ func answerJobConflict(m Model, msg KeyMsg) (Model, []Cmd) {
 			taken.Worker, taken.Workflows, taken.WorkflowsRead, taken.WorkflowsErr = f.Worker, f.Workflows, f.WorkflowsRead, f.WorkflowsErr
 			*f = taken
 		} else {
-			f.Conflict, f.Err = nil, errors.New("The Job card can't edit the newer job.")
+			f.Conflict, f.Err = nil, errors.New("the newer job cannot be edited in this card")
 		}
 	case JobDiscard:
 		f.Open = false
@@ -943,11 +1000,11 @@ func (m Model) JobConflictFacts() []JobFact {
 	if d.Issue != nil {
 		add("Child title", d.Issue.Title)
 	}
-	catchup := d.Catchup
+	catchup := CatchupLabel(d.Catchup)
 	if d.GraceSeconds > 0 {
-		catchup += fmt.Sprintf(", grace %d s", d.GraceSeconds)
+		catchup += " · grace " + durationWords(d.GraceSeconds, false)
 	}
-	add("Catchup", catchup)
+	add("Catch up", catchup)
 	add("Updated", m.Calendar.Stamp(job.UpdatedAt))
 	return facts
 }

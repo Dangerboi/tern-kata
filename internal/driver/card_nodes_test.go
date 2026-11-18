@@ -187,12 +187,18 @@ func pageBarEntryAt(t *testing.T, m model.Model, chord string) (string, bool) {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(m, now)) {
 		for _, bar := range []string{".pages.", ".pagebar."} {
-			if i := strings.Index(n.ID, bar); i >= 0 && !strings.Contains(n.ID[i+len(bar):], ".") && slices.Contains(drawnPieces(n), chord) {
+			if i := strings.Index(n.ID, bar); i >= 0 && !strings.Contains(n.ID[i+len(bar):], ".") && (slices.Contains(drawnPieces(n), chord) || clicksKey(n, chord)) {
 				return n.ID, true
 			}
 		}
 	}
 	return "", false
+}
+
+// clicksKey is whether a click on n presses chord: the compact Page bar draws no keycap, so an entry is known by its click.
+func clicksKey(n tern.WireNode, chord string) bool {
+	actions, _ := n.P["actions"].(map[string]any)
+	return actions["click"] == "key="+chord
 }
 
 // pageBarEntry is pageBarEntryAt that fails the test when the Page bar draws no such entry.

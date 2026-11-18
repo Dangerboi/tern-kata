@@ -81,13 +81,20 @@ func TestEveryTextFieldEditsAtTheCaret(t *testing.T) {
 		t.Run(card.name, func(t *testing.T) {
 			s := driver.State{Model: card.open(t, browsing(t, 160))}
 			s = step(t, s, model.ResizeMsg{Cols: 160}).State
+			if card.name == "Close" { // the card opens on its Reason, a choice; the caret belongs to the Message after it
+				s = step(t, s, key("tab")).State
+			}
 			before := card.typed(s.Model)
+			caretBase := len([]rune(before))
+			if card.name == "Close" {
+				caretBase = 0 // the Message is empty; the Reason before it is not text
+			}
 			out := feed(t, s, key("a"), key("b"), key("c"), key("left"), key("left"), key("x"))
 			if got, want := card.typed(out.State.Model), before+"axbc"; got != want {
 				t.Fatalf("text %q after a, b, c, left, left, x; want %q", got, want)
 			}
-			if got := drawnCursor(t, out); got != len([]rune(before))+2 {
-				t.Errorf("drawn caret %d, want %d", got, len([]rune(before))+2)
+			if got := drawnCursor(t, out); got != caretBase+2 {
+				t.Errorf("drawn caret %d, want %d", got, caretBase+2)
 			}
 			out = feed(t, out.State, key("delete"), key("backspace"))
 			if got, want := card.typed(out.State.Model), before+"ac"; got != want {

@@ -36,7 +36,7 @@ func replyNotes(m model.Model) []string {
 
 func TestReplyRowsShowKindTargetAndReplyCount(t *testing.T) {
 	got := strings.Join(replyNotes(onReplies(t).Model), "|")
-	if want := "2 replies|confirms dana's comment|refutes fay's comment in #bbbb"; got != want {
+	if want := "2 replies|confirming dana|refuting fay in #bbbb"; got != want {
 		t.Fatalf("rows = %q, want %q", got, want)
 	}
 }

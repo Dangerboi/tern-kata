@@ -176,37 +176,43 @@ func TestStaleNoticeStaysWhileACollectionLoads(t *testing.T) {
 	sameIDs(t, "main", idle, loading)
 }
 
-func TestTopBarIsOneRowWithTheDaemonRightAligned(t *testing.T) {
+func TestTopBarIsOneRowWithTheFactsRightAligned(t *testing.T) {
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}, Daemon: model.Daemon{Kind: model.DaemonLocal, Version: "v0.18.0"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha, beta}}}})
 	nodes := render(t, m)
 	var got []string
-	for _, id := range []string{"main.topbar.left.heading", "main.topbar.counts", "main.topbar.right.daemon", "main.topbar.right.sep", "main.topbar.right.menu"} {
+	for _, id := range []string{"main.topbar.left.heading", "main.topbar.right.facts.fact0", "main.topbar.right.facts.fact1", "main.topbar.right.menu"} {
 		got = append(got, text(nodes[id]))
 	}
-	want := []string{"Project: work", "open: 2 · closed: 0 · all: 2", "Daemon: local · kata v0.18.0", " · ", "Menu"}
+	want := []string{"work", "local", " · kata v0.18.0", "Menu"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("top bar %q, want %q", got, want)
 	}
-	if _, ok := nodes["main.filters"]; ok {
-		t.Error("filter line shown with no filter on")
+	if _, ok := nodes["main.topbar.counts"]; ok {
+		t.Error("the counts are in the top bar")
+	}
+	if got := text(nodes["main.filters.counts"]); got != "2 open · 0 closed" {
+		t.Errorf("counts %q, want them in the context line", got)
+	}
+	if _, ok := nodes["main.filters.status"]; ok {
+		t.Error("filter chip shown with no filter on")
 	}
 }
 
-func TestFilterLineAppearsOnlyWhenFiltered(t *testing.T) {
+func TestContextLineShowsFilterChipsWhenFiltered(t *testing.T) {
 	m := browsing()
-	if _, ok := render(t, m)["main.filters"]; ok {
-		t.Fatal("filter line shown with no filter on")
+	if _, ok := render(t, m)["main.filters.icon"]; ok {
+		t.Fatal("filter icon shown with no filter on")
 	}
 	m = apply(m, model.KeyMsg{Chord: "s"})
 	nodes := render(t, m)
-	if got := text(nodes["main.filters.status"]); got != "status open" {
-		t.Errorf("status chip %q, want status open", got)
+	if got := text(nodes["main.filters.status"]); got != "Status open" {
+		t.Errorf("status chip %q, want Status open", got)
 	}
-	if got := text(nodes["main.topbar.left.heading"]); strings.Contains(got, "status") {
+	if got := text(nodes["main.topbar.left.heading"]); strings.Contains(got, "tatus") {
 		t.Errorf("title carries the filters: %q", got)
 	}
 	m.Filters.Relationship = "blocked_by"
-	if got := text(render(t, m)["main.filters.relationship"]); got != "relationship blocked by" {
+	if got := text(render(t, m)["main.filters.relationship"]); got != "Relationship Blocked by" {
 		t.Errorf("relationship chip %q, want the Filter card's words", got)
 	}
 	if _, ok := nodes["main.topbar.filters"]; ok {
@@ -217,10 +223,10 @@ func TestFilterLineAppearsOnlyWhenFiltered(t *testing.T) {
 func TestTopBarShowsTheTimeZoneNote(t *testing.T) {
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{LocalDate: "2026-10-12", TimeZone: "UTC", TimeZoneNote: "time zone unknown, using UTC"}})
 	nodes := render(t, m)
-	if got := text(nodes["main.topbar.right.zone-note"]); got != "time zone unknown, using UTC" {
+	if got := text(nodes["main.topbar.right.facts.zone-note"]); got != "time zone unknown, using UTC" {
 		t.Fatalf("zone note %q", got)
 	}
-	if _, ok := render(t, browsing())["main.topbar.right.zone-note"]; ok {
+	if _, ok := render(t, browsing())["main.topbar.right.facts.zone-note"]; ok {
 		t.Error("zone note shown with none set")
 	}
 }

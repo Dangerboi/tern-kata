@@ -103,30 +103,27 @@ func (m Model) MoveCardMode() Mode {
 	return ModeMoveProject
 }
 
+// MoveRef names the Issue the card moves, as the Pane names it.
+func (m Model) MoveRef() string { return m.RefName(m.MoveProject.From, m.MoveProject.ShortID) }
+
 // MovePreview is the sentence the card shows for the chosen Project: what a dry run accepted, or the conflict. Empty before
 // kata answered.
 func (m Model) MovePreview() string {
 	f := m.MoveProject
+	ref := m.MoveRef()
 	switch {
 	case f.Conflict:
-		return fmt.Sprintf("#%s changed since this card opened; nothing was moved.", f.ShortID)
+		return Cannot("move", ref, errors.New("it changed since this card opened"))
 	case f.Previewed && len(f.Descendants) == 0:
-		return fmt.Sprintf("#%s moves to %s and gets its new id there.", f.ShortID, f.Target.Name)
+		return fmt.Sprintf("%s moves to %s and gets a new id there.", ref, f.Target.Name)
 	case f.Previewed:
-		return fmt.Sprintf("#%s and %s move to %s and get new ids there: %s.", f.ShortID, descendantCount(len(f.Descendants)), f.Target.Name, m.descendantRefs())
+		return fmt.Sprintf("%s and %s (%s) move to %s and get new ids there.", ref, Count(len(f.Descendants), "descendant", "descendants"), m.descendantRefs(), f.Target.Name)
 	}
 	return ""
 }
 
-func descendantCount(n int) string {
-	if n == 1 {
-		return "1 descendant"
-	}
-	return fmt.Sprintf("%d descendants", n)
-}
-
-// descendantRefs names the previewed descendants by short id, qualified by Project name when one lives in another Project than
-// the Issue, and counts the ones past moveListLimit.
+// descendantRefs names the previewed descendants as the Pane names Issues, qualified by Project name when one lives in another
+// Project than the Issue's, and counts the ones past moveListLimit.
 func (m Model) descendantRefs() string {
 	f := m.MoveProject
 	var source string
@@ -139,11 +136,11 @@ func (m Model) descendantRefs() string {
 	}
 	var refs []string
 	for _, d := range f.Descendants[:min(len(f.Descendants), moveListLimit)] {
-		ref := "#" + d.ShortID
+		project := f.From
 		if name := names[d.ProjectUID]; d.ProjectUID != "" && d.ProjectUID != source && name != "" {
-			ref = name + ref
+			project = name
 		}
-		refs = append(refs, ref)
+		refs = append(refs, m.RefName(project, d.ShortID))
 	}
 	if more := len(f.Descendants) - len(refs); more > 0 {
 		refs = append(refs, fmt.Sprintf("and %d more", more))
@@ -166,7 +163,7 @@ func openMoveProject(m Model) Model {
 func sendMoveProject(m Model, dryRun bool) (Model, []Cmd) {
 	f := &m.MoveProject
 	if m.Stale {
-		f.Err = errors.New("Daemon disconnected; reconnect before moving.")
+		f.Err = cardFailure("move", m.MoveRef(), ErrDisconnected)
 		return m, nil
 	}
 	cmd := MoveToProjectCmd{Workspace: m.Workspace, UID: f.UID, ProjectID: f.ProjectID, Actor: m.Actor, ToProjectUID: f.Target.UID, DryRun: dryRun, Single: f.Single, Revision: f.Revision}
@@ -228,13 +225,13 @@ func updateMoveProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 		f.Previewed, f.Conflict, f.Err = false, true, nil
 		return m, nil
 	case msg.Err != nil && msg.Subtree:
-		f.Previewed, f.Descendants, f.Conflict, f.Err = false, nil, false, msg.Err
+		f.Previewed, f.Descendants, f.Conflict, f.Err = false, nil, false, cardFailure("move", m.MoveRef(), msg.Err)
 		return m, nil
 	case msg.Err != nil && msg.DryRun:
-		f.Target, f.Previewed, f.Conflict, f.Err = Project{}, false, false, msg.Err
+		f.Target, f.Previewed, f.Conflict, f.Err = Project{}, false, false, cardFailure("move", m.MoveRef(), msg.Err)
 		return m, nil
 	case msg.Err != nil:
-		f.Err = msg.Err
+		f.Err = cardFailure("move", m.MoveRef(), msg.Err)
 		return m, nil
 	case msg.DryRun:
 		if f.Conflict {
@@ -252,11 +249,11 @@ func movedToProject(m Model, msg ProjectMoveAnswer) (Model, []Cmd) {
 	f := m.MoveProject
 	m.MoveProject = MoveProjectState{}
 	ref := f.Target.Name + "/" + msg.NewShortID
-	moved := "#" + f.ShortID
+	moved := m.RefName(f.From, f.ShortID)
 	if msg.Count > 1 {
-		moved = fmt.Sprintf("#%s and %s", f.ShortID, descendantCount(msg.Count-1))
+		moved += " and " + Count(msg.Count-1, "descendant", "descendants")
 	}
-	m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("Moved %s to %s.", moved, f.Target.Name+"#"+msg.NewShortID), Label: "Open", Ref: ref})
+	m, wait := m.raiseToast(Toast{Text: "Moved " + moved + " to " + f.Target.Name + "#" + msg.NewShortID + ".", Label: "Open", Ref: ref})
 	m = issueGone(m, f.UID)
 	m, cmds := snapshotChanged(m.issueWritten(f.UID))
 	return m, append(cmds, wait)

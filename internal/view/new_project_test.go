@@ -81,8 +81,8 @@ func TestRenderNewProjectFormFollowsTheModel(t *testing.T) {
 	m, _ = model.Update(m, model.KeyMsg{Chord: "enter"})
 	m, _ = model.Update(m, model.ProjectSaved{Err: errors.New("project with this name was archived")})
 	nodes = pickerNodes(t, m)
-	if joinedSpans(nodes[newProjectIDPrefix+".error"]) != "project with this name was archived" || nodes[view.FieldID(model.CardProject, "")].P["text"] != "my-repo" {
-		t.Fatalf("rejected form: error=%v input=%v", nodes[newProjectIDPrefix+".error"].P, nodes[view.FieldID(model.CardProject, "")].P)
+	if joinedSpans(nodes[newProjectIDPrefix+".foot.error"]) != "Cannot create Project: project with this name was archived." || nodes[view.FieldID(model.CardProject, "")].P["text"] != "my-repo" {
+		t.Fatalf("rejected form: error=%v input=%v", nodes[newProjectIDPrefix+".foot.error"].P, nodes[view.FieldID(model.CardProject, "")].P)
 	}
 
 	// While the daemon works the input is read-only.
@@ -91,7 +91,7 @@ func TestRenderNewProjectFormFollowsTheModel(t *testing.T) {
 	if nodes[view.FieldID(model.CardProject, "")].P["readonly"] != true {
 		t.Fatalf("saving form: input=%v", nodes[view.FieldID(model.CardProject, "")].P)
 	}
-	if _, ok := nodes[newProjectIDPrefix+".saving"]; !ok {
+	if _, ok := nodes[newProjectIDPrefix+".foot.saving"]; !ok {
 		t.Fatal("no saving marker")
 	}
 }

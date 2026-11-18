@@ -23,7 +23,7 @@ func entryActs(t *testing.T, m model.Model, id, label string) (menu, hold string
 			pick := func(list string) string {
 				items, _ := actions[list].([]any)
 				for _, item := range items {
-					if fields := item.(map[string]any); fields["label"] == label {
+					if fields, ok := item.(map[string]any); ok && fields["label"] == label {
 						return fields["id"].(string)
 					}
 				}
@@ -63,7 +63,7 @@ func TestHoldPickRunsWhatTheSameMenuPickRuns(t *testing.T) {
 			func(t *testing.T, s driver.State) string { return issueRow(t, s.Model, view.BoardID, second) }},
 	}
 	for _, tc := range cases {
-		for _, label := range []string{"Close", "Priority…"} {
+		for _, label := range []string{"Close…", "Priority…"} {
 			t.Run(tc.name+" "+label, func(t *testing.T) {
 				s := tc.state(t)
 				id := tc.node(t, s)

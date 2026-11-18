@@ -17,7 +17,7 @@ expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(c
 [[ $(rs_recur) == "$rs_out" ]]
 
 kata --workspace "$rs_dir" close "$rs_short" --done --message "Finished the shell recurring fixture and verified it by hand" --commit abc1234def56 --json >/dev/null
-expect_tree "[data-id^='main.columns.list.issues.']" '.ok and ([.nodes[] | select((.text | contains("open ↻ Smoke shell recurrence")) and (.text | startswith("'"$rs_short"' ") | not))] | length == 1)'
+expect_tree "[data-id^='main.columns.list.issues.']" '.ok and ([.nodes[] | select((.text | contains("open ↻ Smoke")) and (.text | startswith("'"$rs_short"' ") | not))] | length == 1)'
 
 # The first Occurrence is closed; the detail of the open Pane is still its own, and the series is read through it.
 rs_out=$(rs_recur --frequency weekly --every 2 --on fri --start 2026-11-02 --zone UTC)

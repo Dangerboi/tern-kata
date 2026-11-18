@@ -19,7 +19,7 @@ expect_tree "[data-id^='layer.move.list.']" '.ok and ([.nodes[].text] | any(cont
 ctl type '"move-t"'
 expect_tree "[data-id^='layer.move.list.']" '.ok and ([.nodes[] | select(.text != null and (.text | contains("move-target")))] | length) >= 1'
 ctl key enter
-expect_tree "[data-id='layer.move.preview']" '.ok and .count == 1 and (.nodes[0].text | contains("moves to move-target"))'
+expect_tree "[data-id='layer.move.preview']" '.ok and .count == 1 and (.nodes[0].text | contains("moves to move-target and gets a new id there."))'
 # The Issue has not moved: the preview changed nothing.
 expect_tree "$mv_row" '.ok and .count == 1'
 
@@ -32,7 +32,7 @@ expect_tree "$mv_row" '.ok and .count == 0'
 # The toast's Open button opens the Issue in its new Project.
 mv_ref=$(ctl tree ".toast" | jq -er '.nodes[0].text | capture("(?<ref>move-target#[a-z0-9]+)").ref')
 ctl click "button.toast-act"
-expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("Project: move-target"))'
+expect_tree "[data-id='main.topbar.left.heading']" '.ok and (.nodes[0].text | contains("move-target"))'
 expect_tree "[data-id^='main.columns.detail']" '.ok and ([.nodes[].text] | any(contains("Smoke move Issue")))'
 
 kata delete "$mv_ref" --force --confirm "DELETE $mv_ref" --json >/dev/null

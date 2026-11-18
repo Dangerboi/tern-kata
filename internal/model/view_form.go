@@ -156,7 +156,7 @@ func saveViewForm(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.Views.Token == nil {
-		m.ViewForm.Err = errors.New("Saved views cannot be written: " + cmp.Or(errText(m.Views.Err), "views.toml has not been read"))
+		m.ViewForm.Err = errors.New(cmp.Or(errText(m.Views.Err), "views.toml has not been read"))
 		return m, nil
 	}
 	send := SaveView{Self: f.Self, View: checked, Token: m.Views.Token}
