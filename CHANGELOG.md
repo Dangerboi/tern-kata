@@ -24,8 +24,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - A save of the Issue body or of a comment on a selection that fails or is refused (kata reconnecting, say) raises a Notice naming the Issue that says its Draft is kept.
   - A conflict that arrives while another Issue's card is open raises a Notice saying `e` on that Issue opens the conflict card; the line under that Issue's body says so too once the Notice is gone, whether the body is empty, has a picture or is text.
   - While the Issue holds a Draft the Issue body cannot take, the Issue body is read-only and offers no Comment button.
-  - Tern closes an in-place edit as soon as the Pane sends any frame that changes anything, so while the body is open for editing the Pane draws nothing; what arrives meanwhile (an agent's change, the clock moving) is drawn when you leave. A click elsewhere, a key that reaches the Pane or a change in another field also ends the wait.
-  - When Tern closes an edit at once anyway, because a frame was already on its way as you double-clicked, the Pane ignores the printable keys and `enter` that would run a key binding for about two seconds.
+  - While the body is open for editing the Pane holds its updates, because Tern would close the edit on any that changes anything; what arrives meanwhile (an agent's change, the clock moving) is drawn when you leave.
+  - A click elsewhere, a key that reaches the Pane or a change in another field also ends the wait.
+  - When Tern closes an edit at once anyway, because an update was already on its way as you double-clicked, the Pane ignores the printable keys and `enter` that would run a key binding for about two seconds.
     - A Notice says to double-click the body again, so typing does not run a key binding.
     - A click, a text selection, a field taking focus, a button press, a change to a dropdown or switch, an edit of the body, an edit that stays open longer than half a second, or the end of the two seconds lifts it and takes the Notice away.
     - An agent changing state does not lift it.

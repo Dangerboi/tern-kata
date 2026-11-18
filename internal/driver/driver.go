@@ -156,19 +156,21 @@ func (s State) frameWithinRace(now time.Time) bool {
 func withLastFocus(ops []tern.Op) []tern.Op {
 	last := -1
 	for i, op := range ops {
-		if len(op) > 0 && op[0] == "focus" {
+		if isFocusOp(op) {
 			last = i
 		}
 	}
 	kept := ops[:0]
 	for i, op := range ops {
-		if len(op) > 0 && op[0] == "focus" && i != last {
+		if isFocusOp(op) && i != last {
 			continue
 		}
 		kept = append(kept, op)
 	}
 	return kept
 }
+
+func isFocusOp(op tern.Op) bool { return len(op) > 0 && op[0] == "focus" }
 
 // leavesDoc reports whether in shows the user is outside the doc they edit: a key reaches the Pane only when the doc does not have
 // it, and a pointer action, a focus, a comment or a change elsewhere is not the doc's own typing.

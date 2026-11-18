@@ -1177,7 +1177,7 @@ func TestLateChangeAfterAnOrdinarySaveSettledIsSavedOnTheTextSaved(t *testing.T)
 func focusOps(ops []tern.Op) int {
 	n := 0
 	for _, op := range ops {
-		if len(op) > 0 && op[0] == "focus" {
+		if driver.IsFocusOp(op) {
 			n++
 		}
 	}

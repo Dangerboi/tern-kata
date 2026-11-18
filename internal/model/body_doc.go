@@ -376,12 +376,9 @@ func (m Model) EndDocGuard() Model {
 
 // docKeyGuarded reports whether key is one the key guard swallows: a printable key or enter that would run a Pane binding on the
 // detail that shows the doc, or on the Menu beside it. Escape, the arrows and the like pass, and so does any key a card, a picker or
-// a text input has, and any key while an edit is open past deadEditWithin (the doc has it).
+// a text input has.
 func (m Model) docKeyGuarded(key KeyMsg) bool {
 	if !m.Now.Before(m.docGuardUntil) || !(key.Text != "" || key.Chord == "enter") {
-		return false
-	}
-	if opened := m.docOpened; opened != nil && m.Now.Sub(opened.at) > deadEditWithin {
 		return false
 	}
 	if m.docIssue() == nil {
