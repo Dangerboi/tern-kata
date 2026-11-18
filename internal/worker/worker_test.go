@@ -228,6 +228,9 @@ func TestARunIsRecordedRunningThenSucceededWithItsPerRunIssue(t *testing.T) {
 	if err != nil || !strings.HasPrefix(issue.Title, "PR review — ") || issue.Body != "job body" {
 		t.Fatalf("per-run Issue %+v, %v", issue, err)
 	}
+	if s, ok := h.runStatus(r, resp.Run.RunUID); !ok || s.IssueTitle != issue.Title {
+		t.Fatalf("status of the run: %+v (found %v), want Issue title %q", s, ok, issue.Title)
+	}
 	launches := h.launches()
 	if len(launches) != 1 {
 		t.Fatalf("agent launched %d times, want once", len(launches))

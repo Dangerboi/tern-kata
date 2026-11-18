@@ -90,14 +90,15 @@ end
 
 test("a held run carries its uid, job, held time and the verbs the worker would take; a binary without them gives none", function()
     local runs: { any } = {
-        { UID = "01RUNA", Job = "review", Issue = "k#1", Held = true, Hold = "interrupted", Resumable = true, Abandonable = true, EndedAt = "2026-11-18T09:00:00.123456789+01:00" },
+        { UID = "01RUNA", Job = "review", Issue = "k#1", IssueTitle = "Review PRs", Held = true, Hold = "interrupted", Resumable = true, Abandonable = true, EndedAt = "2026-11-18T09:00:00.123456789+01:00" },
         { UID = "01RUNB", Issue = "k#2", Held = true, Hold = "agent_login", Resumable = false, Abandonable = true, EndedAt = ZERO },
         { Issue = "k#3", Held = true, Hold = "interrupted" },
     }
     local got = workersummary.of({ PID = 1, Runs = runs })
     assert(got ~= nil and #got.held == 3)
     local a, b, c = got.held[1], got.held[2], got.held[3]
-    assert(a.uid == "01RUNA" and a.job == "review" and a.resumable and a.abandonable and a.heldAt == workersummary.epoch("2026-11-18T08:00:00Z"))
+    assert(a.uid == "01RUNA" and a.job == "review" and a.title == "Review PRs" and a.resumable and a.abandonable and a.heldAt == workersummary.epoch("2026-11-18T08:00:00Z"))
+    assert(b.title == "")
     assert(b.uid == "01RUNB" and b.job == "" and not b.resumable and b.abandonable and b.heldAt == nil)
     assert(c.uid == "" and not c.resumable and not c.abandonable and c.heldAt == nil)
     local kv = fakeKv(nil)
@@ -105,7 +106,7 @@ test("a held run carries its uid, job, held time and the verbs the worker would 
     local record = workersummary.load(kv, nil)
     assert(record ~= nil)
     local back = record.worker.held
-    assert(back[1].uid == "01RUNA" and back[1].job == "review" and back[1].resumable and back[1].abandonable and back[1].heldAt == a.heldAt)
+    assert(back[1].uid == "01RUNA" and back[1].job == "review" and back[1].title == "Review PRs" and back[1].resumable and back[1].abandonable and back[1].heldAt == a.heldAt)
     assert(not back[2].resumable and back[2].abandonable and back[2].heldAt == nil)
 end)
 

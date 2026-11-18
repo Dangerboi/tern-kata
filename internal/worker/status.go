@@ -64,8 +64,10 @@ type RunStatus struct {
 	Project string
 	Job     string
 	Issue   string
-	State   string // running, resuming, held: <reason>, succeeded, failed, cancelled, ...
-	Pending string // what is still unreported
+	// IssueTitle is the Issue's title as the run found it when it started (the per-run Issue's, or the existing one's).
+	IssueTitle string
+	State      string // running, resuming, held: <reason>, succeeded, failed, cancelled, ...
+	Pending    string // what is still unreported
 	// Unrecorded is why the latest attempt's output was not recorded, empty when it was.
 	Unrecorded string
 	// Inspect names each report kata holds something newer than, so it was not sent: the run needs a person to look.
@@ -148,7 +150,7 @@ func (w *Worker) runStatus(j *Journal) RunStatus {
 func runStatus(j *Journal) RunStatus {
 	r := RunStatus{UID: j.RunUID, Project: j.ProjectName, Job: j.JobName, Attempt: j.attempt(), StartedAt: j.StartedAt}
 	if j.Issue != nil {
-		r.Issue = j.Issue.Ref
+		r.Issue, r.IssueTitle = j.Issue.Ref, j.Issue.Title
 	}
 	r.State = j.stateName()
 	if j.held() {

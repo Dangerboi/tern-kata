@@ -19,7 +19,7 @@ end
 local NOW = 1800000000
 local function held(fields: { [string]: any }): workersummary.Held
     return {
-        uid = fields.uid or "u", job = fields.job or "j", ref = fields.ref or "k#a1", reason = fields.reason or "r",
+        uid = fields.uid or "u", job = fields.job or "j", ref = fields.ref or "k#a1", title = fields.title or "", reason = fields.reason or "r",
         resumable = fields.resumable == true, abandonable = fields.abandonable == true, heldAt = fields.heldAt,
     }
 end
@@ -114,15 +114,23 @@ test("every title line fits Tern's width for a long executor, Issue ref and reas
     assert(lines[4]:sub(1, 29) == "3 running, process 4242, eeee", lines[4])
 end)
 
-test("the card lists each held run as its job and age, Issue link and Resume over its reason, then what runs and which worker", function()
-    local rows = cardRows(summary(2, {held({uid = "01RUN", job = "review", ref = "kata-a#a1b2", reason = "agent_quota: out of tokens", resumable = true, heldAt = NOW - 7300})}))
-    assert(#rows == 4, #rows)
-    local head = rows[1]
-    assert(head.label == "review · 2 h" and head.text == "kata-a#a1b2" and head.href == "https://kata.invalid/kata-a/a1b2", head.label)
-    assert(head.id == "01RUN" and head.tone == nil and head.actions ~= nil and #head.actions == 1 and head.actions[1].id == workerwidget.RESUME_ID)
-    assert(rows[2].label == nil and rows[2].text == "agent_quota: out of tokens" and rows[2].tone == "warn")
-    assert(rows[3].label == "Running" and rows[3].text == "2")
-    assert(rows[4].label == "Worker" and rows[4].text == "box · pid 42", rows[4].text)
+test("each held run is its Issue heading, then its job, age and button, then its reason; then what runs and which worker", function()
+    local run = held({uid = "01RUN", job = "review", ref = "kata-a#a1b2", title = "Review open pull requests", reason = "agent_quota: out of tokens", resumable = true, heldAt = NOW - 7300})
+    local rows = cardRows(summary(2, {run}))
+    assert(#rows == 5, #rows)
+    local head, byline = rows[1], rows[2]
+    assert(head.label == "kata-a#a1b2" and head.text == "Review open pull requests" and head.tone == "accent", head.text)
+    assert(head.href == "https://kata.invalid/kata-a/a1b2" and head.actions == nil, head.href)
+    assert(byline.label == "review · 2 h" and byline.text == "" and byline.tone == "muted", byline.label)
+    assert(byline.id == "01RUN" and assert(byline.actions)[1].id == workerwidget.RESUME_ID)
+    assert(rows[3].label == nil and rows[3].text == "agent_quota: out of tokens" and rows[3].tone == "warn")
+    assert(rows[4].label == "Running" and rows[4].text == "2")
+    assert(rows[5].label == "Worker" and rows[5].text == "box · pid 42", rows[5].text)
+end)
+
+test("a run whose worker gave no Issue title is headed by its ref alone, which still opens the Issue", function()
+    local head = cardRows(summary(0, {held({ref = "kata-a#a1b2"})}))[1]
+    assert(head.label == nil and head.text == "kata-a#a1b2" and head.href == "https://kata.invalid/kata-a/a1b2" and head.tone == "accent")
 end)
 
 test("the Worker row says this machine on the window half's widget, and leaves out an executor the worker does not name", function()
@@ -137,8 +145,8 @@ test("a held run's age is in its largest whole unit, and a run without a held ti
     assert(workerwidget.age(NOW - 60, NOW) == "1 m" and workerwidget.age(NOW - 3599, NOW) == "59 m")
     assert(workerwidget.age(NOW - 3600, NOW) == "1 h" and workerwidget.age(NOW - 86399, NOW) == "23 h")
     assert(workerwidget.age(NOW - 3 * 86400, NOW) == "3 d")
-    assert(cardRows(summary(0, {held({job = "review"})}))[1].label == "review")
-    assert(cardRows(summary(0, {held({job = "", heldAt = NOW - 120})}))[1].label == "held · 2 m")
+    assert(cardRows(summary(0, {held({job = "review"})}))[2].label == "review")
+    assert(cardRows(summary(0, {held({job = "", heldAt = NOW - 120})}))[2].label == "held · 2 m")
 end)
 
 test("the clock key changes each minute while runs are held, and never without any", function()
@@ -152,51 +160,53 @@ end)
 test("a long reason wraps by words on up to three full-width rows under its run, the last ending in an ellipsis", function()
     local reason = "agent_quota: the agent ran out of quota for this billing period; resume it once the quota resets at midnight, or switch the job to another agent"
     local rows = cardRows(summary(0, {held({reason = reason})}))
-    assert(#rows == 6, #rows)
-    assert(rows[2].text == "agent_quota: the agent ran out of quota for", rows[2].text)
-    assert(rows[3].text == "this billing period; resume it once the", rows[3].text)
-    assert(rows[4].text == "quota resets at midnight, or switch the job…" and rows[4].label == nil and rows[4].tone == "warn", rows[4].text)
-    for index = 2, 4 do assert((utf8.len(rows[index].text) :: number) <= 44, rows[index].text) end
+    assert(#rows == 7, #rows)
+    assert(rows[3].text == "agent_quota: the agent ran out of quota for", rows[3].text)
+    assert(rows[4].text == "this billing period; resume it once the", rows[4].text)
+    assert(rows[5].text == "quota resets at midnight, or switch the job…" and rows[5].label == nil and rows[5].tone == "warn", rows[5].text)
+    for index = 3, 5 do assert((utf8.len(rows[index].text) :: number) <= 44, rows[index].text) end
 end)
 
-test("a run the worker would resume offers Resume; one it would only abandon offers Abandon on an error-toned row; else none", function()
+test("a run the worker would resume offers Resume; one it would only abandon offers Abandon on an error-toned byline; else none", function()
     local rows = cardRows(summary(0, {
         held({uid = "a", resumable = true, abandonable = true}),
         held({uid = "b", abandonable = true}),
         held({uid = "c"}),
     }))
-    assert(assert(rows[1].actions)[1].id == workerwidget.RESUME_ID and rows[1].tone == nil)
-    local abandon = assert(rows[3].actions)[1]
-    assert(rows[3].id == "b" and rows[3].tone == "error" and abandon.id == workerwidget.ABANDON_ID and abandon.label == "Abandon")
-    assert(rows[5].actions == nil and rows[5].id == nil and rows[5].tone == nil)
+    assert(assert(rows[2].actions)[1].id == workerwidget.RESUME_ID and rows[2].tone == "muted")
+    local abandon = assert(rows[5].actions)[1]
+    assert(rows[5].id == "b" and rows[5].tone == "error" and abandon.id == workerwidget.ABANDON_ID and abandon.label == "Abandon")
+    assert(rows[8].actions == nil and rows[8].id == nil and rows[8].tone == "muted")
+    for _, index in {1, 4, 7} do assert(rows[index].actions == nil and rows[index].id == nil, index) end
 end)
 
 test("only the session host's half offers buttons, and only for a uid Tern takes as a row id", function()
     local runs = {held({uid = "a", resumable = true}), held({uid = "", resumable = true}), held({uid = string.rep("u", 65), abandonable = true})}
     local rows = cardRows(summary(0, runs))
-    assert(rows[1].actions ~= nil)
-    for _, index in {3, 5} do assert(rows[index].actions == nil and rows[index].id == nil, index) end
+    assert(rows[2].actions ~= nil)
+    for _, index in {5, 8} do assert(rows[index].actions == nil and rows[index].id == nil, index) end
     for _, row in cardRows(summary(0, runs), false) do assert(row.actions == nil) end
 end)
 
-test("a run with no job, Issue or reason keeps its heading row, and a ref the link route cannot carry gets no link", function()
+test("a run with no job, Issue or reason keeps its heading and byline, and a ref the link route cannot carry gets no link", function()
     local rows = cardRows(summary(0, {
         held({job = "", ref = "my project#a1"}),
         held({job = "", ref = "", reason = ""}),
-        held({job = string.rep("j", 30), ref = "odd;$x&y#c1"}),
+        held({job = string.rep("j", 30), ref = "odd;$x&y#c1", title = "Odd"}),
     }))
-    assert(rows[1].href == nil and rows[1].label == "held" and rows[1].text == "my project#a1")
-    assert(rows[3].href == nil and rows[3].text == "no Issue" and rows[4].label == string.rep("j", 15) .. "…", rows[4].label)
-    assert(rows[4].href == "https://kata.invalid/odd;$x&y/c1", rows[4].href)
+    assert(rows[1].href == nil and rows[1].text == "my project#a1" and rows[2].label == "held")
+    assert(rows[4].href == nil and rows[4].text == "no Issue" and rows[5].label == "held" and rows[6].tone == "accent")
+    assert(rows[6].label == "odd;$x&y#c1" and rows[6].href == "https://kata.invalid/odd;$x&y/c1", rows[6].href)
+    assert(rows[7].label == string.rep("j", 23) .. "…", rows[7].label)
 end)
 
 test("the card keeps to Tern's 32 rows: held runs that do not fit become one row saying how many more", function()
     local rows = cardRows(summary(1, heldRuns(40)))
-    assert(#rows == 31, #rows)
-    assert(rows[27].text == "r14" and rows[28].text == "why14" and rows[29].text == "and 26 more held", rows[29].text)
-    assert(rows[30].label == "Running" and rows[31].label == "Worker")
-    local fifteen = cardRows(summary(0, heldRuns(15)))
-    assert(#fifteen == 32 and fifteen[30].text == "why15")
+    assert(#rows == 30, #rows)
+    assert(rows[25].text == "r9" and rows[27].text == "why9" and rows[28].text == "and 31 more held", rows[28].text)
+    assert(rows[29].label == "Running" and rows[30].label == "Worker")
+    local ten = cardRows(summary(0, heldRuns(10)))
+    assert(#ten == 32 and ten[30].text == "why10")
 end)
 
 harness.finish()

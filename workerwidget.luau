@@ -28,10 +28,10 @@ local CARD_CHARS = 200
 local ROW_ID_CHARS = 64
 -- Tern draws each card row on one line and cuts it with an ellipsis. A row without a label spans the card (272 px of sans
 -- text on 0.9.27, about 49 average characters), so a hold reason is wrapped by words at REASON_CHARS onto at most
--- REASON_LINES such rows. A job name, which the label before the Issue link and button starts with, is cut at JOB_CHARS.
+-- REASON_LINES such rows. A job name, which a run's second row starts with, is cut at JOB_CHARS.
 local REASON_CHARS = 44
 local REASON_LINES = 3
-local JOB_CHARS = 16
+local JOB_CHARS = 24
 
 -- The tooltip, which a Tern before 0.9.27 shows instead of the card (`card` below). Its lines are written so that what each
 -- line is for survives Tern's cut at LINE_CHARS (widgets.fit): the first line is where the worker is, a held run is its hold
@@ -65,31 +65,38 @@ function M.age(since: number, now: number): string
     return seconds // 86400 .. " d"
 end
 
--- The rows of one held run: a heading row with its job and how long it has been held, its Issue (a link that opens it) and a
--- button, then the worker's sentence for the hold, wrapped on full-width rows under it. The button is Resume when the worker
--- would resume the run, and Abandon when it would not but would abandon it, which is then the only way to settle it (as
--- `worker status` says); that row has the error tone, which the stylesheet draws the Abandon button in. Neither is offered
--- while the worker would take neither verb (its hold is still being reported, or its agent's process is still there), nor by
--- the window half's widget, as only the session host's half runs the command.
+-- The rows of one held run, as a heading, a byline and a body:
+-- 1. its Issue, in the accent tone: the ref as the label and the Issue's title as the text, which opens the Issue (the ref is
+--    the text when the worker gave no title, as a binary from before titles does);
+-- 2. its job and how long it has been held, with a button: Resume when the worker would resume the run, and Abandon when it
+--    would not but would abandon it, which is then the only way to settle it (as `worker status` says). That row has the
+--    error tone with Abandon, which the stylesheet draws the button in, and the muted tone otherwise. Neither button is
+--    offered while the worker would take neither verb (its hold is still being reported, or its agent's process is still
+--    there), nor by the window half's widget, as only the session host's half runs the command;
+-- 3. the worker's sentence for the hold, wrapped on full-width rows.
 local function heldRows(run: workersummary.Held, onHost: boolean, now: number): { WidgetCardRow }
-    local title = if run.job ~= "" then widgets.cut(run.job, JOB_CHARS) else "held"
-    if run.heldAt ~= nil then title ..= " · " .. M.age(run.heldAt, now) end
+    local ref = if run.ref ~= "" then widgets.cut(run.ref, CARD_CHARS) else "no Issue"
+    local titled = run.title ~= ""
     local head: WidgetCardRow = {
-        label = title,
-        text = if run.ref ~= "" then widgets.cut(run.ref, CARD_CHARS) else "no Issue",
+        label = if titled then ref else nil,
+        text = if titled then widgets.cut(run.title, CARD_CHARS) else ref,
         href = issueLink(run.ref),
+        tone = "accent",
     }
+    local byline = if run.job ~= "" then widgets.cut(run.job, JOB_CHARS) else "held"
+    if run.heldAt ~= nil then byline ..= " · " .. M.age(run.heldAt, now) end
+    local meta: WidgetCardRow = {label = byline, text = "", tone = "muted"}
     if onHost and #run.uid >= 1 and #run.uid <= ROW_ID_CHARS then
         if run.resumable then
-            head.id = run.uid
-            head.actions = {{id = M.RESUME_ID, label = "Resume"}}
+            meta.id = run.uid
+            meta.actions = {{id = M.RESUME_ID, label = "Resume"}}
         elseif run.abandonable then
-            head.id = run.uid
-            head.tone = "error"
-            head.actions = {{id = M.ABANDON_ID, label = "Abandon"}}
+            meta.id = run.uid
+            meta.tone = "error"
+            meta.actions = {{id = M.ABANDON_ID, label = "Abandon"}}
         end
     end
-    local rows = {head}
+    local rows = {head, meta}
     for _, line in widgets.wrap(run.reason, REASON_CHARS, REASON_LINES) do
         table.insert(rows, {text = line, tone = "warn"})
     end
@@ -156,24 +163,28 @@ end
 
 -- The window's stylesheet for this widget's hover card, which Tern draws as `.wgc[data-widget="<plugin>/<id>"]` with one
 -- `.wgc-plugin-row` per card row (`.bare` without a label, `data-tone` its tone). It gives the card the built-in Agents card's
--- hierarchy, where Tern draws every plugin row alike: a held run's job is its title, its Issue a chip (cut with an ellipsis
--- before the button is), its reason a muted paragraph behind a rule in the warning colour, runs are spaced apart, and Running
--- and Worker sit under a line as the card's footer. Resume is a solid pill in the theme's accent fill (with white text, as the
--- Pane's selected rows use it); Abandon, on the error-toned rows, an outlined pill in the error colour, so the button that
--- ends a run does not look like the one that continues it. Tern's own card buttons are plain text. A window without this
--- plugin, or a Tern whose card markup changed, draws the card plain.
+-- hierarchy, where Tern draws every plugin row alike. A held run's heading (the accent row) is its Issue ref as a chip and its
+-- title in bold, cut with an ellipsis; its byline (the row after the heading) is muted, with the button at its end; its
+-- reason is a muted paragraph behind a rule in the warning colour. Runs are spaced apart, and Running and Worker sit under a
+-- line as the card's footer. Resume is a solid pill in the theme's accent fill (with white text, as the Pane's selected rows
+-- use it); Abandon, on an error-toned byline, an outlined pill in the error colour, so the button that ends a run does not
+-- look like the one that continues it. Tern's own card buttons are plain text. A window without this plugin, or a Tern whose
+-- card markup changed, draws the card plain, the heading in the accent colour.
 function M.css(plugin: string): string
     local card = '.wgc[data-widget="' .. plugin .. "/" .. M.ID .. '"]'
-    local head = card .. " .wgc-plugin-row:has(.wgc-plugin-link, .wgc-plugin-act)"
+    local head = card .. ' .wgc-plugin-row[data-tone="accent"]'
+    local byline = head .. " + .wgc-plugin-row"
     local abandon = card .. ' .wgc-plugin-row[data-tone="error"] .wgc-plugin-act'
     return table.concat({
-        head .. " {\n\tmargin-top: 6px;\n}",
-        head .. " .wgc-k {\n\tflex: none;\n\tcolor: var(--t1);\n\tfont-weight: 600;\n}",
-        card .. " .wgc-plugin-link {\n\tflex: 0 1 auto;\n\tmin-width: 0;\n\tmargin-left: 2px;\n\tpadding: 1px 6px;\n\tborder-radius: 5px;\n\toverflow: hidden;\n\ttext-overflow: ellipsis;\n\twhite-space: nowrap;\n\tcolor: var(--t1);\n\tbackground-color: color-mix(in srgb, var(--t1) 8%, transparent);\n\ttext-decoration: none;\n}",
-        card .. " .wgc-plugin-link:hover {\n\tcolor: var(--accent);\n}",
+        head .. ":not(:first-child) {\n\tmargin-top: 10px;\n}",
+        head .. " .wgc-k {\n\tflex: none;\n\talign-self: center;\n\tmargin-right: 2px;\n\tpadding: 0 5px;\n\tborder-radius: 4px;\n\tline-height: 18px;\n\tfont-family: var(--mono);\n\tfont-size: 11.5px;\n\tcolor: var(--t1);\n\tbackground-color: color-mix(in srgb, var(--t1) 8%, transparent);\n}",
+        head .. " .wgc-v {\n\tflex: 1 1 auto;\n\tmin-width: 0;\n\toverflow: hidden;\n\ttext-overflow: ellipsis;\n\twhite-space: nowrap;\n\ttext-align: left;\n\tfont-family: inherit;\n\tfont-size: 13px;\n\tfont-weight: 600;\n\tcolor: var(--t1);\n\ttext-decoration: none;\n}",
+        head .. " .wgc-plugin-link:hover {\n\tcolor: var(--accent);\n\ttext-decoration: underline;\n}",
+        byline .. " {\n\tmin-height: 0;\n}",
+        byline .. " .wgc-k {\n\tflex: 1 1 auto;\n\tmin-width: 0;\n\toverflow: hidden;\n\ttext-overflow: ellipsis;\n\twhite-space: nowrap;\n\tcolor: var(--t2);\n}",
         card .. ' .wgc-plugin-row.bare[data-tone="warn"] {\n\tmin-height: 0;\n\theight: 18px;\n\tmargin-left: 2px;\n\tpadding-left: 10px;\n\tborder-left: 2px solid var(--warn);\n}',
         card .. ' .wgc-plugin-row.bare[data-tone="warn"] .wgc-v {\n\tcolor: var(--t2);\n}',
-        card .. " .wgc-plugin-row:nth-last-child(2) {\n\tmargin-top: 6px;\n\tpadding-top: 6px;\n\tborder-top: 1px solid color-mix(in srgb, var(--t1) 12%, transparent);\n}",
+        card .. " .wgc-plugin-row:nth-last-child(2) {\n\tmargin-top: 8px;\n\tpadding-top: 6px;\n\tborder-top: 1px solid color-mix(in srgb, var(--t1) 12%, transparent);\n}",
         card .. " .wgc-plugin-act {\n\tflex: none;\n\tmargin-left: auto;\n\tborder: 1px solid transparent;\n\tborder-radius: 999px;\n\tpadding: 0 10px;\n\tcolor: #fff;\n\tbackground-color: var(--accent-fill);\n}",
         card .. " .wgc-plugin-act:hover {\n\tbackground-color: color-mix(in srgb, var(--accent-fill) 85%, #000);\n}",
         abandon .. " {\n\tcolor: var(--bad);\n\tbackground-color: transparent;\n\tborder-color: color-mix(in srgb, var(--bad) 55%, transparent);\n}",
