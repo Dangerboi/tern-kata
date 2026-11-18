@@ -28,7 +28,7 @@ local CARD_CHARS = 200
 local ROW_ID_CHARS = 64
 -- Tern draws each card row on one line and cuts it with an ellipsis. A row without a label spans the card (272 px of sans
 -- text on 0.9.27, about 49 average characters), so a hold reason is wrapped by words at REASON_CHARS onto at most
--- REASON_LINES such rows. A job name, which a run's second row starts with, is cut at JOB_CHARS.
+-- REASON_LINES such rows. A job name, which a run's second row starts with, and the executor in the footer are cut at JOB_CHARS.
 local REASON_CHARS = 44
 local REASON_LINES = 3
 local JOB_CHARS = 24
@@ -103,13 +103,14 @@ local function heldRows(run: workersummary.Held, onHost: boolean, now: number): 
     return rows
 end
 
--- The hover card (Tern 0.9.27+; an older Tern shows `title`): each held run as heldRows lays it out, then what runs and which
--- worker this is: its executor and pid, and "this machine" on the window half's widget, which reads its own machine's worker
--- rather than the session host's. Held runs past Tern's row limit become one "and N more held" row.
+-- The hover card (Tern 0.9.27+; an older Tern shows `title`): each held run as heldRows lays it out, then one footer row:
+-- which worker this is (its executor, and "this machine" on the window half's widget, which reads its own machine's worker
+-- rather than the session host's) and what it is doing, "1 running · 2 of 4 slots" as `worker status` counts slots in use.
+-- Its pid is left to the tooltip and `worker status`. Held runs past Tern's row limit become one "and N more held" row.
 local function card(summary: Summary, onHost: boolean, now: number): { WidgetCardRow }
     local rows: { WidgetCardRow } = {}
-    -- The Running and Worker rows close the card.
-    local limit = CARD_ROWS - 2
+    -- The footer row closes the card.
+    local limit = CARD_ROWS - 1
     for index, run in summary.held do
         local block = heldRows(run, onHost, now)
         local more = if index < #summary.held then 1 else 0
@@ -119,12 +120,12 @@ local function card(summary: Summary, onHost: boolean, now: number): { WidgetCar
         end
         for _, row in block do table.insert(rows, row) end
     end
-    table.insert(rows, {label = "Running", text = tostring(summary.running)})
     local names = {}
-    if summary.executor ~= "" then table.insert(names, summary.executor) end
+    if summary.executor ~= "" then table.insert(names, widgets.cut(summary.executor, JOB_CHARS)) end
     if not onHost then table.insert(names, "this machine") end
-    table.insert(names, "pid " .. summary.pid)
-    table.insert(rows, {label = "Worker", text = widgets.cut(table.concat(names, " · "), CARD_CHARS)})
+    local activity = if summary.running > 0 then summary.running .. " running" else "idle"
+    if summary.capacity > 0 then activity ..= " · " .. summary.inUse .. " of " .. summary.capacity .. " slots" end
+    table.insert(rows, {label = if #names > 0 then table.concat(names, " · ") else "Worker", text = activity})
     return rows
 end
 
@@ -165,11 +166,11 @@ end
 -- `.wgc-plugin-row` per card row (`.bare` without a label, `data-tone` its tone). It gives the card the built-in Agents card's
 -- hierarchy, where Tern draws every plugin row alike. A held run's heading (the accent row) is its Issue ref as a chip and its
 -- title in bold, cut with an ellipsis; its byline (the row after the heading) is muted, with the button at its end; its
--- reason is a muted paragraph behind a rule in the warning colour. Runs are spaced apart, and Running and Worker sit under a
--- line as the card's footer. Resume is a solid pill in the theme's accent fill (with white text, as the Pane's selected rows
--- use it); Abandon, on an error-toned byline, an outlined pill in the error colour, so the button that ends a run does not
--- look like the one that continues it. Tern's own card buttons are plain text. A window without this plugin, or a Tern whose
--- card markup changed, draws the card plain, the heading in the accent colour.
+-- reason is a muted paragraph behind a rule in the warning colour. Runs are spaced apart, and the worker's row sits under a
+-- line as the card's footer when runs are held. Resume is a solid pill in the theme's accent fill (with white text, as the
+-- Pane's selected rows use it); Abandon, on an error-toned byline, an outlined pill in the error colour, so the button that
+-- ends a run does not look like the one that continues it. Tern's own card buttons are plain text. A window without this
+-- plugin, or a Tern whose card markup changed, draws the card plain, the heading in the accent colour.
 function M.css(plugin: string): string
     local card = '.wgc[data-widget="' .. plugin .. "/" .. M.ID .. '"]'
     local head = card .. ' .wgc-plugin-row[data-tone="accent"]'
@@ -184,7 +185,7 @@ function M.css(plugin: string): string
         byline .. " .wgc-k {\n\tflex: 1 1 auto;\n\tmin-width: 0;\n\toverflow: hidden;\n\ttext-overflow: ellipsis;\n\twhite-space: nowrap;\n\tcolor: var(--t2);\n}",
         card .. ' .wgc-plugin-row.bare[data-tone="warn"] {\n\tmin-height: 0;\n\theight: 18px;\n\tmargin-left: 2px;\n\tpadding-left: 10px;\n\tborder-left: 2px solid var(--warn);\n}',
         card .. ' .wgc-plugin-row.bare[data-tone="warn"] .wgc-v {\n\tcolor: var(--t2);\n}',
-        card .. " .wgc-plugin-row:nth-last-child(2) {\n\tmargin-top: 8px;\n\tpadding-top: 6px;\n\tborder-top: 1px solid color-mix(in srgb, var(--t1) 12%, transparent);\n}",
+        card .. " .wgc-plugin-row:last-child:not(:first-child) {\n\tmargin-top: 8px;\n\tpadding-top: 6px;\n\tborder-top: 1px solid color-mix(in srgb, var(--t1) 12%, transparent);\n}",
         card .. " .wgc-plugin-act {\n\tflex: none;\n\tmargin-left: auto;\n\tborder: 1px solid transparent;\n\tborder-radius: 999px;\n\tpadding: 0 10px;\n\tcolor: #fff;\n\tbackground-color: var(--accent-fill);\n}",
         card .. " .wgc-plugin-act:hover {\n\tbackground-color: color-mix(in srgb, var(--accent-fill) 85%, #000);\n}",
         abandon .. " {\n\tcolor: var(--bad);\n\tbackground-color: transparent;\n\tborder-color: color-mix(in srgb, var(--bad) 55%, transparent);\n}",
