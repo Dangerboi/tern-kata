@@ -87,37 +87,41 @@ func TestDetailMachineStringsAreMono(t *testing.T) {
 	props := view.DetailContentID + ".properties"
 	wantMono(t, "heading id", nodes[view.DetailContentID+".heading.title"], "#aaaa")
 	when := at.In(tokyo).Format("2006-01-02 15:04")
-	wantMono(t, "meta line", nodes[props+".meta"], when, when)
-	if role, _ := nodes[props+".scheduled.v"].P["role"].(string); !strings.Contains(role, view.MonoRole) {
+	wantMono(t, "created", nodes[props+".facts.right.created.v"], when)
+	wantMono(t, "updated", nodes[props+".facts.right.updated.v"], when)
+	if role, _ := nodes[props+".facts.left.scheduled.v"].P["role"].(string); !strings.Contains(role, view.MonoRole) {
 		t.Errorf("scheduled badge role = %q", role)
 	}
-	if role, _ := nodes[props+".priority.v"].P["role"].(string); strings.Contains(role, view.MonoRole) {
+	if role, _ := nodes[props+".facts.left.priority.v"].P["role"].(string); strings.Contains(role, view.MonoRole) {
 		t.Errorf("priority badge role = %q, want the sans face", role)
 	}
-	if got := monoRuns(nodes[props+".owner.v"]); len(got) != 0 {
+	if got := monoRuns(nodes[props+".facts.left.owner.v"]); len(got) != 0 {
 		t.Errorf("the owner is mono: %v", got)
 	}
 }
 
-// Every property key sits in one box the style sheet gives a single width, so the values start at the same x in either face,
+// Every fact's key sits in a box of one width set by a layout bound, so the values of a column start at the same x in either face,
 // and no key is padded with no-break spaces.
-func TestPropertyKeysShareOneBox(t *testing.T) {
+func TestFactKeysShareOneBox(t *testing.T) {
 	nodes := render(t, browsing())
-	props := nodes[view.DetailContentID+".properties"]
-	if len(props.C) < 2 {
-		t.Fatalf("%d properties", len(props.C))
+	keys := 0
+	for _, col := range []string{"left", "right"} {
+		for _, row := range nodes[view.DetailContentID+".properties.facts."+col].C {
+			key, ok := nodes[row.ID+".k"]
+			if !ok {
+				continue
+			}
+			keys++
+			if min, _ := key.P["min"].(map[string]any); min["w"] == nil {
+				t.Errorf("%s has no key width: %v", row.ID, key.P)
+			}
+			if strings.Contains(text(key), "\u00a0") {
+				t.Errorf("%s is padded: %q", row.ID, text(key))
+			}
+		}
 	}
-	for _, row := range props.C {
-		key, ok := nodes[row.ID+".k"]
-		if !ok {
-			continue // the created line is not a property
-		}
-		if role, _ := key.P["role"].(string); role != view.PropertyKeyRole {
-			t.Errorf("%s role = %q", row.ID, role)
-		}
-		if strings.Contains(text(key), "\u00a0") {
-			t.Errorf("%s is padded: %q", row.ID, text(key))
-		}
+	if keys < 4 {
+		t.Errorf("%d facts", keys)
 	}
 }
 

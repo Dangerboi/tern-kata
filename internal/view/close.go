@@ -49,6 +49,7 @@ func closeLayer(m model.Model) tern.Element {
 		return nil
 	}
 	children := make([]tern.Element, 0, 12)
+	roomFor := 0
 	for _, field := range model.CloseFields {
 		if m.CloseForm.Hides(field.Name) {
 			continue
@@ -62,6 +63,9 @@ func closeLayer(m model.Model) tern.Element {
 		switch field.Name {
 		case model.CloseReason:
 			children = append(children, choiceControl(m, model.CardClose, field.Name, label, focused, "", ""))
+			if set, ok := m.CardChoices(model.CardClose, field.Name); ok && set.Control == model.ControlSelect && focused {
+				roomFor = len(set.Labels)
+			}
 			continue
 		case model.CloseAttachments:
 			children = append(children, attachmentPicker(m.CloseForm, tone, label))
@@ -70,6 +74,10 @@ func closeLayer(m model.Model) tern.Element {
 		value := m.CloseForm.Values.Value(field.Name)
 		input := ui.Input{Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: label}, Field: ui.Field{Text: value, Cursor: caretAt(m.CloseForm.Caret, field.Name, value), Mode: "insert", Readonly: m.CloseForm.Saving}}
 		children = append(children, labelledInput(string(field.Name), label, closeHints[field.Name], focused, input)...)
+	}
+	if roomFor > 0 {
+		// Room under the last field for the open menu, which the scrolling body would otherwise clip.
+		children = append(children, menuRoom(roomFor))
 	}
 	if m.CloseForm.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, m.CloseForm.Err.Error()))

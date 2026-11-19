@@ -12,6 +12,8 @@ const DraftReplyKind Field = "reply-kind"
 // priorityValues are the values a Create card's Priority holds, in the order its choices are shown: none, then P0 to P4.
 var priorityValues = []string{"", "0", "1", "2", "3", "4"}
 
+// The Priority picker is a segmented row, not a select: six short words fit in a row, and a select's menu is drawn inside the
+// card body, which clips it to the few options its height allows.
 var priorityLabels = []string{"None", "P0", "P1", "P2", "P3", "P4"}
 
 // priorityIndex is the index of a held priority among priorityValues; a typed "-" (kata's word for none) is none.
@@ -26,7 +28,7 @@ func createChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	if name != CreatePriority {
 		return ChoiceSet{}, false
 	}
-	return newChoices(ControlSelect, priorityLabels, priorityIndex(m.Create.Priority)), true
+	return newChoices(ControlTabs, priorityLabels, priorityIndex(m.Create.Priority)), true
 }
 
 // FieldPriority is the Priority choice of the Set priority card, the same picker as the Create card's.
@@ -37,7 +39,7 @@ func fieldChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	if !m.FieldForm.Open || m.FieldForm.Action != PriorityAction || name != FieldPriority {
 		return ChoiceSet{}, false
 	}
-	return newChoices(ControlSelect, priorityLabels, priorityIndex(m.FieldForm.Value)), true
+	return newChoices(ControlTabs, priorityLabels, priorityIndex(m.FieldForm.Value)), true
 }
 
 // chooseFieldPriority holds the priority at index of the picker; none is kata's "-".
@@ -69,8 +71,10 @@ var closeReasons = []CloseReasonKind{ReasonDone, ReasonWontfix, ReasonDuplicate,
 // is its own word.
 func CloseReasonLabel(reason string) string { return CloseReasonWords(reason) }
 
-// closeChoiceSet is the Reason control: segmented tabs while the card is wide, a select once it is narrower than the folded
-// legend.
+// closeReasonTabsCols is the narrowest Pane that fits the five reasons in one segmented row; below it the Reason is a select.
+const closeReasonTabsCols = 56
+
+// closeChoiceSet is the Reason control: segmented tabs while the five reasons fit a row, a select below that.
 func closeChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	if name != CloseReason {
 		return ChoiceSet{}, false
@@ -80,7 +84,7 @@ func closeChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 		labels[i] = CloseReasonLabel(string(reason))
 	}
 	control := ControlTabs
-	if m.NarrowerThan(FoldedLegendCols) {
+	if m.NarrowerThan(closeReasonTabsCols) {
 		control = ControlSelect
 	}
 	return newChoices(control, labels, slices.Index(closeReasons, CloseReasonKind(m.CloseForm.Values.Reason))), true

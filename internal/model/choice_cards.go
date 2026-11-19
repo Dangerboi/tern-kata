@@ -21,8 +21,10 @@ func (m Model) filterChoiceText(name Field, value string) string {
 	return FilterChoiceLabel(FilterRelationships, value)
 }
 
+// filterControl is the status and the relationship as a segmented row: both are short closed sets, and the Relationship is the
+// last field of the card, where a select's menu would be clipped by the card body after its first option.
 func filterControl(name Field) Control {
-	if name == FilterStatus {
+	if name == FilterStatus || name == FilterRelationship {
 		return ControlTabs
 	}
 	return ControlSelect

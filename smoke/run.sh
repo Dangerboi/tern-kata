@@ -117,6 +117,9 @@ http_pids=()
 export CGO_ENABLED=0
 export KATA_HOME="$tmp/kata"
 export TERN_CONFIG_DIR="$tmp/config"
+# SMOKE_TERN_SETTINGS=<file> runs Tern with that settings.json (a user's material, themes and widgets) instead of an empty
+# config, to reproduce what the headless run does not show.
+if [[ -n ${SMOKE_TERN_SETTINGS:-} ]]; then mkdir -p "$TERN_CONFIG_DIR" && cp "$SMOKE_TERN_SETTINGS" "$TERN_CONFIG_DIR/settings.json"; fi
 export XDG_CONFIG_HOME="$tmp/xdg-config"
 export XDG_STATE_HOME="$tmp/xdg-state"
 # tern-kata downloads Attachments into os.UserCacheDir: keep them in $tmp, not the user's ~/.cache.

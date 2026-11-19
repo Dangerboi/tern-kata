@@ -34,6 +34,7 @@ func (c *Client) ReadSnapshot(ctx context.Context, cmd model.ReadSnapshot) (mode
 	}
 	result.Snapshot = def.Keep(translateSnapshot(response.JSON200), date)
 	result.Selected = translateDetail(response.JSON200.Selected, response.JSON200.Capabilities)
+	c.linkTitles(ctx, result.Selected)
 	if response.Headers200 != nil {
 		result.ETag = response.Headers200.ETag
 	}

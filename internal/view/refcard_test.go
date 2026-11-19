@@ -67,7 +67,7 @@ func relating() model.Model {
 
 func TestLinkAndParentReferencesCarryTheIssuesCard(t *testing.T) {
 	nodes := render(t, relating())
-	parent := hovercardOf(t, nodes, view.DetailContentID+".properties.parent.v")
+	parent := hovercardOf(t, nodes, view.DetailContentID+".properties.facts.right.parent.v")
 	wantCard(t, "parent property", parent, "#root", "Root title", "open", model.PaneCalendar{}.Read(testNow.Add(-3*time.Hour), testNow))
 	if strings.Contains(parent, "owner") {
 		t.Errorf("unowned parent shows an owner: %s", parent)

@@ -161,12 +161,12 @@ func TestDetailShowsTheOwnerExpiryAndRecurring(t *testing.T) {
 		return render(t, apply(sel, detailOf(issue)))
 	}
 	for uid, want := range map[string]string{"today": "dana until 22:30", "plain": "dana"} {
-		if got := text(props(uid)[view.DetailContentID+".properties.owner.v"]); got != want {
+		if got := text(props(uid)[view.DetailContentID+".properties.facts.left.owner.v"]); got != want {
 			t.Errorf("%s detail owner %q, want %q", uid, got, want)
 		}
 	}
 	// The detail data carries no recurrence for it (kata withholds them from a scoped access): the property says no more than yes.
-	if got := text(props("loop")[view.DetailContentID+".properties.recurring.v"]); got != "Yes" {
+	if got := text(props("loop")[view.DetailContentID+".properties.facts.right.recurring.v"]); got != "Yes" {
 		t.Errorf("recurring property %q, want Yes", got)
 	}
 }
@@ -181,7 +181,7 @@ func TestRecurringPropertyReadsTheScheduleItsNextDateOrTheRawRule(t *testing.T) 
 		"stopped":                              {Stopped: true},
 	} {
 		m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &recurring, Recurrence: &recurrence}})
-		if got := text(render(t, m)[view.DetailContentID+".properties.recurring.v"]); got != want {
+		if got := text(render(t, m)[view.DetailContentID+".properties.facts.right.recurring.v"]); got != want {
 			t.Errorf("recurring property %q, want %q", got, want)
 		}
 	}

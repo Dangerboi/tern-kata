@@ -88,12 +88,12 @@ func TestTheIssueDetailHasAWorkAttentionPropertyWithTheWholeMessage(t *testing.T
 	var word, message bool
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
 		switch {
-		case strings.HasSuffix(n.ID, ".properties.work-attention.v.word"):
+		case strings.HasSuffix(n.ID, ".properties.facts.right.work-attention.v.word"):
 			word = true
 			if n.P["text"] != "needs human" || n.P["tone"] != "warning" {
 				t.Errorf("word %v", n.P)
 			}
-		case strings.HasSuffix(n.ID, ".properties.work-attention.v.message"):
+		case strings.HasSuffix(n.ID, ".properties.facts.right.work-attention.v.message"):
 			message = true
 			if n.P["text"] != strings.TrimSpace(long) {
 				t.Errorf("message %v", n.P)
@@ -110,7 +110,7 @@ func TestAClosedIssuesLeftoverWorkAttentionShowsNotOnTheDetail(t *testing.T) {
 	issue.Status = "closed"
 	s := step(t, projectPane(t, 160, issue), model.DetailLoaded{UID: "t1", Selected: &model.IssueDetailData{Issue: &issue}}).State
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if strings.Contains(n.ID, ".properties.work-attention") {
+		if strings.Contains(n.ID, ".properties.facts.right.work-attention") {
 			t.Errorf("detail: a closed Issue has the property %s", n.ID)
 		}
 	}

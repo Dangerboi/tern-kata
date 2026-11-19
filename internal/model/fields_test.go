@@ -108,3 +108,16 @@ func TestSetPriorityIsAPickerThatOpensOnTheIssuesPriority(t *testing.T) {
 	}
 	t.Fatalf("enter wrote %#v, want the priority cleared", cmds)
 }
+
+func TestThePriorityPickersShowEveryChoiceInARowNotInAClippedMenu(t *testing.T) {
+	m := model.Model{SelectedUID: "i", Issues: []model.Issue{{UID: "i"}}}
+	set, _ := model.Update(m, model.KeyMsg{Chord: "!"})
+	field, _ := set.CardChoices(model.CardField, model.FieldPriority)
+	create, _ := model.Update(m, model.KeyMsg{Chord: "n"})
+	created, _ := create.CardChoices(model.CardCreate, model.CreatePriority)
+	for name, got := range map[string]model.ChoiceSet{"Set priority": field, "Create": created} {
+		if got.Control != model.ControlTabs || len(got.Labels) != 6 {
+			t.Errorf("%s picker: control %v with %d choices, want a tabs row of None and P0 to P4", name, got.Control, len(got.Labels))
+		}
+	}
+}

@@ -36,12 +36,12 @@ func parenting(tab model.ActivityTab) model.Model {
 	)
 }
 
-func TestPropertiesHaveNoChildrenRowAndNoChildLines(t *testing.T) {
+func TestFactsShowTheChildCountsAndNoChildLines(t *testing.T) {
 	nodes := render(t, parenting(model.TabLinks))
-	if ids := nodes.under(view.DetailContentID + ".properties.children"); len(ids) != 0 {
-		t.Errorf("properties still have a Children row: %v", ids)
+	if got := text(nodes[view.DetailContentID+".properties.facts.right.children.v"]); got != "1 of 3 open" {
+		t.Errorf("children fact = %q", got)
 	}
-	if ids := nodes.under(view.DetailContentID + ".properties.parent"); len(ids) != 0 {
+	if ids := nodes.under(view.DetailContentID + ".properties.facts.right.parent"); len(ids) != 0 {
 		t.Errorf("properties still list relatives with no parent: %v", ids)
 	}
 }
@@ -230,7 +230,7 @@ func TestUnloadedChildShowsItsReferenceOnly(t *testing.T) {
 
 func TestNoChildrenTableNorCountsLineWithoutChildren(t *testing.T) {
 	nodes := render(t, browsing())
-	for _, id := range []string{childrenID, view.DetailContentID + ".properties.children"} {
+	for _, id := range []string{childrenID, view.DetailContentID + ".properties.facts.right.children"} {
 		if ids := nodes.under(id); len(ids) != 0 {
 			t.Errorf("%s shown without children: %v", id, ids)
 		}

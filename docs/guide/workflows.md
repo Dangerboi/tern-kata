@@ -36,6 +36,8 @@ The inspector shows the selected workflow: each step in order with its number an
 - **Step** chooses the step whose fields are shown below it (`1 review`, `2 test`); the other fields belong to that step: **Step name**, **Kind** (command or prompt), the **Command** or **Prompt** in a multi-line editor, **After** (the earlier steps it waits for, separated by commas) and **Retries** (0 to 100).
 - **Add step** puts a new prompt step after the shown one, **Remove step** takes the shown step out (the last one stays), and **Move up** and **Move down** reorder it. Tab moves between fields; left and right change the chosen step or kind.
 
+Each field has a muted line under it saying what it takes, from kata's and the worker's own behaviour: **About** is free text the worker puts at the top of every prompt step; **Input** is free text that kata keeps and the worker does not read; a command runs with `sh -c` in the job's checkout and a prompt goes to the agent as the task, both as written, with no placeholders expanded; **After** names earlier steps (a step is skipped when one it needs fails); **Retries** is how often a failed step runs again (a timeout is never retried).
+
 `ctrl+o` saves. The card's other buttons are **Open in editor** and **Cancel**; leaving a changed form asks "Discard this Draft?" with **Discard Draft** and **Keep editing**.
 
 The options kata accepts on a workflow and on a step have no field. The card carries them through a save unchanged, and **Open in editor** shows the whole workflow as the JSON kata takes, for anyone who wants to change them:

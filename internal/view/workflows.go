@@ -237,18 +237,19 @@ func workflowForm(m model.Model, c model.WorkflowCard) []tern.Element {
 		}
 		value := f.Text(name)
 		input := ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: value, Cursor: caretAt(f.Caret, name, value), Mode: "insert", Readonly: readonly}}
-		return labelledInput(string(name), label, hint, focused, input)
+		nodes := labelledInput(string(name), label, "", focused, input)
+		return append(nodes, workflowHint(string(name), hint))
 	}
 	step := f.Step()
 	children := text(model.WorkflowFieldName, "Name", "")
-	children = append(children, text(model.WorkflowFieldAbout, "About", "")...)
-	children = append(children, text(model.WorkflowFieldInput, "Input", "")...)
+	children = append(children, text(model.WorkflowFieldAbout, "About", aboutHint)...)
+	children = append(children, text(model.WorkflowFieldInput, "Input", inputHint)...)
 	children = append(children, stepsHead(f, readonly))
 	if pick := choiceControl(m, model.CardWorkflow, model.WorkflowFieldStep, "Step", f.Field == model.WorkflowFieldStep, "", ""); pick != nil {
 		children = append(children, pick)
 	}
-	children = append(children, text(model.WorkflowFieldKey, "Step name", "")...)
-	if kind := choiceControl(m, model.CardWorkflow, model.WorkflowFieldKind, "Kind", f.Field == model.WorkflowFieldKind, "", ""); kind != nil {
+	children = append(children, text(model.WorkflowFieldKey, "Step name", stepNameHint)...)
+	if kind := choiceControl(m, model.CardWorkflow, model.WorkflowFieldKind, "Kind", f.Field == model.WorkflowFieldKind, kindHint, ""); kind != nil {
 		children = append(children, kind)
 	}
 	bodyLabel := "Prompt"
@@ -264,9 +265,14 @@ func workflowForm(m model.Model, c model.WorkflowCard) []tern.Element {
 		}
 		editor = e
 	}
+	bodyHint := promptHint
+	if step.Kind == cronjob.StepCommand {
+		bodyHint = commandHint
+	}
 	children = append(children, labelledInput(string(model.WorkflowFieldBody), bodyLabel, "", focused, editor)...)
-	children = append(children, text(model.WorkflowFieldAfter, "After", "Earlier steps this one waits for, separated by commas.")...)
-	children = append(children, text(model.WorkflowFieldRetries, "Retries", "A whole number from 0 to "+strconv.Itoa(cronjob.MaxWorkflowRetries)+".")...)
+	children = append(children, workflowHint(string(model.WorkflowFieldBody), bodyHint))
+	children = append(children, text(model.WorkflowFieldAfter, "After", afterHint)...)
+	children = append(children, text(model.WorkflowFieldRetries, "Retries", retriesHint)...)
 	if c.Reading != nil {
 		children = append(children, workerReading(*c.Reading))
 	}
@@ -303,6 +309,25 @@ func stepsHead(f model.WorkflowForm, busy bool) tern.Element {
 		unavailable(cardButton("up", model.ModeWorkflowForm, model.WorkflowStepMoveUp, "Move up", false), stepReason(busy, !f.CanMoveStep(true), "This is the first step.")),
 		unavailable(cardButton("down", model.ModeWorkflowForm, model.WorkflowStepMoveDown, "Move down", false), stepReason(busy, !f.CanMoveStep(false), "This is the last step.")))
 	return ui.Row{Common: ui.Common{Key: "steps-head"}, Gap: ui.GapMD, Wrap: true, Align: ui.AlignCenter, Children: children}
+}
+
+// The descriptions under the Workflow card's fields. Each says what kata or the worker does with the field's text, as their own
+// documentation has it; none invents a format.
+const (
+	aboutHint    = "Free text. The worker puts it at the top of every prompt step, so the agent knows what the workflow is for."
+	inputHint    = "Free text noting what a run is given. kata keeps it with the workflow and the worker does not read it."
+	stepNameHint = "Letters, digits, - _ and . only. Each step's name is unique, and After refers to it."
+	kindHint     = "A command runs in a shell; a prompt goes to the agent."
+	commandHint  = "Runs with sh -c in the job's checkout, as written (no placeholders). The environment has TERN_KATA_RUN, TERN_KATA_RUN_DIR and KATA_PROJECT."
+	promptHint   = "Sent to the agent as the task, as written (no placeholders); the worker adds the Issue, run and step details around it."
+	afterHint    = "Earlier steps this one needs, separated by commas. If one fails, this step is skipped."
+	retriesHint  = "How many times a failed step runs again, 0 to 100. A timeout is never retried."
+)
+
+// workflowHint is the muted line under a Workflow card field that says what it takes. Unlike the hints of other forms it stays
+// while the field has no focus, so the whole card can be read through.
+func workflowHint(key, text string) tern.Element {
+	return toneText(key+"-hint", ui.ToneMuted, text)
 }
 
 // busyReason is the reason a card's buttons cannot be pressed while it works, "" when they can.

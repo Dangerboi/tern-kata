@@ -55,6 +55,25 @@ func fieldLayer(m model.Model) tern.Nodes {
 	return ui.Nodes(popup(overlay, children))
 }
 
+// menuRoomRow is the height of one option of a select's menu, in pixels, with the menu's padding left over.
+const menuRoomRow = 32
+
+// menuRoom is blank space under a select that makes the card body tall enough to hold the select's open menu. The menu is drawn
+// inside the card body, which scrolls and clips what overflows it, so a card whose only content is the select would cut the
+// list off after its first options.
+func menuRoom(options int) tern.Element {
+	return ui.Text{Common: ui.Common{Key: "menu-room", Shrink: new(float64), Min: &ui.Bounds{H: ui.Px(float64(options*menuRoomRow + 8))}}, Text: "\u00a0"}
+}
+
+// selectRoom is the blank space under a card's fields that lets the focused field's open menu show, nothing when that field is
+// not a select.
+func selectRoom(m model.Model, card model.Card, focused model.Field) []tern.Element {
+	if set, ok := m.CardChoices(card, focused); ok && set.Control == model.ControlSelect {
+		return []tern.Element{menuRoom(len(set.Labels))}
+	}
+	return nil
+}
+
 // saveLabel is the word on the form's save button: a restore finds the Issue first, then restores it.
 func saveLabel(m model.Model) string {
 	switch {

@@ -31,36 +31,36 @@ func filterCardOn(n int, field model.Field) model.Model {
 }
 
 func TestSelectOpensWithDownAndHighlightsWithTheArrows(t *testing.T) {
-	m := filterCardOn(0, model.FilterRelationship)
+	m := filterCardOn(5, model.FilterProject)
 	m = cardKeys(m, "down")
-	dropdown := m.OpenDropdown(model.CardFilter, model.FilterRelationship)
+	dropdown := m.OpenDropdown(model.CardFilter, model.FilterProject)
 	if !dropdown.Open || dropdown.Active != 0 {
 		t.Fatalf("down on a closed select left dropdown %+v, want it open on the held choice", dropdown)
 	}
 	m = cardKeys(m, "down", "down")
-	if got := m.OpenDropdown(model.CardFilter, model.FilterRelationship).Active; got != 2 {
+	if got := m.OpenDropdown(model.CardFilter, model.FilterProject).Active; got != 2 {
 		t.Fatalf("two downs highlight %d, want 2", got)
 	}
 	m = cardKeys(m, "up", "up", "up")
-	if got := m.OpenDropdown(model.CardFilter, model.FilterRelationship).Active; got != len(model.FilterRelationships)-1 {
+	if got := m.OpenDropdown(model.CardFilter, model.FilterProject).Active; got != 5 {
 		t.Fatalf("up from the first wraps to %d, want the last", got)
 	}
-	if m.FilterForm.Values.Relationship != "" {
-		t.Fatalf("moving the highlight set %q", m.FilterForm.Values.Relationship)
+	if m.FilterForm.Values.ProjectUID != "" {
+		t.Fatalf("moving the highlight set %q", m.FilterForm.Values.ProjectUID)
 	}
 }
 
 func TestSelectEnterPicksTheHighlightAndEscapeKeepsTheCard(t *testing.T) {
-	m := cardKeys(filterCardOn(0, model.FilterRelationship), "down", "down", "down", "enter")
-	if got := m.FilterForm.Values.Relationship; got != "child" {
-		t.Fatalf("enter picked %q, want child", got)
+	m := cardKeys(filterCardOn(5, model.FilterProject), "down", "down", "down", "enter")
+	if got := m.FilterForm.Values.ProjectUID; got != "p01" {
+		t.Fatalf("enter picked %q, want p01", got)
 	}
-	if m.OpenDropdown(model.CardFilter, model.FilterRelationship).Open || !m.FilterForm.Open || m.FilterForm.Field != model.FilterRelationship {
+	if m.OpenDropdown(model.CardFilter, model.FilterProject).Open || !m.FilterForm.Open || m.FilterForm.Field != model.FilterProject {
 		t.Fatalf("after a pick: dropdown open %v, card open %v, field %q", m.Dropdown.Open, m.FilterForm.Open, m.FilterForm.Field)
 	}
 	m = cardKeys(m, "down", "escape")
-	if m.OpenDropdown(model.CardFilter, model.FilterRelationship).Open || !m.FilterForm.Open || m.FilterForm.Values.Relationship != "child" {
-		t.Fatalf("escape closes the dropdown only: dropdown open %v, card open %v, value %q", m.Dropdown.Open, m.FilterForm.Open, m.FilterForm.Values.Relationship)
+	if m.OpenDropdown(model.CardFilter, model.FilterProject).Open || !m.FilterForm.Open || m.FilterForm.Values.ProjectUID != "p01" {
+		t.Fatalf("escape closes the dropdown only: dropdown open %v, card open %v, value %q", m.Dropdown.Open, m.FilterForm.Open, m.FilterForm.Values.ProjectUID)
 	}
 	m = cardKeys(m, "escape")
 	if m.FilterForm.Open {
@@ -69,26 +69,26 @@ func TestSelectEnterPicksTheHighlightAndEscapeKeepsTheCard(t *testing.T) {
 }
 
 func TestKeysThatSetAChoiceStillSetItWhileTheMenuIsClosedOrOpen(t *testing.T) {
-	m := cardKeys(filterCardOn(0, model.FilterRelationship), "right")
-	if got := m.FilterForm.Values.Relationship; got != "parent" {
-		t.Fatalf("right set %q, want parent", got)
+	m := cardKeys(filterCardOn(5, model.FilterProject), "right")
+	if got := m.FilterForm.Values.ProjectUID; got != "p00" {
+		t.Fatalf("right set %q, want p00", got)
 	}
 	m = cardKeys(m, "space")
-	if got := m.FilterForm.Values.Relationship; got != "child" {
-		t.Fatalf("space set %q, want child", got)
+	if got := m.FilterForm.Values.ProjectUID; got != "p01" {
+		t.Fatalf("space set %q, want p01", got)
 	}
 	m = cardKeys(m, "down", "left")
-	if got := m.FilterForm.Values.Relationship; got != "parent" || m.Dropdown.Open {
-		t.Fatalf("left in an open dropdown set %q (dropdown open %v), want parent and the dropdown closed", got, m.Dropdown.Open)
+	if got := m.FilterForm.Values.ProjectUID; got != "p00" || m.Dropdown.Open {
+		t.Fatalf("left in an open dropdown set %q (dropdown open %v), want p00 and the dropdown closed", got, m.Dropdown.Open)
 	}
 	m = cardKeys(m, "down", "tab")
-	if m.Dropdown.Open || m.FilterForm.Field == model.FilterRelationship {
+	if m.Dropdown.Open || m.FilterForm.Field == model.FilterProject {
 		t.Fatalf("tab left dropdown open %v on field %q", m.Dropdown.Open, m.FilterForm.Field)
 	}
 }
 
 func TestDownOnATabsFieldOpensNothing(t *testing.T) {
-	m := cardKeys(filterCardOn(0, model.FilterStatus), "down")
+	m := cardKeys(filterCardOn(5, model.FilterStatus), "down")
 	if m.Dropdown.Open {
 		t.Fatal("down opened a dropdown on the Status tabs")
 	}
@@ -123,20 +123,20 @@ func TestSelectPastADozenOptionsSearchesAndEnterPicksTheFirstHit(t *testing.T) {
 }
 
 func TestSelectWithAFewOptionsTypesNothing(t *testing.T) {
-	m := cardKeys(filterCardOn(0, model.FilterRelationship), "down", "x")
+	m := cardKeys(filterCardOn(5, model.FilterProject), "down", "x")
 	if m.Dropdown.Query != "" {
 		t.Fatalf("a select without search took the text %q", m.Dropdown.Query)
 	}
 }
 
 func TestPointerPickAndToggleDriveTheSameState(t *testing.T) {
-	m := filterCardOn(0, model.FilterStatus)
-	m, _ = model.Update(m, model.DropdownToggleMsg{Field: model.FilterRelationship, Open: true})
-	if dropdown := m.OpenDropdown(model.CardFilter, model.FilterRelationship); !dropdown.Open || m.FilterForm.Field != model.FilterRelationship {
+	m := filterCardOn(5, model.FilterStatus)
+	m, _ = model.Update(m, model.DropdownToggleMsg{Field: model.FilterProject, Open: true})
+	if dropdown := m.OpenDropdown(model.CardFilter, model.FilterProject); !dropdown.Open || m.FilterForm.Field != model.FilterProject {
 		t.Fatalf("the pointer's open left dropdown %+v on field %q", dropdown, m.FilterForm.Field)
 	}
-	m, _ = model.Update(m, model.ChooseMsg{Field: model.FilterRelationship, Index: 3})
-	if got := m.FilterForm.Values.Relationship; got != "blocks" || m.Dropdown.Open {
+	m, _ = model.Update(m, model.ChooseMsg{Field: model.FilterProject, Index: 3})
+	if got := m.FilterForm.Values.ProjectUID; got != "p02" || m.Dropdown.Open {
 		t.Fatalf("a pick set %q with the dropdown open %v", got, m.Dropdown.Open)
 	}
 	m, _ = model.Update(m, model.DropdownToggleMsg{Field: model.FilterStatus, Open: true})
@@ -157,8 +157,8 @@ func asksClose(cmds []model.Cmd) bool {
 // The Pane draws open only a menu the keys opened: a drawing answering the pointer's open could reach Tern after the pick that
 // followed it and open the menu again. A menu the pointer opened that the keys close is closed by a command, not by drawing.
 func TestTheMenuIsDrawnOpenOnlyWhenTheKeysOpenedIt(t *testing.T) {
-	shown := func(m model.Model) bool { return m.SelectShown(model.CardFilter, model.FilterRelationship) }
-	keys := cardKeys(filterCardOn(0, model.FilterRelationship), "down")
+	shown := func(m model.Model) bool { return m.SelectShown(model.CardFilter, model.FilterProject) }
+	keys := cardKeys(filterCardOn(5, model.FilterProject), "down")
 	if !shown(keys) {
 		t.Fatal("a menu the keys opened is not drawn open")
 	}
@@ -166,7 +166,7 @@ func TestTheMenuIsDrawnOpenOnlyWhenTheKeysOpenedIt(t *testing.T) {
 		t.Fatalf("escape on the keys' menu: drawn open %v, close asked %v; drawing it closed closes it", shown(keys), asksClose(cmds))
 	}
 
-	pointer, cmds := model.Update(filterCardOn(0, model.FilterRelationship), model.DropdownToggleMsg{Field: model.FilterRelationship, Open: true})
+	pointer, cmds := model.Update(filterCardOn(5, model.FilterProject), model.DropdownToggleMsg{Field: model.FilterProject, Open: true})
 	if !pointer.Dropdown.Open || shown(pointer) || asksClose(cmds) {
 		t.Fatalf("the pointer's open: dropdown open %v, drawn open %v", pointer.Dropdown.Open, shown(pointer))
 	}
@@ -175,22 +175,22 @@ func TestTheMenuIsDrawnOpenOnlyWhenTheKeysOpenedIt(t *testing.T) {
 	}
 	for _, key := range []string{"enter", "escape", "tab"} {
 		closed, cmds := model.Update(pointer, model.KeyMsg{Chord: key})
-		want := model.CloseSelectMenu{Card: model.CardFilter, Field: model.FilterRelationship}
+		want := model.CloseSelectMenu{Card: model.CardFilter, Field: model.FilterProject}
 		if closed.Dropdown.Open || shown(closed) || len(cmds) == 0 || cmds[len(cmds)-1] != model.Cmd(want) {
 			t.Errorf("%s in the pointer's menu: dropdown open %v, drawn open %v, cmds %+v; want %+v", key, closed.Dropdown.Open, shown(closed), cmds, want)
 		}
 	}
 
 	for name, msg := range map[string]model.Msg{
-		"pick":  model.ChooseMsg{Field: model.FilterRelationship, Index: 3},
-		"close": model.DropdownToggleMsg{Field: model.FilterRelationship, Open: false},
+		"pick":  model.ChooseMsg{Field: model.FilterProject, Index: 3},
+		"close": model.DropdownToggleMsg{Field: model.FilterProject, Open: false},
 	} {
 		if closed, cmds := model.Update(pointer, msg); closed.Dropdown.Open || shown(closed) || asksClose(cmds) {
 			t.Errorf("the pointer's %s: dropdown open %v, drawn open %v, close asked %v; Tern closed it already", name, closed.Dropdown.Open, shown(closed), asksClose(cmds))
 		}
 	}
-	if picked, _ := model.Update(pointer, model.ChooseMsg{Field: model.FilterRelationship, Index: 3}); picked.FilterForm.Values.Relationship != "blocks" {
-		t.Errorf("the pointer's pick set %q, want blocks", picked.FilterForm.Values.Relationship)
+	if picked, _ := model.Update(pointer, model.ChooseMsg{Field: model.FilterProject, Index: 3}); picked.FilterForm.Values.ProjectUID != "p02" {
+		t.Errorf("the pointer's pick set %q, want blocks", picked.FilterForm.Values.ProjectUID)
 	}
 }
 
@@ -204,23 +204,23 @@ func TestReopeningAnOpenDropdownKeepsItsQuery(t *testing.T) {
 }
 
 func TestAButtonPressForgetsTheMenuTheKeysDrewOpen(t *testing.T) {
-	m := cardKeys(filterCardOn(0, model.FilterRelationship), "down")
-	if !m.SelectShown(model.CardFilter, model.FilterRelationship) {
+	m := cardKeys(filterCardOn(5, model.FilterProject), "down")
+	if !m.SelectShown(model.CardFilter, model.FilterProject) {
 		t.Fatal("a menu the keys opened is not drawn open")
 	}
 	m, cmds := model.Update(m, model.ButtonPressMsg{Chord: "ctrl+o"})
-	if m.SelectShown(model.CardFilter, model.FilterRelationship) || asksClose(cmds) {
-		t.Fatalf("a button press left the menu drawn open %v, close asked %v", m.SelectShown(model.CardFilter, model.FilterRelationship), asksClose(cmds))
+	if m.SelectShown(model.CardFilter, model.FilterProject) || asksClose(cmds) {
+		t.Fatalf("a button press left the menu drawn open %v, close asked %v", m.SelectShown(model.CardFilter, model.FilterProject), asksClose(cmds))
 	}
 }
 
 func TestMenuClosesWhenFocusMovesOrTheCardGoes(t *testing.T) {
-	m := cardKeys(filterCardOn(0, model.FilterRelationship), "down")
+	m := cardKeys(filterCardOn(5, model.FilterProject), "down")
 	m, _ = model.Update(m, model.FocusFieldMsg{Field: model.FilterOwner})
 	if m.Dropdown.Open {
 		t.Fatal("focus on another field left the dropdown open")
 	}
-	m = cardKeys(filterCardOn(0, model.FilterRelationship), "down", "ctrl+o")
+	m = cardKeys(filterCardOn(5, model.FilterProject), "down", "ctrl+o")
 	if m.Dropdown.Open || m.FilterForm.Open {
 		t.Fatalf("applying left dropdown open %v, card open %v", m.Dropdown.Open, m.FilterForm.Open)
 	}
@@ -236,7 +236,7 @@ func TestShiftedLettersTypeIntoTheSearchLine(t *testing.T) {
 
 // The key line follows the keys the open dropdown takes: esc closes the choices, not the card.
 func TestTheOpenDropdownHasItsOwnKeyLine(t *testing.T) {
-	m := cardKeys(filterCardOn(3, model.FilterRelationship), "down")
+	m := cardKeys(filterCardOn(3, model.FilterProject), "down")
 	if got := m.CurrentMode(); got != model.ModeDropdown {
 		t.Fatalf("mode %s with the dropdown open, want %s", got, model.ModeDropdown)
 	}

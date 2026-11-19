@@ -47,6 +47,7 @@ func viewLayer(m model.Model) tern.Element {
 			Field:  ui.Field{Text: value, Cursor: caretAt(form.Caret, field.Name, value), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: form.Saving},
 		})...)
 	}
+	children = append(children, selectRoom(m, model.CardView, form.Field)...)
 	if form.Saving {
 		children = append(children, toneText("pending", ui.TonePending, model.Progress("Saving", "")))
 	}

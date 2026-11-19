@@ -27,64 +27,90 @@ func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded
 	return model.DetailLoaded{UID: uid, Selected: detail}, nil
 }
 
-// linkTitleTTL is how long a title read for a Link's far end is trusted before it is read again.
+// linkTitleTTL is how long a title read for a Link's far end is trusted before it is read again. A title that cannot be read again
+// stays as it was: a daemon that is busy or briefly gone must not blank a title the Pane already showed.
 const linkTitleTTL = 5 * time.Minute
+
+// linkTitleWorkers bounds the reads made at once, so a parent with a hundred children does not open a hundred requests.
+const linkTitleWorkers = 8
+
+// linkTitleBudget bounds all of one detail's title reads together; the titles read by then are kept and the rest stay with the
+// cache or empty, and the next refresh asks again for what is still missing.
+const linkTitleBudget = 4 * time.Second
 
 type cachedTitle struct {
 	title string
 	at    time.Time
 }
 
-// linkTitles gives each Link of the detail the titles of its ends, so the Links tab names an Issue that is in another Project or
-// not in the Pane's list. Titles come from a cache, and the misses are read from kata at once with a short deadline each; an Issue
-// that cannot be read keeps no title and the row shows its id alone.
+// linkTitles gives each Link of the detail the titles of its ends, so the Links tab and the Children table name an Issue that is
+// closed, in another Project or not in the Pane's list. Every read of a detail (the one that opens it and each live refresh) goes
+// through here. Titles come from a cache; the stale or missing ones are read from kata with a few reads at once and a deadline on
+// the whole, and an Issue that cannot be read keeps the title it had, or none.
 func (c *Client) linkTitles(ctx context.Context, d *model.IssueDetailData) {
 	if d == nil || d.Issue == nil || len(d.Links) == 0 {
 		return
 	}
 	titles := map[string]string{}
-	var missing []string
+	var stale []string
 	for _, l := range d.Links {
 		for _, uid := range []string{l.FromIssueUID, l.ToIssueUID} {
 			if uid == "" || uid == d.Issue.UID {
 				continue
 			}
-			if _, seen := titles[uid]; seen || slices.Contains(missing, uid) {
+			if _, seen := titles[uid]; seen {
 				continue
 			}
-			if v, ok := c.titles.Load(uid); ok && time.Since(v.(cachedTitle).at) < linkTitleTTL {
-				titles[uid] = v.(cachedTitle).title
-				continue
+			v, ok := c.titles.Load(uid)
+			if ok {
+				cached := v.(cachedTitle)
+				titles[uid] = cached.title
+				if time.Since(cached.at) < linkTitleTTL {
+					continue
+				}
+			} else {
+				titles[uid] = ""
 			}
-			missing = append(missing, uid)
+			stale = append(stale, uid)
 		}
 	}
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	for _, uid := range missing {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			readCtx, cancel := context.WithTimeout(ctx, linkTitleDeadline)
-			defer cancel()
-			r, err := c.ShowIssueByUIDWithResponse(readCtx, &g.ShowIssueByUIDRequestOptions{PathParams: &g.ShowIssueByUIDPath{UID: uid}})
-			if err != nil || r.JSON200 == nil {
-				return
+	if len(stale) > 0 {
+		budget, cancel := context.WithTimeout(ctx, linkTitleBudget)
+		defer cancel()
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		queue := make(chan string)
+		for range min(linkTitleWorkers, len(stale)) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for uid := range queue {
+					r, err := c.ShowIssueByUIDWithResponse(budget, &g.ShowIssueByUIDRequestOptions{PathParams: &g.ShowIssueByUIDPath{UID: uid}})
+					if err != nil || r.JSON200 == nil {
+						continue
+					}
+					c.titles.Store(uid, cachedTitle{title: r.JSON200.Issue.Title, at: time.Now()})
+					mu.Lock()
+					titles[uid] = r.JSON200.Issue.Title
+					mu.Unlock()
+				}
+			}()
+		}
+	feed:
+		for _, uid := range stale {
+			select {
+			case queue <- uid:
+			case <-budget.Done():
+				break feed
 			}
-			c.titles.Store(uid, cachedTitle{title: r.JSON200.Issue.Title, at: time.Now()})
-			mu.Lock()
-			titles[uid] = r.JSON200.Issue.Title
-			mu.Unlock()
-		}()
+		}
+		close(queue)
+		wg.Wait()
 	}
-	wg.Wait()
 	for i := range d.Links {
 		d.Links[i].FromTitle, d.Links[i].ToTitle = titles[d.Links[i].FromIssueUID], titles[d.Links[i].ToIssueUID]
 	}
 }
-
-// linkTitleDeadline bounds each title read, so a slow or remote daemon cannot hold the detail back.
-const linkTitleDeadline = 2 * time.Second
 
 // translateDetail is the one place kata's selected authority becomes the model's Issue detail; nil stays nil.
 //

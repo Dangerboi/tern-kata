@@ -41,6 +41,7 @@ func filterLayer(m model.Model) tern.Element {
 		}
 		children = append(children, labelledInput(string(field.Name), title, hint, focused, input)...)
 	}
+	children = append(children, selectRoom(m, model.CardFilter, m.FilterForm.Field)...)
 	if m.FilterForm.Saving {
 		children = append(children, toneText("pending", ui.TonePending, model.Progress("Saving", "")))
 	}

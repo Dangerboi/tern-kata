@@ -7,7 +7,7 @@ ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id$='.$expiry_uid']" '.ok and .count == 1'
 ctl click "[data-id$='.$expiry_uid']"
 ctl key enter
-owner="main.columns.detail.viewport.content.properties.owner.v"
+owner="main.columns.detail.viewport.content.properties.facts.left.owner.v"
 expect_tree "[data-id='$owner']" '.ok and .count == 1 and .nodes[0].text == "unassigned"'
 kata --workspace "$tmp/workspace" claim "$expiry_uid" --ttl 1m --json >/dev/null
 expect_tree "[data-id='$owner']" '.ok and .count == 1 and (.nodes[0].text | test(" until [0-9]{2}:[0-9]{2}$"))'

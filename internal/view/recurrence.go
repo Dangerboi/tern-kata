@@ -114,6 +114,7 @@ func recurrenceLayer(m model.Model) tern.Element {
 			children = append(children, recurrenceField(m, f, field)...)
 		}
 	}
+	children = append(children, selectRoom(m, model.CardRecurrence, f.Field)...)
 	if f.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
 	}

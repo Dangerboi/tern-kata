@@ -321,21 +321,53 @@ func statusTone(status string) ui.Tone {
 	return ui.ToneMuted
 }
 
-// properties is one key/value grid in propRow's shared key column, so the values start at one x in the mono and the sans face
-// alike. A row with nothing to show is left out. The status is in the heading. Under the grid is one muted line with who
-// created the Issue and when, then the attribution line when kata gave one.
+// factKeyWidth is the width, in characters, of a fact's key box. It is a Tern layout bound and not a style sheet rule, so the box
+// holds in every Tern build and the longest key ("Work attention") fits it.
+const factKeyWidth = 12
+
+// factColumnWidth is the least width, in characters, of one of the two columns of facts; a detail narrower than two of them
+// puts the second column under the first.
+const factColumnWidth = 28
+
+// fact is one row of the facts panel: the key in muted text in a box of one width, then the value. The row's key is the
+// lower-cased key word, the value node is keyed "v".
+func fact(key string, value ...tern.Element) tern.Element {
+	label := ui.Text{Common: ui.Common{Key: "k", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(factKeyWidth)}}, Spans: []ui.Span{{T: key, S: "muted"}}, Wrap: ui.WrapNone}
+	return ui.Row{Common: ui.Common{Key: strings.ReplaceAll(strings.ToLower(key), " ", "-")}, Gap: ui.GapMD, Align: ui.AlignStart, Children: append(ui.Nodes(label), value...)}
+}
+
+// properties is the facts panel: Status, Priority, Owner and Labels always, an empty one as a muted dash, then the facts an Issue
+// may have (Agent, Lane, dates, Parent, Children, Work attention, Recurring, Cron jobs), and who created the Issue and when it
+// last changed. The facts sit in two columns, in one when the Pane is narrow. The panel is laid out with Tern's own rows and
+// columns only; the style sheet adds a surface and a radius and never changes the layout.
 func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
-	var rows []tern.Element
-	add := func(key string, value ...tern.Element) { rows = append(rows, propRow(key, value...)) }
+	var left, right []tern.Element
 	text := func(s string) tern.Element { return ui.Text{Common: ui.Common{Key: "v"}, Text: s} }
-	owner := ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{ownerSpan(m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String())}}
-	add("Owner", owner)
-	if badge, ok := agentBadge(m, issue.UID, "v"); ok {
-		add("Agent", badge)
+	none := func() tern.Element {
+		return ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{{T: model.None, S: "muted"}}}
 	}
+	left = append(left, fact("Status", ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{{T: statusText(issue), S: toneStyle(statusTone(issue.Status))}}}))
 	if issue.Priority != nil {
 		prio, tone := priorityText(issue.Priority)
-		add("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: tone, Title: fmt.Sprintf("Priority %d (0 is highest)", *issue.Priority)}, Text: prio})
+		left = append(left, fact("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: tone, Title: fmt.Sprintf("Priority %d (0 is highest)", *issue.Priority)}, Text: prio}))
+	} else {
+		left = append(left, fact("Priority", none()))
+	}
+	left = append(left, fact("Owner", ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{ownerSpan(m.OwnerText(issue.Owner, issue.AssignmentExpiresOn, now).String())}}))
+	if badge, ok := agentBadge(m, issue.UID, "v"); ok {
+		left = append(left, fact("Agent", badge))
+	}
+	if len(issue.Labels) > 0 {
+		chips := make(tern.Nodes, len(issue.Labels))
+		for i, name := range issue.Labels {
+			chips[i] = labelChip(name)
+		}
+		left = append(left, fact("Labels", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Wrap: true, Children: chips}))
+	} else {
+		left = append(left, fact("Labels", none()))
+	}
+	if lane := model.LaneOf(*issue, m.LaneList()); lane != model.LaneNone && lane != model.LaneDone {
+		left = append(left, fact("Lane", text(lane)))
 	}
 	scheduled, deadline := model.IssueDates(*issue)
 	// Dates are facts here, not warnings: the Board and list badges carry the urgency.
@@ -343,55 +375,49 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		return ui.Badge{Common: ui.Common{Key: "v", Tone: ui.ToneMuted, Role: MonoRole}, Text: day}
 	}
 	if scheduled != "" {
-		add("Scheduled", dateBadge(scheduled))
+		left = append(left, fact("Scheduled", dateBadge(scheduled)))
 	}
 	if deadline != "" {
-		add("Deadline", dateBadge(deadline))
+		left = append(left, fact("Deadline", dateBadge(deadline)))
 	}
-	if len(issue.Labels) > 0 {
-		chips := make(tern.Nodes, len(issue.Labels))
-		for i, name := range issue.Labels {
-			chips[i] = labelChip(name)
-		}
-		add("Labels", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Wrap: true, Children: chips})
+	if link, ok := m.DetailParent(); ok {
+		right = append(right, fact("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle, refCard(m, rowFacts(link), now))))
 	}
-	if lane := model.LaneOf(*issue, m.LaneList()); lane != model.LaneNone && lane != model.LaneDone {
-		add("Lane", text(lane))
+	if counts := m.DetailChildCounts(); counts.Total > 0 {
+		right = append(right, fact("Children", text(fmt.Sprintf("%d of %d open", counts.Open, counts.Total))))
 	}
 	if w, ok := model.IssueWorkAttention(*issue); ok {
-		add("Work attention", workAttention(w))
+		right = append(right, fact("Work attention", workAttention(w)))
 	}
 	if issue.RecurrenceID != nil {
 		recurring := "Yes" // kata did not say more: it withholds recurrences from a scoped access
 		if d := m.DetailAuthority(); d != nil && d.Recurrence != nil {
 			recurring = d.Recurrence.Text()
 		}
-		add("Recurring", text(recurring))
+		right = append(right, fact("Recurring", text(recurring)))
 	}
 	for _, r := range cronProperties(m) {
-		add(r.name, r.value)
+		right = append(right, fact(r.name, r.value))
 	}
-	if link, ok := m.DetailParent(); ok {
-		add("Parent", referenceText("v", link.ReferenceUID, link.Ref, link.RefTitle, refCard(m, rowFacts(link), now)))
-	}
-	rows = append(rows, createdLine(m, issue))
-	if line := issue.Attribution.Line(issue.Author); line != "" {
-		rows = append(rows, plainText("creation", ui.ToneMuted, line))
-	}
-	return propGrid(rows...)
-}
-
-// createdLine is the muted line under the properties: "dana created 2026-11-18 18:21 · updated 18:40". The author is left out
-// when kata gave none; the times are mono, the words around them muted sans.
-func createdLine(m model.Model, issue *model.Issue) tern.Element {
-	var spans []ui.Span
+	created := []ui.Span{timeSpan(m.DetailTime(issue.CreatedAt))}
 	if issue.Author != "" {
-		spans = append(spans, ui.Span{T: issue.Author + " ", S: "muted"})
+		created = append([]ui.Span{{T: issue.Author}, {T: " · ", S: "muted"}}, created...)
 	}
-	spans = append(spans,
-		ui.Span{T: "created ", S: "muted"}, timeSpan(m.DetailTime(issue.CreatedAt)),
-		ui.Span{T: " · updated ", S: "muted"}, timeSpan(m.DetailTime(issue.UpdatedAt)))
-	return ui.Text{Common: ui.Common{Key: "meta"}, Spans: spans}
+	right = append(right,
+		fact("Created", ui.Text{Common: ui.Common{Key: "v"}, Spans: created}),
+		fact("Updated", ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{timeSpan(m.DetailTime(issue.UpdatedAt))}}))
+	column := func(key string, rows []tern.Element) tern.Element {
+		return ui.Col{Common: ui.Common{Key: key, Grow: 1, Min: &ui.Bounds{W: ui.Ch(factColumnWidth)}}, Gap: ui.GapXS, Children: rows}
+	}
+	var facts tern.Element = ui.Row{Common: ui.Common{Key: "facts"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(column("left", left), column("right", right))}
+	if m.NarrowerThan(model.FoldedLegendCols) {
+		facts = ui.Col{Common: ui.Common{Key: "facts"}, Gap: ui.GapXS, Children: ui.Nodes(append(left, right...)...)}
+	}
+	children := ui.Nodes(facts)
+	if line := issue.Attribution.Line(issue.Author); line != "" {
+		children = append(children, plainText("creation", ui.ToneMuted, line))
+	}
+	return ui.Col{Common: ui.Common{Key: "properties", Role: PropertiesRole}, Gap: ui.GapSM, Children: children}
 }
 
 // message is read to its last word instead of being cut at the edge of a one-line chip.

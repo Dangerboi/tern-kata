@@ -122,7 +122,7 @@ func TestTheIssueDetailHasAnAgentPropertyWithItsOwnClick(t *testing.T) {
 	s = step(t, s, model.DetailLoaded{UID: "t1", Selected: &model.IssueDetailData{Issue: &issue}}).State
 	var badge tern.WireNode
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if strings.HasSuffix(n.ID, ".properties.agent.v") {
+		if strings.HasSuffix(n.ID, ".properties.facts.left.agent.v") {
 			badge = n
 		}
 	}

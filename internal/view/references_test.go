@@ -110,7 +110,7 @@ func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 	}
 	m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
-	parent := view.DetailContentID + ".properties.parent"
+	parent := view.DetailContentID + ".properties.facts.right.parent"
 	assertReference(t, nodes, parent+".v", "#up", "up")
 	if got := text(nodes[parent+".v"]); got != "#up" {
 		t.Errorf("parent value draws %q", got)
@@ -174,7 +174,7 @@ func TestPropertiesTitleJumpsToTheReferencedIssue(t *testing.T) {
 	up := model.Issue{UID: "up", ShortID: "up", Title: "Up", ProjectName: "work"}
 	m := apply(browsing(), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{alpha, up}}}}, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &alpha, Links: links}})
 	nodes := render(t, m)
-	value := nodes[view.DetailContentID+".properties.parent.v"]
+	value := nodes[view.DetailContentID+".properties.facts.right.parent.v"]
 	if text(value) != "#up Up" || value.P["actions"].(map[string]any)["click"] != view.JumpClick("up") {
 		t.Errorf("parent value = %v", value)
 	}

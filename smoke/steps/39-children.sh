@@ -30,9 +30,9 @@ ctl click "[data-id^='main.columns.list.'][data-id\$='.$ch_parent']"
 ch_content="main.columns.detail.viewport.content"
 expect_tree "[data-id='$ch_content.heading.title']" '.ok and (.nodes[0].text | contains("Children parent") and (contains("loading") | not))'
 
-# The properties block lists no children; the table's heading counts them.
-expect_tree "[data-id='$ch_content.properties.children']" '.ok and .count == 0'
-expect_tree "[data-id^='$ch_content.properties.parent']" '.ok and .count == 0'
+# The facts panel counts the children and lists none of them; the table's heading counts them too.
+expect_tree "[data-id='$ch_content.properties.facts.right.children.v']" '.ok and .count == 1 and (.nodes[0].text == "2 of 3 open")'
+expect_tree "[data-id^='$ch_content.properties.facts.right.parent']" '.ok and .count == 0'
 
 # The table sits below the body and above Activity: Tern's own table, a header row, then one row per child with its four cells (no Owner column while no child has an owner).
 ch_table="$ch_content.children.table"

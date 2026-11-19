@@ -28,7 +28,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
-- Set priority is the same picker as the Create card (None, P0 to P4), opened on the Issue's current priority; `!` then a digit or `-` still sets or clears it at once.
+- Set priority and the Create card's Priority are one segmented row (None, P0 to P4) that shows every choice at once, replacing a select whose menu the card body clipped after its first options. The Filter and View cards' Relationship is a segmented row for the same reason, and the Close reason stays tabs down to a 56-column Pane. Set priority opens on the Issue's current priority; `!` then a digit or `-` still sets or clears it at once.
 - On Tern 0.9.26 or newer the Issue body is edited in place: a double click on it edits, and leaving it saves at once, as the Edit Issue body card's Save does.
   - Someone else's edit made in between opens the same conflict card; if the save fails, the edit is kept as a Draft that `e` opens.
   - If you select another Issue mid-edit, the edit is saved to its own Issue.
@@ -80,7 +80,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
-- The Issue detail tells its parts apart: the properties sit in a quiet panel with a rule on its left, with a narrow key column and brighter keys and created line, the body and comments use the whole width of the detail (no half-width measure), and each comment is a block of its own with the same rule.
+- The Issue detail's facts panel is laid out with Tern's own rows and columns, so it renders the same in every Tern build (a style sheet rule for its layout lost in a real Pane, which made its text grow and its rows run together on one line). It always shows Status, Priority, Owner and Labels (an empty one as a muted `—`), then Agent, Lane, Scheduled and Deadline when set on the left, and Parent, Children (`4 of 101 open`), Work attention, Recurring, Cron jobs, Created (author and time) and Updated on the right; a narrow Pane shows one column. The panel and each comment sit on one soft rounded surface with the Pane's card radius and the normal text tones, and the body and comments use the detail's whole width.
 
 - The Issues Page, the Board and their Popup cards follow one design: the same tones, wording, dates and keys everywhere.
   - Dates read `2026-11-18 18:21` (`18:21` today) in the Pane's zone, a missing value reads `—`, and narrow cells show a compact age such as `4m ago`; the Date badge reads "overdue 3d", "due 2026-11-25" or "scheduled 2026-12-01".
@@ -91,7 +91,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The Issue detail shows the Issue's id, title and status, one grid of properties, a muted line saying who created it and when, and a Children table headed "Children 3 of 4 open".
   - The Events tab no longer shows kata event codes and hides created and commented events; each tab shows its row count, and a close line reads `closed as done` with `Evidence: attachment report.pdf`.
   - An event's time sits left of a thin rule and the sentence follows it, with the verb and object in the verb's tone. Events that looked alike now say what differs: a child linked to the shown Issue names that child (`linked child kb01`), and a metadata change names its new value (`set todo status to doing`, `set Work attention to needs human`, `cleared todo status`).
-  - The Links tab groups its rows under a heading per relation with a count (`Blocked by 1`, `Related 3`), and every row carries the linked Issue's title, including Issues of other Projects and Issues the Pane has not loaded; kata is asked for those titles with the detail and the answers are cached for five minutes.
+  - The Links tab groups its rows under a heading per relation with a count (`Blocked by 1`, `Related 3`), and every row carries the linked Issue's title, including Issues of other Projects and Issues the Pane has not loaded; kata is asked for those titles with the detail and with every live refresh of it, a few reads at once, and the answers are cached for five minutes. A closed child or a link into another Project keeps its title after a refresh, including when the daemon is slow to answer.
   - The list draws only the columns a row has a value for and shows an empty state with its action ("No Issues" with a New Issue button).
   - Board cards show a muted "also in" line, the Relationship as a line under the title and one muted row of facts on the selected card; each Lane keeps one identity colour on its header and card ids, and the Lanes card names the list in use ("Using this machine's list").
   - The Menu groups its top level under Pages, Actions and Updates, and the right-click menu gains Owner…, Labels… and New child….

@@ -129,10 +129,10 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 			if n := nodes[view.DetailContentID+".heading.status"]; fmt.Sprint(n.P["tone"]) != fmt.Sprint(orNil(tt.status)) || text(n) != tt.issue.Status {
 				t.Errorf("status badge: %v", n)
 			}
-			if n := nodes[props+".priority.v"]; n.P["tone"] != tt.priority || !strings.HasPrefix(text(n), "P") {
+			if n := nodes[props+".facts.left.priority.v"]; n.P["tone"] != tt.priority || !strings.HasPrefix(text(n), "P") {
 				t.Errorf("priority badge: %v", n)
 			}
-			labels := props + ".labels.v"
+			labels := props + ".facts.left.labels.v"
 			for _, l := range tt.issue.Labels {
 				if n, ok := nodes[labels+".label-"+l]; !ok || text(n) != l {
 					t.Errorf("label chip %s: %v", l, n)
@@ -246,13 +246,13 @@ func TestDetailOwnerIsPlainTextAndLabelsAreNeutralChips(t *testing.T) {
 	issue.Labels = []string{"bug"}
 	props := view.DetailContentID + ".properties"
 	nodes := detailNodes(t, issue)
-	if n := nodes[props+".owner.v"]; n.K != "text" || n.P["tone"] != nil || text(n) != "dana" {
+	if n := nodes[props+".facts.left.owner.v"]; n.K != "text" || n.P["tone"] != nil || text(n) != "dana" {
 		t.Errorf("owner %v", n)
 	}
-	if n := nodes[props+".labels.v.label-bug"]; n.P["tone"] != "neutral" {
+	if n := nodes[props+".facts.left.labels.v.label-bug"]; n.P["tone"] != "neutral" {
 		t.Errorf("label %v", n)
 	}
-	n := detailNodes(t, alpha)[props+".owner.v"]
+	n := detailNodes(t, alpha)[props+".facts.left.owner.v"]
 	if got := styled(n); text(n) != "unassigned" || len(got) != 1 || got[0][1] != "muted" {
 		t.Errorf("unassigned owner %v", n)
 	}
@@ -281,10 +281,10 @@ func TestDetailDatesAreMutedWhateverTheirDay(t *testing.T) {
 			m.Calendar = model.NewPaneCalendar(tt.calendar, "UTC", "")
 			nodes := render(t, m)
 			props := view.DetailContentID + ".properties"
-			if n := nodes[props+".scheduled.v"]; n.P["tone"] != tt.wantSched || text(n) != tt.scheduled {
+			if n := nodes[props+".facts.left.scheduled.v"]; n.P["tone"] != tt.wantSched || text(n) != tt.scheduled {
 				t.Errorf("scheduled %v, want %s %s", n, tt.wantSched, tt.scheduled)
 			}
-			if n := nodes[props+".deadline.v"]; n.P["tone"] != tt.wantDeadln || text(n) != tt.deadline {
+			if n := nodes[props+".facts.left.deadline.v"]; n.P["tone"] != tt.wantDeadln || text(n) != tt.deadline {
 				t.Errorf("deadline %v, want %s %s", n, tt.wantDeadln, tt.deadline)
 			}
 		})
@@ -348,39 +348,44 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	nodes := render(t, apply(withZone(browsing()), model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{issue}, Links: links}}},
 		model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &issue, Links: links}}))
 	props := nodes[view.DetailContentID+".properties"]
-	var keys []string
-	for _, row := range props.C {
-		if key, ok := nodes[row.ID+".k"]; ok {
-			keys = append(keys, text(key))
-		}
-	}
-	want := []string{"Owner", "Priority", "Scheduled", "Deadline", "Labels", "Parent"}
+	keys := factKeys(nodes)
+	want := []string{"Status", "Priority", "Owner", "Labels", "Scheduled", "Deadline", "Parent", "Children", "Created", "Updated"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("keys %v, want %v", keys, want)
 	}
 	when := at.In(tokyo).Format("2006-01-02 15:04")
-	if got, want := text(nodes[props.ID+".meta"]), "ann created "+when+" · updated "+when; got != want {
-		t.Errorf("meta line %q, want %q", got, want)
+	if got, want := text(nodes[props.ID+".facts.right.created.v"]), "ann · "+when; got != want {
+		t.Errorf("Created %q, want %q", got, want)
 	}
-	if _, ok := nodes[props.ID+".children"]; ok {
-		t.Error("properties still have a Children row")
+	if got := text(nodes[props.ID+".facts.right.updated.v"]); got != when {
+		t.Errorf("Updated %q, want %q", got, when)
 	}
-	if got := text(nodes[props.ID+".deadline.v"]); got != day {
+	if got := text(nodes[props.ID+".facts.right.children.v"]); got != "1 of 2 open" {
+		t.Errorf("Children %q", got)
+	}
+	if got := text(nodes[props.ID+".facts.left.deadline.v"]); got != day {
 		t.Errorf("metadata-only Deadline %q, want %q", got, day)
 	}
-	if n := nodes[props.ID+".priority.v"]; n.P["tone"] != "warning" || text(n) != "P1" {
+	if n := nodes[props.ID+".facts.left.priority.v"]; n.P["tone"] != "warning" || text(n) != "P1" {
 		t.Errorf("priority %v", n)
 	}
 	bare := render(t, apply(browsing(), detailOf(model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "open", ProjectName: "work", Revision: 2})))
-	keys = nil
-	for _, row := range bare[view.DetailContentID+".properties"].C {
-		if key, ok := bare[row.ID+".k"]; ok {
-			keys = append(keys, text(key))
+	if want := []string{"Status", "Priority", "Owner", "Labels", "Created", "Updated"}; !slices.Equal(factKeys(bare), want) {
+		t.Errorf("bare keys %v, want %v", factKeys(bare), want)
+	}
+}
+
+// factKeys are the keys of the facts panel in reading order: the left column, then the right one.
+func factKeys(nodes shown) []string {
+	var keys []string
+	for _, col := range []string{"left", "right"} {
+		for _, row := range nodes[view.DetailContentID+".properties.facts."+col].C {
+			if key, ok := nodes[row.ID+".k"]; ok {
+				keys = append(keys, text(key))
+			}
 		}
 	}
-	if want := []string{"Owner"}; !slices.Equal(keys, want) {
-		t.Errorf("bare keys %v, want %v", keys, want)
-	}
+	return keys
 }
 
 func TestLeadingParentSectionIsHiddenOnlyWhenItNamesTheParent(t *testing.T) {
@@ -582,5 +587,24 @@ func TestDetailShowsCreationLinesForTheIssueAndItsComments(t *testing.T) {
 	nodes = render(t, apply(withZone(browsing()), model.DetailLoaded{UID: "alpha", Selected: selected}))
 	if n, ok := nodes[view.DetailContentID+".properties.creation"]; ok {
 		t.Errorf("a legacy Issue by its author shows %q", text(n))
+	}
+}
+
+// The facts panel and the comment blocks are laid out by Tern's rows and columns and the style sheet only paints them: a rule that
+// changes display, flex or grid for them depends on which of Tern's own rules wins in the build that runs it, and in a real Pane it
+// lost, so the panel's text grew and its rows ran together on one line.
+func TestDetailStyleSheetOnlyPaintsAndNeverLaysOut(t *testing.T) {
+	for _, forbidden := range []string{"display", "grid", "flex", "contents", "float", "position"} {
+		if strings.Contains(view.DocCSS, forbidden) {
+			t.Errorf("DocCSS has %q", forbidden)
+		}
+	}
+	nodes := render(t, browsing())
+	if nodes[view.DetailContentID+".properties.facts"].K != "row" {
+		t.Errorf("the facts are %q, want a row of two columns", nodes[view.DetailContentID+".properties.facts"].K)
+	}
+	narrow := render(t, detailAt(60))
+	if got := narrow[view.DetailContentID+".properties.facts"].K; got != "col" {
+		t.Errorf("facts in a narrow Pane are %q, want one column", got)
 	}
 }
