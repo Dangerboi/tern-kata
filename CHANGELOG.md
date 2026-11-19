@@ -6,6 +6,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- On a phone, or whenever the Issue detail is the only column, its scroll stopped short: the scroller was as tall as the window and ended under the Pane's header and footer, so the end of the body and the last comments could not be reached. It now fills the room below the header like a column card does.
 - Every text field of the New job and Edit job cards, and of the Create, Close, Filter and other form cards, shows its label above the input again: Tern took the label text that sat directly before an input for the input's accessible name and did not draw it, so the label now sits in a row of its own.
 
 ### Added
@@ -81,6 +82,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - The Issue detail's facts panel is laid out with Tern's own rows and columns, so it renders the same in every Tern build (a style sheet rule for its layout lost in a real Pane, which made its text grow and its rows run together on one line). It always shows Status, Priority, Owner and Labels (an empty one as a muted `—`), then Agent, Lane, Scheduled and Deadline when set on the left, and Parent, Children (`4 of 101 open`), Work attention, Recurring, Cron jobs, Created (author and time) and Updated on the right; a narrow Pane shows one column. The panel and each comment sit on one soft rounded surface with the Pane's card radius and the normal text tones, and the body and comments use the detail's whole width.
+- The Issue detail's heading no longer repeats the status: the panel's Status row shows it (a closed Issue reads `closed · done` in muted text).
 
 - The Issues Page, the Board and their Popup cards follow one design: the same tones, wording, dates and keys everywhere.
   - Dates read `2026-11-18 18:21` (`18:21` today) in the Pane's zone, a missing value reads `—`, and narrow cells show a compact age such as `4m ago`; the Date badge reads "overdue 3d", "due 2026-11-25" or "scheduled 2026-12-01".

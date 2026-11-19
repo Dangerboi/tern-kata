@@ -130,8 +130,8 @@ func TestStatusBadgeIsShownOnceUnderTheTitle(t *testing.T) {
 	if _, ok := nodes[view.DetailContentID+".properties.badges.status"]; ok {
 		t.Error("properties repeat the status badge")
 	}
-	if _, ok := nodes[view.DetailContentID+".heading.status"]; !ok {
-		t.Error("no status badge after the title")
+	if _, ok := nodes[view.DetailContentID+".heading.status"]; ok {
+		t.Error("the heading repeats the status the panel shows")
 	}
 }
 

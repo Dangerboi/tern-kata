@@ -54,7 +54,10 @@ const (
 const ColumnFillCSS = `.sf-card[data-role~='` + ColumnRole + `'] { display: flex !important; flex-direction: column !important; }
 .sf-card[data-role~='` + ColumnRole + `'] > .sf-card-body { flex: 1 1 0 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; }
 .sf-card[data-role~='` + ColumnRole + `'] .sf-list[data-role~='` + FillRole + `'] { flex: 1 1 0 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; }
-.sf-card[data-role~='` + ColumnRole + `'] .sf-list[data-role~='` + FillRole + `'] > .sf-list-scroll { flex: 1 1 0 !important; min-height: 0 !important; max-height: none !important; }`
+.sf-card[data-role~='` + ColumnRole + `'] .sf-list[data-role~='` + FillRole + `'] > .sf-list-scroll { flex: 1 1 0 !important; min-height: 0 !important; max-height: none !important; }
+.sf-col[data-role~='` + ColumnRole + `'] { flex: 1 1 0 !important; min-height: 0 !important; }
+.sf-col[data-role~='` + ColumnRole + `'] .sf-list[data-role~='` + FillRole + `'] { flex: 1 1 0 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; }
+.sf-col[data-role~='` + ColumnRole + `'] .sf-list[data-role~='` + FillRole + `'] > .sf-list-scroll { flex: 1 1 0 !important; min-height: 0 !important; max-height: none !important; }`
 
 // PlainCellCSS draws the plain cells at a row's right end (the owner, the Date of an Issue without a badge tone) in the default
 // text colour: Tern draws that side muted, and a plain cell (plainStyle) takes the colour of its container. Tern draws the em

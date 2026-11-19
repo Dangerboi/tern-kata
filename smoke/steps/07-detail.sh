@@ -9,7 +9,8 @@ expect_tree "[data-id^='main.columns.detail.viewport.content.properties.facts.']
 expect_tree "[data-id^='main.columns.detail.viewport.content.properties.facts.left.'][data-id\$='.v']" '.ok and .count >= 1 and ([.nodes[].rect[0]] | unique | length == 1)'
 # The key legend keeps its keys in key spans and its hints in one wrapping row.
 expect_tree "[data-id^='dock.hints.grid.']" '.ok and .count > 3 and all(.nodes[]; (.text | test("\u00a0|▕") | not))'
-expect_tree "[data-id='main.columns.detail.viewport.content.heading.status']" '.ok and .count == 1'
+expect_tree "[data-id='main.columns.detail.viewport.content.heading.status']" '.ok and .count == 0'
+expect_tree "[data-id='main.columns.detail.viewport.content.properties.facts.left.status.v']" '.ok and .count == 1'
 expect_tree "[data-id^='main.columns.detail.viewport.content.body'][data-id\$='.heading'],[data-id='main.columns.detail.navigation']" '.ok and .count == 0'
 ctl key tab
 ctl key shift+tab

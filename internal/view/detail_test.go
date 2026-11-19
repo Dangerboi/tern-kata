@@ -126,7 +126,7 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 			m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &tt.issue}})
 			nodes := render(t, m)
 			props := view.DetailContentID + ".properties"
-			if n := nodes[view.DetailContentID+".heading.status"]; fmt.Sprint(n.P["tone"]) != fmt.Sprint(orNil(tt.status)) || text(n) != tt.issue.Status {
+			if n := nodes[view.DetailContentID+".properties.facts.left.status.v"]; fmt.Sprint(n.P["tone"]) != fmt.Sprint(orNil(tt.status)) || text(n) != tt.issue.Status {
 				t.Errorf("status badge: %v", n)
 			}
 			if n := nodes[props+".facts.left.priority.v"]; n.P["tone"] != tt.priority || !strings.HasPrefix(text(n), "P") {
@@ -155,12 +155,12 @@ func TestDetailHeaderIsTheTitleAndStatusWithoutButtonsOrBodyHeading(t *testing.T
 	if got := text(nodes[view.DetailContentID+".heading.title"]); got != "#aaaa Alpha" {
 		t.Errorf("title %q, want %q", got, "#aaaa Alpha")
 	}
-	if badge := nodes[view.DetailContentID+".heading.status"]; text(badge) != "open" || badge.P["tone"] != nil {
-		t.Errorf("status beside the title: %v", badge)
+	if status := nodes[view.DetailContentID+".properties.facts.left.status.v"]; text(status) != "open" || status.P["tone"] != nil {
+		t.Errorf("status in the panel: %v", status)
 	}
 	heading := nodes[view.DetailContentID+".heading"]
-	if len(heading.C) != 2 || text(heading.C[0]) != "#aaaa Alpha" || text(heading.C[1]) != "open" {
-		t.Errorf("heading is not the title then the status: %v", heading.C)
+	if len(heading.C) != 1 || text(heading.C[0]) != "#aaaa Alpha" {
+		t.Errorf("heading is not the title alone (the status is the panel's): %v", heading.C)
 	}
 	if ids := nodes.under(view.DetailID); slices.ContainsFunc(ids, func(id string) bool {
 		return strings.HasSuffix(id, ".navigation") || strings.Contains(id, ".navigation.") || strings.HasSuffix(id, ".back") || strings.HasSuffix(id, ".toggle")
@@ -328,8 +328,8 @@ func TestClosedIssueBadgeCarriesTheCloseReason(t *testing.T) {
 	reason := "done"
 	issue := model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "closed", ProjectName: "work", ClosedReason: &reason}
 	nodes := render(t, apply(browsing(), detailOf(issue)))
-	if badge := nodes[view.DetailContentID+".heading.status"]; text(badge) != "closed · done" || badge.P["tone"] != "muted" {
-		t.Errorf("closed badge: %v", badge)
+	if status := nodes[view.DetailContentID+".properties.facts.left.status.v"]; text(status) != "closed · done" || status.P["tone"] != "muted" {
+		t.Errorf("closed status: %v", status)
 	}
 	if _, ok := nodes[view.DetailContentID+".properties.closed"]; ok {
 		t.Error("properties still have a Closed row")
@@ -606,5 +606,25 @@ func TestDetailStyleSheetOnlyPaintsAndNeverLaysOut(t *testing.T) {
 	narrow := render(t, detailAt(60))
 	if got := narrow[view.DetailContentID+".properties.facts"].K; got != "col" {
 		t.Errorf("facts in a narrow Pane are %q, want one column", got)
+	}
+}
+
+// A column that is the only one on screen (a phone, or the detail alone) is a plain column and not a card. Its scroller must still
+// be stretched to the room the column has, by the same style sheet rule a card column gets: without the column's role the scroller
+// is as tall as the window, its end lies under the Pane's header and footer, and the last rows of the body and Activity cannot be
+// scrolled into view.
+func TestAloneDetailColumnFillsItsRoomLikeACardColumn(t *testing.T) {
+	nodes := render(t, detailAt(60))
+	if _, ok := nodes[view.DetailID]; !ok {
+		t.Fatal("no detail")
+	}
+	if nodes[view.DetailID].K != "col" {
+		t.Fatalf("the alone detail is a %q, want a plain column", nodes[view.DetailID].K)
+	}
+	if role, _ := nodes[view.DetailID].P["role"].(string); !strings.Contains(role, view.ColumnRole) {
+		t.Errorf("the alone detail has role %q, want %q", role, view.ColumnRole)
+	}
+	if !strings.Contains(view.ColumnFillCSS, ".sf-col[data-role~='"+view.ColumnRole+"'] .sf-list[data-role~='"+view.FillRole+"'] > .sf-list-scroll") {
+		t.Error("ColumnFillCSS has no rule that makes a plain column's scroller fill it")
 	}
 }

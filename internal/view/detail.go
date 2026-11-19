@@ -81,7 +81,6 @@ func detail(m model.Model, now time.Time) tern.Element {
 		}
 		parts := []tern.Element{ui.Row{Common: ui.Common{Key: "heading"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "title", Grow: 1, Actions: &ui.Actions{Click: FocusDetailClick}}, Spans: title},
-			ui.Text{Common: ui.Common{Key: "status", Tone: statusTone(issue.Status), Shrink: new(float64)}, Spans: []ui.Span{{T: statusText(issue), S: toneStyle(statusTone(issue.Status))}}, Wrap: ui.WrapNone},
 		)}, ui.Spacer{Common: ui.Common{Key: "gap"}, Size: ui.GapMD}}
 		parts = append(parts, properties(m, issue, now))
 		parts = append(parts, bodyNodes(m, *issue)...)
@@ -346,7 +345,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	none := func() tern.Element {
 		return ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{{T: model.None, S: "muted"}}}
 	}
-	left = append(left, fact("Status", ui.Text{Common: ui.Common{Key: "v"}, Spans: []ui.Span{{T: statusText(issue), S: toneStyle(statusTone(issue.Status))}}}))
+	left = append(left, fact("Status", ui.Text{Common: ui.Common{Key: "v", Tone: statusTone(issue.Status)}, Spans: []ui.Span{{T: statusText(issue), S: toneStyle(statusTone(issue.Status))}}}))
 	if issue.Priority != nil {
 		prio, tone := priorityText(issue.Priority)
 		left = append(left, fact("Priority", ui.Badge{Common: ui.Common{Key: "v", Tone: tone, Title: fmt.Sprintf("Priority %d (0 is highest)", *issue.Priority)}, Text: prio}))

@@ -370,13 +370,13 @@ func filterChip(term model.FilterTerm) []ui.Span {
 // by gap. Either way it is clipped to the height its Row gives it.
 func panel(m model.Model, column model.Column, common ui.Common, gap ui.Gap, children []tern.Element) tern.Element {
 	common.Max = &ui.Bounds{H: ui.Frac(1)}
+	common.Role = ColumnRole
 	if len(m.VisibleColumns()) < 2 {
 		return ui.Col{Common: common, Gap: gap, Children: children}
 	}
 	if m.Focus != column {
 		common.Tone = ui.ToneMuted
 	}
-	common.Role = ColumnRole
 	return ui.Card{Common: common, Selected: m.Focus == column, Children: children}
 }
 
