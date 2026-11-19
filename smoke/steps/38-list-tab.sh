@@ -5,7 +5,7 @@ expect_tree "$(lt_hint tab)" '.count == 1 and (.nodes[0].text | contains("detail
 expect_tree "$(lt_hint f)" '.count == 1 and (.nodes[0].text | contains("filter"))'
 expect_tree "$(lt_hint +)" '.count == 0'
 ctl key tab
-expect_tree "$(lt_hint escape)" '.count == 1 and (.nodes[0].text | contains("esc back"))'
+expect_tree "$(lt_hint escape)" '.count == 1 and (.nodes[0].text | contains("Esc back"))'
 expect_tree "$(lt_hint +)" '.count == 1 and (.nodes[0].text | contains("label"))'
 expect_tree "$(lt_hint f)" '.count == 0'
 ctl key escape

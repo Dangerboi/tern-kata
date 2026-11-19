@@ -29,7 +29,7 @@ func (m Model) EscEndsSearch() bool {
 // innerEscOpen says the current Page has a layer open that esc closes before it ends a search or goes back: the Workflows
 // inspector. A Page gaining such a layer is one case here and one close in its own esc handler.
 func (m Model) innerEscOpen() bool {
-	return m.Page == PageWorkflows && m.Workflows.Inspecting
+	return m.Page == PageWorkflows && m.Workflows.Inspecting && m.Cols < SideBySideCols
 }
 
 func (m Model) searchingPage(page Page) bool {

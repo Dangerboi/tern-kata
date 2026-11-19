@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 	g "go.kenn.io/kata/pkg/client/generated"
@@ -20,8 +22,69 @@ func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded
 	if response.JSON200.Selected == nil {
 		return model.DetailLoaded{}, fmt.Errorf("kata daemon returned no detail for Issue %s", uid)
 	}
-	return model.DetailLoaded{UID: uid, Selected: translateDetail(response.JSON200.Selected, response.JSON200.Capabilities)}, nil
+	detail := translateDetail(response.JSON200.Selected, response.JSON200.Capabilities)
+	c.linkTitles(ctx, detail)
+	return model.DetailLoaded{UID: uid, Selected: detail}, nil
 }
+
+// linkTitleTTL is how long a title read for a Link's far end is trusted before it is read again.
+const linkTitleTTL = 5 * time.Minute
+
+type cachedTitle struct {
+	title string
+	at    time.Time
+}
+
+// linkTitles gives each Link of the detail the titles of its ends, so the Links tab names an Issue that is in another Project or
+// not in the Pane's list. Titles come from a cache, and the misses are read from kata at once with a short deadline each; an Issue
+// that cannot be read keeps no title and the row shows its id alone.
+func (c *Client) linkTitles(ctx context.Context, d *model.IssueDetailData) {
+	if d == nil || d.Issue == nil || len(d.Links) == 0 {
+		return
+	}
+	titles := map[string]string{}
+	var missing []string
+	for _, l := range d.Links {
+		for _, uid := range []string{l.FromIssueUID, l.ToIssueUID} {
+			if uid == "" || uid == d.Issue.UID {
+				continue
+			}
+			if _, seen := titles[uid]; seen || slices.Contains(missing, uid) {
+				continue
+			}
+			if v, ok := c.titles.Load(uid); ok && time.Since(v.(cachedTitle).at) < linkTitleTTL {
+				titles[uid] = v.(cachedTitle).title
+				continue
+			}
+			missing = append(missing, uid)
+		}
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, uid := range missing {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			readCtx, cancel := context.WithTimeout(ctx, linkTitleDeadline)
+			defer cancel()
+			r, err := c.ShowIssueByUIDWithResponse(readCtx, &g.ShowIssueByUIDRequestOptions{PathParams: &g.ShowIssueByUIDPath{UID: uid}})
+			if err != nil || r.JSON200 == nil {
+				return
+			}
+			c.titles.Store(uid, cachedTitle{title: r.JSON200.Issue.Title, at: time.Now()})
+			mu.Lock()
+			titles[uid] = r.JSON200.Issue.Title
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	for i := range d.Links {
+		d.Links[i].FromTitle, d.Links[i].ToTitle = titles[d.Links[i].FromIssueUID], titles[d.Links[i].ToIssueUID]
+	}
+}
+
+// linkTitleDeadline bounds each title read, so a slow or remote daemon cannot hold the detail back.
+const linkTitleDeadline = 2 * time.Second
 
 // translateDetail is the one place kata's selected authority becomes the model's Issue detail; nil stays nil.
 //
@@ -52,6 +115,7 @@ func translateDetail(s *g.UISelectedAuthority, capabilities g.UICapabilities) *m
 		d.History = append(d.History, model.Event{
 			UID: e.UID, Type: e.Type, Actor: e.Actor, CreatedAt: e.CreatedAt, Payload: e.Payload, ProjectName: e.ProjectName,
 			RelatedIssueUID: e.RelatedIssueUID, RelatedIssueShortID: e.RelatedIssueShortID,
+			IssueUID: derefString(e.IssueUID), IssueShortID: derefString(e.IssueShortID),
 		})
 	}
 	for _, l := range s.Links {

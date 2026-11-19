@@ -37,8 +37,8 @@ func turnOnButton(t *testing.T, s driver.State) (id, act string, ok bool) {
 			if text, _ := n.P["text"].(string); text != "Turn on…" {
 				t.Fatalf("button reads %q", text)
 			}
-			if keys, _ := n.P["keys"].([]any); len(keys) != 1 || keys[0] != "^O" {
-				t.Fatalf("button keycaps %v, want ^O", keys)
+			if keys, _ := n.P["keys"].([]any); len(keys) != 1 || keys[0] != "Ctrl+O" {
+				t.Fatalf("button keycaps %v, want Ctrl+O", keys)
 			}
 			return n.ID, act, true
 		}

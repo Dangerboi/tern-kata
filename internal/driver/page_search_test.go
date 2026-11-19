@@ -185,11 +185,8 @@ func TestWorkflowsFooterOffersEndSearchOnlyWhileEscEndsIt(t *testing.T) {
 		t.Fatalf("the footer does not offer esc as end search with a kept search:\n%s", screen(t, s))
 	}
 	s = step(t, s, key("enter")).State
-	if !s.Model.Workflows.Inspecting {
-		t.Fatal("enter did not open the steps")
-	}
-	if strings.Contains(screen(t, s), "end search") {
-		t.Errorf("the footer offers end search while esc closes the steps first:\n%s", screen(t, s))
+	if !strings.Contains(screen(t, s), "end search") {
+		t.Errorf("the footer must keep offering end search, the steps being shown beside the list:\n%s", screen(t, s))
 	}
 }
 

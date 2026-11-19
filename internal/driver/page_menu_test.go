@@ -19,7 +19,7 @@ func menuPages(t *testing.T) []struct {
 	t.Helper()
 	jobs := jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", false)))
 	runs := runsPane(t, 160, finishedRun("R1"))
-	flows := workflowsPane(t, 160, nightlyFlow())
+	flows := workflowsPane(t, 100, nightlyFlow()) // narrow: a wide Pane shows the steps beside the list with no inspector to leave
 	return []struct {
 		name      string
 		list      driver.State

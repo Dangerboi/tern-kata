@@ -184,6 +184,9 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 			continue
 		}
 		if item.Kind == model.RowLink {
+			if i == 0 || m.DetailRows()[i-1].Kind != model.RowLink || m.DetailRows()[i-1].Activity.Relation != row.Relation {
+				activity = append(activity, linkGroupHeading(m, row))
+			}
 			activity = append(activity, ui.Col{Common: ui.Common{Key: row.Key, Mark: mark}, Children: ui.Nodes(linkRow(m, row, &ui.Actions{Click: action}, now))})
 			continue
 		}
@@ -228,7 +231,11 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 		if item.Depth > 0 {
 			parts = ui.Nodes(indented("indented", item.Depth, ui.Col{Common: ui.Common{Key: "parts", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Children: parts}))
 		}
-		activity = append(activity, ui.Card{Common: ui.Common{Key: row.Key, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, HeadNode: headNode, Children: parts})
+		role := ""
+		if item.Kind == model.RowComment {
+			role = CommentRole
+		}
+		activity = append(activity, ui.Card{Common: ui.Common{Key: row.Key, Role: role, Mark: mark, Actions: &ui.Actions{Click: action}}, Variant: ui.CardBare, Head: head, HeadNode: headNode, Children: parts})
 		for n, leaf := range item.Leaves {
 			activity = append(activity, commentLeaf(leafKey(row.Key, n), leaf))
 		}

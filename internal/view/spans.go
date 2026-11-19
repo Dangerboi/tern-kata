@@ -21,8 +21,17 @@ func refSpan(ref string, link bool) ui.Span {
 // timeSpan is a timestamp or a duration: mono and muted.
 func timeSpan(text string) ui.Span { return monoSpan(text, "muted") }
 
-// keySpan is a key drawn as Tern's keycap.
-func keySpan(key string) ui.Span { return ui.Span{T: key, S: "key"} }
+// KeyStyle is the span style of a keycap. Tern's own "key" style rewrites the text it draws into its notation (ctrl+d becomes ^D),
+// and the keycaps here name a chord in words (Ctrl+D). A span has no class of its own and Tern drops a style it does not know, so
+// a keycap uses "code", the one chip style Tern draws as typed; the plugin uses it for keycaps only, and KeyCSS gives it the keycap look.
+const KeyStyle = "code"
+
+// KeyCSS draws a KeyStyle span as Tern draws its keycap: a mono run on the raised surface with a one-pixel ring, from theme
+// variables only.
+const KeyCSS = `.sf-t-` + KeyStyle + ` { padding: 0 0.35em; color: var(--sf-c-key, var(--t2)); background: var(--l1); box-shadow: inset 0 0 0 1px var(--l2), inset 0 -1px 0 var(--l1); }`
+
+// keySpan is a key drawn as a keycap, named in words (see KeyWords).
+func keySpan(key string) ui.Span { return ui.Span{T: KeyWords(key), S: KeyStyle} }
 
 // prose is text whose "{W}" markers are keycaps: each marker becomes keySpan("W"), "{{" is a literal brace, and the rest carries
 // style. A "{" with no closing "}" is literal text. The model names a key with model.Key so a notice never spells one by hand.

@@ -154,7 +154,7 @@ func TestPageBarEntriesDrawTheirKeyAsAKeycapSpan(t *testing.T) {
 				t.Fatalf("%s has %d spans, want keycap and label", id, len(spans))
 			}
 			key, name := spans[0].(map[string]any), spans[1].(map[string]any)
-			if key["s"] != "key" || key["t"] != entry.Chord || name["t"] != " "+entry.Label {
+			if key["s"] != view.KeyStyle || key["t"] != entry.Chord || name["t"] != " "+entry.Label {
 				t.Errorf("%s spans = %v", id, spans)
 			}
 			if wantMuted := !entry.Current; wantMuted != (name["s"] == "muted") {

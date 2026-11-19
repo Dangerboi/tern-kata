@@ -81,17 +81,17 @@ func (w Workflow) Definition() cronjob.WorkflowDefinition {
 func (m Model) settleWorkflowReading() (Model, []Cmd) {
 	w := &m.Workflows
 	c := &w.Card
-	if !c.Open || c.Conflict != nil || (c.asked && c.askedText == c.Editor.Text && !c.askNow) {
+	text := c.Form.snapshot()
+	if !c.Open || c.Conflict != nil || (c.asked && c.askedText == text && !c.askNow) {
 		return m, nil
 	}
 	after := workflowReadingDelay
 	if c.askNow {
 		after = 0
 	}
-	c.asked, c.askedText, c.askNow, c.Reading = true, c.Editor.Text, false, nil
+	c.asked, c.askedText, c.askNow, c.Reading = true, text, false, nil
 	request := w.checkReads.Ask()
-	doc, err := ParseWorkflow(c.Editor.Text)
-	c.Problem = err
+	doc, err := c.Form.document()
 	if err != nil {
 		return m, nil
 	}

@@ -203,7 +203,7 @@ func TestCardButtonKeycapsAndClickFollowARebind(t *testing.T) {
 	}
 	m := press(selectedFirst(), "n", "t")
 	node := pickerNodes(t, m)["layer.create.foot.cancel"]
-	if keys := node.P["keys"]; !reflect.DeepEqual(keys, []any{"^Q"}) {
+	if keys := node.P["keys"]; !reflect.DeepEqual(keys, []any{"Ctrl+Q"}) {
 		t.Errorf("rebound cancel keycaps = %v", keys)
 	}
 	if click := node.P["actions"].(map[string]any)["click"]; click != view.ButtonClick("ctrl+q") {

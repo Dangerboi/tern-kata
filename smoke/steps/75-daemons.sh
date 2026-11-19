@@ -80,6 +80,56 @@ expect_tree "[data-id^='main.topbar.right.facts.fact']" '.ok and ([.nodes[].text
 expect_tree "[data-id='main.topbar.left.heading']" '.ok and .nodes[0].text == "smoke"'
 expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count >= 3'
 
+# The Pane manages the entries of the config itself: n adds one, e edits the selected one, x removes it after asking, and the entry
+# this Pane uses cannot be removed. The file is written as text, so everything that was in it stays.
+dm_cfg="$KATA_HOME/config.toml"
+ctl key D
+expect_tree "[data-id='main.columns.list.daemons']" '.ok and (.nodes[0].text | contains("smoke-home") and contains("current"))'
+ctl key n
+expect_tree "[data-id='layer.daemon']" '.count == 1'
+ctl type '"smoke-added"'
+ctl key Tab
+ctl key Tab
+ctl type '"http://127.0.0.1:2"'
+ctl key Tab
+ctl key Tab
+ctl key space
+ctl key enter
+expect_tree "[data-id='layer.daemon']" '.count == 0'
+expect_tree "[data-id='main.columns.list.daemons']" '.ok and (.nodes[0].text | contains("smoke-added127.0.0.1:2no token"))'
+grep -q '^name = "smoke-added"$' "$dm_cfg"
+grep -q '^allow_insecure = true$' "$dm_cfg"
+[[ "$(grep -c '^\[\[daemon\]\]' "$dm_cfg")" == 5 ]]
+head -c "$(stat -c %s "$dm_home.config")" "$dm_cfg" | cmp - "$dm_home.config"
+# The new entry is under the cursor: e renames it, and the card says what is wrong with a name that is taken.
+ctl key e
+expect_tree "[data-id='layer.daemon']" '.count == 1'
+for _ in $(seq 11); do ctl key Backspace; done
+ctl type '"smoke-home"'
+ctl key enter
+expect_tree "[data-id='layer.daemon.foot.error']" '.ok and (.nodes[0].text == "Cannot save the daemon: another daemon has that name.")'
+for _ in $(seq 11); do ctl key Backspace; done
+ctl type '"smoke-renamed"'
+ctl key enter
+expect_tree "[data-id='layer.daemon']" '.count == 0'
+expect_tree "[data-id='main.columns.list.daemons']" '.ok and (.nodes[0].text | contains("smoke-renamed127.0.0.1:2") and (contains("smoke-added") | not))'
+grep -q '^name = "smoke-renamed"$' "$dm_cfg"
+! grep -q '^name = "smoke-added"$' "$dm_cfg"
+ctl key x
+expect_tree "[data-id='layer.daemon-remove.foot.question']" '.ok and .nodes[0].text == "Remove smoke-renamed?"'
+ctl key y
+expect_tree "[data-id='layer.daemon-remove']" '.count == 0'
+expect_tree "[data-id='main.columns.list.daemons']" '.ok and (.nodes[0].text | contains("smoke-renamed") | not)'
+! grep -q 'smoke-renamed' "$dm_cfg"
+[[ "$(grep -c '^\[\[daemon\]\]' "$dm_cfg")" == 4 ]]
+head -c "$(stat -c %s "$dm_home.config")" "$dm_cfg" | cmp - "$dm_home.config"
+ctl key g
+ctl key x
+expect_tree "[data-id\$='.notice']" '.ok and .count == 1 and (.nodes[0].text == "Cannot remove smoke-home: this Pane uses it.")'
+expect_tree "[data-id='layer.daemon-remove']" '.count == 0'
+grep -q '^name = "smoke-home"$' "$dm_cfg"
+ctl key escape
+
 cp "$dm_home.config" "$KATA_HOME/config.toml"
 KATA_HOME="$dm_other" kata daemon stop >/dev/null
 KATA_HOME="$dm_profile" kata daemon stop >/dev/null

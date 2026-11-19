@@ -76,13 +76,14 @@ func TestDoubleClickOnARunCardUnderAnotherLayerDoesNothing(t *testing.T) {
 func TestDoubleClickOnAWorkflowRowSelectsItAndShowsTheSteps(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
 	m := step(t, s, click(workflowRow(t, s.Model, "W2"), view.WorkflowOpenClick("W2"))).State.Model
-	if m.Workflows.Selected != "W2" || !m.Workflows.Inspecting {
-		t.Errorf("selected %q inspecting %v, want W2 with its steps shown", m.Workflows.Selected, m.Workflows.Inspecting)
+	if m.Workflows.Selected != "W2" {
+		t.Errorf("selected %q, want W2 with its steps shown beside the list", m.Workflows.Selected)
 	}
+	mustShow(t, step(t, s, click(workflowRow(t, s.Model, "W2"), view.WorkflowOpenClick("W2"))).State, "steps", "Nightly build")
 
 	unknown := step(t, s, click(workflowRow(t, s.Model, "W1"), view.WorkflowOpenClick("nope"))).State.Model
-	if unknown.Workflows.Inspecting {
-		t.Error("a uid off the list opened the steps")
+	if unknown.Workflows.Selected != "W1" {
+		t.Error("a uid off the list moved the selection")
 	}
 }
 
@@ -94,8 +95,8 @@ func TestDoubleClickOnAWorkflowRowUnderAPopupCardDoesNothing(t *testing.T) {
 		t.Fatalf("card %v, want the Workflow card", s.Model.TopCard())
 	}
 	m := step(t, s, click(row, view.WorkflowOpenClick("W2"))).State.Model
-	if m.Workflows.Inspecting || m.Workflows.Selected != s.Model.Workflows.Selected {
-		t.Errorf("selected %q inspecting %v, want nothing changed", m.Workflows.Selected, m.Workflows.Inspecting)
+	if m.Workflows.Selected != s.Model.Workflows.Selected {
+		t.Errorf("selected %q, want nothing changed", m.Workflows.Selected)
 	}
 }
 

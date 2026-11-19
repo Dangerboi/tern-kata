@@ -1,7 +1,6 @@
 package view
 
 import (
-	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,13 +14,15 @@ import (
 
 const WorkflowListID = "main.columns.list.page.names.rows"
 
+// workflows is the Page: wide, the list and the selected workflow's inspector side by side from the first frame, as the Issues
+// Page shows its list and detail; narrow, the list alone until enter opens the inspector in its place.
 func workflows(m model.Model, now time.Time) tern.Element {
 	sideBySide := m.Cols >= model.SideBySideCols
 	var panels []tern.Element
-	if !m.Workflows.Inspecting || sideBySide {
-		panels = append(panels, workflowList(m, sideBySide && m.Workflows.Inspecting, now))
+	if sideBySide || !m.Workflows.Inspecting {
+		panels = append(panels, workflowList(m, sideBySide, now))
 	}
-	if m.Workflows.Inspecting {
+	if sideBySide || m.Workflows.Inspecting {
 		panels = append(panels, workflowInspector(m, sideBySide, now))
 	}
 	var top []tern.Element
@@ -193,10 +194,7 @@ func workflowStep(i int, step model.WorkflowStep) tern.Element {
 		text = ui.Text{Common: ui.Common{Key: "text"}, Text: step.Prompt}
 	}
 	head := ui.Nodes(
-		ui.Row{Common: ui.Common{Key: "key"}, Gap: ui.GapXS, Children: ui.Nodes(
-			ui.Text{Common: ui.Common{Key: "number"}, Spans: []ui.Span{{T: strconv.Itoa(i + 1), S: "muted"}}, Wrap: ui.WrapNone},
-			ui.Text{Common: ui.Common{Key: "name"}, Spans: []ui.Span{{T: step.Key, S: "strong"}}, Wrap: ui.WrapNone},
-		)},
+		ui.Text{Common: ui.Common{Key: "key"}, Spans: []ui.Span{{T: strconv.Itoa(i+1) + " ", S: "muted"}, {T: step.Key, S: "strong"}}, Wrap: ui.WrapNone},
 		ui.Text{Common: ui.Common{Key: "kind"}, Spans: []ui.Span{{T: string(step.Kind), S: "muted"}}, Wrap: ui.WrapNone},
 	)
 	if len(step.After) > 0 {
@@ -218,39 +216,112 @@ func workflowLayer(m model.Model) tern.Element {
 		title, meta = "Edit workflow", ui.T(c.Name)
 	}
 	var children []tern.Element
-	switch {
-	case c.Conflict != nil:
+	if c.Conflict != nil {
 		children = workflowConflict(c)
-	case c.DiscardConfirm:
-		children = ui.Nodes(TextEditor(inputLeaf, c.Editor, true), toneText("question", ui.ToneWarning, "Discard this Draft?"), discardButtons())
-	default:
-		children = ui.Nodes(TextEditor(inputLeaf, c.Editor, c.Saving))
-		if c.Reading != nil {
-			children = append(children, workerReading(*c.Reading))
-		}
-		if c.Saving {
-			children = append(children, toneText("saving", ui.TonePending, model.Progress("Saving", "")))
-		}
-		if problem := cmp.Or(c.Err, c.Problem); problem != nil {
-			children = append(children, toneText("error", ui.ToneError, problem.Error()))
-		}
-		children = append(children, workflowFoot(c.Saving))
+	} else {
+		children = workflowForm(m, c)
 	}
 	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardWorkflow)}, Modal: true, Size: ui.SizeLG, Head: ui.T(title), Meta: meta, Icon: ui.IconPen}, children))
 }
 
-// workflowFoot is the editing card's buttons: Save, then Open in editor, then the safe exit. While a save is in flight they stay drawn
-// and cannot be pressed.
-func workflowFoot(saving bool) tern.Element {
-	reason := ""
-	if saving {
-		reason = model.Progress("Saving", "")
+// workflowForm is the card while it is edited: the workflow's own fields, then the shown step, then the worker's reading; the
+// buttons that add, remove and move steps sit in the Steps head, the error and the other buttons go to the foot.
+func workflowForm(m model.Model, c model.WorkflowCard) []tern.Element {
+	f := c.Form
+	readonly := c.Saving || c.DiscardConfirm
+	text := func(name model.Field, label, hint string) []tern.Element {
+		focused := f.Field == name
+		tone := ui.ToneNeutral
+		if focused {
+			tone = ui.ToneAccent
+		}
+		value := f.Text(name)
+		input := ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: value, Cursor: caretAt(f.Caret, name, value), Mode: "insert", Readonly: readonly}}
+		return labelledInput(string(name), label, hint, focused, input)
 	}
-	return formFoot(
-		unavailable(cardButton("save", model.ModeEditor, model.SaveDraftAction, "Save", true), reason),
-		unavailable(exitButton("cancel", model.ModeEditor, model.CancelDraft, "Cancel"), reason),
-		unavailable(cardButton("editor", model.ModeEditor, model.ExternalEditorAction, "Open in editor", false), reason),
-	)
+	step := f.Step()
+	children := text(model.WorkflowFieldName, "Name", "")
+	children = append(children, text(model.WorkflowFieldAbout, "About", "")...)
+	children = append(children, text(model.WorkflowFieldInput, "Input", "")...)
+	children = append(children, stepsHead(f, readonly))
+	if pick := choiceControl(m, model.CardWorkflow, model.WorkflowFieldStep, "Step", f.Field == model.WorkflowFieldStep, "", ""); pick != nil {
+		children = append(children, pick)
+	}
+	children = append(children, text(model.WorkflowFieldKey, "Step name", "")...)
+	if kind := choiceControl(m, model.CardWorkflow, model.WorkflowFieldKind, "Kind", f.Field == model.WorkflowFieldKind, "", ""); kind != nil {
+		children = append(children, kind)
+	}
+	bodyLabel := "Prompt"
+	if step.Kind == cronjob.StepCommand {
+		bodyLabel = "Command"
+	}
+	focused := f.Field == model.WorkflowFieldBody
+	editor := TextEditorLines(string(model.WorkflowFieldBody), step.Body, readonly, 8)
+	if e, ok := editor.(ui.Editor); ok {
+		e.Aria = bodyLabel
+		if !focused {
+			e.Tone = ui.ToneNeutral
+		}
+		editor = e
+	}
+	children = append(children, labelledInput(string(model.WorkflowFieldBody), bodyLabel, "", focused, editor)...)
+	children = append(children, text(model.WorkflowFieldAfter, "After", "Earlier steps this one waits for, separated by commas.")...)
+	children = append(children, text(model.WorkflowFieldRetries, "Retries", "A whole number from 0 to "+strconv.Itoa(cronjob.MaxWorkflowRetries)+".")...)
+	if c.Reading != nil {
+		children = append(children, workerReading(*c.Reading))
+	}
+	if c.Saving {
+		children = append(children, toneText("saving", ui.TonePending, model.Progress("Saving", "")))
+	}
+	if c.Err != nil {
+		children = append(children, toneText("error", ui.ToneError, c.Err.Error()))
+	}
+	if c.DiscardConfirm {
+		return append(children, toneText("question", ui.ToneWarning, "Discard this Draft?"), discardButtons())
+	}
+	busy := busyReason(c.Saving)
+	return append(children, formFoot(
+		unavailable(cardButton("save", model.ModeWorkflowForm, model.SaveDraftAction, "Save", true), busy),
+		unavailable(exitButton("cancel", model.ModeWorkflowForm, model.CancelDraft, "Cancel"), busy),
+		unavailable(cardButton("editor", model.ModeWorkflowForm, model.ExternalEditorAction, "Open in editor", false), busy)))
+}
+
+// stepsHead is the Steps section's head: the title and count, with the buttons that add, remove and move steps beside them.
+func stepsHead(f model.WorkflowForm, busy bool) tern.Element {
+	title := ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: "Steps", S: "strong"}}, Wrap: ui.WrapNone}
+	children := ui.Nodes(title)
+	if count := countSpan(len(f.Steps)); count.T != "" {
+		children = append(children, ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{count}, Wrap: ui.WrapNone})
+	}
+	if busy {
+		// While the card saves or asks about discarding, the form is read-only and the step buttons are not offered.
+		return ui.Row{Common: ui.Common{Key: "steps-head"}, Gap: ui.GapMD, Align: ui.AlignCenter, Children: children}
+	}
+	children = append(children,
+		unavailable(cardButton("add", model.ModeWorkflowForm, model.WorkflowStepAdd, "Add step", false), busyReason(busy)),
+		unavailable(cardButton("remove", model.ModeWorkflowForm, model.WorkflowStepRemove, "Remove step", false), stepReason(busy, !f.CanRemoveStep(), "A workflow needs at least one step.")),
+		unavailable(cardButton("up", model.ModeWorkflowForm, model.WorkflowStepMoveUp, "Move up", false), stepReason(busy, !f.CanMoveStep(true), "This is the first step.")),
+		unavailable(cardButton("down", model.ModeWorkflowForm, model.WorkflowStepMoveDown, "Move down", false), stepReason(busy, !f.CanMoveStep(false), "This is the last step.")))
+	return ui.Row{Common: ui.Common{Key: "steps-head"}, Gap: ui.GapMD, Wrap: true, Align: ui.AlignCenter, Children: children}
+}
+
+// busyReason is the reason a card's buttons cannot be pressed while it works, "" when they can.
+func busyReason(busy bool) string {
+	if busy {
+		return model.Progress("Saving", "")
+	}
+	return ""
+}
+
+// stepReason is why a step button cannot be pressed: the card is busy, or the step has nothing to move or go.
+func stepReason(busy, blocked bool, why string) string {
+	if busy {
+		return busyReason(true)
+	}
+	if blocked {
+		return why
+	}
+	return ""
 }
 
 // workflowConflict is the card after a save found the workflow changed: what happened, the two texts side by side, and the
@@ -258,8 +329,8 @@ func workflowFoot(saving bool) tern.Element {
 func workflowConflict(c model.WorkflowCard) []tern.Element {
 	current := c.Conflict
 	versions := ui.Row{Common: ui.Common{Key: "versions"}, Gap: ui.GapMD, Wrap: true, Children: ui.Nodes(
-		ui.Col{Common: ui.Common{Key: "draft", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: "Yours"}, TextEditor("body", c.Editor, true))},
-		ui.Col{Common: ui.Common{Key: "current", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: "Current"}, TextEditor("now", model.NewTextEditor(current.Text()), true))},
+		ui.Col{Common: ui.Common{Key: "draft", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: "Yours"}, TextEditorLines("body", model.NewTextEditor(c.Form.JSON()), true, 12))},
+		ui.Col{Common: ui.Common{Key: "current", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Text: "Current"}, TextEditorLines("now", model.NewTextEditor(current.Text()), true, 12))},
 	)}
 	if current.Archived {
 		return ui.Nodes(

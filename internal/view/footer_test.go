@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/view"
 )
 
 // footerHints are the legend's hints at a Pane cols wide, in reading order, each as its key and label joined.
@@ -39,7 +40,7 @@ func TestFooterIsAKeyLegendThatKeepsEveryHintAtAnyWidth(t *testing.T) {
 			t.Fatalf("%s has %d spans", id, len(spans))
 		}
 		key, label := spans[0].(map[string]any), spans[1].(map[string]any)
-		if key["s"] != "key" || label["s"] != "muted" || !strings.HasPrefix(label["t"].(string), " ") {
+		if key["s"] != view.KeyStyle || label["s"] != "muted" || !strings.HasPrefix(label["t"].(string), " ") {
 			t.Errorf("%s spans = %v", id, spans)
 		}
 	}
@@ -49,8 +50,8 @@ func TestFooterIsAKeyLegendThatKeepsEveryHintAtAnyWidth(t *testing.T) {
 // checked by its hint and not by the joined text.
 func TestFooterHintReadsKeyAndLabelTogether(t *testing.T) {
 	nodes := render(t, apply(browsing(), model.ResizeMsg{Cols: model.MinCols}))
-	if got := text(nodes["dock.hints.grid.escape"]); got != "esc Menu" {
-		t.Errorf("escape hint reads %q, want %q", got, "esc Menu")
+	if got := text(nodes["dock.hints.grid.escape"]); got != "Esc Menu" {
+		t.Errorf("escape hint reads %q, want %q", got, "Esc Menu")
 	}
 }
 

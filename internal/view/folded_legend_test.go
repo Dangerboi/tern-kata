@@ -48,7 +48,7 @@ func TestFoldedLegendIsOneLineOfCounterEscAndKeysChip(t *testing.T) {
 		}
 	}
 	list := apply(legendModes(t)["list"], model.ResizeMsg{Cols: model.FoldedLegendCols - 1})
-	if hints, _, _ := legendOf(t, list); hints["esc Menu"] != view.KeyClick("escape") {
+	if hints, _, _ := legendOf(t, list); hints["Esc Menu"] != view.KeyClick("escape") {
 		t.Errorf("list legend = %q, want the esc Menu hint", hints)
 	}
 }

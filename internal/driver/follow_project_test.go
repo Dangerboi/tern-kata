@@ -244,7 +244,7 @@ func TestFollowingFromAnAllOpenCollectionKeepsTheCollection(t *testing.T) {
 	}
 }
 
-// escHint is the footer's label of esc: "esc Menu" or "esc back".
+// escHint is the footer's label of esc: "Esc Menu" or "Esc back".
 func escHint(t *testing.T, s driver.State) string {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
@@ -264,18 +264,18 @@ func escHint(t *testing.T, s driver.State) string {
 
 func TestEscIsLabelledBackWhileItReturnsAcrossProjectsAndMenuOnceTheCardMovesOn(t *testing.T) {
 	s := workBoard(t)
-	if got := escHint(t, s); got != "esc Menu" {
-		t.Fatalf("before a follow the footer says %q; want esc Menu", got)
+	if got := escHint(t, s); got != "Esc Menu" {
+		t.Fatalf("before a follow the footer says %q; want Esc Menu", got)
 	}
 	out := step(t, s, click("", refClick(t, s, "task", "far")))
 	s = answeredRead(t, out.State, out.Cmds, model.Snapshot{Issues: []model.Issue{infraCard("far"), infraCard("other")}, Links: []model.Link{farLink()}})
 	s = step(t, s, newestLanes{ProjectUID: "q"}).State
-	if got := escHint(t, s); got != "esc back" {
+	if got := escHint(t, s); got != "Esc back" {
 		t.Errorf("after a follow the footer says %q; want esc back", got)
 	}
 	s = step(t, s, key("j")).State
-	if got := escHint(t, s); got != "esc Menu" {
-		t.Errorf("after moving off the card the footer says %q; want esc Menu", got)
+	if got := escHint(t, s); got != "Esc Menu" {
+		t.Errorf("after moving off the card the footer says %q; want Esc Menu", got)
 	}
 }
 

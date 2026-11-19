@@ -76,12 +76,10 @@ func openedCreate() model.Model {
 	return m
 }
 
-// openedWorkflow opens the Workflow card for a new workflow and empties its starting text, as a Draft opens empty.
+// openedWorkflow opens the Workflow card for a new workflow.
 func openedWorkflow() model.Model {
 	m, _ := workflowsPage()
 	m, _ = model.Update(m, model.KeyMsg{Chord: "n"})
-	old := len(m.Workflows.Card.Editor.Text)
-	m, _ = model.Update(m, model.EditMsg{Target: model.EditWorkflowBody, From: 0, To: old, Text: "", Cursor: 0, Len: old})
 	return m
 }
 
@@ -155,21 +153,29 @@ func popupCards() []popupCard {
 			return m
 		}, model.ModeConflict})
 	workflow := popupCard{
-		name: "Workflow editor", card: model.CardWorkflow, multiline: true,
-		states: []cardState{{"", openedWorkflow, model.ModeEditor}},
-		graft:  func(dst *model.Model, src model.Model) { dst.Workflows = src.Workflows },
-		field:  func(model.Model) model.Field { return "" },
+		name: "Workflow card", card: model.CardWorkflow, textField: model.WorkflowFieldName,
+		tabOrder: []model.Field{model.WorkflowFieldName, model.WorkflowFieldAbout, model.WorkflowFieldInput, model.WorkflowFieldStep, model.WorkflowFieldKey, model.WorkflowFieldKind, model.WorkflowFieldBody, model.WorkflowFieldAfter, model.WorkflowFieldRetries},
+		states:   []cardState{{"", openedWorkflow, model.ModeWorkflowForm}},
+		graft:    func(dst *model.Model, src model.Model) { dst.Workflows = src.Workflows },
+		busy:     func(m *model.Model) { m.Workflows.Card.Saving = true },
+		field:    func(m model.Model) model.Field { return m.Workflows.Card.Form.Field },
+		text:     func(m model.Model, _ model.Field) string { return m.Workflows.Card.Form.Name },
 		body: &cardBody{
 			target: model.EditWorkflowBody, save: "ctrl+o",
-			focus: func(m model.Model) model.Model { return m },
-			// ready replaces the text with a workflow the local check passes, so a save goes out.
-			ready: func(m model.Model) model.Model {
-				const valid = `{"name":"w","definition":{"version":1,"steps":[{"key":"a","kind":"command","command":"c"}]}}`
-				old := len(m.Workflows.Card.Editor.Text)
-				m, _ = model.Update(m, model.EditMsg{Target: model.EditWorkflowBody, From: 0, To: old, Text: valid, Cursor: len(valid), Len: old})
+			focus: func(m model.Model) model.Model {
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: model.WorkflowFieldBody})
 				return m
 			},
-			text:    func(m model.Model) string { return m.Workflows.Card.Editor.Text },
+			// ready names the workflow and gives its step a prompt, so the form passes kata's rules and a save goes out.
+			ready: func(m model.Model) model.Model {
+				if m.Workflows.Card.Form.Step().Body.Text == "" {
+					m, _ = model.Update(m, model.FocusFieldMsg{Field: model.WorkflowFieldBody})
+					m = typed(m, "p")
+				}
+				m, _ = model.Update(m, model.FocusFieldMsg{Field: model.WorkflowFieldName})
+				return typed(m, "w")
+			},
+			text:    func(m model.Model) string { return m.Workflows.Card.Form.Step().Body.Text },
 			present: func(m model.Model) bool { return m.Workflows.Card.Open },
 			err:     func(m model.Model) error { return m.Workflows.Card.Err },
 			fail: func(_ model.Model, err error) model.Msg {

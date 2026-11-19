@@ -11,7 +11,7 @@ cm_selected() { expect_tree "$1" '.ok and .count == 1 and (.nodes[0]["aria-selec
 # cm_pick right-clicks the row or card, checks the menu names the Issue's keys and chooses Close, which opens the Close card.
 cm_pick() {
   ctl click "$1" right
-  expect_tree "[role='menu']" '.ok and .count == 1 and (.nodes[0].text | test("^Open.Close…X") and contains("Move to Project…⇧M") and contains("Agents…W"))'
+  expect_tree "[role='menu']" '.ok and .count == 1 and (.nodes[0].text | test("^Open.Close…X") and contains("Move to Project…Shift+M") and contains("Agents…W"))'
   ctl tree "[role='menuitem']" | jq -er '[.nodes[] | select(.text | startswith("Close"))][0].rect | "\(.[0] + .[2] / 2) \(.[1] + .[3] / 2)"' >"$tmp/cm-close.xy"
   # shellcheck disable=SC2046
   ctl click $(<"$tmp/cm-close.xy")

@@ -82,6 +82,8 @@ type Model struct {
 	DeleteForm     DeleteFormState
 	TokenForm      TokenFormState
 	RevokeCard     RevokeState
+	DaemonForm     DaemonFormState
+	DaemonRemove   DaemonRemoveState
 	AgentCard      AgentCardState
 	AgentSessions  agentSessionState
 	RecurrenceForm RecurrenceFormState

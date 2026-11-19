@@ -15,7 +15,7 @@ const (
 	ListOwnerRole = "tern-kata.ow"
 )
 
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + PropertiesCSS + "\n" + PlainCellCSS + "\n" + TabCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + TwoLineRowCSS + "\n" + DocCSS
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + PropertiesCSS + "\n" + PlainCellCSS + "\n" + TabCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + TwoLineRowCSS + "\n" + DocCSS + "\n" + KeyCSS + "\n" + EventTimeCSS + "\n" + FieldLabelCSS
 
 // ActiveTabRole marks the active Activity tab; TabCSS underlines it so the active tab is not told by colour alone.
 const ActiveTabRole = "tern-kata.tab-on"
@@ -27,6 +27,12 @@ const PropertyKeyRole = "tern-kata.propkey"
 // PropertyKeyCSS gives every property key one box, wide enough for the longest label ("Scheduled:", "Recurring:", "Cron jobs:")
 // in either face, so every value starts at the same x. The box is in em because the label's own width depends on the face.
 const PropertyKeyCSS = `.sf-text[data-role~='` + PropertyKeyRole + `'] { display: inline-block; white-space: pre; min-width: 6.4em; }`
+
+// FieldLabelRole marks the row that holds a text input's label (labelledInput). FieldLabelCSS pulls the input up under it, so the
+// label reads as part of its input instead of floating in the gap the card puts between its fields.
+const FieldLabelRole = "tern-kata.fieldlabel"
+
+const FieldLabelCSS = `.sf-row[data-role~='` + FieldLabelRole + `'] { margin-bottom: -8px; }`
 
 const PropertiesRole = "tern-kata.props"
 

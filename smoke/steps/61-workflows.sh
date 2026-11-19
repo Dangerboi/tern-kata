@@ -1,5 +1,4 @@
-# The Workflows Page (4) lists the Project's workflows. Enter on a selected one shows its steps beside the list, and a double
-# click on a workflow that is not selected does the same for that workflow. A workflow with more steps than the Pane shows
+# The Workflows Page (4) lists the Project's workflows with the selected one's steps beside the list. A workflow with more steps than the Pane shows
 # scrolls inside its card: the top bar stays put and the card ends above the footer. Own workflows; it cleans up.
 wf_dir="$tmp/workspace"
 wf_make() { # uid name command
@@ -14,23 +13,31 @@ wf_make "$wf_second" "Smoke second workflow" "echo second-step"
 ctl key 4
 expect_tree "[data-id='main.columns.list.page.names.rows.$wf_first']" '.ok and .count == 1'
 expect_tree "[data-id='main.columns.list.page.names.rows.$wf_second']" '.ok and .count == 1'
-# A single click only selects: no steps are shown.
+# The selected workflow's steps sit beside the list from the first frame, with no Enter: a wide Pane splits like the Issues Page.
+expect_tree "[data-id\$='.steps-title']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.page.names.rows.$wf_first']"
 expect_tree "[data-id='main.columns.list.page.names.rows.$wf_first']" '.ok and .nodes[0]["aria-selected"] == "true"'
-expect_tree "[data-id\$='.steps-title']" '.count == 0'
-# Enter shows the steps of the selected workflow.
-ctl key enter
-expect_tree "[data-id\$='.steps-title']" '.ok and .count == 1'
 expect_tree "[data-id^='main.columns.list.page.inspector']" '.ok and ([.nodes[] | tostring] | any(contains("echo first-step")))'
-ctl key escape
-expect_tree "[data-id\$='.steps-title']" '.count == 0'
-# A double click on the other workflow selects it and shows its steps, as Enter does.
-ctl dblclick "[data-id='main.columns.list.page.names.rows.$wf_second']"
+# A click on the other workflow shows its steps in the same place.
+ctl click "[data-id='main.columns.list.page.names.rows.$wf_second']"
 expect_tree "[data-id='main.columns.list.page.names.rows.$wf_second']" '.ok and .nodes[0]["aria-selected"] == "true"'
-expect_tree "[data-id\$='.steps-title']" '.ok and .count == 1'
 expect_tree "[data-id^='main.columns.list.page.inspector']" '.ok and ([.nodes[] | tostring] | any(contains("echo second-step")))'
-ctl key escape
-expect_tree "[data-id\$='.steps-title']" '.count == 0'
+
+# The Workflow card is a form: name, about, input, one step at a time, and buttons to add, remove and move steps. A step added
+# from the card is saved through kata with the rest.
+ctl key e
+expect_tree "[data-id='layer.workflow']" '.ok and .count == 1'
+expect_tree "[data-id='layer.workflow.name']" '.ok and .count == 1'
+expect_tree "[data-id='layer.workflow.step']" '.ok and .count == 1'
+expect_tree "[data-id='layer.workflow.body']" '.ok and .count == 1'
+ctl click "[data-id='layer.workflow.steps-head.add']"
+expect_tree "[data-id='layer.workflow.key']" '.ok and .count == 1 and ([.nodes[] | tostring] | any(contains("step")))'
+ctl click "[data-id='layer.workflow.foot.save']"
+expect_tree "[data-id='layer.workflow.foot.error']" '.ok and .count == 1 and (.nodes[0].text | contains("Cannot save the workflow"))'
+ctl click "[data-id='layer.workflow.steps-head.remove']"
+ctl click "[data-id='layer.workflow.foot.cancel']"
+expect_tree "[data-id='layer.workflow']" '.count == 0'
+ctl click "[data-id='main.columns.list.page.names.rows.$wf_first']"
 ctl key 1
 
 # A long workflow: the inspector card stays inside the Pane and its viewport scrolls to the last step.
@@ -40,7 +47,7 @@ kata --workspace "$wf_dir" cron workflow create --uid "$wf_long" --file "$tmp/wo
 ctl key 4
 expect_tree "[data-id='main.columns.list.page.names.rows.$wf_long']" '.ok and .count == 1'
 wf_bar=$(ctl tree "[data-id='main.topbar']" | jq -c '.nodes[0].rect')
-ctl dblclick "[data-id='main.columns.list.page.names.rows.$wf_long']"
+ctl click "[data-id='main.columns.list.page.names.rows.$wf_long']"
 expect_tree "[data-id='main.columns.list.page.inspector.viewport.content']" '.ok and .count == 1'
 ctl tree "[data-id='dock.hints']" | jq '.nodes[0].rect[1]' >"$tmp/workflows-dock-top.txt"
 ctl tree "[data-id='main.columns.list.page.inspector'],[data-id='main.columns.list.page.names']" >"$tmp/workflows-cards.json"
@@ -52,7 +59,6 @@ for _ in $(seq 40); do ctl wheel 0 300 >/dev/null; done
 wf_at_end() { [[ $(wf_below) -le 1 ]]; }
 wait_for wf_at_end || { printf 'The inspector viewport does not scroll to its end\n' >&2; return 1; }
 [[ $(ctl tree "[data-id='main.topbar']" | jq -c '.nodes[0].rect') == "$wf_bar" ]] || { printf 'The top bar moved while the inspector scrolled\n' >&2; return 1; }
-ctl key escape
 ctl key 1
 for wf_uid in "$wf_first" "$wf_second" "$wf_long"; do
   kata --workspace "$wf_dir" cron workflow show "$wf_uid" --json >"$tmp/workflows-show.json"

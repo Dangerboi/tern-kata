@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"go.kenn.io/kata/pkg/client"
@@ -31,6 +32,8 @@ type Client struct {
 	// deadline bounds the instance read that names the daemon's account; the data client has no HTTP timeout of its own: each one-shot call is bounded by the Gateway's callBudget. Zero reads
 	// as connectDeadline.
 	deadline time.Duration
+	// titles caches the titles of Issues that a detail's Links name, by Issue UID (see linkTitles).
+	titles sync.Map
 }
 
 type Target struct {

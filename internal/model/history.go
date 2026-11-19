@@ -42,6 +42,19 @@ func EventHidden(event Event) bool {
 // read as their type name.
 func (m Model) historyRow(event Event) DetailRow {
 	payload, _ := decodePayload(event.Payload)
+	// An event about another Issue (a child linked to the shown one) names that Issue as the peer, read from the shown
+	// Issue's side.
+	peerUID, peerShort := "", ""
+	if event.RelatedIssueUID != nil {
+		peerUID = *event.RelatedIssueUID
+	}
+	if event.RelatedIssueShortID != nil {
+		peerShort = *event.RelatedIssueShortID
+	}
+	foreign := event.IssueUID != "" && event.IssueUID != m.DetailIssueUID() && event.IssueShortID != ""
+	if foreign {
+		peerUID, peerShort = event.IssueUID, event.IssueShortID
+	}
 	verb, object, detail, tone := "", "", "", VerbTone("")
 	switch event.Type {
 	case "issue.created":
@@ -71,9 +84,9 @@ func (m Model) historyRow(event Event) DetailRow {
 		verb, object = "edited", editedFields(payload)
 	case "issue.linked", "issue.unlinked":
 		verb = strings.TrimPrefix(event.Type, "issue.")
-		object = linkObject(event, payload)
+		object = linkObject(event, payload, foreign)
 	case "issue.links_changed":
-		verb, object = linksChanged(payload)
+		verb, object = linksChanged(payload, foreign, peerShort)
 	case "issue.metadata_updated":
 		verb, object = metadataChanged(payload)
 	case "issue.scheduled_reached":
@@ -95,12 +108,12 @@ func (m Model) historyRow(event Event) DetailRow {
 		Key: event.UID, Type: event.Type, Author: event.Actor, Time: m.DetailTime(event.CreatedAt), Body: detail,
 		History: &HistorySentence{Verb: verb, Object: object, Tone: tone},
 	}
-	if event.RelatedIssueUID != nil {
-		row.ReferenceUID = *event.RelatedIssueUID
-	}
-	if event.RelatedIssueShortID != nil && row.ReferenceUID != "" {
-		if head, ok := strings.CutSuffix(object, *event.RelatedIssueShortID); ok && *event.RelatedIssueShortID != "" {
-			row.Ref, row.History.Object = *event.RelatedIssueShortID, strings.TrimRight(head, " ")
+	row.ReferenceUID = peerUID
+	if peerShort != "" && peerUID != "" {
+		if after, ok := strings.CutPrefix(object, peerShort+" as "); ok {
+			row.Ref, row.History.Object, row.History.After = peerShort, "", "as "+after
+		} else if head, ok := strings.CutSuffix(object, peerShort); ok {
+			row.Ref, row.History.Object = peerShort, strings.TrimRight(head, " ")
 		}
 	}
 	return row
@@ -307,15 +320,19 @@ func relationLabel(relation string) string {
 	return strings.ToUpper(words[:1]) + words[1:]
 }
 
-func linkObject(event Event, p payloadMap) string {
+func linkObject(event Event, p payloadMap, foreign bool) string {
 	relation, peer := p.text("type"), p.text("to_short_id")
 	if event.RelatedIssueShortID != nil {
 		peer = *event.RelatedIssueShortID
 	}
-	if incoming, _ := p["incoming"].(bool); incoming && inverseRelation[relation] != "" {
+	if foreign {
+		peer = event.IssueShortID
+	}
+	incoming, _ := p["incoming"].(bool)
+	if incoming != foreign && inverseRelation[relation] != "" {
 		relation = inverseRelation[relation]
 	}
-	return RelationWords(relation) + " " + peer
+	return linkNoun(RelationWords(relation)) + " " + peer
 }
 
 type linkField struct{ field, relation string }
@@ -325,31 +342,73 @@ var (
 	linkRemoves = []linkField{{"parent_removed", "parent"}, {"blocks_removed", "blocks"}, {"blocked_by_removed", "blocked by"}, {"related_removed", "related"}}
 )
 
-func linksChanged(p payloadMap) (verb, object string) {
-	collect := func(specs []linkField, prefix string) (parts []string) {
-		for _, spec := range specs {
-			value, ok := p[spec.field]
-			if !ok {
-				continue
-			}
-			refs, _ := value.([]any)
-			if single, isString := value.(string); isString {
-				refs = []any{single}
-			}
-			for _, ref := range refs {
-				parts = append(parts, prefix+spec.relation+" "+plain(ref))
-			}
-		}
-		return parts
+// inverseWords reads a relation from the other end of its link: the shown Issue was linked to by its child.
+var inverseWords = map[string]string{"parent": "child", "blocks": "blocked by", "blocked by": "blocks", "related": "related"}
+
+// linkNoun is what the linked Issue is to the shown one, as the Events tab says it: "blocked by" reads "blocker", and "blocks" reads
+// "dependent"; the other relations read as their words.
+func linkNoun(words string) string {
+	switch words {
+	case "blocked by":
+		return "blocker"
+	case "blocks":
+		return "dependent"
 	}
-	added, removed := collect(linkAdds, ""), collect(linkRemoves, "")
+	return words
+}
+
+type linkPart struct{ noun, ref string }
+
+// linkParts are the links the fields name, each as the noun of its relation and the Issue it links to. An event about another
+// Issue links that Issue (peer) to the shown one, so its relations read from the shown Issue's side.
+func linkParts(p payloadMap, specs []linkField, foreign bool, peer string) (parts []linkPart) {
+	for _, spec := range specs {
+		value, ok := p[spec.field]
+		if !ok {
+			continue
+		}
+		if foreign {
+			parts = append(parts, linkPart{linkNoun(inverseWords[spec.relation]), peer})
+			continue
+		}
+		refs, _ := value.([]any)
+		if single, isString := value.(string); isString {
+			refs = []any{single}
+		}
+		for _, ref := range refs {
+			parts = append(parts, linkPart{linkNoun(spec.relation), plain(ref)})
+		}
+	}
+	return parts
+}
+
+// phraseLinks phrases one direction of a link event: "blocker bbbb, related cccc", and when every link is to one Issue, that Issue
+// once with the relations after it ("bbbb as blocker and related"); historyRow draws the Issue's id where it stands.
+func phraseLinks(parts []linkPart, prefix string) string {
+	if len(parts) > 1 && prefix == "" && !slices.ContainsFunc(parts, func(l linkPart) bool { return l.ref != parts[0].ref }) {
+		nouns := make([]string, len(parts))
+		for i, l := range parts {
+			nouns[i] = l.noun
+		}
+		last := len(nouns) - 1
+		return parts[0].ref + " as " + strings.Join(nouns[:last], ", ") + " and " + nouns[last]
+	}
+	words := make([]string, len(parts))
+	for i, l := range parts {
+		words[i] = prefix + l.noun + " " + l.ref
+	}
+	return strings.Join(words, ", ")
+}
+
+func linksChanged(p payloadMap, foreign bool, peer string) (verb, object string) {
+	added, removed := linkParts(p, linkAdds, foreign, peer), linkParts(p, linkRemoves, foreign, peer)
 	switch {
 	case len(removed) == 0:
-		return "linked", strings.Join(added, ", ")
+		return "linked", phraseLinks(added, "")
 	case len(added) == 0:
-		return "unlinked", strings.Join(removed, ", ")
+		return "unlinked", phraseLinks(removed, "")
 	}
-	return "changed links", strings.Join(append(collect(linkAdds, "+"), collect(linkRemoves, "-")...), ", ")
+	return "changed links", phraseLinks(added, "+") + ", " + phraseLinks(removed, "-")
 }
 
 // metadataChanged phrases schedule and deadline changes, and names the keys
@@ -393,8 +452,21 @@ func metadataChanged(p payloadMap) (verb, object string) {
 			}
 			continue
 		}
-		if word := metadataKeyWords(key); !slices.Contains(others, word) {
-			others = append(others, word)
+		if key == WorkAttentionMsgKey && diff[WorkAttentionKey] != nil {
+			continue
+		}
+		if segment := metadataSegment(key, diff[key]); !slices.Contains(others, segment) {
+			others = append(others, segment)
+		}
+	}
+	if len(attached) == 0 && len(removed) == 0 && len(others) == 1 {
+		// one change reads as a sentence: "set todo status to doing", "cleared Work attention"
+		words, value, set := metadataChange(keys, diff)
+		switch {
+		case set && value != "":
+			return "set", words + " to " + value
+		case !set && words != "":
+			return "cleared", words
 		}
 	}
 	switch {
@@ -404,6 +476,56 @@ func metadataChanged(p payloadMap) (verb, object string) {
 		return "removed", strings.Join(removed, ", ")
 	}
 	return "updated", strings.Join(append(append(others, attached...), removed...), ", ")
+}
+
+// metadataChange is the one changed key of a diff as its words and its new value; set is false when the key was cleared. A
+// value that is not a plain word or number reads as no value.
+func metadataChange(keys []string, diff map[string]any) (words, value string, set bool) {
+	for _, key := range keys {
+		if key == WorkAttentionMsgKey && diff[WorkAttentionKey] != nil {
+			continue
+		}
+		change, _ := diff[key].(map[string]any)
+		return metadataKeyWords(key), metadataValue(key, change["to"]), change["to"] != nil
+	}
+	return "", "", false
+}
+
+// metadataSegment is one changed key as "<words> to <value>", "<words> cleared", or just the words when the value is no plain
+// word or number.
+func metadataSegment(key string, raw any) string {
+	change, _ := raw.(map[string]any)
+	words := metadataKeyWords(key)
+	switch value := metadataValue(key, change["to"]); {
+	case change["to"] == nil && change != nil:
+		return words + " cleared"
+	case value != "":
+		return words + " to " + value
+	}
+	return words
+}
+
+// metadataValue is a plain value of a metadata key as the Events tab shows it: text and numbers, cut to a short line, and the
+// Work attention signal in words. Anything else (an object, a list) shows nothing, as it has no short form.
+func metadataValue(key string, v any) string {
+	var text string
+	switch v := v.(type) {
+	case string:
+		text = oneLine(v)
+	case json.Number:
+		text = v.String()
+	case bool:
+		text = fmt.Sprint(v)
+	default:
+		return ""
+	}
+	if key == WorkAttentionKey && text == WorkAttentionNeedsHuman {
+		text = "needs human"
+	}
+	if r := []rune(text); len(r) > 40 {
+		text = string(r[:39]) + "…"
+	}
+	return text
 }
 
 // changedAttachment is the file name in one attachment key's diff and whether the diff set it (false: it removed it). A name that

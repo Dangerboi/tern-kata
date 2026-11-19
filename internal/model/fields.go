@@ -228,6 +228,13 @@ func openField(m Model, action Action) (Model, []Cmd) {
 	spec := fieldSpecs[action]
 	m.FieldForm = FieldFormState{Open: true, Action: action, UID: issue.UID, ProjectID: issue.ProjectID}
 	f := &m.FieldForm
+	if action == PriorityAction {
+		// The picker opens on the Issue's priority; none is "-", the word kata's priority write clears with.
+		f.Value = "-"
+		if issue.Priority != nil {
+			f.Value = strconv.FormatInt(*issue.Priority, 10)
+		}
+	}
 	if action == AttachFileAction && m.authority != nil && m.authority.Issue != nil && m.authority.Issue.UID == issue.UID && m.authority.AttachmentsOff {
 		f.Err = errors.New(DocbankOffMessage)
 	}
@@ -324,12 +331,17 @@ func updateFieldKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	if m.FieldForm.Saving {
 		return m, nil
 	}
-	if m.FieldForm.Action == PriorityAction && m.FieldForm.Value == "" {
-		if slices.Contains([]string{"0", "1", "2", "3", "4", "-"}, msg.Chord) {
+	if m.FieldForm.Action == PriorityAction {
+		switch {
+		case slices.Contains([]string{"0", "1", "2", "3", "4", "-"}, msg.Chord):
+			// A digit or a dash sets or clears the priority at once, as the key after the priority key always did.
 			m.FieldForm.Value = msg.Chord
 			return submitField(m)
-		}
-		if msg.Chord != "escape" {
+		case slices.Contains([]string{"left", "up"}, msg.Chord):
+			return stepFieldChoice(m, true), nil
+		case slices.Contains([]string{"right", "down", "space"}, msg.Chord):
+			return stepFieldChoice(m, false), nil
+		case msg.Chord != "escape" && msg.Chord != "enter" && msg.Chord != "ctrl+o" && msg.Chord != "ctrl+s":
 			// Any other key closes the field and is handled as if it had been pressed with no field open.
 			m.FieldForm = FieldFormState{}
 			return update(m, msg)

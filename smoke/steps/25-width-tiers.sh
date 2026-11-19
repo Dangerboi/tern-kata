@@ -131,7 +131,7 @@ ctl key esc
 expect_tree "[data-id='main.help']" '.ok and .count == 0'
 expect_width 1200 1 1 0
 expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" ".nodes[0].text == $title_json"
-expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
+expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("Esc back"))'
 
 # q still quits below 40 columns.
 expect_width 300 0 0 1

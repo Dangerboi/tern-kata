@@ -1,10 +1,10 @@
 # The Create card ends in buttons that click their keys: Cancel closes the empty card, the primary button creates the Issue.
 # Tern draws a footer key span in its own notation; the button keycaps are sent in the same one, and n and shift+n stay apart.
 expect_tree "[data-id='dock.hints.grid.n']" '.ok and .count == 1 and (.nodes[0].text | startswith("N "))'
-expect_tree "[data-id='dock.hints.grid.shift+n']" '.ok and .count == 1 and (.nodes[0].text | startswith("⇧N "))'
+expect_tree "[data-id='dock.hints.grid.shift+n']" '.ok and .count == 1 and (.nodes[0].text | startswith("Shift+N "))'
 ctl key n
 expect_tree "[data-id='layer.create.title']" '.count == 1'
-expect_tree "[data-id='layer.create.foot.save']" '.count == 1 and (.nodes[0].text | startswith("Create Issue") and endswith("^O"))'
+expect_tree "[data-id='layer.create.foot.save']" '.count == 1 and (.nodes[0].text | startswith("Create Issue") and endswith("Ctrl+O"))'
 expect_tree "[data-id='layer.create.foot.cancel']" '.count == 1 and (.nodes[0].text | startswith("Cancel") and endswith("esc"))'
 ctl click "[data-id='layer.create.foot.cancel']"
 expect_tree "[data-id='layer.create']" '.count == 0'

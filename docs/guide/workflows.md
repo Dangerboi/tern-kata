@@ -2,7 +2,7 @@
 
 `4` in a Project opens the Workflows Page. It shows the Project's kata **Workflows**, one card each with its name and step count. The heading counts them (`Workflows 2`) and, while archived ones are hidden, says how many (`2 archived hidden`); `a` shows them. With none, the Page reads "No workflows" / "A workflow is a list of steps a job runs." with a **New workflow** button; when every workflow is archived it reads "No workflows" / "All of them are archived." with a **Show archived** button.
 
-The Project is found as the [Board Page](pages-and-board.md#board-page) finds it, and the Page ends when you leave the Project Collection. Esc closes the steps first, then ends a search, then goes to the Menu.
+The Project is found as the [Board Page](pages-and-board.md#board-page) finds it, and the Page ends when you leave the Project Collection. From 140 columns the selected workflow's steps sit beside the list from the first frame, as the Issues Page shows its list and detail. In a narrower Pane the list is alone until Enter opens the steps in its place, and Esc closes them first. Otherwise Esc ends a search, then goes to the Menu.
 
 ![The Workflows Page with a workflow selected and its steps shown](../images/workflows.png)
 
@@ -12,11 +12,13 @@ Each card names the jobs that run the workflow (`Used by Hourly report +1`) and 
 
 | Key | Action |
 |---|---|
-| Enter | Open the inspector for the selected workflow |
+| Enter | In a Pane narrower than 140 columns, open the inspector for the selected workflow |
 | `n` | New workflow (opens the Workflow card) |
 | `e` | Edit the selected workflow |
-| `ctrl+e` | In the card, edit the JSON in `$VISUAL`, else `$EDITOR`, else `vi` |
+| `ctrl+e` | In the card, open the whole workflow as JSON in `$VISUAL`, else `$EDITOR`, else `vi` |
 | `ctrl+o` | In the card, save |
+| `ctrl+n`, `ctrl+x` | In the card, add a step after the shown one, remove the shown step |
+| `ctrl+up`, `ctrl+down` | In the card, move the shown step up or down |
 | `x` | Archive the selected workflow |
 | `r` | Restore an archived workflow |
 | `a` | Show or hide archived workflows |
@@ -24,31 +26,38 @@ Each card names the jobs that run the workflow (`Used by Hourly report +1`) and 
 
 ## Inspector
 
-**Enter** opens the inspector for the selected workflow: each step in order with its number and key, its kind in words (`command` or `prompt`), its command or prompt, the steps it waits for (`after review`) and its retries (`retries 2`), the jobs that run it, its latest runs, and `Created by <author>`. A card also names those jobs. Above the steps a line says whether this machine's worker can run the workflow, or lists what it would refuse. The inspector sits beside the list at 140 columns and wider, in place of it in a narrower Pane.
+The inspector shows the selected workflow: each step in order with its number and key, its kind in words (`command` or `prompt`), its command or prompt, the steps it waits for (`after review`) and its retries (`retries 2`), the jobs that run it, its latest runs, and `Created by <author>`. A card also names those jobs. Above the steps a line says whether this machine's worker can run the workflow, or lists what it would refuse.
 
 ## Workflow card
 
-`n` and `e` open the **Workflow card** on a new workflow or the selected one, as the JSON kata takes:
+`n` and `e` open the **Workflow card** on a new workflow or the selected one. It is a form:
+
+- **Name**, **About** and **Input** are the workflow's own texts.
+- **Step** chooses the step whose fields are shown below it (`1 review`, `2 test`); the other fields belong to that step: **Step name**, **Kind** (command or prompt), the **Command** or **Prompt** in a multi-line editor, **After** (the earlier steps it waits for, separated by commas) and **Retries** (0 to 100).
+- **Add step** puts a new prompt step after the shown one, **Remove step** takes the shown step out (the last one stays), and **Move up** and **Move down** reorder it. Tab moves between fields; left and right change the chosen step or kind.
+
+`ctrl+o` saves. The card's other buttons are **Open in editor** and **Cancel**; leaving a changed form asks "Discard this Draft?" with **Discard Draft** and **Keep editing**.
+
+The options kata accepts on a workflow and on a step have no field. The card carries them through a save unchanged, and **Open in editor** shows the whole workflow as the JSON kata takes, for anyone who wants to change them:
 
 ```json
 {"name": "...", "definition": {"version": 1, "steps": [{"key": "review", "kind": "prompt", "prompt": "..."}, {"key": "test", "kind": "command", "command": "make test", "after": ["review"], "retries": 1}]}}
 ```
 
-Edit it in the card or press `ctrl+e` for your editor; `ctrl+o` saves. The card's buttons are **Save**, **Open in editor** and **Cancel**; leaving a changed text asks "Discard this Draft?" with **Discard Draft** and **Keep editing**.
+What the editor returns is read back into the form. Text that is not valid JSON is refused in the card's foot and the form stays as it was; text that reads as a document but breaks a rule is checked when you save.
 
-Saving checks the text first, and nothing is sent while it fails. The check requires:
+Saving checks the form first, and nothing is sent while it fails. The check requires:
 
-- valid JSON and a name;
-- version 1;
+- a name;
 - at least one step;
-- unique step keys of letters, digits, `-`, `_` and `.`;
-- `after` naming earlier steps only (so steps are listed in the order they run);
-- retries from 0 to 100;
-- exactly one of `command` or `prompt`, matching the step's kind.
+- unique step names of letters, digits, `-`, `_` and `.`;
+- **After** naming earlier steps only (so steps are listed in the order they run);
+- retries from 0 to 100, as a whole number;
+- a command for a command step and a prompt for a prompt step.
 
-The card names the problem and keeps your text.
+The foot names the problem and the form keeps what you typed.
 
-A save is a Guarded write on the version you started from. If the workflow changed meanwhile, nothing is written: the card says "Changed since you opened it. Nothing was written; your Draft is kept." and shows your text (**Yours**) beside the workflow as it stands now (**Current**). **Keep mine** (`o`) saves yours over it and **Discard mine** (`d`) drops your text. When the workflow was archived meanwhile, only Discard mine is offered, since a save would bring it back.
+A save is a Guarded write on the version you started from. If the workflow changed meanwhile, nothing is written: the card says "Changed since you opened it. Nothing was written; your Draft is kept." and shows your workflow (**Yours**) beside the workflow as it stands now (**Current**), both as JSON. **Keep mine** (`o`) saves yours over it and **Discard mine** (`d`) drops your changes. When the workflow was archived meanwhile, only Discard mine is offered, since a save would bring it back.
 
 ## Archive and restore
 

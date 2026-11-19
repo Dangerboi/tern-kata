@@ -53,27 +53,25 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 		if field.Name == model.JobFieldProfile && f.Worker.Note != "" {
 			children = append(children, toneText("worker-note", ui.ToneWarning, "Cannot read the worker's config, so profile and checkout are free text: "+strings.TrimSuffix(f.Worker.Note, ".")+"."))
 		}
-		tone, labelStyle := ui.ToneNeutral, "muted"
+		tone := ui.ToneNeutral
 		if focused {
-			tone, labelStyle = ui.ToneAccent, "accent"
+			tone = ui.ToneAccent
 		}
-		children = append(children, ui.Text{Common: ui.Common{Key: string(field.Name) + "-label"}, Spans: []ui.Span{{T: label, S: labelStyle}}, Wrap: ui.WrapNone})
 		text := f.Text(field.Name)
+		var input tern.Element
 		if field.Name == model.JobFieldPrompt {
-			children = append(children, ui.Editor{
+			input = ui.Editor{
 				Common:   ui.Common{Key: string(field.Name), Tone: tone, Aria: label},
 				Field:    ui.Field{Text: text, Cursor: caretAt(f.Caret, field.Name, text), Mode: "insert", Readonly: f.Saving},
 				MaxLines: 8,
-			})
+			}
 		} else {
-			children = append(children, ui.Input{
+			input = ui.Input{
 				Common: ui.Common{Key: string(field.Name), Tone: tone, Aria: label},
 				Field:  ui.Field{Text: text, Cursor: caretAt(f.Caret, field.Name, text), Mode: "insert", Readonly: f.Saving},
-			})
+			}
 		}
-		if hint := model.JobHint(field.Name); focused && hint != "" {
-			children = append(children, toneText(string(field.Name)+"-hint", ui.ToneMuted, hint))
-		}
+		children = append(children, labelledInput(string(field.Name), label, model.JobHint(field.Name), focused, input)...)
 	}
 	if !previewed {
 		children = append(children, jobPreview(f, m.Calendar, now))

@@ -99,7 +99,7 @@ func keySpans(keys []string) []ui.Span {
 		if i > 0 {
 			spans = append(spans, ui.Span{T: " "})
 		}
-		spans = append(spans, keySpan(k))
+		spans = append(spans, keySpan(KeyWords(k)))
 	}
 	return spans
 }
@@ -108,7 +108,7 @@ func keySpans(keys []string) []ui.Span {
 func keysWidth(keys []string) int {
 	width := len(keys) - 1
 	for _, k := range keys {
-		width += utf8.RuneCountInString(k)
+		width += utf8.RuneCountInString(KeyWords(k))
 	}
 	return max(width, 0)
 }

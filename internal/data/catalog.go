@@ -137,6 +137,11 @@ func ReadCatalogAt(home string) (Catalog, error) {
 	if err != nil {
 		return Catalog{}, fmt.Errorf("read %s: %w", path, err)
 	}
+	return parseCatalog(path, raw)
+}
+
+// parseCatalog decodes and validates the text of a config.toml the way kata does; path only names the file in an error.
+func parseCatalog(path string, raw []byte) (Catalog, error) {
 	var f catalogFile
 	if _, err := toml.Decode(string(raw), &f); err != nil {
 		return Catalog{}, fmt.Errorf("parse %s: %w", path, err)

@@ -160,7 +160,7 @@ func undoBoundary(cmd Cmd) (string, bool) {
 		LoadJobWorkflows, LoadJobs, LoadRuns, ShowRun, LoadRecurTarget, LoadFieldLabels, LoadProject, ReadSnapshot, Subscribe,
 		WakeAt, OpenIssue, LookupSearchID, SearchByMeaning, LoadWorkflows, ReadWorkflowText, LoadWorker, LoadWorkerSetup, SaveWorkerSetup,
 		SaveWorkerEdit, StopWorker, SetWorkerSupervision, LoadLocalRun, RunJobNow, ResumeJob, ResumeLocalRun, AbandonLocalRun,
-		OpenRunSession, StartAgent, StartTeam, DriveTeams, PruneAgents, RefreshAgents, ReadAgentSessions, WaitAgentSessions, WaitToast, WaitDocGuard, FocusAgent, OpenAgent, SendAgentBack, SetAgentOpen, CloseAgent, StopAgent, HandOffAgent, InterruptAgent, ReadAgentIssue, ReadSweepComments, RaiseAgentAttention, ClearAgentAttention, ClearAgentAddress, CreateProject, BindProject, LookupDeleted, LoadDaemons, SwitchDaemon, LoadConfigFiles, LoadEmbeddingsStatus, TurnOnEmbeddings, LoadAttention, LoadAuthCapabilities, OpenAttachment,
+		OpenRunSession, StartAgent, StartTeam, DriveTeams, PruneAgents, RefreshAgents, ReadAgentSessions, WaitAgentSessions, WaitToast, WaitDocGuard, FocusAgent, OpenAgent, SendAgentBack, SetAgentOpen, CloseAgent, StopAgent, HandOffAgent, InterruptAgent, ReadAgentIssue, ReadSweepComments, RaiseAgentAttention, ClearAgentAttention, ClearAgentAddress, CreateProject, BindProject, LookupDeleted, LoadDaemons, SwitchDaemon, SaveDaemonCmd, RemoveDaemonCmd, LoadConfigFiles, LoadEmbeddingsStatus, TurnOnEmbeddings, LoadAttention, LoadAuthCapabilities, OpenAttachment,
 		LoadCredentials, LoadFederation, LoadFederationHubs, LoadFederationHubProjects, BrowseFederationHubs,
 		SaveAgentConfig, SwitchDocbank, RestartKataDaemon, CheckVersions, ShowWhatsNew,
 		LoadTeamKids, ResolveComment,

@@ -58,6 +58,8 @@ const (
 	CardAgentMessage
 	CardEmbeddings
 	CardAttachmentCopy
+	CardDaemon
+	CardDaemonRemove
 )
 
 type cardEntry struct {
@@ -203,8 +205,6 @@ func draftBusy(m Model) bool {
 	return m.EditorMode() != ModeEditor || draft.Saving
 }
 
-func workflowBusy(m Model) bool { return workflowMode(m) != ModeEditor || m.Workflows.Card.Saving }
-
 func buildCards() []cardEntry {
 	list := []cardEntry{
 		{
@@ -251,15 +251,18 @@ func buildCards() []cardEntry {
 		},
 		{
 			card: CardWorkflow, name: "workflow", open: func(m Model) bool { return m.Workflows.Card.Open },
-			modes:  []Mode{ModeEditor, ModeDiscard, ModeConflict},
-			mode:   workflowMode,
-			key:    workflowCardKey,
-			busy:   workflowBusy,
-			fields: []FieldSpec{}, input: true,
-			target: EditWorkflowBody,
+			modes:   []Mode{ModeWorkflowForm, ModeDiscard, ModeConflict},
+			mode:    workflowMode,
+			key:     workflowCardKey,
+			table:   &workflowTable,
+			editing: []fieldEditing{{mode: ModeWorkflowForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, OpenChoice, DeleteInput, ClearInput}}},
+			choices: workflowChoiceSet,
+			target:  EditWorkflowBody, bodyField: WorkflowFieldBody,
 			edit: func(m Model, apply func(TextEditor) TextEditor) Model {
 				if !workflowBusy(m) {
-					m.Workflows.Card.Editor = apply(m.Workflows.Card.Editor)
+					if step := m.Workflows.Card.Form.current(); step != nil {
+						step.Body = apply(step.Body)
+					}
 				}
 				return m
 			},
@@ -270,6 +273,7 @@ func buildCards() []cardEntry {
 			key:    updateFieldKey,
 			busy:   func(m Model) bool { return m.FieldForm.Saving },
 			fields: []FieldSpec{}, input: true,
+			choices: fieldChoiceSet, choose: func(m Model, i int) Model { return chooseFieldPriority(m, i) },
 			editing: []fieldEditing{{mode: ModeFieldForm, actions: []Action{DeleteInput, ClearInput}, delete: "erase", clear: "clear input"}},
 			text:    func(m *Model) (*string, *Caret) { return &m.FieldForm.Value, &m.FieldForm.Caret },
 			erased: func(m Model, _ Action, changed bool) Model {
@@ -313,6 +317,20 @@ func buildCards() []cardEntry {
 			modes: []Mode{ModeRevokeToken},
 			key:   updateRevokeKey,
 			busy:  func(m Model) bool { return m.RevokeCard.Saving }, fields: []FieldSpec{},
+		},
+		{
+			card: CardDaemon, name: "daemon", open: func(m Model) bool { return m.DaemonForm.Open },
+			modes:   []Mode{ModeDaemonForm},
+			key:     updateDaemonFormKey,
+			table:   &daemonTable,
+			editing: []fieldEditing{{mode: ModeDaemonForm, actions: []Action{NextField, PreviousField, NextChoice, PreviousChoice, DeleteInput, ClearInput}}},
+			choices: daemonChoiceSet,
+		},
+		{
+			card: CardDaemonRemove, name: "daemon-remove", open: func(m Model) bool { return m.DaemonRemove.Open },
+			modes: []Mode{ModeDaemonRemove},
+			key:   updateDaemonRemoveKey,
+			busy:  func(m Model) bool { return m.DaemonRemove.Saving }, fields: []FieldSpec{},
 		},
 		{
 			card: CardMove, name: "move", open: func(m Model) bool { return m.MoveProject.Open },

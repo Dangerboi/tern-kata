@@ -11,9 +11,9 @@ func labelTexts(t *testing.T, m model.Model, layer string, keys []string) []any 
 	nodes := pickerNodes(t, m)
 	var got []any
 	for _, key := range keys {
-		node, ok := nodes[layer+"."+key+"-label"]
+		node, ok := nodes[layer+"."+key+"-label.name"]
 		if !ok {
-			t.Fatalf("missing %s.%s-label", layer, key)
+			t.Fatalf("missing %s.%s-label.name", layer, key)
 		}
 		got = append(got, text(node))
 	}
@@ -51,11 +51,11 @@ func TestRenderCloseShowsTheReferenceAndRationaleOnlyForTheirReasons(t *testing.
 		t.Error("a done close shows the reference field")
 	}
 	m.CloseForm.Values.Reason = string(model.ReasonSuperseded)
-	if got := text(pickerNodes(t, m)["layer.close.reference-label"]); got != "Replaced by" {
+	if got := text(pickerNodes(t, m)["layer.close.reference-label.name"]); got != "Replaced by" {
 		t.Errorf("superseded reference label = %v", got)
 	}
 	m.CloseForm.Values.Reason = string(model.ReasonAuditNoChange)
-	if got := text(pickerNodes(t, m)["layer.close.rationale-label"]); got != "Why nothing changed" {
+	if got := text(pickerNodes(t, m)["layer.close.rationale-label.name"]); got != "Why nothing changed" {
 		t.Errorf("rationale label = %v", got)
 	}
 }

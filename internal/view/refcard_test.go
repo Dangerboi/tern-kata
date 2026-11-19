@@ -177,7 +177,7 @@ func TestMachineStringsAreMono(t *testing.T) {
 	if got := spanStyles(nodes, view.DetailActivityID+".linked.row.jump")["peer"]; got != "accent link mono" {
 		t.Errorf("event reference style = %q", got)
 	}
-	for _, id := range []string{".linked.row.heading"} {
+	for _, id := range []string{".linked.row.time"} {
 		var muted []string
 		for text, style := range spanStyles(nodes, view.DetailActivityID+id) {
 			if style == "muted mono" {

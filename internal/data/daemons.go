@@ -51,6 +51,7 @@ func (g *Gateway) loadDaemons(ctx context.Context, cmd model.LoadDaemons) model.
 		entry, _ := catalog.Entry(d.Name)
 		loaded.Entries = append(loaded.Entries, model.DaemonEntry{
 			Name: d.Name, Endpoint: d.Endpoint, Token: d.HasToken, AllowInsecure: entry.AllowInsecure, Current: d.Name == current,
+			URL: entry.URL, Local: entry.Local, TokenEnv: entry.TokenEnv, InlineToken: entry.InlineToken != "",
 		})
 	}
 	return loaded
@@ -122,4 +123,21 @@ func (c *Client) describe(ctx context.Context) model.Daemon {
 		}
 	}
 	return daemon
+}
+
+// saveDaemon writes an entry to kata's config.toml. It needs no daemon: the file is the client's own.
+func (g *Gateway) saveDaemon(cmd model.SaveDaemonCmd) model.Msg {
+	spec := DaemonSpec{Name: cmd.Name, Local: cmd.Local, URL: cmd.URL, TokenEnv: cmd.TokenEnv, Token: cmd.Token, AllowInsecure: cmd.AllowInsecure, KeepToken: cmd.KeepToken}
+	var err error
+	if cmd.Old == "" {
+		err = AddDaemon(spec)
+	} else {
+		err = UpdateDaemon(cmd.Old, spec)
+	}
+	return model.DaemonSaved{Request: cmd.Request, Name: cmd.Name, Err: err}
+}
+
+// removeDaemon deletes an entry from kata's config.toml.
+func (g *Gateway) removeDaemon(cmd model.RemoveDaemonCmd) model.Msg {
+	return model.DaemonRemoved{Request: cmd.Request, Name: cmd.Name, Err: RemoveDaemon(cmd.Name)}
 }

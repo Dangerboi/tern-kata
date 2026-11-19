@@ -62,7 +62,7 @@ func TestHelpIsAFullPaneSheetOfTheIssuesPage(t *testing.T) {
 		at += i + 1
 	}
 	joined := strings.Join(lines, "\n")
-	for _, want := range []string{"?  help", "Quit (asks first", "pgup  page up", "I  Inbox", "1-6", "first", "last", "tab", "shift+tab", "Set priority", "expand/collapse all", "Flat or nested", "Open linked Issue", "new child", "Reset the form", "reply to comment", "Cycle reply kind", "make or change recurrence", "set parent", "Projects", "menu"} {
+	for _, want := range []string{"?  help", "Quit (asks first", "PgUp  page up", "I  Inbox", "1-6", "first", "last", "Tab", "Shift+Tab", "Set priority", "expand/collapse all", "Flat or nested", "Open linked Issue", "new child", "Reset the form", "reply to comment", "Cycle reply kind", "make or change recurrence", "set parent", "Projects", "menu"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("row %q missing in %q", want, lines)
 		}
@@ -144,12 +144,12 @@ func TestHelpSheetListsTheGlobalKeysAndTheCurrentPagesKeys(t *testing.T) {
 
 func TestHelpSheetListsTheAgentKeyOnTheIssuesPageAndTheBoard(t *testing.T) {
 	for _, key := range []string{"", "5"} {
-		if !slices.ContainsFunc(strings.Split(helpOn(t, key), "\n"), func(line string) bool { return strings.HasPrefix(line, "w ") }) {
+		if !slices.ContainsFunc(strings.Split(helpOn(t, key), "\n"), func(line string) bool { return strings.HasPrefix(line, "W ") }) {
 			t.Errorf("page key %q: no w line", key)
 		}
 	}
 	for _, line := range strings.Split(helpOn(t, "2"), "\n") {
-		if strings.HasPrefix(line, "w ") && strings.Contains(line, "agents") {
+		if strings.HasPrefix(line, "W ") && strings.Contains(line, "agents") {
 			t.Errorf("the agent key is listed on the Jobs Page: %q", line)
 		}
 	}

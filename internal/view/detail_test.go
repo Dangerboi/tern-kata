@@ -82,7 +82,7 @@ func TestOnlyTheActiveTabsRowsRender(t *testing.T) {
 	}{
 		{model.TabComments, []string{"c1", "c2"}},
 		{model.TabEvents, []string{"e3", "e2"}}, // the snapshot lists History newest first; the created event is not a row
-		{model.TabLinks, []string{"7"}},
+		{model.TabLinks, []string{"group-related", "7"}},
 	} {
 		nodes := render(t, detailWithActivity(tt.tab))
 		var got []string
@@ -316,7 +316,10 @@ func TestEventsAreOneCompactLine(t *testing.T) {
 		t.Fatalf("event card head %v with %d children, want no head and one line", card.P["head"], len(card.C))
 	}
 	nodes := render(t, detailWithActivity(model.TabEvents))
-	if got, want := text(nodes[view.DetailActivityID+".e2.heading"]), "2026-10-09 03:05 dana reopened"; got != want {
+	if got, want := text(nodes[view.DetailActivityID+".e2.row.time"]), "2026-10-09 03:05"; got != want {
+		t.Errorf("event time = %q, want %q", got, want)
+	}
+	if got, want := text(nodes[view.DetailActivityID+".e2.row.heading"]), "dana reopened"; got != want {
 		t.Errorf("event line = %q, want %q", got, want)
 	}
 }

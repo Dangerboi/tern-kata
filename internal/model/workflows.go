@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 )
 
 // The Workflows Page lists the Pane's Project's kata workflows beside an inspector of the selected one. Like the Board it takes the
@@ -44,26 +43,25 @@ type WorkflowsState struct {
 	checkReads Latest
 }
 
-// WorkflowCard is the Workflow card: the JSON text of a new workflow or of one being changed, edited in the card or in $EDITOR.
+// WorkflowCard is the Workflow card: the form of a new workflow or of one being changed.
 type WorkflowCard struct {
 	Open bool
 	// UID is the workflow being changed, "" for a new one; Name is what the card titles it with.
 	UID, Name string
-	// Base is the definition_event_uid the text started against; a save is guarded on it.
+	// Base is the definition_event_uid the form started against; a save is guarded on it.
 	Base string
-	// Start is the text the card opened with, so a card left unchanged closes without asking.
-	Start  string
-	Editor TextEditor
-	// Conflict is the workflow as it stands now when the save found it changed; the edited text is kept beside it.
+	// Start is the form's snapshot when the card opened, so a card left unchanged closes without asking.
+	Start string
+	Form  WorkflowForm
+	// Conflict is the workflow as it stands now when the save found it changed; the form is kept beside it.
 	Conflict       *Workflow
 	Saving         bool
 	DiscardConfirm bool
-	Err            error
-	// Problem is what kata would refuse of the text as it stands, nil while the text is fine.
-	Problem error
-	// Reading is the Worker's reading of the text as it stands, nil while none has answered or the text is one kata refuses.
+	// Err is what stopped the last save: a rule of kata's the form breaks, or the refusal of the write.
+	Err error
+	// Reading is the Worker's reading of the form as it stands, nil while none has answered or the form is one kata refuses.
 	Reading *WorkerReading
-	// asked, askedText and askNow track the text the Worker was last asked about, and whether the next ask goes out at once.
+	// asked, askedText and askNow track the form the Worker was last asked about, and whether the next ask goes out at once.
 	asked     bool
 	askedText string
 	askNow    bool
@@ -305,8 +303,10 @@ func moveWorkflow(m Model, action Action) Model {
 	return m
 }
 
+// inspectWorkflow is enter on the Page. A wide Pane always shows the selected workflow beside the list, so only a narrow one has
+// an inspector to open in place of the list.
 func inspectWorkflow(m Model) Model {
-	if _, ok := m.SelectedWorkflow(); ok {
+	if _, ok := m.SelectedWorkflow(); ok && m.Cols < SideBySideCols {
 		m.Workflows.Inspecting = true
 	}
 	return m
@@ -358,7 +358,8 @@ func newWorkflow(m Model) Model {
 	if m.Workflows.ProjectID == 0 {
 		return m
 	}
-	m.Workflows.Card = WorkflowCard{Open: true, Start: NewWorkflowText, Editor: NewTextEditor(NewWorkflowText), askNow: true}
+	form := blankWorkflowForm()
+	m.Workflows.Card = WorkflowCard{Open: true, Start: form.snapshot(), Form: form, askNow: true}
 	return m
 }
 
@@ -369,8 +370,8 @@ func editWorkflow(m Model) Model {
 	case w.Archived:
 		m = m.say(fmt.Sprintf("%q is archived. Restore it first.", w.Name))
 	default:
-		text := w.Text()
-		m.Workflows.Card = WorkflowCard{Open: true, UID: w.UID, Name: w.Name, Base: w.EventUID, Start: text, Editor: NewTextEditor(text), askNow: true}
+		form := newWorkflowForm(w)
+		m.Workflows.Card = WorkflowCard{Open: true, UID: w.UID, Name: w.Name, Base: w.EventUID, Start: form.snapshot(), Form: form, askNow: true}
 	}
 	return m
 }
@@ -495,10 +496,17 @@ func updateWorkflows(m Model, msg Msg) (Model, []Cmd, bool) {
 			return m, nil, false
 		}
 		if c := &m.Workflows.Card; c.Open {
-			c.Err, c.askNow = msg.Err, true
-			if msg.Err == nil {
-				text := normalizeLineBreaks(msg.Text)
-				c.Editor = c.Editor.ApplyEdit(0, len16(c.Editor.Text), text, len16(text), len16(c.Editor.Text))
+			c.askNow = true
+			if msg.Err != nil {
+				c.Err = errors.New(Cannot("read", "the editor's text", msg.Err))
+			} else if w, err := decodeWorkflowText(normalizeLineBreaks(msg.Text)); err != nil {
+				c.Err = errors.New(Cannot("read", "the editor's text", err))
+			} else {
+				c.Err = nil
+				at, field := c.Form.At, c.Form.Field
+				c.Form = newWorkflowForm(w)
+				c.Form.At, c.Form.Field = at, field
+				c.Form.current()
 			}
 		}
 		return m, nil, true
@@ -525,7 +533,7 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 	}
 	switch {
 	case msg.Err != nil && saving:
-		card.Err = msg.Err
+		card.Err = errors.New(Cannot("save", "the workflow", msg.Err))
 	case msg.Err != nil:
 		m = m.fail(Cannot(msg.Op.verb(), fmt.Sprintf("%q", cmp.Or(msg.Name, msg.UID)), msg.Err))
 	case msg.Workflow == nil && msg.Current != nil:
@@ -552,8 +560,8 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 	return m
 }
 
-// workflowCardKey is the Workflow card's key handler: the shared Draft keys for save, discard and $EDITOR, over the card's own
-// text, and Overwrite and Discard Draft once a save found the workflow changed.
+// workflowCardKey is the Workflow card's key handler: the form's own keys for save, cancel, the editor and the steps, the typing
+// of the focused field, and Keep mine and Discard mine once a save found the workflow changed.
 func workflowCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 	c := m.Workflows.Card
 	if c.Saving {
@@ -591,22 +599,35 @@ func workflowCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		case SaveDraftAction:
 			return saveWorkflowCard(m)
 		case CancelDraft:
-			if c.Editor.Text == c.Start || strings.TrimSpace(c.Editor.Text) == "" {
+			if c.Form.snapshot() == c.Start {
 				m.Workflows.Card = WorkflowCard{}
 			} else {
 				m.Workflows.Card.DiscardConfirm = true
 			}
 			return m, nil
 		case ExternalEditorAction:
-			return m, []Cmd{OpenDraftEditor{UID: WorkflowDraftUID, Text: c.Editor.Text, Suffix: ".json"}}
+			return m, []Cmd{OpenDraftEditor{UID: WorkflowDraftUID, Text: c.Form.JSON(), Suffix: ".json"}}
+		}
+		if next, taken := workflowStepKey(m, binding.Action); taken {
+			return next, nil
 		}
 	}
-	m.Workflows.Card.Editor = editorKey(c.Editor, binding, ok, msg)
-	m.Workflows.Card.Err = nil
+	f := &m.Workflows.Card.Form
+	switch {
+	case f.Field == WorkflowFieldBody:
+		if step := f.current(); step != nil {
+			b, bound := LookupBindingForMode(msg.Chord, ModeEditor)
+			step.Body = editorKey(step.Body, b, bound, msg)
+			m.Workflows.Card.Err = nil
+		}
+	case !workflowTable.typeKey(&m, binding, ok, msg) && typedText(msg) == " ":
+		// A choice has no text to type a space into: it moves on, as it does in the other cards.
+		workflowTable.stepFocused(&m, false)
+	}
 	return m, nil
 }
 
-// saveWorkflowCard checks the text against kata's rules and, when it passes, sends it. A text that fails stays in the card with
+// saveWorkflowCard checks the form against kata's rules and, when it passes, sends it. A form that fails stays in the card with
 // the problem named.
 func saveWorkflowCard(m Model) (Model, []Cmd) {
 	c := &m.Workflows.Card
@@ -614,9 +635,9 @@ func saveWorkflowCard(m Model) (Model, []Cmd) {
 		c.Err = errors.New(Cannot("save", "the workflow", errDraftReadOnly))
 		return m, nil
 	}
-	doc, err := ParseWorkflow(c.Editor.Text)
+	doc, err := c.Form.document()
 	if err != nil {
-		c.Err = err
+		c.Err = errors.New(Cannot("save", "the workflow", err))
 		return m, nil
 	}
 	c.Saving, c.Err = true, nil
@@ -624,21 +645,11 @@ func saveWorkflowCard(m Model) (Model, []Cmd) {
 	return m, []Cmd{SaveWorkflow{Workspace: m.Workspace, Actor: m.Actor, ProjectID: s.ProjectID, ProjectUID: s.ProjectUID, UID: c.UID, Expected: c.Base, Name: doc.Name, Definition: doc.Definition}}
 }
 
-func workflowMode(m Model) Mode {
-	switch c := m.Workflows.Card; {
-	case c.Conflict != nil:
-		return ModeConflict
-	case c.DiscardConfirm:
-		return ModeDiscard
-	}
-	return ModeEditor
-}
-
 var workflowModes = []Mode{ModeWorkflows}
 
 func workflowActions() []actionEntry {
 	return []actionEntry{
-		{action: OpenWorkflow, modes: workflowModes, keys: keys("enter", "enter"), help: "steps", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 3, "show the steps"}}, handle: pure(inspectWorkflow)},
+		{action: OpenWorkflow, modes: workflowModes, keys: keys("enter", "enter"), help: "steps", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 3, "show the steps"}}, handle: pure(inspectWorkflow), when: func(m Model) bool { return m.Cols < SideBySideCols }},
 		{action: NewWorkflow, modes: workflowModes, keys: keys("n", "n"), help: "new", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 4, "new workflow (Workflow card)"}}, handle: pure(newWorkflow)},
 		{action: EditWorkflow, modes: workflowModes, keys: keys("e", "e"), help: "edit", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 5, "edit the workflow (Workflow card)"}}, handle: pure(editWorkflow)},
 		{action: ArchiveWorkflowAction, modes: workflowModes, keys: keys("x", "x"), help: "archive", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 6, "archive"}}, handle: changeWorkflowState(false)},

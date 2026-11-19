@@ -29,6 +29,39 @@ func createChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	return newChoices(ControlSelect, priorityLabels, priorityIndex(m.Create.Priority)), true
 }
 
+// FieldPriority is the Priority choice of the Set priority card, the same picker as the Create card's.
+const FieldPriority Field = "priority"
+
+// fieldChoiceSet is the choice of the single-field card: the Priority picker of Set priority, none for every other form.
+func fieldChoiceSet(m Model, name Field) (ChoiceSet, bool) {
+	if !m.FieldForm.Open || m.FieldForm.Action != PriorityAction || name != FieldPriority {
+		return ChoiceSet{}, false
+	}
+	return newChoices(ControlSelect, priorityLabels, priorityIndex(m.FieldForm.Value)), true
+}
+
+// chooseFieldPriority holds the priority at index of the picker; none is kata's "-".
+func chooseFieldPriority(m Model, index int) Model {
+	if index < 0 || index >= len(priorityValues) {
+		return m
+	}
+	m.FieldForm.Value = cmpOr(priorityValues[index], "-")
+	m.FieldForm.Err = nil
+	return m
+}
+
+// stepFieldChoice moves the Set priority picker to its next or previous choice.
+func stepFieldChoice(m Model, back bool) Model {
+	return chooseFieldPriority(m, cycleIndex(max(priorityIndex(m.FieldForm.Value), 0), len(priorityValues), back))
+}
+
+func cmpOr(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
 // closeReasons are the reasons a close takes, in the order the Reason control shows them.
 var closeReasons = []CloseReasonKind{ReasonDone, ReasonWontfix, ReasonDuplicate, ReasonSuperseded, ReasonAuditNoChange}
 

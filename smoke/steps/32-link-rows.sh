@@ -1,4 +1,4 @@
-# A Links row reads `relation | #id - title` as the Pane draws it: relation and separator muted; the reference and the title
+# A Links group is headed by its relation and count, and a row reads `#id title`; the reference and the title
 # both jump on a click. Own Project and Issues; it cleans up.
 lr_dir="$tmp/linkrows-workspace"
 mkdir -p "$lr_dir" "$tmp/linkrows-unbound"
@@ -22,12 +22,10 @@ ctl click "[data-id\$='.$lr_main']"
 ctl key enter
 ctl key Tab
 ctl key Tab
-expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.heading']" '.ok and (.nodes[0].text == "Blocked by")'
+expect_tree "[data-id\$='.group-blocked_by']" '.ok and (.nodes[0].text | test("^Blocked by\\s*1$"))'
 expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.jump']" ".ok and (.nodes[0].text == \"#$lr_short Linkrows peer\")"
-# The row reads `Relation #id title` as laid out, with no pipe or dash between the pieces. The relation's muted span must sit
-# inside its box, left of the reference.
-expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row']" ".ok and (.nodes[0].text | test(\"^Blocked by\\\\s*#$lr_short Linkrows peer$\"))"
-expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row'] *" '.ok and ([.nodes[] | select(.text == "Blocked by" and .class == "sf-t-muted")] | length == 1) and ([.nodes[] | select(.class == "sf-t-muted")][0].rect as $r | [.nodes[] | select(.class | startswith("sf sf-text"))][1].rect as $ref | $r[0] + $r[2] <= $ref[0] + 0.5)'
+# The relation is named once by the group heading above its rows; the row is the reference and the title, with no pipe or dash.
+expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row']" ".ok and (.nodes[0].text == \"#$lr_short Linkrows peer\")"
 
 # Link ids are daemon-wide, so the row is found by suffix. A click on the reference and title opens the peer.
 ctl click "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.row.jump']"

@@ -58,27 +58,27 @@ func TestIssueRowMenuListsTheKeysActionsAndDisablesWhatCannotRun(t *testing.T) {
 		want []menuRow
 	}{
 		{"open", view.IssueID(alpha.UID), alpha.UID, []menuRow{
-			{"Open", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "enter"), "", []string{"⏎"}},
+			{"Open", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "enter"), "", []string{"Enter"}},
 			{"Close…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "x"), "", []string{"X"}},
 			{"Priority…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "!"), "", []string{"!"}},
 			{"Dates…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "d"), "", []string{"D"}},
 			{"Owner…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "a"), "", []string{"A"}},
 			{"Labels…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "+"), "", []string{"+"}},
-			{"Move to Project…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "shift+m"), "", []string{"⇧M"}},
+			{"Move to Project…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "shift+m"), "", []string{"Shift+M"}},
 			{"Agents…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "w"), "", []string{"W"}},
-			{"New child…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "shift+n"), "", []string{"⇧N"}},
+			{"New child…", view.ContextMenuPickClick(alpha.UID, model.ModeList, "", "shift+n"), "", []string{"Shift+N"}},
 		}},
 		{"closed", view.IssueID(closed.UID), closed.UID, []menuRow{
-			{"Open", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "enter"), "", []string{"⏎"}},
+			{"Open", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "enter"), "", []string{"Enter"}},
 			{"Close…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "x"), model.ClosedAlreadyRefusal, []string{"X"}},
 			{"Reopen", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "r"), "", []string{"R"}},
 			{"Priority…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "!"), "", []string{"!"}},
 			{"Dates…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "d"), "", []string{"D"}},
 			{"Owner…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "a"), "", []string{"A"}},
 			{"Labels…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "+"), "", []string{"+"}},
-			{"Move to Project…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "shift+m"), "", []string{"⇧M"}},
+			{"Move to Project…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "shift+m"), "", []string{"Shift+M"}},
 			{"Agents…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "w"), model.ClosedIssueRefusal, []string{"W"}},
-			{"New child…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "shift+n"), "", []string{"⇧N"}},
+			{"New child…", view.ContextMenuPickClick(closed.UID, model.ModeList, "", "shift+n"), "", []string{"Shift+N"}},
 		}},
 	}
 	for _, tc := range cases {

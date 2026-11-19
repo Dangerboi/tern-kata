@@ -9,7 +9,6 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/Dangerboi/tern-kata/internal/worker"
-	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
 // workflowText is a workflow document with one step list, as the card holds it.
@@ -17,11 +16,17 @@ func workflowText(steps string) string {
 	return `{"name":"Flow","definition":{"version":1,"steps":[` + steps + `]}}`
 }
 
-// typeWorkflow replaces the card's text.
+// typeWorkflow brings a workflow document back into the card as $EDITOR does: the form takes what it holds, and the card asks
+// for the worker's reading at once.
 func typeWorkflow(t *testing.T, s driver.State, text string) driver.Output {
 	t.Helper()
-	old := len(s.Model.Workflows.Card.Editor.Text)
-	return step(t, s, &tern.Edit{ID: cardInput(t, s.Model), From: 0, To: old, Text: text, Cursor: len(text), Len: old})
+	return step(t, s, model.DraftEditorClosed{UID: model.WorkflowDraftUID, Text: text})
+}
+
+// retypeName types a character into the focused field, as a person editing does: the card asks for the reading after a pause.
+func retypeName(t *testing.T, s driver.State) driver.Output {
+	t.Helper()
+	return step(t, s, key("x"))
 }
 
 func readingAsk(t *testing.T, out driver.Output) (model.ReadWorkflowText, bool) {
@@ -69,7 +74,7 @@ func TestWorkflowCardSavesWhatTheWorkerWouldRefuseAndSaysWhy(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := step(t, workflowsPane(t, 160, reviewFlow()), key("n")).State
-			typed := typeWorkflow(t, s, workflowText(tc.steps))
+			typed := retypeName(t, typeWorkflow(t, s, workflowText(tc.steps)).State)
 			ask, ok := readingAsk(t, typed)
 			if !ok || ask.After <= 0 {
 				t.Fatalf("typing sent %#v, want an ask after a pause", typed.Cmds)
@@ -108,7 +113,6 @@ func TestWorkflowCardShowsOnlyKatasProblemForTextKataRefuses(t *testing.T) {
 	if ask, ok := readingAsk(t, typed); ok {
 		t.Fatalf("text kata refuses was sent to the Worker: %#v", ask)
 	}
-	mustShow(t, typed.State, "kata's problem while editing", "must be")
 	saved := step(t, typed.State, key("ctrl+o")).State
 	mustShow(t, saved, "kata's problem", "must be")
 	if strings.Contains(screen(t, saved), "This machine's worker") {
@@ -216,15 +220,16 @@ func TestAWorkflowWithOptionKeysTheWorkerDoesNotKnowGetsNoRefusal(t *testing.T) 
 	}
 }
 
-func TestWorkflowCardShowsKatasProblemWhileEditingAndClearsItWhenTheTextIsValid(t *testing.T) {
+func TestWorkflowCardShowsKatasProblemOnSaveAndClearsItWhenTheTextIsValid(t *testing.T) {
 	five := 5
 	s := step(t, workflowsPane(t, 160), key("n")).State
 	broken := typeWorkflow(t, s, workflowText(`{"key":"a","kind":"shell"}`))
-	mustShow(t, broken.State, "the problem before any save", "must be")
-	if strings.Contains(screen(t, broken.State), "This machine's worker") {
+	refused := step(t, broken.State, key("ctrl+o")).State
+	mustShow(t, refused, "the problem after a save", "must be")
+	if strings.Contains(screen(t, refused), "This machine's worker") {
 		t.Error("a Worker note is drawn under text kata refuses")
 	}
-	fixed := typeWorkflow(t, broken.State, workflowText(`{"key":"a","kind":"prompt","prompt":"p"}`))
+	fixed := typeWorkflow(t, refused, workflowText(`{"key":"a","kind":"prompt","prompt":"p"}`))
 	ask, ok := readingAsk(t, fixed)
 	if !ok {
 		t.Fatalf("text kata accepts sent no ask: %#v", fixed.Cmds)
@@ -243,13 +248,14 @@ func TestWorkflowCardRefusesOptionsWrittenAsNullAndTakesOptionsLeftOut(t *testin
 		t.Run(name, func(t *testing.T) {
 			s := step(t, workflowsPane(t, 160), key("n")).State
 			typed := typeWorkflow(t, s, text)
-			mustShow(t, typed.State, "the problem while editing", `\"options\" must be an object.`)
 			if _, ok := readingAsk(t, typed); ok {
 				t.Error("text with options written as null was sent to the Worker")
 			}
-			if out := step(t, typed.State, key("ctrl+o")); len(out.Cmds) != 0 {
+			out := step(t, typed.State, key("ctrl+o"))
+			if len(out.Cmds) != 0 {
 				t.Errorf("text with options written as null was saved: %#v", out.Cmds)
 			}
+			mustShow(t, out.State, "the problem after a save", `\"options\" must be an object.`)
 		})
 	}
 	s := step(t, workflowsPane(t, 160), key("n")).State
@@ -277,7 +283,7 @@ func TestADiscardedDraftAfterAConflictLeavesTheCurrentVersionWithItsReading(t *t
 	newer.EventUID = "E2"
 	s := workflowsPane(t, 160, reviewFlow())
 	editing := step(t, s, key("e")).State
-	edited := typeWorkflow(t, editing, strings.Replace(reviewFlow().Text(), "make test", "make check", 1)).State
+	edited := editWorkflowStep(t, editing, 1, "make check")
 	saving := step(t, edited, key("ctrl+o")).State
 	conflict := step(t, saving, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, UID: "W1", Current: &newer, Reading: &refusal}).State
 	discarded := step(t, conflict, key("d")).State

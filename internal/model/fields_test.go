@@ -86,3 +86,25 @@ func TestLabelCompletionAndPriorityBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestSetPriorityIsAPickerThatOpensOnTheIssuesPriority(t *testing.T) {
+	two := int64(2)
+	m := model.Model{SelectedUID: "i", Issues: []model.Issue{{UID: "i", Priority: &two}}}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "!"})
+	set, ok := m.CardChoices(model.CardField, model.FieldPriority)
+	if !ok || set.Chosen != 3 || set.Labels[0] != "None" {
+		t.Fatalf("picker %+v ok %v, want P2 chosen among None and P0 to P4", set, ok)
+	}
+	m, _ = model.Update(m, model.KeyMsg{Chord: "right"})
+	m, _ = model.Update(m, model.ChooseMsg{Field: model.FieldPriority, Index: 0})
+	if m.FieldForm.Value != "-" {
+		t.Fatalf("choosing None holds %q, want the clearing dash", m.FieldForm.Value)
+	}
+	_, cmds := model.Update(m, model.KeyMsg{Chord: "enter"})
+	for _, c := range cmds {
+		if w, ok := c.(model.WriteField); ok && w.Value == "-" && w.Action == model.PriorityAction {
+			return
+		}
+	}
+	t.Fatalf("enter wrote %#v, want the priority cleared", cmds)
+}

@@ -115,29 +115,49 @@ func TestWorkflowsPageSaysWhyItIsEmpty(t *testing.T) {
 	mustShow(t, failed, "load failure", "kata server not responding")
 }
 
+// editWorkflowStep shows step number i (from zero) of the open Workflow card and replaces its command or prompt, as Tern's editor
+// sends the edit.
+func editWorkflowStep(t *testing.T, s driver.State, i int, text string) driver.State {
+	t.Helper()
+	s = step(t, s, model.ChooseMsg{Field: model.WorkflowFieldStep, Index: i}).State
+	s = step(t, s, model.FocusFieldMsg{Field: model.WorkflowFieldBody}).State
+	old := len(s.Model.Workflows.Card.Form.Step().Body.Text)
+	return step(t, s, &tern.Edit{ID: view.FieldID(model.CardWorkflow, model.WorkflowFieldBody), From: 0, To: old, Text: text, Cursor: len(text), Len: old}).State
+}
+
 type errText string
 
 func (e errText) Error() string { return string(e) }
 
-func TestWorkflowCardEditsTheDefinitionAsJSONAndRefusesAnInvalidOneKeepingTheText(t *testing.T) {
+func TestWorkflowCardEditsTheFieldsAndStepsAndRefusesAnInvalidFormKeepingIt(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow())
 	s = step(t, s, key("e")).State
 	if s.Model.TopCard() != model.CardWorkflow {
 		t.Fatalf("e opened card %v", s.Model.TopCard())
 	}
-	mustShow(t, s, "card", "Edit workflow", "Review then test", `\"after\": [`, `make test`)
-	cardInput(t, s.Model) // fails the test when the card draws no text editor
+	mustShow(t, s, "card", "Edit workflow", "Review then test", "Name", "About", "Steps", "Step name", "Kind", "Prompt", "After", "Retries", "Review the change.", "Add step", "Remove step", "Move up", "Move down", "Open in editor", "Save", "Cancel")
+	if strings.Contains(screen(t, s), `\"after\": [`) {
+		t.Error("the card shows the JSON of the workflow")
+	}
 
-	broken := strings.Replace(reviewFlow().Text(), `"review"`, `"test"`, 1)
-	old := len(s.Model.Workflows.Card.Editor.Text)
-	s = step(t, s, &tern.Edit{ID: cardInput(t, s.Model), From: 0, To: old, Text: broken, Cursor: len(broken), Len: old}).State
+	// Two steps with one name is what kata refuses; the form says so in the foot and keeps what was typed.
+	s = step(t, s, model.DraftEditorClosed{UID: model.WorkflowDraftUID, Text: strings.Replace(reviewFlow().Text(), `"test"`, `"review"`, 1)}).State
 	refused := step(t, s, key("ctrl+o"))
 	if len(refused.Cmds) != 0 {
-		t.Fatalf("a workflow with duplicate keys was sent: %#v", refused.Cmds)
+		t.Fatalf("a workflow with duplicate step names was sent: %#v", refused.Cmds)
 	}
-	mustShow(t, refused.State, "refusal", "is used by an earlier step")
-	if got := refused.State.Model.Workflows.Card.Editor.Text; got != broken {
-		t.Errorf("the card holds %q after the refusal, want the edited text kept", got)
+	mustShow(t, refused.State, "refusal", "Cannot save the workflow", "is used by an earlier step")
+	if got := refused.State.Model.Workflows.Card.Form.Steps[1].Key; got != "review" {
+		t.Errorf("the form holds step name %q after the refusal, want what was typed kept", got)
+	}
+	foot := false
+	for _, n := range wireNodes(t, view.Render(refused.State.Model, now)) {
+		if strings.HasPrefix(n.ID, "layer.workflow.foot") && strings.Contains(wireText(n), "is used by an earlier step") {
+			foot = true
+		}
+	}
+	if !foot {
+		t.Error("the refusal is not drawn in the card's foot")
 	}
 
 	// The card is a Draft: leaving it with changes asks first.
@@ -147,12 +167,44 @@ func TestWorkflowCardEditsTheDefinitionAsJSONAndRefusesAnInvalidOneKeepingTheTex
 	}
 }
 
+func TestWorkflowCardStepButtonsAddRemoveAndMoveSteps(t *testing.T) {
+	s := workflowsPane(t, 160, reviewFlow())
+	s = step(t, s, key("e")).State
+	labels := func(s driver.State) string { return strings.Join(s.Model.Workflows.Card.Form.StepLabels(), ",") }
+	press := func(s driver.State, button string) driver.State {
+		t.Helper()
+		id := view.LayerID(model.CardWorkflow) + ".steps-head." + button
+		buttons, _ := cardButtonsOf(t, s)
+		act, ok := buttons[id]
+		if !ok {
+			t.Fatalf("the card draws no button %s among %v", id, buttons)
+		}
+		return step(t, s, click(id, act)).State
+	}
+	s = press(s, "add")
+	if labels(s) != "1 review,2 step,3 test" {
+		t.Fatalf("add left %q", labels(s))
+	}
+	s = press(s, "down")
+	if labels(s) != "1 review,2 test,3 step" {
+		t.Fatalf("down left %q", labels(s))
+	}
+	s = press(s, "up")
+	s = press(s, "up")
+	if labels(s) != "1 step,2 review,3 test" {
+		t.Fatalf("up twice left %q", labels(s))
+	}
+	s = press(s, "remove")
+	if labels(s) != "1 review,2 test" {
+		t.Fatalf("remove left %q", labels(s))
+	}
+}
+
 func TestWorkflowCardSavesAndShowsAConflictBesideTheKeptText(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow())
 	s = step(t, s, key("e")).State
-	edited := strings.Replace(reviewFlow().Text(), "make test", "make check", 1)
-	old := len(s.Model.Workflows.Card.Editor.Text)
-	s = step(t, s, &tern.Edit{ID: cardInput(t, s.Model), From: 0, To: old, Text: edited, Cursor: len(edited), Len: old}).State
+	s = editWorkflowStep(t, s, 1, "make check")
+	edited := s.Model.Workflows.Card.Form.JSON()
 	saved := step(t, s, key("ctrl+o"))
 	var save model.SaveWorkflow
 	for _, cmd := range saved.Cmds {
@@ -169,7 +221,7 @@ func TestWorkflowCardSavesAndShowsAConflictBesideTheKeptText(t *testing.T) {
 	newer.Steps[0].Prompt = "Review it twice."
 	conflict := step(t, saved.State, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, UID: "W1", Current: &newer}).State
 	mustShow(t, conflict, "conflict", "Edit workflow", "Changed since you opened it. Nothing was written; your Draft is kept.", "make check", "Review it twice.", "Yours", "Current", "Keep mine", "Discard mine")
-	if got := conflict.Model.Workflows.Card.Editor.Text; got != edited {
+	if got := conflict.Model.Workflows.Card.Form.JSON(); got != edited {
 		t.Errorf("the conflict lost the edited text: %q", got)
 	}
 
@@ -188,9 +240,7 @@ func TestWorkflowCardSavesAndShowsAConflictBesideTheKeptText(t *testing.T) {
 func TestWorkflowConflictOnAnArchivedWorkflowOffersNoOverwrite(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow())
 	s = step(t, s, key("e")).State
-	edited := strings.Replace(reviewFlow().Text(), "make test", "make check", 1)
-	old := len(s.Model.Workflows.Card.Editor.Text)
-	s = step(t, s, &tern.Edit{ID: cardInput(t, s.Model), From: 0, To: old, Text: edited, Cursor: len(edited), Len: old}).State
+	s = editWorkflowStep(t, s, 1, "make check")
 	s = step(t, s, key("ctrl+o")).State
 	gone := reviewFlow()
 	gone.EventUID, gone.Revision, gone.Archived = "E2", 4, true
@@ -205,13 +255,12 @@ func TestWorkflowConflictOnAnArchivedWorkflowOffersNoOverwrite(t *testing.T) {
 	}
 }
 
-func TestNewWorkflowStartsFromATemplateAndCreatesWithoutAGuard(t *testing.T) {
+func TestNewWorkflowStartsWithOneEmptyStepAndCreatesWithoutAGuard(t *testing.T) {
 	s := workflowsPane(t, 160)
 	s = step(t, s, key("n")).State
-	mustShow(t, s, "template", "New workflow", `\"steps\"`)
+	mustShow(t, s, "blank form", "New workflow", "Name", "Steps", "Add step")
 	text := `{"name":"Nightly","definition":{"version":1,"steps":[{"key":"build","kind":"command","command":"make"}]}}`
-	old := len(s.Model.Workflows.Card.Editor.Text)
-	s = step(t, s, &tern.Edit{ID: cardInput(t, s.Model), From: 0, To: old, Text: text, Cursor: len(text), Len: old}).State
+	s = step(t, s, model.DraftEditorClosed{UID: model.WorkflowDraftUID, Text: text}).State
 	out := step(t, s, key("ctrl+o"))
 	for _, cmd := range out.Cmds {
 		if c, ok := cmd.(model.SaveWorkflow); ok && c.UID == "" && c.Expected == "" && c.Name == "Nightly" {
@@ -228,9 +277,9 @@ func TestWorkflowCardOpensEditorOnTheTextAndTakesItBack(t *testing.T) {
 	if out.Editor == nil || out.Editor.UID != model.WorkflowDraftUID || out.Editor.Text != reviewFlow().Text() || out.Editor.Suffix != ".json" {
 		t.Fatalf("ctrl+e routed %#v to $EDITOR", out.Editor)
 	}
-	back := step(t, out.State, model.DraftEditorClosed{UID: model.WorkflowDraftUID, Text: "{}\n"}).State
-	if back.Model.Workflows.Card.Editor.Text != "{}\n" {
-		t.Errorf("the card holds %q", back.Model.Workflows.Card.Editor.Text)
+	back := step(t, out.State, model.DraftEditorClosed{UID: model.WorkflowDraftUID, Text: strings.Replace(reviewFlow().Text(), "Review then test", "Renamed", 1)}).State
+	if got := back.Model.Workflows.Card.Form.Name; got != "Renamed" {
+		t.Errorf("the card holds name %q", got)
 	}
 }
 
@@ -292,8 +341,7 @@ func TestEveryWorkflowsFooterHintClicksLikeItsKey(t *testing.T) {
 func TestWorkflowCardButtonsAreDrawnForEveryState(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow())
 	editing := step(t, s, key("e")).State
-	old := len(editing.Model.Workflows.Card.Editor.Text)
-	asking := step(t, step(t, editing, &tern.Edit{ID: cardInput(t, editing.Model), From: 0, To: old, Text: "x", Cursor: 1, Len: old}).State, key("escape")).State
+	asking := step(t, editWorkflowStep(t, editing, 0, "x"), key("escape")).State
 	conflict := editing
 	conflict.Model, _ = model.Update(editing.Model, model.KeyMsg{Chord: "ctrl+o"})
 	newer := reviewFlow()
@@ -302,7 +350,7 @@ func TestWorkflowCardButtonsAreDrawnForEveryState(t *testing.T) {
 	for name, tt := range map[string]struct {
 		state driver.State
 		mode  model.Mode
-	}{"editing": {editing, model.ModeEditor}, "asking to discard": {asking, model.ModeDiscard}, "conflict": {conflict, model.ModeConflict}} {
+	}{"editing": {editing, model.ModeWorkflowForm}, "asking to discard": {asking, model.ModeDiscard}, "conflict": {conflict, model.ModeConflict}} {
 		t.Run(name, func(t *testing.T) {
 			if got := tt.state.Model.CurrentMode(); got != tt.mode {
 				t.Fatalf("mode %s, want %s", got, tt.mode)
@@ -436,9 +484,7 @@ func TestWorkflowsPageDropsAnAnswerToAnOlderRead(t *testing.T) {
 func TestSavingAWorkflowHiddenBySearchSelectsAVisibleRow(t *testing.T) {
 	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
 	s = step(t, s, key("e")).State
-	edited := strings.Replace(reviewFlow().Text(), "make test", "make check", 1)
-	old := len(s.Model.Workflows.Card.Editor.Text)
-	s = step(t, s, &tern.Edit{ID: cardInput(t, s.Model), From: 0, To: old, Text: edited, Cursor: len(edited), Len: old}).State
+	s = editWorkflowStep(t, s, 1, "make check")
 	saved := step(t, s, key("ctrl+o")).State
 	saved.Model.PageSearch.Text = "nightly"
 	flow := reviewFlow()
@@ -446,5 +492,23 @@ func TestSavingAWorkflowHiddenBySearchSelectsAVisibleRow(t *testing.T) {
 	after := step(t, saved, model.WorkflowWritten{ProjectUID: "p", Op: model.WorkflowOpSave, UID: "W1", Workflow: &flow}).State
 	if got := after.Model.Workflows.Selected; got != "W2" {
 		t.Errorf("selected %q after saving a workflow the search hides, want the visible W2", got)
+	}
+}
+
+func TestWorkflowsFooterOffersEnterStepsOnlyInAPaneTooNarrowToShowThemBesideTheList(t *testing.T) {
+	hint := func(cols int) bool {
+		s := workflowsPane(t, cols, reviewFlow())
+		for _, n := range wireNodes(t, view.Render(s.Model, now)) {
+			if n.ID == "dock.hints" {
+				return strings.Contains(wireText(n), "steps")
+			}
+		}
+		return false
+	}
+	if hint(160) {
+		t.Error("a wide Pane offers Enter for steps it already shows")
+	}
+	if !hint(100) {
+		t.Error("a narrow Pane does not offer Enter for the steps")
 	}
 }

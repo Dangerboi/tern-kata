@@ -267,10 +267,10 @@ func TestGatewayDaemonsListsTheCatalogInKataTuisColumns(t *testing.T) {
 
 	got := as[model.DaemonsLoaded](t, run(t, gateway, model.LoadDaemons{Request: 4}))
 	want := []model.DaemonEntry{
-		{Name: "mine", Endpoint: "local"},
-		{Name: "alpha", Endpoint: strings.TrimPrefix(alpha.URL, "http://"), AllowInsecure: true},
-		{Name: "beta", Endpoint: "kata.example.com:7474", Token: true, Current: true},
-		{Name: "inline", Endpoint: "inline.example.com", Token: true},
+		{Name: "mine", Endpoint: "local", Local: true},
+		{Name: "alpha", Endpoint: strings.TrimPrefix(alpha.URL, "http://"), AllowInsecure: true, URL: alpha.URL},
+		{Name: "beta", Endpoint: "kata.example.com:7474", Token: true, Current: true, URL: "https://kata.example.com:7474/base", TokenEnv: "BETA_TOKEN"},
+		{Name: "inline", Endpoint: "inline.example.com", Token: true, URL: "https://inline.example.com", InlineToken: true},
 	}
 	if got.Err != nil || got.Request != 4 || !slices.Equal(got.Entries, want) || got.ConfigPath != filepath.Join(home, "config.toml") {
 		t.Fatalf("daemons %+v, want %+v from %s", got, want, filepath.Join(home, "config.toml"))

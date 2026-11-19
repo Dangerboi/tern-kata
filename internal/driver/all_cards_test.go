@@ -15,13 +15,17 @@ import (
 // opener here fails the test that walks the table.
 func cardOpeners() map[model.Card]func(*testing.T) driver.State {
 	return map[model.Card]func(*testing.T) driver.State{
-		model.CardCreate:          popupOpener("Create"),
-		model.CardDraft:           popupOpener("Draft editor"),
-		model.CardField:           popupOpener("single-field form"),
-		model.CardClose:           popupOpener("Close"),
-		model.CardDates:           popupOpener("Dates"),
-		model.CardToken:           func(t *testing.T) driver.State { return tokenCard(t) },
-		model.CardRevoke:          func(t *testing.T) driver.State { return step(t, tokenList(t), key("x")).State },
+		model.CardCreate: popupOpener("Create"),
+		model.CardDraft:  popupOpener("Draft editor"),
+		model.CardField:  popupOpener("single-field form"),
+		model.CardClose:  popupOpener("Close"),
+		model.CardDates:  popupOpener("Dates"),
+		model.CardToken:  func(t *testing.T) driver.State { return tokenCard(t) },
+		model.CardRevoke: func(t *testing.T) driver.State { return step(t, tokenList(t), key("x")).State },
+		model.CardDaemon: func(t *testing.T) driver.State { return step(t, daemonsListed(t), key("n")).State },
+		model.CardDaemonRemove: func(t *testing.T) driver.State {
+			return step(t, step(t, daemonsListed(t), key("k")).State, key("x")).State
+		},
 		model.CardMove:            popupOpener("Move"),
 		model.CardAgent:           popupOpener("Agent"),
 		model.CardAgentMessage:    popupOpener("Message"),
@@ -131,7 +135,8 @@ func TestEveryCardDrawsItsTonedLinesInTheirToneColour(t *testing.T) {
 				if n.K == "el" && n.P["tag"] == "button" {
 					t.Errorf("%s is a bare button element, not Tern's button", n.ID)
 				}
-				if n.K == "button" && !strings.HasPrefix(n.ID, layer+".foot.") {
+				// A card may put the buttons of one section, as the Workflow card's steps, in that section's head.
+				if n.K == "button" && !strings.HasPrefix(n.ID, layer+".foot.") && !strings.HasPrefix(n.ID, layer+".steps-head.") {
 					t.Errorf("button %s is not in the card's footer bar %s.foot", n.ID, layer)
 				}
 				if keys, _ := n.P["keys"].([]any); n.K == "button" && len(keys) == 0 && n.P["disabled"] == nil {

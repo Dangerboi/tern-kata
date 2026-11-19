@@ -392,6 +392,8 @@ func init() {
 		readDefaultFilterAfter)
 
 	local((*Gateway).loadDaemons)
+	local(withoutCtx((*Gateway).saveDaemon))
+	local(withoutCtx((*Gateway).removeDaemon))
 	local((*Gateway).switchDaemon)
 	local((*Gateway).loadConfigFiles)
 	local((*Gateway).switchDocbank)

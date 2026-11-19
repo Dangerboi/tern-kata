@@ -52,6 +52,9 @@ type Event struct {
 	ProjectName         string
 	RelatedIssueUID     *string
 	RelatedIssueShortID *string
+	// IssueUID and IssueShortID are the Issue the event happened to: the shown Issue, or one related to it (a child that was
+	// linked to it).
+	IssueUID, IssueShortID string
 }
 
 // Link is one Link touching the Issue, with both ends. FromStatus and ToStatus are the ends' statuses: a parent Link's FromStatus is its child's.
@@ -64,4 +67,6 @@ type Link struct {
 	ToIssueUID      string
 	ToQualifiedID   string
 	ToStatus        string
+	// FromTitle and ToTitle are the ends' titles when the data layer could read them; empty otherwise.
+	FromTitle, ToTitle string
 }

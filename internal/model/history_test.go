@@ -45,21 +45,25 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 		{"title and body edited", model.Event{Type: "issue.updated", Payload: `{"title":"New title","old_title":"Old","body":"x"}`}, "dana edited title and body", "", ""},
 		{"body edited", model.Event{Type: "issue.updated", Payload: `{"body":"x"}`}, "dana edited body", "", ""},
 		{"owner edited", model.Event{Type: "issue.updated", Payload: `{"owner":"bob","old_owner":"alice"}`}, "dana edited owner", "", ""},
-		{"linked", model.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":false}`}, "dana linked blocks bbbb", "", ""},
-		{"linked incoming", model.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":true}`}, "dana linked blocked by bbbb", "", ""},
+		{"linked", model.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":false}`}, "dana linked dependent bbbb", "", ""},
+		{"linked incoming", model.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":true}`}, "dana linked blocker bbbb", "", ""},
 		{"unlinked", model.Event{Type: "issue.unlinked", Payload: `{"type":"related","from_short_id":"aaaa","to_short_id":"bbbb"}`}, "dana unlinked related bbbb", "", ""},
-		{"links added", model.Event{Type: "issue.links_changed", Payload: `{"parent_set":"pppp","blocked_by_added":["bbbb","cccc"]}`}, "dana linked parent pppp, blocked by bbbb, blocked by cccc", "", ""},
+		{"links added", model.Event{Type: "issue.links_changed", Payload: `{"parent_set":"pppp","blocked_by_added":["bbbb","cccc"]}`}, "dana linked parent pppp, blocker bbbb, blocker cccc", "", ""},
+		{"one issue in two relations", model.Event{Type: "issue.links_changed", Payload: `{"blocked_by_added":["bbbb"],"related_added":["bbbb"]}`, RelatedIssueUID: new("b"), RelatedIssueShortID: new("bbbb")}, "dana linked bbbb as blocker and related", "", ""},
 		{"links removed", model.Event{Type: "issue.links_changed", Payload: `{"related_removed":["rrrr"]}`}, "dana unlinked related rrrr", "", ""},
-		{"links changed", model.Event{Type: "issue.links_changed", Payload: `{"blocks_added":["bbbb"],"parent_removed":"pppp"}`}, "dana changed links +blocks bbbb, -parent pppp", "", ""},
+		{"links changed", model.Event{Type: "issue.links_changed", Payload: `{"blocks_added":["bbbb"],"parent_removed":"pppp"}`}, "dana changed links +dependent bbbb, -parent pppp", "", ""},
 		{"attachment added", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"attachment.A":{"from":null,"to":{"name":"notes.txt","media_type":"text/plain","size":9,"docbank_version":"6f1c2e8a-2222-4222-8222-000000000001"}}}}`}, "dana attached notes.txt", "", ""},
 		{"attachment removed", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"attachment.A":{"from":{"name":"shot.png","media_type":"image/png","size":9,"docbank_version":"6f1c2e8a-2222-4222-8222-000000000001"},"to":null}}}`}, "dana removed shot.png", "", ""},
 		{"attachment unreadable", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"attachment.A":{"from":null,"to":"x"}}}`}, "dana attached an attachment", "", ""},
-		{"work attention", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"work.attention":{"from":null,"to":"review"},"work.attention_msg":{"from":null,"to":"look"}}}`}, "dana updated Work attention", "", ""},
+		{"work attention", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"work.attention":{"from":null,"to":"review"},"work.attention_msg":{"from":null,"to":"look"}}}`}, "dana set Work attention to review", "", ""},
+		{"todo status", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"todo.status":{"from":null,"to":"doing"}}}`}, "dana set todo status to doing", "", ""},
+		{"value cleared", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"todo.status":{"from":"doing","to":null}}}`}, "dana cleared todo status", "", ""},
+		{"needs human", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"work.attention":{"from":null,"to":"needs-human"}}}`}, "dana set Work attention to needs human", "", ""},
 		{"scheduled", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"scheduled_on":{"from":null,"to":"2026-12-01"}}}`}, "dana scheduled for 2026-12-01", "", ""},
 		{"schedule cleared", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"scheduled_on":{"from":"2026-12-01","to":null}}}`}, "dana cleared schedule", "", ""},
 		{"deadline", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"deadline_on":{"from":null,"to":"2026-12-31"}}}`}, "dana set deadline to 2026-12-31", "", ""},
 		{"deadline cleared", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"deadline_on":{"from":"2026-12-31","to":null}}}`}, "dana cleared deadline", "", ""},
-		{"other metadata", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"zeta":{"from":null,"to":1},"alpha":{"from":null,"to":2}}}`}, "dana updated alpha, zeta", "", ""},
+		{"other metadata", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"zeta":{"from":null,"to":1},"alpha":{"from":null,"to":2}}}`}, "dana updated alpha to 2, zeta to 1", "", ""},
 		{"request", slotEvent(map[string]string{"bob": `{"from":"dana","message":"please look\nat this"}`}), "dana asked bob: please look at this", "", ""},
 		{"reply notice", slotEvent(map[string]string{"bob": `{"from":"dana","message":"m","kind":"reply","re":"c:abc123"}`}), "dana told bob about a reply", "", ""},
 		{"confirm notice", slotEvent(map[string]string{"bob": `{"from":"dana","message":"m","kind":"confirm"}`}), "dana told bob about a confirm", "", ""},
@@ -72,7 +76,7 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 		{"malformed optional fields dropped", slotEvent(map[string]string{"bob": `{"from":"dana","message":"m","kind":5,"re":[],"broadcast":"x","teammate":"bad handle"}`}), "dana asked bob: m", "", ""},
 		{"undecodable key", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"notify.!!":{"from":null,"to":{"from":"dana","message":"m"}}}}`}, "dana updated notify !!", "", ""},
 		{"slot with unreadable value", slotEvent(map[string]string{"bob": `{"from":"dana","message":" "}`}), "dana updated bob", "", ""},
-		{"mixed diff", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"zeta":{"from":null,"to":1},"` + model.NotificationKey("bob") + `":{"from":null,"to":{"from":"dana","message":"m"}}}}`}, "dana updated bob, zeta", "", ""},
+		{"mixed diff", model.Event{Type: "issue.metadata_updated", Payload: `{"diff":{"zeta":{"from":null,"to":1},"` + model.NotificationKey("bob") + `":{"from":null,"to":{"from":"dana","message":"m"}}}}`}, "dana updated bob, zeta to 1", "", ""},
 		{"scheduled date reached", model.Event{Type: "issue.scheduled_reached", Payload: `{"field":"scheduled_on","value":"2026-12-01","timezone":"UTC","instant":"2026-12-01T00:00:00Z"}`}, "dana reached the scheduled date 2026-12-01", "", ""},
 		{"moved", model.Event{Type: "issue.moved", ProjectName: "other", Payload: `{"from_short_id":"aaaa","to_short_id":"bbbb","to_project_uid":"p"}`}, "dana moved to other as bbbb", "", ""},
 		{"deleted", model.Event{Type: "issue.soft_deleted", Payload: `{}`}, "dana deleted", "", ""},
@@ -112,7 +116,7 @@ func slotEvent(slots map[string]string) model.Event {
 
 // sentence is the event as one line, author first, the way a reader takes it in.
 func sentence(row model.DetailRow) string {
-	return strings.TrimSpace(strings.Join([]string{row.Author, row.History.Verb, row.History.Object, row.Ref}, " "))
+	return strings.Join(strings.Fields(strings.Join([]string{row.Author, row.History.Verb, row.History.Object, row.Ref, row.History.After}, " ")), " ")
 }
 
 func TestHistoryRowsReadOldestFirst(t *testing.T) {
@@ -191,5 +195,24 @@ func TestEventsTabListsOnlyChangesToTheIssue(t *testing.T) {
 	m := withDetail(model.Model{}, &model.IssueDetailData{History: []model.Event{{UID: "b", Type: "issue.commented", Payload: "{}"}, {UID: "a", Type: "issue.created", Payload: "{}"}}})
 	if n := m.DetailRowCount(model.TabEvents); n != 0 {
 		t.Errorf("events tab counts %d rows, want 0 for an Issue with only created and commented events", n)
+	}
+}
+
+func TestAnEventAboutAnotherIssueNamesItFromTheShownIssuesSide(t *testing.T) {
+	m := withDetail(model.Model{}, &model.IssueDetailData{Issue: &model.Issue{UID: "parent"}})
+	child, parent := "child", "parent"
+	childShort := "kb01"
+	for _, tt := range []struct {
+		name, typ, payload, want string
+	}{
+		{"parent set", "issue.links_changed", `{"parent_set":"mm2a"}`, "dana linked child kb01"},
+		{"blocks added", "issue.links_changed", `{"blocks_added":["mm2a"]}`, "dana linked blocker kb01"},
+		{"linked", "issue.linked", `{"type":"parent","to_short_id":"mm2a"}`, "dana linked child kb01"},
+	} {
+		row := model.HistoryRowOf(m, model.Event{Type: tt.typ, Actor: "dana", Payload: tt.payload, IssueUID: child, IssueShortID: childShort,
+			RelatedIssueUID: &parent, RelatedIssueShortID: new("mm2a")})
+		if got := sentence(row); got != tt.want || row.ReferenceUID != child {
+			t.Errorf("%s: %q opening %q, want %q opening child", tt.name, got, row.ReferenceUID, tt.want)
+		}
 	}
 }

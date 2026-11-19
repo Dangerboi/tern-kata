@@ -18,6 +18,8 @@ var layerDraws = map[model.Card]func(model.Model, time.Time) tern.Element{
 	model.CardDates:           func(m model.Model, _ time.Time) tern.Element { return datesLayer(m) },
 	model.CardToken:           func(m model.Model, _ time.Time) tern.Element { return tokenLayer(m) },
 	model.CardRevoke:          func(m model.Model, _ time.Time) tern.Element { return revokeLayer(m) },
+	model.CardDaemon:          func(m model.Model, _ time.Time) tern.Element { return daemonLayer(m) },
+	model.CardDaemonRemove:    func(m model.Model, _ time.Time) tern.Element { return daemonRemoveLayer(m) },
 	model.CardMove:            func(m model.Model, _ time.Time) tern.Element { return moveLayer(m) },
 	model.CardAgent:           func(m model.Model, _ time.Time) tern.Element { return agentLayer(m) },
 	model.CardAgentMessage:    func(m model.Model, _ time.Time) tern.Element { return agentMessageLayer(m) },

@@ -15,6 +15,11 @@ type DaemonEntry struct {
 	// Token says the entry has a token (inline or by environment variable) and AllowInsecure that it allows an unencrypted url.
 	Token, AllowInsecure bool
 	Current              bool
+	// URL is the remote entry's address, Local says a local entry, TokenEnv names the variable that holds its token and InlineToken
+	// says its token is in the file itself. The secret is never read into the Pane.
+	URL, TokenEnv string
+	Local         bool
+	InlineToken   bool
 }
 
 // LoadDaemons asks for the catalog. Request numbers the asks: an answer to an older one is dropped. Workspace is the one whose
@@ -67,8 +72,10 @@ type DaemonsState struct {
 	// Switching is the daemon being connected to, "" when no switch is out. It outlives leaving the Page, because the answer still
 	// changes the Pane's connection.
 	Switching string
-	// reads numbers the list reads and switches the switches; an answer to another is dropped.
-	reads, switches Latest
+	// focusName is the entry the cursor goes to when the next read lands, set by a write.
+	focusName string
+	// reads numbers the list reads, switches the switches and writes the writes to kata's config; an answer to another is dropped.
+	reads, switches, writes Latest
 }
 
 func (m Model) OnDaemons() bool { return m.Page == PageDaemons }
@@ -77,14 +84,14 @@ var daemonsMode = sidebarMode(ModeDaemons)
 
 func enterDaemons(m Model) (Model, []Cmd) {
 	d := m.Daemons
-	m.Daemons = DaemonsState{reads: d.reads, Loading: true, Switching: d.Switching, switches: d.switches}
+	m.Daemons = DaemonsState{reads: d.reads, Loading: true, Switching: d.Switching, switches: d.switches, writes: d.writes}
 	return m, []Cmd{LoadDaemons{Request: m.Daemons.reads.Ask(), Workspace: m.Workspace}}
 }
 
 // clearDaemons drops what the Page held and every list read still out; a switch still out is kept.
 func clearDaemons(m Model) Model {
 	d := m.Daemons
-	m.Daemons = DaemonsState{reads: d.reads.Discarded(), Switching: d.Switching, switches: d.switches}
+	m.Daemons = DaemonsState{reads: d.reads.Discarded(), Switching: d.Switching, switches: d.switches, writes: d.writes}
 	return m
 }
 
@@ -115,12 +122,16 @@ func updateDaemons(m Model, msg Msg) (Model, []Cmd, bool) {
 		}
 		d.Entries, d.ConfigPath = slices.Clone(msg.Entries), msg.ConfigPath
 		d.Cursor = max(slices.IndexFunc(d.Entries, func(e DaemonEntry) bool { return e.Current }), 0)
+		if d.focusName != "" {
+			d.Cursor = max(slices.IndexFunc(d.Entries, func(e DaemonEntry) bool { return e.Name == d.focusName }), 0)
+		}
+		d.focusName = ""
 		return m, nil, true
 	case DaemonSwitched:
 		next, cmds := daemonSwitched(m, msg)
 		return next, cmds, true
 	}
-	return m, nil, false
+	return updateDaemonWrites(m, msg)
 }
 
 // daemonSwitched ends a switch. A failure says why and changes nothing else. A success starts the Pane over on the new daemon: what
@@ -143,6 +154,7 @@ func daemonSwitched(m Model, msg DaemonSwitched) (Model, []Cmd) {
 	m.CloseForm, m.DatesForm, m.RecurrenceForm, m.JobForm, m.Backfill = CloseFormState{}, DatesFormState{}, RecurrenceFormState{}, JobFormState{}, BackfillState{}
 	m.FieldForm, m.MoveProject, m.afterMove, m.Moving = FieldFormState{}, MoveProjectState{}, nil, ""
 	m.DeleteForm, m.TokenForm, m.RevokeCard, m.AgentCard, m.AgentMessage = DeleteFormState{}, TokenFormState{}, RevokeState{}, AgentCardState{}, AgentMessageState{}
+	m.DaemonForm, m.DaemonRemove = DaemonFormState{}, DaemonRemoveState{}
 	m.Embeddings, m.EmbeddingsCard = m.Embeddings.forDaemon(), EmbeddingsCardState{}
 	m.Versions = m.Versions.forDaemon()
 	m.AskUnlink, m.AttachmentCopy = nil, AttachmentCopyState{}
@@ -240,7 +252,12 @@ func (e DaemonEntry) State() string {
 	return ""
 }
 
+func daemonSelected(m Model) bool { return m.SelectedDaemon() != nil }
+
 var daemonsRows = []actionEntry{
+	{action: NewDaemon, modes: []Mode{ModeDaemons}, keys: keys("n", "n"), help: "new", footer: []Mode{ModeDaemons}, sheet: []sheetLine{{sheetLettered, 11, "Add a daemon"}}, handle: newDaemonForm},
+	{action: EditDaemon, modes: []Mode{ModeDaemons}, keys: keys("e", "e"), help: "edit", footer: []Mode{ModeDaemons}, sheet: []sheetLine{{sheetLettered, 12, "Edit the daemon"}}, handle: editDaemonForm, when: daemonSelected},
+	{action: RemoveDaemonAction, modes: []Mode{ModeDaemons}, keys: keys("x", "x"), help: "remove", footer: []Mode{ModeDaemons}, sheet: []sheetLine{{sheetLettered, 13, "Remove the daemon"}}, handle: askRemoveDaemon, when: daemonSelected},
 	{action: SwitchDaemonAction, modes: []Mode{ModeDaemons}, keys: keys("enter", "enter"), help: "switch", footer: []Mode{ModeDaemons}, footerKey: "enter", sheet: []sheetLine{{sheetLettered, 10, "Switch to this daemon"}}, handle: switchSelectedDaemon},
 	letteredBackRow(ModeDaemons, letteredBack),
 }

@@ -20,7 +20,7 @@ func TestMonoAndRefSpansAreExplicit(t *testing.T) {
 	if got := timeSpan("18:21"); !reflect.DeepEqual(got, (ui.Span{T: "18:21", S: "muted mono"})) {
 		t.Errorf("timeSpan = %+v", got)
 	}
-	if got := keySpan("W"); !reflect.DeepEqual(got, (ui.Span{T: "W", S: "key"})) {
+	if got := keySpan("W"); !reflect.DeepEqual(got, (ui.Span{T: "W", S: KeyStyle})) {
 		t.Errorf("keySpan = %+v", got)
 	}
 }
@@ -30,8 +30,8 @@ func TestProseTurnsMarkersIntoKeycaps(t *testing.T) {
 		text string
 		want []ui.Span
 	}{
-		{"Create one with {N}.", []ui.Span{{T: "Create one with ", S: "muted"}, {T: "N", S: "key"}, {T: ".", S: "muted"}}},
-		{"{ctrl+o} opens", []ui.Span{{T: "ctrl+o", S: "key"}, {T: " opens", S: "muted"}}},
+		{"Create one with {N}.", []ui.Span{{T: "Create one with ", S: "muted"}, {T: "N", S: KeyStyle}, {T: ".", S: "muted"}}},
+		{"{ctrl+o} opens", []ui.Span{{T: "Ctrl+O", S: KeyStyle}, {T: " opens", S: "muted"}}},
 		{"a {{literal}} brace", []ui.Span{{T: "a {literal}} brace", S: "muted"}}},
 		{"open { brace", []ui.Span{{T: "open { brace", S: "muted"}}},
 		{"no keys", []ui.Span{{T: "no keys", S: "muted"}}},

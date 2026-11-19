@@ -653,7 +653,7 @@ func footer(m model.Model) tern.Element {
 	cells := make([]tern.Element, len(hints))
 	for i, hint := range hints {
 		cells[i] = ui.Text{Common: ui.Common{Key: hint.chord, Actions: &ui.Actions{Click: KeyClick(hint.chord)}},
-			Spans: []ui.Span{{T: keycap(hint.chord, hint.key), S: "key"}, {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
+			Spans: []ui.Span{keySpan(keycap(hint.chord, hint.key)), {T: " " + hint.description, S: "muted"}}, Wrap: ui.WrapNone}
 	}
 	row := ui.Nodes(ui.Row{Common: ui.Common{Key: "grid", Grow: 1}, Gap: ui.GapMD, Wrap: true, Children: cells})
 	if m.LegendChip() {

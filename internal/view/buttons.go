@@ -3,7 +3,6 @@ package view
 import (
 	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -137,40 +136,56 @@ func cardKeys(mode model.Mode, action model.Action) (keys []string, chord string
 	return []string{keycap(bindings[0].Chord, bindings[0].Key)}, bindings[0].Chord
 }
 
-// keycap is the keycap text of a binding in Tern's own notation, so a button reads as the footer does for the same chord: a
-// control chord is "^X", enter "⏎", tab "⇥", escape "esc", a letter its capital and a shifted letter "⇧" and the capital, which keeps
-// n and N apart. Arrows and other labels are drawn as the binding labels them.
+// keycap is the keycap text of a binding, the chord named in words: "Ctrl+D", "Shift+N", "Enter", "Tab", "Esc", a letter as its
+// capital, and arrows and other symbols as the binding labels them. n and Shift+N stay apart.
 func keycap(chord, key string) string {
-	if letter, ok := strings.CutPrefix(chord, "shift+"); ok && utf8.RuneCountInString(letter) == 1 && unicode.IsLetter([]rune(letter)[0]) {
-		return "⇧" + strings.ToUpper(letter)
+	if key == "" {
+		key = chord
 	}
-	if rest, ok := strings.CutPrefix(chord, "ctrl+"); ok && utf8.RuneCountInString(rest) == 1 {
-		return "^" + strings.ToUpper(rest)
-	}
-	switch chord {
-	case "enter":
-		return "⏎"
-	case "tab":
-		return "⇥"
-	case "escape":
-		return "esc"
-	}
-	if utf8.RuneCountInString(key) == 1 && unicode.IsLetter([]rune(key)[0]) {
-		return strings.ToUpper(key)
-	}
-	switch key {
-	case "↵":
-		return "⏎"
-	case "⇥", "↹":
-		return "⇥"
-	case "escape":
-		return "esc"
-	}
-	return key
+	return KeyWords(key)
 }
 
 // Keycap is keycap for the tests, which compare what a button shows with the binding it presses.
 func Keycap(chord, key string) string { return keycap(chord, key) }
+
+// keyNames are the words for the keys a label names in lower case.
+var keyNames = map[string]string{
+	"escape": "Esc", "esc": "Esc", "enter": "Enter", "↵": "Enter", "⏎": "Enter", "tab": "Tab", "↹": "Tab", "⇥": "Tab", "space": "Space",
+	"backspace": "Backspace", "delete": "Delete", "home": "Home", "end": "End", "pgup": "PgUp", "pgdn": "PgDn", "page_up": "PgUp",
+	"page_down": "PgDn", "ctrl": "Ctrl", "alt": "Alt", "shift": "Shift", "meta": "Meta", "up": "↑", "down": "↓", "left": "←", "right": "→",
+}
+
+// KeyWords names a key label in words: "ctrl+d" is "Ctrl+D", "⇧N" is "Shift+N", "enter" is "Enter", "pgup/pgdn" is "PgUp/PgDn".
+// A label of symbols (arrows, brackets) is returned as it is.
+func KeyWords(label string) string {
+	if utf8.RuneCountInString(label) < 2 {
+		return strings.ToUpper(label)
+	}
+	if rest, ok := strings.CutPrefix(label, "⇧"); ok {
+		return "Shift+" + KeyWords(rest)
+	}
+	if strings.Contains(label, "/") {
+		parts := strings.Split(label, "/")
+		for i, part := range parts {
+			parts[i] = KeyWords(part)
+		}
+		return strings.Join(parts, "/")
+	}
+	if strings.Contains(label, "+") && !strings.HasSuffix(label, "+") {
+		parts := strings.Split(label, "+")
+		for i, part := range parts {
+			parts[i] = KeyWords(part)
+		}
+		return strings.Join(parts, "+")
+	}
+	if name, ok := keyNames[label]; ok {
+		return name
+	}
+	if first := []rune(label)[0]; first >= 'a' && first <= 'z' {
+		return strings.ToUpper(label[:1]) + label[1:]
+	}
+	return label
+}
 
 // cardButton is a card's Tern button for action in mode. Its click presses the action's first non-headless chord with the
 // card's overlays closed and its one keycap is that chord's label, so a click and the key never disagree and a rebind moves

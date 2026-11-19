@@ -137,6 +137,8 @@ func TestUndoBoundaryListsEveryCmd(t *testing.T) {
 		{StopWorker{}, false},
 		{Subscribe{}, false},
 		{SwitchDaemon{}, false},
+		{SaveDaemonCmd{}, false},
+		{RemoveDaemonCmd{}, false},
 		{UndoChange{}, false},
 		{WakeAt{}, false},
 		{WriteField{}, false},

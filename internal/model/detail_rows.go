@@ -131,11 +131,14 @@ func (m Model) withRows() Model {
 	}
 	switch m.tab {
 	case TabLinks:
-		for _, link := range links {
+		// The rows sit grouped by relation, in the order of linkGroups, so the view can head each group.
+		grouped := slices.SortedStableFunc(slices.Values(links), func(a, b DetailRow) int {
+			return linkGroupIndex(a.Relation) - linkGroupIndex(b.Relation)
+		})
+		for _, link := range grouped {
 			if link.Relation == "parent" || link.Relation == "child" {
 				continue
 			}
-			link.RelationRepeat = len(m.rows.items) > 0 && m.rows.items[len(m.rows.items)-1].Kind == RowLink && m.rows.items[len(m.rows.items)-1].Activity.Relation == link.Relation
 			m.rows.items = append(m.rows.items, DetailItem{Kind: RowLink, Key: link.Key, ReferenceUID: link.ReferenceUID, Activity: link})
 		}
 	case TabAttachments:
@@ -165,6 +168,27 @@ func (m Model) withRows() Model {
 		}
 	}
 	return m
+}
+
+// linkGroups is the order the Links tab lists relations in; a relation kata adds later sorts after them.
+var linkGroups = []string{"blocked_by", "blocks", "related"}
+
+func linkGroupIndex(relation string) int {
+	if i := slices.Index(linkGroups, relation); i >= 0 {
+		return i
+	}
+	return len(linkGroups)
+}
+
+// LinkGroupCount is how many of the Links tab's rows have the relation.
+func (m Model) LinkGroupCount(relation string) int {
+	n := 0
+	for _, item := range m.rows.items {
+		if item.Kind == RowLink && item.Activity.Relation == relation {
+			n++
+		}
+	}
+	return n
 }
 
 func (m Model) commentItem(comment Comment) DetailItem {
@@ -207,11 +231,11 @@ func (m Model) commentItem(comment Comment) DetailItem {
 }
 
 func (m Model) linkRow(link Link) DetailRow {
-	uid, ref, status := link.ToIssueUID, link.ToQualifiedID, link.ToStatus
+	uid, ref, status, title := link.ToIssueUID, link.ToQualifiedID, link.ToStatus, link.ToTitle
 	qualified := ref
 	relation := link.Type
 	if uid == m.DetailIssueUID() {
-		uid, ref, status = link.FromIssueUID, link.FromQualifiedID, link.FromStatus
+		uid, ref, status, title = link.FromIssueUID, link.FromQualifiedID, link.FromStatus, link.FromTitle
 		qualified = ref
 		switch relation {
 		case "parent":
@@ -227,9 +251,13 @@ func (m Model) linkRow(link Link) DetailRow {
 	if project, short, ok := strings.Cut(ref, "#"); ok && m.authority.Issue != nil && project == m.authority.Issue.ProjectName {
 		ref = "#" + short
 	}
-	row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, RelationLabel: relationLabel(relation), Ref: ref, ReferenceUID: uid, Qualified: qualified, Status: status}
+	row := DetailRow{Key: fmt.Sprint(link.ID), Relation: relation, RelationLabel: relationLabel(relation), Ref: ref, ReferenceUID: uid, Qualified: qualified, Status: status, RefTitle: title}
 	if i := slices.IndexFunc(m.Issues, func(issue Issue) bool { return issue.UID == uid }); i >= 0 {
 		row.RefTitle = m.Issues[i].Title
+	} else if uid == link.ToIssueUID {
+		row.RefTitle = link.ToTitle
+	} else {
+		row.RefTitle = link.FromTitle
 	}
 	return row
 }
@@ -255,7 +283,9 @@ func (m Model) childItems(links []DetailRow) []DetailItem {
 	}
 	for _, uid := range uids {
 		if link, ok := byUID[uid]; ok {
-			add(ChildRow{Key: link.Key, UID: uid, Ref: link.Ref, Qualified: link.Qualified, Status: link.Status})
+			// A child the list does not hold (a closed one the status filter leaves out) still has the title the data layer read for
+			// its Link, so the table names it; its owner and update time stay unknown.
+			add(ChildRow{Key: link.Key, UID: uid, Ref: link.Ref, Qualified: link.Qualified, Status: link.Status, Title: link.RefTitle, Loaded: link.RefTitle != "", Closed: link.Status != "" && link.Status != "open"})
 		}
 	}
 	return items

@@ -65,14 +65,9 @@ func TestLinksReferenceIsStyledAsALinkAndRelationIsMuted(t *testing.T) {
 	m, _ := referencing(model.TabLinks)
 	nodes := render(t, m)
 	assertReference(t, nodes, view.DetailActivityID+".1.row.jump", "#peer", "peer")
-	styles := spanStyles(t, nodes[view.DetailActivityID+".1.row.heading"].P)
-	if len(styles) != 1 {
-		t.Fatalf("relation spans = %v, want one", styles)
-	}
-	for _, style := range styles {
-		if style != "muted" {
-			t.Errorf("relation style = %q", style)
-		}
+	styles := spanStyles(t, nodes[view.DetailActivityID+".group-blocks"].P)
+	if styles["Blocks"] != "strong" {
+		t.Fatalf("group heading spans = %v, want one strong", styles)
 	}
 	for id, n := range nodes {
 		if strings.Contains(text(n), "Open referenced Issue") {
@@ -85,7 +80,7 @@ func TestEventsReferenceIsStyledAndPlainEventsAreNot(t *testing.T) {
 	m, _ := referencing(model.TabEvents)
 	nodes := render(t, m)
 	assertReference(t, nodes, view.DetailActivityID+".linked.row.jump", "peer", "peer")
-	if _, ok := nodes[view.DetailActivityID+".closed.heading"]; !ok {
+	if _, ok := nodes[view.DetailActivityID+".closed.row.heading"]; !ok {
 		t.Fatalf("no plain heading: %v", nodes.under(view.DetailActivityID))
 	}
 	for _, id := range nodes.under(view.DetailActivityID + ".closed") {
@@ -93,7 +88,7 @@ func TestEventsReferenceIsStyledAndPlainEventsAreNot(t *testing.T) {
 			t.Errorf("event without a reference has %s", id)
 		}
 	}
-	if click := nodes[view.DetailActivityID+".closed.heading"].P["actions"].(map[string]any)["click"]; strings.HasPrefix(click.(string), view.JumpClick("")) {
+	if click := nodes[view.DetailActivityID+".closed.row.heading"].P["actions"].(map[string]any)["click"]; strings.HasPrefix(click.(string), view.JumpClick("")) {
 		t.Errorf("plain row jumps: %v", click)
 	}
 }
@@ -154,7 +149,7 @@ func TestLinkRowReadsRelationLabelReferenceAndTitle(t *testing.T) {
 	m, _ := referencing(model.TabLinks)
 	nodes := render(t, m)
 	row := view.DetailActivityID + ".1.row"
-	if got := drawn(nodes[row]); got != "Blocks#peer Peer" {
+	if got := drawn(nodes[row]); got != "#peer Peer" {
 		t.Errorf("same-Project row draws %q", got)
 	}
 
@@ -162,15 +157,15 @@ func TestLinkRowReadsRelationLabelReferenceAndTitle(t *testing.T) {
 	other := model.Link{ID: 2, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "peer", ToQualifiedID: "elsewhere#peer"}
 	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Links: []model.Link{other}}}))
 	assertReference(t, nodes, view.DetailActivityID+".2.row.jump", "elsewhere#peer", "peer")
-	if got := drawn(nodes[view.DetailActivityID+".2.row"]); got != "Relatedelsewhere#peer Peer" {
+	if got := drawn(nodes[view.DetailActivityID+".2.row"]); got != "elsewhere#peer Peer" {
 		t.Errorf("cross-Project row draws %q", got)
 	}
 
-	ghost := model.Link{ID: 3, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost"}
+	ghost := model.Link{ID: 3, Type: "related", FromIssueUID: "main", FromQualifiedID: "work#main", ToIssueUID: "ghost", ToQualifiedID: "work#ghost", ToTitle: "Read from kata"}
 	nodes = render(t, apply(m, model.DetailLoaded{UID: "main", Selected: &model.IssueDetailData{Issue: &main, Links: []model.Link{ghost}}}))
 	assertReference(t, nodes, view.DetailActivityID+".3.row.jump", "#ghost", "ghost")
-	if got := drawn(nodes[view.DetailActivityID+".3.row"]); got != "Related#ghost" {
-		t.Errorf("row without a title draws %q", got)
+	if got := drawn(nodes[view.DetailActivityID+".3.row"]); got != "#ghost Read from kata" {
+		t.Errorf("row whose title kata gave draws %q", got)
 	}
 }
 

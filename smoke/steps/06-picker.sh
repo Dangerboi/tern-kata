@@ -55,7 +55,7 @@ expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "tru
 ctl key enter
 expect_tree "$picker_items" '.ok and .nodes[0].text == "picker-alphacurrent" and .nodes[1].text == "smoke"'
 expect_tree "[data-id='layer.collections.list.project.$picker_alpha_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
-expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
+expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("Esc back"))'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'
 expect_tree "$picker_projects_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
@@ -70,7 +70,7 @@ ctl click "[data-id='main.topbar.right.menu']"
 ctl key Down
 ctl key enter
 expect_tree "$picker_items" '.ok and .count == 7 and .nodes[0].text == "Inbox" and .nodes[0]["aria-selected"] == "true" and .nodes[1].text == "Today" and .nodes[2].text == "Upcoming" and .nodes[3].text == "Deadlines" and .nodes[4].text == "All Open" and .nodes[5].text == "Logbook" and .nodes[6].text == "New view"'
-expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
+expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("Esc back"))'
 ctl key esc
 expect_tree "$picker_views_entry" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key enter
@@ -113,9 +113,9 @@ expect_tree "[data-id^='main.columns.list.issues.01']" '.ok and .count == 3'
 
 # esc backs out detail, then the list, into the picker, then closes it.
 ctl key enter
-expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc back"))'
+expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("Esc back"))'
 ctl key esc
-expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("esc Menu"))'
+expect_tree "[data-id^='dock.hints.grid.'][data-id\$='.escape']" '.count == 1 and (.nodes[0].text | contains("Esc Menu"))'
 expect_tree "[data-id='layer.collections']" '.ok and .count == 0'
 ctl key esc
 expect_tree "[data-id='layer.collections']" '.ok and .count == 1'

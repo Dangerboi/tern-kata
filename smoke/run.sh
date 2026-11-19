@@ -232,7 +232,7 @@ expect_tree() {
 }
 # The mode the footer hints show the keys are in: collections, detail, list or other.
 hint_mode() {
-  ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("j/k row") then "detail" elif contains("layout") or contains("expand") then "list" elif contains("open Collection") or contains(" open") then "collections" else "other" end'
+  ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("J/K row") then "detail" elif contains("layout") or contains("expand") then "list" elif contains("open Collection") or contains(" open") then "collections" else "other" end'
 }
 hint_in_mode() { [[ $(hint_mode) == "$1" ]]; }
 hint_expect_mode() {

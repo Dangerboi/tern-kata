@@ -4,7 +4,17 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Fixed
+
+- Every text field of the New job and Edit job cards, and of the Create, Close, Filter and other form cards, shows its label above the input again: Tern took the label text that sat directly before an input for the input's accessible name and did not draw it, so the label now sits in a row of its own.
+
 ### Added
+
+#### Workflows
+
+- The Workflows Page shows the selected workflow's steps beside the list from the first frame at 140 columns and wider, as the Issues Page does, instead of full-width cards until Enter.
+- The Workflow card is a form, not a JSON file: name, about and input, then one step at a time with its name, kind, command or prompt (multi-line), the steps it waits for and its retries, and buttons to add, remove and move steps.
+  - Rule problems show in the card's foot and the form keeps what you typed; options kata accepts but the form has no field for are kept through a save, and **Open in editor** (`ctrl+e`) opens the whole workflow as JSON and reads it back into the form.
 
 #### Install and update
 
@@ -18,6 +28,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
+- Set priority is the same picker as the Create card (None, P0 to P4), opened on the Issue's current priority; `!` then a digit or `-` still sets or clears it at once.
 - On Tern 0.9.26 or newer the Issue body is edited in place: a double click on it edits, and leaving it saves at once, as the Edit Issue body card's Save does.
   - Someone else's edit made in between opens the same conflict card; if the save fails, the edit is kept as a Draft that `e` opens.
   - If you select another Issue mid-edit, the edit is saved to its own Issue.
@@ -46,6 +57,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ### Changed
 
+- Keys read in words everywhere: `Ctrl+D`, `Ctrl+Space`, `Shift+N`, `Enter`, `Tab`, `Esc`, in the footer, the help sheet, buttons, the Page bar and the keys named in sentences. Tern's own key style rewrote them into `^D`, so they are drawn as the plugin's keycap chip, which looks the same.
+
 #### Agents
 
 - An agent waiting on a closed Issue no longer raises an Attention request, as kata refuses requests on closed Issues.
@@ -67,6 +80,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
+- The Issue detail tells its parts apart: the properties sit in a quiet panel with a rule on its left, with a narrow key column and brighter keys and created line, the body and comments use the whole width of the detail (no half-width measure), and each comment is a block of its own with the same rule.
+
 - The Issues Page, the Board and their Popup cards follow one design: the same tones, wording, dates and keys everywhere.
   - Dates read `2026-11-18 18:21` (`18:21` today) in the Pane's zone, a missing value reads `—`, and narrow cells show a compact age such as `4m ago`; the Date badge reads "overdue 3d", "due 2026-11-25" or "scheduled 2026-12-01".
   - Failures are drawn in the error tone, and every Notice that reports one starts with "Cannot"; the selected row is filled with the accent colour, which marks nothing else.
@@ -75,6 +90,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The top bar shows the Project's name and a muted facts line with no prefixes, and the line under it is the context line, with the counts "5 open · 0 closed" and each active filter.
   - The Issue detail shows the Issue's id, title and status, one grid of properties, a muted line saying who created it and when, and a Children table headed "Children 3 of 4 open".
   - The Events tab no longer shows kata event codes and hides created and commented events; each tab shows its row count, and a close line reads `closed as done` with `Evidence: attachment report.pdf`.
+  - An event's time sits left of a thin rule and the sentence follows it, with the verb and object in the verb's tone. Events that looked alike now say what differs: a child linked to the shown Issue names that child (`linked child kb01`), and a metadata change names its new value (`set todo status to doing`, `set Work attention to needs human`, `cleared todo status`).
+  - The Links tab groups its rows under a heading per relation with a count (`Blocked by 1`, `Related 3`), and every row carries the linked Issue's title, including Issues of other Projects and Issues the Pane has not loaded; kata is asked for those titles with the detail and the answers are cached for five minutes.
   - The list draws only the columns a row has a value for and shows an empty state with its action ("No Issues" with a New Issue button).
   - Board cards show a muted "also in" line, the Relationship as a line under the title and one muted row of facts on the selected card; each Lane keeps one identity colour on its header and card ids, and the Lanes card names the list in use ("Using this machine's list").
   - The Menu groups its top level under Pages, Actions and Updates, and the right-click menu gains Owner…, Labels… and New child….
@@ -98,6 +115,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Daemons and Federation
 
+- The Daemons Page manages the entries of kata's client config: `n` adds one (name, remote with a URL or local, a token by environment variable or inline, and whether an insecure URL is allowed), `e` edits the selected one and `x` removes it after asking.
+  - kata has no command for this, so the Pane edits `config.toml` as text: only the lines of the entry change, and the comments, `[tui]` and every other key stay as they were; the file is checked with kata's own rules and replaced in one step, and a refused change leaves it as it was.
+  - An inline token is never read into the Pane: an edit shows its field empty and an empty field keeps the token. The entry this Pane uses keeps its name and cannot be removed.
 - The Daemons Page is a table (Name, Endpoint, Auth, State) and the Federation Page shows cards under a Page head (`Federation 2 · work · auth token`); the enrolling and leaving steps are headed and worded alike.
   - Insecure connections, quarantines, reset blockers and claim violations read as words in the warning tone.
   - The Name spoke and Adopt into hub cards ask in the warning tone with one muted line, and refusals read "Cannot …".
@@ -121,6 +141,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 ### Fixed
 
 #### Issues and Pages
+
+- The Children table in the Issue detail names a closed child that the Pane's list leaves out: its Status and Title come from the title the daemon read with its Link, and Updated shows `—`, instead of a bare id.
 
 - A refused Dates save no longer keeps one of the two dates: when a date changed elsewhere since the card opened, nothing is saved.
   - Undo of a Dates save restores both dates or neither.

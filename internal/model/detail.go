@@ -101,8 +101,6 @@ type DetailRow struct {
 	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
 	// detail's Issue. RefTitle is that Issue's title when it is loaded.
 	Relation, RelationLabel, Ref, RefTitle string
-	// RelationRepeat says the row above has the same relation, so the view draws the label once.
-	RelationRepeat bool
 	// Qualified and Status are the referenced Issue's qualified id and status as its Link carries them (empty for an event row).
 	Qualified, Status string
 	File              Attachment
@@ -130,10 +128,11 @@ const (
 )
 
 // HistorySentence is "<Verb> <Object>" (the row's Author did it) with the Verb's
-// tone. Object stops before the row's Ref when the sentence names the referenced Issue.
+// tone. Object stops before the row's Ref when the sentence names the referenced Issue, and After is what follows the Ref
+// ("as blocker and related").
 type HistorySentence struct {
-	Verb, Object string
-	Tone         VerbTone
+	Verb, Object, After string
+	Tone                VerbTone
 }
 
 func (m Model) DetailRowCount(tab ActivityTab) int {

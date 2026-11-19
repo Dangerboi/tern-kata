@@ -147,6 +147,11 @@ func (b Binding) Described(m Model) string {
 }
 
 func (b Binding) Offered(m Model) bool {
+	// Tab completes a name only in the forms that list names (labels); the priority picker and the free-text forms have none.
+	if b.Mode == ModeFieldForm && b.Action == FieldComplete {
+		open := fieldSpecs[m.FieldForm.Action].open
+		return open == openProjectLabels || open == openIssueLabels
+	}
 	// The Menu popup's view keys act on a saved view only, so its footer names them only while the cursor is on one.
 	if b.Mode == ModePicker && (b.Action == EditViewAction || b.Action == AskDeleteView) && !m.CursorOnSavedView() {
 		return false

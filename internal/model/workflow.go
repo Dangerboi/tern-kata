@@ -69,21 +69,6 @@ type workflowStep struct {
 	Options json.RawMessage  `json:"options,omitempty"`
 }
 
-const NewWorkflowText = `{
-  "name": "",
-  "definition": {
-    "version": 1,
-    "steps": [
-      {
-        "key": "step",
-        "kind": "prompt",
-        "prompt": ""
-      }
-    ]
-  }
-}
-`
-
 func (w Workflow) Text() string {
 	file := workflowFile{Name: w.Name, Definition: w.wire()}
 	var text bytes.Buffer
@@ -117,14 +102,9 @@ type WorkflowDocument struct {
 // ParseWorkflow checks text, the JSON document of a workflow, against kata's rules and returns what to send. The error says
 // what is wrong and where; the text stays the caller's to keep.
 func ParseWorkflow(text string) (WorkflowDocument, error) {
-	var file workflowFile
-	decoder := json.NewDecoder(strings.NewReader(text))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&file); err != nil {
-		return WorkflowDocument{}, describeJSONError(text, err)
-	}
-	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return WorkflowDocument{}, errors.New("Not valid JSON: more text follows the workflow document.")
+	file, err := decodeWorkflowFile(text)
+	if err != nil {
+		return WorkflowDocument{}, err
 	}
 	if err := file.check(); err != nil {
 		return WorkflowDocument{}, err
@@ -137,6 +117,21 @@ func ParseWorkflow(text string) (WorkflowDocument, error) {
 		return WorkflowDocument{}, fmt.Errorf("The workflow definition is over kata's %d KiB limit.", maxWorkflowDefinition>>10)
 	}
 	return WorkflowDocument{Name: strings.TrimSpace(file.Name), Definition: string(definition), Shape: file.Definition.shape()}, nil
+}
+
+// decodeWorkflowFile reads text as the JSON document of a workflow, refusing a field kata does not take and text after the
+// document, and checks no rule of kata's.
+func decodeWorkflowFile(text string) (workflowFile, error) {
+	var file workflowFile
+	decoder := json.NewDecoder(strings.NewReader(text))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&file); err != nil {
+		return workflowFile{}, describeJSONError(text, err)
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return workflowFile{}, errors.New("Not valid JSON: more text follows the workflow document.")
+	}
+	return file, nil
 }
 
 // check is the document rules in kata's order: the name first, then the definition against the shared validator.

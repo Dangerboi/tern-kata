@@ -20,6 +20,9 @@ func fieldLayer(m model.Model) tern.Nodes {
 	if label := m.FieldFormLabel(); label != "" {
 		children = labelledInput(inputLeaf, label, "", true, input)
 	}
+	if m.FieldForm.Action == model.PriorityAction {
+		children = []tern.Element{choiceControl(m, model.CardField, model.FieldPriority, m.FieldFormLabel(), true, "", "")}
+	}
 	suggestions := m.FieldSuggestions()
 	for i, label := range suggestions {
 		tone, style := ui.ToneMuted, ""
@@ -63,17 +66,19 @@ func saveLabel(m model.Model) string {
 	return "Restore"
 }
 
-// labelledInput is a form input's three nodes, for the caller to spread into its own column: the label above (muted sans,
+// labelledInput is a form input's three nodes, for the caller to spread into its own column: the label above (default text, like a choice field's label,
 // accent while the input has focus), the input itself, and its format hint as one muted line, present only while the input has
 // focus and hint is not empty. The nodes keep flat ids: key-label, the input's own key and key-hint.
 func labelledInput(key, label, hint string, focused bool, input tern.Element) []tern.Element {
-	labelTone := ui.ToneMuted
+	labelTone := ui.ToneNeutral
 	if focused {
 		labelTone = ui.ToneAccent
 	}
-	name := toneText(key+"-label", labelTone, label)
+	name := toneText("name", labelTone, label)
 	name.Wrap = ui.WrapNone
-	nodes := []tern.Element{name, input}
+	// A text straight before an input is taken by Tern for the input's accessible name and is not drawn, so the label sits in
+	// a row of its own.
+	nodes := []tern.Element{ui.Row{Common: ui.Common{Key: key + "-label", Role: FieldLabelRole}, Children: ui.Nodes(name)}, input}
 	if focused && hint != "" {
 		nodes = append(nodes, toneText(key+"-hint", ui.ToneMuted, hint))
 	}

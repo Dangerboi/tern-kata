@@ -48,7 +48,7 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 			t.Errorf("%s shows code: %q", id, text(n))
 		}
 	}
-	if _, ok := nodes[activity+".e1.heading"]; ok {
+	if _, ok := nodes[activity+".e1.row.heading"]; ok {
 		t.Errorf("the created event is listed; the Issue's meta line says it")
 	}
 	for _, tt := range []struct {
@@ -59,8 +59,8 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 		{"e3", "reopened", "reopened", ""},
 		{"e4", "assigned to alice", "assigned", ""},
 	} {
-		heading := nodes[activity+"."+tt.event+".heading"]
-		if !strings.HasSuffix(text(heading), " dana "+tt.sentence) || strings.Contains(text(heading), " - ") {
+		heading := nodes[activity+"."+tt.event+".row.heading"]
+		if text(heading) != "dana "+tt.sentence || strings.Contains(text(heading), " - ") {
 			t.Errorf("%s reads %q, want it to end with %q and have no dash", tt.event, text(heading), " dana "+tt.sentence)
 		}
 		var got string

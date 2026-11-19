@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"fmt"
 	"maps"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 	"github.com/Dangerboi/tern-kata/internal/driver"
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
@@ -628,4 +630,39 @@ func TestEditingANotifyJobKeepsItsOverlap(t *testing.T) {
 	if got := saved(t, s).Definition.Overlap; got != "forbid" {
 		t.Errorf("overlap %q, want forbid", got)
 	}
+}
+
+// Every text input and editor of the Job card is drawn under a visible label, whatever the kind and the trigger.
+func TestEveryInputOfTheJobCardHasItsLabel(t *testing.T) {
+	check := func(t *testing.T, name string, s driver.State) {
+		t.Helper()
+		nodes := wireNodes(t, view.Render(s.Model, now))
+		texts := map[string]string{}
+		for _, n := range nodes {
+			texts[n.ID] = wireText(n)
+		}
+		inputs := 0
+		for _, n := range nodes {
+			if !strings.HasPrefix(n.ID, "layer.job.") || strings.Count(n.ID, ".") != 2 || (n.K != "input" && n.K != "editor") {
+				continue
+			}
+			inputs++
+			label := n.ID + "-label"
+			want := model.JobPrompt(model.Field(strings.TrimPrefix(n.ID, "layer.job.")))
+			if got, ok := texts[label]; !ok || !strings.Contains(got, want) {
+				t.Errorf("%s: input %s has no visible label %q (node %s: %q)", name, n.ID, want, label, got)
+			}
+		}
+		if inputs == 0 {
+			t.Errorf("%s: no inputs drawn", name)
+		}
+	}
+	for kind, kindName := range map[int]string{kindPrompt: "prompt", kindWorkflow: "workflow", kindNotify: "notify"} {
+		for trigger := triggerCron; trigger <= triggerIssueDeadline; trigger++ {
+			s := choose(t, adapterCard(t, kind), model.JobFieldTrigger, trigger)
+			check(t, fmt.Sprintf("new %s trigger %d", kindName, trigger), s)
+		}
+	}
+	check(t, "new recurring issue", newJobCard(t))
+	check(t, "edit prompt", editedJob(t, promptJob("J2", "Triage")))
 }

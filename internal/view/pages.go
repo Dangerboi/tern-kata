@@ -118,7 +118,7 @@ func pageBar(m model.Model, flexCell func(string, ui.Tone, float64) ui.Common, c
 		case iconLabel(entry, compact):
 			parts = ui.Nodes(icon, ui.Text{Common: ui.Common{Key: "label", Tone: tone}, Spans: []ui.Span{{T: entry.Label, S: style}}, Wrap: ui.WrapNone})
 		default:
-			spans := []ui.Span{{T: keycap(entry.Chord, entry.Chord), S: "key"}, {T: " " + entry.Label, S: style}}
+			spans := []ui.Span{keySpan(keycap(entry.Chord, entry.Chord)), {T: " " + entry.Label, S: style}}
 			parts = ui.Nodes(ui.Text{Common: ui.Common{Key: "label", Tone: tone}, Spans: spans, Wrap: ui.WrapNone})
 		}
 		if entry.Count > 0 {
