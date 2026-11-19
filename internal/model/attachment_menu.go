@@ -26,7 +26,7 @@ const (
 )
 
 const (
-	// ModeUnlinkAttachment is the question "Unlink <name> from <ref>? y/n".
+	// ModeUnlinkAttachment is the question "Unlink <name> from <ref>?".
 	ModeUnlinkAttachment Mode = "unlink-attachment"
 	// ModeAttachmentCopy is the card with the downloaded file's path and the kata command that fetches it.
 	ModeAttachmentCopy Mode = "attachment-copy"

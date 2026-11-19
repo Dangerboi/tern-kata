@@ -67,7 +67,7 @@ func TestDaemonsPageOpensFromEveryPageAndTheMenu(t *testing.T) {
 		"Jobs":   jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", false))),
 	} {
 		out := daemonsOpened(t, s)
-		if !pageBarDrawn(t, out.State.Model, "D") || out.State.Model.CurrentMode() != model.ModeDaemons {
+		if !pageBarDrawn(t, out.State.Model, "Shift+D") || out.State.Model.CurrentMode() != model.ModeDaemons {
 			t.Errorf("%s: no Page bar entry for D, or mode %q", name, out.State.Model.CurrentMode())
 		}
 	}
@@ -106,7 +106,7 @@ func TestDaemonsPageSaysWhenThereIsNoCatalogAndHowToAddADaemon(t *testing.T) {
 	load, _ := askedDaemons(out.Cmds)
 	wantText(t, "while the read is out", wireTextOf(t, out.State), "Loading daemons…")
 	empty := step(t, out.State, model.DaemonsLoaded{Request: load.Request, ConfigPath: "/kata/config.toml"}).State
-	wantText(t, "an empty catalog", wireTextOf(t, empty), "No named daemons", "Add a [[daemon]] entry to config.toml.")
+	wantText(t, "an empty catalog", wireTextOf(t, empty), "No named daemons", "A daemon is a kata server you can switch to.", "New daemon")
 	if out := step(t, empty, key("enter")); len(out.Cmds) != 0 {
 		t.Errorf("Enter on an empty catalog sent %#v", out.Cmds)
 	}

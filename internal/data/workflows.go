@@ -137,7 +137,7 @@ func conflictingWorkflow(err error) (model.Workflow, bool) {
 
 func translateWorkflow(w g.CronWorkflow) model.Workflow {
 	def := cronjobclient.WorkflowDefinition(w.Definition)
-	out := model.Workflow{UID: w.UID, Name: w.Name, Author: w.Author, EventUID: w.DefinitionEventUID, Revision: w.Revision, Archived: w.DeletedAt != nil,
+	out := model.Workflow{UID: w.UID, Name: w.Name, Author: w.Author, EventUID: w.DefinitionEventUID, Revision: w.Revision, Archived: w.DeletedAt != nil, CreatedAt: w.CreatedAt,
 		About: def.About, Input: def.Input, Options: rawOptions(w.Definition.Options), Steps: make([]model.WorkflowStep, len(def.Steps))}
 	for i, step := range def.Steps {
 		out.Steps[i] = model.WorkflowStep{Key: step.Key, Kind: step.Kind, Command: step.Command, Prompt: step.Prompt, After: step.After,

@@ -8,6 +8,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/cronjob"
 )
@@ -20,8 +21,10 @@ type Workflow struct {
 	EventUID string
 	Revision int64
 	Archived bool
-	About    string
-	Input    string
+	// CreatedAt is when kata first stored the workflow; zero when it was not read.
+	CreatedAt time.Time
+	About     string
+	Input     string
 	// Options is the workflow's adapter options as kata holds them, nil when there are none.
 	Options json.RawMessage
 	Steps   []WorkflowStep

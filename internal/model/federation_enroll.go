@@ -848,7 +848,7 @@ func previewFederationEnroll(m Model) (Model, []Cmd) {
 			case hubUID != "" && localUID == hubUID:
 				d.Operation, d.AdoptExisting = FederationRejoin, false
 			case localUID == "":
-				d.BlockedReason = fmt.Sprintf("local project %q identity is still loading; press esc and retry", d.SpokeProjectName)
+				d.BlockedReason = fmt.Sprintf("local project %q identity is still loading; go back and retry", d.SpokeProjectName)
 			case hubUID == "":
 				d.BlockedReason = fmt.Sprintf("hub project %q identity is unknown; refresh the hub project list and retry", d.HubProjectName)
 			}

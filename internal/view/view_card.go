@@ -59,5 +59,5 @@ func viewLayer(m model.Model) tern.Element {
 	if form.Self != "" {
 		head, meta = "Edit view", ui.T(form.Self)
 	}
-	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardView)}, Head: ui.T(head), Meta: meta, Modal: true, Size: ui.SizeMD}, children))
+	return ui.Nodes(popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardView)}, Head: ui.T(head), Meta: meta, Icon: ui.IconFunnel, Modal: true, Size: ui.SizeMD}, children))
 }

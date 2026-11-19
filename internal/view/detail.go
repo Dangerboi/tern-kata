@@ -86,7 +86,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		parts = append(parts, bodyNodes(m, *issue)...)
 		kids, activity := detailRows(m, now)
 		if len(kids) > 0 {
-			parts = append(parts, ui.Spacer{Common: ui.Common{Key: "gap-children"}, Size: ui.GapMD}, childrenTable(m, kids, now))
+			parts = append(parts, ui.Spacer{Common: ui.Common{Key: "gap-children"}, Size: ui.GapSM}, childrenTable(m, kids, now))
 		}
 		if len(activity) == 0 {
 			activity = ui.Nodes(emptyTab("empty", m.EmptyDetail()))
@@ -94,7 +94,7 @@ func detail(m model.Model, now time.Time) tern.Element {
 		parts = append(parts,
 			ui.Spacer{Common: ui.Common{Key: "gap-activity"}, Size: ui.GapMD},
 			ui.Col{Common: ui.Common{Key: activityKey}, Gap: ui.GapSM, Children: append(ui.Nodes(activityTabs(m)), activity...)})
-		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: fillMax, Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})})
+		children = append(children, ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: fillMax, Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content", Role: DetailContentRole}, Gap: ui.GapSM, Children: parts})})
 	}
 	return panel(m, model.ColumnDetail, ui.Common{Key: "detail", Grow: 1, Basis: ui.BasisFrac(0.5)}, ui.GapMD, children)
 }
@@ -366,7 +366,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		left = append(left, fact("Labels", none()))
 	}
 	if lane := model.LaneOf(*issue, m.LaneList()); lane != model.LaneNone && lane != model.LaneDone {
-		left = append(left, fact("Lane", text(lane)))
+		left = append(left, fact("Lane", text(model.LaneTitle(lane))))
 	}
 	scheduled, deadline := model.IssueDates(*issue)
 	// Dates are facts here, not warnings: the Board and list badges carry the urgency.
@@ -493,9 +493,9 @@ func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 		state = m.BodyDoc(issue)
 		switch {
 		case state.Conflicted:
-			line = []tern.Element{toneText("body-error", ui.ToneError, model.ConflictSentence(state.What, ""))}
+			line = []tern.Element{bodyError(model.ConflictSentence(state.What, ""))}
 		case state.Err != nil:
-			line = []tern.Element{toneText("body-error", ui.ToneError, state.Err.Error()+model.DraftKeptHint(state.Err, ""))}
+			line = []tern.Element{bodyError(state.Err.Error() + model.DraftKeptHint(state.Err, ""))}
 		}
 	}
 	if strings.TrimSpace(body) == "" {
@@ -507,4 +507,10 @@ func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 	}
 	doc := ui.Doc{Common: ui.Common{Key: strings.TrimPrefix(BodyDocID(issue.UID), DetailContentID+".")}, Text: state.Text, Edit: state.Editable, Comment: state.Editable}
 	return append([]tern.Element{doc}, line...)
+}
+
+// bodyError is the line under the body that says a Draft is held or in conflict: error tone, with the keys the model names as
+// "{e}" drawn as keycaps.
+func bodyError(text string) ui.Text {
+	return ui.Text{Common: ui.Common{Key: "body-error", Tone: ui.ToneError}, Spans: prose(text, toneStyle(ui.ToneError))}
 }

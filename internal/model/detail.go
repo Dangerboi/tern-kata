@@ -1,6 +1,9 @@
 package model
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 type ActivityTab uint8
 
@@ -96,6 +99,9 @@ func (m Model) EmptyDetail() EmptyDetail {
 // RelationLabel (its words) and Ref instead; a history row also carries its sentence in parts.
 type DetailRow struct {
 	Key, Type, Author, Time, Body, ReferenceUID string
+	// Message and Evidence are a close event's message and its evidence line; they sit under the event's sentence.
+	Message  string
+	Evidence []RowSpan
 	// Creation is a comment row's creation line, empty when kata gave no verification state.
 	Creation string
 	// Ref is the referenced Issue's id as shown (#<short_id> in the detail Issue's Project), and Relation how it relates to the
@@ -124,6 +130,7 @@ const (
 	SpanStrong SpanStyle = "strong"
 	SpanTime   SpanStyle = "muted mono"
 	SpanMuted  SpanStyle = "muted"
+	SpanMono   SpanStyle = "mono"
 	SpanAccent SpanStyle = "accent"
 )
 
@@ -196,7 +203,7 @@ func (m Model) NarrowerThan(cols int) bool { return m.Cols > 0 && m.Cols < cols 
 // directory shows it while a fixed Collection is current and drops it once a Project
 // is entered. Everywhere else the picker replaces it.
 func (m Model) SidebarShown() bool {
-	return !m.Bound && !m.Collection.IsProject()
+	return !m.Bound && !m.Collection.IsProject() && m.Err == nil
 }
 
 func (m Model) VisibleColumns() []Column {
@@ -252,4 +259,13 @@ func drillOut(m Model) (Model, []Cmd) {
 		return m, reloadViews()
 	}
 	return m, nil
+}
+
+// EvidenceText is the evidence line as plain text.
+func (r DetailRow) EvidenceText() string {
+	var b strings.Builder
+	for _, part := range r.Evidence {
+		b.WriteString(part.Text)
+	}
+	return b.String()
 }

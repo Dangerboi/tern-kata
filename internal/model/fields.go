@@ -148,7 +148,7 @@ var fieldSpecs = map[Action]fieldSpec{
 	PriorityAction:       {title: "Set priority", label: "Priority", placeholder: "P0 to P4, or - to clear", clean: trimPriority, check: checkPriority, send: sendFieldWrite},
 	SetParentAction:      {title: "Set parent", label: "Parent", placeholder: "Issue id", needsValue: true, clean: trimHash, send: sendFieldWrite},
 	TimedAssignAction:    {title: "Assign for a time", label: "Duration", placeholder: "1h (1m to 24h)", needsValue: true, check: checkAssignmentDuration, send: sendTimedAssignment},
-	AddBlockerAction:     {title: "Add blocker", label: "Issue", placeholder: "Issue id", needsValue: true, clean: trimHash, send: sendFieldWrite},
+	AddBlockerAction:     {title: "Block an Issue", label: "Blocked Issue", placeholder: "Issue id", needsValue: true, clean: trimHash, send: sendFieldWrite},
 	AddRelatedAction:     {title: "Add related Issue", label: "Issue", placeholder: "Issue id", needsValue: true, clean: trimHash, send: sendFieldWrite},
 	AttachFileAction:     {title: "Attach file", label: "File", placeholder: "File path", needsValue: true, send: sendAttach},
 	DetachFileAction:     {title: "Unlink attachment", label: "Attachment", placeholder: "Name", open: openAttachments, send: sendDetach},

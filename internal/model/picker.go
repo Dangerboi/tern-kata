@@ -91,7 +91,7 @@ type PickerEntry struct {
 	Page  Page
 	// Section names the divider the row sits under at the top level; "" for the unlabelled rows.
 	Section string
-	// Hint is the keycap letter that opens a Lettered Page, "" for every other row.
+	// Hint is the keycap that opens a Lettered Page, "" for every other row.
 	Hint string
 }
 

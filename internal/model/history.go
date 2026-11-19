@@ -11,8 +11,7 @@ import (
 type VerbTone string
 
 const (
-	VerbSuccess VerbTone = "success"
-	VerbMuted   VerbTone = "muted"
+	VerbMuted VerbTone = "muted"
 )
 
 // DetailTime is the one time rule of the detail: Events, comments and the meta line read like 18:21 today and 2026-10-09 22:42
@@ -21,7 +20,7 @@ func (m Model) DetailTime(t time.Time) string {
 	return m.Calendar.Read(t, m.Now)
 }
 
-// EventHidden says the Events tab does not list the event: it only lists changes to the Issue, and the Issue's meta line already
+// EventHidden says the Events tab does not list the event: it only lists changes to the Issue, and the facts panel's Created row already
 // says who created it and when. Comments live on the Comments tab, and a notification slot's rows (told someone about a reply)
 // are bookkeeping, not a change to the Issue.
 func EventHidden(event Event) bool {
@@ -55,7 +54,8 @@ func (m Model) historyRow(event Event) DetailRow {
 	if foreign {
 		peerUID, peerShort = event.IssueUID, event.IssueShortID
 	}
-	verb, object, detail, tone := "", "", "", VerbTone("")
+	verb, object, message, tone := "", "", "", VerbTone("")
+	var evidence []RowSpan
 	switch event.Type {
 	case "issue.created":
 		verb, object = "created", "this Issue"
@@ -69,7 +69,7 @@ func (m Model) historyRow(event Event) DetailRow {
 		verb = "unassigned"
 	case "issue.closed":
 		verb, object, tone = "closed", closeReason(payload.text("reason")), closeTone(payload.text("reason"))
-		detail = closeDetail(payload, m.currentMetadata())
+		message, evidence = closeDetail(payload, m.currentMetadata())
 	case "issue.reopened":
 		verb = "reopened"
 	case "issue.labeled":
@@ -77,7 +77,7 @@ func (m Model) historyRow(event Event) DetailRow {
 	case "issue.unlabeled":
 		verb, object = "removed label", payload.text("label")
 	case "issue.priority_set":
-		verb, object = "set priority to", payload.text("priority")
+		verb, object = "set priority to", "P"+payload.text("priority")
 	case "issue.priority_cleared":
 		verb = "cleared priority"
 	case "issue.updated":
@@ -105,8 +105,14 @@ func (m Model) historyRow(event Event) DetailRow {
 		verb = strings.NewReplacer(".", " ", "_", " ").Replace(strings.TrimPrefix(event.Type, "issue."))
 	}
 	row := DetailRow{
-		Key: event.UID, Type: event.Type, Author: event.Actor, Time: m.DetailTime(event.CreatedAt), Body: detail,
+		Key: event.UID, Type: event.Type, Author: event.Actor, Time: m.DetailTime(event.CreatedAt), Message: message, Evidence: evidence,
 		History: &HistorySentence{Verb: verb, Object: object, Tone: tone},
+	}
+	if strings.HasPrefix(event.Type, "issue.link") || strings.HasPrefix(event.Type, "issue.unlink") {
+		names := m.linkedNames()
+		row.History.Object = qualifyShorts(row.History.Object, names)
+		object = qualifyShorts(object, names)
+		peerShort = qualifyShorts(peerShort, names)
 	}
 	row.ReferenceUID = peerUID
 	if peerShort != "" && peerUID != "" {
@@ -132,11 +138,11 @@ func closeReason(code string) string {
 	return "as " + words
 }
 
-// closeTone is success for a close as done, muted for a close that is not a completion, and plain for a code kata adds later.
+// closeTone is plain for a close as done (a closed Issue is never success green), muted for a close that is not a completion, and plain for a code kata adds later.
 func closeTone(code string) VerbTone {
 	switch {
 	case code == "done":
-		return VerbSuccess
+		return ""
 	case CloseReasonWords(code) != code:
 		return VerbMuted
 	}
@@ -232,45 +238,53 @@ func (m Model) currentMetadata() map[string]any {
 	return m.authority.Issue.Metadata
 }
 
-func closeDetail(p payloadMap, current map[string]any) string {
-	var evidence []string
+// evidenceKindWords is the words of a kata evidence kind; a kind kata adds later reads as its code.
+var evidenceKindWords = map[string]string{"pr": "pull request", "test": "test run", "reviewed-paths": "reviewed", "audit-no-change": "audit"}
+
+// closeDetail is a close's message and its evidence as spans: "Evidence: " muted, then each item as its kind in words and its
+// value in mono, so a command reads exactly as typed.
+func closeDetail(p payloadMap, current map[string]any) (message string, evidence []RowSpan) {
 	items, _ := p["evidence"].([]any)
 	for _, item := range items {
 		fields, _ := item.(map[string]any)
+		kind, value := "", ""
 		if plain(fields["type"]) == "attachment" {
-			evidence = append(evidence, attachmentEvidence(fields, current))
-			continue
-		}
-		parts := []string{plain(fields["type"])}
-		for _, key := range []string{"sha", "url", "command", "paths", "account", "rationale", "issue_ref"} {
-			if value, ok := fields[key]; ok {
-				if key == "sha" {
-					value = truncate(plain(value), 7)
+			kind, value = attachmentEvidence(fields, current)
+		} else {
+			kind = plain(fields["type"])
+			if words := evidenceKindWords[kind]; words != "" {
+				kind = words
+			}
+			for _, key := range []string{"sha", "url", "command", "paths", "account", "rationale", "issue_ref"} {
+				if v, ok := fields[key]; ok {
+					if key == "sha" {
+						v = truncate(plain(v), 7)
+					}
+					value = plain(v)
+					break
 				}
-				parts = append(parts, plain(value))
-				break
 			}
 		}
-		evidence = append(evidence, strings.Join(parts, " "))
+		if len(evidence) == 0 {
+			evidence = append(evidence, RowSpan{"Evidence: ", SpanMuted})
+		} else {
+			evidence = append(evidence, RowSpan{", ", SpanMuted})
+		}
+		if value == "" {
+			evidence = append(evidence, RowSpan{kind, ""})
+			continue
+		}
+		evidence = append(evidence, RowSpan{kind + " ", ""}, RowSpan{value, SpanMono})
 	}
-	message, list := strings.TrimSpace(p.text("message")), strings.Join(evidence, ", ")
-	if list != "" {
-		list = "Evidence: " + list
-	}
-	switch {
-	case message == "":
-		return list
-	case list == "":
-		return message
-	}
-	return message + "\n\n" + list
+	return strings.TrimSpace(p.text("message")), evidence
 }
 
-// attachmentEvidence is how an attachment evidence entry reads in a close: "attachment <name>", with (changed) when the Issue
-// has another version of the file now and (removed) when it no longer has the Attachment. The name comes from the copy kata froze
-// into the evidence, so it survives the Attachment's removal. An entry with no copy reads from the Issue's current Attachment,
-// like kata's web UI; one that has neither reads "Attachment removed", and one whose copy is no reference "Invalid attachment".
-func attachmentEvidence(fields map[string]any, metadata map[string]any) string {
+// attachmentEvidence is how an attachment evidence entry reads in a close: kind "attachment" and the name, with (changed) when the
+// Issue has another version of the file now and (removed) when it no longer has the Attachment. The name comes from the copy kata
+// froze into the evidence, so it survives the Attachment's removal. An entry with no copy reads from the Issue's current Attachment,
+// like kata's web UI; one that has neither reads "Attachment removed", and one whose copy is no reference "Invalid attachment"
+// (both as a kind with no value).
+func attachmentEvidence(fields map[string]any, metadata map[string]any) (kind, value string) {
 	id := plain(fields["attachment_id"])
 	nowRef := metadata[attachmentKeyPrefix+id]
 	now, nowOK := attachmentRef(id, nowRef)
@@ -278,18 +292,18 @@ func attachmentEvidence(fields map[string]any, metadata map[string]any) string {
 	if _, hasCopy := fields["attachment"]; !hasCopy {
 		frozen, frozenOK = attachmentRef(id, nowRef)
 		if !frozenOK {
-			return "Attachment removed"
+			return "Attachment removed", ""
 		}
 	} else if !frozenOK {
-		return "Invalid attachment"
+		return "Invalid attachment", ""
 	}
 	switch {
 	case !nowOK:
-		return "attachment " + frozen.Name + " (removed)"
+		return "attachment", frozen.Name + " (removed)"
 	case !strings.EqualFold(now.Version, frozen.Version):
-		return "attachment " + frozen.Name + " (changed)"
+		return "attachment", frozen.Name + " (changed)"
 	}
-	return "attachment " + frozen.Name
+	return "attachment", frozen.Name
 }
 
 func truncate(s string, n int) string {
@@ -382,8 +396,9 @@ func linkParts(p payloadMap, specs []linkField, foreign bool, peer string) (part
 	return parts
 }
 
-// phraseLinks phrases one direction of a link event: "blocker bbbb, related cccc", and when every link is to one Issue, that Issue
-// once with the relations after it ("bbbb as blocker and related"); historyRow draws the Issue's id where it stands.
+// phraseLinks phrases one direction of a link event: relations in order with their Issues ("blocker bbbb, related cccc and dddd"),
+// and when every link is to one Issue, that Issue once with the relations after it ("bbbb as blocker and related"); historyRow
+// draws the Issue's id where it stands.
 func phraseLinks(parts []linkPart, prefix string) string {
 	if len(parts) > 1 && prefix == "" && !slices.ContainsFunc(parts, func(l linkPart) bool { return l.ref != parts[0].ref }) {
 		nouns := make([]string, len(parts))
@@ -393,9 +408,22 @@ func phraseLinks(parts []linkPart, prefix string) string {
 		last := len(nouns) - 1
 		return parts[0].ref + " as " + strings.Join(nouns[:last], ", ") + " and " + nouns[last]
 	}
-	words := make([]string, len(parts))
-	for i, l := range parts {
-		words[i] = prefix + l.noun + " " + l.ref
+	var order []string
+	refs := map[string][]string{}
+	for _, l := range parts {
+		if _, seen := refs[l.noun]; !seen {
+			order = append(order, l.noun)
+		}
+		refs[l.noun] = append(refs[l.noun], l.ref)
+	}
+	words := make([]string, len(order))
+	for i, noun := range order {
+		list := refs[noun]
+		joined := strings.Join(list, ", ")
+		if n := len(list); n > 1 && prefix == "" {
+			joined = strings.Join(list[:n-1], ", ") + " and " + list[n-1]
+		}
+		words[i] = prefix + noun + " " + joined
 	}
 	return strings.Join(words, ", ")
 }
@@ -567,4 +595,42 @@ func movedTo(event Event, p payloadMap) string {
 		parts = append(parts, "as "+id)
 	}
 	return strings.Join(parts, " ")
+}
+
+// linkedNames reads the short id of each Issue the shown Issue is linked to as the Pane names it: "#short" in the shown Issue's
+// own Project and "project#short" in another, as the Links tab does.
+func (m Model) linkedNames() map[string]string {
+	if m.authority == nil || m.authority.Issue == nil {
+		return nil
+	}
+	names := map[string]string{}
+	for _, link := range m.authority.Links {
+		for _, qualified := range []string{link.FromQualifiedID, link.ToQualifiedID} {
+			project, short, ok := strings.Cut(qualified, "#")
+			if !ok || short == "" {
+				continue
+			}
+			if project == m.authority.Issue.ProjectName {
+				names[short] = "#" + short
+			} else {
+				names[short] = qualified
+			}
+		}
+	}
+	return names
+}
+
+// qualifyShorts replaces each short id in text that names a linked Issue by its name; a word that is no linked id stays.
+func qualifyShorts(text string, names map[string]string) string {
+	if len(names) == 0 {
+		return text
+	}
+	fields := strings.Split(text, " ")
+	for i, field := range fields {
+		word := strings.TrimRight(field, ",")
+		if name, ok := names[word]; ok {
+			fields[i] = name + field[len(word):]
+		}
+	}
+	return strings.Join(fields, " ")
 }

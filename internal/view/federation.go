@@ -26,27 +26,27 @@ func federation(m model.Model, now time.Time) tern.Element {
 		if failure := f.LeaveFailure(); failure != "" {
 			children = append(children, toneText("error", ui.ToneError, failure))
 		}
-		return listPanel(m, 0.5, children)
+		return listPanel(m, 0.4, children)
 	case model.FederationLeaveDone:
 		children = append(children, federationScreen("Leave result", f.Left.ResultRows())...)
-		return listPanel(m, 0.5, children)
+		return listPanel(m, 0.4, children)
 	}
 	if more, shown := federationEnrollScreen(m); shown {
 		children = append(children, more...)
-		return listPanel(m, 0.5, children)
+		return listPanel(m, 0.4, children)
 	}
 	spoke := m.SelectedSpoke()
 	if f.Screen == model.FederationDetail && spoke != nil {
 		children = append(children, factRows("", spoke.DetailRows(m.Calendar, now))...)
-		return listPanel(m, 0.5, children)
+		return listPanel(m, 0.4, children)
 	}
 	if notice, shown := f.Notice(); shown {
 		if notice.Empty {
 			empty := emptyState(notice.Text, "Enroll a Project to sync it with a hub.", emptyButton(m, "enroll", model.StartFederationEnroll, "Enroll a Project", true)...)
 			empty.Key = "empty"
-			return listPanel(m, 0.5, append(children, empty))
+			return listPanel(m, 0.4, append(children, empty))
 		}
-		return listPanel(m, 0.5, append(children, noticeLines(notice.Err, !notice.Pending, notice.Text, "")...))
+		return listPanel(m, 0.4, append(children, noticeLines(notice.Err, !notice.Pending, notice.Text, "")...))
 	}
 	cards := make([]tern.Element, len(f.Spokes))
 	for i, s := range f.Spokes {
@@ -57,7 +57,7 @@ func federation(m model.Model, now time.Time) tern.Element {
 		children = append(children, ui.Text{Common: ui.Common{Key: "footer", Tone: ui.ToneMuted}, Spans: []ui.Span{
 			monoSpan(spoke.HubURLFact(), "muted"), {T: " · " + spoke.CredentialFact(), S: "muted"}}, Wrap: ui.WrapNone})
 	}
-	return listPanel(m, 0.5, children)
+	return listPanel(m, 0.4, children)
 }
 
 // federationCard is a spoke in the list: its name, spoke name, hub host and actor on one line, the sync facts muted under it, and in

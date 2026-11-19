@@ -1,8 +1,10 @@
 package view
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
@@ -33,6 +35,73 @@ func (c *listColumns) fit(id, owner, date int) {
 	c.id = min(max(c.id, id), maxBoxWidth)
 	c.owner = min(max(c.owner, owner), maxBoxWidth)
 	c.date = min(max(c.date, date), maxDateWidth)
+}
+
+// minTitleCells is the room a row's title keeps before the Date column gives way: below it the Date badge leaves its column and
+// follows the title as a flag instead (see layoutRow), so one dated row cannot squeeze every other row's title and cells.
+const minTitleCells = 30
+
+// minFlaggedTitle is the least title, in cells, a row keeps beside its Date badge. A row too narrow for that much title and the
+// full badge shows the badge in its compact form (compactDate); only when even that leaves less title does it drop the badge.
+const minFlaggedTitle = 8
+
+var dayInBadge = regexp.MustCompile(`(\d{4})-(\d\d)-(\d\d)$`)
+
+// compactDate is a Date badge with its day written short: "due 2026-12-01" is "due Dec 1". Words without a day ("due today",
+// "overdue 3d") are already short and come back unchanged.
+func compactDate(text string) string {
+	m := dayInBadge.FindStringSubmatchIndex(text)
+	if m == nil {
+		return text
+	}
+	day, err := time.Parse("2006-01-02", text[m[0]:])
+	if err != nil {
+		return text
+	}
+	return text[:m[0]] + day.Format("Jan 2")
+}
+
+// sansPerCell and sansSavedPerCell say how much narrower sans text is than the mono cells the boxes are sized in: out of every 20
+// cells of mono width, sans text takes 17.
+const (
+	sansPerCell      = 20
+	sansSavedPerCell = 3
+)
+
+// sansCells is the room, in mono cells, that sans text of the given mono width takes.
+func sansCells(width int) int {
+	return (width*(sansPerCell-sansSavedPerCell) + sansPerCell - 1) / sansPerCell
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// fitDate drops the Date column when the list is too narrow to keep minTitleCells for the title beside it. width is the list's
+// width in cells.
+func (c *listColumns) fitDate(width int) {
+	if c.date == 0 {
+		return
+	}
+	fixed := rowPadding + itemDetailWidth + c.id + displayWidth(cellGap) + updatedWidth + 1
+	if c.prioShown {
+		fixed += displayWidth(cellGap) + prioWidth
+	}
+	if c.statusShown {
+		fixed += displayWidth(cellGap) + statusWidth
+	}
+	if c.kidsShown {
+		fixed += kidsWidth
+	}
+	if c.ownerShown {
+		fixed += displayWidth(cellGap) + c.owner
+	}
+	if width-fixed-(displayWidth(cellGap)+c.date) < minTitleCells {
+		c.date = 0
+	}
 }
 
 // role is the row's boxes in role tokens, which the style sheet turns into the columns' widths (see cellBoxCSS): the row
@@ -158,22 +227,39 @@ func layoutRow(cols listColumns, width int, p rowParts) listRow {
 		room -= displayWidth(span.T)
 	}
 	flags := p.flags
+	// With no Date column the Date badge follows the title as a flag, so it takes its room from its own row's title and from no
+	// other row's cells. It is the first flag to go when the row is too wide, then the Agent badge.
+	dateFlag := cols.date == 0 && p.date.T != ""
+	if dateFlag {
+		flags = append([]ui.Span{{T: p.date.T, S: cellStyleOrDefault(p.date.S)}}, flags...)
+	}
+	// room is in mono cells, the unit the boxes are sized in, but the title and flags are sans, whose letters run about 15% narrower
+	// than a mono cell (sansCells); measuring them in mono cells dropped a Date badge that Tern had room to draw.
 	flagsWidth := func() int {
 		total := 0
 		for _, flag := range flags {
-			total += displayWidth(cellGap + flag.T)
+			total += sansCells(displayWidth(cellGap + flag.T))
 		}
 		return total
 	}
 	title := p.title
 	room -= displayWidth(cellGap)
-	if p.agentFlags > 0 && len(flags) >= p.agentFlags && displayWidth(title)+flagsWidth() > room {
-		flags = flags[p.agentFlags:]
+	// A row too wide for its flags gives way in this order: the Agent badge goes, then the title is cut (down to minFlaggedTitle
+	// cells) to keep the Date badge and the attention word; the Date badge shows in its compact form before it goes, and goes only
+	// when not even that much title fits beside it. The attention word is never dropped. With no flag after it the title is left
+	// whole: Tern ellipsizes a label that overflows, so a cut made here from the estimate above would only lose room that is there.
+	if p.agentFlags > 0 && len(flags) >= p.agentFlags+btoi(dateFlag) && sansCells(displayWidth(title))+flagsWidth() > room {
+		start := btoi(dateFlag)
+		flags = append(flags[:start:start], flags[start+p.agentFlags:]...)
 	}
-	// With no flag after it the title is left whole: Tern ellipsizes a label that overflows, up to the first shown right-hand cell, so
-	// a cut made here from the estimate above would only lose room that is there.
-	if over := displayWidth(title) + flagsWidth() - room; over > 0 && len(flags) > 0 {
-		title = cut(title, max(displayWidth(title)-over, 1))
+	if dateFlag && sansCells(minFlaggedTitle) > room-flagsWidth() && sansCells(displayWidth(title))+flagsWidth() > room {
+		flags[0].T = compactDate(flags[0].T)
+		if sansCells(minFlaggedTitle) > room-flagsWidth() {
+			flags = flags[1:]
+		}
+	}
+	if over := sansCells(displayWidth(title)) + flagsWidth() - room; over > 0 && len(flags) > 0 {
+		title = cut(title, max((room-flagsWidth())*sansPerCell/(sansPerCell-sansSavedPerCell), 1))
 	}
 	label = append(label, ui.Span{T: cellGap + title})
 	for _, flag := range flags {

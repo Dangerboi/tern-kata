@@ -2,7 +2,7 @@ package view
 
 import (
 	"cmp"
-	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -39,7 +39,7 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 	cols = append(cols, ui.Column{ID: "updated", Head: ui.T("Updated"), Priority: 2, Align: ui.AlignEnd})
 	counts := m.DetailChildCounts()
 	return ui.Col{Common: ui.Common{Key: "children"}, Gap: ui.GapXS, Children: ui.Nodes(
-		ui.Text{Common: ui.Common{Key: "heading"}, Spans: []ui.Span{{T: "Children ", S: "strong"}, {T: fmt.Sprintf("%d of %d open", counts.Open, counts.Total), S: "muted"}}},
+		ui.Text{Common: ui.Common{Key: "heading"}, Spans: []ui.Span{{T: "Children ", S: "strong"}, {T: strconv.Itoa(counts.Total), S: "muted"}}},
 		ui.Table{
 			Common:     ui.Common{Key: "table"},
 			Cols:       cols,
@@ -54,7 +54,11 @@ func childrenTable(m model.Model, children []detailChild, now time.Time) tern.El
 // one-line Title.
 func childTicketCell(m model.Model, child detailChild, now time.Time) ui.Cell {
 	facts := refFacts{UID: child.UID, Qualified: cmp.Or(child.Qualified, child.Ref), Status: child.Status}
-	return ui.TextCell{Text: ui.Spans(ui.Span{T: child.Ref, S: "accent"}), Title: refTooltip(summarize(m, facts, now))}
+	style := "accent link" // the style of every other Issue ref; a closed child's id is muted like the rest of its row
+	if child.Closed {
+		style = "muted"
+	}
+	return ui.TextCell{Text: ui.Spans(ui.Span{T: child.Ref, S: style}), Title: refTooltip(summarize(m, facts, now))}
 }
 
 func loadedChildCells(cells map[string]ui.Cell, c model.ChildCells, child detailChild) {

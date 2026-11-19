@@ -295,7 +295,7 @@ func (m Model) RunFacts(now time.Time) []RunFact {
 		if t == nil {
 			return ""
 		}
-		return m.Calendar.Stamp(*t)
+		return m.Calendar.Read(*t, now)
 	}
 	code, detail := run.Reason()
 	summary := strings.TrimSpace(detail)

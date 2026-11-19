@@ -556,7 +556,7 @@ func (f docbankFixture) closeEvents(t *testing.T) []string {
 	var bodies []string
 	for _, item := range m.DetailRows() {
 		if item.Kind == model.RowEvent {
-			bodies = append(bodies, item.Activity.Body)
+			bodies = append(bodies, item.Activity.Message+"\n"+item.Activity.EvidenceText())
 		}
 	}
 	return bodies

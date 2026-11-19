@@ -62,7 +62,7 @@ func TestHelpIsAFullPaneSheetOfTheIssuesPage(t *testing.T) {
 		at += i + 1
 	}
 	joined := strings.Join(lines, "\n")
-	for _, want := range []string{"?  help", "Quit (asks first", "PgUp  page up", "I  Inbox", "1-6", "first", "last", "Tab", "Shift+Tab", "Set priority", "expand/collapse all", "Flat or nested", "Open linked Issue", "new child", "Reset the form", "reply to comment", "Cycle reply kind", "make or change recurrence", "set parent", "Projects", "menu"} {
+	for _, want := range []string{"?  Help", "Quit, asking first", "PgUp  Page up", "I  Inbox", "1-6", "first", "last", "Tab", "Shift+Tab", "Set priority", "Expand/collapse all", "Flat or nested", "Open linked Issue", "New child", "Reset the form", "Reply to comment", "Cycle reply kind", "Make or change recurrence", "Set parent", "Projects", "Menu"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("row %q missing in %q", want, lines)
 		}
@@ -118,18 +118,18 @@ func TestHelpSheetListsTheGlobalKeysAndTheCurrentPagesKeys(t *testing.T) {
 		name, key, own string
 		others         []string
 	}{
-		{"Issues", "", "Flat or nested", []string{"next job", "next run", "next request", "show the spoke's detail", "move lanes", "Read again"}},
-		{"Board", "5", "toggle Issues and Board Pages", []string{"Flat or nested", "next job", "next run", "next request", "show the spoke's detail"}},
-		{"Jobs", "2", "next job", []string{"Flat or nested", "next run", "next request", "toggle Issues and Board Pages"}},
-		{"Runs", "3", "next run", []string{"Flat or nested", "next job", "next request", "toggle Issues and Board Pages"}},
-		{"Attention", "6", "next request", []string{"Flat or nested", "next job", "next run", "toggle Issues and Board Pages"}},
-		{"Credentials", "C", "Read again", []string{"Flat or nested", "next job", "next run", "show the spoke's detail"}},
-		{"Daemons", "D", "Switch to this daemon", []string{"Flat or nested", "next job", "Read again"}},
-		{"Config", "K", "back to the Page shown before", []string{"Flat or nested", "next job", "Read again", "Switch to this daemon"}},
+		{"Issues", "", "Flat or nested", []string{"Next job", "Next run", "Next request", "Show the spoke's detail", "Move lanes", "Read again"}},
+		{"Board", "5", "Toggle Issues and Board Pages", []string{"Flat or nested", "Next job", "Next run", "Next request", "Show the spoke's detail"}},
+		{"Jobs", "2", "Next job", []string{"Flat or nested", "Next run", "Next request", "Toggle Issues and Board Pages"}},
+		{"Runs", "3", "Next run", []string{"Flat or nested", "Next job", "Next request", "Toggle Issues and Board Pages"}},
+		{"Attention", "6", "Next request", []string{"Flat or nested", "Next job", "Next run", "Toggle Issues and Board Pages"}},
+		{"Credentials", "C", "Read again", []string{"Flat or nested", "Next job", "Next run", "Show the spoke's detail"}},
+		{"Daemons", "D", "Switch to this daemon", []string{"Flat or nested", "Next job", "Read again"}},
+		{"Config", "K", "Back to the Page shown before", []string{"Flat or nested", "Next job", "Read again", "Switch to this daemon"}},
 	}
 	for _, page := range pages {
 		sheet := helpOn(t, page.key)
-		for _, want := range []string{"help", "Quit (asks first", "Inbox", "switch Page", page.own} {
+		for _, want := range []string{"Help", "Quit, asking first", "Inbox", "Switch Page", page.own} {
 			if !strings.Contains(sheet, want) {
 				t.Errorf("%s Page: sheet lacks %q in %q", page.name, want, sheet)
 			}

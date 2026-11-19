@@ -79,8 +79,8 @@ func TestLinksReferenceIsStyledAsALinkAndRelationIsMuted(t *testing.T) {
 func TestEventsReferenceIsStyledAndPlainEventsAreNot(t *testing.T) {
 	m, _ := referencing(model.TabEvents)
 	nodes := render(t, m)
-	assertReference(t, nodes, view.DetailActivityID+".linked.row.jump", "peer", "peer")
-	if _, ok := nodes[view.DetailActivityID+".closed.row.heading"]; !ok {
+	assertReference(t, nodes, view.DetailActivityID+".linked.row.jump", "#peer", "peer")
+	if _, ok := nodes[view.DetailActivityID+".closed.row.what.heading"]; !ok {
 		t.Fatalf("no plain heading: %v", nodes.under(view.DetailActivityID))
 	}
 	for _, id := range nodes.under(view.DetailActivityID + ".closed") {
@@ -88,17 +88,20 @@ func TestEventsReferenceIsStyledAndPlainEventsAreNot(t *testing.T) {
 			t.Errorf("event without a reference has %s", id)
 		}
 	}
-	if click := nodes[view.DetailActivityID+".closed.row.heading"].P["actions"].(map[string]any)["click"]; strings.HasPrefix(click.(string), view.JumpClick("")) {
+	if click := nodes[view.DetailActivityID+".closed.row.what.heading"].P["actions"].(map[string]any)["click"]; strings.HasPrefix(click.(string), view.JumpClick("")) {
 		t.Errorf("plain row jumps: %v", click)
 	}
 }
 
 func TestLongCloseMessageAndEvidenceRenderWhole(t *testing.T) {
 	m, long := referencing(model.TabEvents)
-	body := text(render(t, m)[view.DetailActivityID+".closed.body"])
-	want := long + "\n\nEvidence: commit abc123d, test go test ./..."
-	if body != want {
-		t.Errorf("close detail = %q, want %q", body, want)
+	nodes := render(t, m)
+	if body := text(nodes[view.DetailActivityID+".closed.row.what.body"]); body != long {
+		t.Errorf("close message = %q, want %q", body, long)
+	}
+	// the evidence is no markdown, so its command reads as typed, "./..." included
+	if got, want := text(nodes[view.DetailActivityID+".closed.row.what.evidence"]), "Evidence: commit abc123d, test run go test ./..."; got != want {
+		t.Errorf("close evidence = %q, want %q", got, want)
 	}
 }
 

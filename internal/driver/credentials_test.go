@@ -69,7 +69,7 @@ func TestCredentialsPageOpensFromEveryPageAndTheMenu(t *testing.T) {
 		if check, _ := askedCapabilities(out.Cmds); check.Workspace != "/repo" {
 			t.Errorf("%s: the check asked for workspace %q", name, check.Workspace)
 		}
-		if !pageBarDrawn(t, out.State.Model, "C") || out.State.Model.CurrentMode() != model.ModeCredentials {
+		if !pageBarDrawn(t, out.State.Model, "Shift+C") || out.State.Model.CurrentMode() != model.ModeCredentials {
 			t.Errorf("%s: no Page bar entry for C, or mode %q", name, out.State.Model.CurrentMode())
 		}
 	}
@@ -99,15 +99,15 @@ func TestMenuListsTheLetteredPageAndFiltersIt(t *testing.T) {
 
 func TestPageBarDrawsAnLetteredPageOnlyWhileItIsShown(t *testing.T) {
 	s := projectPane(t, 160, boardCard("a"))
-	if pageBarDrawn(t, s.Model, "C") {
+	if pageBarDrawn(t, s.Model, "Shift+C") {
 		t.Fatal("the Page bar on the Issues Page draws C")
 	}
 	on := credentialsOpened(t, s).State
-	if !pageBarDrawn(t, on.Model, "C") {
+	if !pageBarDrawn(t, on.Model, "Shift+C") {
 		t.Fatal("the Credentials Page's Page bar does not draw C")
 	}
 	back := step(t, on, key("escape")).State
-	if pageBarDrawn(t, back.Model, "C") {
+	if pageBarDrawn(t, back.Model, "Shift+C") {
 		t.Error("the Page bar still draws C after leaving the Credentials Page")
 	}
 }
@@ -285,7 +285,7 @@ func TestCredentialsPageKeysKeepThePageKeysAndTheMenu(t *testing.T) {
 	if got := step(t, audited, key("?")).State.Model; !got.HelpOpen {
 		t.Error("? opens no help")
 	}
-	if got := step(t, audited, click(pageBarEntry(t, audited.Model, "C"), view.KeyClick("shift+c"))); got.State.Model.Page != model.PageCredentials {
+	if got := step(t, audited, click(pageBarEntry(t, audited.Model, "Shift+C"), view.KeyClick("shift+c"))); got.State.Model.Page != model.PageCredentials {
 		t.Errorf("clicking the shown entry left page %v", got.State.Model.Page)
 	}
 }

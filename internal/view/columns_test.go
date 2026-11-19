@@ -196,10 +196,10 @@ func TestLongOwnerIsCutWithoutAnExpiryAndKeepsItsUntilWithOne(t *testing.T) {
 		{UID: "timed", ShortID: "tttt", Title: "Timed", Status: "open", ProjectName: "work", Owner: &long, AssignmentExpiresOn: &soon, UpdatedAt: testNow},
 	}
 	nodes := render(t, m)
-	if row := text(nodes[view.IssueID("bare")]); !strings.Contains(row, "smoke-o…") || strings.Contains(row, long) {
-		t.Errorf("bare long owner row %q: want the name cut to smoke-o…", row)
+	if row := text(nodes[view.IssueID("bare")]); !strings.Contains(row, "smoke-owner-l…") || strings.Contains(row, long) {
+		t.Errorf("bare long owner row %q: want the name cut to smoke-owner-l…", row)
 	}
-	if row := text(nodes[view.IssueID("timed")]); !strings.Contains(row, "smoke-o… until 22:30") {
-		t.Errorf("timed long owner row %q: want smoke-o… until 22:30", row)
+	if row := text(nodes[view.IssueID("timed")]); !strings.Contains(row, "smoke-owner-l… until 22:30") {
+		t.Errorf("timed long owner row %q: want smoke-owner-l… until 22:30", row)
 	}
 }

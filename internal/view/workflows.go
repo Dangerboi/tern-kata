@@ -75,7 +75,7 @@ func workflowList(m model.Model, paired bool, now time.Time) tern.Element {
 	}
 	selected := selectedItem(WorkflowListID, m.Workflows.Selected)
 	list := listAndEmpty(ui.List{CommonWithoutMax: scrollerCommon("rows"), Max: fillMax, Selected: selected, Empty: ui.T("Loading workflows…"), Children: cards}, m.Workflows.Loading, empty)
-	common := ui.Common{Key: "names", Grow: 1, Basis: ui.BasisFrac(0.4), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
+	common := ui.Common{Key: "names", Grow: 2, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
 	children := ui.Nodes(workflowsHead(m, len(visible)))
 	if m.Workflows.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, model.Cannot("read", "workflows", m.Workflows.Err)))
@@ -133,7 +133,7 @@ func sectionHead(key, title string, n int) tern.Element {
 }
 
 func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
-	common := ui.Common{Key: "inspector", Grow: 1, Basis: ui.BasisFrac(0.6), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
+	common := ui.Common{Key: "inspector", Grow: 3, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}}
 	w, ok := m.SelectedWorkflow()
 	if !ok {
 		return ui.Col{Common: common, Children: ui.Nodes(ui.Text{Common: ui.Common{Key: "empty"}, Text: "Select a workflow to read it."})}
@@ -158,8 +158,8 @@ func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
 	}
 	parts = append(parts, workflowJobs(m, w)...)
 	parts = append(parts, workflowRuns(m, w, now)...)
-	if w.Author != "" {
-		parts = append(parts, ui.Text{Common: ui.Common{Key: "by"}, Spans: []ui.Span{{T: "Created by " + w.Author, S: "muted"}}})
+	if by := workflowCreated(m, w, now); len(by) > 0 {
+		parts = append(parts, ui.Text{Common: ui.Common{Key: "by"}, Spans: by})
 	}
 	body := ui.List{CommonWithoutMax: scrollerCommon("viewport"), Max: fillMax, Children: ui.Nodes(ui.Col{Common: ui.Common{Key: "content"}, Gap: ui.GapSM, Children: parts})}
 	if paired {
@@ -167,6 +167,22 @@ func workflowInspector(m model.Model, paired bool, now time.Time) tern.Element {
 		return ui.Card{Common: common, Children: ui.Nodes(body)}
 	}
 	return ui.Col{Common: common, Children: ui.Nodes(body)}
+}
+
+// workflowCreated is the inspector's closing line: "Created 16:09 · dana", the time in the Pane's calendar, each part left out
+// when kata did not give it.
+func workflowCreated(m model.Model, w model.Workflow, now time.Time) []ui.Span {
+	var spans []ui.Span
+	if !w.CreatedAt.IsZero() {
+		spans = append(spans, ui.Span{T: "Created ", S: "muted"}, timeSpan(m.Calendar.Read(w.CreatedAt, now)))
+	}
+	if w.Author != "" {
+		if len(spans) == 0 {
+			return []ui.Span{{T: "Created by " + w.Author, S: "muted"}}
+		}
+		spans = append(spans, ui.Span{T: " · " + w.Author, S: "muted"})
+	}
+	return spans
 }
 
 // workerReading is the worker's verdict on a workflow: the good verdict in success, each refusal a warning line, and what could
@@ -237,8 +253,7 @@ func workflowForm(m model.Model, c model.WorkflowCard) []tern.Element {
 		}
 		value := f.Text(name)
 		input := ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: value, Cursor: caretAt(f.Caret, name, value), Mode: "insert", Readonly: readonly}}
-		nodes := labelledInput(string(name), label, "", focused, input)
-		return append(nodes, workflowHint(string(name), hint))
+		return labelledInput(string(name), label, hint, focused, input)
 	}
 	step := f.Step()
 	children := text(model.WorkflowFieldName, "Name", "")
@@ -249,7 +264,7 @@ func workflowForm(m model.Model, c model.WorkflowCard) []tern.Element {
 		children = append(children, pick)
 	}
 	children = append(children, text(model.WorkflowFieldKey, "Step name", stepNameHint)...)
-	if kind := choiceControl(m, model.CardWorkflow, model.WorkflowFieldKind, "Kind", f.Field == model.WorkflowFieldKind, kindHint, ""); kind != nil {
+	if kind := choiceControl(m, model.CardWorkflow, model.WorkflowFieldKind, "Kind", f.Field == model.WorkflowFieldKind, focusedHint(f.Field == model.WorkflowFieldKind, kindHint), ""); kind != nil {
 		children = append(children, kind)
 	}
 	bodyLabel := "Prompt"
@@ -269,8 +284,7 @@ func workflowForm(m model.Model, c model.WorkflowCard) []tern.Element {
 	if step.Kind == cronjob.StepCommand {
 		bodyHint = commandHint
 	}
-	children = append(children, labelledInput(string(model.WorkflowFieldBody), bodyLabel, "", focused, editor)...)
-	children = append(children, workflowHint(string(model.WorkflowFieldBody), bodyHint))
+	children = append(children, labelledInput(string(model.WorkflowFieldBody), bodyLabel, bodyHint, focused, editor)...)
 	children = append(children, text(model.WorkflowFieldAfter, "After", afterHint)...)
 	children = append(children, text(model.WorkflowFieldRetries, "Retries", retriesHint)...)
 	if c.Reading != nil {
@@ -324,10 +338,12 @@ const (
 	retriesHint  = "How many times a failed step runs again, 0 to 100. A timeout is never retried."
 )
 
-// workflowHint is the muted line under a Workflow card field that says what it takes. Unlike the hints of other forms it stays
-// while the field has no focus, so the whole card can be read through.
-func workflowHint(key, text string) tern.Element {
-	return toneText(key+"-hint", ui.ToneMuted, text)
+// focusedHint is hint while its field has focus, else empty: a hint is shown only for the focused field.
+func focusedHint(focused bool, hint string) string {
+	if focused {
+		return hint
+	}
+	return ""
 }
 
 // busyReason is the reason a card's buttons cannot be pressed while it works, "" when they can.

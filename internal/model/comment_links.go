@@ -52,19 +52,30 @@ func (m Model) commentLinks(uid string) []commentLink {
 		}
 		links = append(links, commentLink{issue, *l.UID, project, label, qualified})
 	}
-	if comment.Reply != nil && comment.ReplyKind != nil {
-		add(*comment.Reply, replyVerb(*comment.ReplyKind)+" "+answeredComment(comment.Reply.Author))
-	} else if comment.Reply != nil {
-		add(*comment.Reply, "replies to a comment")
+	// A link names its target, never the relation: the relation is already in the comment's head ("replying to dana", "1 reply").
+	if comment.Reply != nil {
+		label := "a comment"
+		if comment.Reply.Author != nil {
+			label = *comment.Reply.Author + "'s comment"
+		}
+		add(*comment.Reply, label)
 	}
 	for _, back := range comment.Backlinks {
-		who := "a comment"
-		if back.Author != nil {
-			who = *back.Author
-		}
-		add(back, who+" "+replyVerb(back.Kind))
+		add(back, replyOf(back.Author, back.Kind))
 	}
 	return links
+}
+
+// replyOf names a comment that answers this one: "dana's reply", "dana's confirmation".
+func replyOf(author *string, kind string) string {
+	noun := map[string]string{"confirm": "confirmation", "refute": "refutation", "supersede": "supersession"}[kind]
+	if noun == "" {
+		noun = "reply"
+	}
+	if author == nil {
+		return "a " + noun
+	}
+	return *author + "'s " + noun
 }
 
 // answeredAuthor names the author of the comment a reply answers; a target with no author is "a comment".
@@ -73,20 +84,6 @@ func answeredAuthor(author *string) string {
 		return "a comment"
 	}
 	return *author
-}
-
-func answeredComment(author *string) string {
-	if author == nil {
-		return "a comment"
-	}
-	return *author + "'s comment"
-}
-
-func replyVerb(kind string) string {
-	if verb := map[string]string{"confirm": "confirms", "refute": "refutes", "supersede": "supersedes"}[kind]; verb != "" {
-		return verb
-	}
-	return "replies to"
 }
 
 // replyingTo is the reply kind as a participle for a reply's own head: "replying to dana", "confirming dana".

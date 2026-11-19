@@ -25,7 +25,7 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 	if p := f.Opened.Parent; f.Change && p != nil {
 		parent := []ui.Span{refSpan(p.UID, false)}
 		if p.ShortID != "" {
-			parent = []ui.Span{refSpan("#"+p.ShortID, false), {T: p.Title}}
+			parent = []ui.Span{refSpan("#"+p.ShortID, false), {T: " " + p.Title}}
 		}
 		children = append(children, ui.Col{Common: ui.Common{Key: "parent-fixed"}, Gap: ui.GapXS, Children: ui.Nodes(
 			propRow("Parent", ui.Text{Common: ui.Common{Key: "value"}, Spans: parent}),
@@ -37,7 +37,9 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 			continue
 		}
 		if !previewed && field.Name != model.JobFieldKind && field.Name != model.JobFieldName && !f.InTrigger(field.Name) && field.Name != model.JobFieldTrigger {
-			children = append(children, jobPreview(f, m.Calendar, now))
+			if preview := jobPreview(f, m.Calendar, now); preview != nil {
+				children = append(children, preview)
+			}
 			previewed = true
 		}
 		focused := field.Name == f.Field
@@ -74,7 +76,9 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 		children = append(children, labelledInput(string(field.Name), label, model.JobHint(field.Name), focused, input)...)
 	}
 	if !previewed {
-		children = append(children, jobPreview(f, m.Calendar, now))
+		if preview := jobPreview(f, m.Calendar, now); preview != nil {
+			children = append(children, preview)
+		}
 	}
 	if conditions := jobConditions(f); conditions != nil {
 		children = append(children, conditions)
@@ -94,6 +98,9 @@ func jobLayer(m model.Model, now time.Time) tern.Element {
 func jobPreview(f model.JobFormState, cal model.PaneCalendar, now time.Time) tern.Element {
 	preview := f.Preview(cal, now)
 	if preview.Err != nil {
+		if f.InTrigger(model.JobFieldAt) && strings.TrimSpace(f.At) == "" {
+			return nil
+		}
 		return toneText("preview", ui.ToneWarning, "Not a valid schedule: "+model.Reason(preview.Err)+".")
 	}
 	lines := []tern.Element{ui.Text{Common: ui.Common{Key: "words"}, Text: "Runs " + preview.Words}}

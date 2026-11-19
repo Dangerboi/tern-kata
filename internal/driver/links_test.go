@@ -30,7 +30,7 @@ func TestBAndLOpenTheLinkFormAndSendOneLinkWriteOfTheirType(t *testing.T) {
 		action model.Action
 		title  string
 	}{
-		{"b", model.AddBlockerAction, "Add blocker"},
+		{"b", model.AddBlockerAction, "Block an Issue"},
 		{"l", model.AddRelatedAction, "Add related Issue"},
 	} {
 		for _, ref := range []string{"bbbb", "#bbbb", "other#bbbb"} {

@@ -56,7 +56,7 @@ func TestChildrenTableSitsBetweenTheBodyAndActivity(t *testing.T) {
 	if body < 0 || table <= body || activity <= table {
 		t.Fatalf("content order = %v, want body, children, activity", order)
 	}
-	if got := text(nodes[childrenID+".heading"]); got != "Children 1 of 3 open" {
+	if got := text(nodes[childrenID+".heading"]); got != "Children 3" {
 		t.Errorf("heading = %q", got)
 	}
 }

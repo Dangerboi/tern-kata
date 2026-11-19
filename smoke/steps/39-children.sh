@@ -38,7 +38,7 @@ expect_tree "[data-id^='$ch_content.properties.facts.right.parent']" '.ok and .c
 ch_table="$ch_content.children.table"
 ch_rows="[data-id='$ch_table'] .sf-tbl-body .sf-tbl-row"
 ch_heads="[data-id='$ch_table'] .sf-tbl > .sf-tbl-row.head > .sf-tbl-h"
-expect_tree "[data-id='$ch_content.children.heading']" '.ok and .count == 1 and (.nodes[0].text == "Children 2 of 3 open")'
+expect_tree "[data-id='$ch_content.children.heading']" '.ok and .count == 1 and (.nodes[0].text == "Children 3")'
 expect_tree "$ch_heads" '.ok and ([.nodes[].text] == ["Id", "Status", "Title", "Updated"])'
 expect_tree "$ch_rows" '.ok and .count == 3'
 expect_tree "$ch_rows > .sf-tbl-c" '.ok and .count == 12'

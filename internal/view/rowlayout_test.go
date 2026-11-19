@@ -112,3 +112,43 @@ func TestLayoutTwoLineHoldsTheDateChildrenAndOwnerAtTheEnd(t *testing.T) {
 		t.Errorf("first line %v lacks the closed status", head)
 	}
 }
+
+// A narrow list drops the Date column, so one dated row cannot squeeze every other row's title and cells; the badge then follows
+// its own row's title and is the first flag to go when that row is too wide.
+func TestFitDateDropsTheColumnWhereTheTitleWouldBeSqueezed(t *testing.T) {
+	cols := rowCols()
+	cols.date = 20
+	wide := cols
+	wide.fitDate(200)
+	if wide.date != 20 {
+		t.Errorf("a wide list lost its Date column: %d", wide.date)
+	}
+	narrow := cols
+	narrow.fitDate(71)
+	if narrow.date != 0 {
+		t.Errorf("a 71-cell list keeps a Date column of %d", narrow.date)
+	}
+	parts := flagged()
+	parts.date = ui.Span{T: "due 2026-12-01"}
+	if got := labelText(layoutRow(narrow, 200, parts)); !strings.HasSuffix(got, cellGap+"due 2026-12-01") {
+		t.Errorf("row %q, want the badge after the title", got)
+	}
+	if got := labelText(layoutRow(narrow, 80, parts)); !strings.HasSuffix(got, cellGap+"due 2026-12-01") || !strings.Contains(got, "…") {
+		t.Errorf("row %q, want the badge kept and the title cut", got)
+	}
+	// Between the full badge and the least title there is room only for the compact badge; below that the badge goes.
+	if got := labelText(layoutRow(narrow, 68, parts)); !strings.HasSuffix(got, cellGap+"due Dec 1") {
+		t.Errorf("row %q, want the compact badge, due Dec 1", got)
+	}
+	if got := labelText(layoutRow(narrow, 40, parts)); strings.Contains(got, "due ") {
+		t.Errorf("row %q, want the badge dropped where less than %d cells of title fit beside it", got, minFlaggedTitle)
+	}
+}
+
+func TestCompactDateWritesTheDayShortAndLeavesWordsAlone(t *testing.T) {
+	for in, want := range map[string]string{"due 2026-12-01": "due Dec 1", "scheduled 2026-11-25": "scheduled Nov 25", "due today": "due today", "overdue 3d": "overdue 3d"} {
+		if got := compactDate(in); got != want {
+			t.Errorf("compactDate(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

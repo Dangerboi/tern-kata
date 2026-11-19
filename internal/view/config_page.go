@@ -13,14 +13,14 @@ const ConfigListID = "main.columns.list.config"
 func ConfigFileID(key model.ConfigFileKey) string { return itemID(ConfigListID, string(key)) }
 
 // configHead is the Page's head: the title, then the muted count and the folder the files live in. The folder is a path, so it
-// is the one mono span.
+// is the one mono span. The row wraps, so a long folder drops under the title and never squeezes it.
 func configHead(c model.ConfigPageState) tern.Element {
 	title := ui.Text{Common: ui.Common{Key: "title"}, Spans: []ui.Span{{T: "Config", S: "strong"}}, Wrap: ui.WrapNone}
 	if c.Folder == "" {
 		return ui.Row{Common: ui.Common{Key: "heading"}, Gap: ui.GapMD, Align: ui.AlignCenter, Children: ui.Nodes(title)}
 	}
 	facts := ui.Text{Common: ui.Common{Key: "facts", Tone: ui.ToneMuted}, Spans: []ui.Span{{T: strconv.Itoa(c.Count()) + " · ", S: "muted"}, monoSpan(c.Summary(), "muted")}, Wrap: ui.WrapNone}
-	return ui.Row{Common: ui.Common{Key: "heading"}, Gap: ui.GapMD, Align: ui.AlignCenter, Children: ui.Nodes(title, facts)}
+	return ui.Row{Common: ui.Common{Key: "heading"}, Gap: ui.GapMD, Wrap: true, Align: ui.AlignCenter, Children: ui.Nodes(title, facts)}
 }
 
 // configStatusTone is the tone of a file row's status word: ok is an outcome that went well, broken is an error, and a file that
@@ -43,7 +43,7 @@ func configPage(m model.Model) tern.Element {
 		if notice.Err {
 			tone = ui.ToneError
 		}
-		return listPanel(m, 0.5, append(children, toneText("notice", tone, notice.Text)))
+		return listPanel(m, 0.4, append(children, toneText("notice", tone, notice.Text)))
 	}
 	cards := make([]tern.Element, len(c.Files))
 	for i, f := range c.Files {
@@ -79,5 +79,5 @@ func configPage(m model.Model) tern.Element {
 		}
 		children = append(children, ui.Text{Common: ui.Common{Key: "message", Tone: tone}, Spans: prose(c.Message, toneStyle(tone))})
 	}
-	return listPanel(m, 0.5, children)
+	return listPanel(m, 0.4, children)
 }

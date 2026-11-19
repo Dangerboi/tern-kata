@@ -55,12 +55,12 @@ func keyStrings(keys []model.ConfigFileKey) []string {
 func TestConfigFilesReadsEveryMissingFileWithWhatItsAbsenceImplies(t *testing.T) {
 	rows, _, dirs := configFiles(t, nil, "")
 	for key, want := range map[model.ConfigFileKey]string{
-		model.ConfigLanes:   "Not created: every Project uses the default Lanes",
-		model.ConfigFilters: "Not created: no Project has a default filter",
-		model.ConfigViews:   "Not created: no saved views",
-		model.ConfigSeen:    "Not created: no Runs marked seen",
+		model.ConfigLanes:   "Every Project uses the default Lanes",
+		model.ConfigFilters: "No Project has a default filter",
+		model.ConfigViews:   "No saved views",
+		model.ConfigSeen:    "No runs marked seen",
 		model.ConfigWorker:  "No worker set up",
-		model.ConfigAgent:   "Not created: agents start with the defaults",
+		model.ConfigAgent:   "Agents start with the defaults",
 		model.ConfigDocbank: "Not set up: run kata docbank setup",
 		model.ConfigKata:    "read-only · 0 daemons",
 	} {

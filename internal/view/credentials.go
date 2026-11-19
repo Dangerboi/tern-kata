@@ -33,9 +33,9 @@ func credentials(m model.Model, now time.Time) tern.Element {
 		if notice.Empty {
 			empty := emptyState(notice.Text, "Create a token for a script or an agent to use.", emptyButton(m, "new", model.NewToken, "New token", true)...)
 			empty.Key = "empty"
-			return listPanel(m, 0.5, append(children, empty))
+			return listPanel(m, 0.4, append(children, empty))
 		}
-		return listPanel(m, 0.5, append(children, noticeLines(notice.Err, !notice.Pending, notice.Text, "")...))
+		return listPanel(m, 0.4, append(children, noticeLines(notice.Err, !notice.Pending, notice.Text, "")...))
 	}
 	cards := make([]tern.Element, len(c.Tokens))
 	for i, token := range c.Tokens {
@@ -45,7 +45,7 @@ func credentials(m model.Model, now time.Time) tern.Element {
 	if failure := c.RefreshError(); failure != "" {
 		children = append(children, plainText("refresh-error", ui.ToneError, failure))
 	}
-	return listPanel(m, 0.5, children)
+	return listPanel(m, 0.4, children)
 }
 
 func credentialCard(m model.Model, token model.Credential, selected bool, now time.Time) tern.Element {

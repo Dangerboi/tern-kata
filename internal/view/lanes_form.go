@@ -22,16 +22,21 @@ var lanesDonePlaceholders = map[model.Field]string{
 // label (accent while it has focus, error when it is the field the error is about), the input, and under it the error or,
 // while the field has focus, its one-line hint.
 func lanesField(form model.LanesFormState, name model.Field, label, placeholder, hint string) []tern.Element {
-	tone := fieldTone(form, name)
 	failed := form.Err != nil && form.ErrField == name
+	focused := form.Field == name
+	tone := fieldTone(form, name)
 	if failed {
 		tone = ui.ToneError
 	}
 	text := form.Value(name)
-	field := []tern.Element{
-		toneText(string(name)+"-label", tone, label),
-		ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: form.Saving}},
+	labelTone := ui.ToneNeutral
+	switch {
+	case failed:
+		labelTone = ui.ToneError
+	case focused:
+		labelTone = ui.ToneAccent
 	}
+	field := []tern.Element{fieldLabelTone(string(name), label, labelTone), ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T(placeholder), Readonly: form.Saving}}}
 	switch {
 	case failed:
 		field = append(field, toneText(string(name)+"-error", ui.ToneError, form.Err.Error()))

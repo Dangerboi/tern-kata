@@ -48,11 +48,34 @@ func fieldLayer(m model.Model) tern.Nodes {
 	} else {
 		children = append(children, formFoot(cardButton("save", model.ModeFieldForm, model.FieldSubmit, saveLabel(m), true), exitButton("cancel", model.ModeFieldForm, model.FieldCancel, "Cancel")))
 	}
-	overlay := ui.Overlay{Common: ui.Common{Key: layerKey(model.CardField)}, Modal: true, Head: ui.T(title)}
+	overlay := ui.Overlay{Common: ui.Common{Key: layerKey(model.CardField)}, Modal: true, Head: ui.T(title), Icon: fieldIcon(m.FieldForm.Action)}
 	if meta := m.FieldFormMeta(); meta != "" {
 		overlay.Meta = refMeta(meta)
 	}
 	return ui.Nodes(popup(overlay, children))
+}
+
+// fieldIcon is the head icon of a field card: what the card changes.
+func fieldIcon(action model.Action) ui.IconName {
+	switch action {
+	case model.AddLabelAction, model.RemoveLabelAction:
+		return ui.IconTag
+	case model.AssignOwnerAction, model.ClearOwnerAction:
+		return ui.IconUser
+	case model.PriorityAction:
+		return ui.IconGauge
+	case model.SetParentAction, model.AddBlockerAction, model.AddRelatedAction:
+		return ui.IconLink
+	case model.TimedAssignAction:
+		return ui.IconTimer
+	case model.AttachFileAction:
+		return ui.IconFilePlus
+	case model.DetachFileAction:
+		return ui.IconFile
+	case model.RestoreDeletedAction:
+		return ui.IconUndo
+	}
+	return ui.IconPen
 }
 
 // menuRoomRow is the height of one option of a select's menu, in pixels, with the menu's padding left over.
@@ -89,17 +112,26 @@ func saveLabel(m model.Model) string {
 // accent while the input has focus), the input itself, and its format hint as one muted line, present only while the input has
 // focus and hint is not empty. The nodes keep flat ids: key-label, the input's own key and key-hint.
 func labelledInput(key, label, hint string, focused bool, input tern.Element) []tern.Element {
-	labelTone := ui.ToneNeutral
-	if focused {
-		labelTone = ui.ToneAccent
-	}
-	name := toneText("name", labelTone, label)
-	name.Wrap = ui.WrapNone
-	// A text straight before an input is taken by Tern for the input's accessible name and is not drawn, so the label sits in
-	// a row of its own.
-	nodes := []tern.Element{ui.Row{Common: ui.Common{Key: key + "-label", Role: FieldLabelRole}, Children: ui.Nodes(name)}, input}
+	nodes := []tern.Element{fieldLabel(key, label, focused), input}
 	if focused && hint != "" {
 		nodes = append(nodes, toneText(key+"-hint", ui.ToneMuted, hint))
 	}
 	return nodes
+}
+
+// fieldLabel is the label row above a field: default text, accent while the field has focus.
+func fieldLabel(key, label string, focused bool) tern.Element {
+	tone := ui.ToneNeutral
+	if focused {
+		tone = ui.ToneAccent
+	}
+	return fieldLabelTone(key, label, tone)
+}
+
+// fieldLabelTone is a label row in tone. A text straight before an input is taken by Tern for the input's accessible name and
+// is not drawn, so the label sits in a row of its own.
+func fieldLabelTone(key, label string, tone ui.Tone) tern.Element {
+	name := toneText("name", tone, label)
+	name.Wrap = ui.WrapNone
+	return ui.Row{Common: ui.Common{Key: key + "-label", Role: FieldLabelRole}, Children: ui.Nodes(name)}
 }

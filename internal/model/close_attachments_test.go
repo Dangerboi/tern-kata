@@ -102,7 +102,7 @@ func closeEventRow(t *testing.T, payload string, metadata map[string]any) string
 	if !ok {
 		t.Fatal("no history row")
 	}
-	return row.Body
+	return closeText(row)
 }
 
 func TestEventsLineNamesAttachmentEvidenceAndHowItStands(t *testing.T) {

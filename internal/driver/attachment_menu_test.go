@@ -93,7 +93,7 @@ func TestEachAttachmentMenuItemPressesItsKey(t *testing.T) {
 		{"Copy…", "y", want(model.WayCopy)},
 		{"Unlink…", "z", func(t *testing.T, out driver.Output) {
 			q, ok := out.State.Model.Question()
-			if !ok || q.Mode != model.ModeUnlinkAttachment || q.Text != "Unlink shot.png from work#a? y/n" || !q.Danger || len(out.Cmds) != 0 {
+			if !ok || q.Mode != model.ModeUnlinkAttachment || q.Text != "Unlink shot.png from work#a?" || !q.Danger || len(out.Cmds) != 0 {
 				t.Fatalf("question %+v (%v), cmds %#v", q, ok, out.Cmds)
 			}
 		}},

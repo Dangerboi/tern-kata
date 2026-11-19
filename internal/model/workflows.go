@@ -321,6 +321,14 @@ func workflowsBack(m Model) (Model, []Cmd) {
 	return pageSearchEscape(m)
 }
 
+// workflowsEscLabel is the footer's word for esc: back while the inspector is open to close, else the Menu it opens.
+func workflowsEscLabel(m Model) string {
+	if m.innerEscOpen() {
+		return "back"
+	}
+	return "Menu"
+}
+
 // backWithoutMenu is backspace on a surface where esc opens the Menu: it goes back across Projects when esc would, and otherwise
 // does nothing, as kata tui binds backspace to going back and never to the Menu.
 func backWithoutMenu(m Model) (Model, []Cmd) {
@@ -655,7 +663,7 @@ func workflowActions() []actionEntry {
 		{action: ArchiveWorkflowAction, modes: workflowModes, keys: keys("x", "x"), help: "archive", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 6, "archive"}}, handle: changeWorkflowState(false)},
 		{action: RestoreWorkflowAction, modes: workflowModes, keys: keys("r", "r"), help: "restore", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 7, "restore"}}, handle: changeWorkflowState(true)},
 		{action: ToggleArchivedWorkflows, modes: workflowModes, keys: keys("a", "a"), help: "archived", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 8, "show or hide archived workflows"}}, handle: pure(toggleArchivedWorkflows)},
-		{action: DrillOut, modes: workflowModes, keys: keys("escape", "esc"), help: "back", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 9, "close the steps, end the search, or go to the Menu"}}, handle: workflowsBack},
+		{action: DrillOut, modes: workflowModes, keys: keys("escape", "esc"), help: "back", footerLabel: workflowsEscLabel, footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 9, "close the steps, end the search, or go to the Menu"}}, handle: workflowsBack},
 		{action: DrillOut, modes: workflowModes, keys: keys("backspace", "⌫"), help: "back", handle: workflowsBackspace},
 	}
 }

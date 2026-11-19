@@ -309,7 +309,7 @@ func TestDeleteAsksFirstAndOnlyYDeletes(t *testing.T) {
 		return m
 	}
 	asked := open()
-	if asked.Views.Deleting != "Mine" || asked.CurrentMode() != model.ModeDeleteView || questionText(asked) != "Delete view Mine? y/n" {
+	if asked.Views.Deleting != "Mine" || asked.CurrentMode() != model.ModeDeleteView || questionText(asked) != "Delete view Mine?" {
 		t.Fatalf("asked: %+v mode %s", asked.Views, asked.CurrentMode())
 	}
 	if kept, cmds := model.Update(asked, model.KeyMsg{Chord: "x", Text: "x"}); len(cmds) != 0 || kept.Views.Deleting != "Mine" {

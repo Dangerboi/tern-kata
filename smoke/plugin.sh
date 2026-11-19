@@ -119,7 +119,7 @@ serve_dir "$tmp/dist" "$tmp/http.log"
 export TERN_KATA_BASE_URL="$serve_url" TERN_KATA_NO_UPDATE_CHECK=1
 # The host half finds the worker's binary and the omp stub in this folder, not on PATH (the window half must not find tern-kata there).
 export TERN_KATA_INSTALL_DIR="$tmp/app"
-# q asks "Quit tern-kata? y/n" unless kata's [tui] confirm_quit is false: the steps quit with one key.
+# q asks "Quit tern-kata?" unless kata's [tui] confirm_quit is false: the steps quit with one key.
 mkdir -p "$KATA_HOME"
 printf '[tui]\nconfirm_quit = false\n' >"$KATA_HOME/config.toml"
 kata daemon start

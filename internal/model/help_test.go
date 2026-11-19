@@ -93,7 +93,7 @@ func TestHelpSheetListsSlashSearch(t *testing.T) {
 		text string
 	}{
 		{model.PageIssues, "search"},
-		{model.PageJobs, "search the jobs (esc ends the search)"},
+		{model.PageJobs, "search the jobs ({esc} ends the search)"},
 	} {
 		found := false
 		for _, group := range model.HelpSheetOn(tt.page, model.Model{}) {

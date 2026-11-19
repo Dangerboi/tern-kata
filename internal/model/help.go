@@ -41,10 +41,10 @@ type questionEntry struct {
 // added here and nowhere else.
 var questions = []questionEntry{
 	{ModeQuit, func(m Model) (Question, bool) {
-		return Question{Text: "Quit tern-kata? y/n", Yes: ConfirmQuitAction, No: StayAction, YesWords: "Quit", NoWords: "Stay"}, m.AskQuit
+		return Question{Text: "Quit tern-kata?", Yes: ConfirmQuitAction, No: StayAction, YesWords: "Quit", NoWords: "Stay"}, m.AskQuit
 	}},
 	{ModeDeleteView, func(m Model) (Question, bool) {
-		return Question{Text: "Delete view " + m.Views.Deleting + "? y/n", Yes: ConfirmDeleteViewAction, No: KeepViewAction, YesWords: "Delete", NoWords: "Keep", Danger: true}, m.Views.Deleting != ""
+		return Question{Text: "Delete view " + m.Views.Deleting + "?", Yes: ConfirmDeleteViewAction, No: KeepViewAction, YesWords: "Delete", NoWords: "Keep", Danger: true}, m.Views.Deleting != ""
 	}},
 	{ModeSwitchDocbank, func(m Model) (Question, bool) {
 		return Question{Text: "Switch to kata's local Docbank? kata restarts its daemon.", Yes: ConfirmSwitchDocbankAction, No: KeepDocbankAction, YesWords: "Switch", NoWords: "Keep"}, m.ConfigPage.AskSwitch
@@ -54,7 +54,7 @@ var questions = []questionEntry{
 		if a == nil {
 			return Question{}, false
 		}
-		return Question{Text: "Unlink " + a.Attachment.Name + " from " + a.Ref + "? y/n", Yes: ConfirmUnlinkAttachmentAction, No: KeepAttachmentAction, YesWords: "Unlink", NoWords: "Keep", Danger: true}, true
+		return Question{Text: "Unlink " + a.Attachment.Name + " from " + a.Ref + "?", Yes: ConfirmUnlinkAttachmentAction, No: KeepAttachmentAction, YesWords: "Unlink", NoWords: "Keep", Danger: true}, true
 	}},
 	{ModeNoticeRestart, func(m Model) (Question, bool) {
 		return Question{Text: RestartQuestion, Yes: ConfirmNoticeRestartAction, No: DeclineNoticeRestartAction, YesWords: "Restart now", NoWords: "Not now"}, m.Versions.askRestart

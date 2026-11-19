@@ -10,7 +10,7 @@ ctl click "[data-id='main.columns.list.issues.$mr_uid']"
 expect_tree "[data-id='main.columns.list.issues.$mr_uid']" '.ok and .nodes[0]["aria-selected"] == "true"'
 ctl key O
 expect_tree "[data-id='layer.recurrence.frequency']" '.ok and .count == 1 and (.nodes[0].text | endswith("Weekly"))'
-expect_tree "[data-id='layer.recurrence.every-label']" '.ok and .count == 1 and .nodes[0].text == "Every"'
+expect_tree "[data-id='layer.recurrence.every-label.name']" '.ok and .count == 1 and .nodes[0].text == "Every"'
 expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("1"))'
 # Weekly shows no Day or Month field; clicking Monthly shows Day, clicking Weekly hides it again.
 expect_tree "[data-id='layer.recurrence.day']" '.ok and .count == 0'
@@ -21,9 +21,9 @@ pick_option layer.recurrence.frequency 2
 expect_tree "[data-id='layer.recurrence.day']" '.ok and .count == 0'
 # The end field asks for a count or a date by the end chosen, and goes when the series never ends.
 pick_option layer.recurrence.ends 3
-expect_tree "[data-id='layer.recurrence.end-label']" '.ok and .count == 1 and .nodes[0].text == "Occurrences"'
+expect_tree "[data-id='layer.recurrence.end-label.name']" '.ok and .count == 1 and .nodes[0].text == "Occurrences"'
 pick_option layer.recurrence.ends 2
-expect_tree "[data-id='layer.recurrence.end-label']" '.ok and .count == 1 and .nodes[0].text == "End date"'
+expect_tree "[data-id='layer.recurrence.end-label.name']" '.ok and .count == 1 and .nodes[0].text == "End date"'
 pick_option layer.recurrence.ends 1
 expect_tree "[data-id='layer.recurrence.end']" '.ok and .count == 0'
 ctl click "[data-id='layer.recurrence.foot.save']"

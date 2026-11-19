@@ -30,15 +30,6 @@ func laneTone(lanes []string, lane string) ui.Tone {
 	return ui.ToneNeutral
 }
 
-// laneSpanStyle is the span style that draws a Lane id in tone t. Spans have no user style, so user is drawn as info; neutral is
-// the plain text colour. The header rule and the badge use the tone itself.
-func laneSpanStyle(t ui.Tone) string {
-	if t == ui.ToneUser {
-		return string(ui.ToneInfo)
-	}
-	return toneStyle(t)
-}
-
 // issueStateTone is the tone of an Issue's status word: open is plain text and closed is muted. Neither takes accent (where you
 // are) or success (an outcome), so the status never competes with the selection or a run's result.
 func issueStateTone(closed bool) ui.Tone {

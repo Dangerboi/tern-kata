@@ -102,12 +102,12 @@ func TestMoveIsRefusedWhileDisconnected(t *testing.T) {
 
 func TestMoveEndsPointToCloseAndReopen(t *testing.T) {
 	last := step(t, boardPane(t, boardCard("a", "ready-for-human")), key(">"))
-	if len(withoutToastWait(last.Cmds)) != 0 || !containsAll(toastText(t, last), "press x") {
+	if len(withoutToastWait(last.Cmds)) != 0 || !containsAll(toastText(t, last), "last Lane.") {
 		t.Errorf("last Lane: cmds %#v, toast %q", last.Cmds, toastText(t, last))
 	}
 	for _, k := range []string{"<", ">"} {
 		done := step(t, boardPane(t, closedAt("d", 10, 5)), key(k))
-		if len(withoutToastWait(done.Cmds)) != 0 || !containsAll(toastText(t, done), "press r") {
+		if len(withoutToastWait(done.Cmds)) != 0 || !containsAll(toastText(t, done), "is closed.") {
 			t.Errorf("%s on Done: cmds %#v, toast %q", k, done.Cmds, toastText(t, done))
 		}
 	}

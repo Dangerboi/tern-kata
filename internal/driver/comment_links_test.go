@@ -52,25 +52,25 @@ func TestBracketsStepThroughACommentsLinksAndWrap(t *testing.T) {
 			t.Fatalf("link = %+v (%v), want %+v", got, ok, want)
 		}
 	}
-	at(model.CommentLinkChoice{Index: 1, Count: 2, Label: "eli confirms"})
+	at(model.CommentLinkChoice{Index: 1, Count: 2, Label: "eli's confirmation"})
 	s = feed(t, s, key("]")).State
-	at(model.CommentLinkChoice{Index: 2, Count: 2, Label: "fay refutes in #bbbb", IssueUID: "beta", Qualified: "#bbbb"})
+	at(model.CommentLinkChoice{Index: 2, Count: 2, Label: "fay's refutation in #bbbb", IssueUID: "beta", Qualified: "#bbbb"})
 	s = feed(t, s, key("]")).State
-	at(model.CommentLinkChoice{Index: 1, Count: 2, Label: "eli confirms"})
+	at(model.CommentLinkChoice{Index: 1, Count: 2, Label: "eli's confirmation"})
 	s = feed(t, s, key("[")).State
-	at(model.CommentLinkChoice{Index: 2, Count: 2, Label: "fay refutes in #bbbb", IssueUID: "beta", Qualified: "#bbbb"})
+	at(model.CommentLinkChoice{Index: 2, Count: 2, Label: "fay's refutation in #bbbb", IssueUID: "beta", Qualified: "#bbbb"})
 	s = feed(t, s, key("[")).State
-	at(model.CommentLinkChoice{Index: 1, Count: 2, Label: "eli confirms"})
+	at(model.CommentLinkChoice{Index: 1, Count: 2, Label: "eli's confirmation"})
 }
 
 func TestTheCommentRowMarksTheChosenLink(t *testing.T) {
 	s := withLinks(t)
-	if got := chosenLink(t, s); !strings.Contains(got, "eli confirms") {
-		t.Fatalf("marked link %q, want eli confirms", got)
+	if got := chosenLink(t, s); !strings.Contains(got, "eli's confirmation") {
+		t.Fatalf("marked link %q, want eli's confirmation", got)
 	}
 	s = feed(t, s, key("]")).State
-	if got := chosenLink(t, s); !strings.Contains(got, "fay refutes in #bbbb") {
-		t.Fatalf("marked link %q, want fay refutes in #bbbb", got)
+	if got := chosenLink(t, s); !strings.Contains(got, "fay's refutation in #bbbb") {
+		t.Fatalf("marked link %q, want fay's refutation in #bbbb", got)
 	}
 	if s = feed(t, s, key("j"), key("j")).State; chosenLink(t, s) != "" {
 		t.Fatalf("a comment without links marks %q", chosenLink(t, s))

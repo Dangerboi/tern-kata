@@ -56,11 +56,12 @@ func attentionCard(m model.Model, request model.AttentionRequest, selected bool,
 	if request.Slot.Re != "" {
 		left = append(left, ui.Text{Common: ui.Common{Key: "comment", Tone: ui.ToneMuted}, Text: "on a comment", Wrap: ui.WrapNone})
 	}
-	who := ui.Text{Common: ui.Common{Key: "who", Tone: ui.ToneMuted}, Text: request.Sender() + " · " + model.RelativeTime(request.Updated, now), Wrap: ui.WrapNone}
+	noShrink := 0.0
+	who := ui.Text{Common: ui.Common{Key: "who", Tone: ui.ToneMuted, Shrink: &noShrink}, Text: request.Sender() + " · " + model.RelativeTime(request.Updated, now), Wrap: ui.WrapNone}
 	if !request.Updated.IsZero() {
 		who.Hovercard = ui.Hovercard{Element: ui.Text{Common: ui.Common{Key: "stamp"}, Spans: []ui.Span{timeSpan(m.Calendar.Stamp(request.Updated))}}}
 	}
-	head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapMD, Justify: ui.JustifyBetween, Children: ui.Nodes(
+	head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapMD, Wrap: true, Justify: ui.JustifyBetween, Children: ui.Nodes(
 		ui.Row{Common: ui.Common{Key: "subject"}, Gap: ui.GapMD, Wrap: true, Children: left}, who)}
 	body := ui.Nodes(head)
 	if selected {

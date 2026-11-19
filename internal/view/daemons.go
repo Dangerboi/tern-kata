@@ -23,11 +23,11 @@ func daemons(m model.Model) tern.Element {
 	children := ui.Nodes(pageHead("heading", "Daemons", count))
 	if noticed {
 		if notice.Empty {
-			empty := emptyState(notice.Text, notice.Detail)
+			empty := emptyState(notice.Text, notice.Detail, emptyButton(m, "new", model.NewDaemon, "New daemon", true)...)
 			empty.Key = "empty"
-			return listPanel(m, 0.5, append(children, empty))
+			return listPanel(m, 0.4, append(children, empty))
 		}
-		return listPanel(m, 0.5, append(children, noticeLines(notice.Err, !notice.Pending, notice.Text, notice.Detail)...))
+		return listPanel(m, 0.4, append(children, noticeLines(notice.Err, !notice.Pending, notice.Text, notice.Detail)...))
 	}
 	rows := make([]ui.TableRow, len(d.Entries))
 	for i, e := range d.Entries {
@@ -59,5 +59,5 @@ func daemons(m model.Model) tern.Element {
 	if line := d.SwitchingLine(); line != "" {
 		children = append(children, plainText("switching", ui.TonePending, line))
 	}
-	return listPanel(m, 0.5, children)
+	return listPanel(m, 0.4, children)
 }

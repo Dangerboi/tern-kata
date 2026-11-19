@@ -506,7 +506,7 @@ func TestTheLineUnderTheDocSaysTheDraftIsKeptOnce(t *testing.T) {
 			s = feed(t, s, model.DraftFailed{UID: "alpha", Err: errTest}).State
 		}
 		line := bodyErrorLine(t, s)
-		if strings.Count(line, "kept") != 1 || !strings.Contains(line, "press e or c to open it") && !strings.Contains(line, "Press e or c to open it") {
+		if strings.Count(line, "kept") != 1 || !strings.Contains(line, "press E or C to open it") && !strings.Contains(line, "Press E or C to open it") {
 			t.Fatalf("%s: line %q, want it to say the Draft is kept once and how to open it", c.name, line)
 		}
 		if strings.Contains(line, "kept The") {
@@ -585,7 +585,7 @@ func TestConflictWhileAnotherIssuesCardIsOpenRaisesTheNoticeNamingTheIssueAndLea
 	theirs := alpha
 	theirs.Body, theirs.Revision = "theirs", 4
 	s = feed(t, s, model.DraftConflict{UID: "alpha", Issue: theirs}).State
-	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, "conflict") || !strings.Contains(n, "Press e or c on that Issue to open the conflict card.") {
+	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, "conflict") || !strings.Contains(n, "Press {e} or {c} on that Issue to open the conflict card.") {
 		t.Fatalf("notice %q, want it to name the Issue and say it conflicts", n)
 	}
 	if s.Model.EditorUID != "beta" {
@@ -599,7 +599,7 @@ func TestConflictWhileAnotherIssuesCardIsOpenRaisesTheNoticeNamingTheIssueAndLea
 	back := alpha
 	back.Body, back.ProjectID, back.Revision, back.QualifiedID = docBody, 7, 3, "work#aaaa"
 	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &back}}).State
-	if line := bodyErrorLine(t, s); !strings.Contains(line, "conflicts with a newer change") || !strings.Contains(line, "Press e or c to open the conflict card.") {
+	if line := bodyErrorLine(t, s); !strings.Contains(line, "conflicts with a newer change") || !strings.Contains(line, "Press E or C to open the conflict card.") {
 		t.Fatalf("line %q, want it to say the edit conflicts and how to open the card", line)
 	}
 	s = feed(t, s, key("e")).State

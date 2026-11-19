@@ -52,7 +52,22 @@ func historySentence(m model.Model, row model.DetailRow, action string, now time
 	if object := strings.TrimRight(sentence.Object, " "); object != "" {
 		spans = append(spans, ui.Span{T: " " + object, S: string(sentence.Tone)})
 	}
-	what := ui.Text{Common: ui.Common{Key: "heading", Actions: clicks}, Spans: spans}
+	var what tern.Element = ui.Text{Common: ui.Common{Key: "heading", Actions: clicks}, Spans: spans}
+	if row.Message != "" || len(row.Evidence) > 0 {
+		// a close's message and evidence sit under the sentence, inside the rule
+		lines := ui.Nodes(what)
+		if row.Message != "" {
+			lines = append(lines, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Message})
+		}
+		if len(row.Evidence) > 0 {
+			evidence := make([]ui.Span, len(row.Evidence))
+			for i, part := range row.Evidence {
+				evidence[i] = ui.Span{T: part.Text, S: string(part.Style)}
+			}
+			lines = append(lines, ui.Text{Common: ui.Common{Key: "evidence"}, Spans: evidence})
+		}
+		what = ui.Col{Common: ui.Common{Key: "what", Grow: 1}, Gap: ui.GapXS, Children: lines}
+	}
 	children := ui.Nodes(when, what)
 	if row.Ref != "" {
 		children = append(children, jumpLink(row.ReferenceUID, row.Ref, refCard(m, rowFacts(row), now)))

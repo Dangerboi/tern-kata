@@ -43,6 +43,10 @@ func runs(m model.Model, now time.Time) tern.Element {
 		empty = searchEmpty(m)
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("runs"), Max: fillMax, Empty: ui.T("Loading runs…"), Children: cards}
+	if m.Runs.Err != nil && len(cards) == 0 {
+		// A failed read is no empty list: the failure line above is the only text.
+		return runsPanel(m, children)
+	}
 	children = append(children, listAndEmpty(list, m.Runs.Loading, empty)...)
 	return runsPanel(m, children)
 }
@@ -73,7 +77,7 @@ func runsNotices(m model.Model) []tern.Element {
 		notices = append(notices, toneText("archived-project", ui.ToneWarning, "This Project is archived: kata answers none of its runs."))
 	}
 	if m.Runs.Err != nil {
-		notices = append(notices, toneText("error", ui.ToneError, model.Cannot("load", "runs", m.Runs.Err)))
+		notices = append(notices, loadFailure("runs", m.Runs.Err))
 	}
 	if m.Runs.SeenErr != nil {
 		notices = append(notices, toneText("seen-error", ui.ToneError, model.Cannot("read", "seen.toml", m.Runs.SeenErr)))
@@ -82,7 +86,7 @@ func runsNotices(m model.Model) []tern.Element {
 }
 
 func runsPanel(m model.Model, children []tern.Element) tern.Element {
-	return listPanel(m, 0.5, children)
+	return listPanel(m, listBasis, children)
 }
 
 func runCard(row model.RunRow, selected bool) tern.Element {
@@ -108,10 +112,12 @@ func runCard(row model.RunRow, selected bool) tern.Element {
 	if line := joinWords(why, row.Summary); line != "" {
 		body = append(body, ui.Text{Common: ui.Common{Key: "reason"}, Spans: []ui.Span{{T: line, S: "muted"}}})
 	}
-	when := []ui.Span{timeSpan(row.Start)}
+	// One span: the flex row drops the spaces at the edge of a mono span beside another.
+	start := row.Start
 	if row.Duration != "" {
-		when = append(when, ui.Span{T: " · ", S: "muted"}, timeSpan(row.Duration))
+		start += " · " + row.Duration
 	}
+	when := []ui.Span{timeSpan(start)}
 	body = append(body, ui.Text{Common: ui.Common{Key: "when"}, Spans: when})
 	cardTone := ui.ToneNeutral
 	if row.Run.Status == cronjob.RunCancelled {

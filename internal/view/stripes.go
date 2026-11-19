@@ -15,18 +15,15 @@ const (
 	ListOwnerRole = "tern-kata.ow"
 )
 
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertyKeyCSS + "\n" + PropertiesCSS + "\n" + PlainCellCSS + "\n" + TabCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + TwoLineRowCSS + "\n" + DocCSS + "\n" + KeyCSS + "\n" + EventTimeCSS + "\n" + FieldLabelCSS
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertiesCSS + "\n" + PlainCellCSS + "\n" + TabCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + TwoLineRowCSS + "\n" + DocCSS + "\n" + KeyCSS + "\n" + EventTimeCSS + "\n" + FieldLabelCSS
 
 // ActiveTabRole marks the active Activity tab; TabCSS underlines it so the active tab is not told by colour alone.
 const ActiveTabRole = "tern-kata.tab-on"
 
 const TabCSS = `.sf-text[data-role~='` + ActiveTabRole + `'] { border-bottom: 2px solid var(--accent); }`
 
+// PropertyKeyRole names a property key. It has no style sheet rule: the key box width is a layout bound (factKeyWidth).
 const PropertyKeyRole = "tern-kata.propkey"
-
-// PropertyKeyCSS gives every property key one box, wide enough for the longest label ("Scheduled:", "Recurring:", "Cron jobs:")
-// in either face, so every value starts at the same x. The box is in em because the label's own width depends on the face.
-const PropertyKeyCSS = `.sf-text[data-role~='` + PropertyKeyRole + `'] { display: inline-block; white-space: pre; min-width: 6.4em; }`
 
 // FieldLabelRole marks the row that holds a text input's label (labelledInput). FieldLabelCSS pulls the input up under it, so the
 // label reads as part of its input instead of floating in the gap the card puts between its fields.
@@ -132,6 +129,10 @@ var cellBoxCSS = func() string {
 	}
 	row := ".sf-item[data-role~='" + ListRowRole + "']"
 	gap := displayWidth(cellGap)
+	// The right-hand cells (date, children, owner, updated) keep their boxes whole and the label side gives way: with a date badge
+	// and a Children count together they are wider than the value area Tern leaves them, and Tern cut the last of them, Updated, to
+	// an ellipsis.
+	fmt.Fprintf(&css, "%s .sf-item-value { flex: none; }\n%s .sf-item-label { min-width: 0; }\n", row, row)
 	box(row+" .sf-item-label > span:nth-child(2)", gap+prioWidth)
 	box(row+" .sf-item-label > span:nth-child(3)", gap+statusWidth)
 	box(row+" .sf-item-value > span:nth-child(2)", kidsWidth)

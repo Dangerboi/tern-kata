@@ -18,12 +18,13 @@ import (
 // a cell lines up with the header above it. The title takes the rest of the row and is cut with an ellipsis when it does
 // not fit.
 const (
-	prioWidth    = 8
-	statusWidth  = 6
-	kidsWidth    = 8
-	ownerWidth   = 8
-	updatedWidth = 8
-	cellGap      = "  "
+	prioWidth     = 8
+	statusWidth   = 6
+	kidsWidth     = 8
+	ownerWidth    = 8  // the Owner column's least width
+	ownerMaxWidth = 14 // the longest owner name a row shows whole
+	updatedWidth  = 8
+	cellGap       = "  "
 )
 
 const IssueListID = "main.columns.list.issues"
@@ -122,6 +123,7 @@ func issues(m model.Model, now time.Time) tern.Element {
 	if slices.Contains(columns, model.ColumnList) && slices.Contains(columns, model.ColumnDetail) {
 		cols.ownerShown = false
 	}
+	cols.fitDate(lookups.width)
 	items := make([]tern.Element, 0, len(rows)+len(m.Groups))
 	groups := make(map[string]model.IssueGroup, len(m.Issues))
 	for _, group := range m.Groups {
@@ -675,10 +677,10 @@ func headerRow(cols listColumns) tern.Element {
 
 func listOwner(m model.Model, row model.IssueRow, now time.Time) string {
 	owner := m.OwnerText(row.Owner, row.AssignmentExpiresOn, now)
-	if displayWidth(owner.Name) <= ownerWidth {
+	if displayWidth(owner.Name) <= ownerMaxWidth {
 		return owner.String()
 	}
-	return cell(owner.Name, ownerWidth) + owner.Until
+	return cell(owner.Name, ownerMaxWidth) + owner.Until
 }
 
 func issueTitle(issue model.Issue) string {

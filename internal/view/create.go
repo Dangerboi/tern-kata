@@ -35,35 +35,33 @@ func createLayer(m model.Model) tern.Element {
 	}
 	values := map[model.Field]string{model.CreateTitle: f.Title, model.CreateLabels: f.Labels, model.CreateOwner: f.Owner, model.CreateScheduled: f.Dates.Scheduled, model.CreateDeadline: f.Dates.Deadline}
 	children := []tern.Element{}
-	readonly := f.Saving
-	if !f.DiscardConfirm {
-		for _, field := range model.CreateFields {
-			key := string(field.Name)
-			label := createLabels[field.Name]
-			focused := field.Name == f.Field
-			tone := ui.ToneNeutral
-			if focused {
-				tone = ui.ToneAccent
-			}
-			switch field.Name {
-			case model.CreatePriority:
-				children = append(children, choiceControl(m, model.CardCreate, field.Name, label, focused, "", ""))
-				continue
-			case model.CreateBody:
-				editor := ui.Editor{Common: ui.Common{Key: key, Tone: ui.ToneAccent}, Field: ui.Field{Text: f.Editor.Text, Cursor: &f.Editor.Cursor, Anchor: &f.Editor.Anchor, Readonly: readonly}, MaxLines: createBodyLines}
-				children = append(children, labelledInput(key, label, createHints[field.Name], focused, editor)...)
-				continue
-			}
-			input := ui.Input{Common: ui.Common{Key: key, Tone: tone, Aria: label}, Field: ui.Field{Text: values[field.Name], Cursor: caretAt(f.Caret, field.Name, values[field.Name]), Mode: "insert", Readonly: readonly}}
-			children = append(children, labelledInput(key, label, createHints[field.Name], focused, input)...)
-			if (field.Name == model.CreateScheduled || field.Name == model.CreateDeadline) && strings.TrimSpace(values[field.Name]) != "" {
-				children = append(children, toneText(key+"-preview", ui.ToneMuted, m.CreatePreview(field.Name)))
-			}
+	readonly := f.Saving || f.DiscardConfirm
+	for _, field := range model.CreateFields {
+		key := string(field.Name)
+		label := createLabels[field.Name]
+		focused := field.Name == f.Field
+		tone := ui.ToneNeutral
+		if focused {
+			tone = ui.ToneAccent
 		}
-		if f.Field == model.CreateLabels {
-			if suggestions := m.CreateSuggestions(); len(suggestions) > 0 {
-				children = append(children, toneText("completion", ui.ToneMuted, strings.Join(suggestions, ", ")))
-			}
+		switch field.Name {
+		case model.CreatePriority:
+			children = append(children, choiceControl(m, model.CardCreate, field.Name, label, focused, "", ""))
+			continue
+		case model.CreateBody:
+			editor := ui.Editor{Common: ui.Common{Key: key, Tone: ui.ToneAccent}, Field: ui.Field{Text: f.Editor.Text, Cursor: &f.Editor.Cursor, Anchor: &f.Editor.Anchor, Readonly: readonly}, MaxLines: createBodyLines}
+			children = append(children, labelledInput(key, label, createHints[field.Name], focused, editor)...)
+			continue
+		}
+		input := ui.Input{Common: ui.Common{Key: key, Tone: tone, Aria: label}, Field: ui.Field{Text: values[field.Name], Cursor: caretAt(f.Caret, field.Name, values[field.Name]), Mode: "insert", Readonly: readonly}}
+		children = append(children, labelledInput(key, label, createHints[field.Name], focused, input)...)
+		if (field.Name == model.CreateScheduled || field.Name == model.CreateDeadline) && strings.TrimSpace(values[field.Name]) != "" {
+			children = append(children, toneText(key+"-preview", ui.ToneMuted, m.CreatePreview(field.Name)))
+		}
+	}
+	if f.Field == model.CreateLabels && !f.DiscardConfirm {
+		if suggestions := m.CreateSuggestions(); len(suggestions) > 0 {
+			children = append(children, toneText("completion", ui.ToneMuted, strings.Join(suggestions, ", ")))
 		}
 	}
 	if f.Err != nil {

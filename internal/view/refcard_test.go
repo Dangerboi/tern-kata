@@ -174,7 +174,7 @@ func TestMachineStringsAreMono(t *testing.T) {
 	}
 	m, _ := referencing(model.TabEvents)
 	nodes = render(t, m)
-	if got := spanStyles(nodes, view.DetailActivityID+".linked.row.jump")["peer"]; got != "accent link mono" {
+	if got := spanStyles(nodes, view.DetailActivityID+".linked.row.jump")["#peer"]; got != "accent link mono" {
 		t.Errorf("event reference style = %q", got)
 	}
 	for _, id := range []string{".linked.row.time"} {

@@ -65,14 +65,6 @@ func TestLaneToneCyclesIdentityTonesAndMutesDoneAndNoLane(t *testing.T) {
 	}
 }
 
-func TestLaneSpanStyle(t *testing.T) {
-	for tone, want := range map[ui.Tone]string{ui.ToneInfo: "info", ui.ToneUser: "info", ui.ToneNeutral: "", ui.ToneMuted: "muted"} {
-		if got := laneSpanStyle(tone); got != want {
-			t.Errorf("laneSpanStyle(%q) = %q, want %q", tone, got, want)
-		}
-	}
-}
-
 func TestOwnerSpanIsPlainAndUnassignedMuted(t *testing.T) {
 	if got := ownerSpan("dana"); !reflect.DeepEqual(got, (ui.Span{T: "dana"})) {
 		t.Errorf("owner = %+v", got)

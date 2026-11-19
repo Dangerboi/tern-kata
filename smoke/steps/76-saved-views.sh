@@ -1,5 +1,5 @@
 # A saved view is made in the Menu's Views level with the View card, survives a restart, opens with its base and filters and is named
-# on the filter line, and is deleted after a y/n question. The step ends with no view in views.toml and no filters on.
+# on the filter line, and is deleted after a question. The step ends with no view in views.toml and no filters on.
 sv_file="$XDG_CONFIG_HOME/tern-kata/views.toml"
 sv_items="[data-id^='layer.collections.list.']"
 expect_tree "[data-id='main.filters.icon']" '.ok and .count == 0'
@@ -57,7 +57,7 @@ grep -q 'name = "openbugs"' "$sv_file"
 ctl click "[data-id='main.topbar.right.menu']"
 for letter in o p e n b u g s; do ctl key "$letter"; done
 ctl key Ctrl+d
-expect_tree "[data-id='layer.collections.delete-view.text']" '.ok and (.nodes[0].text == "Delete view openbugs? y/n")'
+expect_tree "[data-id='layer.collections.delete-view.text']" '.ok and (.nodes[0].text == "Delete view openbugs?")'
 ctl key n
 expect_tree "[data-id='layer.collections.delete-view']" '.ok and .count == 0'
 grep -q 'name = "openbugs"' "$sv_file"

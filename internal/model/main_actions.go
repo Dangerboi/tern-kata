@@ -117,6 +117,15 @@ func menuBack(m Model) Model {
 	return m
 }
 
+// laneEscLabel is the footer's word for esc in a Lane: back to the Board beside the Lane, or the Menu in a narrow Pane where
+// the Lane is the Board itself.
+func laneEscLabel(m Model) string {
+	if m.Cols < SideBySideCols {
+		return "Menu"
+	}
+	return "back"
+}
+
 var (
 	issueModes     = []Mode{ModeList, ModeBoard, ModeLane, ModeDetail}
 	listAndBoard   = []Mode{ModeList, ModeBoard, ModeLane}
@@ -234,7 +243,7 @@ var mainRows = []actionEntry{
 	{action: DrillIn, modes: []Mode{ModeCollections}, keys: keys("enter", "enter"), help: "open", footer: []Mode{ModeCollections}, handle: sidebarOpen},
 	{action: MenuBack, modes: []Mode{ModeCollections}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeCollections}, handle: pure(menuBack)},
 	{action: EditViewAction, modes: []Mode{ModeCollections}, keys: keys("f2", "f2"), help: "edit view", footer: []Mode{ModeCollections}, sheet: []sheetLine{{sheetMenu, 1, "edit the saved view under the Menu cursor"}}, when: Model.CursorOnSavedView, handle: pure(func(m Model) Model { return editSavedView(m, false) })},
-	{action: AskDeleteView, modes: []Mode{ModeCollections}, keys: keys("ctrl+d", "ctrl+d", "meta+d", ""), help: "delete view", footer: []Mode{ModeCollections}, sheet: []sheetLine{{sheetMenu, 2, "delete the saved view under the Menu cursor (asks y/n)"}}, when: Model.CursorOnSavedView, handle: pure(func(m Model) Model { return askDeleteView(m, false) })},
+	{action: AskDeleteView, modes: []Mode{ModeCollections}, keys: keys("ctrl+d", "ctrl+d", "meta+d", ""), help: "delete view", footer: []Mode{ModeCollections}, sheet: []sheetLine{{sheetMenu, 2, "delete the saved view under the Menu cursor (asks first)"}}, when: Model.CursorOnSavedView, handle: pure(func(m Model) Model { return askDeleteView(m, false) })},
 	{action: SearchEnter, modes: []Mode{ModeSearch}, keys: keys("enter", "enter"), help: "results", footer: []Mode{ModeSearch}, handle: searchEnter},
 	{action: SearchBack, modes: []Mode{ModeSearch}, keys: keys("escape", "esc"), help: "cancel search", footer: []Mode{ModeSearch}, handle: searchBack},
 	{action: ToggleSearchMeaning, modes: searching, keys: keys("ctrl+t", "ctrl+t", "meta+t", ""), help: "by meaning", label: searchMeaningLabel, footer: searching, sheet: []sheetLine{{sheetFilters, 5, "search by meaning or by words (inside one Project)"}}, handle: toggleSearchMeaning},
@@ -250,9 +259,9 @@ var mainRows = []actionEntry{
 	{action: SearchEnter, modes: []Mode{ModeSearchResults}, keys: keys("enter", "enter"), help: "commit search", footer: []Mode{ModeSearchResults}, handle: searchEnter},
 	{action: SearchBack, modes: []Mode{ModeSearchResults}, keys: keys("escape", "esc"), help: "edit query", footer: []Mode{ModeSearchResults}, handle: searchBack},
 	{action: SearchQuery, modes: []Mode{ModeSearchResults}, keys: keys("/", "/"), help: "edit query", handle: pure(func(m Model) Model { m.Search.Results = false; return m })},
-	{action: SearchPage, modes: []Mode{ModeJobs}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetJobs, 19, "search the jobs (esc ends the search)"}}, handle: pure(openPageSearch)},
-	{action: SearchPage, modes: []Mode{ModeRuns}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetRuns, 16, "search the runs (esc ends the search)"}}, handle: pure(openPageSearch)},
-	{action: SearchPage, modes: []Mode{ModeWorkflows}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetWorkflows, 10, "search the workflows (esc ends the search)"}}, handle: pure(openPageSearch)},
+	{action: SearchPage, modes: []Mode{ModeJobs}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetJobs, 19, "search the jobs ({esc} ends the search)"}}, handle: pure(openPageSearch)},
+	{action: SearchPage, modes: []Mode{ModeRuns}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetRuns, 16, "search the runs ({esc} ends the search)"}}, handle: pure(openPageSearch)},
+	{action: SearchPage, modes: []Mode{ModeWorkflows}, keys: keys("/", "/"), help: "search", sheet: []sheetLine{{sheetWorkflows, 10, "search the workflows ({esc} ends the search)"}}, handle: pure(openPageSearch)},
 	{action: PageSearchKeep, modes: []Mode{ModePageSearch}, keys: keys("enter", "enter"), help: "keep search", footer: []Mode{ModePageSearch}, handle: pure(pageSearchKeep)},
 	{action: PageSearchClear, modes: []Mode{ModePageSearch}, keys: keys("escape", "esc"), help: "end search", footer: []Mode{ModePageSearch}, handle: pure(clearPageSearch)},
 	{action: MoveUp, modes: []Mode{ModePageSearch}, keys: slices.Concat(keys("up", "up"), emacsUp), help: "previous row", handle: pageSearchMoving(MoveUp)},
@@ -282,7 +291,7 @@ var mainRows = []actionEntry{
 	{action: OpenAttachmentBesideAction, modes: []Mode{ModeDetail}, keys: keys("v", "v"), help: "beside", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 40, "open the attachment in a split beside the Pane (Attachments tab)"}}, handle: attachmentHandler(OpenAttachmentBesideAction), when: Model.attachmentOnCursor},
 	{action: SaveAttachmentAction, modes: []Mode{ModeDetail}, keys: keys("s", "s"), help: "save", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 42, "save the attachment to Downloads where you sit (Attachments tab)"}}, handle: attachmentHandler(SaveAttachmentAction), when: Model.attachmentOnCursor},
 	{action: CopyAttachmentAction, modes: []Mode{ModeDetail}, keys: keys("y", "y"), help: "copy", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 43, "copy the attachment's path or its kata command (Attachments tab)"}}, handle: attachmentHandler(CopyAttachmentAction), when: Model.attachmentOnCursor},
-	{action: UnlinkAttachmentAction, modes: []Mode{ModeDetail}, keys: keys("z", "z"), help: "unlink…", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 44, "unlink the attachment under the cursor after asking (Attachments tab; U picks by name)"}}, handle: attachmentHandler(UnlinkAttachmentAction), when: Model.attachmentOnCursor},
+	{action: UnlinkAttachmentAction, modes: []Mode{ModeDetail}, keys: keys("z", "z"), help: "unlink…", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 44, "unlink the attachment under the cursor after asking (Attachments tab; {shift+u} picks by name)"}}, handle: attachmentHandler(UnlinkAttachmentAction), when: Model.attachmentOnCursor},
 	{action: DetachFileAction, modes: issueModes, keys: keys("shift+u", "⇧U"), help: "unlink by name", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 11, "unlink attachment"}}, handle: fieldFor(DetachFileAction)},
 	{action: AssignOwnerAction, modes: issueModes, keys: keys("a", "a"), help: "owner", footer: boardAndDetail, sheet: []sheetLine{{sheetDetail, 12, "assign owner"}}, handle: fieldFor(AssignOwnerAction)},
 	{action: ClearOwnerAction, modes: issueModes, keys: keys("shift+a", "⇧A"), help: "unassign", footer: boardAndDetail, sheet: []sheetLine{{sheetDetail, 13, "clear owner"}}, handle: fieldFor(ClearOwnerAction)},
@@ -294,7 +303,7 @@ var mainRows = []actionEntry{
 	{action: TimedAssignAction, modes: []Mode{ModeDetail}, keys: keys("t", "t"), help: "timed assignment", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 20, "assign to yourself for a set time (1m..24h)"}}, handle: fieldFor(TimedAssignAction)},
 	{action: AddBlockerAction, modes: []Mode{ModeDetail}, keys: keys("b", "b"), help: "blocks", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 18, "add a Blocking link: this Issue blocks the one you name"}}, handle: fieldFor(AddBlockerAction)},
 	{action: AddRelatedAction, modes: []Mode{ModeDetail}, keys: keys("l", "l"), help: "related", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 19, "add a related link"}}, handle: fieldFor(AddRelatedAction)},
-	{action: PriorityAction, modes: issueModes, keys: keys("!", "!"), help: "priority", footer: issueModes, sheet: []sheetLine{{sheetDetail, 14, "Set priority (! then 0 to 4)"}}, handle: fieldFor(PriorityAction)},
+	{action: PriorityAction, modes: issueModes, keys: keys("!", "!"), help: "priority", footer: issueModes, sheet: []sheetLine{{sheetDetail, 14, "Set priority ({!} then {0} to {4})"}}, handle: fieldFor(PriorityAction)},
 	{action: OpenDates, modes: issueModes, keys: keys("d", "d"), help: "dates", footer: issueModes, sheet: []sheetLine{{sheetDetail, 17, "set scheduled date and deadline (Dates card)"}}, handle: pure(openDates)},
 	{action: OpenMoveProject, modes: issueModes, keys: keys("shift+m", "⇧M"), help: "to Project", footer: issueModes, sheet: []sheetLine{{sheetDetail, 30, "move the Issue to another Project (Move card)"}}, handle: pure(openMoveProject)},
 	{action: OpenDelete, modes: issueModes, keys: keys("shift+x", "⇧X"), help: "delete", sheet: []sheetLine{{sheetDetail, 31, "Delete Issue (type its id)"}}, handle: pure(openDelete), when: notIssueScoped},
@@ -303,7 +312,7 @@ var mainRows = []actionEntry{
 	{action: ToggleDetail, modes: []Mode{ModeList, ModeLane, ModeDetail}, keys: keys("shift+l", "⇧L"), help: "layout", footer: []Mode{ModeList, ModeLane, ModeDetail}, sheet: []sheetLine{{sheetGlobal, 6, "Switch layout"}}, handle: pure(Model.toggleDetail)},
 	{action: ShowMenu, modes: menuModes, keys: keys("escape", "esc"), help: "Menu", footer: menuModes, sheet: []sheetLine{{sheetGlobal, 5, "menu, or end the search of the Jobs and Runs Pages"}}, handle: pageSearchEscape},
 	{action: DrillOut, modes: menuModes, keys: keys("backspace", "⌫"), help: "back", handle: backWithoutMenu},
-	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
+	{action: DrillOut, modes: []Mode{ModeLane}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footerLabel: laneEscLabel, footer: []Mode{ModeLane}, sheet: []sheetLine{{sheetBoard, 10, "back to the Board, or the Menu in a narrow Pane"}}, handle: laneBack},
 	{action: DrillOut, modes: []Mode{ModeDetail}, keys: keys("escape", "esc", "left", "←", "backspace", "⌫"), help: "back", footer: []Mode{ModeDetail}, sheet: []sheetLine{{sheetDetail, 4, "back"}}, handle: drillOut},
 	{action: OpenProjects, modes: projectModes, keys: keys("shift+p", "⇧P"), help: "Projects", sheet: []sheetLine{{sheetMenu, 3, "Projects"}}, handle: openProjects},
 	{action: OpenInbox, modes: projectModes, keys: keys("shift+i", "⇧I"), help: "Inbox", sheet: []sheetLine{{sheetMenu, 4, "Inbox"}}, handle: openInbox},
@@ -312,8 +321,8 @@ var mainRows = []actionEntry{
 	{action: ShowDaemonsPage, modes: []Mode{ModeError}, keys: keys("shift+d", "⇧D"), help: "Daemons", handle: showPage(PageDaemons)},
 	{action: CloseHelp, modes: []Mode{ModeHelp}, keys: keys("escape", "esc", "backspace", "⌫"), help: "close help", footer: []Mode{ModeHelp}, handle: pure(func(m Model) Model { m.HelpOpen = false; return m })},
 	{action: ToggleHelp, keys: keys("?", "?", "shift+?", "?"), help: "help", footer: global, sheet: []sheetLine{{sheetGlobal, 1, "help"}}, handle: pure(func(m Model) Model { m.HelpOpen = !m.HelpOpen; return m })},
-	{action: QuitAction, keys: keys("q", "q"), help: "quit", footer: global, sheet: []sheetLine{{sheetGlobal, 2, "Quit (asks first; ctrl+c quits now)"}}, handle: pure(askQuit)},
-	{action: QuitNowAction, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", sheet: []sheetLine{{sheetGlobal, 2, "Quit (asks first; ctrl+c quits now)"}}, handle: pure(quitNow)},
+	{action: QuitAction, keys: keys("q", "q"), help: "quit", footer: global, sheet: []sheetLine{{sheetGlobal, 2, "Quit, asking first; {ctrl+c} quits now"}}, handle: pure(askQuit)},
+	{action: QuitNowAction, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", sheet: []sheetLine{{sheetGlobal, 2, "Quit, asking first; {ctrl+c} quits now"}}, handle: pure(quitNow)},
 	{action: ConfirmDeleteViewAction, modes: []Mode{ModeDeleteView}, keys: keys("y", "y"), help: "delete view", footer: []Mode{ModeDeleteView}, handle: confirmDeleteView},
 	{action: KeepViewAction, modes: []Mode{ModeDeleteView}, keys: keys("n", "n", "escape", "esc"), help: "keep view", footer: []Mode{ModeDeleteView}, handle: pure(dismissDeleteQuestion)},
 	{action: QuitNowAction, modes: []Mode{ModeDeleteView}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},

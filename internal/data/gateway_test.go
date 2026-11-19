@@ -542,7 +542,7 @@ func TestGatewayStoresReviewedPathsAndExternalEvidenceAndActivityNamesThem(t *te
 		stored   map[string]any
 		activity string
 	}{
-		{"reviewed paths", model.CloseEvidence{Kind: model.EvidenceReviewed, Value: "src/a.go, src/b.go"}, map[string]any{"type": "reviewed-paths", "paths": []any{"src/a.go", "src/b.go"}}, "reviewed-paths src/a.go, src/b.go"},
+		{"reviewed paths", model.CloseEvidence{Kind: model.EvidenceReviewed, Value: "src/a.go, src/b.go"}, map[string]any{"type": "reviewed-paths", "paths": []any{"src/a.go", "src/b.go"}}, "reviewed src/a.go, src/b.go"},
 		{"external", model.CloseEvidence{Kind: model.EvidenceExternal, Value: "alice"}, map[string]any{"type": "external", "account": "alice"}, "external alice"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -562,7 +562,7 @@ func TestGatewayStoresReviewedPathsAndExternalEvidenceAndActivityNamesThem(t *te
 			var bodies []string
 			for _, item := range m.DetailRows() {
 				if item.Kind != model.RowChild {
-					bodies = append(bodies, item.Activity.Body)
+					bodies = append(bodies, item.Activity.Message+"\n"+item.Activity.EvidenceText())
 				}
 			}
 			if !slices.ContainsFunc(bodies, func(b string) bool { return strings.Contains(b, "Evidence: "+tt.activity) }) {

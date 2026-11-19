@@ -126,7 +126,12 @@ func recurrenceChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	default:
 		return ChoiceSet{}, false
 	}
-	return newChoices(ControlSelect, labels, chosen), true
+	control := ControlSelect
+	if name == RecurrenceMonth {
+		// Twelve short labels fit in a row; a select's menu is clipped by the card body.
+		control = ControlTabs
+	}
+	return newChoices(control, labels, chosen), true
 }
 
 func lanesChoiceSet(m Model, name Field) (ChoiceSet, bool) {

@@ -355,9 +355,9 @@ func TestFooterAndHelpSheetListTheRunsPageKeys(t *testing.T) {
 	s := runsPane(t, 160, finishedRun("R1"))
 	wantText(t, "Runs Page footer", footerText(t, s), "detail", "issue", "job filter", "older")
 	help := wireTextOf(t, feed(t, s, key("?")).State)
-	wantText(t, "help sheet", help, "Runs", "open the run's Issue", "show the run's detail", "switch Page")
+	wantText(t, "help sheet", help, "Runs", "Open the run's Issue", "Show the run's detail", "Switch Page")
 	jobs := wireTextOf(t, feed(t, jobsPane(t, 160, promptJob("J1", "Triage")), key("?")).State)
-	wantText(t, "Jobs help", jobs, "open the Runs Page on the job's runs")
+	wantText(t, "Jobs help", jobs, "Open the Runs Page on the job's runs")
 }
 
 func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {

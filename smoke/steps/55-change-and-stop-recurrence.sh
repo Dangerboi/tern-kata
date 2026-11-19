@@ -1,5 +1,5 @@
 # O on a recurring Issue opens the Recurrence card as "Change recurrence", prefilled; saving changes the schedule and the
-# Issue detail reads it. Stopping asks y/n first and the detail then reads "stopped"; closing the Issue as done with the
+# Issue detail reads it. Stopping asks first and the detail then reads "stopped"; closing the Issue as done with the
 # kata CLI afterwards creates no next occurrence. Own Issue; it cleans up.
 cs_dir="$tmp/workspace"
 kata --workspace "$cs_dir" create "Smoke changing recurrence" --body "Recurs, then stops" --json >"$tmp/changing.json"
@@ -18,7 +18,7 @@ expect_tree "[data-id='main.columns.list.issues.$cs_uid']" '.ok and .count == 1 
 ctl key O
 expect_tree "[data-id='layer.recurrence']" '.ok and .count == 1 and (.nodes[0].text | contains("Change recurrence"))'
 expect_tree "[data-id='layer.recurrence.foot.stop']" '.ok and .count == 1'
-expect_tree "[data-id='layer.recurrence.every-label']" '.ok and .count == 1 and .nodes[0].text == "Every"'
+expect_tree "[data-id='layer.recurrence.every-label.name']" '.ok and .count == 1 and .nodes[0].text == "Every"'
 expect_tree "[data-id='layer.recurrence.every']" '.ok and .count == 1 and (.nodes[0].text | contains("1"))'
 ctl key Tab
 ctl key Backspace

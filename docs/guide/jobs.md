@@ -21,21 +21,21 @@ The agent profile is in the inspector, not on the card. A schedule that can't be
 
 | Key | Action |
 |---|---|
-| `↑`/`↓` or `j`/`k`, `g`, `G`, Page Up/Down | Move the selection |
+| `↑`/`↓` or `J`/`K`, `G`, `Shift+G`, Page Up/Down | Move the selection |
 | Enter or Tab | Show the inspector (narrow Panes) |
 | Esc or Tab | Back to the list (on the list, Esc first ends a search) |
-| `n` | New job (opens the [Job card](#job-card)) |
-| `e` | Edit the selected job |
-| `J` | On an Issue (list, Board, Lane view, Issue detail): new Recurring Issue job with that Issue as parent |
-| `p` | Pause (writes the job disabled) or resume |
-| `x` | Archive, or restore an archived job; the footer reads "archive" or "restore" |
-| `a` | Show or hide archived jobs (hidden until then) |
+| `N` | New job (opens the [Job card](#job-card)) |
+| `E` | Edit the selected job |
+| `Shift+J` | On an Issue (list, Board, Lane view, Issue detail): new Recurring Issue job with that Issue as parent |
+| `P` | Pause (writes the job disabled) or resume |
+| `X` | Archive, or restore an archived job; the footer reads "archive" or "restore" |
+| `A` | Show or hide archived jobs (hidden until then) |
 | `/` | Search the jobs: type to keep the jobs whose name, state, kind, schedule, profile or last run holds the text (case-insensitive); Enter keeps the search and returns to the list, Esc ends it and brings every job back. An empty result says so under the search |
-| `ctrl+r` | Read the jobs again; they also reload when the daemon reports a change |
-| `r` | Open the Runs Page filtered to the selected job (see [Runs](runs.md)) |
-| `R` | Ask the worker to run the selected adapter job now |
-| `u` | Resume the selected job this machine's worker paused after repeated failed runs |
-| `W` | Open the [Worker card](worker.md#from-the-pane-the-worker-card): this machine's worker; set it up, serve the Project, edit, restart or stop it |
+| `Ctrl+R` | Read the jobs again; they also reload when the daemon reports a change |
+| `R` | Open the Runs Page filtered to the selected job (see [Runs](runs.md)) |
+| `Shift+R` | Ask the worker to run the selected adapter job now |
+| `U` | Resume the selected job this machine's worker paused after repeated failed runs |
+| `Shift+W` | Open the [Worker card](worker.md#from-the-pane-the-worker-card): this machine's worker; set it up, serve the Project, edit, restart or stop it |
 
 ### What a card tells you
 
@@ -69,27 +69,27 @@ The Jobs Page shows one line under its head about **this machine's worker**: a b
 - `Starting` (pending) with `the plugin starts one within 10 seconds`;
 - with supervision off and a worker running, ` · supervision is off` ends the detail.
 
-The banner names no key; the footer shows `W`. Adapter jobs run only when a worker serves the Project. The Pane asks the worker over its control socket when the page opens, on `ctrl+r` and after a run is requested.
+The banner names no key; the footer shows `Shift+W`. Adapter jobs run only when a worker serves the Project. The Pane asks the worker over its control socket when the page opens, on `Ctrl+R` and after a run is requested.
 
 ### Run now
 
-`R` asks the worker to run the selected **adapter** job now, under the same lease, overlap and capacity rules as a scheduled run. It is refused with the reason on a recurring-child job (kata runs those, not the worker), on an archived job, when no worker runs on this machine, when the worker does not serve the Project, and with the worker's own words when it declines (a full Project, a closed overlap gate). On success the Notice names the new run, which shows on the [Runs Page](runs.md).
+`Shift+R` asks the worker to run the selected **adapter** job now, under the same lease, overlap and capacity rules as a scheduled run. It is refused with the reason on a recurring-child job (kata runs those, not the worker), on an archived job, when no worker runs on this machine, when the worker does not serve the Project, and with the worker's own words when it declines (a full Project, a closed overlap gate). On success the Notice names the new run, which shows on the [Runs Page](runs.md).
 
 The Jobs Page needs a Project like the Board Page and ends when you switch to a Collection that is not a Project.
 
 ### Paused after failed runs
 
-After `pause_after_failures` runs of one adapter job in a row end `failed` (default 3; see the [worker reference](worker-reference.md#paused-jobs)) the worker stops admitting that job's runs. Its card reads "paused: failed runs" and says "This machine's worker: paused after 3 failed runs in a row", and the inspector adds a Worker line. This is the worker's own state, not kata's: the job stays enabled for every other executor and Pane, `p` neither shows nor lifts it, and `R` is refused with the same words. `u` asks the worker to resume the job; its failure count starts from none. It is refused with a Notice for a job the worker has not paused.
+After `pause_after_failures` runs of one adapter job in a row end `failed` (default 3; see the [worker reference](worker-reference.md#paused-jobs)) the worker stops admitting that job's runs. Its card reads "paused: failed runs" and says "This machine's worker: paused after 3 failed runs in a row", and the inspector adds a Worker line. This is the worker's own state, not kata's: the job stays enabled for every other executor and Pane, `P` neither shows nor lifts it, and `Shift+R` is refused with the same words. `U` asks the worker to resume the job; its failure count starts from none. It is refused with a Notice for a job the worker has not paused.
 
 ### Pause, archive and guarded writes
 
-On the Jobs Page, `p` pauses a job that is running (it writes the job disabled) and resumes one that is not (enabled again); `x` archives the selected job and, on an archived one (press `a` to list them), restores it. All three are Guarded writes: a job changed meanwhile is left alone, the list shows the newer job and a Notice says nothing was written. A job's list and inspector update as soon as the write is answered.
+On the Jobs Page, `P` pauses a job that is running (it writes the job disabled) and resumes one that is not (enabled again); `X` archives the selected job and, on an archived one (press `A` to list them), restores it. All three are Guarded writes: a job changed meanwhile is left alone, the list shows the newer job and a Notice says nothing was written. A job's list and inspector update as soon as the write is answered.
 
 ## Job card
 
 ![The Job card editing an agent prompt job, with the schedule preview](../images/job-card.png)
 
-`n` on the Jobs Page opens the **Job card** for a new job; `J` on an Issue (list, Board, Lane view, Issue detail) opens it for a new Recurring Issue job with that Issue as its parent; `e` opens it on the selected job, prefilled. A refusal reads "Cannot create a job: disconnected from kata.", "Cannot create a job: this Project is archived." or "Cannot edit the job: it is archived; restore it first."
+`N` on the Jobs Page opens the **Job card** for a new job; `Shift+J` on an Issue (list, Board, Lane view, Issue detail) opens it for a new Recurring Issue job with that Issue as its parent; `E` opens it on the selected job, prefilled. A refusal reads "Cannot create a job: disconnected from kata.", "Cannot create a job: this Project is archived." or "Cannot edit the job: it is archived; restore it first."
 
 The **Kind** field offers:
 
@@ -104,7 +104,7 @@ kata never runs the last three. The card makes and edits all of them and kata ac
 
 Each field has a one- or two-word label (Cron expression, Time zone, Interval, Once at, Target Issue, Notify about, Lead, Parent Issue, Prompt, Workflow, Agent profile, Checkout, Secrets, Adapter, Run Issue, Child title, Child body, Scheduled offset, Deadline offset, Inbox recipient, Inbox message, Overlap, Timeout, Catch up, Grace, Enabled), and the format it reads is a muted hint under the focused field. Every text field, the Prompt included, is drawn under its label in every kind and trigger. The card marks no field as required; a refusal names the field.
 
-The fields are reached with `tab` and `shift+tab`; a field that doesn't apply is hidden and skipped.
+The fields are reached with `Tab` and `Shift+Tab`; a field that doesn't apply is hidden and skipped.
 
 ### Name and Trigger
 
@@ -119,7 +119,7 @@ Under the trigger a live preview reads the schedule in words ("Runs every day at
 
 ### Recurring Issue fields
 
-- **Parent Issue**: a short id, which a job made with `J` has filled in. The card resolves it to the Issue's full uid. A job keeps its parent, so when editing the card shows a Parent row (`#ab12 Title`) with the muted line "A job keeps its parent." instead of the field.
+- **Parent Issue**: a short id, which a job made with `Shift+J` has filled in. The card resolves it to the Issue's full uid. A job keeps its parent, so when editing the card shows a Parent row (`#ab12 Title`) with the muted line "A job keeps its parent." instead of the field.
 - **Child title** and **Child body**: the body is one line; a body with line breaks is shown on one line and saved that way.
 - **Inbox recipient**: blank is the parent's current owner or author; otherwise an exact address like `alice` or `alice/reviewer`.
 - **Inbox message**.
@@ -153,7 +153,7 @@ kata's own date sweeper already notifies the owner or author of the trigger's Is
 - **Every missed run**;
 - **Skip runs older than the grace**, with the **Grace** in seconds, which skip requires for a Recurring Issue and takes as optional for a worker's job.
 
-On the day a cron trigger's zone falls back, a time inside the repeated hour runs twice (two runs); on the day it springs forward, a skipped time such as midnight can fail to run that day. It applies to cron, interval and once triggers. **Enabled** turns the job on or off. Turning a paused Recurring Issue job back on from the card, with catch-up on every missed run and runs missed, opens the [Backfill card](#backfill-card) first, as `p` does; it sends the card's draft with the answer, and Esc returns to the card.
+On the day a cron trigger's zone falls back, a time inside the repeated hour runs twice (two runs); on the day it springs forward, a skipped time such as midnight can fail to run that day. It applies to cron, interval and once triggers. **Enabled** turns the job on or off. Turning a paused Recurring Issue job back on from the card, with catch-up on every missed run and runs missed, opens the [Backfill card](#backfill-card) first, as `P` does; it sends the card's draft with the answer, and Esc returns to the card.
 
 ### Conditions
 
@@ -174,7 +174,7 @@ See [Conditions and skips](worker-reference.md#conditions-and-skips) for the rul
 
 ### Saving
 
-`ctrl+o` saves (or the button).
+`Ctrl+O` saves (or the button).
 
 <details>
 <summary>What the card refuses, and what a save does</summary>
@@ -202,22 +202,22 @@ An edit is a Guarded write on the job's `definition_event_uid`: if the job chang
 
 | Key | Result |
 |---|---|
-| `u` | **Use theirs** (primary): replace the draft with the newer job |
-| `o` | **Keep mine**: save the draft over the newer job |
-| `d` | **Discard mine** |
+| `U` | **Use theirs** (primary): replace the draft with the newer job |
+| `O` | **Keep mine**: save the draft over the newer job |
+| `D` | **Discard mine** |
 
 </details>
 
 ## Backfill card
 
-Before a Recurring Issue job whose catch-up is every missed run makes the runs it missed, the **Backfill card** asks. Reopening the parent with `r` on the Issues Page, resuming the job with `p`, restoring it with `x` on an archived one and saving it from the Job card each end a pause, after which kata's daemon creates one child Issue for every occurrence since the parent's progress stopped advancing, all at once.
+Before a Recurring Issue job whose catch-up is every missed run makes the runs it missed, the **Backfill card** asks. Reopening the parent with `R` on the Issues Page, resuming the job with `P`, restoring it with `X` on an archived one and saving it from the Job card each end a pause, after which kata's daemon creates one child Issue for every occurrence since the parent's progress stopped advancing, all at once.
 
 When that count is above zero the card asks "Create 4 missed Issues?" ("Create 1 missed Issue?", "Create 10000 or more missed Issues?") and warns in one sentence: for a single job, "Minute tick missed 4 runs. Resuming creates all of them now, or only the latest." ("Restoring" and "Saving" in place of "Resuming" for those keys; "Reopening #12 creates the Issues its jobs missed, all of them or only the latest of each." for a reopen, which lists each job with its missed runs under the sentence). Choices, primary first and the safe exit last:
 
 | Key | Choice |
 |---|---|
-| `l` | **Only the latest**: first replaces the job's catch-up with `latest` as a Guarded write, then goes on (resume, restore, save or reopen) |
-| `c` | **Create all**: the daemon makes every missed child Issue |
-| `esc` | **Cancel**: changes nothing |
+| `L` | **Only the latest**: first replaces the job's catch-up with `latest` as a Guarded write, then goes on (resume, restore, save or reopen) |
+| `C` | **Create all**: the daemon makes every missed child Issue |
+| `Esc` | **Cancel**: changes nothing |
 
-While a write is under way the card shows `Resuming…`, `Restoring…`, `Saving…` or `Reopening…` in its foot and disables its buttons. After the last write a Notice says `Resumed "Minute tick" with only its latest missed run.` (or `Restored …`). A job that catches up with `latest` or `skip`, one with nothing missed and one that would stay paused for another reason (the parent is still closed, the job disabled) ask nothing. `r` reads the parent's jobs afresh first, since its progress stopped when it closed; a failed read says "Cannot read the Issue's jobs, so nothing was reopened: <reason>." A job changed meanwhile is not written; the list shows it and a Notice says so. Restoring a deleted parent from the Menu asks no Backfill; only reopening a closed parent does.
+While a write is under way the card shows `Resuming…`, `Restoring…`, `Saving…` or `Reopening…` in its foot and disables its buttons. After the last write a Notice says `Resumed "Minute tick" with only its latest missed run.` (or `Restored …`). A job that catches up with `latest` or `skip`, one with nothing missed and one that would stay paused for another reason (the parent is still closed, the job disabled) ask nothing. `R` reads the parent's jobs afresh first, since its progress stopped when it closed; a failed read says "Cannot read the Issue's jobs, so nothing was reopened: <reason>." A job changed meanwhile is not written; the list shows it and a Notice says so. Restoring a deleted parent from the Menu asks no Backfill; only reopening a closed parent does.

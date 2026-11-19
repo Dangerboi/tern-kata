@@ -55,11 +55,14 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 		event, sentence string
 		verb, style     string
 	}{
-		{"e2", "closed as done", "closed", "success"},
+		{"e2", "closed as done", "closed", ""},
 		{"e3", "reopened", "reopened", ""},
 		{"e4", "assigned to alice", "assigned", ""},
 	} {
-		heading := nodes[activity+"."+tt.event+".row.heading"]
+		heading, ok := nodes[activity+"."+tt.event+".row.heading"]
+		if !ok { // a close's message and evidence put the sentence in a column with them
+			heading = nodes[activity+"."+tt.event+".row.what.heading"]
+		}
 		if text(heading) != "dana "+tt.sentence || strings.Contains(text(heading), " - ") {
 			t.Errorf("%s reads %q, want it to end with %q and have no dash", tt.event, text(heading), " dana "+tt.sentence)
 		}
@@ -74,7 +77,7 @@ func TestHistoryRendersSentencesWithTonedVerbs(t *testing.T) {
 			t.Errorf("%s verb %q has style %q (found %v), want %q", tt.event, tt.verb, got, found, tt.style)
 		}
 	}
-	if detail := text(nodes[activity+".e2.body"]); detail != "shipped" {
+	if detail := text(nodes[activity+".e2.row.what.body"]); detail != "shipped" {
 		t.Errorf("close detail line = %q", detail)
 	}
 }

@@ -195,7 +195,7 @@ func agentFoot(m model.Model, hasAgents bool) tern.Element {
 		fresh = append(fresh, b("team", model.AgentCardTeam, "Start a team…", false))
 	}
 	groups := []tern.Element{footGroup("new", "New agent", fresh)}
-	cancel := cardButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Cancel", false)
+	cancel := exitButton("cancel", model.ModeAgentCard, model.AgentCardCancel, "Close")
 	var selected []tern.Element
 	if hasAgents {
 		selected = []tern.Element{
@@ -271,16 +271,15 @@ func teamDialog(m model.Model) tern.Element {
 	if d.Limit >= model.TeamMaxLimit {
 		more = "At most " + strconv.Itoa(model.TeamMaxLimit) + "."
 	}
-	return popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Start a team"), Meta: refMeta(m.RefOf(m.AgentCard.IssueRef)), Icon: ui.IconUsers, Modal: true, Size: ui.SizeMD}, []tern.Element{
-		toneText("team-ask", ui.ToneNeutral, "A coordinator on this Issue runs background agents on its ready children."),
-		propRow("Coordinator", ui.Row{Common: ui.Common{Key: "team-where"}, Gap: ui.GapMD, Children: ui.Nodes(
-			where("team-split", model.AgentCardTeamSplit, "Split", model.AgentSplit),
-			where("team-tab", model.AgentCardTeamTab, "Tab", model.AgentTab),
-			where("team-background", model.AgentCardTeamBackground, "Background", model.AgentBackground))}),
-		propRow("Children at once", ui.Row{Common: ui.Common{Key: "team-limit"}, Gap: ui.GapSM, Align: ui.AlignCenter, Children: ui.Nodes(
-			step("team-less", model.AgentCardTeamLess, "−", fewer),
-			ui.Text{Common: ui.Common{Key: "team-count"}, Text: strconv.Itoa(d.Limit)},
-			step("team-more", model.AgentCardTeamMore, "+", more))}),
-		formFoot(cardButton("team-start", model.ModeAgentCardTeam, model.AgentCardTeamStart, "Start team", true), exitButton("team-cancel", model.ModeAgentCardTeam, model.AgentCardTeamCancel, "Cancel")),
-	})
+	children := []tern.Element{toneText("team-ask", ui.ToneNeutral, "A coordinator on this Issue runs background agents on its ready children.")}
+	children = append(children, labelledInput("team-where", "Coordinator", "", false, ui.Row{Common: ui.Common{Key: "team-where"}, Gap: ui.GapMD, Children: ui.Nodes(
+		where("team-split", model.AgentCardTeamSplit, "Split", model.AgentSplit),
+		where("team-tab", model.AgentCardTeamTab, "Tab", model.AgentTab),
+		where("team-background", model.AgentCardTeamBackground, "Background", model.AgentBackground))})...)
+	children = append(children, labelledInput("team-limit", "Children at once", "", false, ui.Row{Common: ui.Common{Key: "team-limit"}, Gap: ui.GapSM, Align: ui.AlignCenter, Children: ui.Nodes(
+		step("team-less", model.AgentCardTeamLess, "−", fewer),
+		ui.Text{Common: ui.Common{Key: "team-count"}, Text: strconv.Itoa(d.Limit)},
+		step("team-more", model.AgentCardTeamMore, "+", more))})...)
+	children = append(children, formFoot(cardButton("team-start", model.ModeAgentCardTeam, model.AgentCardTeamStart, "Start team", true), exitButton("team-cancel", model.ModeAgentCardTeam, model.AgentCardTeamCancel, "Cancel")))
+	return popup(ui.Overlay{Common: ui.Common{Key: layerKey(model.CardAgent)}, Head: ui.T("Start a team"), Meta: refMeta(m.RefOf(m.AgentCard.IssueRef)), Icon: ui.IconUsers, Modal: true, Size: ui.SizeMD}, children)
 }

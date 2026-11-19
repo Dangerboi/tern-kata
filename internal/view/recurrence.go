@@ -116,7 +116,7 @@ func recurrenceLayer(m model.Model) tern.Element {
 	}
 	children = append(children, selectRoom(m, model.CardRecurrence, f.Field)...)
 	if f.Err != nil {
-		children = append(children, toneText("error", ui.ToneError, f.Err.Error()))
+		children = append(children, toneText("error", ui.ToneError, model.Cannot("save", "the recurrence", f.Err)))
 	}
 	save := cardButton("save", model.ModeRecurrenceForm, model.RecurrenceSave, "Save", true)
 	cancel := exitButton("cancel", model.ModeRecurrenceForm, model.RecurrenceCancel, "Cancel")
@@ -146,15 +146,14 @@ func recurrenceLayer(m model.Model) tern.Element {
 func recurrenceField(m model.Model, f model.RecurrenceFormState, field model.FieldSpec) []tern.Element {
 	name, focused := field.Name, field.Name == f.Field
 	title := recurrenceTitle(f, name)
-	tone := ui.ToneMuted
+	tone := ui.ToneNeutral
 	if focused {
 		tone = ui.ToneAccent
 	}
-	label := toneText(string(name)+"-label", tone, title)
 	switch {
 	case name == model.RecurrenceWeekdays:
 		labels, chosen, cursor := weekdayChoices(f)
-		return []tern.Element{label, choiceField(name, tone, title, "", labels, chosen, cursor)}
+		return []tern.Element{fieldLabel(string(name), title, focused), choiceField(name, tone, title, "", labels, chosen, cursor)}
 	case !field.Text:
 		return []tern.Element{choiceControl(m, model.CardRecurrence, name, title, focused, "", "")}
 	}
@@ -172,9 +171,5 @@ func recurrenceField(m model.Model, f model.RecurrenceFormState, field model.Fie
 	if name == model.RecurrenceEvery {
 		input.Unit = everyUnits[f.Frequency]
 	}
-	out := []tern.Element{label, input}
-	if hint := recurrenceHint(f, name); focused && hint != "" {
-		out = append(out, toneText(string(name)+"-hint", ui.ToneMuted, hint))
-	}
-	return out
+	return labelledInput(string(name), title, recurrenceHint(f, name), focused, input)
 }

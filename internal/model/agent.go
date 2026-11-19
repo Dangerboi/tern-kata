@@ -141,7 +141,7 @@ type AgentsPruned struct {
 func (AgentsPruned) msg() {}
 
 // ClosedIssueRefusal is the toast `w` shows on a closed Issue, and the reason the buttons that start an agent on one are off.
-const ClosedIssueRefusal = "This Issue is closed; reopen it first (r)."
+const ClosedIssueRefusal = "This Issue is closed; reopen it first."
 
 const ClosedAlreadyRefusal = "This Issue is already closed."
 

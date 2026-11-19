@@ -36,11 +36,11 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 		{"assigned", model.Event{Type: "issue.assigned", Payload: `{"owner":"alice"}`}, "dana assigned to alice", "", ""},
 		{"unassigned", model.Event{Type: "issue.unassigned", Payload: `{"owner":null}`}, "dana unassigned", "", ""},
 		{"closed with reason", model.Event{Type: "issue.closed", Payload: `{"reason":"wontfix"}`}, "dana closed as won't fix", "", model.VerbMuted},
-		{"closed with message and evidence", model.Event{Type: "issue.closed", Payload: `{"reason":"done","message":"shipped it","evidence":[{"type":"commit","sha":"abc123def4"},{"type":"pr","url":"https://x/y/1"},{"type":"test","command":"go test ./..."}]}`}, "dana closed as done", "shipped it\n\nEvidence: commit abc123d, pr https://x/y/1, test go test ./...", model.VerbSuccess},
+		{"closed with message and evidence", model.Event{Type: "issue.closed", Payload: `{"reason":"done","message":"shipped it","evidence":[{"type":"commit","sha":"abc123def4"},{"type":"pr","url":"https://x/y/1"},{"type":"test","command":"go test ./..."}]}`}, "dana closed as done", "shipped it\n\nEvidence: commit abc123d, pull request https://x/y/1, test run go test ./...", ""},
 		{"reopened", model.Event{Type: "issue.reopened", Payload: `{"reopened_at":"2026-10-08T18:05:05Z"}`}, "dana reopened", "", ""},
 		{"labelled", model.Event{Type: "issue.labeled", Payload: `{"label":"bug"}`}, "dana added label bug", "", ""},
 		{"unlabelled", model.Event{Type: "issue.unlabeled", Payload: `{"label":"bug"}`}, "dana removed label bug", "", ""},
-		{"priority set", model.Event{Type: "issue.priority_set", Payload: `{"priority":1,"old_priority":2}`}, "dana set priority to 1", "", ""},
+		{"priority set", model.Event{Type: "issue.priority_set", Payload: `{"priority":1,"old_priority":2}`}, "dana set priority to P1", "", ""},
 		{"priority cleared", model.Event{Type: "issue.priority_cleared", Payload: `{"old_priority":3}`}, "dana cleared priority", "", ""},
 		{"title and body edited", model.Event{Type: "issue.updated", Payload: `{"title":"New title","old_title":"Old","body":"x"}`}, "dana edited title and body", "", ""},
 		{"body edited", model.Event{Type: "issue.updated", Payload: `{"body":"x"}`}, "dana edited body", "", ""},
@@ -48,7 +48,7 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 		{"linked", model.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":false}`}, "dana linked dependent bbbb", "", ""},
 		{"linked incoming", model.Event{Type: "issue.linked", Payload: `{"type":"blocks","from_short_id":"aaaa","to_short_id":"bbbb","incoming":true}`}, "dana linked blocker bbbb", "", ""},
 		{"unlinked", model.Event{Type: "issue.unlinked", Payload: `{"type":"related","from_short_id":"aaaa","to_short_id":"bbbb"}`}, "dana unlinked related bbbb", "", ""},
-		{"links added", model.Event{Type: "issue.links_changed", Payload: `{"parent_set":"pppp","blocked_by_added":["bbbb","cccc"]}`}, "dana linked parent pppp, blocker bbbb, blocker cccc", "", ""},
+		{"links added", model.Event{Type: "issue.links_changed", Payload: `{"parent_set":"pppp","blocked_by_added":["bbbb","cccc"]}`}, "dana linked parent pppp, blocker bbbb and cccc", "", ""},
 		{"one issue in two relations", model.Event{Type: "issue.links_changed", Payload: `{"blocked_by_added":["bbbb"],"related_added":["bbbb"]}`, RelatedIssueUID: new("b"), RelatedIssueShortID: new("bbbb")}, "dana linked bbbb as blocker and related", "", ""},
 		{"links removed", model.Event{Type: "issue.links_changed", Payload: `{"related_removed":["rrrr"]}`}, "dana unlinked related rrrr", "", ""},
 		{"links changed", model.Event{Type: "issue.links_changed", Payload: `{"blocks_added":["bbbb"],"parent_removed":"pppp"}`}, "dana changed links +dependent bbbb, -parent pppp", "", ""},
@@ -83,7 +83,7 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 		{"restored", model.Event{Type: "issue.restored", Payload: `{}`}, "dana restored", "", ""},
 		{"unknown type lists sorted pairs", model.Event{Type: "issue.frobbed", Payload: `{"zeta":"last","alpha":["a","b"],"mid":{"k":1},"gone":null,"n":3}`}, "dana frobbed", "", ""},
 		{"unknown values kept whole", model.Event{Type: "thing.happened", Payload: `{"text":"` + long + `"}`}, "dana thing happened", "", ""},
-		{"long close message with evidence kept whole", model.Event{Type: "issue.closed", Payload: `{"reason":"done","message":"` + long + `","evidence":[{"type":"test","command":"` + long + `"}]}`}, "dana closed as done", long + "\n\nEvidence: test " + long, model.VerbSuccess},
+		{"long close message with evidence kept whole", model.Event{Type: "issue.closed", Payload: `{"reason":"done","message":"` + long + `","evidence":[{"type":"test","command":"` + long + `"}]}`}, "dana closed as done", long + "\n\nEvidence: test run " + long, ""},
 		{"unknown payload that is not JSON", model.Event{Type: "issue.frobbed", Payload: "plain text"}, "dana frobbed", "", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -92,11 +92,11 @@ func TestHistoryReadsAsOneSentencePerEvent(t *testing.T) {
 			if title != tt.title || row.History.Tone != tt.tone {
 				t.Errorf("title = %q tone = %q, want %q %q", title, row.History.Tone, tt.title, tt.tone)
 			}
-			if row.Body != tt.detail {
-				t.Errorf("detail = %q, want %q", row.Body, tt.detail)
+			if got := closeText(row); got != tt.detail {
+				t.Errorf("detail = %q, want %q", got, tt.detail)
 			}
-			if strings.Contains(title+row.Body, `{"`) {
-				t.Errorf("row shows JSON: %q / %q", title, row.Body)
+			if strings.Contains(title+closeText(row), `{"`) {
+				t.Errorf("row shows JSON: %q / %q", title, closeText(row))
 			}
 		})
 	}
@@ -213,6 +213,46 @@ func TestAnEventAboutAnotherIssueNamesItFromTheShownIssuesSide(t *testing.T) {
 			RelatedIssueUID: &parent, RelatedIssueShortID: new("mm2a")})
 		if got := sentence(row); got != tt.want || row.ReferenceUID != child {
 			t.Errorf("%s: %q opening %q, want %q opening child", tt.name, got, row.ReferenceUID, tt.want)
+		}
+	}
+}
+
+// closeText is a close event's message and evidence line as one text, the way they read under the event.
+func closeText(row model.DetailRow) string {
+	if row.Evidence == nil {
+		return row.Message
+	}
+	if row.Message == "" {
+		return row.EvidenceText()
+	}
+	return row.Message + "\n\n" + row.EvidenceText()
+}
+
+func TestLinkEventsNameIssuesAsThePaneDoes(t *testing.T) {
+	m := withDetail(model.Model{}, &model.IssueDetailData{
+		Issue: &model.Issue{UID: "a", ProjectName: "tern-kata"},
+		Links: []model.Link{
+			{ID: 1, Type: "related", FromIssueUID: "a", FromQualifiedID: "tern-kata#aaaa", ToIssueUID: "far", ToQualifiedID: "agent-skills#cpab"},
+			{ID: 2, Type: "related", FromIssueUID: "a", FromQualifiedID: "tern-kata#aaaa", ToIssueUID: "near", ToQualifiedID: "tern-kata#1vza"},
+		},
+	})
+	row := model.HistoryRowOf(m, model.Event{Type: "issue.links_changed", Actor: "dana", Payload: `{"related_added":["cpab","1vza"]}`})
+	if got, want := sentence(row), "dana linked related agent-skills#cpab and #1vza"; got != want {
+		t.Errorf("event reads %q, want %q", got, want)
+	}
+}
+
+func TestAReplyStatesItsRelationOnceWithItsTarget(t *testing.T) {
+	m := withDetail(model.Model{}, &model.IssueDetailData{
+		Issue: &model.Issue{UID: "a"},
+		Comments: []model.Comment{
+			{UID: "c1", Author: "dangerboi", Backlinks: []model.CommentLink{{UID: new("c2"), Kind: "reply", Author: new("dana")}}},
+			{UID: "c2", Author: "dana", ReplyKind: new("reply"), Reply: &model.CommentLink{UID: new("c1"), Kind: "reply", Author: new("dangerboi")}},
+		},
+	})
+	for uid, want := range map[string]string{"c1": "dana's reply", "c2": "dangerboi's comment"} {
+		if got := m.CommentLinkLabels(uid); len(got) != 1 || got[0] != want {
+			t.Errorf("%s links read %q, want one %q", uid, got, want)
 		}
 	}
 }

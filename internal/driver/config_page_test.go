@@ -30,7 +30,7 @@ func configOpened(t *testing.T, s driver.State) driver.Output {
 
 var configRowsFixture = []model.ConfigFile{
 	{Key: model.ConfigLanes, Title: "lanes.toml", Path: "/cfg/tern-kata/lanes.toml", Status: model.ConfigLoads, Summary: "2 Projects with a Lane list"},
-	{Key: model.ConfigFilters, Title: "filters.toml", Path: "/cfg/tern-kata/filters.toml", Summary: "Not created: no Project has a default filter"},
+	{Key: model.ConfigFilters, Title: "filters.toml", Path: "/cfg/tern-kata/filters.toml", Summary: "No Project has a default filter"},
 	{Key: model.ConfigViews, Title: "views.toml", Path: "/cfg/tern-kata/views.toml", Status: model.ConfigBroken,
 		Err: "/cfg/tern-kata/views.toml: toml: line 3: expected value, found newline"},
 	{Key: model.ConfigKata, Title: "kata config.toml", Path: "/kata/config.toml", Status: model.ConfigLoads, Summary: "read-only · 1 daemon · asks before quitting"},
@@ -49,11 +49,11 @@ func TestConfigPageOpensFromEveryPageAndTheMenuAndShowsInThePageBarWhileShown(t 
 		"Board":  boardPane(t, boardCard("a")),
 		"Jobs":   jobsPane(t, 160, nativeJob("J1", "Weekly", jobParent("open", false))),
 	} {
-		if pageBarDrawn(t, s.Model, "K") {
+		if pageBarDrawn(t, s.Model, "Shift+K") {
 			t.Errorf("%s: the Page bar shows K before the Page is open", name)
 		}
 		out := configOpened(t, s)
-		if !pageBarDrawn(t, out.State.Model, "K") || out.State.Model.CurrentMode() != model.ModeConfig {
+		if !pageBarDrawn(t, out.State.Model, "Shift+K") || out.State.Model.CurrentMode() != model.ModeConfig {
 			t.Errorf("%s: no Page bar entry for K, or mode %q", name, out.State.Model.CurrentMode())
 		}
 	}
@@ -77,7 +77,7 @@ func TestConfigPageListsEveryRowWithPathStatusAndSummaryAndTheSelectedRowsFullEr
 	s := configListed(t)
 	wantText(t, "the list", wireTextOf(t, s), "Config", "4", "/cfg/tern-kata",
 		"lanes.toml", "ok", "2 Projects with a Lane list",
-		"filters.toml", "not created", "Not created: no Project has a default filter",
+		"filters.toml", "not created", "No Project has a default filter",
 		"views.toml", "broken", "kata config.toml", "/kata/config.toml", "read-only · 1 daemon · asks before quitting")
 	if text := wireTextOf(t, s); strings.Contains(text, "expected value, found newline") || strings.Contains(text, "/cfg/tern-kata/lanes.toml") {
 		t.Errorf("an error shows before its row is selected, or a path inside the folder is drawn again: %s", text)

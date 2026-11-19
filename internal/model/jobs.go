@@ -424,13 +424,35 @@ func (m Model) JobFacts(now time.Time) []JobFact {
 			add("Missed", strconv.Itoa(missed))
 		}
 	}
-	created := m.Calendar.Stamp(job.CreatedAt)
+	created := m.Calendar.Read(job.CreatedAt, now)
 	if job.Author != "" {
 		created += " · " + job.Author
 	}
 	add("Created", created)
-	add("Updated", m.Calendar.Stamp(job.UpdatedAt))
+	add("Updated", m.Calendar.Read(job.UpdatedAt, now))
 	return facts
+}
+
+// Unreachable says err is a transport failure: kata did not answer, as opposed to answering with a refusal.
+func Unreachable(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := err.Error()
+	for _, marker := range []string{"error sending request", "error executing request", "connection refused", "kata daemon start", "dial tcp", "no such host", "i/o timeout"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// LoadFailure is the line for a failed read of thing: a transport failure reads "kata is not reachable", else kata's own words.
+func LoadFailure(thing string, err error) string {
+	if Unreachable(err) {
+		return "Cannot load " + thing + ": kata is not reachable."
+	}
+	return Cannot("load", thing, err)
 }
 
 // workflowName is the name of the workflow with uid when the Workflows Page has read it, else empty.

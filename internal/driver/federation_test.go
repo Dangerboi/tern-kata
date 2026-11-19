@@ -72,7 +72,7 @@ func TestFederationPageOpensFromEveryPageAndTheMenu(t *testing.T) {
 		if load, _ := askedFederation(out.Cmds); load.Workspace != "/repo" {
 			t.Errorf("%s: the read asked for workspace %q", name, load.Workspace)
 		}
-		if !pageBarDrawn(t, out.State.Model, "F") || out.State.Model.CurrentMode() != model.ModeFederation {
+		if !pageBarDrawn(t, out.State.Model, "Shift+F") || out.State.Model.CurrentMode() != model.ModeFederation {
 			t.Errorf("%s: no Page bar entry for F, or mode %q", name, out.State.Model.CurrentMode())
 		}
 	}
@@ -202,7 +202,7 @@ func TestEscAndBackspaceReturnFromTheFederationPageToThePageShownBefore(t *testi
 			"Runs":   {runsPane(t, 160, finishedRun("R1")), model.PageRuns},
 		} {
 			back := step(t, federationOpened(t, start.s).State, key(leave)).State
-			if back.Model.Page != start.page || pageBarDrawn(t, back.Model, "F") {
+			if back.Model.Page != start.page || pageBarDrawn(t, back.Model, "Shift+F") {
 				t.Errorf("%s then %s: page %v, want %v with no F entry", name, leave, back.Model.Page, start.page)
 			}
 		}
@@ -307,7 +307,7 @@ func TestFederationPageKeepsThePageKeysAndTheMenu(t *testing.T) {
 	if got := step(t, s, key("5")).State.Model.Page; got != model.PageBoard {
 		t.Errorf("2 gave page %v, want the Board", got)
 	}
-	if got := step(t, s, click(pageBarEntry(t, s.Model, "F"), view.KeyClick("shift+f"))); got.State.Model.Page != model.PageFederation {
+	if got := step(t, s, click(pageBarEntry(t, s.Model, "Shift+F"), view.KeyClick("shift+f"))); got.State.Model.Page != model.PageFederation {
 		t.Errorf("clicking the shown entry left page %v", got.State.Model.Page)
 	}
 }

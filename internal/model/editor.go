@@ -30,8 +30,8 @@ func ConflictSentence(what, where string) string {
 	return "Your " + what + " conflicts with a newer change. Press " + openPhrase(where) + " the conflict card."
 }
 
-// openPhrase is the phrase "e or c to open" (with where after the keys), which leads to what the keys open.
-func openPhrase(where string) string { return "e or c" + where + " to open" }
+// openPhrase is the phrase "E or C to open" (with where after the keys), which leads to what the keys open.
+func openPhrase(where string) string { return Key("e") + " or " + Key("c") + where + " to open" }
 
 type Draft struct {
 	Editor TextEditor

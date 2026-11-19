@@ -22,7 +22,7 @@ type ViewsState struct {
 	// Err is why the file could not be read (it is left as it is), Problems the entries the read left out.
 	Err      error
 	Problems []error
-	// Deleting is the name of the view the question "Delete view <name>? y/n" is about, "" when none is asked.
+	// Deleting is the name of the view the question "Delete view <name>?" is about, "" when none is asked.
 	Deleting string
 }
 

@@ -13,7 +13,12 @@ const DocCSS = `.sf-doc { isolation: isolate; }
 .sf-md h2, .sf-md h3, .sf-md h4, .sf-md h5, .sf-md h6 { font-size: 1em; }
 [data-role~='` + PropertiesRole + `'], .sf-card[data-role~='` + CommentRole + `'] { background-color: color-mix(in srgb, var(--t1) 7%, transparent) !important; border-radius: var(--r-card, 10px) !important; padding: 8px 12px; }
 .sf-card[data-role~='` + CommentRole + `'] { margin: 4px 0; }
+.sf-col[data-role~='` + DetailContentRole + `'] { padding-right: 12px; }
 .sf-card[data-role~='` + CommentRole + `'] .sf-card-body { padding-left: 0 !important; margin-left: 0 !important; }`
+
+// DetailContentRole marks the detail's scrolled content; DocCSS leaves a gutter on its right for the scrollbar, which would
+// otherwise be drawn over the right edge of the comment cards.
+const DetailContentRole = "tern-kata.detailcontent"
 
 // CommentRole marks a comment's card, which DocCSS draws as a block of its own.
 const CommentRole = "tern-kata.comment"

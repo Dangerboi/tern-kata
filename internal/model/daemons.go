@@ -217,7 +217,7 @@ func (d DaemonsState) Notice() (DaemonsNotice, bool) {
 	case d.Err != nil:
 		return DaemonsNotice{Text: Cannot("read", "the daemon catalog", d.Err), Err: true}, true
 	case len(d.Entries) == 0:
-		return DaemonsNotice{Text: "No named daemons", Detail: "Add a [[daemon]] entry to config.toml.", Empty: true}, true
+		return DaemonsNotice{Text: "No named daemons", Detail: "A daemon is a kata server you can switch to.", Empty: true}, true
 	}
 	return DaemonsNotice{}, false
 }

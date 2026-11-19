@@ -12,6 +12,16 @@ import (
 
 const JobListID = "main.columns.list.jobs"
 
+// loadFailure is the failure line of a Page's read: "Cannot load <thing>: kata is not reachable." when kata did not answer, with
+// the raw error in its Hovercard.
+func loadFailure(thing string, err error) ui.Text {
+	line := toneText("error", ui.ToneError, model.LoadFailure(thing, err))
+	if model.Unreachable(err) {
+		line.Hovercard = ui.Hovercard{Element: plainText("reason", ui.ToneNeutral, model.Reason(err))}
+	}
+	return line
+}
+
 func jobTone(pause model.PauseReason) ui.Tone {
 	switch pause {
 	case model.NotPaused:
@@ -36,14 +46,14 @@ func jobs(m model.Model, now time.Time) tern.Element {
 		loading = "loading…"
 	}
 	children := ui.Nodes(pageHead("heading", "Jobs", strconv.Itoa(len(rows)), hidden, loading))
-	if banner := m.WorkerBanner(); !banner.Empty() {
+	if banner := m.WorkerBanner(); !banner.Empty() && m.Jobs.Err == nil {
 		children = append(children, workerBanner(banner))
 	}
 	if m.Jobs.ProjectArchived {
 		children = append(children, toneText("archived-project", ui.ToneWarning, "This Project is archived: kata answers none of its jobs, so those held here are paused."))
 	}
 	if m.Jobs.Err != nil {
-		children = append(children, toneText("error", ui.ToneError, model.Cannot("load", "jobs", m.Jobs.Err)))
+		children = append(children, loadFailure("jobs", m.Jobs.Err))
 	}
 	if m.PageSearchShown() {
 		children = append(children, pageSearchInput(m))
@@ -53,8 +63,12 @@ func jobs(m model.Model, now time.Time) tern.Element {
 		empty = searchEmpty(m)
 	}
 	list := ui.List{CommonWithoutMax: scrollerCommon("jobs"), Max: fillMax, Empty: ui.T("Loading jobs…"), Children: cards}
+	if m.Jobs.Err != nil && len(cards) == 0 {
+		// A failed read is no empty list: the failure line above is the only text.
+		return listPanel(m, listBasis, children)
+	}
 	children = append(children, listAndEmpty(list, m.Jobs.Loading, empty)...)
-	return listPanel(m, 0.5, children)
+	return listPanel(m, listBasis, children)
 }
 
 // workerBanner is the one-line state of this machine's worker: a badge (success while it serves the Project, pending while one
@@ -147,6 +161,12 @@ func inspector(m model.Model, now time.Time) tern.Element {
 			lines[i].Spans = []ui.Span{{T: status, S: toneStyle(runStateTone(status))}, {T: " · " + fact.Value, S: "muted"}}
 		case fact.Label == "Worker" || fact.Label == "Warning":
 			lines[i].Style = toneStyle(ui.ToneWarning)
+		case fact.Label == "Created":
+			when, by, _ := strings.Cut(fact.Value, " · ")
+			lines[i].Spans = []ui.Span{monoSpan(when, "")}
+			if by != "" {
+				lines[i].Spans = append(lines[i].Spans, ui.Span{T: " · " + by, S: "muted"})
+			}
 		case isTimeFact(fact.Label):
 			lines[i].Spans = []ui.Span{monoSpan(fact.Value, "")}
 		case fact.Label == "Checkout":

@@ -180,7 +180,7 @@ func TestAgentCardEndsInButtonsAndSaysWhenThereAreNoAgents(t *testing.T) {
 	m := model.Model{Cols: 160, Project: model.Project{ID: 7}, Issues: []model.Issue{{UID: "a", QualifiedID: "work#a", Status: "open"}}, SelectedUID: "a"}
 	m = press(m, "w")
 	cardButtons(t, m, agentNew, []button{{"split", "Split"}, {"tab", "Tab"}, {"new-background", "Background"}, {"team", "Start a team…"}}, "")
-	cardButtons(t, m, "layer.agent.foot.end", []button{{"cancel", "Cancel"}}, "")
+	cardButtons(t, m, "layer.agent.foot.end", []button{{"cancel", "Close"}}, "")
 	nodes := pickerNodes(t, m)
 	if _, drawn := nodes[agentNew+".pause"]; drawn {
 		t.Error("Pause the team is drawn on an Issue with no team")
@@ -305,7 +305,7 @@ func TestTeamDialogShowsWhereTheCoordinatorGoesAndHowManyChildrenRun(t *testing.
 	m := press(teamCardModel(), "w", "c")
 	cardButtons(t, m, "layer.agent.foot", []button{{"team-start", "Start team"}, {"team-cancel", "Cancel"}}, "team-start")
 	nodes := pickerNodes(t, m)
-	const where, count = "layer.agent.coordinator.team-where.", "layer.agent.children-at-once.team-limit.team-count"
+	const where, count = "layer.agent.team-where.", "layer.agent.team-limit.team-count"
 	chosen := func(id string) bool { return strings.Contains(fmt.Sprint(nodes[where+id].P["spans"]), "accent strong") }
 	if !chosen("team-split") || chosen("team-tab") || text(nodes[count]) != "2" {
 		t.Errorf("at the start: split chosen %v, tab chosen %v, limit %q", chosen("team-split"), chosen("team-tab"), text(nodes[count]))

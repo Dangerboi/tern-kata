@@ -1,10 +1,10 @@
 # Dates
 
-`d` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Dates card**: a Scheduled field and a Deadline field holding the Issue's current dates.
+`D` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Dates card**: a Scheduled field and a Deadline field holding the Issue's current dates.
 
 ![The Dates card over the Board, with "+1w" typed in Scheduled and the weekday of the date it resolves to beside it](../images/dates-card.png)
 
-The card's head reads Dates, with the Issue's ref (`#tga6`, or `project#tga6` across Projects) as a muted line; its buttons are **Save** and **Cancel**, and each field's placeholder is `YYYY-MM-DD`. While a field has focus, one muted line under it reads "Date like 2026-11-20, today, tomorrow or +3d. Blank clears it." `tab` moves between the fields, `enter` saves and `esc` cancels. `ctrl+d` in a field opens a calendar beside it (the footer shows `ctrl+d calendar`) on the month of the field's date, else of the other date, else today: the arrow keys move by a day or a week, `enter` or a click picks the date and `esc` closes the calendar. Typing a date works as before. A field takes:
+The card's head reads Dates, with the Issue's ref (`#tga6`, or `project#tga6` across Projects) as a muted line; its buttons are **Save** and **Cancel**, and each field's placeholder is `YYYY-MM-DD`. While a field has focus, one muted line under it reads "Date like 2026-11-20, today, tomorrow or +3d. Blank clears it." `Tab` moves between the fields, `Enter` saves and `Esc` cancels. `Ctrl+D` in a field opens a calendar beside it (the footer shows `Ctrl+D calendar`) on the month of the field's date, else of the other date, else today: the arrow keys move by a day or a week, `Enter` or a click picks the date and `Esc` closes the calendar. Typing a date works as before. A field takes:
 
 | Input | Meaning |
 |---|---|
@@ -16,11 +16,11 @@ The card's head reads Dates, with the Issue's ref (`#tga6`, or `project#tga6` ac
 | `+Nw` | N weeks on |
 | blank | clears the date |
 
-A muted text beside the field shows the weekday of a typed date (`Sat`, with the time for a local time: `Sat 09:00`) and the day and weekday of a date that resolves from `today` or `+3d` (`2026-10-24 Sat`); a blank field, a UTC instant and text that is not a date show nothing, since a UTC instant's calendar day depends on the time zone. The same forms kata's own `d` form takes are accepted, and the time forms need the `T` and, for UTC, a capital `Z`; the forms with a time and `Z` are listed in the table above, not in the hint. Anything else is refused with a message naming the field: "Scheduled must be a date like 2026-11-20, today, tomorrow or +3d." A date kata holds with a time (`2026-11-02T17:30:00`) is shown as it is and left alone unless you edit that field.
+A muted text beside the field shows the weekday of a typed date (`Sat`, with the time for a local time: `Sat 09:00`) and the day and weekday of a date that resolves from `today` or `+3d` (`2026-10-24 Sat`); a blank field, a UTC instant and text that is not a date show nothing, since a UTC instant's calendar day depends on the time zone. The same forms kata's own `D` form takes are accepted, and the time forms need the `T` and, for UTC, a capital `Z`; the forms with a time and `Shift+Z` are listed in the table above, not in the hint. Anything else is refused with a message naming the field: "Scheduled must be a date like 2026-11-20, today, tomorrow or +3d." A date kata holds with a time (`2026-11-02T17:30:00`) is shown as it is and left alone unless you edit that field.
 
 ## In the Create card
 
-The Create card (`n`, and `N` for a child Issue) has the same two fields after Priority, in tab order, with the same input forms, the same `ctrl+d` calendar, weekday hint and refusal naming the field (nothing is created). The dates go into the one create request as the new Issue's `scheduled_on` and `deadline_on` metadata; a field left blank sends none. Retrying a failed create reuses its idempotency key, and editing a date makes a new request.
+The Create card (`N`, and `Shift+N` for a child Issue) has the same two fields after Priority, in tab order, with the same input forms, the same `Ctrl+D` calendar, weekday hint and refusal naming the field (nothing is created). The dates go into the one create request as the new Issue's `scheduled_on` and `deadline_on` metadata; a field left blank sends none. Retrying a failed create reuses its idempotency key, and editing a date makes a new request.
 
 ## Saving
 

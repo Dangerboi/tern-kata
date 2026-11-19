@@ -33,7 +33,7 @@ parent_expect_drawn() {
   expect_tree "[data-id\$='.$parent_uid']" ".ok and .count == 1 and .nodes[0][\"aria-selected\"] == \"true\" and .nodes[0].rect[1] >= 0 and (.nodes[0].rect[1] + .nodes[0].rect[3]) <= $parent_height"
   expect_tree "[data-id='main.columns.detail.viewport.content.heading.title']" '.ok and (.nodes[0].text | contains("Smoke parent spec") and (contains("loading") | not))'
   expect_tree "[data-id^='main.columns.detail.viewport.content.activity.'][data-id\$='.jump']" '.ok and .count == 0'
-  expect_tree "[data-id='main.columns.detail.viewport.content.children.heading']" '.ok and .count == 1 and (.nodes[0].text == "Children 40 of 40 open")'
+  expect_tree "[data-id='main.columns.detail.viewport.content.children.heading']" '.ok and .count == 1 and (.nodes[0].text == "Children 40")'
   expect_tree "[data-id^='main.columns.detail.viewport.content.properties.facts.right.parent']" '.ok and .count == 0'
   # Tern draws only the table rows near the view, so how many rows are in the tree depends on how far the detail is
   # scrolled; the body's laid-out height is what holds all 40 children (the body first, then the drawn rows).

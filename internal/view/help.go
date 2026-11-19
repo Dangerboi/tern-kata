@@ -163,11 +163,20 @@ func helpCard(key string, group model.SheetGroup, keyCols int) tern.Element {
 		keys := shownKeys(l.Keys)
 		rows[i] = ui.Row{Common: ui.Common{Key: "row-" + strconv.Itoa(i)}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "keys", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(float64(keyCols))}}, Spans: keySpans(keys), Wrap: ui.WrapNone},
-			ui.Text{Common: ui.Common{Key: "action", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Text: l.Text},
+			helpAction(capitalize(l.Text)),
 		)}
 	}
 	if group.Title == model.SheetEverywhere {
 		rows = append(rows, ui.Text{Common: ui.Common{Key: "emacs"}, Spans: prose(emacsNote, "muted")})
 	}
 	return ui.Card{Common: ui.Common{Key: key}, Head: ui.T(group.Title), Children: rows}
+}
+
+// helpAction is a row's words: plain text, or spans when the words name a key as a keycap.
+func helpAction(words string) ui.Text {
+	common := ui.Common{Key: "action", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}
+	if !strings.Contains(words, "{") {
+		return ui.Text{Common: common, Text: words}
+	}
+	return ui.Text{Common: common, Spans: prose(words, "")}
 }
