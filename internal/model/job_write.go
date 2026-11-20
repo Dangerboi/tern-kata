@@ -2,7 +2,6 @@ package model
 
 import (
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -101,7 +100,7 @@ func writableJob(m Model) (Model, CronJob, bool) {
 		m = m.fail(Cannot("change", "the job", ErrDisconnected))
 	case m.Jobs.Writing != "":
 	case m.Jobs.ProjectArchived:
-		m = m.fail(Cannot("change", "the job", errors.New("this Project is archived")))
+		m = m.fail(Refused("change", "the job", "this Project is archived"))
 	default:
 		return m, *job, true
 	}
@@ -124,7 +123,7 @@ func toggleJob(m Model) (Model, []Cmd) {
 		if !job.Definition.Enabled {
 			verb = "resume"
 		}
-		return refuse(m, Cannot(verb, "the job", errors.New("it is archived; restore it first")))
+		return refuse(m, Refused(verb, "the job", "it is archived; restore it first"))
 	case job.Definition.Enabled:
 		return writeJobEnabled(m, job, false)
 	}

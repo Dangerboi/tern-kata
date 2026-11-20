@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -492,7 +491,7 @@ func toggleRunJobFilter(m Model) Model {
 	case run == nil:
 		return m
 	case run.JobUID == "":
-		return m.fail(Cannot("filter", "the runs by job", errors.New("this run belongs to a workflow")))
+		return m.fail(Refused("filter", "the runs by job", "this run belongs to a workflow"))
 	default:
 		m.Runs.JobUID, m.Runs.JobName = run.JobUID, run.JobName
 	}
@@ -529,7 +528,7 @@ func openRunIssue(m Model) Model {
 	case run == nil:
 		return m
 	case run.IssueUID == "":
-		return m.fail(Cannot("open", "the Issue", errors.New("this run has none")))
+		return m.fail(Refused("open", "the Issue", "this run has none"))
 	}
 	uid := run.IssueUID
 	m = m.leavePage()

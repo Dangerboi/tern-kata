@@ -395,7 +395,7 @@ func (m Model) agentCardNotice(action Action, reason string) string {
 			thing += " on " + m.RefOf(issue.QualifiedID)
 		}
 	}
-	return Refused(verb, thing, reason)
+	return Refused(verb, thing, Clause(reason))
 }
 
 // AgentCardStateWords is the state word of an agent's row on the card: what the relay last said of it, in the words a person

@@ -668,7 +668,7 @@ func openNewJob(m Model) (Model, []Cmd) {
 	case m.Stale:
 		return refuse(m, Cannot("create", "a job", ErrDisconnected))
 	case m.Jobs.ProjectArchived:
-		return refuse(m, Cannot("create", "a job", errors.New("this Project is archived")))
+		return refuse(m, Refused("create", "a job", "this Project is archived"))
 	}
 	return newJobForm(m, m.Jobs.ProjectID, "")
 }
@@ -690,7 +690,7 @@ func openEditJob(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if job.Archived() {
-		return refuse(m, Cannot("edit", "the job", errors.New("it is archived; restore it first")))
+		return refuse(m, Refused("edit", "the job", "it is archived; restore it first"))
 	}
 	f, editable := changeJobForm(m.Jobs.ProjectID, job)
 	if !editable {

@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -461,7 +460,7 @@ func runJobNow(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if job.Archived() {
-		return m.fail(Cannot("run", fmt.Sprintf("%q", job.Name), errors.New("it is archived; restore it first"))), nil
+		return m.fail(Refused("run", fmt.Sprintf("%q", job.Name), "it is archived; restore it first")), nil
 	}
 	if notice := m.runNowRefusal(*job); notice != "" {
 		return m.fail(notice), nil
@@ -488,7 +487,7 @@ func resumePausedJob(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.workerPausedJobs(job.UID) == 0 {
-		return m.fail(Cannot("resume", fmt.Sprintf("%q", job.Name), errors.New("this machine's worker has not paused it"))), nil
+		return m.fail(Refused("resume", fmt.Sprintf("%q", job.Name), "this machine's worker has not paused it")), nil
 	}
 	return m.say(Progress("Asking the worker to resume", fmt.Sprintf("%q", job.Name))), []Cmd{ResumeJob{JobUID: job.UID, JobName: job.Name}}
 }
@@ -537,7 +536,7 @@ func (m Model) notLocal(run Run, verb, thing string) string {
 	case m.IsLocalRun(run):
 		return ""
 	case !m.Worker.Running:
-		return Cannot(verb, thing, errors.New("no worker is running on this machine; start one with `tern-kata worker`"))
+		return Refused(verb, thing, "no worker is running on this machine; start one with `tern-kata worker`")
 	}
 	return Cannot(verb, thing, fmt.Errorf("it belongs to executor %q, not this machine's worker %q, and only its own machine can %s it", run.Executor(), m.Worker.Executor, verb))
 }
@@ -559,7 +558,7 @@ func moveHeldRun(resume bool) func(Model) (Model, []Cmd) {
 		}
 		local, ok := m.LocalRunOf(run.UID)
 		if !ok || !(local.Held || !resume && local.Abandonable) {
-			return m.fail(Cannot(verb, "the run", errors.New("it is not held"))), nil
+			return m.fail(Refused(verb, "the run", "it is not held")), nil
 		}
 		if resume {
 			return m, []Cmd{ResumeLocalRun{UID: run.UID}}

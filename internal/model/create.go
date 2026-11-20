@@ -149,7 +149,7 @@ func submitCreate(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if strings.TrimSpace(f.Title) == "" {
-		f.Err = errors.New(Cannot("create", "Issue", errors.New("enter a title")))
+		f.Err = errors.New(Refused("create", "Issue", "enter a title"))
 		return m, nil
 	}
 	if f.ProjectID == 0 {

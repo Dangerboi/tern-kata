@@ -61,8 +61,8 @@ func TestANoticeWithAKeyIsOneToastWhoseButtonDoesWhatTheKeyDoes(t *testing.T) {
 		text, label, chord string
 	}{
 		{"delete", afterDelete, "Deleted #a.", "Undo", "u"},
-		{"w on a closed Issue", step(t, agentPanes(t, closed)["list"], key("w")), model.Refused("start", "an agent on #t1", model.ClosedIssueRefusal), "Reopen", "r"},
-		{"w on a closed Issue in its detail", step(t, agentPanes(t, closed)["detail"], key("w")), model.Refused("start", "an agent on #t1", model.ClosedIssueRefusal), "Reopen", "r"},
+		{"w on a closed Issue", step(t, agentPanes(t, closed)["list"], key("w")), model.Refused("start", "an agent on #t1", model.Clause(model.ClosedIssueRefusal)), "Reopen", "r"},
+		{"w on a closed Issue in its detail", step(t, agentPanes(t, closed)["detail"], key("w")), model.Refused("start", "an agent on #t1", model.Clause(model.ClosedIssueRefusal)), "Reopen", "r"},
 		{"move on a closed card", step(t, boardPane(t, closedAt("d", 10, 5)), key(">")), "d is closed.", "Reopen", "r"},
 		{"move past the last Lane", step(t, boardPane(t, boardCard("a", "waiting")), key(">")), "a is in the last Lane.", "Close", "x"},
 	} {

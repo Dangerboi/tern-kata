@@ -369,7 +369,7 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 	}
 	if msg.Result == UndoConflict && (msg.Conflict == "daemon principal changed" || msg.Conflict == "daemon instance changed") {
 		m.Undo = h.cleared(msg.Conflict)
-		m = m.fail(Cannot("undo", target, errors.New(msg.Conflict)))
+		m = m.fail(Refused("undo", target, msg.Conflict))
 		return m, nil
 	}
 	switch msg.Result {
@@ -377,7 +377,7 @@ func undoDone(m Model, msg ChangeUndone) (Model, []Cmd) {
 		return openUndoClose(m, entry), nil
 	case UndoConflict:
 		m.Undo = h.without(entry.ID)
-		m = m.fail(Cannot("undo", target, errors.New(msg.Conflict)))
+		m = m.fail(Refused("undo", target, msg.Conflict))
 		return m, nil
 	case UndoUnknown:
 		m.Undo = h.cleared("undo outcome is unknown")

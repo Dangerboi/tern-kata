@@ -1,6 +1,9 @@
 package model
 
-import "slices"
+import (
+	"cmp"
+	"slices"
+)
 
 // The choice sets of the form cards whose field is a choice, not typed text: each reads the held value from the card's state
 // and says how the card draws it. popup_card.go registers them as the cards' choices.
@@ -47,7 +50,7 @@ func chooseFieldPriority(m Model, index int) Model {
 	if index < 0 || index >= len(priorityValues) {
 		return m
 	}
-	m.FieldForm.Value = cmpOr(priorityValues[index], "-")
+	m.FieldForm.Value = cmp.Or(priorityValues[index], "-")
 	m.FieldForm.Err = nil
 	return m
 }
@@ -57,19 +60,8 @@ func stepFieldChoice(m Model, back bool) Model {
 	return chooseFieldPriority(m, cycleIndex(max(priorityIndex(m.FieldForm.Value), 0), len(priorityValues), back))
 }
 
-func cmpOr(value, fallback string) string {
-	if value == "" {
-		return fallback
-	}
-	return value
-}
-
 // closeReasons are the reasons a close takes, in the order the Reason control shows them.
 var closeReasons = []CloseReasonKind{ReasonDone, ReasonWontfix, ReasonDuplicate, ReasonSuperseded, ReasonAuditNoChange}
-
-// CloseReasonLabel is the word the Reason control shows for a reason: kata's code is never shown, and a code from a newer kata
-// is its own word.
-func CloseReasonLabel(reason string) string { return CloseReasonWords(reason) }
 
 // closeReasonTabsCols is the narrowest Pane that fits the five reasons in one segmented row; below it the Reason is a select.
 const closeReasonTabsCols = 56
@@ -81,7 +73,7 @@ func closeChoiceSet(m Model, name Field) (ChoiceSet, bool) {
 	}
 	labels := make([]string, len(closeReasons))
 	for i, reason := range closeReasons {
-		labels[i] = CloseReasonLabel(string(reason))
+		labels[i] = CloseReasonWords(string(reason))
 	}
 	control := ControlTabs
 	if m.NarrowerThan(closeReasonTabsCols) {

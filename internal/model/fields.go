@@ -212,7 +212,7 @@ func trimPriority(v string) string { return strings.TrimLeft(v, "Pp") }
 
 func checkPriority(v string) error {
 	if n, err := strconv.Atoi(v); v != "-" && (err != nil || n < 0 || n > 4) {
-		return errors.New(Cannot("set", "priority", errors.New("use P0 to P4, or - to clear")))
+		return errors.New(Refused("set", "priority", "use P0 to P4, or - to clear"))
 	}
 	return nil
 }

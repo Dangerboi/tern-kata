@@ -77,10 +77,10 @@ func TestAgentRefusalNoticesStartWithCannot(t *testing.T) {
 	notices := map[string]string{
 		"sweep with no agent":     NoAgentsToSweepRefusal,
 		"broadcast with no agent": NoAgentsToBroadcastRefusal,
-		"message on no request":   Refused("message", "the agent", NoAgentRaisedRefusal),
-		"close on a closed Issue": Refused("close", "#1", ClosedAlreadyRefusal),
-		"start on a closed Issue": Refused("start", "an agent on #1", ClosedIssueRefusal),
-		"remote agent":            Refused("stop", "the agent", RemoteAgentRefusal("desk")),
+		"message on no request":   Refused("message", "the agent", Clause(NoAgentRaisedRefusal)),
+		"close on a closed Issue": Refused("close", "#1", Clause(ClosedAlreadyRefusal)),
+		"start on a closed Issue": Refused("start", "an agent on #1", Clause(ClosedIssueRefusal)),
+		"remote agent":            Refused("stop", "the agent", Clause(RemoteAgentRefusal("desk"))),
 	}
 	for _, action := range []Action{AgentCardGo, AgentCardBackground, AgentCardInterrupt, AgentCardStop, AgentCardForget, AgentCardMessage,
 		AgentCardQuickReply, AgentCardSplit, AgentCardTab, AgentCardNewBackground, AgentCardTeam, AgentCardPause} {
@@ -91,7 +91,7 @@ func TestAgentRefusalNoticesStartWithCannot(t *testing.T) {
 			t.Errorf("%s: notice %q does not read \"Cannot <verb> <thing>: <reason>.\"", name, notice)
 		}
 	}
-	if got := Refused("start", "an agent on #12", ClosedIssueRefusal); got != "Cannot start an agent on #12: the Issue is closed." {
+	if got := Refused("start", "an agent on #12", Clause(ClosedIssueRefusal)); got != "Cannot start an agent on #12: the Issue is closed." {
 		t.Errorf("closed Issue notice %q", got)
 	}
 }

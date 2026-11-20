@@ -133,7 +133,7 @@ func TestOpenBesideIsRefusedForATypeTernDoesNotDraw(t *testing.T) {
 	}
 	s = step(t, s, model.DetailItemMsg{Tab: model.TabAttachments, Key: model.AttachmentRowKey("A3")}).State
 	out := step(t, s, key("v"))
-	if len(out.Cmds) != 0 || out.State.Model.Notice != model.Cannot("open", "movie.avi", errors.New(reason)) {
+	if len(out.Cmds) != 0 || out.State.Model.Notice != model.Refused("open", "movie.avi", reason) {
 		t.Fatalf("v on an avi: cmds %#v, notice %q, want the refusal %q", out.Cmds, out.State.Model.Notice, reason)
 	}
 }

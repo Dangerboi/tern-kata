@@ -78,14 +78,14 @@ func TestARemoteRowOffersOnlyForgetAmongTheAgentKeys(t *testing.T) {
 		t.Errorf("Forget is off with %q on a remote row", got)
 	}
 	for chord, verb := range map[string][2]string{"enter": {"go to", "the agent"}, "b": {"send", "the agent to the background"}, "i": {"interrupt", "the agent"}, "x": {"stop", "the agent"}} {
-		notice := model.Refused(verb[0], verb[1], want)
+		notice := model.Refused(verb[0], verb[1], model.Clause(want))
 		got := step(t, s, key(chord))
 		if m := got.State.Model; len(got.Cmds) != 0 || m.TopCard() != model.CardAgent || m.CurrentMode() != model.ModeAgentCard || m.Notice != notice {
 			t.Errorf("%s: cmds %#v, card %v, mode %s, notice %q; want the card open with %q and nothing sent", chord, got.Cmds, m.TopCard(), m.CurrentMode(), m.Notice, notice)
 		}
 	}
 	local := step(t, remotePane(t), key("w")).State
-	if got := step(t, local, key("f")); got.State.Model.Notice != model.Refused("forget", "the agent", model.AgentForgetLocalReason) || got.State.Model.AgentCard.Forgetting != "" || len(got.Cmds) != 0 {
+	if got := step(t, local, key("f")); got.State.Model.Notice != model.Refused("forget", "the agent", model.Clause(model.AgentForgetLocalReason)) || got.State.Model.AgentCard.Forgetting != "" || len(got.Cmds) != 0 {
 		t.Errorf("f on a local row: notice %q, cmds %#v", got.State.Model.Notice, got.Cmds)
 	}
 }

@@ -211,14 +211,6 @@ func FilterFieldLabel(field Field) string {
 // "Default filter" has no value). The two stay apart so a name with a space in it is not cut into a label and a value.
 type FilterNote struct{ Label, Value string }
 
-// Text is the note as one line, the value after the label.
-func (n FilterNote) Text() string {
-	if n.Value == "" {
-		return n.Label
-	}
-	return n.Label + " " + n.Value
-}
-
 // FilterLine is what the context line under the top bar shows: the active filters, and a note naming where they came from,
 // "Saved view <name>" while they are the saved view's this Pane opened or "Default filter" while they equal the Project's
 // default. The Board leaves the status filter out. With no terms and no note there is no line.

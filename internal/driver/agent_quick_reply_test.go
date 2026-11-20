@@ -105,8 +105,8 @@ func TestQuickReplyIsRefusedWhereMessageIs(t *testing.T) {
 		t.Run(name+" on the Attention Page", func(t *testing.T) {
 			s := messagePane(t, agentRaised(t), tc.states, tc.agent)
 			quick, typed := step(t, s, key("r")), step(t, s, key("m"))
-			if m := quick.State.Model; m.TopCard() != model.NoCard || m.Notice != model.Refused("message", "the agent", tc.want) || m.Notice != typed.State.Model.Notice || len(quick.Cmds) != 0 {
-				t.Errorf("card %v notice %q cmds %v, want no card and %q as `m` gives", m.TopCard(), m.Notice, quick.Cmds, model.Refused("message", "the agent", tc.want))
+			if m := quick.State.Model; m.TopCard() != model.NoCard || m.Notice != model.Refused("message", "the agent", model.Clause(tc.want)) || m.Notice != typed.State.Model.Notice || len(quick.Cmds) != 0 {
+				t.Errorf("card %v notice %q cmds %v, want no card and %q as `m` gives", m.TopCard(), m.Notice, quick.Cmds, model.Refused("message", "the agent", model.Clause(tc.want)))
 			}
 		})
 		t.Run(name+" on the Agent card", func(t *testing.T) {
@@ -115,8 +115,8 @@ func TestQuickReplyIsRefusedWhereMessageIs(t *testing.T) {
 			s := cardPane(t, onCard)
 			s.Model.Agents = model.AgentStatesRelay{Received: true, States: tc.states}
 			quick, typed := step(t, s, key("r")), step(t, s, key("m"))
-			if m := quick.State.Model; m.TopCard() != model.CardAgent || m.Notice != model.Refused("message", "the agent", tc.want) || m.Notice != typed.State.Model.Notice || len(quick.Cmds) != 0 {
-				t.Errorf("card %v notice %q cmds %v, want the Agent card and %q as `m` gives", m.TopCard(), m.Notice, quick.Cmds, model.Refused("message", "the agent", tc.want))
+			if m := quick.State.Model; m.TopCard() != model.CardAgent || m.Notice != model.Refused("message", "the agent", model.Clause(tc.want)) || m.Notice != typed.State.Model.Notice || len(quick.Cmds) != 0 {
+				t.Errorf("card %v notice %q cmds %v, want the Agent card and %q as `m` gives", m.TopCard(), m.Notice, quick.Cmds, model.Refused("message", "the agent", model.Clause(tc.want)))
 			}
 			if why := quick.State.Model.AgentCardUnavailable(model.AgentCardQuickReply); why != tc.want {
 				t.Errorf("the button is off with %q, want %q", why, tc.want)

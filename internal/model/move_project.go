@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -113,7 +112,7 @@ func (m Model) MovePreview() string {
 	ref := m.MoveRef()
 	switch {
 	case f.Conflict:
-		return Cannot("move", ref, errors.New("it changed since this card opened"))
+		return Refused("move", ref, "it changed since this card opened")
 	case f.Previewed && len(f.Descendants) == 0:
 		return fmt.Sprintf("%s moves to %s and gets a new id there.", ref, f.Target.Name)
 	case f.Previewed:

@@ -27,7 +27,7 @@ func DraftKeptHint(err error, where string) string {
 // ConflictSentence is the refusal to save what (a Draft's "edit of work#1", "comment on the Issue") conflicts with a newer change, and how to open
 // the conflict card; where is as in DraftKeptHint. The Notice and the line under the body say it the same way.
 func ConflictSentence(what, where string) string {
-	return strings.TrimSuffix(Cannot("save your", what, errors.New("it conflicts with a newer change")), ".") + ". Press " + openPhrase(where) + " the conflict card."
+	return strings.TrimSuffix(Refused("save your", what, "it conflicts with a newer change"), ".") + ". Press " + openPhrase(where) + " the conflict card."
 }
 
 // openPhrase is the phrase "E or C to open" (with where after the keys), which leads to what the keys open.

@@ -44,14 +44,18 @@ func Cannot(verb, thing string, err error) string {
 	return "Cannot " + verb + ": " + Reason(err) + "."
 }
 
-// Refused is Cannot for a refusal whose reason is held as a sentence a button's tooltip shows ("The Issue is closed."): the
-// reason is the clause after the colon, so its first letter goes to lower case unless the word is an acronym.
-func Refused(verb, thing, reason string) string {
-	first, size := utf8.DecodeRuneInString(reason)
-	if next, _ := utf8.DecodeRuneInString(reason[size:]); size > 0 && unicode.IsUpper(first) && !unicode.IsUpper(next) {
-		reason = string(unicode.ToLower(first)) + reason[size:]
+// Refused is the Notice of a refusal whose reason is held as text, not an error: `Cannot <verb> <thing>: <reason>.`. The reason
+// keeps its case, so a name it starts with ("Tern draws only …", "Trust must be Yes …") stays a name.
+func Refused(verb, thing, reason string) string { return Cannot(verb, thing, errors.New(reason)) }
+
+// Clause is a sentence a button's tooltip shows ("The Issue is closed.") as the reason of a Refused Notice: its first letter goes
+// to lower case unless the word is an acronym.
+func Clause(sentence string) string {
+	first, size := utf8.DecodeRuneInString(sentence)
+	if next, _ := utf8.DecodeRuneInString(sentence[size:]); size > 0 && unicode.IsUpper(first) && !unicode.IsUpper(next) {
+		return string(unicode.ToLower(first)) + sentence[size:]
 	}
-	return Cannot(verb, thing, errors.New(reason))
+	return sentence
 }
 
 // Reason is the first line of err's text without its closing period, so it ends a sentence; "unknown error" when there is none.

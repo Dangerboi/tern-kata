@@ -331,7 +331,7 @@ func (s WorkerSetup) Problem() string { return tomlProblem(s.LoadErr, s.Path) }
 // workerFailure is the card's error for a write of worker.toml that was refused: the refusal without the file's path, which the
 // card shows once.
 func (m Model) workerFailure(err error) error {
-	return errors.New(Cannot("save", "worker.toml", errors.New(tomlProblem(Reason(err), m.Worker.Setup.Path))))
+	return errors.New(Refused("save", "worker.toml", tomlProblem(Reason(err), m.Worker.Setup.Path)))
 }
 
 // startSentence is what happens next when no worker runs: the plugin starts one, or nothing does under the supervision marker.
@@ -386,13 +386,13 @@ func (m Model) workerSaveRefusal() error {
 	if m.WorkerCardKind() == WorkerSetUp {
 		switch executor := strings.TrimSpace(f.Executor); {
 		case executor == "":
-			return workerFieldError{WorkerFieldExecutor, Cannot("save", "worker.toml", errors.New("Executor must not be blank"))}
+			return workerFieldError{WorkerFieldExecutor, Refused("save", "worker.toml", "Executor must not be blank")}
 		case len(executor) > 256 || strings.ContainsAny(executor, " \t\r\n"):
-			return workerFieldError{WorkerFieldExecutor, Cannot("save", "worker.toml", errors.New("Executor takes at most 256 bytes and no whitespace"))}
+			return workerFieldError{WorkerFieldExecutor, Refused("save", "worker.toml", "Executor takes at most 256 bytes and no whitespace")}
 		}
 	}
 	if !f.Trusted {
-		return workerFieldError{WorkerFieldTrust, Cannot("save", "worker.toml", errors.New("Trust must be Yes to list the Project"))}
+		return workerFieldError{WorkerFieldTrust, Refused("save", "worker.toml", "Trust must be Yes to list the Project")}
 	}
 	return nil
 }

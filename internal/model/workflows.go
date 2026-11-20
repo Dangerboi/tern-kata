@@ -376,7 +376,7 @@ func editWorkflow(m Model) Model {
 	switch {
 	case !ok:
 	case w.Archived:
-		m = m.fail(Cannot("edit", fmt.Sprintf("%q", w.Name), errors.New("it is archived; restore it first")))
+		m = m.fail(Refused("edit", fmt.Sprintf("%q", w.Name), "it is archived; restore it first"))
 	default:
 		form := newWorkflowForm(w)
 		m.Workflows.Card = WorkflowCard{Open: true, UID: w.UID, Name: w.Name, Base: w.EventUID, Start: form.snapshot(), Form: form, askNow: true}
@@ -395,10 +395,10 @@ func changeWorkflowState(restore bool) func(Model) (Model, []Cmd) {
 			m = m.fail(Cannot(workflowOpVerb(restore), "the workflow", ErrDisconnected))
 			return m, nil
 		case restore && !w.Archived:
-			m = m.fail(Cannot("restore", fmt.Sprintf("%q", w.Name), errors.New("it is not archived")))
+			m = m.fail(Refused("restore", fmt.Sprintf("%q", w.Name), "it is not archived"))
 			return m, nil
 		case !restore && w.Archived:
-			m = m.fail(Cannot("archive", fmt.Sprintf("%q", w.Name), errors.New("it is already archived")))
+			m = m.fail(Refused("archive", fmt.Sprintf("%q", w.Name), "it is already archived"))
 			return m, nil
 		}
 		s := m.Workflows
@@ -552,7 +552,7 @@ func workflowWritten(m Model, msg WorkflowWritten) Model {
 		}
 		m.Workflows = m.Workflows.withWorkflow(*msg.Current)
 		m.Workflows.readings = readingOf(m.Workflows.readings, msg.Current.UID, msg.Reading)
-		m = m.fail(Cannot(msg.Op.verb(), fmt.Sprintf("%q", msg.Current.Name), errors.New("it changed since you opened it")))
+		m = m.fail(Refused(msg.Op.verb(), fmt.Sprintf("%q", msg.Current.Name), "it changed since you opened it"))
 		return m.selectWorkflow(row)
 	case msg.Workflow != nil:
 		m.Workflows = m.Workflows.withWorkflow(*msg.Workflow)
@@ -581,7 +581,7 @@ func workflowCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		switch {
 		case ok && binding.Action == OverwriteDraft && c.Conflict.Archived:
 			// kata would save onto the tombstone and restore it.
-			m = m.fail(Cannot("overwrite", fmt.Sprintf("%q", c.Conflict.Name), errors.New("it was archived since you opened it")))
+			m = m.fail(Refused("overwrite", fmt.Sprintf("%q", c.Conflict.Name), "it was archived since you opened it"))
 			return m, nil
 		case ok && binding.Action == OverwriteDraft:
 			c.Base, c.Conflict = c.Conflict.EventUID, nil

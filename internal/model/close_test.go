@@ -44,7 +44,7 @@ func TestCloseOnAClosedIssueSaysItIsClosedAndOpensNoCard(t *testing.T) {
 	if m.CloseForm.Open {
 		t.Error("the Close card opened on a closed Issue")
 	}
-	if want := model.Refused("close", "", model.ClosedAlreadyRefusal); m.Notice != want {
+	if want := model.Refused("close", "", model.Clause(model.ClosedAlreadyRefusal)); m.Notice != want {
 		t.Errorf("notice %q, want %q", m.Notice, want)
 	}
 }

@@ -179,8 +179,8 @@ func TestMOnTheAgentCardMessagesTheSelectedRunningAgentWhereverItIs(t *testing.T
 			s = step(t, s, key("down")).State
 		}
 		got := step(t, s, key("m"))
-		if m := got.State.Model; m.TopCard() != model.CardAgent || m.Notice != model.Refused("message", "the agent", reason) || len(got.Cmds) != 0 {
-			t.Errorf("row %d: card %v notice %q cmds %v, want a Notice %q", row, m.TopCard(), m.Notice, got.Cmds, model.Refused("message", "the agent", reason))
+		if m := got.State.Model; m.TopCard() != model.CardAgent || m.Notice != model.Refused("message", "the agent", model.Clause(reason)) || len(got.Cmds) != 0 {
+			t.Errorf("row %d: card %v notice %q cmds %v, want a Notice %q", row, m.TopCard(), m.Notice, got.Cmds, model.Refused("message", "the agent", model.Clause(reason)))
 		}
 		if why := got.State.Model.AgentCardUnavailable(model.AgentCardMessage); why != reason {
 			t.Errorf("row %d: the button is off with %q, want %q", row, why, reason)
@@ -215,7 +215,7 @@ func TestMOnTheAgentCardFollowsTheSenderRuleForAListedActor(t *testing.T) {
 		got := step(t, s, key("m"))
 		want := ""
 		if tc.notice != "" {
-			want = model.Refused("message", "the agent", tc.notice)
+			want = model.Refused("message", "the agent", model.Clause(tc.notice))
 		}
 		if m := got.State.Model; m.TopCard() != tc.wantCard || m.Notice != want || len(got.Cmds) != 0 {
 			t.Errorf("%s: card %v notice %q cmds %v, want card %v notice %q", name, m.TopCard(), m.Notice, got.Cmds, tc.wantCard, want)
@@ -296,7 +296,7 @@ func TestPOnTheParentsCardPausesAndResumesAndIsOffWithoutATeam(t *testing.T) {
 		}
 	}
 	open := step(t, agentPanes(t, agentIssue("t1"))["list"], key("w")).State
-	if off := step(t, open, key("p")); len(off.Cmds) != 0 || off.State.Model.Notice != model.Refused("pause or resume", "the team", model.TeamNoneReason) {
+	if off := step(t, open, key("p")); len(off.Cmds) != 0 || off.State.Model.Notice != model.Refused("pause or resume", "the team", model.Clause(model.TeamNoneReason)) {
 		t.Errorf("without a team: cmds %#v, notice %q", off.Cmds, off.State.Model.Notice)
 	}
 }

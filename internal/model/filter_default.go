@@ -29,7 +29,7 @@ func (FiltersSaved) msg() {}
 // waits, the card staying open, for the answer.
 func saveFilterDefault(m Model) (Model, []Cmd) {
 	if m.Project.UID == "" {
-		m.FilterForm.Err = errors.New(Cannot("save", "the default filter", errors.New("this folder is bound to no Project")))
+		m.FilterForm.Err = errors.New(Refused("save", "the default filter", "this folder is bound to no Project"))
 		return m, nil
 	}
 	values := trimmedFilters(m.FilterForm.Values)

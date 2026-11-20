@@ -251,7 +251,7 @@ func openClose(m Model) Model {
 		return m
 	}
 	if reason := IssueRefusal(*issue, OpenClose); reason != "" {
-		return m.fail(Refused("close", m.RefOf(issue.QualifiedID), reason))
+		return m.fail(Refused("close", m.RefOf(issue.QualifiedID), Clause(reason)))
 	}
 	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Attachments: Attachments(issue.Metadata)}
 	m.CloseForm.Values.Reason = string(ReasonDone)
@@ -310,7 +310,7 @@ func submitUndoClose(m Model, cmd CloseIssueCmd, quick bool) (Model, []Cmd) {
 	case quick || cmd.Reason != ReasonDone:
 		f.Saving, f.Err = false, errors.New("Undo completes the Issue as done, with evidence.")
 	case !found:
-		f.Saving, f.Err = false, errors.New(Cannot("undo", "", errors.New("that undo is no longer available")))
+		f.Saving, f.Err = false, errors.New(Refused("undo", "", "that undo is no longer available"))
 	default:
 		return m.sendUndo(entry, &cmd)
 	}

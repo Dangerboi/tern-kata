@@ -163,7 +163,7 @@ func issueRestored(m Model, msg IssueRestored) (Model, []Cmd) {
 	case msg.Err != nil:
 		f.Err = restoreError(msg.Err)
 	case !msg.Changed:
-		f.Err = errors.New(Cannot("restore", "", errors.New("this Issue is not deleted")))
+		f.Err = errors.New(Refused("restore", "", "this Issue is not deleted"))
 	default:
 		ref := m.DeletedRef(*f.Found)
 		m.FieldForm = FieldFormState{}

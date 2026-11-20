@@ -1,7 +1,6 @@
 package view
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -104,7 +103,7 @@ func federationEnrollScreen(m model.Model) ([]tern.Element, bool) {
 	case model.FederationPreview:
 		out := append(title("Enrollment preview"), factRows("", f.Draft.PreviewRows())...)
 		if f.Draft.BlockedReason != "" {
-			out = append(out, toneText("blocked", ui.ToneError, model.Cannot("enroll", "", errors.New(f.Draft.BlockedReason))))
+			out = append(out, toneText("blocked", ui.ToneError, model.Refused("enroll", "", f.Draft.BlockedReason)))
 		}
 		out = append(out, failure()...)
 		if f.Enrolling {

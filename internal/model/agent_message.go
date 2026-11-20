@@ -258,7 +258,7 @@ func openAgentMessageFor(m Model, picking bool) (Model, []Cmd) {
 	}
 	target, reason := m.messageTarget(request)
 	if reason != "" {
-		return m.fail(Refused("message", "the agent", reason)), nil
+		return m.fail(Refused("message", "the agent", Clause(reason))), nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, Picking: picking, IssueUID: request.IssueUID, IssueRef: request.QualifiedID(), ProjectID: request.ProjectID,
 		Agent: target.Teammate, Address: target.Address}
@@ -283,7 +283,7 @@ func askAgentAboutComment(m Model) (Model, []Cmd) {
 		reason = m.agentMessageRefusal(target)
 	}
 	if reason != "" {
-		return m.fail(Refused("message", "the agent", reason)), nil
+		return m.fail(Refused("message", "the agent", Clause(reason))), nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, IssueUID: issue.UID, IssueRef: issue.QualifiedID, ProjectID: issue.ProjectID,
 		Agent: target.Teammate, Address: target.Address, Re: row.Key}

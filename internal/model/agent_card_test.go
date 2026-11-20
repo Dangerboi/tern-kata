@@ -48,7 +48,7 @@ func TestWOnAClosedIssueOpensNoCard(t *testing.T) {
 	m := cardModel()
 	m.Issues[0].Status = "closed"
 	after, cmds := press(m, "w")
-	if _, started := agentCmd[model.StartAgent](cmds); after.TopCard() == model.CardAgent || started || after.Notice != "" || after.Toast == nil || after.Toast.Text != model.Refused("start", "an agent on work#a", model.ClosedIssueRefusal) {
+	if _, started := agentCmd[model.StartAgent](cmds); after.TopCard() == model.CardAgent || started || after.Notice != "" || after.Toast == nil || after.Toast.Text != model.Refused("start", "an agent on work#a", model.Clause(model.ClosedIssueRefusal)) {
 		t.Errorf("card %v, cmds %#v, notice %q, toast %+v", after.TopCard(), cmds, after.Notice, after.Toast)
 	}
 }
@@ -229,7 +229,7 @@ func TestAgentCardRefusalNoticeIsTheButtonsReason(t *testing.T) {
 		t.Fatal("a start on an Issue the Pane does not hold is available")
 	}
 	after, cmds := model.Update(m, model.KeyMsg{Chord: "t"})
-	if _, started := agentCmd[model.StartAgent](cmds); started || after.Notice != model.Refused("start", "an agent", reason) || after.TopCard() == model.CardAgent {
+	if _, started := agentCmd[model.StartAgent](cmds); started || after.Notice != model.Refused("start", "an agent", model.Clause(reason)) || after.TopCard() == model.CardAgent {
 		t.Errorf("notice %q, started %v, card %v; want the button's reason %q and the card closed", after.Notice, started, after.TopCard(), reason)
 	}
 }
@@ -271,7 +271,7 @@ func TestInterruptIsRefusedWithAReasonWhereItCannotWork(t *testing.T) {
 		if len(cmds) != 0 {
 			t.Errorf("%s: cmds %#v", name, cmds)
 		}
-		if name != "no agent yet" && (after.Notice != model.Refused("interrupt", "the agent", tt.reason) || after.AgentCard.Open) {
+		if name != "no agent yet" && (after.Notice != model.Refused("interrupt", "the agent", model.Clause(tt.reason)) || after.AgentCard.Open) {
 			t.Errorf("%s: notice %q, card open %v", name, after.Notice, after.AgentCard.Open)
 		}
 	}
@@ -311,7 +311,7 @@ func TestStopIsOfferedForAnyPlacementAndRefusedForAnExitedAgent(t *testing.T) {
 	}
 	exited := openCard("open", st("11", model.AgentExited, ""))
 	after, cmds := press(exited, "x")
-	if len(cmds) != 0 || after.AgentCard.Open || after.Notice != model.Refused("stop", "the agent", model.AgentCardExitedReason) {
+	if len(cmds) != 0 || after.AgentCard.Open || after.Notice != model.Refused("stop", "the agent", model.Clause(model.AgentCardExitedReason)) {
 		t.Errorf("exited: cmds %#v, card open %v, notice %q", cmds, after.AgentCard.Open, after.Notice)
 	}
 }

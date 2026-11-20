@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -336,11 +337,12 @@ var workflowKindField = formField[WorkflowCard]{name: WorkflowFieldKind,
 	},
 }
 
+// kindIndex is kind's place among workflowKinds; an unknown kind reads as the last.
 func kindIndex(kind cronjob.StepKind) int {
-	if kind == cronjob.StepCommand {
-		return 0
+	if i := slices.Index(workflowKinds, kind); i >= 0 {
+		return i
 	}
-	return 1
+	return len(workflowKinds) - 1
 }
 
 // WorkflowFields is the card's fields in tab order.

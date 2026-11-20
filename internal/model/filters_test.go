@@ -18,7 +18,7 @@ func filterLine(m model.Model) string {
 	}
 	line := strings.Join(parts, " · ")
 	if note != (model.FilterNote{}) {
-		line = strings.TrimSpace(line + " (" + note.Text() + ")")
+		line = strings.TrimSpace(line + " (" + strings.TrimSpace(note.Label+" "+note.Value) + ")")
 	}
 	return line
 }
