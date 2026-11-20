@@ -4,6 +4,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-20
+
 ### Added
 
 #### Install and update
@@ -1814,7 +1816,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - Text written in `$EDITOR` is kept in a file, and its path is printed, when Tern cannot be reached after the editor closes.
 - `--as` and `--issue` refuse a value that is another flag, so `--as --issue x` no longer starts tern-kata as the actor `--issue`.
 
-[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/Dangerboi/tern-kata/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/Dangerboi/tern-kata/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/Dangerboi/tern-kata/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/Dangerboi/tern-kata/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/Dangerboi/tern-kata/compare/v0.13.0...v0.14.0
