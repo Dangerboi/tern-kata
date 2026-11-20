@@ -129,7 +129,7 @@ func TestHelpSheetAndSearchFooterListCtrlOOnlyWhileTurnOnIsOffered(t *testing.T)
 	listed := func(m model.Model) (sheet, footer bool) {
 		for _, group := range model.HelpSheetOn(model.PageIssues, m) {
 			for _, line := range group.Lines {
-				if slices.Contains(line.Keys, "ctrl+o") && strings.Contains(line.Text, "turn on search by meaning") {
+				if slices.Contains(line.Keys, "ctrl+o") && strings.Contains(line.Text, "Turn on search by meaning") {
 					sheet = true
 				}
 			}

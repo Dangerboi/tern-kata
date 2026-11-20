@@ -376,7 +376,7 @@ func editWorkflow(m Model) Model {
 	switch {
 	case !ok:
 	case w.Archived:
-		m = m.say(fmt.Sprintf("%q is archived. Restore it first.", w.Name))
+		m = m.fail(Cannot("edit", fmt.Sprintf("%q", w.Name), errors.New("it is archived; restore it first")))
 	default:
 		form := newWorkflowForm(w)
 		m.Workflows.Card = WorkflowCard{Open: true, UID: w.UID, Name: w.Name, Base: w.EventUID, Start: form.snapshot(), Form: form, askNow: true}
@@ -395,10 +395,10 @@ func changeWorkflowState(restore bool) func(Model) (Model, []Cmd) {
 			m = m.fail(Cannot(workflowOpVerb(restore), "the workflow", ErrDisconnected))
 			return m, nil
 		case restore && !w.Archived:
-			m = m.say(fmt.Sprintf("%q is not archived.", w.Name))
+			m = m.fail(Cannot("restore", fmt.Sprintf("%q", w.Name), errors.New("it is not archived")))
 			return m, nil
 		case !restore && w.Archived:
-			m = m.say(fmt.Sprintf("%q is already archived.", w.Name))
+			m = m.fail(Cannot("archive", fmt.Sprintf("%q", w.Name), errors.New("it is already archived")))
 			return m, nil
 		}
 		s := m.Workflows
@@ -657,13 +657,13 @@ var workflowModes = []Mode{ModeWorkflows}
 
 func workflowActions() []actionEntry {
 	return []actionEntry{
-		{action: OpenWorkflow, modes: workflowModes, keys: keys("enter", "enter"), help: "steps", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 3, "show the steps"}}, handle: pure(inspectWorkflow), when: func(m Model) bool { return m.Cols < SideBySideCols }},
-		{action: NewWorkflow, modes: workflowModes, keys: keys("n", "n"), help: "new", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 4, "new workflow (Workflow card)"}}, handle: pure(newWorkflow)},
-		{action: EditWorkflow, modes: workflowModes, keys: keys("e", "e"), help: "edit", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 5, "edit the workflow (Workflow card)"}}, handle: pure(editWorkflow)},
-		{action: ArchiveWorkflowAction, modes: workflowModes, keys: keys("x", "x"), help: "archive", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 6, "archive"}}, handle: changeWorkflowState(false)},
-		{action: RestoreWorkflowAction, modes: workflowModes, keys: keys("r", "r"), help: "restore", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 7, "restore"}}, handle: changeWorkflowState(true)},
-		{action: ToggleArchivedWorkflows, modes: workflowModes, keys: keys("a", "a"), help: "archived", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 8, "show or hide archived workflows"}}, handle: pure(toggleArchivedWorkflows)},
-		{action: DrillOut, modes: workflowModes, keys: keys("escape", "esc"), help: "back", footerLabel: workflowsEscLabel, footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 9, "close the steps, end the search, or go to the Menu"}}, handle: workflowsBack},
+		{action: OpenWorkflow, modes: workflowModes, keys: keys("enter", "enter"), help: "steps", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 3, "Show the steps"}}, handle: pure(inspectWorkflow), when: func(m Model) bool { return m.Cols < SideBySideCols }},
+		{action: NewWorkflow, modes: workflowModes, keys: keys("n", "n"), help: "new", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 4, "New workflow"}}, handle: pure(newWorkflow)},
+		{action: EditWorkflow, modes: workflowModes, keys: keys("e", "e"), help: "edit", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 5, "Edit the workflow"}}, handle: pure(editWorkflow)},
+		{action: ArchiveWorkflowAction, modes: workflowModes, keys: keys("x", "x"), help: "archive", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 6, "Archive the workflow"}}, handle: changeWorkflowState(false)},
+		{action: RestoreWorkflowAction, modes: workflowModes, keys: keys("r", "r"), help: "restore", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 7, "Restore the workflow"}}, handle: changeWorkflowState(true)},
+		{action: ToggleArchivedWorkflows, modes: workflowModes, keys: keys("a", "a"), help: "archived", footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 8, "Show or hide archived workflows"}}, handle: pure(toggleArchivedWorkflows)},
+		{action: DrillOut, modes: workflowModes, keys: keys("escape", "esc"), help: "back", footerLabel: workflowsEscLabel, footer: workflowModes, sheet: []sheetLine{{sheetWorkflows, 9, "Close the steps, end the search, or go to the Menu"}}, handle: workflowsBack},
 		{action: DrillOut, modes: workflowModes, keys: keys("backspace", "⌫"), help: "back", handle: workflowsBackspace},
 	}
 }

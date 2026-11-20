@@ -51,9 +51,12 @@ function M.kataPaneFor(panes: { PaneRec }, starter: number?, fallback: number?):
 end
 
 -- The position that puts `tab` right of `home`, the tab of the starting Pane; nil when it is there already or in another session.
+-- A move takes the other tabs one place along: a tab that sits left of `home` leaves a gap when it goes, so `home` itself falls
+-- one place and the target is `home.position`; a tab right of `home` goes to `home.position + 1`.
 function M.positionBeside(home: TabRec, tab: TabRec): number?
     if home.id == tab.id or home.session ~= tab.session then return nil end
     if tab.position == home.position + 1 then return nil end
+    if tab.position < home.position then return home.position end
     return home.position + 1
 end
 

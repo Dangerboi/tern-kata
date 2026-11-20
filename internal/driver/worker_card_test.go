@@ -374,7 +374,7 @@ func TestWorkerKeysFootersAndHelpAgree(t *testing.T) {
 	var line *model.SheetLine
 	for _, group := range model.HelpSheet() {
 		for i, l := range group.Lines {
-			if group.Title == "Jobs" && strings.Contains(l.Text, "Worker card") {
+			if group.Title == "Jobs" && l.Text == "Set up this machine's worker" {
 				line = &group.Lines[i]
 			}
 		}

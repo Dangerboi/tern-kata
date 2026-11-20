@@ -3,6 +3,7 @@ package view
 import (
 	"strings"
 
+	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
@@ -40,36 +41,29 @@ func markdown(key, text string) ui.Md {
 	return ui.Md{Common: ui.Common{Key: key}, Text: text, Run: &noRun, Icons: true}
 }
 
-// prose is text whose "{W}" markers are keycaps: each marker becomes keySpan("W"), "{{" is a literal brace, and the rest carries
-// style. A "{" with no closing "}" is literal text. The model names a key with model.Key so a notice never spells one by hand.
+// prose is text whose model.Key markers are keycaps: each marker becomes keySpan of its key, and everything else, braces included,
+// is drawn as typed in style. The markers are private-use runes (see model.KeyOpen), so a file name or an error message in a notice
+// can never forge a keycap. A marker with no closing rune is dropped.
 func prose(text, style string) []ui.Span {
 	var spans []ui.Span
-	var run strings.Builder
-	flush := func() {
-		if run.Len() > 0 {
-			spans = append(spans, ui.Span{T: run.String(), S: style})
-			run.Reset()
+	flush := func(run string) {
+		if run != "" {
+			spans = append(spans, ui.Span{T: run, S: style})
 		}
 	}
-	for i := 0; i < len(text); i++ {
-		if text[i] != '{' {
-			run.WriteByte(text[i])
-			continue
+	for {
+		before, rest, found := strings.Cut(text, model.KeyOpen)
+		flush(before)
+		if !found {
+			return spans
 		}
-		if i+1 < len(text) && text[i+1] == '{' {
-			run.WriteByte('{')
-			i++
-			continue
+		key, after, closed := strings.Cut(rest, model.KeyClose)
+		if !closed {
+			return spans
 		}
-		end := strings.IndexByte(text[i+1:], '}')
-		if end <= 0 {
-			run.WriteByte('{')
-			continue
+		if key != "" {
+			spans = append(spans, keySpan(key))
 		}
-		flush()
-		spans = append(spans, keySpan(text[i+1:i+1+end]))
-		i += end + 1
+		text = after
 	}
-	flush()
-	return spans
 }

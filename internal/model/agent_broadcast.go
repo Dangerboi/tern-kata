@@ -10,11 +10,11 @@ const (
 	BroadcastAgents Action = "broadcast-agents"
 )
 
-// Why `S` opens no card, and why a broadcast skips an agent whose slot holds a message it has not cleared.
-const (
-	NoAgentsToBroadcastRefusal = "Nothing to broadcast: no running agents."
-	AgentHoldsMessageRefusal   = "The agent holds an unread message; it was not replaced."
-)
+// NoAgentsToBroadcastRefusal is the Notice of `S` with no running agent to reach.
+var NoAgentsToBroadcastRefusal = Refused("broadcast", "", "no running agents")
+
+// AgentHoldsMessageRefusal is why a broadcast skips an agent whose slot holds a message it has not cleared.
+const AgentHoldsMessageRefusal = "The agent holds an unread message; it was not replaced."
 
 // BroadcastTarget is one agent a broadcast reaches for: its name and Agent address, and the Issue it runs on. Skipped is why the
 // message was not written to it, "" while it is to be or was written; Answered says kata answered the write.

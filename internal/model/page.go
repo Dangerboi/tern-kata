@@ -111,7 +111,7 @@ type pageScroll struct {
 
 func issueMoves(mode Mode) pageMoves {
 	return pageMoves{mode: mode, noun: "Issue", move: moveSelection, sheet: [6]sheetLine{
-		{sheetGraph, 2, "down"}, {sheetGraph, 1, "up"}, {sheetGraph, 5, "first"}, {sheetGraph, 6, "last"}, {sheetGraph, 3, "page up"}, {sheetGraph, 4, "page down"},
+		{sheetGraph, 2, "Move down"}, {sheetGraph, 1, "Move up"}, {sheetGraph, 5, "Go to the first Issue"}, {sheetGraph, 6, "Go to the last Issue"}, {sheetGraph, 3, "Move a page up"}, {sheetGraph, 4, "Move a page down"},
 	}}
 }
 
@@ -138,40 +138,40 @@ func init() {
 			keymap: []keySegment{pageMoveActions}},
 		{page: PageJobs, id: "jobs", label: "Jobs", chord: "2", action: ShowJobsPage, needs: "Jobs Page", second: SecondInspector, enter: reloadJobs, clear: clearJobs,
 			filledFor: jobsFilledFor, reset: resetJobs, mode: inspectorMode(ModeJobs, ModeJobInspector), update: updateJobs, list: ListNodeJobs, settleSearch: func(m Model, _ int) Model { return m.settleJobSelection() },
-			moves:  pageMoves{mode: ModeJobs, noun: "job", move: moveJob, sheet: [6]sheetLine{{sheetJobs, 1, "next job"}, {sheetJobs, 2, "previous job"}, {sheetJobs, 3, "first job"}, {sheetJobs, 4, "last job"}}},
-			scroll: pageScroll{mode: ModeJobInspector, sheet: sheetLine{sheetJobs, 9, "scroll the inspector"}},
+			moves:  pageMoves{mode: ModeJobs, noun: "job", move: moveJob, sheet: [6]sheetLine{{sheetJobs, 1, "Go to the next job"}, {sheetJobs, 2, "Go to the previous job"}, {sheetJobs, 3, "Go to the first job"}, {sheetJobs, 4, "Go to the last job"}}},
+			scroll: pageScroll{mode: ModeJobInspector, sheet: sheetLine{sheetJobs, 9, "Scroll the inspector"}},
 			keymap: []keySegment{pageMoveActions, rowsOf(jobsRows), pageScrollActions, rowsOf(jobsRowsAfterScroll)}},
 		{page: PageRuns, id: "runs", label: "Runs", chord: "3", action: ShowRunsPage, needs: "Runs Page", second: SecondInspector, enter: enterRuns, clear: clearRuns,
 			filledFor: runsFilledFor, reset: resetRuns, mode: inspectorMode(ModeRuns, ModeRunInspector), update: updateRuns, list: ListNodeRuns, settleSearch: func(m Model, _ int) Model { return m.settleRunSelection() },
-			moves:  pageMoves{mode: ModeRuns, noun: "run", move: moveRun, sheet: [6]sheetLine{{sheetRuns, 1, "next run"}, {sheetRuns, 2, "previous run"}, {sheetRuns, 3, "first run"}, {sheetRuns, 4, "last run"}}},
-			scroll: pageScroll{mode: ModeRunInspector, sheet: sheetLine{sheetRuns, 10, "scroll the detail"}},
+			moves:  pageMoves{mode: ModeRuns, noun: "run", move: moveRun, sheet: [6]sheetLine{{sheetRuns, 1, "Go to the next run"}, {sheetRuns, 2, "Go to the previous run"}, {sheetRuns, 3, "Go to the first run"}, {sheetRuns, 4, "Go to the last run"}}},
+			scroll: pageScroll{mode: ModeRunInspector, sheet: sheetLine{sheetRuns, 10, "Scroll the detail"}},
 			keymap: []keySegment{rowsOf(runsRowsBeforeMovement), pageMoveActions, rowsOf(runsRows), pageScrollActions, rowsOf(mainRows)}},
 		{page: PageWorkflows, id: "workflows", label: "Workflows", chord: "4", action: ShowWorkflowsPage, needs: "Workflows Page", second: SecondIssueDetail, enter: enterWorkflows, clear: clearWorkflows,
 			filledFor: workflowsFilledFor, reset: resetWorkflows, mode: workflowsMode, update: updateWorkflows, list: ListNodeWorkflows, settleSearch: Model.selectWorkflow,
-			moves:  pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "next workflow"}, {sheetWorkflows, 2, "previous workflow"}}},
+			moves:  pageMoves{mode: ModeWorkflows, noun: "workflow", move: moveWorkflow, sheet: [6]sheetLine{{sheetWorkflows, 1, "Go to the next workflow"}, {sheetWorkflows, 2, "Go to the previous workflow"}}},
 			keymap: []keySegment{pageMoveActions, rowsOf(workflowActions())}},
 		{page: PageBoard, id: "board", label: "Board", chord: "5", action: ShowBoardPage, needs: "Board", second: SecondIssueDetail, enter: enterBoard, clear: clearBoard,
 			mode: boardMode, update: updateBoard, moves: issueMoves(ModeLane),
 			keymap: []keySegment{pageMoveActions, rowsOf(listRows)}},
 		{page: PageAttention, id: "attention", label: "Attention", chord: "6", action: ShowAttentionPage, also: keys("shift+t", "⇧T"), second: SecondInspector, enter: askAttention,
 			mode: func(Model) Mode { return ModeAttention }, update: updateAttention, list: ListNodeAttention,
-			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "next request"}, {sheetAttention, 2, "previous request"}}},
+			moves:  pageMoves{mode: ModeAttention, noun: "request", move: moveAttention, sheet: [6]sheetLine{{sheetAttention, 1, "Go to the next request"}, {sheetAttention, 2, "Go to the previous request"}}},
 			keymap: []keySegment{pageMoveActions, rowsOf(attentionRows)}},
 		{page: PageCredentials, id: "credentials", label: "Credentials", chord: "Shift+C", press: "shift+c", lettered: true, action: ShowCredentialsPage, second: SecondInspector, enter: enterCredentials, clear: clearCredentials,
 			mode: credentialsMode, update: updateCredentials, list: ListNodeCredentials,
-			moves:  pageMoves{mode: ModeCredentials, noun: "credential", move: moveCredential, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
+			moves:  pageMoves{mode: ModeCredentials, noun: "credential", move: moveCredential, sheet: [6]sheetLine{{sheetLettered, 2, "Move the cursor"}}},
 			keymap: []keySegment{pageMoveActions, rowsOf(credentialsRows)}},
 		{page: PageFederation, id: "federation", label: "Federation", chord: "Shift+F", press: "shift+f", lettered: true, action: ShowFederationPage, second: SecondInspector, enter: enterFederation, clear: clearFederation,
 			mode: federationMode, update: updateFederation, list: ListNodeFederation,
-			moves:  pageMoves{mode: ModeFederation, noun: "spoke", move: moveFederation, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
+			moves:  pageMoves{mode: ModeFederation, noun: "spoke", move: moveFederation, sheet: [6]sheetLine{{sheetLettered, 2, "Move the cursor"}}},
 			keymap: []keySegment{pageMoveActions, rowsOf(federationRows), rowsOf(federationLeaveRows), federationChoiceMoves, rowsOf(federationEnrollRows)}},
 		{page: PageDaemons, id: "daemons", label: "Daemons", chord: "Shift+D", press: "shift+d", lettered: true, action: ShowDaemonsPage, second: SecondInspector, enter: enterDaemons, clear: clearDaemons,
 			mode: daemonsMode, update: updateDaemons, list: ListNodeDaemons,
-			moves:  pageMoves{mode: ModeDaemons, noun: "daemon", move: moveDaemon, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
+			moves:  pageMoves{mode: ModeDaemons, noun: "daemon", move: moveDaemon, sheet: [6]sheetLine{{sheetLettered, 2, "Move the cursor"}}},
 			keymap: []keySegment{pageMoveActions, rowsOf(daemonsRows)}},
 		{page: PageConfig, id: "config", label: "Config", chord: "Shift+K", press: "shift+k", lettered: true, action: ShowConfigPage, second: SecondInspector, enter: enterConfig, clear: clearConfig,
 			mode: configMode, update: updateConfig, list: ListNodeConfig,
-			moves:  pageMoves{mode: ModeConfig, noun: "file", move: moveConfig, sheet: [6]sheetLine{{sheetLettered, 2, "move"}}},
+			moves:  pageMoves{mode: ModeConfig, noun: "file", move: moveConfig, sheet: [6]sheetLine{{sheetLettered, 2, "Move the cursor"}}},
 			keymap: []keySegment{pageMoveActions, rowsOf(configRows)}},
 	}
 	buildKeymap()
@@ -403,7 +403,7 @@ func pageActions() []actionEntry {
 	entries := make([]actionEntry, len(pageDefs))
 	for i, def := range pageDefs {
 		entries[i] = actionEntry{action: def.action, modes: pageModes, keys: slices.Concat(keys(def.pressed(), def.chord), def.also), help: def.label + " page",
-			sheet: []sheetLine{{sheetGlobal, 7, "switch Page"}}, handle: showPage(def.page)}
+			sheet: []sheetLine{{sheetGlobal, 7, "Switch Page"}}, handle: showPage(def.page)}
 	}
 	return entries
 }

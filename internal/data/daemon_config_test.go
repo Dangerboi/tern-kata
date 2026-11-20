@@ -181,3 +181,54 @@ func TestQuotesAndBackslashesInValuesRoundTrip(t *testing.T) {
 		t.Errorf("catalog %+v, err %v", cat.Daemons, err)
 	}
 }
+
+func TestSwitchingAVariableTokenToAnInlineOneWritesOnlyTheToken(t *testing.T) {
+	path := configHome(t, sampleConfig)
+	if err := UpdateDaemon("lab", DaemonSpec{Name: "lab", URL: "https://lab.example:7474", Token: "pasted", AllowInsecure: true}); err != nil {
+		t.Fatal(err)
+	}
+	got := configText(t, path)
+	if !strings.Contains(got, `token = "pasted"`) || strings.Contains(got, "token_env") || strings.Contains(got, "LAB_TOKEN") {
+		t.Errorf("file:\n%s", got)
+	}
+}
+
+func TestQuotedKeysAndMultilineStringsDoNotMoveAnEntrysEdges(t *testing.T) {
+	const config = `[x."my box"]
+a = 1
+
+["a]b"]
+b = 2
+
+[[daemon]]
+name = "one"
+local = true
+note = """
+[[daemon]]
+name = "fake"
+"""
+
+['q.r']
+c = 3
+
+[[daemon]]
+name = "two"
+local = true
+`
+	path := configHome(t, config)
+	if err := RemoveDaemon("one"); err != nil {
+		t.Fatal(err)
+	}
+	want := "[x.\"my box\"]\na = 1\n\n[\"a]b\"]\nb = 2\n\n['q.r']\nc = 3\n\n[[daemon]]\nname = \"two\"\nlocal = true\n"
+	if got := configText(t, path); got != want {
+		t.Errorf("file:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestAMultilineStringHoldingADaemonHeaderIsNotAnEntry(t *testing.T) {
+	const config = "[[daemon]]\nname = \"a\"\nlocal = true\nnote = '''\n[[daemon]]\n'''\n\n[[daemon]]\nname = \"b\"\nlocal = true\n"
+	blocks := daemonBlocks(splitLines(config))
+	if len(blocks) != 2 || blocks[0].end != 7 || blocks[1].header != 7 {
+		t.Errorf("blocks %+v, want two entries, the first ending before the second's header", blocks)
+	}
+}

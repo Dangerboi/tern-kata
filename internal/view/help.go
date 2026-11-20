@@ -65,7 +65,7 @@ func helpGroups(m model.Model) []model.SheetGroup {
 const helpColumnCols = 64
 
 // emacsNote is named once on the Everywhere card: the Emacs aliases carry no key of their own in the rows.
-const emacsNote = "Emacs keys also work: {ctrl+n}, {ctrl+p}, {ctrl+v}, {alt+v}, {ctrl+alt+<} and {ctrl+alt+>}."
+var emacsNote = "Emacs keys also work: " + model.Key("ctrl+n") + ", " + model.Key("ctrl+p") + ", " + model.Key("ctrl+v") + ", " + model.Key("alt+v") + ", " + model.Key("ctrl+alt+<") + " and " + model.Key("ctrl+alt+>") + "."
 
 // shownKeys is what a sheet row draws for its keys: a run of three or more consecutive digits collapses to "a-b" (1-6), and a
 // row of aliases shows its primary key and one alias. Single characters are sibling keys, not aliases (the letters of the More
@@ -163,7 +163,7 @@ func helpCard(key string, group model.SheetGroup, keyCols int) tern.Element {
 		keys := shownKeys(l.Keys)
 		rows[i] = ui.Row{Common: ui.Common{Key: "row-" + strconv.Itoa(i)}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(
 			ui.Text{Common: ui.Common{Key: "keys", Shrink: new(float64), Min: &ui.Bounds{W: ui.Ch(float64(keyCols))}}, Spans: keySpans(keys), Wrap: ui.WrapNone},
-			helpAction(capitalize(l.Text)),
+			helpAction(model.Capitalize(l.Text)),
 		)}
 	}
 	if group.Title == model.SheetEverywhere {
@@ -175,7 +175,7 @@ func helpCard(key string, group model.SheetGroup, keyCols int) tern.Element {
 // helpAction is a row's words: plain text, or spans when the words name a key as a keycap.
 func helpAction(words string) ui.Text {
 	common := ui.Common{Key: "action", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}
-	if !strings.Contains(words, "{") {
+	if !strings.Contains(words, model.KeyOpen) {
 		return ui.Text{Common: common, Text: words}
 	}
 	return ui.Text{Common: common, Spans: prose(words, "")}

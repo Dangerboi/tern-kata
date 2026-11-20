@@ -408,7 +408,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	column := func(key string, rows []tern.Element) tern.Element {
 		return ui.Col{Common: ui.Common{Key: key, Grow: 1, Min: &ui.Bounds{W: ui.Ch(factColumnWidth)}}, Gap: ui.GapXS, Children: rows}
 	}
-	var facts tern.Element = ui.Row{Common: ui.Common{Key: "facts"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: ui.Nodes(column("left", left), column("right", right))}
+	var facts tern.Element = ui.Row{Common: ui.Common{Key: "facts"}, Gap: ui.GapMD, Align: ui.AlignStart, Wrap: true, Children: ui.Nodes(column("left", left), column("right", right))}
 	if m.NarrowerThan(model.FoldedLegendCols) {
 		facts = ui.Col{Common: ui.Common{Key: "facts"}, Gap: ui.GapXS, Children: ui.Nodes(append(left, right...)...)}
 	}
@@ -452,7 +452,7 @@ func cronProperties(m model.Model) []propertyRow {
 		common := ui.Common{Key: item.Key, Mark: mark, Actions: &ui.Actions{Click: OpenJobClick(item.JobUID)}}
 		if item.Cron.Property == "Cron job" {
 			if item.Cron.Scheduled != "" {
-				spans = append(spans, ui.Span{T: " · scheduled ", S: "muted"}, ui.Span{T: item.Cron.Scheduled, S: mono("muted")})
+				spans = append(spans, ui.Span{T: " · scheduled ", S: "muted"}, timeSpan(item.Cron.Scheduled))
 			}
 			common.Key = "v"
 			job = ui.Text{Common: common, Spans: spans}
@@ -460,7 +460,7 @@ func cronProperties(m model.Model) []propertyRow {
 		}
 		spans = append(spans, ui.Span{T: " · " + item.Cron.State, S: "muted"})
 		if item.Cron.Schedule != "" {
-			spans = append(spans, ui.Span{T: " · ", S: "muted"}, ui.Span{T: item.Cron.Schedule, S: mono("muted")})
+			spans = append(spans, ui.Span{T: " · ", S: "muted"}, timeSpan(item.Cron.Schedule))
 		}
 		jobs = append(jobs, ui.Text{Common: common, Spans: spans})
 	}
@@ -510,7 +510,7 @@ func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 }
 
 // bodyError is the line under the body that says a Draft is held or in conflict: error tone, with the keys the model names as
-// "{e}" drawn as keycaps.
+// model.Key("e") drawn as keycaps.
 func bodyError(text string) ui.Text {
 	return ui.Text{Common: ui.Common{Key: "body-error", Tone: ui.ToneError}, Spans: prose(text, toneStyle(ui.ToneError))}
 }

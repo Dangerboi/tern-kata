@@ -462,10 +462,10 @@ func agentConfigSaved(m Model, msg AgentConfigSaved) (Model, []Cmd) {
 }
 
 var configRows = []actionEntry{
-	{action: OpenConfigFile, modes: []Mode{ModeConfig}, keys: keys("enter", "enter"), help: "open", label: configOpenLabel, footer: []Mode{ModeConfig}, footerKey: "enter", sheet: []sheetLine{{sheetLettered, 40, "open the card or Page that edits the selected file"}}, handle: openConfigFile, when: selectedConfigOffers(ConfigOpen)},
-	{action: EditAgentConfig, modes: []Mode{ModeConfig}, keys: keys("e", "e"), help: "edit", label: configEditLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 42, "edit agent.toml in $EDITOR; it is checked before it is written"}}, handle: editAgentConfig, when: selectedConfigOffers(ConfigEdit)},
-	{action: ConfigSetUp, modes: []Mode{ModeConfig}, keys: keys("s", "s"), help: "set up", label: configSetUpLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 43, "set up the selected row: switch the old pinned Docbank to kata's local Docbank, or turn on search by meaning (both ask first)"}}, handle: configSetUp, when: selectedConfigSetsUp},
-	{action: ConfigRestartDaemon, modes: []Mode{ModeConfig}, keys: keys("r", "r"), help: "restart the kata daemon…", footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 44, "restart the kata daemon to finish setting up search by meaning (asks first; only while a restart is owed and the daemon is local)"}}, handle: openEmbeddingsCard, when: selectedConfigOffers(ConfigRestart)},
+	{action: OpenConfigFile, modes: []Mode{ModeConfig}, keys: keys("enter", "enter"), help: "open", label: configOpenLabel, footer: []Mode{ModeConfig}, footerKey: "enter", sheet: []sheetLine{{sheetLettered, 40, "Open the selected file"}}, handle: openConfigFile, when: selectedConfigOffers(ConfigOpen)},
+	{action: EditAgentConfig, modes: []Mode{ModeConfig}, keys: keys("e", "e"), help: "edit", label: configEditLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 42, "Edit agent.toml in your editor"}}, handle: editAgentConfig, when: selectedConfigOffers(ConfigEdit)},
+	{action: ConfigSetUp, modes: []Mode{ModeConfig}, keys: keys("s", "s"), help: "set up", label: configSetUpLabel, footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 43, "Set up the selected row"}}, handle: configSetUp, when: selectedConfigSetsUp},
+	{action: ConfigRestartDaemon, modes: []Mode{ModeConfig}, keys: keys("r", "r"), help: "restart the kata daemon…", footer: []Mode{ModeConfig}, sheet: []sheetLine{{sheetLettered, 44, "Restart the kata daemon"}}, handle: openEmbeddingsCard, when: selectedConfigOffers(ConfigRestart)},
 	{action: ConfirmSwitchDocbankAction, modes: []Mode{ModeSwitchDocbank}, keys: keys("y", "y"), help: "switch", footer: []Mode{ModeSwitchDocbank}, handle: confirmSwitchDocbank},
 	{action: KeepDocbankAction, modes: []Mode{ModeSwitchDocbank}, keys: keys("n", "n", "escape", "esc"), help: "keep", footer: []Mode{ModeSwitchDocbank}, handle: pure(func(m Model) Model { m.ConfigPage.AskSwitch = false; return m })},
 	{action: QuitNowAction, modes: []Mode{ModeSwitchDocbank}, keys: keys("ctrl+c", "ctrl+c", "meta+c", ""), help: "quit at once", handle: pure(quitNow)},
@@ -484,7 +484,7 @@ func configSetUpLabel(m Model) string {
 		}
 		return ConfigActionLabel(*f, ConfigSwitchDocbank)
 	}
-	return "set up"
+	return "Set up"
 }
 
 // configSetUp is s: what the selected row sets up asks its question first.
@@ -565,5 +565,5 @@ func configEditLabel(m Model) string {
 	if f := m.SelectedConfigFile(); f != nil {
 		return ConfigActionLabel(*f, ConfigEdit)
 	}
-	return "edit"
+	return "Edit"
 }

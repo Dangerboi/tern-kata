@@ -81,11 +81,11 @@ func TestCtrlTSwitchesBetweenWordsAndMeaning(t *testing.T) {
 				}
 				return b.Described(m)
 			}
-			if label(m) != "by meaning" || m.Search.Meaning {
+			if label(m) != "Search by meaning" || m.Search.Meaning {
 				t.Fatalf("fresh search: meaning %v, help %q", m.Search.Meaning, label(m))
 			}
 			m, _ = press(m, toggle)
-			if !m.Search.Meaning || label(m) != "by words" || m.Filters.Search != "q" {
+			if !m.Search.Meaning || label(m) != "Search by words" || m.Filters.Search != "q" {
 				t.Fatalf("by meaning: %v, help %q, query %q", m.Search.Meaning, label(m), m.Filters.Search)
 			}
 			m, cmds := press(m, "down")
@@ -93,7 +93,7 @@ func TestCtrlTSwitchesBetweenWordsAndMeaning(t *testing.T) {
 				t.Fatalf("down: mode %s, %#v", m.CurrentMode(), cmds)
 			}
 			m, _ = press(m, toggle)
-			if m.Search.Meaning || m.CurrentMode() != model.ModeSearchResults || label(m) != "by meaning" {
+			if m.Search.Meaning || m.CurrentMode() != model.ModeSearchResults || label(m) != "Search by meaning" {
 				t.Fatalf("back to words in the results: %v, mode %s", m.Search.Meaning, m.CurrentMode())
 			}
 		})
@@ -114,7 +114,7 @@ func TestHelpSheetAndSearchFooterListCtrlT(t *testing.T) {
 	var found bool
 	for _, group := range model.HelpSheetOn(model.PageIssues, model.Model{}) {
 		for _, line := range group.Lines {
-			if line.Text == "by meaning" && slices.Contains(line.Keys, "ctrl+t") {
+			if line.Text == "Search by meaning" && slices.Contains(line.Keys, "ctrl+t") {
 				found = true
 			}
 		}

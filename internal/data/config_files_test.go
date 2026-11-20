@@ -62,7 +62,7 @@ func TestConfigFilesReadsEveryMissingFileWithWhatItsAbsenceImplies(t *testing.T)
 		model.ConfigWorker:  "No worker set up",
 		model.ConfigAgent:   "Agents start with the defaults",
 		model.ConfigDocbank: "Not set up: run kata docbank setup",
-		model.ConfigKata:    "read-only · 0 daemons",
+		model.ConfigKata:    "daemon entries edited on the Daemons Page · 0 daemons",
 	} {
 		row := rows[key]
 		if row.Status != model.ConfigMissing || row.Err != "" || row.Summary != want || !filepath.IsAbs(row.Path) {
@@ -108,7 +108,7 @@ func TestConfigFilesSummarisesEveryFileThatLoads(t *testing.T) {
 		model.ConfigWorker:  "1 Project served · supervision on",
 		model.ConfigAgent:   "Actor me-agent · host laptop · name builder · command omp --fast · message from dana, dana-laptop · own table for alpha, zeta",
 		model.ConfigDocbank: "Not set up: run kata docbank setup",
-		model.ConfigKata:    "read-only · 1 daemon · quits without asking",
+		model.ConfigKata:    "daemon entries edited on the Daemons Page · 1 daemon · quits without asking",
 	} {
 		if row := rows[key]; row.Status != model.ConfigLoads || row.Err != "" || row.Summary != want {
 			t.Errorf("%s: %+v, want a file that loads reading %q", key, row, want)

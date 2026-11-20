@@ -19,7 +19,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - A fifth default Lane, `waiting`, after `ready-for-human`: Issues parked on something outside the Project (an upstream answer or release) get their own column instead of No lane. Projects with their own Lane list are unchanged.
-- Set priority and the Create card's Priority are one segmented row (None, P0 to P4) that shows every choice at once, replacing a select whose menu the card body clipped after its first options. The Filter and View cards' Relationship is a segmented row for the same reason, and the Close reason stays tabs down to a 56-column Pane. Set priority opens on the Issue's current priority; `!` then a digit or `-` still sets or clears it at once.
+- Set priority and the Create card's Priority are one segmented row (None, P0 to P4) that shows every choice at once, replacing a select whose menu the card body clipped after its first options.
+  - The Filter and View cards' Relationship is a segmented row for the same reason, and the Close reason stays tabs down to a 56-column Pane.
+  - Set priority opens on the Issue's current priority; `!` then a digit or `-` still sets or clears it at once.
 - On Tern 0.9.26 or newer the Issue body is edited in place: a double click on it edits, and leaving it saves at once, as the Edit Issue body card's Save does.
   - Someone else's edit made in between opens the same conflict card; if the save fails, the edit is kept as a Draft that `E` opens.
   - If you select another Issue mid-edit, the edit is saved to its own Issue.
@@ -77,12 +79,19 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - Shell code blocks in comments, close messages and other Issue text the Pane draws offer no Run on Tern 0.9.29 and later, since agents, other people and other Projects write that text; Copy stays, as an icon.
 - The Issues Page, the Board and their Popup cards follow one design: the same tones, wording, dates and keys everywhere.
-  - Keys read in words: `Ctrl+D`, `Ctrl+Space`, `Shift+N`, `Enter`, `Tab`, `Esc`, a letter as its capital and the arrows as glyphs, in the footer, the help sheet, buttons, the Page bar and the keys named in sentences. The Lettered Pages read `Shift+C`, `Shift+F`, `Shift+D` and `Shift+K`, help rows start with a capital, and a toast whose button carries the key (`ABC is closed.`) and a Y/N question (`Quit tern-kata?`) name no key in the text. They are drawn in the plugin's own keycap chip, because Tern's key style would rewrite them into `^D`.
+  - Keys read in words, in the footer, the help sheet, buttons, the Page bar and the keys named in sentences.
+    - `Ctrl+D`, `Ctrl+Space`, `Shift+N`, `Enter`, `Tab`, `Esc`, a letter as its capital and the arrows as glyphs; the Lettered Pages read `Shift+C`, `Shift+F`, `Shift+D` and `Shift+K`, and help rows start with a capital.
+    - A toast whose button carries the key (`ABC is closed.`) and a Y/N question (`Quit tern-kata?`) name no key in the text.
+    - Keys are drawn in the plugin's own keycap chip, because Tern's key style would rewrite them into `^D`.
   - A button shows one keycap, and the footer of every Page ends with `Esc`, `?` and `Q`.
-  - Dates read `2026-11-18 18:21` (`18:21` today) in the Pane's zone, a missing value reads `—`, and narrow cells show a compact age such as `4m ago`; the Date badge reads "overdue 3d", "due 2026-11-25" or "scheduled 2026-12-01".
+  - Dates read `2026-11-18 18:21` (`18:21` today) in the Pane's zone, and a missing value reads `—`.
+    - Narrow cells show a compact age such as `4m ago`.
+    - The Date badge reads "overdue 3d", "due 2026-11-25" or "scheduled 2026-12-01"; in a narrow row it shrinks to the ISO date alone (`2026-12-01`), with the tone and the word in its hover.
   - Failures are drawn in the error tone, and every Notice that reports one starts with "Cannot"; the selected row is filled with the accent colour, which marks nothing else.
   - A Popup card keeps its error or pending line above its buttons, so a failure stays in view; the Create, Close, Delete Issue, Move to Project, Dates, Recurrence and View cards word their fields, hints and buttons alike.
-  - Dates, Recurrence, Lanes, Worker and Start a team set each label above its input in one tone; the field cards and the View card carry a head icon; the blocker card is headed "Block an Issue" with a "Blocked Issue" field; a read-only Agents card ends in **Close**; the Create card's discard question keeps the fields in view; and a recurrence error reads "Cannot save the recurrence: …".
+  - Dates, Recurrence, Lanes, Worker and Start a team set each label above its input in one tone, and the field cards and the View card carry a head icon.
+  - The blocker card is headed "Block an Issue" with a "Blocked Issue" field, and a read-only Agents card ends in **Close**.
+  - The Create card's discard question keeps the fields in view, and a recurrence error reads "Cannot save the recurrence: …".
   - The top bar shows the Project's name and a muted facts line with no prefixes, and the line under it is the context line, with the counts "5 open · 0 closed" and each active filter.
   - The list draws only the columns a row has a value for and shows an empty state with its action ("No Issues" with a New Issue button).
   - Board cards show a muted "also in" line, the Relationship as a line under the title and one muted row of facts on the selected card; each Lane keeps one identity colour on its header and card ids, and the Lanes card names the list in use ("Using this machine's list").
@@ -91,12 +100,23 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The help sheet opens with "Keyboard shortcuts" and a Close button, shows at most two keys per row and names the Emacs keys once.
   - When kata cannot be reached the Pane shows "Cannot reach kata" with **Retry** and **Daemons** buttons.
 - The Issue detail's heading is the Issue's id and title; the status is in the facts panel below it, which is laid out with Tern's own rows and columns so it renders the same in every Tern build.
-  - The panel always shows Status (a closed Issue reads `closed · done` in muted text), Priority, Owner and Labels, an empty one as a muted `—`; it adds Agent, Lane, Scheduled and Deadline when set on the left, and Parent, Children (`4 of 101 open`), Work attention, Recurring, Cron jobs, Created (author and time) and Updated on the right. A narrow Pane shows one column.
+  - The panel always shows Status (a closed Issue reads `closed · done` in muted text), Priority, Owner and Labels, an empty one as a muted `—`.
+    - It adds Agent, Lane, Scheduled and Deadline when set on the left, and Parent, Children (`4 of 101 open`), Work attention, Recurring, Cron jobs, Created (author and time) and Updated on the right.
+    - A narrow Pane shows one column.
   - The panel and each comment sit on one soft rounded surface with the Pane's card radius and the normal text tones, and the body and comments use the detail's whole width.
   - A Children table headed "Children 4" (the facts panel says how many are open) follows the body.
   - The Events tab no longer shows kata event codes and hides created and commented events; each tab shows its row count, and a close line reads `closed as done` with `Evidence: attachment report.pdf`.
-  - An event's time sits left of a thin rule that runs down the whole event, and the sentence follows it, with the verb and object in the verb's tone; a long sentence or a close's message and evidence wrap beside the time, never under it. Events that looked alike now say what differs: a child linked to the shown Issue names that child (`linked child kb01`), a link into another Project reads `agent-skills#cpab`, a priority change reads `set priority to P0`, a close message and its evidence (`pull request`, `test run` and the like, with a command as typed) sit under the event inside its rule, and `closed as done` is plain text rather than green; a comment's links line names targets (`dana's reply`, `dangerboi's comment`) and leaves the relation to the comment's head; and a metadata change names its new value (`set todo status to doing`, `set Work attention to needs human`, `cleared todo status`).
-  - The Links tab groups its rows under a heading per relation with a count (`Blocked by 1`, `Related 3`), and every row carries the linked Issue's title, including Issues of other Projects and Issues the Pane has not loaded; kata is asked for those titles with the detail and with every live refresh of it, a few reads at once, and the answers are cached for five minutes. A closed child or a link into another Project keeps its title after a refresh, including when the daemon is slow to answer.
+  - An event's time sits left of a thin rule that runs down the whole event, and the sentence follows it, with the verb and object in the verb's tone; a long sentence or a close's message and evidence wrap beside the time, never under it.
+    - Events that looked alike now say what differs:
+      - A child linked to the shown Issue names that child (`linked child kb01`).
+      - A link into another Project reads `agent-skills#cpab`.
+      - A priority change reads `set priority to P0`.
+      - A close message and its evidence (`pull request`, `test run` and the like, with a command as typed) sit under the event inside its rule, and `closed as done` is plain text rather than green.
+      - A comment's links line names targets (`dana's reply`, `dangerboi's comment`) and leaves the relation to the comment's head.
+      - A metadata change names its new value (`set todo status to doing`, `set Work attention to needs human`, `cleared todo status`).
+  - The Links tab groups its rows under a heading per relation with a count (`Blocked by 1`, `Related 3`),.
+    - Every row carries the linked Issue's title, including Issues of other Projects and Issues the Pane has not loaded; kata is asked for those titles with the detail and with every live refresh of it, a few reads at once, and the answers are cached for five minutes.
+    - A closed child or a link into another Project keeps its title after a refresh, including when the daemon is slow to answer.
 
 #### Jobs and worker
 
@@ -132,9 +152,15 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - **Breaking:** The Waiting kata agents widget and the "N waiting" entry in the Plugin segments widget are gone: Tern's own Agents widget (on Tern 0.9.23) lists the waiting agents, with each one's question, how long it has waited and its tab.
   - If you placed the widget, remove `tern-kata/waiting` from the bar with the palette's Edit widgets….
-  - **Go to waiting agent** (`shift+F9`) still goes to the kata agent that began waiting last.
+  - **Go to waiting agent** (`Shift+F9`) still goes to the kata agent that began waiting last.
 
 ### Fixed
+
+#### Agents
+
+- On Tern 0.9.28 and later, which opens a new tab right of the current tab instead of last, an agent's tab that was not placed the moment it opened (a remote kata Pane's, say) again moves beside its kata Pane's tab.
+  - The window looks for such tabs wherever Tern opened them, not only at the end of the session.
+  - A tab Tern opens left of its kata Pane's tab now lands right after it.
 
 #### Issues and Pages
 
@@ -171,7 +197,6 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Agents
 
-- On Tern 0.9.28 and later, which opens a new tab right of the current tab instead of last, an agent's tab that was not placed the moment it opened (a remote kata Pane's, say) again moves beside its kata Pane's tab: the window looks for such tabs wherever Tern opened them, not only at the end of the session.
 - A Tern whose version reads `0.9.22-dev` or `v0.9.21` no longer counts as older than 0.9.21, so a kata Pane that starts no longer drops the agents in other Tern windows and deletes their private files.
   - When `tern --version` cannot be read, the Pane keeps every agent and says why.
 - An agent Tern reopened after a restart on a route with no token, DSN or `token_env` values is still recognised: its badge, Agent card and tab placement follow it.

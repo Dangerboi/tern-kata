@@ -213,7 +213,7 @@ func TestIOpensTheRunsIssueOnTheIssuesPage(t *testing.T) {
 
 func TestIOnARunWithoutAnIssueSaysSo(t *testing.T) {
 	got := feed(t, runsPane(t, 160, workflowRun("R2")), key("i")).State.Model
-	if got.Page != model.PageRuns || !strings.Contains(got.Notice, "no Issue") {
+	if got.Page != model.PageRuns || !strings.Contains(got.Notice, "this run has none") {
 		t.Errorf("page %v notice %q, want the Runs Page and a notice", got.Page, got.Notice)
 	}
 }
@@ -357,7 +357,7 @@ func TestFooterAndHelpSheetListTheRunsPageKeys(t *testing.T) {
 	help := wireTextOf(t, feed(t, s, key("?")).State)
 	wantText(t, "help sheet", help, "Runs", "Open the run's Issue", "Show the run's detail", "Switch Page")
 	jobs := wireTextOf(t, feed(t, jobsPane(t, 160, promptJob("J1", "Triage")), key("?")).State)
-	wantText(t, "Jobs help", jobs, "Open the Runs Page on the job's runs")
+	wantText(t, "Jobs help", jobs, "Show the job's runs")
 }
 
 func TestWorkflowRowAndInspectorShowTheWorkflowsLatestRuns(t *testing.T) {

@@ -65,8 +65,8 @@ func TestMAndRRefuseARemoteRowOnAnUnverifiedDaemonOrForAnActorItDoesNotList(t *t
 		s := onFirstRemoteRow(t, tc.verified, tc.edit)
 		for _, chord := range []string{"m", "r"} {
 			got := step(t, s, key(chord))
-			if m := got.State.Model; m.TopCard() != model.CardAgent || m.Notice != tc.reason || len(got.Cmds) != 0 {
-				t.Errorf("%s, %s: card %v notice %q cmds %v, want a Notice %q", name, chord, m.TopCard(), m.Notice, got.Cmds, tc.reason)
+			if m := got.State.Model; m.TopCard() != model.CardAgent || m.Notice != model.Refused("message", "the agent", tc.reason) || len(got.Cmds) != 0 {
+				t.Errorf("%s, %s: card %v notice %q cmds %v, want a Notice %q", name, chord, m.TopCard(), m.Notice, got.Cmds, model.Refused("message", "the agent", tc.reason))
 			}
 		}
 		for _, action := range []model.Action{model.AgentCardMessage, model.AgentCardQuickReply} {
@@ -84,8 +84,8 @@ func TestMOnARemoteRowWithoutAnAddressSaysWhy(t *testing.T) {
 			Actor: "dana", StartedAt: remoteAt, NoAddress: model.AgentNotOmp, MessageFrom: []string{}}}
 		m.Issues = []model.Issue{issue}
 	})
-	if got := step(t, s, key("m")); got.State.Model.Notice != model.AgentNotOmpRefusal {
-		t.Errorf("notice %q, want %q", got.State.Model.Notice, model.AgentNotOmpRefusal)
+	if got := step(t, s, key("m")); got.State.Model.Notice != model.Refused("message", "the agent", model.AgentNotOmpRefusal) {
+		t.Errorf("notice %q, want %q", got.State.Model.Notice, model.Refused("message", "the agent", model.AgentNotOmpRefusal))
 	}
 }
 
@@ -124,7 +124,7 @@ func TestMOnARemoteAgentsRequestIsRefusedOnAnUnverifiedDaemon(t *testing.T) {
 	s := remoteRequestPane(t, false, remoteRecord("desk", "b1b1b1b1", "8", "dana/omp-8", remoteAt))
 	for _, chord := range []string{"m", "r"} {
 		got := step(t, s, key(chord))
-		if m := got.State.Model; m.TopCard() == model.CardAgentMessage || m.Notice != model.AgentUnverifiedRefusal {
+		if m := got.State.Model; m.TopCard() == model.CardAgentMessage || m.Notice != model.Refused("message", "the agent", model.AgentUnverifiedRefusal) {
 			t.Errorf("%s: card %v notice %q, want the unverified refusal", chord, m.TopCard(), m.Notice)
 		}
 	}
@@ -134,8 +134,8 @@ func TestMOnARequestNamingNoAgentOfAnyHostStillSaysNoAgentRaisedIt(t *testing.T)
 	other := remoteRecord("desk", "b1b1b1b1", "8", "dana/vim-8", remoteAt)
 	other.Name = "vim"
 	got := step(t, remoteRequestPane(t, true, other), key("m"))
-	if m := got.State.Model; m.TopCard() == model.CardAgentMessage || m.Notice != model.NoAgentRaisedRefusal {
-		t.Errorf("card %v notice %q, want %q", m.TopCard(), m.Notice, model.NoAgentRaisedRefusal)
+	if m := got.State.Model; m.TopCard() == model.CardAgentMessage || m.Notice != model.Refused("message", "the agent", model.NoAgentRaisedRefusal) {
+		t.Errorf("card %v notice %q, want %q", m.TopCard(), m.Notice, model.Refused("message", "the agent", model.NoAgentRaisedRefusal))
 	}
 }
 

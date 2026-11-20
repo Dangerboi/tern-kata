@@ -230,3 +230,21 @@ func TestTopBarShowsTheTimeZoneNote(t *testing.T) {
 		t.Error("zone note shown with none set")
 	}
 }
+
+// The filter note draws its label muted and its value plain from separate fields: "Saved view" then the view's name, and
+// "Default filter" as one label where that is the whole note.
+func TestFilterNoteDrawsLabelMutedAndValuePlain(t *testing.T) {
+	m := browsing()
+	m.ActiveView = model.ActiveView{Name: "openbugs", Base: m.Collection, Filters: m.Filters}
+	got := spansOf(render(t, m)["main.filters.note"].P)
+	if want := [][2]string{{"Saved view", "muted"}, {" openbugs", ""}}; !slices.Equal(got, want) {
+		t.Errorf("saved view note spans = %q, want %q", got, want)
+	}
+	m = browsing()
+	m.Filters = model.Filters{Owner: "me"}
+	m.DefaultFilters = m.Filters
+	got = spansOf(render(t, m)["main.filters.note"].P)
+	if want := [][2]string{{"Default filter", "muted"}}; !slices.Equal(got, want) {
+		t.Errorf("default note spans = %q, want %q", got, want)
+	}
+}

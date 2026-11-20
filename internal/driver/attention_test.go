@@ -368,7 +368,7 @@ func TestAttentionPageHelpSheetListsItsKeys(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"next request", "previous request", "open the request's Issue, in any Project", "clear the request, if it still reads as shown", "read the requests again"} {
+	for _, want := range []string{"Go to the next request", "Go to the previous request", "Open the request's Issue", "Clear the request", "Read the requests again"} {
 		if !slices.Contains(lines, want) {
 			t.Errorf("the Attention help group lacks %q: %v", want, lines)
 		}
@@ -759,7 +759,7 @@ func TestUOnTheAttentionPageRestoresTheDeletedIssueAndReadsTheRequestsAgain(t *t
 	offered := false
 	for _, group := range model.HelpSheetOn(model.PageAttention, s.Model) {
 		for _, line := range group.Lines {
-			if line.Text == "undo the delete the Pane just made" && slices.Contains(line.Keys, "u") {
+			if line.Text == "Undo the delete" && slices.Contains(line.Keys, "u") {
 				offered = true
 			}
 		}

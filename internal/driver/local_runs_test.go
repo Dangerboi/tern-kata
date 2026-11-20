@@ -359,7 +359,7 @@ func TestJobsPageNamesTheWorkersPauseAfterFailedRunsAndUResumesIt(t *testing.T) 
 	if len(none.Cmds) != 0 {
 		t.Errorf("u on a job the worker runs asked the worker: %#v", none.Cmds)
 	}
-	wantText(t, "notice", none.State.Model.Notice, "not paused by this machine's worker")
+	wantText(t, "notice", none.State.Model.Notice, "this machine's worker has not paused it")
 	if strings.Contains(inspectorText(t, healthy.State), "Paused after") {
 		t.Fatalf("the inspector of a job the worker runs names a pause:\n%s", inspectorText(t, healthy.State))
 	}

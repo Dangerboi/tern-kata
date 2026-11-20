@@ -80,7 +80,7 @@ func (m Model) teamPauseRefusal(uid string) string {
 func pauseTeam(m Model) (Model, []Cmd) {
 	if reason := m.AgentCardUnavailable(AgentCardPause); reason != "" {
 		m.AgentCard = AgentCardState{}
-		m = m.fail(reason)
+		m = m.fail(m.agentCardNotice(AgentCardPause, reason))
 		return m, nil
 	}
 	t, _ := m.TeamOn(m.AgentCard.IssueUID)
@@ -123,8 +123,9 @@ func teamPausedSet(m Model, msg TeamPausedSet) (Model, []Cmd) {
 // openTeamDialog is `c`: the dialog, or the reason as a Notice with the card closed.
 func openTeamDialog(m Model) (Model, []Cmd) {
 	if reason := m.AgentCardUnavailable(AgentCardTeam); reason != "" {
+		notice := m.agentCardNotice(AgentCardTeam, reason)
 		m.AgentCard = AgentCardState{}
-		m = m.fail(reason)
+		m = m.fail(notice)
 		return m, nil
 	}
 	m.AgentCard.Team = TeamDialog{Open: true, Where: AgentSplit, Limit: TeamDefaultLimit}
@@ -161,10 +162,11 @@ func updateTeamDialogKey(m Model, msg KeyMsg) (Model, []Cmd) {
 func startTeam(m Model) (Model, []Cmd) {
 	d := m.AgentCard.Team
 	reason := m.AgentCardUnavailable(AgentCardTeam)
+	notice := m.agentCardNotice(AgentCardTeam, reason)
 	issue := m.issueByUID(m.AgentCard.IssueUID)
 	m.AgentCard = AgentCardState{}
 	if reason != "" {
-		m = m.fail(reason)
+		m = m.fail(notice)
 		return m, nil
 	}
 	cmd := StartTeam{Placement: d.Where, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,

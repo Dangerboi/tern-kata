@@ -181,12 +181,12 @@ func (f WorkflowForm) document() (WorkflowDocument, error) {
 // snapshot is every text and choice of the form, without where the caret is, so a form left as it opened can be told from a
 // changed one.
 func (f WorkflowForm) snapshot() string {
-	type step struct{ Key, Kind, Body, After, Retries string }
+	type step struct{ Key, Kind, Body, After, Retries, Options string }
 	steps := make([]step, len(f.Steps))
 	for i, s := range f.Steps {
-		steps[i] = step{s.Key, string(s.Kind), s.Body.Text, s.After, s.Retries}
+		steps[i] = step{s.Key, string(s.Kind), s.Body.Text, s.After, s.Retries, string(s.Options)}
 	}
-	return fmt.Sprintf("%q %q %q %q", f.Name, f.About, f.Input, steps)
+	return fmt.Sprintf("%q %q %q %q %q", f.Name, f.About, f.Input, string(f.Options), steps)
 }
 
 // uniqueStepKey is a step name no step of the form uses: "step", then "step2" and on.
@@ -394,6 +394,9 @@ func decodeWorkflowText(text string) (Workflow, error) {
 	file, err := decodeWorkflowFile(text)
 	if err != nil {
 		return Workflow{}, err
+	}
+	if file.Definition.Version != 1 {
+		return Workflow{}, errors.New(`"version" must be 1.`)
 	}
 	w := Workflow{Name: file.Name, About: file.Definition.About, Input: file.Definition.Input, Options: file.Definition.Options, Steps: make([]WorkflowStep, len(file.Definition.Steps))}
 	for i, s := range file.Definition.Steps {

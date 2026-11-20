@@ -25,7 +25,7 @@ func (c *Client) OpenIssue(ctx context.Context, cmd model.OpenIssue) (model.Issu
 	if err != nil {
 		return model.IssueOpened{}, err
 	}
-	detail, err := c.ReadDetail(ctx, uid)
+	detail, err := c.ReadDetailWithLinkTitles(ctx, uid)
 	if err != nil {
 		return model.IssueOpened{}, err
 	}

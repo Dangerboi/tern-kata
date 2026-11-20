@@ -87,13 +87,36 @@ var daemonTable = fieldTable[DaemonFormState]{
 		textField(DaemonName, func(f *DaemonFormState) *string { return &f.Values.Name }),
 		daemonChoiceField(DaemonWhere, daemonWheres, func(f *DaemonFormState) *string { return &f.Values.Where }),
 		textField(DaemonURL, func(f *DaemonFormState) *string { return &f.Values.URL }),
-		daemonChoiceField(DaemonAuth, daemonAuths, func(f *DaemonFormState) *string { return &f.Values.Auth }),
+		daemonAuthField(),
 		textField(DaemonSecret, func(f *DaemonFormState) *string { return &f.Values.Secret }),
 		yesNoField(DaemonInsecure, func(f *DaemonFormState) *bool { return &f.Values.Insecure }),
 	},
 }
 
 var DaemonFields = daemonTable.specs()
+
+// daemonAuthField is the token kind's choice. Secret means the variable's name for one kind and the token for another, so a
+// change of kind empties it: the new kind starts blank and never reads the old kind's text.
+func daemonAuthField() formField[DaemonFormState] {
+	field := daemonChoiceField(DaemonAuth, daemonAuths, func(f *DaemonFormState) *string { return &f.Values.Auth })
+	step, choose := field.step, field.choose
+	field.step = func(m *Model, f *DaemonFormState, back bool) {
+		before := f.Values.Auth
+		step(m, f, back)
+		if f.Values.Auth != before {
+			f.Values.Secret = ""
+		}
+	}
+	field.choose = func(m *Model, f *DaemonFormState, index int) bool {
+		before := f.Values.Auth
+		ok := choose(m, f, index)
+		if ok && f.Values.Auth != before {
+			f.Values.Secret = ""
+		}
+		return ok
+	}
+	return field
+}
 
 // daemonChoiceField is a choice that steps and picks among options and holds the chosen one as the value's text.
 func daemonChoiceField(name Field, options []string, held func(*DaemonFormState) *string) formField[DaemonFormState] {

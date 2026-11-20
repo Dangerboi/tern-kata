@@ -179,14 +179,33 @@ func TestFooterOffersEndSearchWhileAKeptSearchIsActive(t *testing.T) {
 }
 
 func TestWorkflowsFooterOffersEndSearchOnlyWhileEscEndsIt(t *testing.T) {
-	s := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
+	// A wide Pane shows the steps beside the list, so esc has no inner layer and always ends the search.
+	wide := workflowsPane(t, 160, reviewFlow(), nightlyFlow())
+	wide = step(t, typed(t, step(t, wide, key("/")).State, "nightly"), key("enter")).State
+	wide = step(t, wide, key("enter")).State
+	if !strings.Contains(screen(t, wide), "end search") {
+		t.Errorf("the footer must keep offering end search, the steps being shown beside the list:\n%s", screen(t, wide))
+	}
+
+	// A narrow Pane opens the steps in place of the list; esc closes them first.
+	s := workflowsPane(t, 100, reviewFlow(), nightlyFlow())
 	s = step(t, typed(t, step(t, s, key("/")).State, "nightly"), key("enter")).State
 	if !strings.Contains(screen(t, s), "end search") {
 		t.Fatalf("the footer does not offer esc as end search with a kept search:\n%s", screen(t, s))
 	}
 	s = step(t, s, key("enter")).State
+	if !s.Model.Workflows.Inspecting {
+		t.Fatal("enter did not open the steps")
+	}
+	if strings.Contains(screen(t, s), "end search") {
+		t.Errorf("the footer offers end search while esc closes the steps first:\n%s", screen(t, s))
+	}
+	s = step(t, s, key("escape")).State
+	if s.Model.Workflows.Inspecting {
+		t.Fatal("esc did not close the steps")
+	}
 	if !strings.Contains(screen(t, s), "end search") {
-		t.Errorf("the footer must keep offering end search, the steps being shown beside the list:\n%s", screen(t, s))
+		t.Errorf("the footer does not offer end search once the steps are closed:\n%s", screen(t, s))
 	}
 }
 

@@ -3,6 +3,8 @@ package model
 import (
 	"errors"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // NoticeKind says how the Notice line is drawn: a failure in the error tone, anything else in default text.
@@ -42,6 +44,16 @@ func Cannot(verb, thing string, err error) string {
 	return "Cannot " + verb + ": " + Reason(err) + "."
 }
 
+// Refused is Cannot for a refusal whose reason is held as a sentence a button's tooltip shows ("The Issue is closed."): the
+// reason is the clause after the colon, so its first letter goes to lower case unless the word is an acronym.
+func Refused(verb, thing, reason string) string {
+	first, size := utf8.DecodeRuneInString(reason)
+	if next, _ := utf8.DecodeRuneInString(reason[size:]); size > 0 && unicode.IsUpper(first) && !unicode.IsUpper(next) {
+		reason = string(unicode.ToLower(first)) + reason[size:]
+	}
+	return Cannot(verb, thing, errors.New(reason))
+}
+
 // Reason is the first line of err's text without its closing period, so it ends a sentence; "unknown error" when there is none.
 func Reason(err error) string {
 	if err == nil {
@@ -64,5 +76,12 @@ func Progress(gerund, thing string) string {
 	return gerund + "…"
 }
 
+// KeyOpen and KeyClose wrap a key inside a model string. They are private-use runes, which no name, path or error text carries,
+// so the view draws a keycap only where the model put one and draws every other character as typed, braces included.
+const (
+	KeyOpen  = "\uE000"
+	KeyClose = "\uE001"
+)
+
 // Key names a key inside a model string as a keycap marker, which the view draws as a keycap.
-func Key(k string) string { return "{" + k + "}" }
+func Key(k string) string { return KeyOpen + k + KeyClose }

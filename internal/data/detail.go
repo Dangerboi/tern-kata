@@ -8,9 +8,12 @@ import (
 	"time"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
+	"go.kenn.io/kata/pkg/client"
 	g "go.kenn.io/kata/pkg/client/generated"
 )
 
+// ReadDetail reads an Issue's detail without the titles of its Links' far ends: for reads that only look at the Issue itself (a
+// delete's reason key, a draft conflict, a recurrence target), which must not pay a request per linked Issue.
 func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded, error) {
 	view, history := model.DetailDaemonView(), true
 	response, err := c.ReadUISnapshotWithResponse(ctx, &g.ReadUISnapshotRequestOptions{
@@ -23,8 +26,17 @@ func (c *Client) ReadDetail(ctx context.Context, uid string) (model.DetailLoaded
 		return model.DetailLoaded{}, fmt.Errorf("kata daemon returned no detail for Issue %s", uid)
 	}
 	detail := translateDetail(response.JSON200.Selected, response.JSON200.Capabilities)
-	c.linkTitles(ctx, detail)
 	return model.DetailLoaded{UID: uid, Selected: detail}, nil
+}
+
+// ReadDetailWithLinkTitles is ReadDetail for a read that shows the detail: opening an Issue. The Links carry the titles of their ends.
+func (c *Client) ReadDetailWithLinkTitles(ctx context.Context, uid string) (model.DetailLoaded, error) {
+	loaded, err := c.ReadDetail(ctx, uid)
+	if err != nil {
+		return loaded, err
+	}
+	c.linkTitles(ctx, loaded.Selected)
+	return loaded, nil
 }
 
 // linkTitleTTL is how long a title read for a Link's far end is trusted before it is read again. A title that cannot be read again
@@ -44,14 +56,16 @@ type cachedTitle struct {
 }
 
 // linkTitles gives each Link of the detail the titles of its ends, so the Links tab and the Children table name an Issue that is
-// closed, in another Project or not in the Pane's list. Every read of a detail (the one that opens it and each live refresh) goes
-// through here. Titles come from a cache; the stale or missing ones are read from kata with a few reads at once and a deadline on
-// the whole, and an Issue that cannot be read keeps the title it had, or none.
+// closed, in another Project or not in the Pane's list. Only the reads that show a detail (the one that opens it and each live
+// refresh) come through here. Titles come from a cache; the stale or missing ones are read from kata with a few reads at once and
+// a deadline on the whole. An Issue that cannot be read keeps the title it had, or none; one kata refuses (deleted, no access) is
+// remembered as unreadable for the cache period, so a refresh does not ask for it again.
 func (c *Client) linkTitles(ctx context.Context, d *model.IssueDetailData) {
 	if d == nil || d.Issue == nil || len(d.Links) == 0 {
 		return
 	}
 	titles := map[string]string{}
+	previous := map[string]string{}
 	var stale []string
 	for _, l := range d.Links {
 		for _, uid := range []string{l.FromIssueUID, l.ToIssueUID} {
@@ -64,7 +78,7 @@ func (c *Client) linkTitles(ctx context.Context, d *model.IssueDetailData) {
 			v, ok := c.titles.Load(uid)
 			if ok {
 				cached := v.(cachedTitle)
-				titles[uid] = cached.title
+				titles[uid], previous[uid] = cached.title, cached.title
 				if time.Since(cached.at) < linkTitleTTL {
 					continue
 				}
@@ -87,6 +101,9 @@ func (c *Client) linkTitles(ctx context.Context, d *model.IssueDetailData) {
 				for uid := range queue {
 					r, err := c.ShowIssueByUIDWithResponse(budget, &g.ShowIssueByUIDRequestOptions{PathParams: &g.ShowIssueByUIDPath{UID: uid}})
 					if err != nil || r.JSON200 == nil {
+						if refused(err, r) && budget.Err() == nil {
+							c.titles.Store(uid, cachedTitle{title: previous[uid], at: time.Now()})
+						}
 						continue
 					}
 					c.titles.Store(uid, cachedTitle{title: r.JSON200.Issue.Title, at: time.Now()})
@@ -110,6 +127,15 @@ func (c *Client) linkTitles(ctx context.Context, d *model.IssueDetailData) {
 	for i := range d.Links {
 		d.Links[i].FromTitle, d.Links[i].ToTitle = titles[d.Links[i].FromIssueUID], titles[d.Links[i].ToIssueUID]
 	}
+}
+
+// refused says kata answered the read of an Issue with a client error (deleted, no access), not that the daemon was busy or gone.
+func refused(err error, r *g.ShowIssueByUIDResp) bool {
+	if err == nil {
+		return r != nil && r.JSON200 == nil
+	}
+	status := client.StatusCode(err)
+	return status >= 400 && status < 500
 }
 
 // translateDetail is the one place kata's selected authority becomes the model's Issue detail; nil stays nil.

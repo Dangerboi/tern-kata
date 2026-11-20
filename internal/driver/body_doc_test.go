@@ -585,7 +585,7 @@ func TestConflictWhileAnotherIssuesCardIsOpenRaisesTheNoticeNamingTheIssueAndLea
 	theirs := alpha
 	theirs.Body, theirs.Revision = "theirs", 4
 	s = feed(t, s, model.DraftConflict{UID: "alpha", Issue: theirs}).State
-	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, "conflict") || !strings.Contains(n, "Press {e} or {c} on that Issue to open the conflict card.") {
+	if n := s.Model.Notice; !strings.Contains(n, "work#aaaa") || !strings.Contains(n, "conflict") || !strings.Contains(n, "Press "+model.Key("e")+" or "+model.Key("c")+" on that Issue to open the conflict card.") {
 		t.Fatalf("notice %q, want it to name the Issue and say it conflicts", n)
 	}
 	if s.Model.EditorUID != "beta" {

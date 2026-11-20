@@ -10,7 +10,8 @@ import (
 // host's Panes started, on whatever Issue each runs, through the broadcast's write (each agent at its own address, an unread
 // message never replaced), and keeps the broadcast's outcome card open to show which agents have finished since.
 
-const NoAgentsToSweepRefusal = "Nothing to sweep: no running agents."
+// NoAgentsToSweepRefusal is the Notice of a sweep with no running agent.
+var NoAgentsToSweepRefusal = Refused("sweep", "", "no running agents")
 
 // Where an agent of a sweep stands, as the outcome card words it.
 const (

@@ -356,10 +356,10 @@ func updateAttention(m Model, msg Msg) (Model, []Cmd, bool) {
 }
 
 var attentionRows = []actionEntry{
-	{action: OpenAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("enter", "enter"), help: "open", footer: []Mode{ModeAttention}, footerKey: "enter", sheet: []sheetLine{{sheetAttention, 3, "open the request's Issue, in any Project"}}, handle: openAttention},
-	{action: ClearAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("c", "c"), help: "clear", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 4, "clear the request, if it still reads as shown"}}, handle: clearAttention},
-	{action: MessageAgent, modes: []Mode{ModeAttention}, keys: keys("m", "m"), help: "message agent", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 5, "message the agent that raised the request"}}, handle: openAgentMessage},
-	{action: QuickReplyAgent, modes: []Mode{ModeAttention}, keys: keys("r", "r"), help: "quick reply", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 6, "send the agent a canned reply: continue, wrap up, or commit and close"}}, handle: openAgentQuickReply},
-	{action: UndoAction, modes: []Mode{ModeAttention}, keys: keys("u", "u"), help: "undo", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 8, "undo the delete the Pane just made"}}, handle: startUndo, when: newestUndoIsDelete},
-	{action: ReloadAttention, modes: []Mode{ModeAttention}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetAttention, 7, "read the requests again"}}, handle: askAttention},
+	{action: OpenAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("enter", "enter"), help: "open", footer: []Mode{ModeAttention}, footerKey: "enter", sheet: []sheetLine{{sheetAttention, 3, "Open the request's Issue"}}, handle: openAttention},
+	{action: ClearAttentionRequest, modes: []Mode{ModeAttention}, keys: keys("c", "c"), help: "clear", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 4, "Clear the request"}}, handle: clearAttention},
+	{action: MessageAgent, modes: []Mode{ModeAttention}, keys: keys("m", "m"), help: "message agent", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 5, "Message the agent"}}, handle: openAgentMessage},
+	{action: QuickReplyAgent, modes: []Mode{ModeAttention}, keys: keys("r", "r"), help: "quick reply", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 6, "Send a quick reply"}}, handle: openAgentQuickReply},
+	{action: UndoAction, modes: []Mode{ModeAttention}, keys: keys("u", "u"), help: "undo", footer: []Mode{ModeAttention}, sheet: []sheetLine{{sheetAttention, 8, "Undo the delete"}}, handle: startUndo, when: newestUndoIsDelete},
+	{action: ReloadAttention, modes: []Mode{ModeAttention}, keys: keys("ctrl+r", "ctrl+r", "meta+r", ""), help: "reload", sheet: []sheetLine{{sheetAttention, 7, "Read the requests again"}}, handle: askAttention},
 }

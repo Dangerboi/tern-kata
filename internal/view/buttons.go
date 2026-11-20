@@ -181,10 +181,7 @@ func KeyWords(label string) string {
 	if name, ok := keyNames[label]; ok {
 		return name
 	}
-	if first := []rune(label)[0]; first >= 'a' && first <= 'z' {
-		return strings.ToUpper(label[:1]) + label[1:]
-	}
-	return label
+	return model.Capitalize(label)
 }
 
 // cardButton is a card's Tern button for action in mode. Its click presses the action's first non-headless chord with the

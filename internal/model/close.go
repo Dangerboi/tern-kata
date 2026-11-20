@@ -251,7 +251,7 @@ func openClose(m Model) Model {
 		return m
 	}
 	if reason := IssueRefusal(*issue, OpenClose); reason != "" {
-		return m.fail(reason)
+		return m.fail(Refused("close", m.RefOf(issue.QualifiedID), reason))
 	}
 	m.CloseForm = CloseFormState{Open: true, Field: CloseFields[0].Name, UID: issue.UID, ProjectID: issue.ProjectID, Attachments: Attachments(issue.Metadata)}
 	m.CloseForm.Values.Reason = string(ReasonDone)

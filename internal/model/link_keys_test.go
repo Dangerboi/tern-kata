@@ -21,7 +21,7 @@ func TestLinkKeysAreInTheDetailFooterAndHelpSheet(t *testing.T) {
 		}
 	}
 	all := strings.Join(lines, "\n")
-	for _, want := range []string{"add a Blocking link: this Issue blocks the one you name|b", "add a related link|l"} {
+	for _, want := range []string{"Add a blocking link|b", "Add a related link|l"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("help sheet lacks %q:\n%s", want, all)
 		}

@@ -17,8 +17,8 @@ func filterLine(m model.Model) string {
 		parts[i] = string(term.Field) + "=" + term.Value
 	}
 	line := strings.Join(parts, " · ")
-	if note != "" {
-		line = strings.TrimSpace(line + " (" + note + ")")
+	if note != (model.FilterNote{}) {
+		line = strings.TrimSpace(line + " (" + note.Text() + ")")
 	}
 	return line
 }

@@ -65,11 +65,11 @@ func TestCIsRefusedWithItsReasonAndStartsNothing(t *testing.T) {
 			t.Errorf("%s: the card's button says %q, want %q", name, reason, c.reason)
 		}
 		after, cmds := press(opened, "c")
-		if _, started := agentCmd[model.StartTeam](cmds); started || after.AgentCard.Team.Open || after.TopCard() == model.CardAgent || after.Notice != c.reason {
+		if _, started := agentCmd[model.StartTeam](cmds); started || after.AgentCard.Team.Open || after.TopCard() == model.CardAgent || after.Notice != model.Refused("start", "a team on work#a", c.reason) {
 			t.Errorf("%s: dialog %v, cmds %#v, notice %q; want the reason and nothing started", name, after.AgentCard.Team.Open, cmds, after.Notice)
 		}
 	}
-	if after, _ := press(closed, "w"); after.TopCard() == model.CardAgent || after.Toast == nil || after.Toast.Text != model.ClosedIssueRefusal {
+	if after, _ := press(closed, "w"); after.TopCard() == model.CardAgent || after.Toast == nil || after.Toast.Text != model.Refused("start", "an agent on work#a", model.ClosedIssueRefusal) {
 		t.Errorf("a closed Issue opened the card: %v %+v", after.TopCard(), after.Toast)
 	}
 }
@@ -168,7 +168,7 @@ func TestPIsRefusedWithItsReasonOnAnIssueWithoutATeamAndOnAStoppingOrEndingTeam(
 			t.Errorf("%s: the button says %q, want %q", name, reason, c.reason)
 		}
 		after, cmds := press(opened, "p")
-		if _, sent := agentCmd[model.SetTeamPaused](cmds); sent || after.TopCard() == model.CardAgent || after.Notice != c.reason {
+		if _, sent := agentCmd[model.SetTeamPaused](cmds); sent || after.TopCard() == model.CardAgent || after.Notice != model.Refused("pause or resume", "the team", c.reason) {
 			t.Errorf("%s: cmds %#v, card %v, notice %q; want the reason and nothing written", name, cmds, after.TopCard(), after.Notice)
 		}
 	}

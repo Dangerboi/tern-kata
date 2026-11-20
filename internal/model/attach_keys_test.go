@@ -186,7 +186,7 @@ func TestAttachKeysAreInTheFooterAndHelpSheet(t *testing.T) {
 		}
 	}
 	all := strings.Join(lines, "\n")
-	for _, want := range []string{"attach file (upload to Docbank)|@", "unlink attachment|⇧U"} {
+	for _, want := range []string{"Attach a file|@", "Unlink an attachment by name|⇧U"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("help sheet lacks %q:\n%s", want, all)
 		}

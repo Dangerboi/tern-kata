@@ -118,9 +118,9 @@ func (m Model) meaningProject() (int64, bool) {
 
 func searchMeaningLabel(m Model) string {
 	if m.Search.Meaning {
-		return "by words"
+		return "Search by words"
 	}
-	return "by meaning"
+	return "Search by meaning"
 }
 
 // toggleSearchMeaning is ctrl+t in the search box: by words and by meaning, on the same query. By meaning needs one Project.

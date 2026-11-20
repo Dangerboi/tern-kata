@@ -218,3 +218,26 @@ func TestTheCardErrorSitsInTheFootUnderItsLayer(t *testing.T) {
 		t.Errorf("foot error %q, %v", text, ok)
 	}
 }
+
+func TestChangingATokenFromVariableToInlineStartsWithAnEmptySecret(t *testing.T) {
+	s := step(t, daemonsManaged(t), key("e")).State // work: token variable WORK_TOKEN
+	s = step(t, s, key("tab")).State                // Runs
+	s = step(t, s, key("tab")).State                // URL
+	s = step(t, s, key("tab")).State                // Token
+	s = step(t, s, key("space")).State              // Inline
+	if v := s.Model.DaemonForm.Values; v.Auth != model.AuthInline || v.Secret != "" {
+		t.Fatalf("inline token field holds %+v, want it empty", v)
+	}
+	s = step(t, s, key("tab")).State
+	s = typeText(t, s, "pasted")
+	cmd, ok := askedSaveDaemon(step(t, s, key("enter")).Cmds)
+	if !ok || cmd.Token != "pasted" || cmd.TokenEnv != "" {
+		t.Fatalf("Enter asked %#v, want the token alone", cmd)
+	}
+
+	back := step(t, step(t, s, key("shift+tab")).State, key("space")).State // None
+	back = step(t, back, key("space")).State                                // Environment variable
+	if v := back.Model.DaemonForm.Values; v.Auth != model.AuthEnv || v.Secret != "" {
+		t.Errorf("after a round trip the variable field holds %+v, want it empty", v)
+	}
+}

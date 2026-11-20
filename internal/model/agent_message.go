@@ -229,7 +229,7 @@ func AgentAddressActor(address string) string {
 // its block is, or the reason there is none in a Notice. The Agent card closes as it does when going to an agent.
 func openAgentCardMessage(m Model, picking bool) (Model, []Cmd) {
 	if reason := m.AgentCardUnavailable(AgentCardMessage); reason != "" {
-		return m.fail(reason), nil
+		return m.fail(m.agentCardNotice(AgentCardMessage, reason)), nil
 	}
 	card := m.AgentCard
 	if r, ok := m.AgentCardSelectedRemote(); ok {
@@ -258,7 +258,7 @@ func openAgentMessageFor(m Model, picking bool) (Model, []Cmd) {
 	}
 	target, reason := m.messageTarget(request)
 	if reason != "" {
-		return m.fail(reason), nil
+		return m.fail(Refused("message", "the agent", reason)), nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, Picking: picking, IssueUID: request.IssueUID, IssueRef: request.QualifiedID(), ProjectID: request.ProjectID,
 		Agent: target.Teammate, Address: target.Address}
@@ -283,7 +283,7 @@ func askAgentAboutComment(m Model) (Model, []Cmd) {
 		reason = m.agentMessageRefusal(target)
 	}
 	if reason != "" {
-		return m.fail(reason), nil
+		return m.fail(Refused("message", "the agent", reason)), nil
 	}
 	m.AgentMessage = AgentMessageState{Open: true, IssueUID: issue.UID, IssueRef: issue.QualifiedID, ProjectID: issue.ProjectID,
 		Agent: target.Teammate, Address: target.Address, Re: row.Key}

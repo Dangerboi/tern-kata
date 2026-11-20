@@ -134,8 +134,8 @@ func TestMessagingIsOffWithAReasonWhenNoAgentCanReceiveIt(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			out := step(t, messagePane(t, tc.request, tc.states, tc.agents...), key("m"))
-			if out.State.Model.TopCard() != model.NoCard || out.State.Model.Notice != tc.want || len(out.Cmds) != 0 {
-				t.Errorf("card %v notice %q cmds %v, want no card and %q", out.State.Model.TopCard(), out.State.Model.Notice, out.Cmds, tc.want)
+			if out.State.Model.TopCard() != model.NoCard || out.State.Model.Notice != model.Refused("message", "the agent", tc.want) || len(out.Cmds) != 0 {
+				t.Errorf("card %v notice %q cmds %v, want no card and %q", out.State.Model.TopCard(), out.State.Model.Notice, out.Cmds, model.Refused("message", "the agent", tc.want))
 			}
 		})
 	}
@@ -230,8 +230,8 @@ func TestAskingAboutACommentWithoutAnAgentThatCanBeMessagedOnlySaysWhy(t *testin
 	} {
 		t.Run(name, func(t *testing.T) {
 			got := step(t, commentPane(t, c.agents...), key("m"))
-			if m := got.State.Model; m.TopCard() != model.NoCard || m.Notice != c.reason || len(got.Cmds) != 0 {
-				t.Fatalf("card %v notice %q cmds %v, want only the notice %q", m.TopCard(), m.Notice, got.Cmds, c.reason)
+			if m := got.State.Model; m.TopCard() != model.NoCard || m.Notice != model.Refused("message", "the agent", c.reason) || len(got.Cmds) != 0 {
+				t.Fatalf("card %v notice %q cmds %v, want only the notice %q", m.TopCard(), m.Notice, got.Cmds, model.Refused("message", "the agent", c.reason))
 			}
 		})
 	}

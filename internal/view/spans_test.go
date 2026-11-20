@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
@@ -30,15 +31,24 @@ func TestProseTurnsMarkersIntoKeycaps(t *testing.T) {
 		text string
 		want []ui.Span
 	}{
-		{"Create one with {N}.", []ui.Span{{T: "Create one with ", S: "muted"}, {T: "N", S: KeyStyle}, {T: ".", S: "muted"}}},
-		{"{ctrl+o} opens", []ui.Span{{T: "Ctrl+O", S: KeyStyle}, {T: " opens", S: "muted"}}},
-		{"a {{literal}} brace", []ui.Span{{T: "a {literal}} brace", S: "muted"}}},
-		{"open { brace", []ui.Span{{T: "open { brace", S: "muted"}}},
+		{"Create one with " + model.Key("N") + ".", []ui.Span{{T: "Create one with ", S: "muted"}, {T: "N", S: KeyStyle}, {T: ".", S: "muted"}}},
+		{model.Key("ctrl+o") + " opens", []ui.Span{{T: "Ctrl+O", S: KeyStyle}, {T: " opens", S: "muted"}}},
+		{"a {{literal}} {brace}", []ui.Span{{T: "a {{literal}} {brace}", S: "muted"}}},
+		{"open " + model.KeyOpen + "unclosed", []ui.Span{{T: "open ", S: "muted"}}},
 		{"no keys", []ui.Span{{T: "no keys", S: "muted"}}},
 		{"", nil},
 	} {
 		if got := prose(tc.text, "muted"); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("prose(%q) = %+v, want %+v", tc.text, got, tc.want)
 		}
+	}
+}
+
+// A file name or an error message carries braces; only the model's own Key markers become keycaps.
+func TestProseDrawsBracesOutsideKeyMarkersAsTyped(t *testing.T) {
+	text := "Opened notes{v2}.md beside the Pane; press " + model.Key("e") + "."
+	want := []ui.Span{{T: "Opened notes{v2}.md beside the Pane; press ", S: ""}, {T: "E", S: KeyStyle}, {T: ".", S: ""}}
+	if got := prose(text, ""); !reflect.DeepEqual(got, want) {
+		t.Errorf("prose(%q) = %+v, want %+v", text, got, want)
 	}
 }

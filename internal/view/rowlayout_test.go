@@ -137,18 +137,32 @@ func TestFitDateDropsTheColumnWhereTheTitleWouldBeSqueezed(t *testing.T) {
 		t.Errorf("row %q, want the badge kept and the title cut", got)
 	}
 	// Between the full badge and the least title there is room only for the compact badge; below that the badge goes.
-	if got := labelText(layoutRow(narrow, 68, parts)); !strings.HasSuffix(got, cellGap+"due Dec 1") {
-		t.Errorf("row %q, want the compact badge, due Dec 1", got)
+	if got := labelText(layoutRow(narrow, 68, parts)); !strings.HasSuffix(got, cellGap+"2026-12-01") {
+		t.Errorf("row %q, want the compact badge, 2026-12-01", got)
 	}
 	if got := labelText(layoutRow(narrow, 40, parts)); strings.Contains(got, "due ") {
 		t.Errorf("row %q, want the badge dropped where less than %d cells of title fit beside it", got, minFlaggedTitle)
 	}
 }
 
-func TestCompactDateWritesTheDayShortAndLeavesWordsAlone(t *testing.T) {
-	for in, want := range map[string]string{"due 2026-12-01": "due Dec 1", "scheduled 2026-11-25": "scheduled Nov 25", "due today": "due today", "overdue 3d": "overdue 3d"} {
+func TestCompactDateIsTheISODateAloneAndLeavesWordsAlone(t *testing.T) {
+	for in, want := range map[string]string{"due 2026-12-01": "2026-12-01", "scheduled 2026-11-25": "2026-11-25", "due today": "due today", "overdue 3d": "overdue 3d"} {
 		if got := compactDate(in); got != want {
 			t.Errorf("compactDate(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// From 36 cells (list beside the detail, id width 5) the compact ISO date fits beside a short title; a title shorter than minFlaggedTitle keeps a badge that fits beside it: the badge goes only when less than the whole title, or
+// minFlaggedTitle cells of a longer one, are left.
+func TestLayoutRowKeepsABadgeBesideAShortTitle(t *testing.T) {
+	parts := flagged()
+	parts.title = "Fix"
+	parts.date = ui.Span{T: "due 2026-12-01"}
+	for width := 36; width <= 38; width++ {
+		got := labelText(layoutRow(listColumns{id: 5}, width, parts))
+		if !strings.Contains(got, "2026-12-01") {
+			t.Errorf("width %d: row %q, want the badge kept beside the short title", width, got)
 		}
 	}
 }

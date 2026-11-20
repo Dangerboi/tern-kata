@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -228,7 +229,7 @@ func openAttachmentAs(way AttachmentWay) func(Model) (Model, []Cmd) {
 			return m, nil
 		}
 		if reason := AttachmentRefusal(a, way); reason != "" {
-			return m.fail(reason), nil
+			return m.fail(Cannot(attachmentActionOf(way).verb, a.Name, errors.New(reason))), nil
 		}
 		return m, []Cmd{OpenAttachment{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Attachment: a, Way: way}}
 	}
@@ -304,7 +305,7 @@ func attachmentOpened(m Model, msg AttachmentOpened) (Model, []Cmd) {
 	case WayCopy:
 		issue := m.issueByUID(msg.UID)
 		if issue == nil {
-			return m.fail("That Issue is no longer listed."), nil
+			return m.fail(Cannot("copy", "the attachment", errors.New("that Issue is no longer listed"))), nil
 		}
 		copied := AttachmentCopyState{Open: true, Name: msg.Name, Path: msg.Path, Command: AttachmentCopyCommand(issue.Qualified(), msg.AttachmentID)}
 		if m.covered() {

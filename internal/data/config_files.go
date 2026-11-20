@@ -175,17 +175,17 @@ func (g *Gateway) saveAgentConfig(cmd model.SaveAgentConfig) model.AgentConfigSa
 	return done
 }
 
-// readOnlyWords opens the kata config.toml row's summary: the Pane reads that file and never writes it.
-const readOnlyWords = "read-only"
+// daemonsWords opens the kata config.toml row's summary: the Daemons Page edits that file's daemon entries.
+const daemonsWords = "daemon entries edited on the Daemons Page"
 
-// kataConfigRow is kata's own config.toml, read by the Daemon catalog reader; the Pane never writes it.
+// kataConfigRow is kata's own config.toml, read by the Daemon catalog reader; the Daemons Page writes its [[daemon]] entries.
 func (g *Gateway) kataConfigRow() model.ConfigFile {
 	const title = "kata config.toml"
 	home, err := kataHome()
 	if err != nil {
 		return model.ConfigFile{Key: model.ConfigKata, Title: title, Status: model.ConfigBroken, Err: err.Error()}
 	}
-	return configRow(model.ConfigKata, title, filepath.Join(home, "config.toml"), readOnlyWords+" · 0 daemons", []model.ConfigAction{model.ConfigOpen}, func(string) (string, error) {
+	return configRow(model.ConfigKata, title, filepath.Join(home, "config.toml"), daemonsWords+" · 0 daemons", []model.ConfigAction{model.ConfigOpen}, func(string) (string, error) {
 		catalog, err := ReadCatalogAt(home)
 		if err != nil {
 			return "", err
@@ -194,7 +194,7 @@ func (g *Gateway) kataConfigRow() model.ConfigFile {
 		if catalog.ConfirmQuit {
 			quit = "asks before quitting"
 		}
-		return joinSummary(readOnlyWords, model.Count(len(catalog.Daemons), "daemon", "daemons"), quit), nil
+		return joinSummary(daemonsWords, model.Count(len(catalog.Daemons), "daemon", "daemons"), quit), nil
 	})
 }
 

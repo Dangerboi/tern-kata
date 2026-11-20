@@ -371,21 +371,22 @@ local function openKata(cx: WindowCx, act: string?, value: string)
     pump(pane)
 end
 
--- `W` starts an agent in a new tab, which Tern appends as the last tab. The agent's prompt file is named
--- `prompt-<starter>-<random>.md` (internal/data), `<starter>` being the block of the starting kata Pane, and that name is in the
--- command line Tern reports for the new tab's Pane: the agent block's `command`, else the running line. The tab is moved right of the
--- starting Pane's tab; no other tab is reordered.
+-- `W` starts an agent in a new tab. Tern opens a new tab last before 0.9.28 and right of the current tab from 0.9.28. The agent's
+-- prompt file is named `prompt-<starter>-<random>.md` (internal/data), `<starter>` being the block of the starting kata Pane, and
+-- that name is in the command line Tern reports for the new tab's Pane: the agent block's `command`, else the running line. The
+-- tab is moved right of the starting Pane's tab (placement.positionBeside: left of that tab it takes the tab's own position,
+-- since it leaves a gap as it goes); no other tab is reordered.
 -- Two ways find a new agent tab. `tab_created` fires for tabs opened on this window's own machine. A window on another machine
 -- gets no `tab_created` for a tab the CLI opens on the session host, and numbers panes differently from the host, so
 -- `<starter>` is no pane id there. Such a window places on `agent_state` and on every relay pass instead: an agent pane whose
 -- command carries the marker is tried once, whatever the result (remembered in `placed` until its pane closes), and then never
--- touched again. The starter id is exact only on the session host's machine, so the move is a guess there. In its session the
--- tab moves only when the run of tabs at the end that are candidates (agents tried in this pass) or agent tabs not handled yet
--- (a pane not in `placed` whose running line carries the marker, even if Tern lists no agent for it yet) contains it, and
--- the tab directly before that run holds no kata Pane: Tern's append already sits right of a kata Pane, possibly placed
--- exactly by the host window. A tab after it that is neither, or a kata Pane's tab just before the run, leaves the tab
--- where it is. So with no window on the session host, `W` in a kata Pane while another kata Pane's tab is
--- last does not move the agent tab. The host window's exact placement is the `tab_created` one.
+-- touched again. The starter id is exact only on the session host's machine, so the move is a guess there. Unplaced agent tabs
+-- are found anywhere in their session, since Tern may open them last or beside the current tab. In its session the tab moves
+-- unless its run of tabs (candidates: agents tried in this pass, and agent tabs not handled yet: a pane not in `placed` whose
+-- running line carries the marker, even if Tern lists no agent for it yet) directly follows a tab holding a kata Pane: such
+-- a run is already beside one, possibly placed exactly by the host window, and stays where it is. So with no window on the
+-- session host, `W` in a kata Pane while another kata Pane's tab is right before the agent tab does not move it. The host
+-- window's exact placement is the `tab_created` one.
 -- The starter is the kata Pane whose id is `<starter>`, else the focused Pane if it is a kata Pane (the Pane the user just pressed
 -- `W` in), else the window's only kata Pane; with none of these nothing moves.
 local PLACE_TRIES = 10

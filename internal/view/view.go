@@ -333,24 +333,23 @@ func contextLine(m model.Model) []tern.Element {
 	if m.ShowCounts() && !m.LaneViewShown() {
 		counts = m.CountsLine()
 	}
-	if counts == "" && len(terms) == 0 && note == "" {
+	if counts == "" && len(terms) == 0 && note == (model.FilterNote{}) {
 		return nil
 	}
 	var cells []tern.Element
 	if counts != "" {
 		cells = append(cells, ui.Text{Common: ui.Common{Key: "counts", Tone: ui.ToneMuted}, Spans: []ui.Span{{T: counts, S: "muted"}}, Wrap: ui.WrapNone})
 	}
-	if len(terms) > 0 || note != "" {
+	if len(terms) > 0 || note != (model.FilterNote{}) {
 		cells = append(cells, ui.Icon{Common: ui.Common{Key: "icon", Tone: ui.ToneMuted, Aria: "Filters"}, Name: ui.IconFunnel})
 	}
 	for _, term := range terms {
 		cells = append(cells, ui.Text{Common: ui.Common{Key: string(term.Field)}, Spans: filterChip(term), Wrap: ui.WrapNone})
 	}
-	if note != "" {
-		label, name, _ := strings.Cut(note, " ")
-		spans := []ui.Span{{T: label, S: "muted"}}
-		if name != "" {
-			spans = append(spans, ui.Span{T: " " + name})
+	if note != (model.FilterNote{}) {
+		spans := []ui.Span{{T: note.Label, S: "muted"}}
+		if note.Value != "" {
+			spans = append(spans, ui.Span{T: " " + note.Value})
 		}
 		cells = append(cells, ui.Text{Common: ui.Common{Key: "note"}, Spans: spans, Wrap: ui.WrapNone})
 	}
@@ -539,7 +538,7 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		flags = append(flags, ui.Span{T: w.Word(), S: string(attentionTone(w))})
 	}
 	parts := rowParts{
-		id:         ui.Span{T: idCell(row), S: mono("muted")},
+		id:         monoSpan(idCell(row), "muted"),
 		prio:       ui.Span{T: prio, S: mono(toneStyle(prioTone))},
 		status:     ui.Span{T: row.Status, S: cellStyleOrDefault(toneStyle(issueStateTone(closed)))},
 		flags:      flags,

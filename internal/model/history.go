@@ -327,11 +327,7 @@ var inverseRelation = map[string]string{"parent": "child", "child": "parent", "b
 
 // relationLabel is a Links row's label: the relation in words, capitalised.
 func relationLabel(relation string) string {
-	words := RelationWords(relation)
-	if words == "" {
-		return words
-	}
-	return strings.ToUpper(words[:1]) + words[1:]
+	return Capitalize(RelationWords(relation))
 }
 
 func linkObject(event Event, p payloadMap, foreign bool) string {

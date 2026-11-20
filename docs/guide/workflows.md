@@ -46,7 +46,7 @@ The options kata accepts on a workflow and on a step have no field. The card car
 {"name": "...", "definition": {"version": 1, "steps": [{"key": "review", "kind": "prompt", "prompt": "..."}, {"key": "test", "kind": "command", "command": "make test", "after": ["review"], "retries": 1}]}}
 ```
 
-What the editor returns is read back into the form. Text that is not valid JSON is refused in the card's foot and the form stays as it was; text that reads as a document but breaks a rule is checked when you save.
+What the editor returns is read back into the form. Text that is not valid JSON, or a document whose `version` is not 1, is refused in the card's foot ("Cannot read the editor's text: "version" must be 1.") and the form stays as it was; text that reads as a document but breaks a rule is checked when you save.
 
 Saving checks the form first, and nothing is sent while it fails. The check requires:
 

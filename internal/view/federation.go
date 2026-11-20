@@ -77,7 +77,7 @@ func federationCard(s model.FederationSpoke, selected bool, now time.Time) tern.
 	tone := ui.ToneNeutral
 	if warnings := s.Warnings(); len(warnings) > 0 {
 		tone = ui.ToneWarning
-		body = append(body, toneText("warnings", ui.ToneWarning, capitalize(strings.Join(warnings, ", "))+"."))
+		body = append(body, toneText("warnings", ui.ToneWarning, model.Capitalize(strings.Join(warnings, ", "))+"."))
 	}
 	return ui.Card{Common: ui.Common{Key: s.ProjectName, Tone: tone}, Selected: selected, Children: body}
 }
@@ -88,14 +88,6 @@ func dashActor(s model.FederationSpoke) string {
 		return model.None
 	}
 	return s.BoundActor
-}
-
-// capitalize is text with its first letter in upper case.
-func capitalize(text string) string {
-	if text == "" {
-		return text
-	}
-	return strings.ToUpper(text[:1]) + text[1:]
 }
 
 // federationScreen is a screen of the Page that is not the list: its title in strong text, then its rows.

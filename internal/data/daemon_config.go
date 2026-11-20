@@ -29,11 +29,14 @@ type DaemonSpec struct {
 	KeepToken bool
 }
 
+// tomlKey is one key of a table header: bare, "basic" or 'literal'.
+const tomlKey = `(?:[A-Za-z0-9_\-]+|"(?:[^"\\]|\\.)*"|'[^']*')`
+
 var (
 	daemonTableHeader = regexp.MustCompile(`^\s*\[\[\s*daemon\s*\]\]\s*(#.*)?$`)
-	// tableHeader is a table header line. The character class leaves out quotes and commas, so a line of a multi-line array does
-	// not read as one.
-	tableHeader     = regexp.MustCompile(`^\s*\[\[?[A-Za-z0-9_. \-]+\]\]?\s*(#.*)?$`)
+	// tableHeader is a table header line. A key is bare, "basic" or 'literal', so a quoted key may hold dots, brackets and spaces,
+	// while a line of a multi-line array (quotes around values, commas) does not read as one.
+	tableHeader     = regexp.MustCompile(`^\s*\[\[?\s*` + tomlKey + `(\s*\.\s*` + tomlKey + `)*\s*\]\]?\s*(#.*)?$`)
 	tomlCommentLine = regexp.MustCompile(`^\s*#`)
 	managedKey      = regexp.MustCompile(`^\s*(name|local|url|token|token_env|allow_insecure)\s*=`)
 	tokenKeyLine    = regexp.MustCompile(`^\s*(token|token_env)\s*=`)
@@ -83,11 +86,59 @@ func (d DaemonSpec) lines() []string {
 // everything up to where the next table's own comment lines begin.
 type block struct{ header, start, end int }
 
+// insideMultiline says for each line whether it begins inside a multi-line string ("""..""" or ”'...”'), where a line that
+// looks like a table header is text.
+func insideMultiline(lines []string) []bool {
+	inside := make([]bool, len(lines))
+	open := "" // the delimiter of the multi-line string the line begins in
+	for i, line := range lines {
+		inside[i] = open != ""
+		for j := 0; j < len(line); {
+			rest := line[j:]
+			switch {
+			case open != "":
+				if open == `"""` && rest[0] == '\\' {
+					j += 2
+				} else if strings.HasPrefix(rest, open) {
+					open = ""
+					j += 3
+				} else {
+					j++
+				}
+			case rest[0] == '#':
+				j = len(line)
+			case strings.HasPrefix(rest, `"""`) || strings.HasPrefix(rest, `'''`):
+				open = rest[:3]
+				j += 3
+			case rest[0] == '"' || rest[0] == '\'':
+				j += 1 + quotedLen(rest[1:], rest[0])
+			default:
+				j++
+			}
+		}
+	}
+	return inside
+}
+
+// quotedLen is the length of s through the quote that closes a single-line string opened by quote, or all of s when none does.
+func quotedLen(s string, quote byte) int {
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] == '\\' && quote == '"':
+			i++
+		case s[i] == quote:
+			return i + 1
+		}
+	}
+	return len(s)
+}
+
 func daemonBlocks(lines []string) []block {
 	var blocks []block
 	var headers []int
+	inside := insideMultiline(lines)
 	for i, line := range lines {
-		if tableHeader.MatchString(line) {
+		if !inside[i] && tableHeader.MatchString(line) {
 			headers = append(headers, i)
 		}
 	}

@@ -233,9 +233,10 @@ expect_tree() {
   printf 'Native tree assertion failed: %s\n' "$2" >&2
   return 1
 }
-# The mode the footer hints show the keys are in: collections, detail, list or other.
+# The mode the footer hints show the keys are in: collections, detail, list or other. The Menu is the footer of only move, open
+# and back (no "new"): Board, Config and Attention footers also say " open" but carry other words.
 hint_mode() {
-  ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("J/K row") then "detail" elif contains("layout") or contains("expand") then "list" elif contains("open Collection") or contains(" open") then "collections" else "other" end'
+  ctl tree "[data-id='dock.hints']" | jq -r '.nodes[0].text | if contains("J/K row") then "detail" elif contains("layout") or contains("expand") then "list" elif contains(" move") and contains(" open") and contains(" back") and (contains(" new") | not) then "collections" else "other" end'
 }
 hint_in_mode() { [[ $(hint_mode) == "$1" ]]; }
 hint_expect_mode() {

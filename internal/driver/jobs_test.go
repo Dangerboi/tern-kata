@@ -347,7 +347,7 @@ func TestFooterAndHelpSheetListTheJobsPageKeys(t *testing.T) {
 	inspector := feed(t, s, key("enter")).State
 	wantText(t, "inspector footer", footerText(t, inspector), "open parent", "back")
 	help := wireTextOf(t, feed(t, s, key("?")).State)
-	wantText(t, "help sheet", help, "Jobs", "Show or hide archived jobs", "Open a native job's parent Issue", "Inspect the job", "Switch Page")
+	wantText(t, "help sheet", help, "Jobs", "Show or hide archived jobs", "Open the job's parent Issue", "Inspect the job", "Switch Page")
 }
 
 func TestJobsPageDoesNotRevealACardAReadJustAdded(t *testing.T) {

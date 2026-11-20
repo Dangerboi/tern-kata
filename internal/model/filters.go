@@ -207,20 +207,32 @@ func FilterFieldLabel(field Field) string {
 	return string(field)
 }
 
+// FilterNote is the note of the filter line: a label, and the value it names when there is one ("Saved view" and the view's name;
+// "Default filter" has no value). The two stay apart so a name with a space in it is not cut into a label and a value.
+type FilterNote struct{ Label, Value string }
+
+// Text is the note as one line, the value after the label.
+func (n FilterNote) Text() string {
+	if n.Value == "" {
+		return n.Label
+	}
+	return n.Label + " " + n.Value
+}
+
 // FilterLine is what the context line under the top bar shows: the active filters, and a note naming where they came from,
 // "Saved view <name>" while they are the saved view's this Pane opened or "Default filter" while they equal the Project's
 // default. The Board leaves the status filter out. With no terms and no note there is no line.
-func (m Model) FilterLine() (terms []FilterTerm, note string) {
+func (m Model) FilterLine() (terms []FilterTerm, note FilterNote) {
 	shown := m.Filters
 	if m.OnBoard() {
 		shown.Status = ""
 	}
 	terms = ActiveFilters(shown, m.ProjectFilterName)
 	if name := m.CurrentSavedView(); name != "" {
-		return terms, "Saved view " + name
+		return terms, FilterNote{Label: "Saved view", Value: name}
 	}
 	if len(terms) > 0 && m.Filters == m.DefaultFilters {
-		note = "Default filter"
+		note = FilterNote{Label: "Default filter"}
 	}
 	return terms, note
 }

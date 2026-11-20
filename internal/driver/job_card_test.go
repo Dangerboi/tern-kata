@@ -466,7 +466,7 @@ func TestJobKeysAreOnTheFooterAndTheHelpSheet(t *testing.T) {
 	s := jobsPane(t, 160, guarded("J1", "Weekly", "EV1"))
 	wantText(t, "Jobs Page footer", footerText(t, s), "new job", "edit job", "pause or resume", "archive")
 	help := wireTextOf(t, feed(t, s, key("?")).State)
-	wantText(t, "help sheet", help, "New job (Job card)", "Edit the selected job", "Pause or resume the selected job", "Archive or restore job")
+	wantText(t, "help sheet", help, "New job", "Edit the job", "Pause or resume the job", "Archive or restore the job")
 	card := step(t, s, key("n")).State
 	wantText(t, "card footer", footerText(t, card), "next field")
 	if footer := footerText(t, card); strings.Contains(footer, "save job") {

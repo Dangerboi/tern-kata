@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -372,15 +373,17 @@ type WorkerBanner struct {
 // Empty says there is nothing to show yet: the first answer has not arrived.
 func (b WorkerBanner) Empty() bool { return b.Badge == "" && b.Detail == "" }
 
-// Refusal is the banner as the reason a job cannot run now.
+// Refusal is the banner as the reason a job cannot run now: a clause that ends the sentence "Cannot run "x" now: <reason>.".
 func (b WorkerBanner) Refusal() string {
 	switch {
 	case b.Failed:
-		return strings.TrimSuffix(strings.TrimPrefix(b.Detail, "Cannot "), ".")
+		return "the worker could not be read: " + strings.TrimSuffix(strings.TrimPrefix(b.Detail, "Cannot read the worker: "), ".")
+	case b.Pending:
+		return "the worker is starting"
 	case b.Badge == "No worker":
 		return "no worker: " + b.Detail
 	}
-	return b.Badge + " " + b.Detail
+	return "the worker " + b.Detail
 }
 
 // WorkerBanner words this machine's worker for the Jobs Page: whether it runs and serves this Pane's Project, and what is missing
@@ -454,10 +457,10 @@ func runJobNow(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if job.Archived() {
-		return m.fail(fmt.Sprintf("%q is archived. Restore it before running it.", job.Name)), nil
+		return m.fail(Cannot("run", fmt.Sprintf("%q", job.Name), errors.New("it is archived; restore it first"))), nil
 	}
-	if reason := m.runNowRefusal(*job); reason != "" {
-		return m.fail(reason), nil
+	if notice := m.runNowRefusal(*job); notice != "" {
+		return m.fail(notice), nil
 	}
 	return m.say(Progress("Asking the worker to run", fmt.Sprintf("%q", job.Name))), []Cmd{RunJobNow{JobUID: job.UID, JobName: job.Name}}
 }
@@ -481,7 +484,7 @@ func resumePausedJob(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if m.workerPausedJobs(job.UID) == 0 {
-		return m.fail(fmt.Sprintf("%q is not paused by this machine's worker.", job.Name)), nil
+		return m.fail(Cannot("resume", fmt.Sprintf("%q", job.Name), errors.New("this machine's worker has not paused it"))), nil
 	}
 	return m.say(Progress("Asking the worker to resume", fmt.Sprintf("%q", job.Name))), []Cmd{ResumeJob{JobUID: job.UID, JobName: job.Name}}
 }
@@ -510,8 +513,8 @@ func openRunSession(m Model) (Model, []Cmd) {
 	if run == nil {
 		return m, nil
 	}
-	if reason := m.notLocal(*run, "open its session"); reason != "" {
-		return m.fail(reason), nil
+	if notice := m.notLocal(*run, "open", "the session"); notice != "" {
+		return m.fail(notice), nil
 	}
 	d := m.LocalDetail()
 	switch {
@@ -525,14 +528,14 @@ func openRunSession(m Model) (Model, []Cmd) {
 	return m, []Cmd{OpenRunSession{Cwd: d.Cwd, SessionDir: d.SessionDir, SessionID: d.SessionID}}
 }
 
-func (m Model) notLocal(run Run, verb string) string {
+func (m Model) notLocal(run Run, verb, thing string) string {
 	switch {
 	case m.IsLocalRun(run):
 		return ""
 	case !m.Worker.Running:
-		return "No worker is running on this machine, so its runs cannot " + verb + ". Start one with `tern-kata worker`."
+		return Cannot(verb, thing, errors.New("no worker is running on this machine; start one with `tern-kata worker`"))
 	}
-	return fmt.Sprintf("This run belongs to executor %q, not this machine's worker %q; only its own machine can %s.", run.Executor(), m.Worker.Executor, verb)
+	return Cannot(verb, thing, fmt.Errorf("it belongs to executor %q, not this machine's worker %q, and only its own machine can %s it", run.Executor(), m.Worker.Executor, verb))
 }
 
 // moveHeldRun is u and A on the Runs Page: the worker resumes the selected held run, or abandons it (cancels it when it is still
@@ -547,12 +550,12 @@ func moveHeldRun(resume bool) func(Model) (Model, []Cmd) {
 		if run == nil {
 			return m, nil
 		}
-		if reason := m.notLocal(*run, verb+" it"); reason != "" {
-			return m.fail(reason), nil
+		if notice := m.notLocal(*run, verb, "the run"); notice != "" {
+			return m.fail(notice), nil
 		}
 		local, ok := m.LocalRunOf(run.UID)
 		if !ok || !(local.Held || !resume && local.Abandonable) {
-			return m.fail("This run is not held, so there is nothing to " + verb + "."), nil
+			return m.fail(Cannot(verb, "the run", errors.New("it is not held"))), nil
 		}
 		if resume {
 			return m, []Cmd{ResumeLocalRun{UID: run.UID}}

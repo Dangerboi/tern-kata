@@ -29,5 +29,5 @@ func rowAt[T any](rows []T, cursor int) *T {
 
 func letteredBackRow(mode Mode, handle func(Model) (Model, []Cmd)) actionEntry {
 	return actionEntry{action: LetteredBack, modes: []Mode{mode}, keys: keys("escape", "esc", "backspace", "⌫"), help: "back", footer: []Mode{mode},
-		sheet: []sheetLine{{sheetLettered, 1, "back to the Page shown before"}}, handle: handle}
+		sheet: []sheetLine{{sheetLettered, 1, "Go back to the last Page"}}, handle: handle}
 }

@@ -1,6 +1,19 @@
 package model
 
-import "strconv"
+import (
+	"strconv"
+	"unicode"
+	"unicode/utf8"
+)
+
+// Capitalize is text with its first letter in upper case.
+func Capitalize(text string) string {
+	r, size := utf8.DecodeRuneInString(text)
+	if size == 0 || r == utf8.RuneError {
+		return text
+	}
+	return string(unicode.ToUpper(r)) + text[size:]
+}
 
 // HoldWords is the sentence-case words of a hold or pause reason code. A code a newer kata sends comes back as it is.
 func HoldWords(code string) string {

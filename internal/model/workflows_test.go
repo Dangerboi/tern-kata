@@ -394,7 +394,7 @@ func TestArchivingAndRestoringAreGuardedOnTheVersionOnScreen(t *testing.T) {
 		t.Fatalf("r sent %#v, want %#v", cmds, want)
 	}
 	m, cmds = model.Update(m, model.KeyMsg{Chord: "e"})
-	if m.Workflows.Card.Open || !strings.Contains(m.Notice, "Restore it first") || len(cmds) != 0 {
+	if m.Workflows.Card.Open || !strings.Contains(m.Notice, "it is archived; restore it first") || len(cmds) != 0 {
 		t.Errorf("editing an archived workflow opened the card (%v) or said %q", m.Workflows.Card.Open, m.Notice)
 	}
 }
@@ -482,5 +482,37 @@ func TestAWidePaneShowsTheStepsBesideTheListWithoutEnter(t *testing.T) {
 	m, _ = model.Update(m, model.KeyMsg{Chord: "escape"})
 	if m.Page != model.PageWorkflows {
 		t.Errorf("page %v after esc: with no inspector to close, esc leaves for the Menu, not another Page", m.Page)
+	}
+}
+
+func TestAnOptionsOnlyEditFromTheEditorAsksBeforeTheFormCloses(t *testing.T) {
+	flow := reviewFlow()
+	flow.Options = []byte(`{"mystery":true}`)
+	flow.Steps[0].Options = []byte(`{"limits":{"turns":12}}`)
+	for name, text := range map[string]string{
+		"workflow options": `{"name":"Review then test","definition":{"version":1,"options":{"mystery":false},"steps":[{"key":"review","kind":"prompt","prompt":"Review the change.","options":{"limits":{"turns":12}}},{"key":"test","kind":"command","command":"make test","after":["review"],"retries":1}]}}`,
+		"step options":     `{"name":"Review then test","definition":{"version":1,"options":{"mystery":true},"steps":[{"key":"review","kind":"prompt","prompt":"Review the change.","options":{"limits":{"turns":99}}},{"key":"test","kind":"command","command":"make test","after":["review"],"retries":1}]}}`,
+	} {
+		m := onWorkflows(t, flow)
+		m, _ = model.Update(m, model.KeyMsg{Chord: "e"})
+		m = loadedText(m, text)
+		if m.Workflows.Card.Err != nil {
+			t.Fatalf("%s: the editor's text was refused: %v", name, m.Workflows.Card.Err)
+		}
+		asked, _ := model.Update(m, model.KeyMsg{Chord: "escape"})
+		if asked.CurrentMode() != model.ModeDiscard {
+			t.Errorf("%s: esc after the edit gave mode %s, want the discard question", name, asked.CurrentMode())
+		}
+	}
+}
+
+func TestAnUnsupportedVersionTypedInTheEditorIsRefusedNotRewrittenAsOne(t *testing.T) {
+	m := onWorkflows(t, reviewFlow())
+	m, _ = model.Update(m, model.KeyMsg{Chord: "e"})
+	before := m.Workflows.Card.Form.JSON()
+	m = loadedText(m, strings.Replace(before, `"version": 1`, `"version": 2`, 1))
+	card := m.Workflows.Card
+	if card.Err == nil || !strings.Contains(card.Err.Error(), "version") || card.Form.JSON() != before {
+		t.Errorf("error %v, form kept %v; want the version refused and the form as it was", card.Err, card.Form.JSON() == before)
 	}
 }

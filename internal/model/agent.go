@@ -140,10 +140,11 @@ type AgentsPruned struct {
 
 func (AgentsPruned) msg() {}
 
-// ClosedIssueRefusal is the toast `w` shows on a closed Issue, and the reason the buttons that start an agent on one are off.
-const ClosedIssueRefusal = "This Issue is closed; reopen it first."
+// ClosedIssueRefusal is why the buttons that start an agent on a closed Issue are off; `w` shows it in the toast's Cannot sentence.
+const ClosedIssueRefusal = "The Issue is closed."
 
-const ClosedAlreadyRefusal = "This Issue is already closed."
+// ClosedAlreadyRefusal is why Close is off on a closed Issue; `x` shows it in the Notice's Cannot sentence.
+const ClosedAlreadyRefusal = "The Issue is already closed."
 
 // IssueRefusal is why action cannot run on issue, or "" when it can: the closed-Issue rules that the Notices of `w` and `x`, the
 // Agent card's buttons and the context menu's rows all follow.
@@ -168,7 +169,7 @@ func openAgent(m Model) (Model, []Cmd) {
 		return m, nil
 	}
 	if reason := IssueRefusal(*issue, OpenAgentCardAction); reason != "" {
-		m, wait := m.raiseToast(Toast{Text: reason, Label: "Reopen", Chord: "r", UID: issue.UID})
+		m, wait := m.raiseToast(Toast{Text: Refused("start", "an agent on "+m.RefOf(issue.QualifiedID), reason), Label: "Reopen", Chord: "r", UID: issue.UID})
 		return m, []Cmd{wait}
 	}
 	m = openAgentCard(m, *issue)
@@ -186,10 +187,11 @@ func openAgent(m Model) (Model, []Cmd) {
 
 func startAgent(m Model, action Action, placement AgentPlacement) (Model, []Cmd) {
 	reason := m.AgentCardUnavailable(action)
+	notice := m.agentCardNotice(action, reason)
 	issue := m.issueByUID(m.AgentCard.IssueUID)
 	m.AgentCard = AgentCardState{}
 	if reason != "" {
-		return m.fail(reason), nil
+		return m.fail(notice), nil
 	}
 	cmd := StartAgent{Placement: placement, IssueUID: issue.UID, IssueRef: issue.QualifiedID, IssueTitle: issue.Title, ProjectID: issue.ProjectID,
 		ProjectName: issue.ProjectName, PaneBlock: m.PaneBlock, Actor: m.MessageActor()}

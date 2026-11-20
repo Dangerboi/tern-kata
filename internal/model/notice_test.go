@@ -47,7 +47,7 @@ func TestSayFailAndClearNotice(t *testing.T) {
 }
 
 func TestKeyIsAKeycapMarker(t *testing.T) {
-	if got := Key("W"); got != "{W}" {
+	if got := Key("W"); got != KeyOpen+"W"+KeyClose {
 		t.Errorf("got %q", got)
 	}
 }

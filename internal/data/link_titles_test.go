@@ -81,7 +81,7 @@ func TestATitleAlreadyReadSurvivesAReadThatCannotRepeatIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := c.ReadDetail(context.Background(), parent)
+	first, err := c.ReadDetailWithLinkTitles(context.Background(), parent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,5 +123,60 @@ func TestAParentWithAHundredChildrenGetsEveryTitle(t *testing.T) {
 	}
 	if took := time.Since(start); took > linkTitleBudget {
 		t.Errorf("reading the titles took %v, over the %v budget", took, linkTitleBudget)
+	}
+}
+
+// Reads that only look at the Issue itself make no request for the titles of its Links.
+func TestReadsThatDoNotShowTheDetailSkipLinkTitles(t *testing.T) {
+	gateway, workspace, _, parent := linkTitleFixture(t)
+	c, err := gateway.client(context.Background(), workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := c.ReadDetail(context.Background(), parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := titlesOf(plain.Selected); len(got) != 0 {
+		t.Errorf("ReadDetail carries link titles %v", got)
+	}
+	cached := 0
+	c.titles.Range(func(_, _ any) bool { cached++; return true })
+	if cached != 0 {
+		t.Errorf("ReadDetail read %d link titles", cached)
+	}
+	shown, err := c.ReadDetailWithLinkTitles(context.Background(), parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantTitles(t, "ReadDetailWithLinkTitles", shown.Selected)
+}
+
+// An Issue kata will not show (deleted, no access) is remembered as unreadable for the cache period: the next read of a detail
+// that links it makes no request for it, and a title the Pane already had stays.
+func TestAnIssueThatCannotBeReadIsNotReadAgainOnEveryRefresh(t *testing.T) {
+	gateway, workspace, _, parent := linkTitleFixture(t)
+	c, err := gateway.client(context.Background(), workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := c.ReadDetail(context.Background(), parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const gone = "01ZZZZZZZZZZZZZZZZZZZZZZZZ"
+	detail.Selected.Links = append(detail.Selected.Links, model.Link{FromIssueUID: parent, ToIssueUID: gone})
+	c.linkTitles(context.Background(), detail.Selected)
+	v, ok := c.titles.Load(gone)
+	if !ok {
+		t.Fatal("the Issue kata refused is not remembered")
+	}
+	first := v.(cachedTitle)
+
+	time.Sleep(5 * time.Millisecond)
+	c.linkTitles(context.Background(), detail.Selected)
+	v, _ = c.titles.Load(gone)
+	if again := v.(cachedTitle); !again.at.Equal(first.at) {
+		t.Errorf("the unreadable Issue was read again: %v then %v", first.at, again.at)
 	}
 }

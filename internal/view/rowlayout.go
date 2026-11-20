@@ -4,13 +4,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
 // The roles that tell the style sheet which optional columns of an Issue list row are not drawn, so their boxes take no room, and
-// how wide the Date column is. A hidden column's spans stay in the row, one-space, so every other cell keeps its child index.
+// how wide the Date column is. A hidden column's spans stay in the row, zero-width space, so every other cell keeps its child index.
 const (
 	ListNoPrioRole   = "tern-kata.nopr"
 	ListNoStatusRole = "tern-kata.nost"
@@ -45,20 +44,16 @@ const minTitleCells = 30
 // full badge shows the badge in its compact form (compactDate); only when even that leaves less title does it drop the badge.
 const minFlaggedTitle = 8
 
-var dayInBadge = regexp.MustCompile(`(\d{4})-(\d\d)-(\d\d)$`)
+var dayInBadge = regexp.MustCompile(`\d{4}-\d\d-\d\d$`)
 
-// compactDate is a Date badge with its day written short: "due 2026-12-01" is "due Dec 1". Words without a day ("due today",
-// "overdue 3d") are already short and come back unchanged.
+// compactDate is a Date badge with its label left off, the ISO date alone: "due 2026-12-01" is "2026-12-01", in the badge's own
+// tone. Words without a day ("due today", "overdue 3d") are already short and come back unchanged.
 func compactDate(text string) string {
-	m := dayInBadge.FindStringSubmatchIndex(text)
+	m := dayInBadge.FindStringIndex(text)
 	if m == nil {
 		return text
 	}
-	day, err := time.Parse("2006-01-02", text[m[0]:])
-	if err != nil {
-		return text
-	}
-	return text[:m[0]] + day.Format("Jan 2")
+	return text[m[0]:]
 }
 
 // sansPerCell and sansSavedPerCell say how much narrower sans text is than the mono cells the boxes are sized in: out of every 20
@@ -252,9 +247,10 @@ func layoutRow(cols listColumns, width int, p rowParts) listRow {
 		start := btoi(dateFlag)
 		flags = append(flags[:start:start], flags[start+p.agentFlags:]...)
 	}
-	if dateFlag && sansCells(minFlaggedTitle) > room-flagsWidth() && sansCells(displayWidth(title))+flagsWidth() > room {
+	keep := sansCells(min(displayWidth(title), minFlaggedTitle))
+	if dateFlag && keep > room-flagsWidth() && sansCells(displayWidth(title))+flagsWidth() > room {
 		flags[0].T = compactDate(flags[0].T)
-		if sansCells(minFlaggedTitle) > room-flagsWidth() {
+		if keep > room-flagsWidth() {
 			flags = flags[1:]
 		}
 	}
@@ -269,7 +265,7 @@ func layoutRow(cols listColumns, width int, p rowParts) listRow {
 }
 
 // rightCells are the cells at a row's right end: the Date badge (empty while the column is hidden), Children, the owner when it
-// shows, and Updated, right-aligned under its header. Hidden columns keep a one-space span so the others keep their child index.
+// shows, and Updated, right-aligned under its header. Hidden columns keep a zero-width space span so the others keep their child index.
 func rightCells(cols listColumns, date, kids, dateStyle, owner, updated, style, ownerStyle string) []ui.Span {
 	dateText := hiddenCell
 	if cols.date > 0 {

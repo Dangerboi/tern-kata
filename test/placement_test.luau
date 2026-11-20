@@ -115,6 +115,29 @@ test("an agent tab in the middle right after a kata Pane's tab stays where it is
     same(plan.moves, {})
 end)
 
+test("an agent tab left of its starter's tab ends right after it", function()
+    -- Tabs: T1, T2, A (agent, pane 30), T4, K (kata, pane 10), T6. Tern 0.9.28 opens the agent tab right of the current tab.
+    local list = tabs(6)
+    local plan = placement.plan(snapshot({
+        tabs = list,
+        panes = {plain(20, 1), plain(21, 2), agent(30, 3, 10), plain(22, 4), kata(10, 5), plain(23, 6)},
+        agents = {{pane = 30, marker = 10}},
+    }))
+    same(plan.moves, {{3, 5}})
+    local names = {"T1", "T2", "A", "T4", "K", "T6"}
+    local from = table.find(names, "A") :: number
+    table.remove(names, from)
+    table.insert(names, plan.moves[1].position, "A")
+    assert(table.concat(names, ",") == "T1,T2,T4,K,A,T6", table.concat(names, ","))
+end)
+
+test("positionBeside: left of home the target is home's own position, right of it the next one", function()
+    local home = {id = 5, session = 1, position = 5}
+    assert(placement.positionBeside(home, {id = 3, session = 1, position = 3}) == 5)
+    assert(placement.positionBeside(home, {id = 6, session = 1, position = 8}) == 6)
+    assert(placement.positionBeside(home, {id = 6, session = 1, position = 6}) == nil)
+end)
+
 test("an agent is tried once: a pane already placed is skipped", function()
     local plan = placement.plan(snapshot({
         tabs = tabs(3),

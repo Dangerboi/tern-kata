@@ -628,3 +628,11 @@ func TestAloneDetailColumnFillsItsRoomLikeACardColumn(t *testing.T) {
 		t.Error("ColumnFillCSS has no rule that makes a plain column's scroller fill it")
 	}
 }
+
+// The two columns of the facts panel wrap, so a detail narrowed below two columns puts the right one under the left.
+func TestFactsPanelWrapsItsColumns(t *testing.T) {
+	facts := detailNodes(t, alpha)[view.DetailContentID+".properties.facts"]
+	if facts.P["wrap"] != true {
+		t.Errorf("facts panel props %v, want wrap", facts.P)
+	}
+}

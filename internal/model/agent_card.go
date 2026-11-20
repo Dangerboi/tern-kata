@@ -185,13 +185,13 @@ func updateAgentCardKey(m Model, msg KeyMsg) (Model, []Cmd) {
 		m.AgentCard = AgentCardState{}
 	case AgentCardGo, AgentCardBackground, AgentCardInterrupt, AgentCardStop:
 		if onRemote {
-			m = m.fail(RemoteAgentRefusal(remote.HostLabel()))
+			m = m.fail(m.agentCardNotice(binding.Action, RemoteAgentRefusal(remote.HostLabel())))
 			return m, nil
 		}
 		return updateLocalAgentKey(m, binding.Action)
 	case AgentCardForget:
 		if reason := m.AgentCardUnavailable(AgentCardForget); reason != "" {
-			m = m.fail(reason)
+			m = m.fail(m.agentCardNotice(AgentCardForget, reason))
 			return m, nil
 		}
 		m.AgentCard.Forgetting = remote.Key()
@@ -245,7 +245,7 @@ func updateLocalAgentKey(m Model, action Action) (Model, []Cmd) {
 		}
 		if reason := m.AgentCardUnavailable(AgentCardStop); reason != "" {
 			m.AgentCard = AgentCardState{}
-			m = m.fail(reason)
+			m = m.fail(m.agentCardNotice(AgentCardStop, reason))
 			return m, nil
 		}
 		m.AgentCard.Stopping = rows[cursor].Block
@@ -257,9 +257,10 @@ func updateLocalAgentKey(m Model, action Action) (Model, []Cmd) {
 // background and not open stays there; the card closes with the card's reason as a Notice.
 func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
 	reason := m.AgentCardUnavailable(AgentCardBackground)
+	notice := m.agentCardNotice(AgentCardBackground, reason)
 	m.AgentCard = AgentCardState{}
 	if reason != "" {
-		m = m.fail(reason)
+		m = m.fail(notice)
 		return m, nil
 	}
 	return placeAgent(m, e.Block), []Cmd{SendAgentBack{Block: e.Block, IssueRef: e.IssueRef}}
@@ -270,7 +271,7 @@ func sendToBackground(m Model, e AgentEntry) (Model, []Cmd) {
 func interruptAgent(m Model, e AgentEntry) (Model, []Cmd) {
 	if reason := m.AgentCardUnavailable(AgentCardInterrupt); reason != "" {
 		m.AgentCard = AgentCardState{}
-		m = m.fail(reason)
+		m = m.fail(m.agentCardNotice(AgentCardInterrupt, reason))
 		return m, nil
 	}
 	m = m.say(agentCardInterruptSent)
@@ -361,6 +362,39 @@ func (m Model) AgentCardUnavailable(action Action) string {
 }
 
 const noAgentReason = "No agent on this Issue yet."
+
+// agentCardNotice is the Notice for action refused with reason on the Agent card: "Cannot <verb> <thing>: <reason>.". The reason
+// is the clause the button's tooltip shows as a sentence.
+func (m Model) agentCardNotice(action Action, reason string) string {
+	var verb, thing string
+	switch action {
+	case AgentCardGo:
+		verb, thing = "go to", "the agent"
+	case AgentCardBackground:
+		verb, thing = "send", "the agent to the background"
+	case AgentCardInterrupt:
+		verb, thing = "interrupt", "the agent"
+	case AgentCardStop:
+		verb, thing = "stop", "the agent"
+	case AgentCardForget:
+		verb, thing = "forget", "the agent"
+	case AgentCardMessage, AgentCardQuickReply:
+		verb, thing = "message", "the agent"
+	case AgentCardSplit, AgentCardTab, AgentCardNewBackground:
+		verb, thing = "start", "an agent"
+	case AgentCardTeam:
+		verb, thing = "start", "a team"
+	case AgentCardPause:
+		verb, thing = "pause or resume", "the team"
+	}
+	switch action {
+	case AgentCardSplit, AgentCardTab, AgentCardNewBackground, AgentCardTeam:
+		if issue := m.issueByUID(m.AgentCard.IssueUID); issue != nil {
+			thing += " on " + m.RefOf(issue.QualifiedID)
+		}
+	}
+	return Refused(verb, thing, reason)
+}
 
 // AgentCardStateWords is the state word of an agent's row on the card: what the relay last said of it, in the words a person
 // uses. An agent the relay has not listed reads "running", the one thing known of it.

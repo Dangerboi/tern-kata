@@ -428,7 +428,7 @@ func init() {
 
 	daemonCall(
 		func(c *Client, ctx context.Context, cmd model.LoadDetail) (model.DetailLoaded, error) {
-			return c.ReadDetail(ctx, cmd.UID)
+			return c.ReadDetailWithLinkTitles(ctx, cmd.UID)
 		},
 		func(cmd model.LoadDetail, err error) model.Msg { return model.DetailFailed{UID: cmd.UID, Err: err} })
 

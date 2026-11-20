@@ -82,7 +82,7 @@ func (m Model) newestRemoteAgentOn(issueUID string, match func(RemoteAgent) bool
 }
 
 // AgentForgetLocalReason is why Forget is off on a row of this host's own agent.
-const AgentForgetLocalReason = "Forget removes the record of an agent on another host; stop this agent from its own row."
+const AgentForgetLocalReason = "That agent runs on this host; stop it from its own row."
 
 // AddressUsedWords is what an agent's row says when another host's record held its address at start, so it published none.
 func AddressUsedWords(host string) string {

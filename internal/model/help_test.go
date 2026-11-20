@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
 )
@@ -92,8 +94,8 @@ func TestHelpSheetListsSlashSearch(t *testing.T) {
 		page model.Page
 		text string
 	}{
-		{model.PageIssues, "search"},
-		{model.PageJobs, "search the jobs ({esc} ends the search)"},
+		{model.PageIssues, "Search Issues"},
+		{model.PageJobs, "Search jobs"},
 	} {
 		found := false
 		for _, group := range model.HelpSheetOn(tt.page, model.Model{}) {
@@ -105,6 +107,20 @@ func TestHelpSheetListsSlashSearch(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("HelpSheetOn(%v) has no %q line with key /", tt.page, tt.text)
+		}
+	}
+}
+
+// Every help row is a verb first, in sentence case, one short clause with no card named in a suffix.
+func TestEveryHelpRowIsAVerbFirstSentence(t *testing.T) {
+	for page := model.Page(0); page <= model.PageConfig; page++ {
+		for _, group := range model.HelpSheetOn(page, model.Model{}) {
+			for _, line := range group.Lines {
+				first, _ := utf8.DecodeRuneInString(line.Text)
+				if !unicode.IsUpper(first) || strings.HasSuffix(line.Text, ")") || strings.Contains(line.Text, "{") || strings.Contains(line.Text, ";") {
+					t.Errorf("page %v, group %q: row %q is not a sentence-case verb phrase", page, group.Title, line.Text)
+				}
+			}
 		}
 	}
 }
