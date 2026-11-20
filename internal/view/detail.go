@@ -366,7 +366,8 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 		left = append(left, fact("Labels", none()))
 	}
 	if lane := model.LaneOf(*issue, m.LaneList()); lane != model.LaneNone && lane != model.LaneDone {
-		left = append(left, fact("Lane", text(model.LaneTitle(lane))))
+		// the Lane in its Board colour, as its label chip above it is
+		left = append(left, fact("Lane", ui.Badge{Common: ui.Common{Key: "v", Tone: laneTone(m.LaneList(), lane)}, Text: model.LaneTitle(lane)}))
 	}
 	scheduled, deadline := model.IssueDates(*issue)
 	// Dates are facts here, not warnings: the Board and list badges carry the urgency.

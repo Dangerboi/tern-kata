@@ -285,12 +285,14 @@ func cardFacts(m model.Model, card model.BoardCard, otherDate string, now time.T
 	if len(facts) == 0 {
 		return nil
 	}
-	parts := make([]tern.Element, 0, 2*len(facts)-1)
+	// A separator travels with the fact after it, so a wrapped row never ends in a dangling dot ("carol ·").
+	parts := make([]tern.Element, len(facts))
 	for i, fact := range facts {
 		if i > 0 {
-			parts = append(parts, ui.Text{Common: ui.Common{Key: "sep" + strconv.Itoa(i)}, Spans: []ui.Span{{T: "·", S: "muted"}}})
+			sep := ui.Text{Common: ui.Common{Key: "sep"}, Spans: []ui.Span{{T: "·", S: "muted"}}}
+			fact = ui.Row{Common: ui.Common{Key: childKey(fact)}, Gap: ui.GapSM, Align: ui.AlignCenter, Children: ui.Nodes(sep, fact)}
 		}
-		parts = append(parts, fact)
+		parts[i] = fact
 	}
 	return ui.Row{Common: ui.Common{Key: "facts"}, Gap: ui.GapSM, Wrap: true, Children: parts}
 }

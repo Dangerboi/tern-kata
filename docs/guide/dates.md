@@ -2,9 +2,9 @@
 
 `D` on the selected Issue (in the list, on the Board, in the Lane view and in the Issue detail) opens the **Dates card**: a Scheduled field and a Deadline field holding the Issue's current dates.
 
-![The Dates card over the Board, with "+1w" typed in Scheduled and the weekday of the date it resolves to beside it](../images/dates-card.png)
+![The Dates card over the Board, with "+1w" typed in Scheduled and the date it resolves to under it](../images/dates-card.png)
 
-The card's head reads Dates, with the Issue's ref (`#tga6`, or `project#tga6` across Projects) as a muted line; its buttons are **Save** and **Cancel**, and each field's placeholder is `YYYY-MM-DD`. While a field has focus, one muted line under it reads "Date like 2026-11-20, today, tomorrow or +3d. Blank clears it." `Tab` moves between the fields, `Enter` saves and `Esc` cancels. `Ctrl+D` in a field opens a calendar beside it (the footer shows `Ctrl+D calendar`) on the month of the field's date, else of the other date, else today: the arrow keys move by a day or a week, `Enter` or a click picks the date and `Esc` closes the calendar. Typing a date works as before. A field takes:
+The card's head reads Dates, with the Issue's ref (`#tga6`, or `project#tga6` across Projects) as a muted line; its buttons are **Save** and **Cancel**, and each field's placeholder is `YYYY-MM-DD`. Under each field, focused or not, a muted line reads "Date like 2026-11-20, today, tomorrow or +3d. Blank clears it." `Tab` moves between the fields, `Enter` saves and `Esc` cancels. `Ctrl+D` in a field opens a calendar beside it (the footer shows `Ctrl+D calendar`) on the month of the field's date, else of the other date, else today: the arrow keys move by a day or a week, `Enter` or a click picks the date and `Esc` closes the calendar. Typing a date works as before. A field takes:
 
 | Input | Meaning |
 |---|---|

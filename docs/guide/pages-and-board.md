@@ -157,7 +157,7 @@ Search by meaning needs embeddings set up on the kata daemon the Pane is connect
 
 - **Turn on** (`Y`) sends one `POST /api/v1/embeddings/local` ("Turning on search by meaning…"). kata starts its setup job in the daemon and the card follows it with the words the Config row uses: a progress bar for the download, "set up · needs a kata daemon restart" when the job is done, then a progress bar for the indexing. The job runs in the daemon, so it goes on when you close the card (`Esc`) or quit the Pane. Opening the card again, from the row, picks the job up where it is; while the Config Page or the card is shown, the status is read again every 2 seconds. A failed job shows kata's error and offers `S` to try again; a refusal reads "Cannot turn on search by meaning: <reason>." (with the stream down, "Cannot turn on search by meaning: disconnected from kata.").
 
-  ![The card following kata's setup job: downloading 17 / 289 MB with a progress bar, and kata keeps going if you close this](../images/search-meaning-download.png)
+  ![The card following kata's setup job: downloading with a progress bar, and kata keeps going if you close this](../images/search-meaning-download.png)
 
 - Search stays by words until the kata daemon restarts: the job writes kata's `config.toml` and never restarts the daemon. The Pane offers the restart itself, behind its own question: when the job is done while the card is open, the card asks "Restart the kata daemon now? Other Panes, agents and the worker lose their connection for a moment and reconnect." with **Restart now** (`Y`) and **Not now** (`N`, `Esc`), because a restart briefly disconnects every client of that daemon. A card opened while a restart is owed on a local daemon (`Enter` or `R` on the row, not `Ctrl+O`, which is not offered while a restart is owed) opens on this question.
 
@@ -230,7 +230,7 @@ After the move a toast says "Moved #492x to other#f7bq."; its **Open** button op
 
 `B` in a Project Collection shows the Project's Issues as a **Board**; `B` or `1` again returns to the list with the same Issue selected. `5` also opens it.
 
-![The acme-shop Board with "Add Apple Pay to checkout" selected, its parent and blocker tagged](../images/board.png)
+![The acme-shop Board, each Lane in its own colour, with "Add Apple Pay to checkout" selected and its blocker, parent and related Issue named on its card](../images/board.png)
 
 Columns, left to right: **No lane** (open Issues with none of the Lane labels, always shown), one **Lane** per label of the Lane list, and **Done** (Issues closed today or in the 14 days before, at most 20 of them, newest closed first; the header says "Done 20 of 192" when more qualify; both numbers are per Project, see [the Lanes card](#the-lanes-card)).
 

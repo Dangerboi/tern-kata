@@ -4,7 +4,7 @@
 
 ## Jobs Page
 
-![The Jobs Page with a job selected and its inspector open, listing its next runs](../images/jobs.png)
+![The Jobs Page with the worker's chip, the Jobs as cards and the selected Job's facts beside them, listing its next runs](../images/jobs.png)
 
 One card per job. The heading reads `Jobs 4`, with `· 2 archived hidden` added only while archived jobs are hidden. With none, the Page reads "No jobs" / "A job makes an Issue or runs an agent on a schedule." with a **New job** button. A card shows:
 
@@ -87,7 +87,7 @@ On the Jobs Page, `P` pauses a job that is running (it writes the job disabled) 
 
 ## Job card
 
-![The Job card editing an agent prompt job, with the schedule preview](../images/job-card.png)
+![The Job card editing an agent prompt job: Kind, Name, Trigger and Interval with their labels, and the schedule preview with the next three runs](../images/job-card.png)
 
 `N` on the Jobs Page opens the **Job card** for a new job; `Shift+J` on an Issue (list, Board, Lane view, Issue detail) opens it for a new Recurring Issue job with that Issue as its parent; `E` opens it on the selected job, prefilled. A refusal reads "Cannot create a job: disconnected from kata.", "Cannot create a job: this Project is archived." or "Cannot edit the job: it is archived; restore it first."
 

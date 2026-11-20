@@ -37,7 +37,7 @@ Both need a folder bound to a kata Project, the Binding the Pane uses: a `.kata.
 
 `Shift+W` on the Jobs Page (from the list or the inspector) opens the Worker card for the Project the Pane's folder is bound to.
 
-![The Worker card for the acme-shop Project, with the worker.toml that serves it](../images/worker-card.png)
+![The Worker card for the acme-shop Project: its checkout, its worker.toml, the running worker and its supervision](../images/worker-card.png)
 
 It reads this machine once, asks the worker for its status and shows, one fact per row:
 

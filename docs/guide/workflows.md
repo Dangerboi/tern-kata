@@ -4,7 +4,7 @@
 
 The Project is found as the [Board Page](pages-and-board.md#board-page) finds it, and the Page ends when you leave the Project Collection. From 140 columns the selected workflow's steps sit beside the list from the first frame, as the Issues Page shows its list and detail. In a narrower Pane the list is alone until Enter opens the steps in its place, and Esc closes them first. Otherwise Esc ends a search, then goes to the Menu.
 
-![The Workflows Page with a workflow selected and its steps shown](../images/workflows.png)
+![The Workflows Page as a split: the Workflows list, and the selected workflow's steps with their kind, dependencies and retries](../images/workflows.png)
 
 Each card names the jobs that run the workflow (`Used by Hourly report +1`) and shows its latest run (`succeeded · 2026-11-17 10:00`); the inspector lists its latest runs (see [Runs](runs.md#reading-and-filtering)).
 

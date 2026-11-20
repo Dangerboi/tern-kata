@@ -48,7 +48,7 @@ func relationshipsText(t *testing.T, s driver.State, uid string) (string, bool) 
 			continue
 		}
 		switch first, _, _ := strings.Cut(strings.TrimPrefix(n.ID, prefix+"."), "."); {
-		case strings.HasPrefix(first, "sep"), first == "owner", first == "other-date", first == "reopen":
+		case first == "owner", first == "other-date", first == "reopen", strings.HasSuffix(n.ID, ".sep"):
 			continue
 		}
 		spans, _ := n.P["spans"].([]any)

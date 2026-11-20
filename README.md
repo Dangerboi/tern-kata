@@ -10,7 +10,7 @@ https://github.com/user-attachments/assets/282d75ee-ccbd-495b-bb78-6eb0565aa3b4
 
 The same example Project in tern-kata (top) and in `kata tui` (bottom), both running in Tern:
 
-![tern-kata showing the acme-shop Project with "Add Apple Pay to checkout" selected](docs/images/tern-kata.png)
+![tern-kata on the acme-shop Project: the Issues list with coloured priorities and dates, and "Add Apple Pay to checkout" open with its facts panel, Lane badge and a comment thread](docs/images/tern-kata.png)
 
 ![kata tui showing the same Project and Issue](docs/images/kata-tui.png)
 
@@ -32,21 +32,21 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Board.** `5` or `B` shows a Project's Issues as cards in Lanes, one per triage label. `<` and `>` move a card by swapping its label in kata, and a selected card tags its related cards; following one of another Project switches the Pane to that Project and Esc comes back. See [Pages and the Board](docs/guide/pages-and-board.md).
 
-![The acme-shop Board with "Add Apple Pay to checkout" selected, its parent and blocker tagged](docs/images/board.png)
+![The acme-shop Board, each Lane in its own colour, with "Add Apple Pay to checkout" selected and its blocker, parent and related Issue named on its card](docs/images/board.png)
 
 **Jobs and the Job card.** `2` lists a Project's Cron jobs with their state, schedule in words and next run. The Job card makes and edits every kind of job. See [Jobs](docs/guide/jobs.md).
 
-![The Jobs Page with a job selected and its inspector open, listing its next runs](docs/images/jobs.png)
+![The Jobs Page with the worker's chip, the Jobs as cards and the selected Job's facts beside them, listing its next runs](docs/images/jobs.png)
 
-![The Job card editing an agent prompt job, with the schedule preview](docs/images/job-card.png)
+![The Job card editing an agent prompt job: Kind, Name, Trigger and Interval with their labels, and the schedule preview with the next three runs](docs/images/job-card.png)
 
 **Runs.** `3` lists a Project's runs newest first, with held runs, steps and output from this machine's worker. See [Runs](docs/guide/runs.md).
 
-![The Runs Page with a held run selected and its detail open](docs/images/runs.png)
+![The Runs Page with runs as cards by status and the selected run's facts beside them](docs/images/runs.png)
 
 **Workflows.** `4` lists a Project's kata workflows, their steps and the jobs that run them, and edits them in a form. See [Workflows](docs/guide/workflows.md).
 
-![The Workflows Page with a workflow selected and its steps shown](docs/images/workflows.png)
+![The Workflows Page as a split: the Workflows list, and the selected workflow's steps with their kind, dependencies and retries](docs/images/workflows.png)
 
 **Attention.** `6`, or `Shift+T` from any Page and the Menu, lists the requests kata holds for you, in every Project on the daemon, newest first: who asked, the message, and the comment a request asks you to answer. Enter opens the request's Issue, on the comment it names so `Shift+R` answers it, `C` clears it, and `M` sends a message to the omp agent that raised it, which reaches the agent at once. It reads the Inbox address `KATA_INBOX_USER`, else the actor the Pane writes as. See [Pages and the Board](docs/guide/pages-and-board.md#attention-page).
 
@@ -60,7 +60,7 @@ In tern-kata, Issue bodies render as Markdown, priorities and labels show as chi
 
 **Dates card.** `D` sets an Issue's scheduled date and deadline, typed as a date, `today`, `tomorrow`, `+3d` or `+1w`, or with a time in kata's date-time forms. See [Dates](docs/guide/dates.md).
 
-![The Dates card over the Board, with "+1w" typed in Scheduled and the weekday of the date it resolves to beside it](docs/images/dates-card.png)
+![The Dates card over the Board, with "+1w" typed in Scheduled and the date it resolves to under it](docs/images/dates-card.png)
 
 **Moving an Issue.** `Shift+M` opens the Move card on the selected Issue: pick a Project from a filtered list, preview the move (kata checks it and changes nothing), then move it, guarded on the revision the card opened with. The Issue moves with its open descendants; `O` (Only this Issue) moves it alone. A toast names the Issue in its new Project, and its Open button opens it there. See [Moving an Issue](docs/guide/pages-and-board.md#moving-an-issue).
 

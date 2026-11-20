@@ -305,6 +305,11 @@ func popup(overlay ui.Overlay, children []tern.Element) ui.Overlay {
 		}
 		body = append(body, child)
 	}
+	// A card that holds nothing but such lines keeps them in its body: moved to the foot they would leave an empty band under
+	// the head.
+	if len(body) == 0 {
+		body, statuses = statuses, nil
+	}
 	if len(statuses) > 0 {
 		if !hasFoot {
 			foot = ui.Row{Common: ui.Common{Key: footKey}, Gap: ui.GapMD, Justify: ui.JustifyEnd, Wrap: true}

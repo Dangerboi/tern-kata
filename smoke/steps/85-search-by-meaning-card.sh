@@ -16,7 +16,7 @@ embeddings_turn_on="[data-id='main.columns.list.config.embeddings.turn-on']"
 expect_tree "$embeddings_turn_on" '.ok and .count == 1 and (.nodes[0].text | contains("Turn on"))'
 ctl click "$embeddings_turn_on"
 expect_tree "$embeddings_card" '.ok and .count == 1'
-expect_tree "[data-id='layer.embeddings.foot.question']" '.ok and .count == 1 and (.nodes[0].text | startswith("Turn on search by meaning? kata ") and (contains("kata will use your Ollama; nothing to download.") or contains("kata will use its built-in model, already on the kata daemon'"'"'s machine; nothing to download.") or test("kata downloads about [0-9]+ MB \\(shared by all Kenn apps\\) to the kata daemon.s machine \\(this machine\\)\\. Search stays by words until the daemon restarts\\.")))'
+expect_tree "[data-id='layer.embeddings.question']" '.ok and .count == 1 and (.nodes[0].text | startswith("Turn on search by meaning? kata ") and (contains("kata will use your Ollama; nothing to download.") or contains("kata will use its built-in model, already on the kata daemon'"'"'s machine; nothing to download.") or test("kata downloads about [0-9]+ MB \\(shared by all Kenn apps\\) to the kata daemon.s machine \\(this machine\\)\\. Search stays by words until the daemon restarts\\.")))'
 
 # n sends nothing: the card goes and the row reads as before.
 ctl key n
