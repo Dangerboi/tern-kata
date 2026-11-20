@@ -4,7 +4,7 @@
 
 A Run is kata's record of one execution of a Cron job or workflow, written by whoever ran it: an adapter, a worker here or another machine's. The Pane shows what kata holds, whoever the executor was.
 
-![The Runs Page with runs as cards by status and the selected run's facts beside them](../images/runs.png)
+![The Runs Page with runs as cards, newest first, each with its status, and the selected run's facts beside them](../images/runs.png)
 
 The heading reads `Runs 5`, with scope clauses `· job Nightly triage` while the list is narrowed to a job and `· older runs not shown` while `M` has more to read. With none, the Page reads "No runs" / "Runs from jobs and workflows appear here."; narrowed to a job it reads "No runs" / "This job has not run yet." with an **All runs** button. Each card has:
 

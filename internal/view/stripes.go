@@ -176,6 +176,9 @@ var prioToneVars = [5]string{"--sf-bad", "--sf-user", "--sf-warn", "--sf-info", 
 var prioCSS = func() string {
 	var css strings.Builder
 	for n, v := range prioToneVars {
+		if v == "--sf-muted" {
+			continue // the cell's muted span style draws P4 already, and lightens on hover as the rest of the row does
+		}
 		role := fmt.Sprintf("[data-role~='%s%d']", ListPrioRole, n)
 		fmt.Fprintf(&css, ".sf-item%s .sf-item-label > span:nth-child(2) { color: var(%s); }\n", role, v)
 		fmt.Fprintf(&css, ".sf-col%s > .sf-row > .sf-text:first-child > span:nth-child(2) { color: var(%s); }\n", role, v)

@@ -81,9 +81,9 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 - Shell code blocks in comments, close messages and other Issue text the Pane draws offer no Run on Tern 0.9.29 and later, since agents, other people and other Projects write that text; Copy stays, as an icon.
 - Lanes, Lane labels and priorities have colours that say what they are.
-  - Default Lanes by name: `needs-triage` yellow, `needs-info` orange-red, `ready-for-agent` cyan, `ready-for-human` lavender, `waiting` red, Done green and No lane muted; a Lane of your own cycles cyan, orange-red, lavender, yellow and red in order.
-  - A label that is one of the Project's Lanes is drawn in that Lane's colour in the Issue's Labels row and on Board cards, and the Issue detail's Lane fact is a badge in the same colour; every other label stays a neutral chip.
-  - Priority reads P0 red, P1 orange-red, P2 yellow, P3 cyan and P4 muted on the list, the Issue detail and the Board.
+  - Default Lanes by name: `needs-triage` warning, `needs-info` user, `ready-for-agent` info, `ready-for-human` pending, `waiting` error, Done success and No lane muted; a Lane of your own cycles info, user, pending, warning and error in order.
+  - A label that is one of the Project's Lanes is drawn in that Lane's tone in the Issue detail's Labels row, and its Lane fact is a badge in the same tone; every other label stays a neutral chip.
+  - Priority reads P0 error, P1 user, P2 warning, P3 info and P4 muted on the list, the Issue detail and the Board.
 - The Issues Page, the Board and their Popup cards follow one design: the same tones, wording, dates and keys everywhere.
   - Keys read in words, in the footer, the help sheet, buttons, the Page bar and the keys named in sentences.
     - `Ctrl+D`, `Ctrl+Space`, `Shift+N`, `Enter`, `Tab`, `Esc`, a letter as its capital and the arrows as glyphs; the Lettered Pages read `Shift+C`, `Shift+F`, `Shift+D` and `Shift+K`, and help rows start with a capital.
@@ -100,7 +100,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - The Create card's discard question keeps the fields in view, and a recurrence error reads "Cannot save the recurrence: …".
   - The top bar shows the Project's name and a muted facts line with no prefixes, and the line under it is the context line, with the counts "5 open · 0 closed" and each active filter.
   - The list draws only the columns a row has a value for and shows an empty state with its action ("No Issues" with a New Issue button).
-  - Board cards show a muted "also in" line, the Relationship as a line under the title and one muted row of facts on the selected card; each Lane keeps one identity colour on its header and card ids, and the Lanes card names the list in use ("Using this machine's list").
+  - Board cards show a muted "also in" line, the Relationship as a line under the title and one muted row of facts on the selected card; a Lane's header and card ids take its colour (see the colours entry above), and the Lanes card names the list in use ("Using this machine's list").
   - The Menu groups its top level under Pages, Actions and Updates, and the right-click menu gains Owner…, Labels… and New child….
   - The Attention Page shows cards with the Issue's title, the sender and the age; the Credentials and Config Pages show label and value cards under a Page head (`Credentials 3 · as of 17:29`, `Config 8 · ~/.config/tern-kata`).
   - The help sheet opens with "Keyboard shortcuts" and a Close button, shows at most two keys per row and names the Emacs keys once.

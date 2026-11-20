@@ -20,8 +20,9 @@ var laneNameTones = map[string]ui.Tone{
 // laneCycleTones are the tones a Lane with no tone of its own cycles through, by its index among such Lanes.
 var laneCycleTones = []ui.Tone{ui.ToneInfo, ui.ToneUser, ui.TonePending, ui.ToneWarning, ui.ToneError}
 
-// laneTone is the colour of lane among lanes: a default Lane has its own tone, Done is success, the No lane is muted, and any
-// other Lane takes laneCycleTones by its index among the Lanes that have no tone of their own. A Lane not in lanes is neutral.
+// laneTone is the colour of lane among lanes: a default Lane has its own tone wherever it is named, Done is success, the No
+// lane is muted, and any other Lane takes laneCycleTones by its index among the Lanes that have no tone of their own; a Lane
+// that is neither a default nor in lanes is neutral.
 func laneTone(lanes []string, lane string) ui.Tone {
 	if lane == model.LaneNone {
 		return ui.ToneMuted

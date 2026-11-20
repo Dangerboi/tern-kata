@@ -35,7 +35,7 @@ func TestLaneHeadersTakeTheirOwnTonesAndCustomLanesCycleInTurn(t *testing.T) {
 	s := boardPane(t)
 	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"needs-triage", "in-review", "ready-for-human", "qa", "blocked", "ship"}}).State
 	nodes := wireNodes(t, view.Render(s.Model, now))
-	// Default Lanes keep their own tone; the others take info, user, pending in turn by their place among them; No lane is muted, Done success.
+	// Default Lanes keep their own tone; the others cycle info, user, pending, warning, error by their place among them; No lane is muted, Done success.
 	want := []string{"muted", "warning", "info", "pending", "user", "pending", "warning", "success"}
 	for i, tone := range want {
 		head := node(t, nodes, fmt.Sprintf("%s.lane%d.head.title", view.BoardID, i))
