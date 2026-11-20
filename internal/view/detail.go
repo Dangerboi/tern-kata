@@ -460,7 +460,7 @@ func cronProperties(m model.Model) []propertyRow {
 		}
 		spans = append(spans, ui.Span{T: " · " + item.Cron.State, S: "muted"})
 		if item.Cron.Schedule != "" {
-			spans = append(spans, ui.Span{T: " · ", S: "muted"}, timeSpan(item.Cron.Schedule))
+			spans = append(append(spans, ui.Span{T: " · ", S: "muted"}), scheduleSpans(item.Cron.Schedule)...)
 		}
 		jobs = append(jobs, ui.Text{Common: common, Spans: spans})
 	}

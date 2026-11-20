@@ -112,7 +112,7 @@ func TestRRefusesANativeJobAndAMissingOrNonServingWorker(t *testing.T) {
 	if len(out.Cmds) != 0 {
 		t.Errorf("no worker, yet the Pane asked: %#v", out.Cmds)
 	}
-	wantText(t, "no worker refusal", out.State.Model.Notice, "no worker: none is running on this machine")
+	wantText(t, "no worker refusal", out.State.Model.Notice, "no worker (none is running on this machine)")
 
 	elsewhere := jobsPaneWithWorker(t, &model.WorkerStatus{Executor: "laptop", Projects: []model.WorkerProject{{Name: "other", Admitting: true}}}, promptJob("A1", "Triage"))
 	out = step(t, elsewhere, key("shift+r"))

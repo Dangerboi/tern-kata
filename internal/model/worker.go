@@ -373,15 +373,19 @@ type WorkerBanner struct {
 // Empty says there is nothing to show yet: the first answer has not arrived.
 func (b WorkerBanner) Empty() bool { return b.Badge == "" && b.Detail == "" }
 
-// Refusal is the banner as the reason a job cannot run now: a clause that ends the sentence "Cannot run "x" now: <reason>.".
+// Refusal is the banner as the reason a job cannot run now: a clause that ends the sentence "Cannot run "x" now: <reason>."; the clause holds no colon of its own.
 func (b WorkerBanner) Refusal() string {
 	switch {
 	case b.Failed:
-		return "the worker could not be read: " + strings.TrimSuffix(strings.TrimPrefix(b.Detail, "Cannot read the worker: "), ".")
+		return "reading the worker failed (" + strings.TrimSuffix(strings.TrimPrefix(b.Detail, "Cannot read the worker: "), ".") + ")"
 	case b.Pending:
 		return "the worker is starting"
 	case b.Badge == "No worker":
-		return "no worker: " + b.Detail
+		return "no worker (" + b.Detail + ")"
+	}
+	// A detail with its own reason ("admits nothing: paused") keeps it in brackets, so the sentence carries one colon.
+	if what, why, ok := strings.Cut(b.Detail, ": "); ok {
+		return "the worker " + what + " (" + why + ")"
 	}
 	return "the worker " + b.Detail
 }

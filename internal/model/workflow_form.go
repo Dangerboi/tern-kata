@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -184,9 +185,18 @@ func (f WorkflowForm) snapshot() string {
 	type step struct{ Key, Kind, Body, After, Retries, Options string }
 	steps := make([]step, len(f.Steps))
 	for i, s := range f.Steps {
-		steps[i] = step{s.Key, string(s.Kind), s.Body.Text, s.After, s.Retries, string(s.Options)}
+		steps[i] = step{s.Key, string(s.Kind), s.Body.Text, s.After, s.Retries, compactOptions(s.Options)}
 	}
-	return fmt.Sprintf("%q %q %q %q %q", f.Name, f.About, f.Input, string(f.Options), steps)
+	return fmt.Sprintf("%q %q %q %q %q", f.Name, f.About, f.Input, compactOptions(f.Options), steps)
+}
+
+// compactOptions is options without insignificant whitespace, so the editor's indented copy and kata's compact one compare equal.
+func compactOptions(raw json.RawMessage) string {
+	var b bytes.Buffer
+	if json.Compact(&b, raw) != nil {
+		return string(raw)
+	}
+	return b.String()
 }
 
 // uniqueStepKey is a step name no step of the form uses: "step", then "step2" and on.
@@ -388,8 +398,8 @@ func workflowStepKey(m Model, action Action) (Model, bool) {
 	return m, true
 }
 
-// decodeWorkflowText reads the JSON document of a workflow into a Workflow without checking kata's rules on it, so text brought
-// back from the editor lands in the form whatever is wrong with it and the save says what.
+// decodeWorkflowText reads the JSON document of a workflow into a Workflow without checking kata's rules on it, apart from the
+// version, so text brought back from the editor lands in the form whatever else is wrong with it and the save says what.
 func decodeWorkflowText(text string) (Workflow, error) {
 	file, err := decodeWorkflowFile(text)
 	if err != nil {

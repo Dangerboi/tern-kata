@@ -210,7 +210,7 @@ func agentStarted(m Model, msg AgentStarted) Model {
 	_, where := msg.Placement.words()
 	text := fmt.Sprintf("Started an agent on %s in %s.", m.RefOf(msg.IssueRef), where)
 	if msg.Note != "" {
-		return m.fail(text + " " + noteSentence(msg.Note))
+		return m.say(text + " " + noteSentence(msg.Note))
 	}
 	return m.say(text)
 }

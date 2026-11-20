@@ -280,7 +280,7 @@ const deadEditWithin = 500 * time.Millisecond
 // DocGuardWindow is how long keys that would run a binding are swallowed after a dead edit: the user types on as if the edit were open.
 const DocGuardWindow = 2 * time.Second
 
-const deadEditNotice = "The body did not open for editing. Double-click it again; keys are ignored for a moment."
+const deadEditNotice = "Cannot open the body for editing: the edit closed as it opened. Double-click it again; keys are ignored for a moment."
 
 // WaitDocGuard is the pause of DocGuardWindow after the key guard Seq began. It reads nothing; its answer DocGuardExpired ends that
 // guard, and the Notice that says why keys are ignored, when no input has.

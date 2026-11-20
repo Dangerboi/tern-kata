@@ -140,6 +140,14 @@ func TestFitDateDropsTheColumnWhereTheTitleWouldBeSqueezed(t *testing.T) {
 	if got := labelText(layoutRow(narrow, 68, parts)); !strings.HasSuffix(got, cellGap+"2026-12-01") {
 		t.Errorf("row %q, want the compact badge, 2026-12-01", got)
 	}
+	if laid := layoutRow(narrow, 68, parts); laid.tip != "due 2026-12-01" {
+		t.Errorf("a compacted badge: tooltip %q, want the full badge", laid.tip)
+	}
+	for _, width := range []int{200, 40} {
+		if laid := layoutRow(narrow, width, parts); laid.tip != "" {
+			t.Errorf("width %d: tooltip %q on a row whose badge is whole or gone", width, laid.tip)
+		}
+	}
 	if got := labelText(layoutRow(narrow, 40, parts)); strings.Contains(got, "due ") {
 		t.Errorf("row %q, want the badge dropped where less than %d cells of title fit beside it", got, minFlaggedTitle)
 	}

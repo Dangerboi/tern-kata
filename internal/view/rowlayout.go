@@ -154,8 +154,11 @@ func cellStyleOrDefault(style string) string {
 // after it, so the span holds a zero-width space instead, which is a real glyph, takes no room and is styled (see cellStyleOrDefault).
 const hiddenCell = "\u200b"
 
+// listRow is a row's label and value spans. tip is the row's tooltip: the full Date badge when the label shows it compacted,
+// so "due" can still be told from "scheduled".
 type listRow struct {
 	label, value []ui.Span
+	tip          string
 }
 
 // headerStyle is the style of a header cell over a mono cell: muted, and in the mono face. A box is sized in em, and a span's em
@@ -237,7 +240,7 @@ func layoutRow(cols listColumns, width int, p rowParts) listRow {
 		}
 		return total
 	}
-	title := p.title
+	title, tip := p.title, ""
 	room -= displayWidth(cellGap)
 	// A row too wide for its flags gives way in this order: the Agent badge goes, then the title is cut (down to minFlaggedTitle
 	// cells) to keep the Date badge and the attention word; the Date badge shows in its compact form before it goes, and goes only
@@ -249,9 +252,12 @@ func layoutRow(cols listColumns, width int, p rowParts) listRow {
 	}
 	keep := sansCells(min(displayWidth(title), minFlaggedTitle))
 	if dateFlag && keep > room-flagsWidth() && sansCells(displayWidth(title))+flagsWidth() > room {
-		flags[0].T = compactDate(flags[0].T)
+		full := flags[0].T
+		flags[0].T = compactDate(full)
 		if keep > room-flagsWidth() {
 			flags = flags[1:]
+		} else if flags[0].T != full {
+			tip = full
 		}
 	}
 	if over := sansCells(displayWidth(title)) + flagsWidth() - room; over > 0 && len(flags) > 0 {
@@ -261,7 +267,7 @@ func layoutRow(cols listColumns, width int, p rowParts) listRow {
 	for _, flag := range flags {
 		label = append(label, ui.Span{T: cellGap + flag.T, S: flag.S})
 	}
-	return listRow{label: label, value: value}
+	return listRow{label: label, value: value, tip: tip}
 }
 
 // rightCells are the cells at a row's right end: the Date badge (empty while the column is hidden), Children, the owner when it

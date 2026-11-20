@@ -86,13 +86,14 @@ func (d DaemonSpec) lines() []string {
 // everything up to where the next table's own comment lines begin.
 type block struct{ header, start, end int }
 
-// insideMultiline says for each line whether it begins inside a multi-line string ("""..""" or ”'...”'), where a line that
-// looks like a table header is text.
+// insideMultiline says for each line whether it begins inside a multi-line string ("""..""" or ”'...”') or a multi-line array,
+// where a line that looks like a table header (`  ["q"]`, the end of an array) is text.
 func insideMultiline(lines []string) []bool {
 	inside := make([]bool, len(lines))
 	open := "" // the delimiter of the multi-line string the line begins in
+	depth := 0 // the brackets of arrays left open
 	for i, line := range lines {
-		inside[i] = open != ""
+		inside[i] = open != "" || depth > 0
 		for j := 0; j < len(line); {
 			rest := line[j:]
 			switch {
@@ -112,6 +113,12 @@ func insideMultiline(lines []string) []bool {
 				j += 3
 			case rest[0] == '"' || rest[0] == '\'':
 				j += 1 + quotedLen(rest[1:], rest[0])
+			case rest[0] == '[':
+				depth++
+				j++
+			case rest[0] == ']':
+				depth = max(depth-1, 0)
+				j++
 			default:
 				j++
 			}

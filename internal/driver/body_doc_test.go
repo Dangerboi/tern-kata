@@ -641,14 +641,14 @@ func TestTheLineUnderTheBodyNamesTheCommentItKeepsAndTheNoticeSaysTheSame(t *tes
 	theirs := alpha
 	theirs.Body, theirs.Revision = "theirs", 4
 	s = feed(t, s, model.DraftConflict{UID: "alpha", Issue: theirs}).State
-	if n := s.Model.Notice; !strings.Contains(n, "Your comment on work#aaaa conflicts") {
+	if n := s.Model.Notice; !strings.Contains(n, "Cannot save your comment on work#aaaa: it conflicts") {
 		t.Fatalf("notice %q, want it to name the comment", n)
 	}
 	s = feed(t, s, key("x"), key("escape"), key("y"), key("escape"), key("k")).State
 	back := alpha
 	back.Body, back.ProjectID, back.Revision, back.QualifiedID = docBody, 7, 3, "work#aaaa"
 	s = feed(t, s, model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &back}}).State
-	if line := bodyErrorLine(t, s); !strings.Contains(line, "Your comment conflicts with a newer change.") {
+	if line := bodyErrorLine(t, s); !strings.Contains(line, "Cannot save your comment: it conflicts with a newer change.") {
 		t.Fatalf("line %q, want it to name the comment", line)
 	}
 }
@@ -713,7 +713,7 @@ func TestNoKeyGuardWhenNoFrameWentOutAroundTheEditingOn(t *testing.T) {
 	id := bodyDocID(t, s)
 	s = driver.Step(s, &tern.Editing{ID: id, On: true}, now.Add(time.Second)).State
 	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(time.Second+40*time.Millisecond)).State
-	if n := s.Model.Notice; strings.Contains(n, "did not open") {
+	if n := s.Model.Notice; strings.Contains(n, "Cannot open the body for editing") {
 		t.Fatalf("notice %q after a double click and esc that no frame came between", n)
 	}
 	if out := driver.Step(s, key("r"), now.Add(time.Second+100*time.Millisecond)); !reopened(out.Cmds) {
@@ -725,7 +725,7 @@ func TestKeyGuardWhenAFrameWentOutJustBeforeTheEditingOn(t *testing.T) {
 	s, id := frameThenOpen(t, onDoc(t, true))
 	s = driver.Step(s, &tern.Editing{ID: id, On: false}, now.Add(40*time.Millisecond)).State
 	for _, k := range []string{"r", "u"} {
-		if out := driver.Step(s, key(k), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "did not open") {
+		if out := driver.Step(s, key(k), now.Add(100*time.Millisecond)); len(out.Cmds) != 0 || !strings.Contains(out.State.Model.Notice, "Cannot open the body for editing") {
 			t.Fatalf("%s after the dead edit sent %#v with notice %q, want it swallowed", k, out.Cmds, out.State.Model.Notice)
 		}
 	}
@@ -762,11 +762,11 @@ func TestKeysAfterADeadEditRunNoBindingUntilTheWindowEnds(t *testing.T) {
 		if len(out.Cmds) != 0 {
 			t.Fatalf("%s ran a binding: %#v", k, out.Cmds)
 		}
-		if n := out.State.Model.Notice; !strings.Contains(n, "did not open for editing") {
+		if n := out.State.Model.Notice; !strings.Contains(n, "Cannot open the body for editing") {
 			t.Fatalf("%s: notice %q, want it to say the body did not open", k, n)
 		}
 	}
-	if out := driver.Step(s, key("escape"), at); strings.Contains(out.State.Model.Notice, "did not open") {
+	if out := driver.Step(s, key("escape"), at); strings.Contains(out.State.Model.Notice, "Cannot open the body for editing") {
 		t.Fatal("escape was swallowed")
 	}
 	if out := driver.Step(s, key("r"), now.Add(3*time.Second)); !reopened(out.Cmds) {
@@ -781,7 +781,7 @@ func TestAgentStatesRelayDoesNotEndTheKeyGuard(t *testing.T) {
 	if len(out.Cmds) != 0 {
 		t.Fatalf("r after an agent-states relay sent %#v, want it swallowed", out.Cmds)
 	}
-	if !strings.Contains(out.State.Model.Notice, "did not open for editing") {
+	if !strings.Contains(out.State.Model.Notice, "Cannot open the body for editing") {
 		t.Fatalf("notice %q, want the guard's", out.State.Model.Notice)
 	}
 }
@@ -805,7 +805,7 @@ func TestKeysAreSwallowedOnTheMenuAfterADeadEdit(t *testing.T) {
 		if len(out.Cmds) != 0 || out.State.Model.CurrentMode() != model.ModeCollections {
 			t.Fatalf("%s on the Menu ran a binding: mode %q, %#v", k, out.State.Model.CurrentMode(), out.Cmds)
 		}
-		if !strings.Contains(out.State.Model.Notice, "did not open for editing") {
+		if !strings.Contains(out.State.Model.Notice, "Cannot open the body for editing") {
 			t.Fatalf("%s: notice %q, want the guard's", k, out.State.Model.Notice)
 		}
 	}
@@ -864,7 +864,7 @@ func TestTheKeyGuardNoticeGoesWhenTheWindowEndsWithNoInput(t *testing.T) {
 	if wait == nil {
 		t.Fatalf("the dead edit asked for no wait: %#v", out.Cmds)
 	}
-	if !strings.Contains(out.State.Model.Notice, "did not open") {
+	if !strings.Contains(out.State.Model.Notice, "Cannot open the body for editing") {
 		t.Fatalf("notice %q, want the guard's", out.State.Model.Notice)
 	}
 	ended := driver.Step(out.State, model.DocGuardExpired(*wait), now.Add(2*time.Second+40*time.Millisecond)).State
@@ -900,7 +900,7 @@ func TestKeysTypedIntoAnOpenInputAreNotSwallowed(t *testing.T) {
 	if out.State.Model.Filters.Search != "x" {
 		t.Fatalf("search holds %q, want the typed x", out.State.Model.Filters.Search)
 	}
-	if strings.Contains(out.State.Model.Notice, "did not open") {
+	if strings.Contains(out.State.Model.Notice, "Cannot open the body for editing") {
 		t.Fatalf("notice %q, the key was swallowed", out.State.Model.Notice)
 	}
 }
@@ -1240,7 +1240,7 @@ func TestInputOutsideTheDocReleasesTheHold(t *testing.T) {
 		}
 		// a late editing off does no harm and starts no guard
 		out = driver.Step(out.State, &tern.Editing{ID: id, On: false}, now.Add(1100*time.Millisecond))
-		if strings.Contains(out.State.Model.Notice, "did not open") {
+		if strings.Contains(out.State.Model.Notice, "Cannot open the body for editing") {
 			t.Fatalf("%s: the late editing off started the guard", name)
 		}
 	}

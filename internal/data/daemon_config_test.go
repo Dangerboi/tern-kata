@@ -232,3 +232,19 @@ func TestAMultilineStringHoldingADaemonHeaderIsNotAnEntry(t *testing.T) {
 		t.Errorf("blocks %+v, want two entries, the first ending before the second's header", blocks)
 	}
 }
+
+func TestAMultilineArrayEndingInAQuotedKeyLookalikeStaysInItsEntry(t *testing.T) {
+	const config = "[[daemon]]\nname = \"one\"\nlocal = true\nextra = [\n  \"a\",\n  [\"q\"]\n]\n\n[tui]\nx = 1\n\n[[daemon]]\nname = \"two\"\nlocal = true\n"
+	// the array's last line is `  ["q"]`-shaped only through nesting; also test a bare lookalike line.
+	const config2 = "[[daemon]]\nname = \"one\"\nlocal = true\nextra = [\n  \"a\",\n[\"q\"]\n]\n\n[tui]\nx = 1\n\n[[daemon]]\nname = \"two\"\nlocal = true\n"
+	for _, c := range []string{config, config2} {
+		path := configHome(t, c)
+		if err := RemoveDaemon("one"); err != nil {
+			t.Fatal(err)
+		}
+		want := "[tui]\nx = 1\n\n[[daemon]]\nname = \"two\"\nlocal = true\n"
+		if got := configText(t, path); got != want {
+			t.Errorf("file:\n%s\nwant:\n%s", got, want)
+		}
+	}
+}

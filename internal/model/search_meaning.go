@@ -123,6 +123,14 @@ func searchMeaningLabel(m Model) string {
 	return "Search by meaning"
 }
 
+// searchMeaningFooter is the search footer's words for ctrl+t, lower case like the footer's others: the search it switches to.
+func searchMeaningFooter(m Model) string {
+	if m.Search.Meaning {
+		return "by words"
+	}
+	return "by meaning"
+}
+
 // toggleSearchMeaning is ctrl+t in the search box: by words and by meaning, on the same query. By meaning needs one Project.
 func toggleSearchMeaning(m Model) (Model, []Cmd) {
 	if m.Search.Meaning {

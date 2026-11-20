@@ -32,4 +32,4 @@ Dated cards on the Board and open Issue rows in the list show a badge such as "o
 
 - Absolute times read `2026-11-18 18:21` (the Pane's zone, no seconds, no `Z`), or `18:21` when the time is today. Date-only fields read `2026-11-18`. A missing time or date reads `—`, never `-`.
 - Narrow list and table cells (Updated, children, related Issues) show a compact age with `ago`: `7s ago`, `4m ago`, `2h ago`, `3d ago`, `1w ago`; the hovercard carries the absolute time. Ages elsewhere are compact with no space: `7s`, `2h`.
-- The date badge words are "due today", "due tomorrow", "due 2026-11-25", "overdue 3d" and "scheduled 2026-12-01". In a narrow row the badge shrinks to the ISO date alone (`2026-12-01`); its tone and word stay in the hover.
+- The date badge words are "due today", "due tomorrow", "due 2026-11-25", "overdue 3d" and "scheduled 2026-12-01". In a narrow row the badge shrinks to the ISO date alone (`2026-12-01`); its tone stays, and the row's tooltip carries the full badge (`due 2026-12-01`), so due and scheduled can still be told apart.

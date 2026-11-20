@@ -120,7 +120,11 @@ func toggleJob(m Model) (Model, []Cmd) {
 	}
 	switch {
 	case job.Archived():
-		return refuse(m, Cannot("pause", "the job", errors.New("it is archived; restore it first")))
+		verb := "pause"
+		if !job.Definition.Enabled {
+			verb = "resume"
+		}
+		return refuse(m, Cannot(verb, "the job", errors.New("it is archived; restore it first")))
 	case job.Definition.Enabled:
 		return writeJobEnabled(m, job, false)
 	}

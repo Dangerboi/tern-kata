@@ -314,7 +314,7 @@ func factSpans(f model.Fact) []ui.Span {
 	if f.Version == "" {
 		return []ui.Span{{T: f.Text, S: "muted"}}
 	}
-	return []ui.Span{{T: f.Text + " ", S: "muted"}, {T: f.Version, S: mono("muted")}}
+	return []ui.Span{{T: f.Text + " ", S: "muted"}, monoSpan(f.Version, "muted")}
 }
 
 // contextLine is the muted line under the top bar. On the Issues Page it is permanent, so the list does not jump when a filter
@@ -555,7 +555,7 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		return twoLineRow(row, parts, selected, role, menu)
 	}
 	laid := layoutRow(cols, lookups.width, parts)
-	return ui.Item{Common: ui.Common{Key: row.UID, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: rowActions(row.Issue, row.HasChildren, menu, "")}, Label: ui.Spans(laid.label...), Detail: ui.T(strings.Repeat(" ", itemDetailWidth)), Value: ui.Spans(laid.value...)}
+	return ui.Item{Common: ui.Common{Key: row.UID, Title: laid.tip, Role: strings.TrimSpace(role + " " + cols.role()), Tone: tone, Actions: rowActions(row.Issue, row.HasChildren, menu, "")}, Label: ui.Spans(laid.label...), Detail: ui.T(strings.Repeat(" ", itemDetailWidth)), Value: ui.Spans(laid.value...)}
 }
 
 // rowActions are an Issue row's or card's actions: click (a parent's click folds it instead), the double click that opens it, and

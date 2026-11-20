@@ -28,9 +28,11 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - A save of the Issue body or of a comment on a selection that fails or is refused (kata reconnecting, say) raises a Notice naming the Issue that says its Draft is kept.
   - A conflict that arrives while another Issue's card is open raises a Notice saying `E` on that Issue opens the conflict card; the line under that Issue's body says so too once the Notice is gone, whether the body is empty, has a picture or is text.
   - While the Issue holds a Draft the Issue body cannot take, the Issue body is read-only and offers no Comment button.
-  - While the body is open for editing the Pane holds its updates, because Tern would close the edit on any that changes anything; what arrives meanwhile (an agent's change, the clock moving) is drawn when you leave. A click elsewhere, a key that reaches the Pane or a change in another field also ends the wait.
-  - When Tern closes an edit at once anyway, because an update was already on its way as you double-clicked, the Pane ignores the printable keys and `Enter` that would run a key binding for about two seconds, and a Notice says to double-click the body again, so typing does not run a key binding.
-    - A click, a text selection, a field taking focus, a button press, a change to a dropdown or switch, an edit of the body, an edit that stays open longer than half a second, or the end of the two seconds lifts it and takes the Notice away. An agent changing state does not.
+  - While the body is open for editing the Pane holds its updates, because Tern would close the edit on any that changes anything.
+    - What arrives meanwhile (an agent's change, the clock moving) is drawn when you leave.
+    - A click elsewhere, a key that reaches the Pane or a change in another field also ends the wait.
+  - When Tern closes an edit at once anyway, because an update was already on its way as you double-clicked, a Notice says to double-click the body again, and for about two seconds the Pane ignores the printable keys and `Enter` that would run a key binding, so typing does not run one.
+    - A click, a text selection, a field taking focus, a button press, a change to a dropdown or switch, an edit of the body, an edit that stays open longer than half a second, or the end of the two seconds lifts that guard and takes the Notice away. An agent changing state does not.
     - A card, a picker or a text field keeps its keys; the Menu is guarded like the list.
   - `E` and `$EDITOR` work as before.
   - A body with a picture (an `<img>` tag or a Markdown image) is drawn as before, so its pictures keep their size and open large on a click; edit it with `E`.
@@ -86,8 +88,8 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - A button shows one keycap, and the footer of every Page ends with `Esc`, `?` and `Q`.
   - Dates read `2026-11-18 18:21` (`18:21` today) in the Pane's zone, and a missing value reads `—`.
     - Narrow cells show a compact age such as `4m ago`.
-    - The Date badge reads "overdue 3d", "due 2026-11-25" or "scheduled 2026-12-01"; in a narrow row it shrinks to the ISO date alone (`2026-12-01`), with the tone and the word in its hover.
-  - Failures are drawn in the error tone, and every Notice that reports one starts with "Cannot"; the selected row is filled with the accent colour, which marks nothing else.
+    - The Date badge reads "overdue 3d", "due 2026-11-25" or "scheduled 2026-12-01"; in a narrow row it shrinks to the ISO date alone (`2026-12-01`), and the row's tooltip carries the full badge (`due 2026-12-01`).
+  - Failures are drawn in the error tone, and every Notice that reports one starts with "Cannot" and holds one colon, before the reason; the selected row is filled with the accent colour, which marks nothing else.
   - A Popup card keeps its error or pending line above its buttons, so a failure stays in view; the Create, Close, Delete Issue, Move to Project, Dates, Recurrence and View cards word their fields, hints and buttons alike.
   - Dates, Recurrence, Lanes, Worker and Start a team set each label above its input in one tone, and the field cards and the View card carry a head icon.
   - The blocker card is headed "Block an Issue" with a "Blocked Issue" field, and a read-only Agents card ends in **Close**.
@@ -114,7 +116,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
       - A close message and its evidence (`pull request`, `test run` and the like, with a command as typed) sit under the event inside its rule, and `closed as done` is plain text rather than green.
       - A comment's links line names targets (`dana's reply`, `dangerboi's comment`) and leaves the relation to the comment's head.
       - A metadata change names its new value (`set todo status to doing`, `set Work attention to needs human`, `cleared todo status`).
-  - The Links tab groups its rows under a heading per relation with a count (`Blocked by 1`, `Related 3`),.
+  - The Links tab groups its rows under a heading per relation with a count (`Blocked by 1`, `Related 3`).
     - Every row carries the linked Issue's title, including Issues of other Projects and Issues the Pane has not loaded; kata is asked for those titles with the detail and with every live refresh of it, a few reads at once, and the answers are cached for five minutes.
     - A closed child or a link into another Project keeps its title after a refresh, including when the daemon is slow to answer.
 

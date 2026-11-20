@@ -506,6 +506,22 @@ func TestAnOptionsOnlyEditFromTheEditorAsksBeforeTheFormCloses(t *testing.T) {
 	}
 }
 
+func TestAnEditorRoundTripThatChangesNothingClosesWithoutAsking(t *testing.T) {
+	flow := reviewFlow()
+	flow.Options = []byte(`{"mystery":true}`)
+	flow.Steps[0].Options = []byte(`{"limits":{"turns":12}}`)
+	m := onWorkflows(t, flow)
+	m, _ = model.Update(m, model.KeyMsg{Chord: "e"})
+	m = loadedText(m, m.Workflows.Card.Form.JSON())
+	if m.Workflows.Card.Err != nil {
+		t.Fatalf("the editor's own text was refused: %v", m.Workflows.Card.Err)
+	}
+	closed, _ := model.Update(m, model.KeyMsg{Chord: "escape"})
+	if closed.CurrentMode() == model.ModeDiscard {
+		t.Errorf("esc after an unchanged round trip asked the discard question")
+	}
+}
+
 func TestAnUnsupportedVersionTypedInTheEditorIsRefusedNotRewrittenAsOne(t *testing.T) {
 	m := onWorkflows(t, reviewFlow())
 	m, _ = model.Update(m, model.KeyMsg{Chord: "e"})

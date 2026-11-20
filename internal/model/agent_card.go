@@ -386,6 +386,8 @@ func (m Model) agentCardNotice(action Action, reason string) string {
 		verb, thing = "start", "a team"
 	case AgentCardPause:
 		verb, thing = "pause or resume", "the team"
+	default:
+		verb, thing = "do", "that"
 	}
 	switch action {
 	case AgentCardSplit, AgentCardTab, AgentCardNewBackground, AgentCardTeam:
