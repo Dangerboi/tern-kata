@@ -36,13 +36,19 @@ func linkGroupHeading(m model.Model, row model.DetailRow) tern.Element {
 	return ui.Text{Common: ui.Common{Key: "group-" + row.Relation}, Spans: spans}
 }
 
-// EventTimeRole marks an event's time, which EventTimeCSS sets off from the sentence with a thin rule.
-const EventTimeRole = "tern-kata.event-time"
+// EventTimeRole marks an event's time and EventWhatRole what follows it: EventTimeCSS keeps the time on one line and draws a thin
+// rule down the left of the event, so a close's message and evidence sit inside it however many lines they take.
+const (
+	EventTimeRole = "tern-kata.event-time"
+	EventWhatRole = "tern-kata.event-what"
+)
 
-const EventTimeCSS = `.sf-text[data-role~='` + EventTimeRole + `'] { border-right: 2px solid var(--t3); padding-right: 10px; white-space: pre; }`
+const EventTimeCSS = `.sf-text[data-role~='` + EventTimeRole + `'] { white-space: pre; }
+[data-role~='` + EventWhatRole + `'] { border-left: 2px solid var(--t3); padding-left: 10px; }`
 
 // historySentence is an event as its time, a rule, then "<author> <verb> <object>" with the verb and object in the verb's tone; a
-// referenced Issue's id follows as a link.
+// referenced Issue's id follows as a link. The row never wraps: a long sentence or a close's message wraps beside the time,
+// not under it.
 func historySentence(m model.Model, row model.DetailRow, action string, now time.Time) tern.Element {
 	sentence := row.History
 	noShrink := 0.0
@@ -52,10 +58,10 @@ func historySentence(m model.Model, row model.DetailRow, action string, now time
 	if object := strings.TrimRight(sentence.Object, " "); object != "" {
 		spans = append(spans, ui.Span{T: " " + object, S: string(sentence.Tone)})
 	}
-	var what tern.Element = ui.Text{Common: ui.Common{Key: "heading", Actions: clicks}, Spans: spans}
+	var what tern.Element = ui.Text{Common: ui.Common{Key: "heading", Role: EventWhatRole, Actions: clicks}, Spans: spans}
 	if row.Message != "" || len(row.Evidence) > 0 {
-		// a close's message and evidence sit under the sentence, inside the rule
-		lines := ui.Nodes(what)
+		// a close's message and evidence sit under the sentence, inside the rule, taking the rest of the row
+		lines := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Actions: clicks}, Spans: spans})
 		if row.Message != "" {
 			lines = append(lines, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Message})
 		}
@@ -66,7 +72,7 @@ func historySentence(m model.Model, row model.DetailRow, action string, now time
 			}
 			lines = append(lines, ui.Text{Common: ui.Common{Key: "evidence"}, Spans: evidence})
 		}
-		what = ui.Col{Common: ui.Common{Key: "what", Grow: 1}, Gap: ui.GapXS, Children: lines}
+		what = ui.Col{Common: ui.Common{Key: "what", Role: EventWhatRole, Grow: 1, Basis: ui.BasisFrac(0)}, Gap: ui.GapXS, Children: lines}
 	}
 	children := ui.Nodes(when, what)
 	if row.Ref != "" {
@@ -75,5 +81,5 @@ func historySentence(m model.Model, row model.DetailRow, action string, now time
 	if sentence.After != "" {
 		children = append(children, ui.Text{Common: ui.Common{Key: "after", Actions: clicks}, Spans: []ui.Span{{T: sentence.After, S: string(sentence.Tone)}}})
 	}
-	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapMD, Align: ui.AlignStart, Wrap: true, Children: children}
+	return ui.Row{Common: ui.Common{Key: "row"}, Gap: ui.GapMD, Align: ui.AlignStart, Children: children}
 }
