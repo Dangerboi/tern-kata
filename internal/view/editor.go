@@ -83,7 +83,7 @@ func conflictLayer(m model.Model, draft model.Draft) tern.Element {
 	if !draft.Conflict.UpdatedAt.IsZero() {
 		current = append(current, ui.Text{Common: ui.Common{Key: "edited"}, Spans: []ui.Span{{T: "edited "}, timeSpan(m.Calendar.Read(draft.Conflict.UpdatedAt, m.Now))}})
 	}
-	current = append(current, ui.Md{Text: draft.Conflict.Body})
+	current = append(current, markdown("", draft.Conflict.Body))
 	children := ui.Nodes(ui.Row{Common: ui.Common{Key: "versions"}, Gap: ui.GapMD, Wrap: true, Children: ui.Nodes(
 		ui.Col{Common: ui.Common{Key: "draft", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: ui.Nodes(ui.Text{Common: ui.Common{Key: "heading"}, Spans: []ui.Span{{T: "Yours", S: "muted strong"}}}, TextEditorLines("body", draft.Editor, true, 12))},
 		ui.Col{Common: ui.Common{Key: "current", Grow: 1, Basis: ui.BasisFrac(0.5)}, Children: current},

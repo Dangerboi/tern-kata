@@ -75,6 +75,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
+- Shell code blocks in comments, close messages and other Issue text the Pane draws offer no Run on Tern 0.9.29 and later, since agents, other people and other Projects write that text; Copy stays, as an icon.
 - The Issues Page, the Board and their Popup cards follow one design: the same tones, wording, dates and keys everywhere.
   - Keys read in words: `Ctrl+D`, `Ctrl+Space`, `Shift+N`, `Enter`, `Tab`, `Esc`, a letter as its capital and the arrows as glyphs, in the footer, the help sheet, buttons, the Page bar and the keys named in sentences. The Lettered Pages read `Shift+C`, `Shift+F`, `Shift+D` and `Shift+K`, help rows start with a capital, and a toast whose button carries the key (`ABC is closed.`) and a Y/N question (`Quit tern-kata?`) name no key in the text. They are drawn in the plugin's own keycap chip, because Tern's key style would rewrite them into `^D`.
   - A button shows one keycap, and the footer of every Page ends with `Esc`, `?` and `Q`.

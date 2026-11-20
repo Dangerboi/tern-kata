@@ -105,6 +105,26 @@ func TestLongCloseMessageAndEvidenceRenderWhole(t *testing.T) {
 	}
 }
 
+func TestMarkdownThePaneDrawsOffersNoRun(t *testing.T) {
+	m, _ := referencing(model.TabEvents)
+	found := 0
+	for id, n := range render(t, m) {
+		if n.K != "md" {
+			continue
+		}
+		found++
+		if run, ok := n.P["run"].(bool); !ok || run {
+			t.Errorf("%s: run = %v, want false: Issue text is not trusted to run commands", id, n.P["run"])
+		}
+		if icons, _ := n.P["icons"].(bool); !icons {
+			t.Errorf("%s: code block heads are not icons", id)
+		}
+	}
+	if found == 0 {
+		t.Fatal("no Markdown node drawn; the test shows nothing")
+	}
+}
+
 func TestPropertiesShowTheParentAsAReferenceAndNoChildLines(t *testing.T) {
 	links := []model.Link{
 		{ID: 1, Type: "parent", FromIssueUID: "alpha", FromQualifiedID: "work#aaaa", ToIssueUID: "up", ToQualifiedID: "work#up"},

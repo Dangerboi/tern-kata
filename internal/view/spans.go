@@ -33,6 +33,13 @@ const KeyCSS = `.sf-t-` + KeyStyle + ` { padding: 0 0.35em; color: var(--sf-c-ke
 // keySpan is a key drawn as a keycap, named in words (see KeyWords).
 func keySpan(key string) ui.Span { return ui.Span{T: KeyWords(key), S: KeyStyle} }
 
+// markdown is Markdown the Pane draws: Issue text written by people, agents and other Projects, so no shell code block offers
+// Run, and code block heads are icons.
+func markdown(key, text string) ui.Md {
+	noRun := false
+	return ui.Md{Common: ui.Common{Key: key}, Text: text, Run: &noRun, Icons: true}
+}
+
 // prose is text whose "{W}" markers are keycaps: each marker becomes keySpan("W"), "{{" is a literal brace, and the rest carries
 // style. A "{" with no closing "}" is literal text. The model names a key with model.Key so a notice never spells one by hand.
 func prose(text, style string) []ui.Span {

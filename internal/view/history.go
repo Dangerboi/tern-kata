@@ -63,7 +63,7 @@ func historySentence(m model.Model, row model.DetailRow, action string, now time
 		// a close's message and evidence sit under the sentence, inside the rule, taking the rest of the row
 		lines := ui.Nodes(ui.Text{Common: ui.Common{Key: "heading", Actions: clicks}, Spans: spans})
 		if row.Message != "" {
-			lines = append(lines, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Message})
+			lines = append(lines, markdown("body", row.Message))
 		}
 		if len(row.Evidence) > 0 {
 			evidence := make([]ui.Span, len(row.Evidence))

@@ -225,7 +225,7 @@ func detailRows(m model.Model, now time.Time) (children []detailChild, activity 
 			}
 		}
 		if row.Body != "" {
-			parts = append(parts, ui.Md{Common: ui.Common{Key: "body"}, Text: row.Body})
+			parts = append(parts, markdown("body", row.Body))
 		}
 		if item.Depth > 0 {
 			parts = ui.Nodes(indented("indented", item.Depth, ui.Col{Common: ui.Common{Key: "parts", Grow: 1, Min: &ui.Bounds{W: ui.Ch(0)}}, Children: parts}))
@@ -503,7 +503,7 @@ func bodyNodes(m model.Model, issue model.Issue) []tern.Element {
 		return append([]tern.Element{empty}, line...)
 	}
 	if !m.InPlaceBody || model.HasPicture(body) {
-		return append([]tern.Element{ui.Md{Common: ui.Common{Key: "body"}, Text: body}}, line...)
+		return append([]tern.Element{markdown("body", body)}, line...)
 	}
 	doc := ui.Doc{Common: ui.Common{Key: strings.TrimPrefix(BodyDocID(issue.UID), DetailContentID+".")}, Text: state.Text, Edit: state.Editable, Comment: state.Editable}
 	return append([]tern.Element{doc}, line...)
