@@ -264,7 +264,7 @@ func workflowForm(m model.Model, c model.WorkflowCard) []tern.Element {
 		children = append(children, pick)
 	}
 	children = append(children, text(model.WorkflowFieldKey, "Step name", stepNameHint)...)
-	if kind := choiceControl(m, model.CardWorkflow, model.WorkflowFieldKind, "Kind", f.Field == model.WorkflowFieldKind, focusedHint(f.Field == model.WorkflowFieldKind, kindHint), ""); kind != nil {
+	if kind := choiceControl(m, model.CardWorkflow, model.WorkflowFieldKind, "Kind", f.Field == model.WorkflowFieldKind, kindHint, ""); kind != nil {
 		children = append(children, kind)
 	}
 	bodyLabel := "Prompt"
@@ -337,14 +337,6 @@ const (
 	afterHint    = "Earlier steps this one needs, separated by commas. If one fails, this step is skipped."
 	retriesHint  = "How many times a failed step runs again, 0 to 100. A timeout is never retried."
 )
-
-// focusedHint is hint while its field has focus, else empty: a hint is shown only for the focused field.
-func focusedHint(focused bool, hint string) string {
-	if focused {
-		return hint
-	}
-	return ""
-}
 
 // busyReason is the reason a card's buttons cannot be pressed while it works, "" when they can.
 func busyReason(busy bool) string {

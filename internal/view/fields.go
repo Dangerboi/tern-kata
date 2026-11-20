@@ -109,11 +109,12 @@ func saveLabel(m model.Model) string {
 }
 
 // labelledInput is a form input's three nodes, for the caller to spread into its own column: the label above (default text, like a choice field's label,
-// accent while the input has focus), the input itself, and its format hint as one muted line, present only while the input has
-// focus and hint is not empty. The nodes keep flat ids: key-label, the input's own key and key-hint.
+// accent while the input has focus), the input itself, and its format hint as one muted line, present whenever hint is not
+// empty, focused or not, so a card keeps its height as focus moves. The nodes keep flat ids: key-label, the input's own key
+// and key-hint.
 func labelledInput(key, label, hint string, focused bool, input tern.Element) []tern.Element {
 	nodes := []tern.Element{fieldLabel(key, label, focused), input}
-	if focused && hint != "" {
+	if hint != "" {
 		nodes = append(nodes, toneText(key+"-hint", ui.ToneMuted, hint))
 	}
 	return nodes

@@ -21,7 +21,7 @@ const (
 )
 
 func DefaultLanes() []string {
-	return []string{"needs-triage", "needs-info", "ready-for-agent", "ready-for-human"}
+	return []string{"needs-triage", "needs-info", "ready-for-agent", "ready-for-human", "waiting"}
 }
 
 // kata's label rule: 1 to 64 characters of [a-z0-9._:-].

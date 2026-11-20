@@ -154,15 +154,15 @@ func TestBoardShowsNoLaneTheDefaultLanesAndDone(t *testing.T) {
 		boardCard("triage", "needs-triage"), boardCard("info", "needs-info"), boardCard("agent", "ready-for-agent", "bug"), boardCard("human", "ready-for-human"),
 		closedAt("fresh", time.October, 7, "ready-for-agent"), closedAt("stale", time.September, 20))
 	heads, _ := lanes(t, s)
-	if len(heads) != 6 {
-		t.Fatalf("the Board draws %d columns, want 6", len(heads))
+	if len(heads) != 7 {
+		t.Fatalf("the Board draws %d columns, want 7", len(heads))
 	}
 	wantLane(t, s, 0, "No lane", "bugonly", "plain") // equal update times list by uid
 	wantLane(t, s, 1, "Needs triage", "triage")
 	wantLane(t, s, 2, "Needs info", "info")
 	wantLane(t, s, 3, "Ready for agent", "agent")
 	wantLane(t, s, 4, "Ready for human", "human")
-	wantLane(t, s, 5, "Done", "fresh")
+	wantLane(t, s, 6, "Done", "fresh")
 }
 
 func TestLaneHeadersShowTheirCardCount(t *testing.T) {
@@ -180,7 +180,7 @@ func TestCardsFollowTheListOrder(t *testing.T) {
 
 func TestDoneHoldsTheLastFourteenDaysNewestFirst(t *testing.T) {
 	s := boardPane(t, closedAt("before", time.September, 23), closedAt("first", time.September, 24), closedAt("mid", time.October, 3), closedAt("last", time.October, 8))
-	wantLane(t, s, 5, "Done", "last", "mid", "first")
+	wantLane(t, s, 6, "Done", "last", "mid", "first")
 }
 
 func TestAnIssueWithTwoLaneLabelsShowsOnceWithAnAlsoNote(t *testing.T) {
@@ -376,7 +376,7 @@ func TestXOpensTheCloseCardForTheSelectedCard(t *testing.T) {
 func TestRReopensADoneCardAndItsLaneShowsItNext(t *testing.T) {
 	closed := closedAt("done1", time.October, 7, "ready-for-agent")
 	s := boardPane(t, closed)
-	wantLane(t, s, 5, "Done", "done1")
+	wantLane(t, s, 6, "Done", "done1")
 	out := step(t, s, key("r"))
 	want := []model.Cmd{model.ReopenIssueCmd{Workspace: "/repo", UID: "done1", ProjectID: 0, Actor: ""}}
 	if !reflect.DeepEqual(out.Cmds, want) {
@@ -386,7 +386,7 @@ func TestRReopensADoneCardAndItsLaneShowsItNext(t *testing.T) {
 	reopened.Status, reopened.ClosedAt = "open", nil
 	after := answered(t, out.State, model.CloseResultMsg{UID: "done1"}, reopened)
 	wantLane(t, after.State, 3, "Ready for agent", "done1")
-	wantLane(t, after.State, 5, "Done")
+	wantLane(t, after.State, 6, "Done")
 	if after.State.Model.SelectedUID != "done1" {
 		t.Errorf("selected %q", after.State.Model.SelectedUID)
 	}
@@ -409,10 +409,10 @@ func TestIssueKeysActOnTheSelectedCardAndEscOpensTheMenu(t *testing.T) {
 func TestFiltersNarrowTheBoard(t *testing.T) {
 	mine, other := ownedBy(boardCard("mine"), "me"), closedAt("shut", time.October, 7)
 	s := boardPane(t, mine, boardCard("theirs"), other)
-	wantLane(t, s, 5, "Done", "shut")
+	wantLane(t, s, 6, "Done", "shut")
 	out := answered(t, feed(t, s, key("f"), key("tab"), key("m"), key("e")).State, key("ctrl+o"), mine)
 	wantLane(t, out.State, 0, "No lane", "mine")
-	wantLane(t, out.State, 5, "Done")
+	wantLane(t, out.State, 6, "Done")
 }
 
 func TestALiveRefreshMovesCards(t *testing.T) {

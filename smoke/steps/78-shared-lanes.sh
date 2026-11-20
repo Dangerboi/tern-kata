@@ -16,7 +16,7 @@ ctl key Right
 expect_tree "[data-id='layer.lanes.share.control'] .sf-tab[aria-selected='true']" '.count == 1 and .nodes[0].text == "The Project"'
 ctl key Enter
 expect_tree "[data-id='layer.lanes']" '.count == 0'
-expect_tree "$(sl_lane 5)" '.ok and .nodes[0].text == "Shared lane"'
+expect_tree "$(sl_lane 6)" '.ok and .nodes[0].text == "Shared lane"'
 sl_project '.project.metadata["tern.lanes"].labels | last == "shared-lane"' | grep -qx true
 if grep -qs shared-lane "$XDG_CONFIG_HOME/tern-kata/lanes.toml"; then printf 'sharing wrote lanes.toml\n' >&2; return 1; fi
 quit_app
@@ -24,7 +24,7 @@ quit_app
 sed "s|KATA_HOME=|XDG_CONFIG_HOME=$tmp/other-config KATA_HOME=|" "$tmp/launch.ctl" >"$tmp/other-config.ctl"
 ctl --file "$tmp/other-config.ctl"
 ctl key 5
-expect_tree "$(sl_lane 5)" '.ok and .nodes[0].text == "Shared lane"'
+expect_tree "$(sl_lane 6)" '.ok and .nodes[0].text == "Shared lane"'
 sl_socket=$(kata daemon status --json | jq -r '.selected.endpoint | sub("^unix://"; "")')
 curl -fsS --unix-socket "$sl_socket" -X POST -H 'Content-Type: application/json' \
   "http://kata.invalid/api/v1/projects/$(sl_project '.project.id')/metadata" \

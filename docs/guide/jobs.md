@@ -102,7 +102,7 @@ The **Kind** field offers:
 
 kata never runs the last three. The card makes and edits all of them and kata accepts them; the worker runs all three kinds and refuses a workflow it does not support with the reason. A job being edited offers only the kinds of its own side (a Recurring Issue stays one, and a worker's job stays a worker's).
 
-Each field has a one- or two-word label (Cron expression, Time zone, Interval, Once at, Target Issue, Notify about, Lead, Parent Issue, Prompt, Workflow, Agent profile, Checkout, Secrets, Adapter, Run Issue, Child title, Child body, Scheduled offset, Deadline offset, Inbox recipient, Inbox message, Overlap, Timeout, Catch up, Grace, Enabled), and the format it reads is a muted hint under the focused field. Every text field, the Prompt included, is drawn under its label in every kind and trigger. The card marks no field as required; a refusal names the field.
+Each field has a one- or two-word label (Cron expression, Time zone, Interval, Once at, Target Issue, Notify about, Lead, Parent Issue, Prompt, Workflow, Agent profile, Checkout, Secrets, Adapter, Run Issue, Child title, Child body, Scheduled offset, Deadline offset, Inbox recipient, Inbox message, Overlap, Timeout, Catch up, Grace, Enabled), and the format it reads is a muted hint under the field, focused or not. Every text field, the Prompt included, is drawn under its label in every kind and trigger. The card marks no field as required; a refusal names the field.
 
 The fields are reached with `Tab` and `Shift+Tab`; a field that doesn't apply is hidden and skipped.
 

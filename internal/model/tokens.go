@@ -98,7 +98,7 @@ func TokenLabel(field Field) string {
 	return string(field)
 }
 
-// TokenHint is the one muted line under a field while it has focus, "" for a field that needs none.
+// TokenHint is the one muted line under a field, "" for a field that needs none.
 func TokenHint(field Field) string {
 	switch field {
 	case TokenExpires:

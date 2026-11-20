@@ -22,10 +22,7 @@ func datesLayer(m model.Model) tern.Element {
 		label := model.DatesLabel(name)
 		text := form.Value(name)
 		input := ui.Input{Common: ui.Common{Key: string(name), Tone: tone, Aria: label}, Field: ui.Field{Text: text, Cursor: caretAt(form.Caret, name, text), Mode: "insert", Placeholder: ui.T("YYYY-MM-DD"), Readonly: form.Saving}}
-		children = append(children, fieldLabel(string(name), label, focused), input, toneText(string(name)+"-preview", ui.ToneMuted, m.DatesPreview(name)))
-		if focused {
-			children = append(children, toneText(string(name)+"-hint", ui.ToneMuted, "Date like 2026-11-20, today, tomorrow or +3d. Blank clears it."))
-		}
+		children = append(children, fieldLabel(string(name), label, focused), input, toneText(string(name)+"-preview", ui.ToneMuted, m.DatesPreview(name)), toneText(string(name)+"-hint", ui.ToneMuted, "Date like 2026-11-20, today, tomorrow or +3d. Blank clears it."))
 	}
 	if form.Err != nil {
 		children = append(children, toneText("error", ui.ToneError, form.Err.Error()))

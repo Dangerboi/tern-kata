@@ -18,7 +18,7 @@ var recurrenceTitles = map[model.Field]string{
 	model.RecurrenceZone:      "Time zone",
 }
 
-// recurrenceHints are the format help lines shown under a text field while it has focus.
+// recurrenceHints are the format help lines shown under a text field.
 var recurrenceHints = map[model.Field]string{
 	model.RecurrenceDay: "1-31, last, 2nd tue, last fri",
 }
@@ -43,7 +43,7 @@ func isDateField(f model.RecurrenceFormState, name model.Field) bool {
 	return name == model.RecurrenceStart || (name == model.RecurrenceEnd && f.Ends == model.EndUntil)
 }
 
-// recurrenceHint is the one muted line under the focused field, "" when the field has none.
+// recurrenceHint is the one muted line under the field, "" when the field has none.
 func recurrenceHint(f model.RecurrenceFormState, name model.Field) string {
 	if isDateField(f, name) {
 		return recurrenceDateHint
@@ -141,7 +141,7 @@ func recurrenceLayer(m model.Model) tern.Element {
 	return withCalendar(m, model.CardRecurrence, ui.Nodes(popup(overlay, children)))
 }
 
-// recurrenceField is one field of the card: its label above, then its control, then the format hint while the field has focus.
+// recurrenceField is one field of the card: its label above, then its control, then the format hint, focused or not.
 // A choice drawn by Tern carries its own label.
 func recurrenceField(m model.Model, f model.RecurrenceFormState, field model.FieldSpec) []tern.Element {
 	name, focused := field.Name, field.Name == f.Field

@@ -111,7 +111,7 @@ var jobFieldTitles = map[Field]string{
 	JobFieldEnabled:      "Enabled",
 }
 
-// jobFieldHints are the one muted line under a field while it has focus: the format it reads, and what a blank value means. A
+// jobFieldHints are the one muted line under a field: the format it reads, and what a blank value means. A
 // field with no entry has no hint.
 var jobFieldHints = map[Field]string{ //nolint:gosec // G101: field hints ("ENV=source"), not credentials
 	JobFieldCron:      "5 fields, or @daily",
@@ -144,7 +144,7 @@ func positiveText(n int64) string {
 
 func JobPrompt(name Field) string { return jobFieldTitles[name] }
 
-// JobHint is the line under the field called name while it has focus, "" when it has none.
+// JobHint is the line under the field called name, "" when it has none.
 func JobHint(name Field) string { return jobFieldHints[name] }
 
 func jobFieldName(name Field) string { return jobFieldTitles[name] }

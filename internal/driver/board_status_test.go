@@ -36,7 +36,7 @@ func TestTheBoardReadsWithoutTheStatusFilterAndTheIssuesPageWithIt(t *testing.T)
 	}
 	board := feed(t, out.State, newestLanes{ProjectUID: "p"}).State
 	board = step(t, board, model.SnapshotLoaded{Request: read.Request, Query: read.Query, Snapshot: model.Snapshot{Issues: []model.Issue{boardCard("a"), closed}}, LocalDate: boardToday, TimeZone: "UTC"}).State
-	wantLane(t, board, 5, "Done", "done1")
+	wantLane(t, board, 6, "Done", "done1")
 
 	lane := feed(t, board, key("right"), key("enter")).State
 	if !lane.Model.OnBoard() || lane.Model.Board.Mode != model.BoardLane {

@@ -51,11 +51,11 @@ func TestDoneShowsTheTwentyNewestClosedAndSaysHowManyQualify(t *testing.T) {
 func TestSavedDoneLimitsChangeDone(t *testing.T) {
 	s := boardPane(t, closedCards(6)...)
 	s = step(t, s, newestLanes{ProjectUID: "p", DoneCards: 2}).State
-	wantLane(t, s, 5, "Done", "c06", "c05")
+	wantLane(t, s, 6, "Done", "c06", "c05")
 	s = step(t, s, newestLanes{ProjectUID: "p", DoneDays: 7}).State
-	wantLane(t, s, 5, "Done", "c06", "c05", "c04", "c03", "c02", "c01")
+	wantLane(t, s, 6, "Done", "c06", "c05", "c04", "c03", "c02", "c01")
 	s = step(t, s, model.LanesSaved{ProjectUID: "p", DoneDays: 2, DoneCards: 1}).State
-	wantLane(t, s, 5, "Done", "c06")
+	wantLane(t, s, 6, "Done", "c06")
 	days, cards := s.Model.DoneLimits()
 	if days != 2 || cards != 1 {
 		t.Errorf("limits %d, %d", days, cards)

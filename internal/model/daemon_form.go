@@ -148,7 +148,7 @@ func (f DaemonFormState) Label(field Field) string {
 	return string(field)
 }
 
-// Hint is the one muted line under a field while it has focus, "" for a field that needs none.
+// Hint is the one muted line under a field, "" for a field that needs none.
 func (f DaemonFormState) Hint(field Field) string {
 	switch field {
 	case DaemonName:

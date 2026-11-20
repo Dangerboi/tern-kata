@@ -8,7 +8,7 @@ import (
 
 const SearchID = "main.columns.list.search"
 
-// labelHint is the one muted line under the Label field while it has focus.
+// labelHint is the one muted line under the Label field.
 const labelHint = "Separate with commas; any one matches."
 
 func filterLayer(m model.Model) tern.Element {

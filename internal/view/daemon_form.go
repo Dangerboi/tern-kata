@@ -21,10 +21,7 @@ func daemonLayer(m model.Model) tern.Element {
 		}
 		focused := form.Field == name
 		label := form.Label(name)
-		hint := ""
-		if focused {
-			hint = form.Hint(name)
-		}
+		hint := form.Hint(name)
 		if !spec.Text {
 			if control := choiceControl(m, model.CardDaemon, name, label, focused, hint, ""); control != nil {
 				children = append(children, control)

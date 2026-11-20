@@ -113,7 +113,7 @@ func TestArrowsSwitchLanesAndEscReturnsToTheBoardWithTheCardKept(t *testing.T) {
 	}
 	s = feed(t, s, key("j")).State
 	out := step(t, s, key("escape"))
-	if heads, _ := lanes(t, out.State); len(heads) != 6 || laneHeader(t, out.State) != "" {
+	if heads, _ := lanes(t, out.State); len(heads) != 7 || laneHeader(t, out.State) != "" {
 		t.Fatalf("the Board did not come back: %d columns", len(heads))
 	}
 	if out.State.Model.SelectedUID != "t2" || drawsDetail(t, out.State) {

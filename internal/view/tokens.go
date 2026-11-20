@@ -29,10 +29,7 @@ func tokenLayer(m model.Model) tern.Element {
 			tone = ui.ToneAccent
 		}
 		label := model.TokenLabel(name)
-		hint := ""
-		if focused {
-			hint = model.TokenHint(name)
-		}
+		hint := model.TokenHint(name)
 		if !spec.Text {
 			if control := choiceControl(m, model.CardToken, name, label, focused, hint, ""); control != nil {
 				children = append(children, control)

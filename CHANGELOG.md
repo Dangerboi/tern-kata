@@ -18,6 +18,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
+- A fifth default Lane, `waiting`, after `ready-for-human`: Issues parked on something outside the Project (an upstream answer or release) get their own column instead of No lane. Projects with their own Lane list are unchanged.
 - Set priority and the Create card's Priority are one segmented row (None, P0 to P4) that shows every choice at once, replacing a select whose menu the card body clipped after its first options. The Filter and View cards' Relationship is a segmented row for the same reason, and the Close reason stays tabs down to a 56-column Pane. Set priority opens on the Issue's current priority; `!` then a digit or `-` still sets or clears it at once.
 - On Tern 0.9.26 or newer the Issue body is edited in place: a double click on it edits, and leaving it saves at once, as the Edit Issue body card's Save does.
   - Someone else's edit made in between opens the same conflict card; if the save fails, the edit is kept as a Draft that `E` opens.
@@ -104,7 +105,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
   - A worker a plugin reload left running logs only its last line, in its exit message.
 - The Jobs, Runs and Workflows Pages, the Job card, the Worker card and the Backfill card follow the same design.
   - The Jobs Page shows `Jobs 4` and one line about this machine's worker (`Worker smoke-box` with `0 of 3 slots in use`); a job is a Recurring Issue, an Agent prompt, a Workflow or a Notification, and its schedule reads "on demand" for a manual trigger.
-  - The Job card gives each field a one- or two-word label with a hint under the focused field, previews "Runs every day at 09:00 UTC" with a Next runs row, and names the field in a refusal ("Cannot save the job: Interval: …").
+  - The Job card gives each field a one- or two-word label with its hint under it, focused or not, previews "Runs every day at 09:00 UTC" with a Next runs row, and names the field in a refusal ("Cannot save the job: Interval: …").
   - The Runs Page shows a run's reason in words ("Quota reached · the provider answered 429"), with ids and kata's internal rows behind a hovercard.
   - The Workflows Page shows cards (`Workflows 2`, `Used by Hourly report +1`) instead of rows.
   - The Worker card lists Project, Checkout, Config, Worker and Supervision as rows, and its restart question describes each choice in one muted line.

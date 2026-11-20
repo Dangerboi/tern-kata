@@ -20,7 +20,7 @@ var lanesDonePlaceholders = map[model.Field]string{
 
 // lanesField is one text field of the Lanes card, as flat children of the card so its input keeps the id FieldID gives it: its
 // label (accent while it has focus, error when it is the field the error is about), the input, and under it the error or,
-// while the field has focus, its one-line hint.
+// when the field has none, its one-line hint: the error takes the hint's place, so the card keeps its height.
 func lanesField(form model.LanesFormState, name model.Field, label, placeholder, hint string) []tern.Element {
 	failed := form.Err != nil && form.ErrField == name
 	focused := form.Field == name
@@ -40,7 +40,7 @@ func lanesField(form model.LanesFormState, name model.Field, label, placeholder,
 	switch {
 	case failed:
 		field = append(field, toneText(string(name)+"-error", ui.ToneError, form.Err.Error()))
-	case form.Field == name:
+	default:
 		field = append(field, toneText(string(name)+"-hint", ui.ToneMuted, hint))
 	}
 	return field

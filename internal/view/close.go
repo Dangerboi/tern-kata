@@ -20,7 +20,7 @@ var closeLabels = map[model.Field]string{
 	model.CloseRationale:   "Why nothing changed",
 }
 
-// closeHints are the one muted line under a field, shown while it has focus.
+// closeHints are the one muted line under a field, always shown.
 var closeHints = map[model.Field]string{
 	model.CloseCommit:   "A commit SHA.",
 	model.ClosePR:       "A URL.",

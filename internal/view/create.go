@@ -20,7 +20,7 @@ var createLabels = map[model.Field]string{
 	model.CreateDeadline:  "Deadline",
 }
 
-// createHints are the one muted line under a field, shown while it has focus.
+// createHints are the one muted line under a field, always shown.
 var createHints = map[model.Field]string{
 	model.CreateLabels:    "Separate with commas.",
 	model.CreateScheduled: "Enter " + model.DateInputHint + ".",
