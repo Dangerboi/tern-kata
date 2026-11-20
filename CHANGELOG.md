@@ -80,6 +80,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 #### Issues and Pages
 
 - Shell code blocks in comments, close messages and other Issue text the Pane draws offer no Run on Tern 0.9.29 and later, since agents, other people and other Projects write that text; Copy stays, as an icon.
+- Lanes, Lane labels and priorities have colours that say what they are.
+  - Default Lanes by name: `needs-triage` yellow, `needs-info` orange-red, `ready-for-agent` cyan, `ready-for-human` lavender, `waiting` red, Done green and No lane muted; a Lane of your own cycles cyan, orange-red, lavender, yellow and red in order.
+  - A label that is one of the Project's Lanes is drawn in that Lane's colour in the Issue's Labels row; every other label stays a neutral chip.
+  - Priority reads P0 red, P1 orange-red, P2 yellow, P3 cyan and P4 muted on the list, the Issue detail and the Board.
 - The Issues Page, the Board and their Popup cards follow one design: the same tones, wording, dates and keys everywhere.
   - Keys read in words, in the footer, the help sheet, buttons, the Page bar and the keys named in sentences.
     - `Ctrl+D`, `Ctrl+Space`, `Shift+N`, `Enter`, `Tab`, `Esc`, a letter as its capital and the arrows as glyphs; the Lettered Pages read `Shift+C`, `Shift+F`, `Shift+D` and `Shift+K`, and help rows start with a capital.

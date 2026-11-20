@@ -13,9 +13,11 @@ const (
 	ListRowRole   = "tern-kata.row"
 	ListIDRole    = "tern-kata.id"
 	ListOwnerRole = "tern-kata.ow"
+	// ListPrioRole is followed by the row's priority, 0 to 4; prioCSS colours the priority cell by it.
+	ListPrioRole = "tern-kata.prio-"
 )
 
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertiesCSS + "\n" + PlainCellCSS + "\n" + TabCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + TwoLineRowCSS + "\n" + DocCSS + "\n" + KeyCSS + "\n" + EventTimeCSS + "\n" + FieldLabelCSS
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertiesCSS + "\n" + PlainCellCSS + "\n" + TabCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + prioCSS + "\n" + TwoLineRowCSS + "\n" + DocCSS + "\n" + KeyCSS + "\n" + EventTimeCSS + "\n" + FieldLabelCSS
 
 // ActiveTabRole marks the active Activity tab; TabCSS underlines it so the active tab is not told by colour alone.
 const ActiveTabRole = "tern-kata.tab-on"
@@ -165,3 +167,18 @@ const TwoLineRowCSS = `.sf-col[data-role~='` + TwoLineRowRole + `'] { padding: 2
 .sf-col[data-role~='` + TwoLineRowRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):hover { background-color: ` + hoverShade + `; }
 .sf-col[data-role~='` + TwoLineRowRole + `']:not([data-role~='` + TwoLineSelectedRole + `']):hover .sf-t-muted { color: ` + hoverMuted + `; }
 ` + selectedTwoLineRow + `, ` + selectedTwoLineRow + ` * { background-color: var(--kata-sel-fill) !important; color: var(--kata-sel-text) !important; }`
+
+// prioToneVars are the variables Tern's badge tones draw in, by priority: P0 error, P1 user, P2 warning, P3 info, P4 muted. A
+// text span has no token for user, and its info token is another colour than the badge's, so the list colours the priority cell
+// itself, to match the badges of the Board and the detail. Colour only; the selected row's !important text colour outweighs it.
+var prioToneVars = [5]string{"--sf-bad", "--sf-user", "--sf-warn", "--sf-info", "--sf-muted"}
+
+var prioCSS = func() string {
+	var css strings.Builder
+	for n, v := range prioToneVars {
+		role := fmt.Sprintf("[data-role~='%s%d']", ListPrioRole, n)
+		fmt.Fprintf(&css, ".sf-item%s .sf-item-label > span:nth-child(2) { color: var(%s); }\n", role, v)
+		fmt.Fprintf(&css, ".sf-col%s > .sf-row > .sf-text:first-child > span:nth-child(2) { color: var(%s); }\n", role, v)
+	}
+	return css.String()
+}()

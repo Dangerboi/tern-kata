@@ -28,8 +28,9 @@ func TestPriorityRamp(t *testing.T) {
 	}{
 		{nil, "", ui.ToneMuted},
 		{ptrTo(0), "P0", ui.ToneError},
-		{ptrTo(1), "P1", ui.ToneWarning},
-		{ptrTo(2), "P2", ui.ToneMuted},
+		{ptrTo(1), "P1", ui.ToneUser},
+		{ptrTo(2), "P2", ui.ToneWarning},
+		{ptrTo(3), "P3", ui.ToneInfo},
 		{ptrTo(4), "P4", ui.ToneMuted},
 	} {
 		if text, tone := priorityText(tc.p); text != tc.text || tone != tc.tone {
@@ -40,27 +41,28 @@ func TestPriorityRamp(t *testing.T) {
 
 func ptrTo(n int64) *int64 { return &n }
 
-func TestLaneToneCyclesIdentityTonesAndMutesDoneAndNoLane(t *testing.T) {
-	lanes := []string{"needs-triage", "needs-info", model.LaneDone, "ready-for-agent", "ready-for-human", "extra"}
+func TestLaneToneIsByNameAndCustomLanesCycle(t *testing.T) {
 	for lane, want := range map[string]ui.Tone{
-		"needs-triage":    ui.ToneInfo,
+		"needs-triage":    ui.ToneWarning,
 		"needs-info":      ui.ToneUser,
-		"ready-for-agent": ui.ToneNeutral,
-		"ready-for-human": ui.ToneInfo,
-		"extra":           ui.ToneUser,
-		model.LaneDone:    ui.ToneMuted,
+		"ready-for-agent": ui.ToneInfo,
+		"ready-for-human": ui.TonePending,
+		"waiting":         ui.ToneError,
+		model.LaneDone:    ui.ToneSuccess,
 		model.LaneNone:    ui.ToneMuted,
 		"not-a-lane":      ui.ToneNeutral,
 	} {
-		if got := laneTone(lanes, lane); got != want {
+		if got := laneTone(model.DefaultLanes(), lane); got != want {
 			t.Errorf("laneTone(%q) = %q, want %q", lane, got, want)
 		}
 	}
-	// No Lane takes a tone that means something else.
-	for _, lane := range lanes {
-		switch got := laneTone(lanes, lane); got {
-		case ui.ToneWarning, ui.ToneError, ui.ToneSuccess, ui.TonePending, ui.ToneAccent:
-			t.Errorf("laneTone(%q) = %q, a meaning tone", lane, got)
+	custom := []string{"a", "b", "waiting", "c", "d", "e", "f"}
+	for lane, want := range map[string]ui.Tone{
+		"a": ui.ToneInfo, "b": ui.ToneUser, "waiting": ui.ToneError, "c": ui.TonePending,
+		"d": ui.ToneWarning, "e": ui.ToneError, "f": ui.ToneInfo,
+	} {
+		if got := laneTone(custom, lane); got != want {
+			t.Errorf("custom laneTone(%q) = %q, want %q", lane, got, want)
 		}
 	}
 }
@@ -74,9 +76,18 @@ func TestOwnerSpanIsPlainAndUnassignedMuted(t *testing.T) {
 	}
 }
 
-func TestLabelChipIsNeutral(t *testing.T) {
-	if chip := labelChip("bug"); chip.Tone != ui.ToneNeutral || chip.Text != "bug" {
+func TestLabelChipTakesALaneLabelsLaneTone(t *testing.T) {
+	lanes := model.DefaultLanes()
+	for _, lane := range lanes {
+		if got := labelChip(lane, lanes).Tone; got != laneTone(lanes, lane) {
+			t.Errorf("chip %q tone = %q, want its Lane's %q", lane, got, laneTone(lanes, lane))
+		}
+	}
+	if chip := labelChip("bug", lanes); chip.Tone != ui.ToneNeutral || chip.Text != "bug" {
 		t.Errorf("chip = %+v", chip)
+	}
+	if chip := labelChip("waiting", []string{"in-review"}); chip.Tone != ui.ToneNeutral {
+		t.Errorf("a label that is not one of the Project's Lanes = %+v", chip)
 	}
 }
 

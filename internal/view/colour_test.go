@@ -57,9 +57,9 @@ func TestRowsToneStatusAndPriority(t *testing.T) {
 		style         string
 	}{
 		{urgent, "em", "P0", "error mono"},
-		{high, "em", "P1", "warning mono"},
-		{normal, "em", "P2", "muted mono"},
-		{low, "muted", "P3", "muted mono"},
+		{high, "em", "P1", "user mono"},
+		{normal, "em", "P2", "warning mono"},
+		{low, "muted", "P3", "info mono"},
 	} {
 		if got := style(t, row(tc.issue), tc.issue.Status); got != tc.status {
 			t.Errorf("%s status style = %q, want %q", tc.issue.Title, got, tc.status)
@@ -71,6 +71,26 @@ func TestRowsToneStatusAndPriority(t *testing.T) {
 
 	if got := text(row(urgent)); strings.Contains(got, "-label") {
 		t.Errorf("row shows labels: %q", got)
+	}
+}
+
+func TestRowPriorityCellIsColouredByItsRoleLikeTheBadges(t *testing.T) {
+	high := model.Issue{UID: "high", ShortID: "hhhh", Title: "High", Status: "open", Priority: ptr(int64(1)), ProjectName: "work"}
+	none := model.Issue{UID: "none", ShortID: "nnnn", Title: "None", Status: "open", ProjectName: "work"}
+	m := apply(model.Model{},
+		model.Start{Workspace: "/repo"},
+		model.ResizeMsg{Cols: 160},
+		model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, snap{model.SnapshotLoaded{Snapshot: model.Snapshot{Issues: []model.Issue{high, none}}}},
+	)
+	nodes := render(t, m)
+	if role, _ := nodes[view.IssueID("high")].P["role"].(string); !strings.Contains(role, view.ListPrioRole+"1") {
+		t.Errorf("P1 row role = %q, want %s1", role, view.ListPrioRole)
+	}
+	if role, _ := nodes[view.IssueID("none")].P["role"].(string); strings.Contains(role, view.ListPrioRole) {
+		t.Errorf("a row without a priority has role %q", role)
+	}
+	if !strings.Contains(view.CSS, "[data-role~='"+view.ListPrioRole+"1'] .sf-item-label > span:nth-child(2) { color: var(--sf-user); }") {
+		t.Error("the style sheet has no rule colouring a P1 cell with --sf-user")
 	}
 }
 

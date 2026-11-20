@@ -119,8 +119,8 @@ func TestDetailBadgesAndChipsAreToned(t *testing.T) {
 		issue            model.Issue
 		status, priority string
 	}{
-		{"open P1", model.Issue{UID: "a", ShortID: "aaaa", Title: "A", Status: "open", Priority: &p1, Labels: []string{"bug", "ui"}}, "", "warning"},
-		{"closed P3", model.Issue{UID: "a", ShortID: "aaaa", Title: "A", Status: "closed", Priority: &p3, Labels: []string{"bug", "ui"}}, "muted", "muted"},
+		{"open P1", model.Issue{UID: "a", ShortID: "aaaa", Title: "A", Status: "open", Priority: &p1, Labels: []string{"bug", "ui"}}, "", "user"},
+		{"closed P3", model.Issue{UID: "a", ShortID: "aaaa", Title: "A", Status: "closed", Priority: &p3, Labels: []string{"bug", "ui"}}, "muted", "info"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := apply(browsing(), model.DetailLoaded{UID: "alpha", Selected: &model.IssueDetailData{Issue: &tt.issue}})
@@ -239,11 +239,11 @@ func TestDetailTitleShowsTheIDMutedThenTheTitleStrong(t *testing.T) {
 	}
 }
 
-func TestDetailOwnerIsPlainTextAndLabelsAreNeutralChips(t *testing.T) {
+func TestDetailOwnerIsPlainTextAndOnlyLaneLabelsTakeATone(t *testing.T) {
 	owner := "dana"
 	issue := alpha
 	issue.Owner = &owner
-	issue.Labels = []string{"bug"}
+	issue.Labels = []string{"bug", "waiting"}
 	props := view.DetailContentID + ".properties"
 	nodes := detailNodes(t, issue)
 	if n := nodes[props+".facts.left.owner.v"]; n.K != "text" || n.P["tone"] != nil || text(n) != "dana" {
@@ -251,6 +251,9 @@ func TestDetailOwnerIsPlainTextAndLabelsAreNeutralChips(t *testing.T) {
 	}
 	if n := nodes[props+".facts.left.labels.v.label-bug"]; n.P["tone"] != "neutral" {
 		t.Errorf("label %v", n)
+	}
+	if n := nodes[props+".facts.left.labels.v.label-waiting"]; n.P["tone"] != "error" {
+		t.Errorf("Lane label %v", n)
 	}
 	n := detailNodes(t, alpha)[props+".facts.left.owner.v"]
 	if got := styled(n); text(n) != "unassigned" || len(got) != 1 || got[0][1] != "muted" {
@@ -366,7 +369,7 @@ func TestPropertiesAreOneNameGridInOrder(t *testing.T) {
 	if got := text(nodes[props.ID+".facts.left.deadline.v"]); got != day {
 		t.Errorf("metadata-only Deadline %q, want %q", got, day)
 	}
-	if n := nodes[props.ID+".facts.left.priority.v"]; n.P["tone"] != "warning" || text(n) != "P1" {
+	if n := nodes[props.ID+".facts.left.priority.v"]; n.P["tone"] != "user" || text(n) != "P1" {
 		t.Errorf("priority %v", n)
 	}
 	bare := render(t, apply(browsing(), detailOf(model.Issue{UID: "alpha", ShortID: "aaaa", Title: "A", Status: "open", ProjectName: "work", Revision: 2})))

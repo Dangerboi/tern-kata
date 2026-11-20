@@ -31,12 +31,12 @@ func spanStyle(t *testing.T, n tern.WireNode) string {
 	return style
 }
 
-func TestLaneHeadersTakeTheirOwnTonesAndCustomLanesTakeTheRestInTurn(t *testing.T) {
+func TestLaneHeadersTakeTheirOwnTonesAndCustomLanesCycleInTurn(t *testing.T) {
 	s := boardPane(t)
 	s = step(t, s, newestLanes{ProjectUID: "p", Lanes: []string{"needs-triage", "in-review", "ready-for-human", "qa", "blocked", "ship"}}).State
 	nodes := wireNodes(t, view.Render(s.Model, now))
-	// Custom Lanes take info, user and neutral in turn by their place among the Lanes; No lane and Done are muted.
-	want := []string{"muted", "info", "user", "neutral", "info", "user", "neutral", "muted"}
+	// Default Lanes keep their own tone; the others take info, user, pending in turn by their place among them; No lane is muted, Done success.
+	want := []string{"muted", "warning", "info", "pending", "user", "pending", "warning", "success"}
 	for i, tone := range want {
 		head := node(t, nodes, fmt.Sprintf("%s.lane%d.head.title", view.BoardID, i))
 		if got := head.P["tone"]; got != tone {
@@ -63,8 +63,8 @@ func TestCardPartsEachDrawInTheirTone(t *testing.T) {
 		uid, part, tone string
 	}{
 		{"open", "id.short", "user"},
-		{"open", "labels.bug", "neutral"},
-		{"done", "id.short", "muted"},
+		{"open", "labels.label-bug", "neutral"},
+		{"done", "id.short", "success"},
 	} {
 		if got := card(c.uid, c.part).P["tone"]; got != c.tone {
 			t.Errorf("%s %s tone = %v, want %s", c.uid, c.part, got, c.tone)

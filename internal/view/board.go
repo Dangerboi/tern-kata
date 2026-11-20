@@ -172,7 +172,7 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	if len(card.Labels) > 0 {
 		chips := make([]tern.Element, len(card.Labels))
 		for i, label := range card.Labels {
-			chips[i] = ui.Badge{Common: ui.Common{Key: label, Tone: ui.ToneNeutral}, Text: label}
+			chips[i] = labelChip(label, m.LaneList())
 		}
 		body = append(body, ui.Row{Common: ui.Common{Key: "labels"}, Gap: ui.GapSM, Wrap: true, Children: chips})
 	}

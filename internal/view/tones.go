@@ -1,29 +1,40 @@
 package view
 
 import (
+	"slices"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/stencil-hq/tern-sdk/go/tern/ui"
 )
 
-// laneIdentityTones are the tones a Lane's identity colour cycles through: the three that carry no other meaning (rule 2), so a
-// Lane's colour never reads as a state. The Lane's name is always drawn beside it.
-var laneIdentityTones = []ui.Tone{ui.ToneInfo, ui.ToneUser, ui.ToneNeutral}
+// laneNameTones are the tones of the default Lanes, keyed by label, so a Lane keeps its colour wherever it sits in the list.
+var laneNameTones = map[string]ui.Tone{
+	"needs-triage":    ui.ToneWarning,
+	"needs-info":      ui.ToneUser,
+	"ready-for-agent": ui.ToneInfo,
+	"ready-for-human": ui.TonePending,
+	"waiting":         ui.ToneError,
+	model.LaneDone:    ui.ToneSuccess,
+}
 
-// quietLane is a Lane that has no identity colour: Done and the No lane are finished or empty, so they are muted.
-func quietLane(lane string) bool { return lane == model.LaneDone || lane == model.LaneNone }
+// laneCycleTones are the tones a Lane with no tone of its own cycles through, by its index among such Lanes.
+var laneCycleTones = []ui.Tone{ui.ToneInfo, ui.ToneUser, ui.TonePending, ui.ToneWarning, ui.ToneError}
 
-// laneTone is the identity colour of lane among lanes: Done and the No lane are muted, and every other Lane takes the tone of
-// its index among the Lanes that are not, cycling laneIdentityTones. A Lane that is not in lanes is neutral.
+// laneTone is the colour of lane among lanes: a default Lane has its own tone, Done is success, the No lane is muted, and any
+// other Lane takes laneCycleTones by its index among the Lanes that have no tone of their own. A Lane not in lanes is neutral.
 func laneTone(lanes []string, lane string) ui.Tone {
-	if quietLane(lane) {
+	if lane == model.LaneNone {
 		return ui.ToneMuted
+	}
+	if tone, ok := laneNameTones[lane]; ok {
+		return tone
 	}
 	index := 0
 	for _, l := range lanes {
 		if l == lane {
-			return laneIdentityTones[index%len(laneIdentityTones)]
+			return laneCycleTones[index%len(laneCycleTones)]
 		}
-		if !quietLane(l) {
+		if _, named := laneNameTones[l]; !named {
 			index++
 		}
 	}
@@ -39,7 +50,7 @@ func issueStateTone(closed bool) ui.Tone {
 	return ui.ToneNeutral
 }
 
-// priorityText is a priority's text and tone: P0 error, P1 warning, the lower ones muted so only an urgent Issue stands out.
+// priorityText is a priority's text and tone: P0 error, P1 user, P2 warning, P3 info, P4 muted.
 func priorityText(p *int64) (string, ui.Tone) {
 	if p == nil {
 		return "", ui.ToneMuted
@@ -49,7 +60,11 @@ func priorityText(p *int64) (string, ui.Tone) {
 	case 0:
 		return text, ui.ToneError
 	case 1:
+		return text, ui.ToneUser
+	case 2:
 		return text, ui.ToneWarning
+	case 3:
+		return text, ui.ToneInfo
 	}
 	return text, ui.ToneMuted
 }
@@ -62,9 +77,14 @@ func ownerSpan(name string) ui.Span {
 	return ui.Span{T: name}
 }
 
-// labelChip is a label as a neutral chip: a label names a thing and carries no colour meaning.
-func labelChip(text string) ui.Badge {
-	return ui.Badge{Common: ui.Common{Key: "label-" + text, Tone: ui.ToneNeutral}, Text: text}
+// labelChip is a label as a chip: a label that is one of lanes is drawn in that Lane's tone, so it matches the Lane's header;
+// every other label names a thing and stays neutral.
+func labelChip(text string, lanes []string) ui.Badge {
+	tone := ui.ToneNeutral
+	if slices.Contains(lanes, text) {
+		tone = laneTone(lanes, text)
+	}
+	return ui.Badge{Common: ui.Common{Key: "label-" + text, Tone: tone}, Text: text}
 }
 
 // runStateTone is the tone of a run's or job's state word: success went well, error failed, warning needs attention, pending
@@ -84,6 +104,8 @@ func runStateTone(state string) ui.Tone {
 }
 
 // toneStyle is the text span style closest to tone. Pending is Tern's own span token for words that wait on something; neutral is the plain text colour.
+// Tern has no span token for user, so a user-toned span draws in the plain text colour, and its info token is the theme's syntax
+// type colour, not the cyan of an info badge.
 func toneStyle(tone ui.Tone) string {
 	switch tone {
 	case ui.ToneNeutral:

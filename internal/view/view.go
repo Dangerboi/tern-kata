@@ -517,6 +517,9 @@ func issueRow(row model.IssueRow, owner string, lookups rowLookups, selected boo
 		tone = ui.ToneAccent
 	}
 	prio, prioTone := priorityText(row.Priority)
+	if row.Priority != nil && *row.Priority >= 0 && *row.Priority <= 4 {
+		role = strings.TrimSpace(role + " " + ListPrioRole + strconv.FormatInt(*row.Priority, 10))
+	}
 	kids := ""
 	if row.TotalKids > 0 {
 		kids = fmt.Sprintf("%d/%d", row.OpenKids, row.TotalKids)

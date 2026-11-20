@@ -359,7 +359,7 @@ func properties(m model.Model, issue *model.Issue, now time.Time) tern.Element {
 	if len(issue.Labels) > 0 {
 		chips := make(tern.Nodes, len(issue.Labels))
 		for i, name := range issue.Labels {
-			chips[i] = labelChip(name)
+			chips[i] = labelChip(name, m.LaneList())
 		}
 		left = append(left, fact("Labels", ui.Row{Common: ui.Common{Key: "v"}, Gap: ui.GapSM, Wrap: true, Children: chips}))
 	} else {
