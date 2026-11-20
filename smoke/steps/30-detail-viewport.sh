@@ -48,9 +48,11 @@ ctl key enter
 # The one container holds the title and the whole body: it starts at its top and is taller than it shows.
 vp_wait "the detail starts at its top" '$a == 0 and $b > 300'
 
-# Wheel to the end of the body (the last line is reachable), then back.
+# Wheel to the end of the body (the last line is reachable), then back. Under load the comment's text is drawn after its card
+# and makes the content taller, so the wheel goes on while it waits, as a person would scroll on: a stuck end still fails.
 vp_wheel 300 12
-vp_wait "the wheel reaches the end of the body" '$b <= 1'
+vp_wheel_settled() { vp_wheel 300 2; [[ $(vp_below) -le 1 ]]; }
+wait_for vp_wheel_settled || { printf 'the wheel reaches the end of the body: scrolled %s px, %s px left below\n' "$(vp_above)" "$(vp_below)" >&2; return 1; }
 [[ $(vp_bar) == "$vp_bar_rect" ]] || { printf 'The top bar moved while the wheel scrolled the detail\n' >&2; return 1; }
 vp_wheel -300 12
 vp_wait "the wheel returns to the top" '$a == 0'
