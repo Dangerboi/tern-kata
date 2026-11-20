@@ -450,7 +450,8 @@ local function placeAgentTab(cx: WindowCx, tab: number, tries: number)
     end
     -- A background agent's tab is in the hidden session and stays where it is.
     if not hiddenTabs(cx, cx.session:tabs())[tab] then
-        -- Here the starter's own id is exact, since the tab is on this window's machine; a starter that is gone leaves the tab last.
+        -- Here the starter's own id is exact, since the tab is on this window's machine; a starter that is gone leaves the tab
+        -- where Tern opened it.
         local home = cx.session:pane(starter)
         placeTab(cx, tab, home and home.tab)
     end

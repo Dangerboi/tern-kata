@@ -96,10 +96,20 @@ test("a trailing run of agent tabs after a plain tab moves in the order it was o
     same(plan.moves, {{5, 2}, {4, 2}})
 end)
 
-test("a tab after the run that is not an agent leaves the run alone", function()
+test("an agent tab in the middle of its session moves beside its starter", function()
+    -- Tern 0.9.28 opens a new tab right of the current tab (here plain tab 2), not last.
     local plan = placement.plan(snapshot({
         tabs = tabs(4),
         panes = {kata(10, 1), plain(20, 2), agent(30, 3, 10), plain(40, 4)},
+        agents = {{pane = 30, marker = 10}},
+    }))
+    same(plan.moves, {{3, 2}})
+end)
+
+test("an agent tab in the middle right after a kata Pane's tab stays where it is", function()
+    local plan = placement.plan(snapshot({
+        tabs = tabs(4),
+        panes = {plain(20, 1), kata(10, 2), agent(30, 3, 10), plain(40, 4)},
         agents = {{pane = 30, marker = 10}},
     }))
     same(plan.moves, {})

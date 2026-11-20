@@ -57,9 +57,10 @@ function M.positionBeside(home: TabRec, tab: TabRec): number?
     return home.position + 1
 end
 
--- The candidate tabs to move: those in the run of tabs at the end of their session made only of candidates and agent tabs not
--- handled yet (`pending`), when the tab directly before that run holds no kata Pane. Highest position first, so tabs moved to
--- the same home keep the order they were opened in.
+-- The candidate tabs to move: every candidate whose run of tabs (candidates and agent tabs not handled yet, `pending`) does
+-- not sit directly after a tab holding a kata Pane, since such a run is already beside one. Tern before 0.9.28 opens a new
+-- tab last and from 0.9.28 right of the current tab, so a run may sit anywhere in its session. Highest position first, so
+-- tabs moved to the same home keep the order they were opened in.
 local function unplacedTabs(
     tabs: { TabRec }, candidates: { [number]: boolean }, pending: { [number]: boolean }, kataTabs: { [number]: boolean }
 ): { number }
@@ -74,19 +75,15 @@ local function unplacedTabs(
     end
     local found: { TabRec } = {}
     for _, list in bySession do
-        table.sort(list, function(a, b) return a.position > b.position end)
-        local run: { TabRec } = {}
-        local before: TabRec? = nil
+        table.sort(list, function(a, b) return a.position < b.position end)
+        -- besideKata: the tab before the current run of agent tabs holds a kata Pane.
+        local besideKata = false
         for _, info in list do
             if candidates[info.id] or pending[info.id] then
-                if candidates[info.id] then table.insert(run, info) end
+                if candidates[info.id] and not besideKata then table.insert(found, info) end
             else
-                before = info
-                break
+                besideKata = kataTabs[info.id] == true
             end
-        end
-        if not (before and kataTabs[before.id]) then
-            for _, info in run do table.insert(found, info) end
         end
     end
     table.sort(found, function(a, b) return a.position > b.position end)

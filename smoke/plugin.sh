@@ -84,6 +84,14 @@ tern.command({id = "agent-tab", title = "Launch agent tab", run = function(cx)
     local focused = cx.session:focused()
     tab(cx, string.format("prompt-%.0f-12345", focused or 0))
 end})
+-- The starter is the first tab's block while another tab is current: the agent tab opens away from its starter.
+tern.command({id = "first-tab-agent", title = "Launch agent tab for the first tab", run = function(cx)
+    local starter = 0
+    for _, info in cx.session:tabs() do
+        if info.position == 1 then starter = info.pane end
+    end
+    tab(cx, string.format("prompt-%.0f-12345", starter))
+end})
 tern.command({id = "plain-tab", title = "Launch plain tab", run = function(cx) tab(cx, "prompt-12345") end})
 tern.command({id = "gone-tab", title = "Launch gone-starter tab", run = function(cx) tab(cx, "prompt-999999-12345") end})
 LUAU
@@ -312,15 +320,29 @@ ctl tab 4
 ctl ready
 ctl plugins run plugin.tab-launcher.agent-tab
 wait_tab_order shell,agent,shell,shell,agent
-# A prompt file with no starter or a starter that is gone leaves the tab last.
+# Started for the first tab's block while the third tab is current, the agent tab still goes second: Tern opens it last
+# (before 0.9.28) or right of the current tab (0.9.28 and later), and the plugin moves it either way.
+ctl tab 3
+ctl ready
+ctl plugins run plugin.tab-launcher.first-tab-agent
+wait_tab_order shell,agent,agent,shell,shell,agent
+# A prompt file with no starter or a starter that is gone leaves the tab where Tern opened it.
 ctl tab 1
 ctl ready
 ctl plugins run plugin.tab-launcher.plain-tab
-wait_tab_order shell,agent,shell,shell,agent,agent
+if tern_at_least 0.9.28; then
+  wait_tab_order shell,agent,agent,agent,shell,shell,agent
+else
+  wait_tab_order shell,agent,agent,shell,shell,agent,agent
+fi
 ctl tab 1
 ctl ready
 ctl plugins run plugin.tab-launcher.gone-tab
-wait_tab_order shell,agent,shell,shell,agent,agent,agent
+if tern_at_least 0.9.28; then
+  wait_tab_order shell,agent,agent,agent,agent,shell,shell,agent
+else
+  wait_tab_order shell,agent,agent,shell,shell,agent,agent,agent
+fi
 # Back to one shell tab for what follows: close the launched tabs, then the extra shell tabs.
 while index=$(ctl state | jq -r '[.tabs | to_entries[] | select(.value.title | test("sleep")) | .key + 1] | first // empty') && [[ -n $index ]]; do
   ctl tab "$index"

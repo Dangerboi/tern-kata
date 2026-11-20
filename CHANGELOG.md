@@ -170,6 +170,7 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Agents
 
+- On Tern 0.9.28 and later, which opens a new tab right of the current tab instead of last, an agent's tab that was not placed the moment it opened (a remote kata Pane's, say) again moves beside its kata Pane's tab: the window looks for such tabs wherever Tern opened them, not only at the end of the session.
 - A Tern whose version reads `0.9.22-dev` or `v0.9.21` no longer counts as older than 0.9.21, so a kata Pane that starts no longer drops the agents in other Tern windows and deletes their private files.
   - When `tern --version` cannot be read, the Pane keeps every agent and says why.
 - An agent Tern reopened after a restart on a route with no token, DSN or `token_env` values is still recognised: its badge, Agent card and tab placement follow it.
