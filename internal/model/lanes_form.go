@@ -50,6 +50,11 @@ type LanesFormState struct {
 	// Sent and SentShare are the write the card is waiting on, so only its own result closes or fails the card.
 	Sent      SaveLanes
 	SentShare ShareLanes
+	// Opened is the shared list the card was filled from, and Resent says a conflict already sent the write again. A conflict
+	// answer whose list equals Opened came from a Project revision raised by a write to other metadata, so the share is sent
+	// once more on the new revision.
+	Opened openedShare
+	Resent bool
 }
 
 func (f LanesFormState) Value(name Field) string { return lanesTable.value(f, name) }
@@ -65,7 +70,7 @@ func openLanesForm(m Model) Model {
 		return m.fail(Cannot("open", "Lanes", m.Board.fileErr))
 	}
 	m.LanesForm = LanesFormState{Open: true, Field: LanesNames, Text: strings.Join(m.LaneList(), ", "), Share: m.Board.Shared,
-		ProjectID: m.Board.projectID, Revision: m.Board.revision}
+		ProjectID: m.Board.projectID, Revision: m.Board.revision, Opened: m.Board.openedShare()}
 	if m.Board.DoneDays > 0 {
 		m.LanesForm.Days = strconv.Itoa(m.Board.DoneDays)
 	}

@@ -104,15 +104,16 @@ func TestDateBadgeSitsAfterThePriorityBadgeAndBeforeRelationshipTags(t *testing.
 	p := int64(1)
 	issue.Priority = &p
 	s := boardPane(t, issue)
-	row := node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.BoardID, "a")+".id")
-	// The selected card's row ends with its spacer and menu button; the badges' order is what this pins.
+	nodes := wireNodes(t, view.Render(s.Model, now))
+	row := node(t, nodes, rowOf(t, s.Model, view.BoardID, "a")+".id")
+	// The selected card's row ends with its menu button; the badges' order is what this pins.
+	prefix := rowOf(t, s.Model, view.BoardID, "a") + ".id."
 	var keys []string
 	for _, c := range row.C {
-		if !strings.HasSuffix(c.ID, ".fill") && !strings.HasSuffix(c.ID, ".more") {
+		if !strings.HasSuffix(c.ID, ".more") {
 			keys = append(keys, c.ID)
 		}
 	}
-	prefix := rowOf(t, s.Model, view.BoardID, "a") + ".id."
 	want := []string{prefix + "short", prefix + "prio", prefix + "date"}
 	if !reflect.DeepEqual(keys, want) {
 		t.Errorf("id row badges = %v, want %v", keys, want)

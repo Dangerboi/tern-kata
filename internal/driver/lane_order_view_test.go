@@ -26,7 +26,7 @@ func TestOnlyACustomOrderedLanesCardsAreDropTargets(t *testing.T) {
 			got, _ := node(t, nodes, laneID(i)+".cards."+card.Issue.UID).P["drop"].(string)
 			want := ""
 			if column.Lane == "needs-triage" {
-				want = view.CardDropAct
+				want = "card-drop:" + column.Lane
 			}
 			if got != want {
 				t.Errorf("card %s in %q: drop = %q, want %q", card.Issue.UID, column.Lane, got, want)

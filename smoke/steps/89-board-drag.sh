@@ -8,20 +8,11 @@ bdr_second=$(jq -r '.issue.uid' "$tmp/bdr-second.json")
 bdr_lane() { printf "[data-id='main.columns.list.board.lane%s']" "$1"; }
 bdr_card() { printf "[data-id='main.columns.list.board.lane%s.cards.%s']" "$1" "$2"; }
 bdr_labels_have() { kata --workspace "$bdr_dir" show "$1" --json | jq -e --arg l "$2" '.issue.labels | index($l)' >/dev/null; }
-# bdr_rect <selector>: the first match's "x y w h", whole pixels.
-bdr_rect() { ctl tree "$1" | jq -er '.nodes[0].rect | map(floor) | "\(.[0]) \(.[1]) \(.[2]) \(.[3])"'; }
-# bdr_drag <card selector> <lane selector> <top|bottom>: presses on the card's middle, moves in steps and releases in the Lane's
-# column, near its top or its bottom edge.
+# bdr_drag <card selector> <lane selector> <top|bottom>: drags the card into the Lane's column, near its top or its bottom edge.
 bdr_drag() {
-  local cx cy cw ch lx ly lw lh tx ty
-  read -r cx cy cw ch < <(bdr_rect "$1")
-  read -r lx ly lw lh < <(bdr_rect "$2")
-  tx=$((lx + lw / 2))
-  if [[ $3 == top ]]; then ty=$((ly + 60)); else ty=$((ly + lh - 20)); fi
-  printf 'down %s %s\nmove %s %s\nmove %s %s\nmove %s %s\nup %s %s\n' \
-    $((cx + cw / 2)) $((cy + ch / 2)) $((cx + cw / 2 + 6)) $((cy + ch / 2 + 6)) \
-    $(((cx + cw / 2 + tx) / 2)) $(((cy + ch / 2 + ty) / 2)) "$tx" "$ty" "$tx" "$ty" >"$tmp/bdr-drag.ctl"
-  ctl --file "$tmp/bdr-drag.ctl"
+  local lx ly lw lh
+  read -r lx ly lw lh < <(rect "$2")
+  if [[ $3 == top ]]; then drag "$1" $((lx + lw / 2)) $((ly + 60)); else drag "$1" $((lx + lw / 2)) $((ly + lh - 20)); fi
 }
 
 ctl key 5
@@ -40,7 +31,7 @@ bdr_drag "$(bdr_card 1 "$bdr_first")" "$(bdr_lane 1)" bottom
 expect_tree "$(bdr_card 1 "$bdr_first")" '.ok and .count == 1'
 kata --workspace "$bdr_dir" show "$bdr_first" --json | jq -e '.issue.labels == ["needs-triage"]' >/dev/null
 
-bdr_first_rect() { bdr_rect "$(bdr_card 1 "$bdr_first")"; }
+bdr_first_rect() { rect "$(bdr_card 1 "$bdr_first")"; }
 wait_settled bdr_first_rect
 
 # The selected card's … button opens the menu a right-click does.

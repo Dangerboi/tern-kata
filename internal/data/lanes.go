@@ -105,9 +105,10 @@ func (g *Gateway) loadLanes(ctx context.Context, cmd model.LoadLanes) model.Lane
 	return loaded
 }
 
-// SharedLanes reads the Project with uid as kata lists it, archived Projects included: its id and revision, and its shared
-// Lane list when tern.lanes holds a valid one. A value that is not a Lane list is left unused with SharedErr saying why. A
-// Project kata does not list shares nothing.
+// SharedLanes reads the Project with uid as kata lists it, archived Projects included: its id and revision, its custom orders
+// (tern.lane_order, read leniently: every Lane entry that parses is kept) and its shared Lane list when tern.lanes holds a valid
+// one. A tern.lanes value that is not a Lane list is left unused with SharedErr saying why. A Project kata does not list shares
+// nothing.
 func (c *Client) SharedLanes(ctx context.Context, uid string) (model.LanesLoaded, error) {
 	include := "archived"
 	response, err := c.ListProjectsWithResponse(ctx, &g.ListProjectsRequestOptions{Query: &g.ListProjectsQuery{Include: &include}})
@@ -120,12 +121,7 @@ func (c *Client) SharedLanes(ctx context.Context, uid string) (model.LanesLoaded
 		}
 		loaded := model.LanesLoaded{ProjectUID: uid, ProjectID: p.ID, Revision: p.Revision, Archived: !p.Active}
 		if value, held := p.Metadata[model.LaneOrderKey]; held {
-			order, err := model.ParseLaneOrders(value)
-			if err != nil {
-				loaded.SharedErr = fmt.Errorf("%s is not a Lane order: %w", model.LaneOrderKey, err)
-			} else {
-				loaded.Order = order
-			}
+			loaded.Order = tidyOrders(value)
 		}
 		value, held := p.Metadata[model.SharedLanesKey]
 		if !held || value == nil {
@@ -221,7 +217,7 @@ func (g *Gateway) writeLanes(cmd model.SaveLanes) error {
 }
 
 // tidyOrders reads a file's order table the way cleanLanes reads its labels: a Lane whose entry does not parse is dropped and
-// the rest kept.
+// the rest kept; the empty key is No lane's order and is kept. A value that is no table holds no orders.
 func tidyOrders(value any) model.LaneOrders {
 	table, _ := value.(map[string]any)
 	var orders model.LaneOrders
@@ -238,6 +234,25 @@ func tidyOrders(value any) model.LaneOrders {
 		}
 	}
 	return orders
+}
+
+// heldOrders is orders as a read that succeeded answers them: never nil, so nil can mean the orders could not be read.
+func heldOrders(orders model.LaneOrders) model.LaneOrders {
+	if orders == nil {
+		return model.LaneOrders{}
+	}
+	return orders
+}
+
+// storedOrders is the Project's orders as the file holds them now, or nil when the file cannot be read. It reads the tables
+// untyped, so a file whose other keys have the wrong type still answers.
+func storedOrders(path, uid string) model.LaneOrders {
+	var file map[string]any
+	if _, err := toml.DecodeFile(path, &file); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	table, _ := file[uid].(map[string]any)
+	return heldOrders(tidyOrders(table["order"]))
 }
 
 // saveLaneOrder writes one Lane's custom order where the Lane list in use lives: the Project's tern.lane_order when shared, else
@@ -258,27 +273,20 @@ func (g *Gateway) saveLaneOrder(ctx context.Context, cmd model.SaveLaneOrder) mo
 		saved.Err = err
 		return saved
 	}
-	saved.Err = updateTables(filepath.Join(folder, lanesFileName), func(file map[string]any) {
+	path := filepath.Join(folder, lanesFileName)
+	saved.Err = updateTables(path, func(file map[string]any) {
 		table, _ := file[cmd.ProjectUID].(map[string]any)
 		fresh := table == nil
 		if fresh {
 			table = map[string]any{}
 		}
-		order, _ := table["order"].(map[string]any)
-		if order == nil {
-			order = map[string]any{}
-		}
-		if len(cmd.Order) == 0 {
-			delete(order, cmd.Lane)
-		} else {
-			order[cmd.Lane] = slices.Clone(cmd.Order)
-		}
-		if len(order) == 0 {
+		next := tidyOrders(table["order"]).With(cmd.Lane, cmd.Order)
+		if len(next) == 0 {
 			delete(table, "order")
 		} else {
-			table["order"] = order
+			table["order"] = map[string][]string(next)
 		}
-		saved.Current = tidyOrders(table["order"])
+		saved.Current = heldOrders(next)
 		if _, named := table["name"]; len(table) == 0 || len(table) == 1 && named {
 			// Nothing but the name is left: the Project's table goes.
 			delete(file, cmd.ProjectUID)
@@ -290,20 +298,21 @@ func (g *Gateway) saveLaneOrder(ctx context.Context, cmd model.SaveLaneOrder) mo
 		file[cmd.ProjectUID] = table
 	})
 	if saved.Err != nil {
-		saved.Current = nil
+		saved.Current = storedOrders(path, cmd.ProjectUID)
 	}
 	return saved
 }
 
 // SaveLaneOrder sets one Lane's entry in the Project's tern.lane_order, reading the Project fresh and patching that key alone
-// guarded on the revision it read. Another Pane's drag in between makes the revision stale: the Project is read once more and
-// the write tried once more. A write that still conflicts, or kata refuses, answers with why and the orders read again.
+// guarded on the revision it read. A Project that no longer shares a Lane list is not written. Another Pane's drag in between
+// makes the revision stale: the Project is read once more and the write tried once more. A write that still conflicts, or kata
+// refuses, answers with why and the orders read again.
 func (c *Client) SaveLaneOrder(ctx context.Context, cmd model.SaveLaneOrder) model.LaneOrderSaved {
 	saved := model.LaneOrderSaved{Save: cmd}
 	fail := func(err error) model.LaneOrderSaved {
 		saved.Err = err
 		if again, readErr := c.SharedLanes(ctx, cmd.ProjectUID); readErr == nil {
-			saved.Current = again.Order
+			saved.Current = heldOrders(again.Order)
 		}
 		return saved
 	}
@@ -317,15 +326,11 @@ func (c *Client) SaveLaneOrder(ctx context.Context, cmd model.SaveLaneOrder) mod
 			saved.Err = errors.New("the Project could not be found")
 			return saved
 		}
-		next := model.LaneOrders{}
-		for label, uids := range fresh.Order {
-			next[label] = uids
+		if !fresh.Shared {
+			saved.Err = errors.New("the Project stopped sharing its Lane list")
+			return saved
 		}
-		if len(cmd.Order) == 0 {
-			delete(next, cmd.Lane)
-		} else {
-			next[cmd.Lane] = slices.Clone(cmd.Order)
-		}
+		next := fresh.Order.With(cmd.Lane, cmd.Order)
 		var value any
 		if len(next) > 0 {
 			value = map[string][]string(next)
@@ -338,14 +343,11 @@ func (c *Client) SaveLaneOrder(ctx context.Context, cmd model.SaveLaneOrder) mod
 		})
 		switch {
 		case err == nil:
-			if len(next) == 0 {
-				next = nil
-			}
-			saved.Current = next
+			saved.Current = heldOrders(next)
 			return saved
 		case client.StatusCode(err) != http.StatusPreconditionFailed:
 			return fail(daemonError(err))
 		}
 	}
-	return fail(errors.New("the Project kept changing while the Lane order was saved"))
+	return fail(errors.New("the Project kept changing while the custom order was saved"))
 }

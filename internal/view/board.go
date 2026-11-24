@@ -60,10 +60,10 @@ func board(m model.Model, now time.Time) tern.Element {
 	lanes := make([]tern.Element, len(columns))
 	menu := newContextMenuKeys(model.ModeBoard, model.OpenLane)
 	for i, column := range columns {
-		custom := column.Lane != model.LaneDone && m.LaneOrderCustom(column.Lane)
+		custom := model.LaneOrderable(column.Lane) && m.LaneOrderCustom(column.Lane)
 		drop := ""
 		if custom {
-			drop = CardDropAct
+			drop = DragAct(CardDropAct, column.Lane)
 		}
 		cards := make([]tern.Element, len(column.Cards))
 		for j, card := range column.Cards {
@@ -85,10 +85,10 @@ func board(m model.Model, now time.Time) tern.Element {
 		}
 		head := ui.Row{Common: headCommon, Gap: ui.GapSM, Children: headChildren}
 		cardList := scrollerCommon("cards")
-		cardList.Drag = CardDragAct
-		cardList.Role = FillRole + " tern-kata.drag-" + strconv.Itoa(m.BoardDragGen())
+		cardList.Drag = DragAct(CardDragAct, column.Lane)
+		cardList.Role = FillRole + " " + DragGenRole + strconv.Itoa(m.BoardDragGen())
 		lanes[i] = ui.Col{
-			Common: ui.Common{Key: laneKey(i), Role: LaneRole, Drop: LaneDropAct, Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
+			Common: ui.Common{Key: laneKey(i), Role: LaneRole, Drop: DragAct(LaneDropAct, column.Lane), Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
 			Gap:    ui.GapSM,
 			Children: append(ui.Nodes(
 				head,
@@ -221,14 +221,12 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 	actions := rowActions(issue, false, menu, CardClick(issue.UID))
 	if selected {
-		// A list that takes drags takes the touch long-press too, so the selected card shows its menu as a button at the end of
-		// its first row, with the entries of its right-click menu.
-		ids = append(ids,
-			ui.Row{Common: ui.Common{Key: "fill", Grow: 1}},
-			ui.Menu{Common: ui.Common{Key: "more", Title: "Actions"}, Items: actions.Menu, Trigger: ui.ButtonQuiet, Size: ui.SizeSM, Align: ui.AlignEnd},
-		)
+		// A list that takes drags takes the touch long-press too, so the selected card shows its menu as a button at the end
+		// of its first row, with the entries of its right-click menu. CardMoreRole pushes it to the row's right end.
+		ids = append(ids, ui.Menu{Common: ui.Common{Key: "more", Role: CardMoreRole, Title: "Actions"}, Items: actions.Menu, Trigger: ui.ButtonQuiet, Size: ui.SizeSM, Align: ui.AlignEnd})
 	}
-	body = slices.Insert(body, 0, tern.Element(ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}))
+	first := ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}
+	body = slices.Insert(body, 0, tern.Element(first))
 	return ui.Card{
 		Common:   ui.Common{Key: issue.UID, MotionKey: issue.UID, Tone: cardTone, Actions: actions, Drop: drop},
 		Selected: selected,

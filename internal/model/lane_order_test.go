@@ -21,6 +21,8 @@ func TestParseLaneOrders(t *testing.T) {
 		{"an empty list drops the Lane", map[string]any{"triage": []any{}, "review": []any{"x"}}, model.LaneOrders{"review": {"x"}}, ""},
 		{"not an object", "triage", nil, "object"},
 		{"a label CheckLabel would change", map[string]any{"In Review": []any{"a"}}, nil, `"In Review"`},
+		{"No lane's empty key", map[string]any{"": []any{"a"}}, model.LaneOrders{"": {"a"}}, ""},
+		{"Done is no Lane label", map[string]any{" done": []any{"a"}}, nil, `" done"`},
 		{"a list that is not a list", map[string]any{"triage": "a"}, nil, "triage"},
 		{"an empty uid", map[string]any{"triage": []any{""}}, nil, "uid"},
 		{"a uid that is a number", map[string]any{"triage": []any{3.0}}, nil, "uid"},

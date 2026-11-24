@@ -113,7 +113,7 @@ func (m Model) shareLaneList(lanes []string, doneDays, doneCards int, stop bool)
 	}
 	share := ShareLanes{Workspace: m.Workspace, Actor: m.Actor, ProjectUID: m.Collection.ProjectUID, ProjectID: form.ProjectID,
 		Revision: form.Revision, Lanes: slices.Clone(lanes), DoneDays: doneDays, DoneCards: doneCards, Stop: stop}
-	form.Saving, form.Err, form.SentShare = true, nil, share
+	form.Saving, form.Err, form.SentShare, form.Resent = true, nil, share, false
 	return m, []Cmd{share}
 }
 
@@ -233,10 +233,51 @@ func lanesSaved(m Model, msg LanesSaved) Model {
 	return m.keepLane().WithVisibleSelection()
 }
 
+// openedShare is the shared Lane list and Done limits a Lanes card was filled from. Shared false means the Project shared no
+// readable list.
+type openedShare struct {
+	Shared              bool
+	Lanes               []string
+	DoneDays, DoneCards int
+}
+
+func (b BoardState) openedShare() openedShare {
+	if !b.Shared || b.sharedErr != nil {
+		return openedShare{}
+	}
+	return openedShare{Shared: true, Lanes: slices.Clone(b.Lanes), DoneDays: b.DoneDays, DoneCards: b.DoneCards}
+}
+
+// equals says the Project's list as read now is the one the card opened with. Done limits compare as the Board holds them.
+func (o openedShare) equals(current LanesLoaded) bool {
+	if current.SharedErr != nil || current.Shared != o.Shared {
+		return false
+	}
+	if !o.Shared {
+		return true
+	}
+	days, cards := current.DoneDays, current.DoneCards
+	if days > maxDoneDays {
+		days = 0
+	}
+	if cards > maxDoneCards {
+		cards = 0
+	}
+	return days == o.DoneDays && cards == o.DoneCards && slices.Equal(current.Lanes, o.Lanes)
+}
+
 // lanesShared applies a write of the Project's shared list. A conflict keeps the card and its text, shows the list the Project
-// shares now and guards the next save on the revision read with it, so saving again replaces that list knowingly.
+// shares now and guards the next save on the revision read with it, so saving again replaces that list knowingly. When the list
+// the Project shares now is the one the card opened with, the conflict came from another metadata write, so the same share is
+// sent once more on the new revision instead.
 func lanesShared(m Model, msg LanesShared) (Model, []Cmd) {
 	if m.LanesForm.Open && m.LanesForm.Saving && m.LanesForm.SentShare.same(msg.Share) {
+		if msg.Conflict && !m.LanesForm.Resent && m.LanesForm.Opened.equals(msg.Current) {
+			share := msg.Share
+			share.Revision = msg.Current.Revision
+			m.LanesForm.Revision, m.LanesForm.SentShare, m.LanesForm.Resent = share.Revision, share, true
+			return m, []Cmd{share}
+		}
 		m.LanesForm.Saving = false
 		switch {
 		case msg.Conflict:

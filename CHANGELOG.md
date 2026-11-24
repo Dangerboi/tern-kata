@@ -8,15 +8,24 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 #### Issues and Pages
 
-- Board cards can be dragged onto another Lane to move their Issue there, as `<` and `>` do.
+- On Tern 0.9.32 and later Board cards can be dragged onto another Lane to move their Issue there, as `<` and `>` do.
+  - On older Terns cards do not drag; `<`, `>` and the card menu still move them.
   - On a touch screen, touch and hold a card, then drag; the Lane under the pointer lights up.
   - The selected card shows a `…` button that opens its menu, since a long-press now picks the card up.
   - `Esc` does not cancel a drag.
-- Dragging a Board card up or down inside its Lane gives that Lane a custom order, and the cards stay where you put them.
+- On Tern 0.9.32 and later dragging a Board card up or down inside its Lane gives that Lane a custom order, and the cards stay where you put them.
   - The Lane's header says `custom order`; its right-click menu (hold menu on a touch screen) has Reset order, which returns the Lane to the list's order.
-  - Cards the order does not name (new to the Lane) show first, in the list's order. Done and No lane have no custom order, and the Lane view shows the same order.
+  - Cards the order does not name (new to the Lane) show first, in the list's order.
+  - A card that leaves the Lane (moved, closed) loses its place there and shows first when it comes back.
+  - No lane can have a custom order too; only Done keeps its fixed order (newest closed first).
+  - The Lane view (narrow Panes and phones) shows the same order.
+  - The Lane view's header says `custom order`, and its right-click or hold menu has Reset order.
   - A card dragged from another Lane lands above or below the card you drop it on, or last on the Lane's empty space; a Lane without a custom order only moves the Issue.
-  - The order is stored with the Lane list: in the Project (`tern.lane_order`) when the Project shares its Lane list, else in `lanes.toml`. A filter hides cards but a drag keeps their places.
+  - The order is stored with the Lane list: in the Project (`tern.lane_order`) when the Project shares its Lane list, else in `lanes.toml`.
+  - Once a Lane has a custom order, a drag keeps the places of the cards a filter hides.
+  - The first custom order saved while filters hide some of the Lane's cards names only the shown ones, so after the filters are cleared the hidden cards show first, as cards new to the Lane do.
+  - A failed save raises a Notice and the Lane shows the order as stored.
+  - While the daemon is disconnected or `lanes.toml` cannot be read, a drag within a Lane is refused with a Notice.
 
 ## [0.16.0] - 2026-11-20
 

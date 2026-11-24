@@ -201,7 +201,13 @@ func laneHeader(m model.Model) tern.Element {
 	if count != "" {
 		cells = append(cells, ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: "muted"}}, Wrap: ui.WrapNone})
 	}
-	return ui.Row{Common: ui.Common{Key: "lane"}, Gap: ui.GapSM, Children: cells}
+	common := ui.Common{Key: "lane"}
+	if m.LaneOrderCustom(m.Board.Lane) {
+		cells = append(cells, ui.Text{Common: ui.Common{Key: "order"}, Spans: []ui.Span{{T: "custom order", S: "muted"}}, Wrap: ui.WrapNone})
+		reset := []ui.MenuEntry{ui.MenuItem{ID: ResetLaneOrderClick(m.Board.Lane), Label: "Reset order"}}
+		common.Actions = &ui.Actions{Menu: reset, Hold: reset}
+	}
+	return ui.Row{Common: common, Gap: ui.GapSM, Children: cells}
 }
 
 func searchInput(m model.Model) tern.Element {

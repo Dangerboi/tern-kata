@@ -95,6 +95,17 @@ release_dist() {
 build_release_dist() { "$repo/scripts/release.sh" "v$(plugin_version "$repo/plugin.toml")" "$1" >/dev/null; }
 # build_old_release <out>: the binary built with a release version older than any real one.
 build_old_release() { (cd "$repo" && go build -ldflags "-X main.version=v0.0.1" -o "$1" ./cmd/tern-kata); }
+# rect <selector>: the first match's "x y w h", whole pixels.
+rect() { ctl tree "$1" | jq -er '.nodes[0].rect | map(floor) | "\(.[0]) \(.[1]) \(.[2]) \(.[3])"'; }
+# drag <selector> <x> <y>: presses on the element's middle, moves in steps and releases at x y.
+drag() {
+  local ex ey ew eh
+  read -r ex ey ew eh < <(rect "$1")
+  local sx=$((ex + ew / 2)) sy=$((ey + eh / 2))
+  printf 'down %s %s\nmove %s %s\nmove %s %s\nmove %s %s\nup %s %s\n' \
+    "$sx" "$sy" $((sx + 6)) $((sy + 6)) $(((sx + $2) / 2)) $(((sy + $3) / 2)) "$2" "$3" "$2" "$3" >"$tmp/drag.ctl"
+  ctl --file "$tmp/drag.ctl"
+}
 ctl_call() {
   case "${1:-}" in
     ready | expect | git-read | link-read | completing) ctl_waiting "$@" ;;

@@ -260,7 +260,8 @@ func snapshotLoaded(m Model, msg SnapshotLoaded) (Model, []Cmd) {
 		m, next = snapshotChanged(m)
 		cmds = append(cmds, next...)
 	}
-	return m, cmds
+	m, prune := m.pruneOrders()
+	return m, append(cmds, prune...)
 }
 
 func snapshotFailed(m Model, msg SnapshotFailed) (Model, []Cmd) {

@@ -29,17 +29,17 @@ func roleWords(n tern.WireNode) []string {
 func TestEveryLaneColumnTakesDropsAndEveryCardListDrags(t *testing.T) {
 	s := dragPane(t)
 	nodes := wireNodes(t, view.Render(s.Model, now))
-	for i := range s.Model.BoardColumns() {
+	for i, column := range s.Model.BoardColumns() {
 		lane := node(t, nodes, laneID(i))
-		if got := lane.P["drop"]; got != view.LaneDropAct {
-			t.Errorf("column %d drop = %v, want %s", i, got, view.LaneDropAct)
+		if got, want := lane.P["drop"], "lane-drop:"+column.Lane; got != want {
+			t.Errorf("column %d drop = %v, want %s", i, got, want)
 		}
 		if !containsWord(roleWords(lane), view.LaneRole) {
 			t.Errorf("column %d role = %v, want it to hold %s", i, lane.P["role"], view.LaneRole)
 		}
 		list := node(t, nodes, laneID(i)+".cards")
-		if got := list.P["drag"]; got != view.CardDragAct {
-			t.Errorf("column %d card list drag = %v, want %s", i, got, view.CardDragAct)
+		if got, want := list.P["drag"], "card-drag:"+column.Lane; got != want {
+			t.Errorf("column %d card list drag = %v, want %s", i, got, want)
 		}
 		if !containsWord(roleWords(list), view.FillRole) {
 			t.Errorf("column %d card list role = %v, want it to keep %s", i, list.P["role"], view.FillRole)
@@ -113,6 +113,33 @@ func TestOnlyTheSelectedCardHasAMoreMenuWithItsRightClickEntries(t *testing.T) {
 	}
 	if !reflect.DeepEqual(button.P["items"], actions["menu"]) {
 		t.Errorf("more menu items = %v, want the right-click menu's %v", button.P["items"], actions["menu"])
+	}
+}
+
+func TestTheSelectedCardsMenuIsTheLastChildOfTheWrappingBadgeRowWithItsRole(t *testing.T) {
+	s := dragPane(t)
+	nodes := wireNodes(t, view.Render(s.Model, now))
+	selected := rowOf(t, s.Model, view.BoardID, "a")
+	row := node(t, nodes, selected+".id")
+	if got := row.P["wrap"]; got != true {
+		t.Errorf("first row wrap = %v, want true", got)
+	}
+	var ids []string
+	for _, c := range row.C {
+		ids = append(ids, c.ID)
+	}
+	if want := []string{selected + ".id.short", selected + ".id.more"}; !reflect.DeepEqual(ids, want) {
+		t.Fatalf("first row children = %v, want %v", ids, want)
+	}
+	if !containsWord(roleWords(node(t, nodes, selected+".id.more")), view.CardMoreRole) {
+		t.Errorf("more role = %v, want it to hold %s", node(t, nodes, selected+".id.more").P["role"], view.CardMoreRole)
+	}
+	if hasNode(nodes, selected+".id.fill") {
+		t.Errorf("the first row still has a fill spacer")
+	}
+	// A card that is not selected has no menu.
+	if hasNode(nodes, rowOf(t, s.Model, view.BoardID, "b")+".id.more") {
+		t.Errorf("an unselected card has a more menu")
 	}
 }
 

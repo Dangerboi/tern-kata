@@ -12,9 +12,7 @@ done
 lo_lane="[data-id='main.columns.list.board.lane2']"
 lo_head="$lo_lane [data-id='main.columns.list.board.lane2.head']"
 lo_card() { printf "[data-id='main.columns.list.board.lane2.cards.%s']" "$1"; }
-# lo_rect <selector>: the first match's "x y w h", whole pixels.
-lo_rect() { ctl tree "$1" | jq -er '.nodes[0].rect | map(floor) | "\(.[0]) \(.[1]) \(.[2]) \(.[3])"'; }
-lo_rects() { local uid; for uid in "${lo_uids[@]}"; do lo_rect "$(lo_card "$uid")"; done; }
+lo_rects() { local uid; for uid in "${lo_uids[@]}"; do rect "$(lo_card "$uid")"; done; }
 # lo_top_down: the three uids, top card first.
 lo_top_down() {
   local uid y
@@ -42,12 +40,8 @@ lo_dragged=${lo_before[2]}
 lo_header_plain
 
 # The bottom card dropped on the upper half of the top card lands first.
-read -r tx ty tw th < <(lo_rect "$(lo_card "${lo_before[0]}")")
-read -r bx by bw bh < <(lo_rect "$(lo_card "$lo_dragged")")
-printf 'down %s %s\nmove %s %s\nmove %s %s\nmove %s %s\nup %s %s\n' \
-  $((bx + bw / 2)) $((by + bh / 2)) $((bx + bw / 2 + 6)) $((by + bh / 2 - 6)) \
-  $((tx + tw / 2)) $(((by + ty) / 2)) $((tx + tw / 2)) $((ty + th / 4)) $((tx + tw / 2)) $((ty + th / 4)) >"$tmp/lo-drag.ctl"
-ctl --file "$tmp/lo-drag.ctl"
+read -r tx ty tw th < <(rect "$(lo_card "${lo_before[0]}")")
+drag "$(lo_card "$lo_dragged")" $((tx + tw / 2)) $((ty + th / 4))
 wait_for lo_first_is "$lo_dragged"
 wait_settled lo_rects
 wait_for lo_header_custom

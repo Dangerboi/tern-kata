@@ -3,12 +3,15 @@ package model
 import "slices"
 
 // CardDropped is a Board card the user dragged and let go of on the columns layout (Tern 0.9.32 drag and drop). Column is the
-// index into BoardColumns of the Lane it was let go on. Reorder says it was let go inside its own Lane's card list, at Index
-// (0-based, among the cards that Lane shows). Target is the card it was let go on, when it was let go on a card of another Lane
-// (a custom-ordered Lane's cards are drop targets), and After says it landed below that card rather than above.
+// index into BoardColumns of the Lane it was let go on, and Lane that Lane's key as the frame the user dragged in drew it, so a
+// drop sent from a frame drawn before the Lane list changed is not taken for another Lane. Reorder says it was let go inside
+// its own Lane's card list, at Index (0-based, among the cards that Lane shows). Target is the card it was let go on, when it
+// was let go on a card of another Lane (a custom-ordered Lane's cards are drop targets), and After says it landed below that
+// card rather than above.
 type CardDropped struct {
 	UID     string
 	Column  int
+	Lane    string
 	Reorder bool
 	Index   int
 	Target  string
@@ -40,8 +43,11 @@ func cardDropped(m Model, msg CardDropped) (Model, []Cmd) {
 		return m, nil
 	}
 	lane := columns[msg.Column].Lane
+	if msg.Lane != lane {
+		return m, nil // the drop was sent from a frame drawn before the Lane list changed
+	}
 	if msg.Reorder {
-		if from != msg.Column || lane == LaneNone || lane == LaneDone {
+		if from != msg.Column || !LaneOrderable(lane) {
 			return m, nil
 		}
 		return reorderCard(m, columns[msg.Column], msg.UID, msg.Index)
@@ -58,7 +64,7 @@ func cardDropped(m Model, msg CardDropped) (Model, []Cmd) {
 		return m, cmds
 	}
 	m, cmds = moveCardTo(m, at, lane)
-	if lane == LaneNone || !m.LaneOrderCustom(lane) {
+	if !LaneOrderable(lane) || !m.LaneOrderCustom(lane) {
 		return m, cmds
 	}
 	order := placeInOrder(laneBase(m, lane, columns[msg.Column]), msg.UID, msg.Target, msg.After)
@@ -90,10 +96,8 @@ func laneBase(m Model, lane string, column BoardColumn) []string {
 		}
 	}
 	for _, uid := range m.Board.order[lane] {
-		if i := slices.IndexFunc(m.Issues, func(issue Issue) bool { return issue.UID == uid }); i >= 0 {
-			if issue := m.Issues[i]; IsClosed(issue) || LaneOf(issue, lanes) != lane {
-				continue
-			}
+		if m.leftLane(uid, lane, lanes) {
+			continue
 		}
 		base = append(base, uid)
 	}

@@ -38,6 +38,9 @@ type BoardState struct {
 	order LaneOrders
 	// fileErr is why the Lane list file could not be read; while it is set the file is never overwritten.
 	fileErr error
+	// saving says a SaveLaneOrder is out, and waiting are the ones asked for since, at most one per Lane, oldest first.
+	saving  bool
+	waiting []SaveLaneOrder
 	// projectID and revision are the Project as read with the list, which a shared write needs; projectID is 0 when it was not
 	// read, and sharedErr then or for a shared value that is not a Lane list says why. reported is the text of the last such
 	// error a Notice gave, so a refresh that finds it unchanged says nothing.
@@ -153,7 +156,7 @@ func (m Model) boardColumns() []BoardColumn {
 		columns[i].Cards = append(columns[i].Cards, card)
 	}
 	for i := range columns {
-		if columns[i].Lane != LaneNone && columns[i].Lane != LaneDone {
+		if LaneOrderable(columns[i].Lane) {
 			columns[i].Cards = orderCards(columns[i].Cards, m.Board.order[columns[i].Lane])
 		}
 	}
