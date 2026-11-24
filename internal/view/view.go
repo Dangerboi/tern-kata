@@ -203,9 +203,9 @@ func laneHeader(m model.Model) tern.Element {
 	}
 	common := ui.Common{Key: "lane"}
 	if m.LaneOrderCustom(m.Board.Lane) {
-		cells = append(cells, ui.Text{Common: ui.Common{Key: "order"}, Spans: []ui.Span{{T: "custom order", S: "muted"}}, Wrap: ui.WrapNone})
-		reset := []ui.MenuEntry{ui.MenuItem{ID: ResetLaneOrderClick(m.Board.Lane), Label: "Reset order"}}
-		common.Actions = &ui.Actions{Menu: reset, Hold: reset}
+		label, actions := laneOrderHead(m.Board.Lane)
+		cells = append(cells, label)
+		common.Actions = actions
 	}
 	return ui.Row{Common: common, Gap: ui.GapSM, Children: cells}
 }

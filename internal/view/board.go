@@ -35,6 +35,13 @@ func SelectedRowID(m model.Model) string {
 	return IssueID(m.SelectedUID)
 }
 
+// laneOrderHead is what a Lane's head shows when the Lane has a custom order: the muted label that says so, and the Reset
+// order entry on the head's menu and hold.
+func laneOrderHead(lane string) (tern.Element, *ui.Actions) {
+	reset := []ui.MenuEntry{ui.MenuItem{ID: ResetLaneOrderClick(lane), Label: "Reset order"}}
+	return ui.Text{Common: ui.Common{Key: "order"}, Spans: []ui.Span{{T: "custom order", S: "muted"}}, Wrap: ui.WrapNone}, &ui.Actions{Menu: reset, Hold: reset}
+}
+
 // board is the Board: one column per Lane, No lane first and Done last, each a header over its cards. It takes the list column's
 // place. A Lane is a column, not a Card: a Card's body sizes to its content, so only a column's list fills the Lane down to the
 // bottom and scrolls inside it, which keeps the Pane itself from scrolling the top bar away. The Lanes' row is a layout
@@ -60,7 +67,7 @@ func board(m model.Model, now time.Time) tern.Element {
 	lanes := make([]tern.Element, len(columns))
 	menu := newContextMenuKeys(model.ModeBoard, model.OpenLane)
 	for i, column := range columns {
-		custom := model.LaneOrderable(column.Lane) && m.LaneOrderCustom(column.Lane)
+		custom := m.LaneOrderCustom(column.Lane)
 		drop := ""
 		if custom {
 			drop = DragAct(CardDropAct, column.Lane)
@@ -79,9 +86,9 @@ func board(m model.Model, now time.Time) tern.Element {
 		)
 		headCommon := ui.Common{Key: "head"}
 		if custom {
-			headChildren = append(headChildren, ui.Text{Common: ui.Common{Key: "order"}, Spans: []ui.Span{{T: "custom order", S: "muted"}}, Wrap: ui.WrapNone})
-			reset := []ui.MenuEntry{ui.MenuItem{ID: ResetLaneOrderClick(column.Lane), Label: "Reset order"}}
-			headCommon.Actions = &ui.Actions{Menu: reset, Hold: reset}
+			label, actions := laneOrderHead(column.Lane)
+			headChildren = append(headChildren, label)
+			headCommon.Actions = actions
 		}
 		head := ui.Row{Common: headCommon, Gap: ui.GapSM, Children: headChildren}
 		cardList := scrollerCommon("cards")
@@ -221,8 +228,9 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	}
 	actions := rowActions(issue, false, menu, CardClick(issue.UID))
 	if selected {
-		// A list that takes drags takes the touch long-press too, so the selected card shows its menu as a button at the end
-		// of its first row, with the entries of its right-click menu. CardMoreRole pushes it to the row's right end.
+		// A list that takes drags takes the touch long-press too, so the selected card shows its menu as a button in the
+		// card's top right corner, with the entries of its right-click menu. It is the last child of the badge row so the
+		// badges keep their ids, and CardMoreRole takes it out of the row's flow and leaves room for it.
 		ids = append(ids, ui.Menu{Common: ui.Common{Key: "more", Role: CardMoreRole, Title: "Actions"}, Items: actions.Menu, Trigger: ui.ButtonQuiet, Size: ui.SizeSM, Align: ui.AlignEnd})
 	}
 	first := ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}

@@ -50,7 +50,7 @@ type LanesFormState struct {
 	// Sent and SentShare are the write the card is waiting on, so only its own result closes or fails the card.
 	Sent      SaveLanes
 	SentShare ShareLanes
-	// Opened is the shared list the card was filled from, and Resent says a conflict already sent the write again. A conflict
+	// Opened is the shared list the card was filled from, or the one its last conflict showed, and Resent says a conflict already sent the write again. A conflict
 	// answer whose list equals Opened came from a Project revision raised by a write to other metadata, so the share is sent
 	// once more on the new revision.
 	Opened openedShare

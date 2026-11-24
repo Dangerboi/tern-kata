@@ -14,12 +14,3 @@ const BoardDropCSS = `.sf-col[data-role~='` + LaneRole + `'].sf-drop-at {
 	outline-offset: 6px;
 	border-radius: var(--r-card);
 }`
-
-// CardMoreRole marks the more menu button of the selected Board card.
-const CardMoreRole = "tern-kata.card-more"
-
-// CardMoreCSS pushes the more button to the right end of the card's first row. In a wrapping row an auto margin keeps the
-// button at the right end of whichever line it lands on.
-const CardMoreCSS = `[data-role~='` + CardMoreRole + `'] {
-	margin-left: auto;
-}`

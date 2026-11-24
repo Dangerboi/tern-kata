@@ -58,6 +58,9 @@ type Project struct {
 type Model struct {
 	// Connection is the number of the daemon connection the Pane holds, stepped by each successful switch. Answers to ProjectLoaded, ClearAttention and token creation echo the number they were asked on, and an older one is dropped.
 	Connection int
+	// orderSeq numbers the custom order saves the Pane has sent, so an answer is matched to its change; a daemon switch leaves it
+	// counting, so an answer from the old daemon never matches a change made on the new one.
+	orderSeq int
 	// IssueScoped says the connection's credential is limited to one Issue, as the daemon's auth capabilities report. kata refuses
 	// delete and restore to such an account, so the Pane does not offer them. It stays false until the answer arrives, and when the read fails.
 	IssueScoped bool

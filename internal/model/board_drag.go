@@ -27,8 +27,9 @@ func (m Model) BoardDragGen() int { return m.Board.dragGen }
 // cardDropped is the model's answer to a card let go on the Board. Every drop counts in dragGen first, so the next frame
 // differs and Tern restores a card the Pane did not move. A drop inside the card's own Lane's card list reorders that Lane, a
 // drop on its own Lane's empty space changes nothing. A drop on another Lane is the Move the keys make, a drop on Done is the
-// Close card, and a closed card dropped on a Lane raises the same Reopen toast as the keys. A Move into a Lane with a custom
-// order also places the card in it: before or after the card it was let go on, else last.
+// Close card, and a closed card dropped on a Lane raises the same Reopen toast as the keys. A Move into a Lane the Pane sees
+// with a custom order also places the card in it: before or after the card it was let go on, else last. That change is applied
+// only where the store still holds an order for the Lane, so a drop never brings back an order another Pane reset.
 func cardDropped(m Model, msg CardDropped) (Model, []Cmd) {
 	m.Board.dragGen++
 	if !m.OnBoard() || m.Board.Mode != BoardColumns {
@@ -64,77 +65,42 @@ func cardDropped(m Model, msg CardDropped) (Model, []Cmd) {
 		return m, cmds
 	}
 	m, cmds = moveCardTo(m, at, lane)
-	if !LaneOrderable(lane) || !m.LaneOrderCustom(lane) {
+	if !m.LaneOrderCustom(lane) {
 		return m, cmds
 	}
-	order := placeInOrder(laneBase(m, lane, columns[msg.Column]), msg.UID, msg.Target, msg.After)
-	m, save := m.saveOrder(lane, order)
+	m, save := m.saveOrder(lane, OrderChange{Shown: shownUIDs(columns[msg.Column]), Move: msg.UID, Anchor: msg.Target, After: msg.After, OnlyOrdered: true})
 	return m, append(cmds, save...)
 }
 
-// reorderCard moves uid to index among the cards the Lane shows and saves the new order.
-func reorderCard(m Model, column BoardColumn, uid string, index int) (Model, []Cmd) {
-	visible := make([]string, len(column.Cards))
+// shownUIDs are the uids of the cards the Lane shows, top first.
+func shownUIDs(column BoardColumn) []string {
+	uids := make([]string, len(column.Cards))
 	for i, card := range column.Cards {
-		visible[i] = card.Issue.UID
+		uids[i] = card.Issue.UID
 	}
-	order := reorderLane(laneBase(m, column.Lane, column), visible, uid, index)
-	if order == nil {
+	return uids
+}
+
+// reorderCard moves uid to index among the cards the Lane shows and saves the change. uid goes right after its new upper
+// neighbour among the shown cards, or right before its new lower one when it is first, so the uids the Pane does not show keep
+// their places. Nothing is saved when the shown order does not change.
+func reorderCard(m Model, column BoardColumn, uid string, index int) (Model, []Cmd) {
+	shown := shownUIDs(column)
+	from := slices.Index(shown, uid)
+	if from < 0 {
 		return m, nil
 	}
-	return m.saveOrder(column.Lane, order)
-}
-
-// laneBase is the Lane's stored order as a write starts from it: without the Issues now closed or in another Lane, and with the
-// cards the order does not name first, as the Lane shows them.
-func laneBase(m Model, lane string, column BoardColumn) []string {
-	lanes := m.LaneList()
-	var base []string
-	for _, card := range column.Cards {
-		if !slices.Contains(m.Board.order[lane], card.Issue.UID) {
-			base = append(base, card.Issue.UID)
-		}
-	}
-	for _, uid := range m.Board.order[lane] {
-		if m.leftLane(uid, lane, lanes) {
-			continue
-		}
-		base = append(base, uid)
-	}
-	return base
-}
-
-// reorderLane is the stored order after uid is dragged to index among the visible uids (the Lane's shown cards, top first).
-// base is the order as laneBase gives it. uid goes right after its new upper neighbour among the visible cards, or right before
-// its new lower one when it is first, so the uids the Pane does not show keep their places. It is nil when the visible order
-// does not change.
-func reorderLane(base, visible []string, uid string, index int) []string {
-	from := slices.Index(visible, uid)
-	if from < 0 {
-		return nil
-	}
-	moved := slices.Clone(visible)
-	moved = slices.Delete(moved, from, from+1)
+	moved := slices.Delete(slices.Clone(shown), from, from+1)
 	index = max(0, min(index, len(moved)))
 	if index == from {
-		return nil
+		return m, nil
 	}
 	moved = slices.Insert(moved, index, uid)
+	change := OrderChange{Shown: shown, Move: uid}
 	if index == 0 {
-		return placeInOrder(base, uid, moved[1], false)
+		change.Anchor = moved[1]
+	} else {
+		change.Anchor, change.After = moved[index-1], true
 	}
-	return placeInOrder(base, uid, moved[index-1], true)
-}
-
-// placeInOrder is order with uid put right before anchor, or right after it when after; last when anchor is not in it.
-func placeInOrder(order []string, uid, anchor string, after bool) []string {
-	placed := slices.DeleteFunc(slices.Clone(order), func(u string) bool { return u == uid })
-	at := slices.Index(placed, anchor)
-	switch {
-	case at < 0:
-		return append(placed, uid)
-	case after:
-		at++
-	}
-	return slices.Insert(placed, at, uid)
+	return m.saveOrder(column.Lane, change)
 }

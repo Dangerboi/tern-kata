@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -73,5 +74,50 @@ func TestAConflictFromAChangedSharedListShowsTheConflict(t *testing.T) {
 					cmds, m.LanesForm.Saving, m.LanesForm.Err, m.LanesForm.Revision)
 			}
 		})
+	}
+}
+
+func TestAConflictShownOnAChangedListThenAnOrderOnlyBumpSendsTheShareAgain(t *testing.T) {
+	m, share := sharedLanesWrite(t)
+	changed := model.LanesLoaded{ProjectUID: "p", Shared: true, Lanes: []string{"triage", "ship"}, DoneDays: 7, ProjectID: 7, Revision: 6}
+	m, _ = model.Update(m, model.LanesShared{Share: share, Conflict: true, Current: changed})
+	if m.LanesForm.Err == nil {
+		t.Fatal("a conflict over a changed list showed no conflict")
+	}
+	m, cmds := clickPress(m, "enter")
+	if len(cmds) != 1 {
+		t.Fatalf("saving again sent %#v, want one shared write", cmds)
+	}
+	second, ok := cmds[0].(model.ShareLanes)
+	if !ok {
+		t.Fatalf("saving again sent %#v, want a shared write", cmds[0])
+	}
+	changed.Revision = 8
+	_, cmds = model.Update(m, model.LanesShared{Share: second, Conflict: true, Current: changed})
+	want := second
+	want.Revision = 8
+	if len(cmds) != 1 || !reflect.DeepEqual(cmds[0], want) {
+		t.Fatalf("a conflict from a write to other metadata sent %#v, want %#v", cmds, want)
+	}
+}
+
+func TestAConflictOverAnUnreadableListAlwaysShowsTheConflictEvenOnceItIsCleared(t *testing.T) {
+	m, _ := loadFirst(model.Model{Cols: 160, Workspace: "/repo"}, model.ProjectLoaded{Project: model.Project{UID: "p", Name: "work"}}, model.SnapshotLoaded{})
+	m, _ = clickPress(m, "b")
+	m, _ = model.Update(m, model.LanesLoaded{ProjectUID: "p", Request: m.LanesRequest(), Shared: true, SharedErr: errors.New("not a list"), ProjectID: 7, Revision: 4})
+	m, _ = clickPress(m, "shift+b", "ctrl+u")
+	m, _ = model.Update(m, model.KeyMsg{Chord: "paste", Text: "triage, qa"})
+	m, cmds := clickPress(m, "enter")
+	if len(cmds) != 1 {
+		t.Fatalf("saving sent %#v, want one shared write", cmds)
+	}
+	share, ok := cmds[0].(model.ShareLanes)
+	if !ok {
+		t.Fatalf("saving sent %#v, want a shared write", cmds[0])
+	}
+	cleared := model.LanesLoaded{ProjectUID: "p", ProjectID: 7, Revision: 6}
+	m, cmds = model.Update(m, model.LanesShared{Share: share, Conflict: true, Current: cleared})
+	if len(cmds) != 0 || m.LanesForm.Saving || m.LanesForm.Err == nil {
+		t.Fatalf("sent %#v saving %v error %v, want the conflict shown over a list that was unreadable", cmds, m.LanesForm.Saving, m.LanesForm.Err)
 	}
 }

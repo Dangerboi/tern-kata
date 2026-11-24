@@ -1,4 +1,4 @@
-# A Board card dragged onto another Lane moves its Issue there as `>` does, and a drop on its own Lane changes nothing.
+# A Board card dragged onto another Lane moves its Issue there as `>` does, a drop on its own Lane's header changes nothing, and a drop on Done opens the Close card.
 # The selected card's … button opens the card's menu. Own Issues; they stay open.
 bdr_dir="$tmp/workspace"
 kata --workspace "$bdr_dir" create "Smoke drag first" --json >"$tmp/bdr-first.json"
@@ -26,12 +26,25 @@ expect_tree "$(bdr_card 1 "$bdr_first")" '.ok and .count == 1'
 expect_tree "$(bdr_card 0 "$bdr_first")" '.ok and .count == 0'
 wait_for bdr_labels_have "$bdr_first" needs-triage
 
-# A drop on its own Lane, in the empty space below the cards, moves nothing.
-bdr_drag "$(bdr_card 1 "$bdr_first")" "$(bdr_lane 1)" bottom
+# A drop on its own Lane's header row (outside the card list, which fills the Lane) moves nothing and leaves no custom order.
+bdr_head="$(bdr_lane 1) [data-id='main.columns.list.board.lane1.head']"
+read -r hx hy hw hh < <(rect "$bdr_head")
+drag "$(bdr_card 1 "$bdr_first")" $((hx + hw / 2)) $((hy + hh / 2))
 expect_tree "$(bdr_card 1 "$bdr_first")" '.ok and .count == 1'
+expect_tree "$bdr_head" '.ok and .count == 1 and (.nodes[0].text | contains("custom order") | not)'
+expect_tree "$(bdr_card 1 "$bdr_second")" '.ok and .count == 1'
 kata --workspace "$bdr_dir" show "$bdr_first" --json | jq -e '.issue.labels == ["needs-triage"]' >/dev/null
+kata --workspace "$bdr_dir" show "$bdr_second" --json | jq -e '.issue.labels == ["needs-triage"]' >/dev/null
 
+# A drop on Done (the last column, with the default Lane list) opens the Close card; Escape leaves the Issue open.
 bdr_first_rect() { rect "$(bdr_card 1 "$bdr_first")"; }
+wait_settled bdr_first_rect
+bdr_drag "$(bdr_card 1 "$bdr_first")" "$(bdr_lane 6)" top
+expect_tree "[data-id='layer.close']" '.ok and .count == 1'
+ctl key Escape
+expect_tree "[data-id='layer.close']" '.ok and .count == 0'
+expect_tree "$(bdr_card 1 "$bdr_first")" '.ok and .count == 1'
+
 wait_settled bdr_first_rect
 
 # The selected card's … button opens the menu a right-click does.

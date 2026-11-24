@@ -334,11 +334,20 @@ func TestConcurrentLaneSavesOfDifferentProjectsKeepEach(t *testing.T) {
 	}
 }
 
-// saveOrder is the Board's drag write through gateway for the fixture's Project.
+// saveOrder is the Board's drag write through gateway for the fixture's Project, setting the Lane's order to order on a Lane that
+// has none; no order drops it.
 func (f configFixture) saveOrder(t *testing.T, gateway *Gateway, shared bool, lane string, order ...string) model.LaneOrderSaved {
 	t.Helper()
+	if len(order) == 0 {
+		return f.orderChange(t, gateway, shared, lane, model.OrderChange{Reset: true})
+	}
+	return f.orderChange(t, gateway, shared, lane, model.OrderChange{Shown: order})
+}
+
+func (f configFixture) orderChange(t *testing.T, gateway *Gateway, shared bool, lane string, change model.OrderChange) model.LaneOrderSaved {
+	t.Helper()
 	return as[model.LaneOrderSaved](t, run(t, gateway, model.SaveLaneOrder{Workspace: f.workspace, Actor: "tester", ProjectUID: f.project.UID,
-		ProjectName: "work", ProjectID: f.project.ID, Shared: shared, Lane: lane, Order: order}))
+		ProjectName: "work", ProjectID: f.project.ID, Shared: shared, Lane: lane, Change: change}))
 }
 
 func (f configFixture) projectMeta(t *testing.T) map[string]any {
@@ -593,7 +602,7 @@ func TestASharedOrderSaveAfterSharingStoppedWritesNothingAndSaysSo(t *testing.T)
 	f.setProjectMeta(t, map[string]any{model.LaneOrderKey: map[string]any{"other": []any{"x"}}})
 	before := f.projectMeta(t)
 	saved := f.saveOrder(t, f.gateway, true, "triage", "a")
-	if saved.Err == nil || !strings.Contains(saved.Err.Error(), "stopped sharing its Lane list") || saved.Current != nil {
+	if saved.Err == nil || !strings.Contains(saved.Err.Error(), "no longer shares a readable Lane list") || saved.Current != nil {
 		t.Fatalf("saved %+v", saved)
 	}
 	if after := f.projectMeta(t); !reflect.DeepEqual(after, before) {
@@ -611,7 +620,7 @@ func TestAFailedFileOrderSaveAnswersTheStoredOrder(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = os.Chmod(f.folder, 0o755) })
-		failed := f.saveOrder(t, f.gateway, false, "triage", "b", "a")
+		failed := f.orderChange(t, f.gateway, false, "triage", model.OrderChange{Move: "b", Anchor: "a"})
 		if failed.Err == nil || !reflect.DeepEqual(failed.Current, model.LaneOrders{"triage": {"a", "b"}}) {
 			t.Errorf("failed write %+v, want the stored order", failed)
 		}
@@ -638,5 +647,110 @@ func TestAFailedSharedOrderSaveWhoseFirstReadFailsAnswersNoOrders(t *testing.T) 
 	f.kata.intercept.Store(nil)
 	if saved.Err == nil || saved.Current != nil {
 		t.Errorf("saved %+v, want Err and no Current", saved)
+	}
+}
+
+func TestAFileOrderChangeThatLeavesTheLaneAsItIsWritesNothing(t *testing.T) {
+	f := newConfigFixture(t)
+	noops := []model.OrderChange{
+		{Reset: true},
+		{Remove: []string{"gone"}},
+		{Shown: []string{"a", "b"}, Move: "a", Anchor: "b"},
+	}
+	// A file that holds nothing stays missing.
+	path := f.folder + "/lanes.toml"
+	if saved := f.orderChange(t, f.gateway, false, "triage", noops[0]); saved.Err != nil || len(saved.Current) != 0 {
+		t.Fatalf("reset of nothing %+v", saved)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Error("a reset of a Lane with no order created the file")
+	}
+	f.saveOrder(t, f.gateway, false, "triage", "a", "b")
+	before, _ := os.ReadFile(path)
+	for _, change := range noops[1:] {
+		saved := f.orderChange(t, f.gateway, false, "triage", change)
+		if saved.Err != nil || !reflect.DeepEqual(saved.Current, model.LaneOrders{"triage": {"a", "b"}}) {
+			t.Errorf("%+v: saved %+v, want the stored order", change, saved)
+		}
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(before) {
+		t.Errorf("the file was rewritten:\n%s\nwas\n%s", after, before)
+	}
+}
+
+func TestASharedNoOpChangeKeepsTheRevision(t *testing.T) {
+	f := newConfigFixture(t)
+	f.setProjectMeta(t, map[string]any{model.SharedLanesKey: map[string]any{"labels": []any{"triage"}}})
+	f.saveOrder(t, f.gateway, true, "triage", "a", "b")
+	revision := f.lanes(t, f.gateway).Revision
+	for _, change := range []model.OrderChange{
+		{Remove: []string{"gone"}},
+		{Shown: []string{"a", "b"}, Move: "a", Anchor: "b"},
+		{Shown: []string{"a"}},
+	} {
+		saved := f.orderChange(t, f.gateway, true, "triage", change)
+		if saved.Err != nil || !reflect.DeepEqual(saved.Current, model.LaneOrders{"triage": {"a", "b"}}) {
+			t.Errorf("%+v: saved %+v, want the stored order", change, saved)
+		}
+	}
+	if got := f.lanes(t, f.gateway).Revision; got != revision {
+		t.Errorf("revision %d after no-op changes, want %d", got, revision)
+	}
+	f.orderChange(t, f.gateway, true, "triage", model.OrderChange{Remove: []string{"a"}})
+	if got := f.lanes(t, f.gateway).Revision; got == revision {
+		t.Errorf("revision stayed %d after a real change", got)
+	}
+}
+
+func TestAMoveLandsOnAnOrderAnotherPaneChangedAndKeepsItsWork(t *testing.T) {
+	for name, shared := range map[string]bool{"file": false, "shared": true} {
+		t.Run(name, func(t *testing.T) {
+			f := newConfigFixture(t)
+			if shared {
+				f.setProjectMeta(t, map[string]any{model.SharedLanesKey: map[string]any{"labels": []any{"triage", "review"}}})
+			}
+			f.saveOrder(t, f.gateway, shared, "triage", "a", "b", "c")
+			f.saveOrder(t, f.gateway, shared, "review", "r1", "r2")
+			// Another Pane puts b first and drops r2 from review; this Pane still holds the first order.
+			f.orderChange(t, f.again(), shared, "triage", model.OrderChange{Move: "b", Anchor: "a"})
+			f.orderChange(t, f.again(), shared, "review", model.OrderChange{Remove: []string{"r2"}})
+			saved := f.orderChange(t, f.gateway, shared, "triage", model.OrderChange{Shown: []string{"a", "b", "c"}, Move: "c", Anchor: "a"})
+			want := model.LaneOrders{"triage": {"b", "c", "a"}, "review": {"r1"}}
+			if saved.Err != nil || !reflect.DeepEqual(saved.Current, want) {
+				t.Fatalf("saved %+v, want %v", saved, want)
+			}
+			if got := f.lanes(t, f.again()); !reflect.DeepEqual(got.Order, want) {
+				t.Errorf("stored %v, want %v", got.Order, want)
+			}
+		})
+	}
+}
+
+func TestADropChangeWritesNothingWhereAnotherPaneResetTheLane(t *testing.T) {
+	for name, shared := range map[string]bool{"file": false, "shared": true} {
+		t.Run(name, func(t *testing.T) {
+			f := newConfigFixture(t)
+			if shared {
+				f.setProjectMeta(t, map[string]any{model.SharedLanesKey: map[string]any{"labels": []any{"triage", "review"}}})
+			}
+			f.saveOrder(t, f.gateway, shared, "triage", "a", "b")
+			f.saveOrder(t, f.gateway, shared, "review", "r1")
+			// Another Pane resets triage; this Pane still sees it as custom and drops a card of review into it.
+			f.saveOrder(t, f.again(), shared, "triage")
+			revision := f.lanes(t, f.gateway).Revision
+			drop := model.OrderChange{Shown: []string{"a", "b", "r1"}, Move: "r1", Anchor: "a", OnlyOrdered: true}
+			saved := f.orderChange(t, f.gateway, shared, "triage", drop)
+			if want := (model.LaneOrders{"review": {"r1"}}); saved.Err != nil || !reflect.DeepEqual(saved.Current, want) {
+				t.Fatalf("saved %+v, want only %v stored", saved, want)
+			}
+			if got := f.lanes(t, f.again()); !reflect.DeepEqual(got.Order, model.LaneOrders{"review": {"r1"}}) {
+				t.Errorf("stored %v, the reset order came back", got.Order)
+			}
+			if shared {
+				if got := f.lanes(t, f.gateway).Revision; got != revision {
+					t.Errorf("revision %d after the refused drop, want %d", got, revision)
+				}
+			}
+		})
 	}
 }

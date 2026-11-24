@@ -133,7 +133,7 @@ func (m Model) lanesLoad(boardWasOn bool) (Model, []Cmd) {
 		m.Board.loaded = false
 		return m, []Cmd{m.loadLanesCmd(uid)}
 	}
-	m.Board = BoardState{Mode: m.Board.Mode, Lane: m.Board.Lane, asked: uid, reads: m.Board.reads}
+	m.Board = BoardState{Mode: m.Board.Mode, Lane: m.Board.Lane, asked: uid, reads: m.Board.reads, pending: m.Board.pending}
 	if uid == "" {
 		return m, nil
 	}
@@ -180,8 +180,9 @@ func applyLanesLoaded(m Model, msg LanesLoaded) Model {
 		m.Board.DoneCards = 0
 	}
 	m.Board.Shared, m.Board.projectID, m.Board.revision, m.Board.sharedErr = msg.Shared, msg.ProjectID, msg.Revision, msg.SharedErr
-	m.Board.archived, m.Board.order = msg.Archived, msg.Order
-	m.Board.fileErr, m.Board.loaded = msg.Err, true
+	m.Board.archived, m.Board.stored, m.Board.pruneFailed = msg.Archived, msg.Order, nil
+	m.Board.order = m.Board.shownOrders()
+	m.Board.fileErr, m.Board.loaded, m.Board.lanesAnswered = msg.Err, true, true
 	var notices []string
 	if msg.SharedErr == nil {
 		m.Board.reported = ""
@@ -233,37 +234,39 @@ func lanesSaved(m Model, msg LanesSaved) Model {
 	return m.keepLane().WithVisibleSelection()
 }
 
-// openedShare is the shared Lane list and Done limits a Lanes card was filled from. Shared false means the Project shared no
-// readable list.
+// openedShare is the shared Lane list and Done limits a Lanes card was filled from, or last showed as a conflict. Shared false
+// means the Project shared no readable list; Unreadable means it held a value that is not a Lane list, which no later read
+// matches.
 type openedShare struct {
-	Shared              bool
+	Shared, Unreadable  bool
 	Lanes               []string
 	DoneDays, DoneCards int
 }
 
 func (b BoardState) openedShare() openedShare {
-	if !b.Shared || b.sharedErr != nil {
-		return openedShare{}
-	}
-	return openedShare{Shared: true, Lanes: slices.Clone(b.Lanes), DoneDays: b.DoneDays, DoneCards: b.DoneCards}
+	return openedFrom(LanesLoaded{SharedErr: b.sharedErr, Shared: b.Shared, Lanes: b.Lanes, DoneDays: b.DoneDays, DoneCards: b.DoneCards})
 }
 
-// equals says the Project's list as read now is the one the card opened with. Done limits compare as the Board holds them.
+// openedFrom is the share a read of the Project's list shows.
+func openedFrom(current LanesLoaded) openedShare {
+	if current.SharedErr != nil {
+		return openedShare{Unreadable: true}
+	}
+	if !current.Shared {
+		return openedShare{}
+	}
+	return openedShare{Shared: true, Lanes: slices.Clone(current.Lanes), DoneDays: current.DoneDays, DoneCards: current.DoneCards}
+}
+
+// equals says the Project's list as read now is the one the card opened with.
 func (o openedShare) equals(current LanesLoaded) bool {
-	if current.SharedErr != nil || current.Shared != o.Shared {
+	if o.Unreadable || current.SharedErr != nil || current.Shared != o.Shared {
 		return false
 	}
 	if !o.Shared {
 		return true
 	}
-	days, cards := current.DoneDays, current.DoneCards
-	if days > maxDoneDays {
-		days = 0
-	}
-	if cards > maxDoneCards {
-		cards = 0
-	}
-	return days == o.DoneDays && cards == o.DoneCards && slices.Equal(current.Lanes, o.Lanes)
+	return current.DoneDays == o.DoneDays && current.DoneCards == o.DoneCards && slices.Equal(current.Lanes, o.Lanes)
 }
 
 // lanesShared applies a write of the Project's shared list. A conflict keeps the card and its text, shows the list the Project
@@ -281,7 +284,8 @@ func lanesShared(m Model, msg LanesShared) (Model, []Cmd) {
 		m.LanesForm.Saving = false
 		switch {
 		case msg.Conflict:
-			m.LanesForm.Revision, m.LanesForm.Err, m.LanesForm.ErrField = msg.Current.Revision, conflictError(msg.Current), ""
+			m.LanesForm.Revision, m.LanesForm.Opened = msg.Current.Revision, openedFrom(msg.Current)
+			m.LanesForm.Err, m.LanesForm.ErrField = conflictError(msg.Current), ""
 			return m, nil
 		case msg.Err != nil:
 			m.LanesForm.Err, m.LanesForm.ErrField = errors.New(shareFailure(msg.Share, msg.Err)), ""

@@ -34,13 +34,15 @@ type BoardState struct {
 	Lane   string
 	// dragGen counts the cards dropped on the Board; see BoardDragGen.
 	dragGen int
-	// order is the Lanes' custom card orders, from the same source as Lanes; see LaneOrderCustom.
-	order LaneOrders
+	// order is the Lanes' custom card orders as the Board shows them: stored with every change still pending laid over it; see
+	// LaneOrderCustom. stored is the orders as the last Lane list read or answer from the store gave them. pending are the
+	// changes not yet answered, oldest first, across Projects: a Project switch keeps them, so the oldest of each Project is out
+	// and the rest wait; order shows only the current Project's. pruneFailed is, by Lane, the prune that failed and is not sent again.
+	order, stored LaneOrders
+	pending       []SaveLaneOrder
+	pruneFailed   map[string]string
 	// fileErr is why the Lane list file could not be read; while it is set the file is never overwritten.
 	fileErr error
-	// saving says a SaveLaneOrder is out, and waiting are the ones asked for since, at most one per Lane, oldest first.
-	saving  bool
-	waiting []SaveLaneOrder
 	// projectID and revision are the Project as read with the list, which a shared write needs; projectID is 0 when it was not
 	// read, and sharedErr then or for a shared value that is not a Lane list says why. reported is the text of the last such
 	// error a Notice gave, so a refresh that finds it unchanged says nothing.
@@ -50,6 +52,10 @@ type BoardState struct {
 	reported            string
 	// loaded says the load for the current Project has answered; until then Lanes is the default, not the saved list.
 	loaded bool
+	// lanesAnswered says the Project's Lane list has answered once since the Board was built for it, so the source in use comes
+	// from an answer, not the default. An answer that could not read the Project leaves it open whether the list is shared; see
+	// orderBlock. Unlike loaded, a reload of the same Project does not clear it.
+	lanesAnswered bool
 	// asked is the Project whose Lane list was last asked for; empty when the Collection is not a Project.
 	asked string
 	// reads numbers the Lane list reads, so an answer sent before a save took effect is dropped.
