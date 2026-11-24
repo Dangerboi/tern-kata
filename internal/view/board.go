@@ -39,7 +39,11 @@ func SelectedRowID(m model.Model) string {
 // place. A Lane is a column, not a Card: a Card's body sizes to its content, so only a column's list fills the Lane down to the
 // bottom and scrolls inside it, which keeps the Pane itself from scrolling the top bar away. The Lanes' row is a layout
 // transition (Tern 0.9.27+; older Terns snap): a card, whose motion key is its Issue's uid, glides to its new place when its
-// Issue moves to another Lane or its Lane reorders.
+// Issue moves to another Lane or its Lane reorders. Each Lane's list takes drags and each Lane column drops (Tern 0.9.32+): a
+// card released on another Lane moves its Issue there. The list's role carries a generation that every drop bumps, so the list
+// node changes and Tern puts back a card the Pane refused at once instead of after a pause. A Lane with a custom card order
+// (never Done) says so after its count, offers Reset order on its header's menus, and makes each of its cards a drop target
+// with CardDropAct, so a card from another Lane lands before or after it; other Lanes are targets only as a whole.
 func board(m model.Model, now time.Time) tern.Element {
 	columns := m.BoardColumns()
 	laneList := m.LaneList()
@@ -56,25 +60,40 @@ func board(m model.Model, now time.Time) tern.Element {
 	lanes := make([]tern.Element, len(columns))
 	menu := newContextMenuKeys(model.ModeBoard, model.OpenLane)
 	for i, column := range columns {
+		custom := column.Lane != model.LaneDone && m.LaneOrderCustom(column.Lane)
+		drop := ""
+		if custom {
+			drop = CardDropAct
+		}
 		cards := make([]tern.Element, len(column.Cards))
 		for j, card := range column.Cards {
-			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, selected, menu, today, badges, now)
+			cards[j] = boardCard(m, card, tones[i], column.Lane == model.LaneDone, selected, menu, today, badges, now, drop)
 		}
 		count := strconv.Itoa(len(column.Cards))
 		if column.Total > len(column.Cards) {
 			count += " of " + strconv.Itoa(column.Total)
 		}
-		head := ui.Row{Common: ui.Common{Key: "head"}, Gap: ui.GapSM, Children: ui.Nodes(
+		headChildren := ui.Nodes(
 			ui.Badge{Common: ui.Common{Key: "title", Tone: tones[i]}, Text: column.Title},
 			ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: "muted"}}, Wrap: ui.WrapNone},
-		)}
+		)
+		headCommon := ui.Common{Key: "head"}
+		if custom {
+			headChildren = append(headChildren, ui.Text{Common: ui.Common{Key: "order"}, Spans: []ui.Span{{T: "custom order", S: "muted"}}, Wrap: ui.WrapNone})
+			reset := []ui.MenuEntry{ui.MenuItem{ID: ResetLaneOrderClick(column.Lane), Label: "Reset order"}}
+			headCommon.Actions = &ui.Actions{Menu: reset, Hold: reset}
+		}
+		head := ui.Row{Common: headCommon, Gap: ui.GapSM, Children: headChildren}
+		cardList := scrollerCommon("cards")
+		cardList.Drag = CardDragAct
+		cardList.Role = FillRole + " tern-kata.drag-" + strconv.Itoa(m.BoardDragGen())
 		lanes[i] = ui.Col{
-			Common: ui.Common{Key: laneKey(i), Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
+			Common: ui.Common{Key: laneKey(i), Role: LaneRole, Drop: LaneDropAct, Grow: 1, Basis: ui.BasisFrac(0), Min: &ui.Bounds{W: ui.Ch(0), H: ui.Lines(0)}, Max: &ui.Bounds{H: ui.Frac(1)}},
 			Gap:    ui.GapSM,
 			Children: append(ui.Nodes(
 				head,
 				ui.Rule{Common: ui.Common{Key: "rule", Tone: tones[i]}},
-			), ui.List{CommonWithoutMax: scrollerCommon("cards"), Max: fillMax, Children: cards}),
+			), ui.List{CommonWithoutMax: cardList, Max: fillMax, Children: cards}),
 		}
 	}
 	children := []tern.Element{}
@@ -127,7 +146,7 @@ func boardEmptyState(m model.Model) ui.Empty {
 	return e
 }
 
-func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, menu contextMenuKeys, today model.CalendarDay, badges model.AgentBadgeIndex, now time.Time) tern.Element {
+func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, selectedRels model.Relationships, menu contextMenuKeys, today model.CalendarDay, badges model.AgentBadgeIndex, now time.Time, drop string) tern.Element {
 	issue := card.Issue
 	selected := issue.UID == m.SelectedUID
 	titleStyle := ""
@@ -200,9 +219,18 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 			body = append(body, row)
 		}
 	}
+	actions := rowActions(issue, false, menu, CardClick(issue.UID))
+	if selected {
+		// A list that takes drags takes the touch long-press too, so the selected card shows its menu as a button at the end of
+		// its first row, with the entries of its right-click menu.
+		ids = append(ids,
+			ui.Row{Common: ui.Common{Key: "fill", Grow: 1}},
+			ui.Menu{Common: ui.Common{Key: "more", Title: "Actions"}, Items: actions.Menu, Trigger: ui.ButtonQuiet, Size: ui.SizeSM, Align: ui.AlignEnd},
+		)
+	}
 	body = slices.Insert(body, 0, tern.Element(ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}))
 	return ui.Card{
-		Common:   ui.Common{Key: issue.UID, MotionKey: issue.UID, Tone: cardTone, Actions: rowActions(issue, false, menu, CardClick(issue.UID))},
+		Common:   ui.Common{Key: issue.UID, MotionKey: issue.UID, Tone: cardTone, Actions: actions, Drop: drop},
 		Selected: selected,
 		Children: body,
 	}

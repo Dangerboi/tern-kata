@@ -4,6 +4,20 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+#### Issues and Pages
+
+- Board cards can be dragged onto another Lane to move their Issue there, as `<` and `>` do.
+  - On a touch screen, touch and hold a card, then drag; the Lane under the pointer lights up.
+  - The selected card shows a `…` button that opens its menu, since a long-press now picks the card up.
+  - `Esc` does not cancel a drag.
+- Dragging a Board card up or down inside its Lane gives that Lane a custom order, and the cards stay where you put them.
+  - The Lane's header says `custom order`; its right-click menu (hold menu on a touch screen) has Reset order, which returns the Lane to the list's order.
+  - Cards the order does not name (new to the Lane) show first, in the list's order. Done and No lane have no custom order, and the Lane view shows the same order.
+  - A card dragged from another Lane lands above or below the card you drop it on, or last on the Lane's empty space; a Lane without a custom order only moves the Issue.
+  - The order is stored with the Lane list: in the Project (`tern.lane_order`) when the Project shares its Lane list, else in `lanes.toml`. A filter hides cards but a drag keeps their places.
+
 ## [0.16.0] - 2026-11-20
 
 ### Added

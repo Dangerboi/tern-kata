@@ -384,6 +384,12 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case MoveResultMsg:
 		return updateMove(m, msg)
+	case CardDropped:
+		return cardDropped(m, msg)
+	case LaneOrderSaved:
+		return laneOrderSaved(m, msg), nil
+	case ResetLaneOrder:
+		return resetLaneOrder(m, msg)
 	case ChangeUndone:
 		return undoDone(m, msg)
 	case FieldWritten:

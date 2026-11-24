@@ -17,7 +17,7 @@ const (
 	ListPrioRole = "tern-kata.prio-"
 )
 
-var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertiesCSS + "\n" + PlainCellCSS + "\n" + TabCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + prioCSS + "\n" + TwoLineRowCSS + "\n" + DocCSS + "\n" + KeyCSS + "\n" + EventTimeCSS + "\n" + FieldLabelCSS
+var CSS = StripeCSS + "\n" + SelectedCSS + "\n" + ModeChipCSS + "\n" + OrderedListCSS + "\n" + ColumnFillCSS + "\n" + PropertiesCSS + "\n" + PlainCellCSS + "\n" + TabCSS + "\n" + MonoCSS + "\n" + cellBoxCSS + "\n" + prioCSS + "\n" + TwoLineRowCSS + "\n" + DocCSS + "\n" + KeyCSS + "\n" + EventTimeCSS + "\n" + FieldLabelCSS + "\n" + BoardDropCSS
 
 // ActiveTabRole marks the active Activity tab; TabCSS underlines it so the active tab is not told by colour alone.
 const ActiveTabRole = "tern-kata.tab-on"

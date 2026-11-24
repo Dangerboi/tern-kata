@@ -250,6 +250,13 @@ Enter opens the card's Lane beside the Issue detail. Clicking an id in the facts
 - `↑`/`↓`/`J`/`K` move within a Lane and `←`/`→` to the neighbouring Lane that has cards. A click selects a card. `X` opens the Close card (on a closed Issue it says the Issue is already closed), `R` reopens a closed Issue into its Lane, and `+`, `-`, `A`, `Shift+A`, `!`, `P`, `U` (undo), `@`, `Shift+U`, `E` and `N` act on the selected card as in the list. `Esc` opens the Menu.
 - `>` moves the selected card one Lane right and `<` one Lane left, among No lane and the Lanes; a Move never enters or leaves Done (`X` closes, `R` reopens). Leaving No lane adds the first Lane's label; moving into No lane removes the Lane labels and keeps every other label.
 - A Move adds the target label first, then removes the other Lane labels, so a failure halfway leaves the Issue in two Lanes, never none, and a Move of an Issue with two Lane labels leaves it with one. The card shows in its new Lane at once; a failure leaves a Notice with the daemon's reason. Moves are refused while the daemon is disconnected.
+- **Dragging a card:** on the Board (not the Lane view) drag a card with the mouse, or on a touch screen touch and hold it and then drag, onto another Lane. The Issue moves there as `<` and `>` do: its Lane label is swapped, as one Move that `U` undoes. While you drag, the Lane under the pointer lights up with an accent tint and ring; the card's own Lane shows nothing.
+  - Dropping on the card's own Lane does nothing. Dropping on Done opens the Close card, and dragging a Done card onto another Lane offers to reopen it, with the toast `R` gives.
+  - Dragging a card up or down inside its Lane gives that Lane a **custom order**: the cards stay where you put them, and the Lane's header says `custom order` after its count. The Lane's right-click menu (hold menu on a touch screen) has **Reset order**, which returns it to the list's order (last updated first). Done and No lane have no custom order (No lane's key is not a label, so an order cannot be stored); a card dragged up or down there goes back to its place.
+  - In a Lane with a custom order, a card dragged from another Lane can be dropped on a card to land above or below it, or on the Lane's empty space to go last. Into a Lane without a custom order a drop only moves the Issue. Cards the order does not name (new to the Lane: created, or moved in by keys or another Pane) show first, in the list's order. Filters hide cards, but a drag keeps hidden cards' places. The Lane view shows the same order.
+  - The order is saved where the Lane list in use is: the Project's `tern.lane_order` metadata (shared by every tern-kata on the daemon) when the Project shares its Lane list, else an `order` table in your `lanes.toml`. A failed save says why and shows the order as stored.
+  - On a touch screen a long-press on a card picks it up instead of opening its hold menu, so the selected card shows a small `…` button at the right of its first row that opens the same menu as a right-click. A phone shows the Lane view, which has no drag, and keeps its hold menu.
+  - Known limitation: `Esc` during a drag does not cancel it. Tern hands `Esc` to the Pane as a key (it backs out or opens the Menu), and letting go still drops the card.
 
 ### The Lanes card
 
@@ -327,6 +334,13 @@ name = "work"
 labels = ["needs-triage", "in-review", "ready-for-agent"]
 done_days = 14
 done_cards = 20
+```
+
+A Lane's custom order is kept in the Project's table too, an `order` table from Lane label to Issue UIDs, top first. Deleting a Lane's line is the same as **Reset order**:
+
+```toml
+["01JABC...".order]
+needs-info = ["01JXYZ...", "01JXWV..."]
 ```
 
 - `done_days` and `done_cards` are how many days before today Done reaches (Issues closed today always count) and how many cards it shows at most; a missing or zero value means the default (14 and 20). A table with only `done_days`/`done_cards` and no `labels` keeps the default Lanes.

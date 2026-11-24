@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Dangerboi/tern-kata/internal/model"
@@ -329,5 +331,210 @@ func TestConcurrentLaneSavesOfDifferentProjectsKeepEach(t *testing.T) {
 		if got := f.loadLanes(t, f.again(), uid); got.Err != nil || !slices.Equal(got.Lanes, []string{fmt.Sprintf("l%02d", i)}) {
 			t.Errorf("%s: loaded %+v", uid, got)
 		}
+	}
+}
+
+// saveOrder is the Board's drag write through gateway for the fixture's Project.
+func (f configFixture) saveOrder(t *testing.T, gateway *Gateway, shared bool, lane string, order ...string) model.LaneOrderSaved {
+	t.Helper()
+	return as[model.LaneOrderSaved](t, run(t, gateway, model.SaveLaneOrder{Workspace: f.workspace, Actor: "tester", ProjectUID: f.project.UID,
+		ProjectName: "work", ProjectID: f.project.ID, Shared: shared, Lane: lane, Order: order}))
+}
+
+func (f configFixture) projectMeta(t *testing.T) map[string]any {
+	t.Helper()
+	shown, err := f.kata.target().Client.ShowProjectWithResponse(context.Background(), &g.ShowProjectRequestOptions{PathParams: &g.ShowProjectPath{ProjectID: f.project.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return shown.JSON200.Project.Metadata
+}
+
+func TestAFileOrderRoundTripsAndKeepsOtherTablesAndUnknownKeys(t *testing.T) {
+	f := newConfigFixture(t)
+	path := f.write(t, "lanes.toml", fmt.Sprintf("[\"other\"]\nname = \"elsewhere\"\nlabels = [\"a\"]\n\n[%q]\nname = \"old\"\nnote = \"mine\"\n", f.project.UID))
+	saved := f.saveOrder(t, f.gateway, false, "triage", "b", "a")
+	if saved.Err != nil || !reflect.DeepEqual(saved.Current, model.LaneOrders{"triage": {"b", "a"}}) {
+		t.Fatalf("saved %+v", saved)
+	}
+	if second := f.saveOrder(t, f.gateway, false, "review", "z"); second.Err != nil || len(second.Current) != 2 {
+		t.Fatalf("second %+v", second)
+	}
+	got := f.lanes(t, f.again())
+	if got.Err != nil || !reflect.DeepEqual(got.Order, model.LaneOrders{"triage": {"b", "a"}, "review": {"z"}}) {
+		t.Errorf("loaded %+v", got)
+	}
+	raw, _ := os.ReadFile(path)
+	for _, want := range []string{"[other]", `name = "elsewhere"`, `note = "mine"`, `name = "old"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("file lacks %q:\n%s", want, raw)
+		}
+	}
+	if other := f.loadLanes(t, f.again(), "other"); !slices.Equal(other.Lanes, []string{"a"}) || other.Order != nil {
+		t.Errorf("the other Project changed: %+v", other)
+	}
+}
+
+func TestAFileOrderForANewProjectIsNamedAndEmptyingItRemovesTheTable(t *testing.T) {
+	f := newConfigFixture(t)
+	path := f.write(t, "lanes.toml", "[\"other\"]\nname = \"elsewhere\"\n")
+	if saved := f.saveOrder(t, f.gateway, false, "triage", "a"); saved.Err != nil {
+		t.Fatal(saved.Err)
+	}
+	if raw, _ := os.ReadFile(path); !strings.Contains(string(raw), `name = "work"`) || !strings.Contains(string(raw), "order") {
+		t.Fatalf("file:\n%s", raw)
+	}
+	emptied := f.saveOrder(t, f.gateway, false, "triage")
+	if emptied.Err != nil || len(emptied.Current) != 0 {
+		t.Fatalf("emptied %+v", emptied)
+	}
+	raw, _ := os.ReadFile(path)
+	if strings.Contains(string(raw), f.project.UID) || strings.Contains(string(raw), "order") || !strings.Contains(string(raw), "[other]") {
+		t.Errorf("file:\n%s", raw)
+	}
+	// With a Lane list in the table, only the order goes.
+	f.writeOwnList(t)
+	f.saveOrder(t, f.gateway, false, "mine", "a")
+	f.saveOrder(t, f.gateway, false, "mine")
+	raw, _ = os.ReadFile(path)
+	if strings.Contains(string(raw), "order") || !strings.Contains(string(raw), `labels = ["mine"]`) {
+		t.Errorf("file:\n%s", raw)
+	}
+}
+
+func TestTheLanesCardSaveKeepsAnOrder(t *testing.T) {
+	f := newConfigFixture(t)
+	f.saveOrder(t, f.gateway, false, "triage", "b", "a")
+	for _, lanes := range [][]string{{"triage", "review"}, nil} {
+		saved := as[model.LanesSaved](t, run(t, f.gateway, model.SaveLanes{ProjectUID: f.project.UID, ProjectName: "work", Lanes: lanes}))
+		if saved.Err != nil {
+			t.Fatal(saved.Err)
+		}
+		got := f.lanes(t, f.again())
+		if !reflect.DeepEqual(got.Order, model.LaneOrders{"triage": {"b", "a"}}) || !slices.Equal(got.Lanes, lanes) {
+			t.Errorf("after saving lanes %v: %+v", lanes, got)
+		}
+	}
+}
+
+func TestABadFileOrderLosesOnlyWhatDoesNotParse(t *testing.T) {
+	f := newConfigFixture(t)
+	f.write(t, "lanes.toml", fmt.Sprintf("[%q.order]\ntriage = [\"a\", \"b\", \"a\"]\n\"Bad Label\" = [\"x\"]\nreview = \"x\"\nempty = []\n", f.project.UID))
+	if got := f.lanes(t, f.gateway); got.Err != nil || !reflect.DeepEqual(got.Order, model.LaneOrders{"triage": {"a", "b"}}) {
+		t.Errorf("loaded %+v", got)
+	}
+}
+
+func TestASharedOrderRoundTripsApartFromTheSharedList(t *testing.T) {
+	f := newConfigFixture(t)
+	f.writeOwnList(t)
+	f.saveOrder(t, f.gateway, false, "mine", "file")
+	opened := f.lanes(t, f.gateway)
+	if shared := f.share(t, f.gateway, opened.Revision, false, "triage", "review"); shared.Err != nil || shared.Conflict {
+		t.Fatalf("share %+v", shared)
+	}
+	if got := f.lanes(t, f.gateway); !got.Shared || got.Order != nil {
+		t.Fatalf("shared list without a shared order read %+v, want no order from the file", got)
+	}
+	saved := f.saveOrder(t, f.gateway, true, "triage", "b", "a")
+	if saved.Err != nil || !reflect.DeepEqual(saved.Current, model.LaneOrders{"triage": {"b", "a"}}) {
+		t.Fatalf("saved %+v", saved)
+	}
+	if second := f.saveOrder(t, f.gateway, true, "review", "z"); second.Err != nil || len(second.Current) != 2 {
+		t.Fatalf("second %+v", second)
+	}
+	got := f.lanes(t, f.again())
+	if !got.Shared || !slices.Equal(got.Lanes, []string{"triage", "review"}) || !reflect.DeepEqual(got.Order, model.LaneOrders{"triage": {"b", "a"}, "review": {"z"}}) {
+		t.Errorf("loaded %+v", got)
+	}
+	meta := f.projectMeta(t)
+	if _, held := meta[model.SharedLanesKey]; !held || meta[model.LaneOrderKey] == nil {
+		t.Errorf("metadata %v", meta)
+	}
+	if cleared := f.saveOrder(t, f.gateway, true, "triage"); cleared.Err != nil || !reflect.DeepEqual(cleared.Current, model.LaneOrders{"review": {"z"}}) {
+		t.Errorf("cleared %+v", cleared)
+	}
+	f.saveOrder(t, f.gateway, true, "review")
+	if _, held := f.projectMeta(t)[model.LaneOrderKey]; held {
+		t.Errorf("an emptied order stays in the metadata: %v", f.projectMeta(t))
+	}
+	// Stopping the sharing returns the file's own order.
+	if stopped := f.share(t, f.gateway, f.lanes(t, f.gateway).Revision, true); stopped.Err != nil {
+		t.Fatal(stopped.Err)
+	}
+	if got := f.lanes(t, f.gateway); got.Shared || !reflect.DeepEqual(got.Order, model.LaneOrders{"mine": {"file"}}) {
+		t.Errorf("after stopping %+v", got)
+	}
+}
+
+func TestASharedOrderSaveAfterAnotherWriteBumpedTheRevisionStillLands(t *testing.T) {
+	f := newConfigFixture(t)
+	f.setProjectMeta(t, map[string]any{model.SharedLanesKey: map[string]any{"labels": []any{"triage"}}})
+	metadata := "/api/v1/projects/" + strconv.FormatInt(f.project.ID, 10) + "/metadata"
+	var rivalled atomic.Bool
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodPost && r.URL.Path == metadata && rivalled.CompareAndSwap(false, true) {
+			f.setProjectMeta(t, map[string]any{model.LaneOrderKey: map[string]any{"other": []any{"x"}}})
+		}
+		return false
+	}
+	f.kata.intercept.Store(&hook)
+	saved := f.saveOrder(t, f.gateway, true, "triage", "a")
+	f.kata.intercept.Store(nil)
+	want := model.LaneOrders{"other": {"x"}, "triage": {"a"}}
+	if saved.Err != nil || !reflect.DeepEqual(saved.Current, want) {
+		t.Fatalf("saved %+v, want %v", saved, want)
+	}
+	if got := f.lanes(t, f.gateway); got.SharedErr != nil || !reflect.DeepEqual(got.Order, want) {
+		t.Errorf("loaded %+v", got)
+	}
+}
+
+func TestASharedOrderSaveThatKeepsConflictingOrIsRefusedSaysWhy(t *testing.T) {
+	f := newConfigFixture(t)
+	f.setProjectMeta(t, map[string]any{model.LaneOrderKey: map[string]any{"other": []any{"x"}}})
+	metadata := "/api/v1/projects/" + strconv.FormatInt(f.project.ID, 10) + "/metadata"
+	var bumps int
+	var inside atomic.Bool
+	hook := func(w http.ResponseWriter, r *http.Request) bool {
+		// Every guarded write meets a rival's write first; the rival's own request passes.
+		if r.Method == http.MethodPost && r.URL.Path == metadata && !inside.Swap(true) {
+			bumps++
+			f.setProjectMeta(t, map[string]any{"rival": bumps})
+			inside.Store(false)
+		}
+		return false
+	}
+	f.kata.intercept.Store(&hook)
+	conflicted := f.saveOrder(t, f.gateway, true, "triage", "a")
+	f.kata.intercept.Store(nil)
+	if conflicted.Err == nil || !strings.Contains(conflicted.Err.Error(), "kept changing") || !reflect.DeepEqual(conflicted.Current, model.LaneOrders{"other": {"x"}}) {
+		t.Fatalf("conflicted %+v", conflicted)
+	}
+	refuse := func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodPost || r.URL.Path != metadata {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"status":403,"error":{"code":"forbidden","message":"this token is read-only"}}`))
+		return true
+	}
+	f.kata.intercept.Store(&refuse)
+	refused := f.saveOrder(t, f.gateway, true, "triage", "a")
+	if refused.Err == nil || !strings.Contains(refused.Err.Error(), "this token is read-only") || !reflect.DeepEqual(refused.Current, model.LaneOrders{"other": {"x"}}) {
+		t.Fatalf("refused %+v", refused)
+	}
+}
+
+func TestASharedOrderThatIsNotALaneOrderIsReportedAndTheListStillLoads(t *testing.T) {
+	f := newConfigFixture(t)
+	f.setProjectMeta(t, map[string]any{model.LaneOrderKey: "triage"})
+	got := f.lanes(t, f.gateway)
+	if got.Err != nil || got.SharedErr == nil || !strings.Contains(got.SharedErr.Error(), "tern.lane_order is not a Lane order") || got.Order != nil || got.ProjectID != f.project.ID {
+		t.Errorf("loaded %+v", got)
+	}
+	if saved := f.saveOrder(t, f.gateway, true, "triage", "a"); saved.Err != nil || !reflect.DeepEqual(saved.Current, model.LaneOrders{"triage": {"a"}}) {
+		t.Errorf("a save over it %+v", saved)
 	}
 }

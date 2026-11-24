@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// A Move takes an open Issue one Lane left or right among No lane and the Lanes. It never enters or leaves Done: closing and
-// reopening have their own keys.
+// A Move takes an open Issue one Lane left or right among No lane and the Lanes, or, as a drag of its card onto another Lane
+// on the Board, straight to that Lane. It never enters or leaves Done: closing and reopening have their own keys, and a card
+// dragged onto Done opens the Close card.
 
 // MoveIssueCmd is one Move as plain values. The Daemon gateway adds Add first, then removes each of Remove, and stops at the
 // first failure, so a Move that fails halfway leaves the Issue in two Lanes, never none.
@@ -32,22 +33,11 @@ func (MoveResultMsg) msg() {}
 // MoveCard moves the open Issue uid one Lane towards dir (-1 left, +1 right). The card shows in its target Lane at once; the
 // snapshot after the result is the truth.
 func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
-	if m.Moving != "" {
-		return m, nil
-	}
-	at := slices.IndexFunc(m.Issues, func(i Issue) bool { return i.UID == uid })
-	if at < 0 {
-		return m, nil
+	m, at, cmds, ok := movable(m, uid)
+	if !ok {
+		return m, cmds
 	}
 	issue := m.Issues[at]
-	if m.Stale {
-		m = m.fail(Cannot("move", "", ErrDisconnected))
-		return m, nil
-	}
-	if IsClosed(issue) {
-		m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("%s is closed.", issue.ShortID), Label: "Reopen", Chord: "r", UID: issue.UID})
-		return m, []Cmd{wait}
-	}
 	lanes := m.LaneList()
 	columns := append([]string{LaneNone}, lanes...)
 	to := slices.Index(columns, LabelLane(issue, lanes)) + dir
@@ -58,7 +48,35 @@ func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
 		m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("%s is in the last Lane.", issue.ShortID), Label: "Close", Chord: "x", UID: issue.UID})
 		return m, []Cmd{wait}
 	}
-	target := columns[to]
+	return moveCardTo(m, at, columns[to])
+}
+
+// movable says whether the Issue uid may be moved now and where it is in m.Issues. When it may not, cmds and the returned
+// Model are the whole answer: nothing for a Move in flight or an unknown Issue, a failure Notice while disconnected, the
+// Reopen toast for a closed Issue.
+func movable(m Model, uid string) (_ Model, at int, cmds []Cmd, ok bool) {
+	if m.Moving != "" {
+		return m, 0, nil, false
+	}
+	at = slices.IndexFunc(m.Issues, func(i Issue) bool { return i.UID == uid })
+	if at < 0 {
+		return m, 0, nil, false
+	}
+	issue := m.Issues[at]
+	if m.Stale {
+		return m.fail(Cannot("move", "", ErrDisconnected)), 0, nil, false
+	}
+	if IsClosed(issue) {
+		m, wait := m.raiseToast(Toast{Text: fmt.Sprintf("%s is closed.", issue.ShortID), Label: "Reopen", Chord: "r", UID: issue.UID})
+		return m, 0, []Cmd{wait}, false
+	}
+	return m, at, nil, true
+}
+
+// moveCardTo moves the open Issue m.Issues[at] straight to the Lane target (LaneNone for No lane), whichever Lane it is in.
+func moveCardTo(m Model, at int, target string) (Model, []Cmd) {
+	issue := m.Issues[at]
+	lanes := m.LaneList()
 	cmd := MoveIssueCmd{Workspace: m.Workspace, UID: issue.UID, ProjectID: issue.ProjectID, Actor: m.Actor}
 	if target != LaneNone && !slices.Contains(issue.Labels, target) {
 		cmd.Add = target
@@ -74,7 +92,7 @@ func MoveCard(m Model, uid string, dir int) (Model, []Cmd) {
 	}
 	m.Issues = slices.Clone(m.Issues)
 	m.Issues[at] = issue
-	m.Moving = uid
+	m.Moving = issue.UID
 	if !matchesLabelFilter(issue, m.Filters.Label) {
 		m = m.say(fmt.Sprintf("Moved %s to %s, outside the current filters.", m.RefName(issue.ProjectName, issue.ShortID), LaneTitle(target)))
 	}

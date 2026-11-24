@@ -24,6 +24,9 @@ import (
 //	labels = ["needs-triage", "in-review"]
 //	done_days = 14
 //	done_cards = 20
+//
+//	["01JABC...".order]
+//	needs-triage = ["01JISSUE1...", "01JISSUE2..."]
 type lanesFile map[string]projectLanes
 
 type projectLanes struct {
@@ -31,6 +34,8 @@ type projectLanes struct {
 	Labels    []string `toml:"labels"`
 	DoneDays  int      `toml:"done_days"`
 	DoneCards int      `toml:"done_cards"`
+	// Order is the Lane card orders, label to uids; left untyped so a malformed one is tidied, not a file error.
+	Order any `toml:"order"`
 }
 
 // configFolder is tern-kata's config folder from the gateway's folder hook, which finds the config folder even when the state
@@ -91,6 +96,12 @@ func (g *Gateway) loadLanes(ctx context.Context, cmd model.LoadLanes) model.Lane
 	if p := file[cmd.ProjectUID]; err == nil && !loaded.Shared {
 		loaded.Lanes, loaded.DoneDays, loaded.DoneCards = cleanLanes(p.Labels), max(p.DoneDays, 0), max(p.DoneCards, 0)
 	}
+	if !loaded.Shared {
+		loaded.Order = nil
+		if p := file[cmd.ProjectUID]; err == nil {
+			loaded.Order = tidyOrders(p.Order)
+		}
+	}
 	return loaded
 }
 
@@ -108,13 +119,21 @@ func (c *Client) SharedLanes(ctx context.Context, uid string) (model.LanesLoaded
 			continue
 		}
 		loaded := model.LanesLoaded{ProjectUID: uid, ProjectID: p.ID, Revision: p.Revision, Archived: !p.Active}
+		if value, held := p.Metadata[model.LaneOrderKey]; held {
+			order, err := model.ParseLaneOrders(value)
+			if err != nil {
+				loaded.SharedErr = fmt.Errorf("%s is not a Lane order: %w", model.LaneOrderKey, err)
+			} else {
+				loaded.Order = order
+			}
+		}
 		value, held := p.Metadata[model.SharedLanesKey]
 		if !held || value == nil {
 			return loaded, nil
 		}
 		lanes, days, cards, err := model.SharedLanes(value)
 		if err != nil {
-			loaded.SharedErr = fmt.Errorf("%s is not a Lane list: %w", model.SharedLanesKey, err)
+			loaded.SharedErr = errors.Join(fmt.Errorf("%s is not a Lane list: %w", model.SharedLanesKey, err), loaded.SharedErr)
 			return loaded, nil
 		}
 		loaded.Lanes, loaded.DoneDays, loaded.DoneCards, loaded.Shared = lanes, days, cards, true
@@ -185,7 +204,7 @@ func (g *Gateway) writeLanes(cmd model.SaveLanes) error {
 			delete(file, cmd.ProjectUID)
 			return
 		}
-		if len(cmd.Lanes) > 0 || cmd.DoneDays != 0 || cmd.DoneCards != 0 {
+		if _, ordered := table["order"]; ordered || len(cmd.Lanes) > 0 || cmd.DoneDays != 0 || cmd.DoneCards != 0 {
 			table["name"] = cmd.ProjectName
 		}
 		if len(cmd.Lanes) > 0 {
@@ -199,4 +218,134 @@ func (g *Gateway) writeLanes(cmd model.SaveLanes) error {
 		}
 		file[cmd.ProjectUID] = table
 	})
+}
+
+// tidyOrders reads a file's order table the way cleanLanes reads its labels: a Lane whose entry does not parse is dropped and
+// the rest kept.
+func tidyOrders(value any) model.LaneOrders {
+	table, _ := value.(map[string]any)
+	var orders model.LaneOrders
+	for label, list := range table {
+		one, err := model.ParseLaneOrders(map[string]any{label: list})
+		if err != nil {
+			continue
+		}
+		for label, uids := range one {
+			if orders == nil {
+				orders = model.LaneOrders{}
+			}
+			orders[label] = uids
+		}
+	}
+	return orders
+}
+
+// saveLaneOrder writes one Lane's custom order where the Lane list in use lives: the Project's tern.lane_order when shared, else
+// the Project's table in the file.
+func (g *Gateway) saveLaneOrder(ctx context.Context, cmd model.SaveLaneOrder) model.Msg {
+	if cmd.Shared {
+		saved, err := callAs(g, ctx, cmd.Workspace, func(ctx context.Context, c *Client) (model.LaneOrderSaved, error) {
+			return c.SaveLaneOrder(ctx, cmd), nil
+		})
+		if err != nil {
+			saved = model.LaneOrderSaved{Save: cmd, Err: err}
+		}
+		return saved
+	}
+	saved := model.LaneOrderSaved{Save: cmd}
+	folder, err := g.configFolder()
+	if err != nil {
+		saved.Err = err
+		return saved
+	}
+	saved.Err = updateTables(filepath.Join(folder, lanesFileName), func(file map[string]any) {
+		table, _ := file[cmd.ProjectUID].(map[string]any)
+		fresh := table == nil
+		if fresh {
+			table = map[string]any{}
+		}
+		order, _ := table["order"].(map[string]any)
+		if order == nil {
+			order = map[string]any{}
+		}
+		if len(cmd.Order) == 0 {
+			delete(order, cmd.Lane)
+		} else {
+			order[cmd.Lane] = slices.Clone(cmd.Order)
+		}
+		if len(order) == 0 {
+			delete(table, "order")
+		} else {
+			table["order"] = order
+		}
+		saved.Current = tidyOrders(table["order"])
+		if _, named := table["name"]; len(table) == 0 || len(table) == 1 && named {
+			// Nothing but the name is left: the Project's table goes.
+			delete(file, cmd.ProjectUID)
+			return
+		}
+		if _, named := table["name"]; fresh && !named {
+			table["name"] = cmd.ProjectName
+		}
+		file[cmd.ProjectUID] = table
+	})
+	if saved.Err != nil {
+		saved.Current = nil
+	}
+	return saved
+}
+
+// SaveLaneOrder sets one Lane's entry in the Project's tern.lane_order, reading the Project fresh and patching that key alone
+// guarded on the revision it read. Another Pane's drag in between makes the revision stale: the Project is read once more and
+// the write tried once more. A write that still conflicts, or kata refuses, answers with why and the orders read again.
+func (c *Client) SaveLaneOrder(ctx context.Context, cmd model.SaveLaneOrder) model.LaneOrderSaved {
+	saved := model.LaneOrderSaved{Save: cmd}
+	fail := func(err error) model.LaneOrderSaved {
+		saved.Err = err
+		if again, readErr := c.SharedLanes(ctx, cmd.ProjectUID); readErr == nil {
+			saved.Current = again.Order
+		}
+		return saved
+	}
+	for range 2 {
+		fresh, err := c.SharedLanes(ctx, cmd.ProjectUID)
+		if err != nil {
+			saved.Err = fmt.Errorf("the Project could not be read: %w", err)
+			return saved
+		}
+		if fresh.ProjectID == 0 {
+			saved.Err = errors.New("the Project could not be found")
+			return saved
+		}
+		next := model.LaneOrders{}
+		for label, uids := range fresh.Order {
+			next[label] = uids
+		}
+		if len(cmd.Order) == 0 {
+			delete(next, cmd.Lane)
+		} else {
+			next[cmd.Lane] = slices.Clone(cmd.Order)
+		}
+		var value any
+		if len(next) > 0 {
+			value = map[string][]string(next)
+		}
+		tag := etag(fresh.Revision)
+		_, err = c.PatchProjectMetadataWithResponse(ctx, &g.PatchProjectMetadataRequestOptions{
+			PathParams: &g.PatchProjectMetadataPath{ProjectID: fresh.ProjectID},
+			Header:     &g.PatchProjectMetadataHeaders{IfMatch: &tag},
+			Body:       &g.PatchProjectMetadataBody{Actor: cmd.Actor, Patch: map[string]any{model.LaneOrderKey: value}},
+		})
+		switch {
+		case err == nil:
+			if len(next) == 0 {
+				next = nil
+			}
+			saved.Current = next
+			return saved
+		case client.StatusCode(err) != http.StatusPreconditionFailed:
+			return fail(daemonError(err))
+		}
+	}
+	return fail(errors.New("the Project kept changing while the Lane order was saved"))
 }

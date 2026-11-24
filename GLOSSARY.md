@@ -60,7 +60,7 @@
 
 **Board Page**: The **Page** that shows one Project's Issues as a Board instead of the list (Board mode before Pages existed). It is Pane state that is not saved, the Pane starts on the Issues Page, and it ends when the Collection is not a Project. It acts on the Pane's Project: the current Project Collection, else the Binding. A Pane narrower than the side-by-side width shows the Lane view in place of the Board. In code and on the help sheet "focus" already means the focused column, so no Board Page term uses it.
 
-**Board**: All Lanes side by side, in place of the list column, with the Issue detail column hidden: No lane, one Lane per Lane label, then Done. Each Issue is a card; the selected card shows its full title and one muted row of facts.
+**Board**: All Lanes side by side, in place of the list column, with the Issue detail column hidden: No lane, one Lane per Lane label, then Done. Each Issue is a card; the selected card shows its full title and one muted row of facts and a `…` button that opens the card's menu. A card can be dragged onto another Lane (a **Move**); the Lane under the pointer lights up while it is. The Lane view has no drag.
 
 **Relationship**: A parent, child, Blocking link or related link between two Issues, as seen from one of them; the word the Filter form already uses. Read from the Collection snapshot's links, so it counts Issues the Board doesn't draw. _Avoid_: relation, dependency.
 
@@ -76,7 +76,7 @@
 
 **Lane**: One label of the Lane list, shown as a column and titled from its label ("ready-for-agent" reads "Ready for agent"). Every Lane stands for one kata label, so the Board is a view of kata data, not a copy.
 
-**Move**: Taking an open card one Lane left or right (`<`, `>`) among No lane and the Lanes, never into or out of Done. One daemon command adds the target Lane's label (if missing), then removes the Issue's other Lane labels.
+**Move**: Taking an open card one Lane left or right (`<`, `>`), or by dragging it onto another Lane of the Board, among No lane and the Lanes; a Move never enters or leaves Done. A drag onto Done is not a Move: it opens the Close card, as `X` does. A Done card dragged onto a Lane is not moved: it offers Reopen, as `R` does. A drop on the card's own Lane changes nothing, and a drag within its Lane sets that Lane's **Custom order** instead. One daemon command adds the target Lane's label (if missing), then removes the Issue's other Lane labels.
 
 **Lane label**: Any label of the Lane list. An Issue whose only labels are not Lane labels has no Lane label.
 
@@ -98,9 +98,11 @@
 
 **Lanes card**: The Popup card `Shift+B` opens on the Board or in the Lane view. Text fields hold the Lane list (**Lanes**) as comma-separated names and Done's limits (**Days back**, **Most cards**), and a **Save to** choice says where `Enter` writes them: this machine (the Lane list file) or the Project (its **Shared Lane list**); it starts on the source in use, which the card's meta line names ("Using the built-in list", "Using this machine's list" or "Using the Project's shared list"). A field that fails shows its error under it. An empty list field restores the default. `Ctrl+X` stops sharing. Esc cancels. It lets no global chord through. Saving never changes a label in kata. _Avoid_: Lane editor, Lanes form.
 
-**Lane list**: A Project's ordered Lane labels, with Done's limits. Read, in order, from the Project's **Shared Lane list**, else the **Lane list file**, `lanes.toml` in tern-kata's user config folder, else the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `waiting`. Loaded when the Board Page turns on or the Project changes, and again when any Project's metadata changes. The Lanes card names the source in use.
+**Lane list**: A Project's ordered Lane labels, with Done's limits. Read, in order, from the Project's **Shared Lane list**, else the **Lane list file**, `lanes.toml` in tern-kata's user config folder, else the default: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `waiting`. Loaded when the Board Page turns on or the Project changes, and again when any Project's metadata changes. The Lanes card names the source in use. Both the shared list and the file also hold the Lanes' **Custom order**s.
 
-**Shared Lane list**: A Project's Lane list kept in kata, in the Project's `tern.lanes` metadata key (`{"labels": [...], "done_days": N, "done_cards": N}`), so every tern-kata on that daemon shows it. Written by the Lanes card as one write guarded on the Project revision the card opened with; a value that is not a Lane list is reported once and the Lane list file used. _Avoid_: project lanes, remote lanes.
+**Custom order**: A Lane's own card order, made by dragging a card up or down inside that Lane on the Board. The Lane's header then says `custom order` and its menu offers Reset order, which returns the Lane to the list's order (last updated first). Cards the order does not name (new to the Lane) show first, in the list's order; Done and No lane have none (No lane's key is not a label, so an order cannot be stored), and a card dragged within either goes back to its place. In a Lane with one, a card dragged from another Lane lands above or below the card it is dropped on, or last when dropped on empty space; into a Lane without one a drop is only a **Move**. Kept with the **Lane list** in use: the Project's `tern.lane_order` metadata with a **Shared Lane list**, else an `order` table in the **Lane list file**. Filters hide cards but a drag keeps their places. The Lane view shows the same order.
+
+**Shared Lane list**: A Project's Lane list kept in kata, in the Project's `tern.lanes` metadata key (`{"labels": [...], "done_days": N, "done_cards": N}`), so every tern-kata on that daemon shows it. Written by the Lanes card as one write guarded on the Project revision the card opened with; a value that is not a Lane list is reported once and the Lane list file used. The Lanes' **Custom order**s sit beside it in `tern.lane_order`, written by drags, not the Lanes card. _Avoid_: project lanes, remote lanes.
 
 **No lane**: The column of open Issues with no Lane label. It is always shown. An Issue with several Lane labels shows once, in the first of its Lanes in Lane order, with a muted "also in" line naming the others.
 

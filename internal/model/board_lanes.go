@@ -29,6 +29,9 @@ type LanesLoaded struct {
 	Lanes               []string
 	DoneDays, DoneCards int
 	Shared              bool
+	// Order is the Lanes' custom card orders from the same source as Lanes: the Project's LaneOrderKey when Shared, else the
+	// file's.
+	Order LaneOrders
 	// ProjectID and Revision are the Project as the daemon listed it with the list; ProjectID is 0 when it was not read.
 	ProjectID, Revision int64
 	// Archived says the Project is archived: kata still lists it with its list but refuses any change to its metadata.
@@ -177,7 +180,7 @@ func applyLanesLoaded(m Model, msg LanesLoaded) Model {
 		m.Board.DoneCards = 0
 	}
 	m.Board.Shared, m.Board.projectID, m.Board.revision, m.Board.sharedErr = msg.Shared, msg.ProjectID, msg.Revision, msg.SharedErr
-	m.Board.archived = msg.Archived
+	m.Board.archived, m.Board.order = msg.Archived, msg.Order
 	m.Board.fileErr, m.Board.loaded = msg.Err, true
 	var notices []string
 	if msg.SharedErr == nil {

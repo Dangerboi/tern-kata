@@ -1,6 +1,8 @@
 package driver
 
 import (
+	"strings"
+
 	"github.com/Dangerboi/tern-kata/internal/model"
 	"github.com/Dangerboi/tern-kata/internal/view"
 	"github.com/stencil-hq/tern-sdk/go/tern"
@@ -46,8 +48,18 @@ func decode(input tern.Input) model.Msg {
 	case *tern.Toggle:
 		return view.DecodeToggle(input.ID, input.Open)
 	case *tern.Action:
+		if msg := view.DecodeDrag(input.ID, input.Act, input.Item, input.Value); msg != nil {
+			return msg
+		}
 		value, _ := input.Value.(string)
-		return view.DecodeAction(input.ID, input.Act, value)
+		act := input.Act
+		// A Menu row sends its whole id as the act; only node actions have Tern split `act=value`.
+		if value == "" {
+			if name, rest, ok := strings.Cut(act, "="); ok {
+				act, value = name, rest
+			}
+		}
+		return view.DecodeAction(input.ID, act, value)
 	}
 	return nil
 }

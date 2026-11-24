@@ -38,6 +38,7 @@ const (
 	agentAct           = "agent"
 	configAct          = "config"
 	contextMenuPickAct = "pick"
+	resetOrderAct      = "reset-order"
 	legendAct          = "legend"
 	toastAct           = "toast"
 )
@@ -76,6 +77,10 @@ func CardClick(uid string) string { return click(cardAct, uid) }
 func ContextMenuPickClick(uid string, mode model.Mode, row, chord string) string {
 	return click(contextMenuPickAct, string(mode)+":"+uid+":"+row+":"+chord)
 }
+
+// ResetLaneOrderClick is the Reset order row of a custom-ordered Lane's header menu. A Lane label holds no "=", so the value
+// keeps the label whole.
+func ResetLaneOrderClick(lane string) string { return click(resetOrderAct, lane) }
 
 func JobClick(uid string) string { return click(jobAct, uid) }
 
@@ -173,6 +178,8 @@ func DecodeAction(id, act, value string) model.Msg {
 		if i, err := strconv.Atoi(index); found && err == nil {
 			return model.ChooseMsg{Field: model.Field(name), Index: i}
 		}
+	case resetOrderAct:
+		return model.ResetLaneOrder{Lane: value}
 	case contextMenuPickAct:
 		parts := strings.SplitN(value, ":", 4)
 		if len(parts) == 4 {

@@ -1,6 +1,8 @@
 package driver_test
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,14 +105,17 @@ func TestDateBadgeSitsAfterThePriorityBadgeAndBeforeRelationshipTags(t *testing.
 	issue.Priority = &p
 	s := boardPane(t, issue)
 	row := node(t, wireNodes(t, view.Render(s.Model, now)), rowOf(t, s.Model, view.BoardID, "a")+".id")
+	// The selected card's row ends with its spacer and menu button; the badges' order is what this pins.
 	var keys []string
 	for _, c := range row.C {
-		keys = append(keys, c.ID)
+		if !strings.HasSuffix(c.ID, ".fill") && !strings.HasSuffix(c.ID, ".more") {
+			keys = append(keys, c.ID)
+		}
 	}
 	prefix := rowOf(t, s.Model, view.BoardID, "a") + ".id."
 	want := []string{prefix + "short", prefix + "prio", prefix + "date"}
-	if len(keys) != 3 || keys[0] != want[0] || keys[1] != want[1] || keys[2] != want[2] {
-		t.Errorf("id row = %v, want %v", keys, want)
+	if !reflect.DeepEqual(keys, want) {
+		t.Errorf("id row badges = %v, want %v", keys, want)
 	}
 }
 

@@ -154,6 +154,7 @@ func init() {
 	daemonCall(
 		(*Client).ShareLanes,
 		func(cmd model.ShareLanes, err error) model.Msg { return model.LanesShared{Share: cmd, Err: err} })
+	local((*Gateway).saveLaneOrder)
 	local(withoutCtx((*Gateway).saveFilters))
 	local(withoutCtx((*Gateway).loadSeen))
 	local(withoutCtx((*Gateway).saveSeen))

@@ -32,6 +32,10 @@ type BoardState struct {
 	// Shared says Lanes and the limits are the Project's shared list (its tern.lanes metadata), not the Lane list file's.
 	Shared bool
 	Lane   string
+	// dragGen counts the cards dropped on the Board; see BoardDragGen.
+	dragGen int
+	// order is the Lanes' custom card orders, from the same source as Lanes; see LaneOrderCustom.
+	order LaneOrders
 	// fileErr is why the Lane list file could not be read; while it is set the file is never overwritten.
 	fileErr error
 	// projectID and revision are the Project as read with the list, which a shared write needs; projectID is 0 when it was not
@@ -148,11 +152,40 @@ func (m Model) boardColumns() []BoardColumn {
 		i := slices.Index(keys, lane)
 		columns[i].Cards = append(columns[i].Cards, card)
 	}
+	for i := range columns {
+		if columns[i].Lane != LaneNone && columns[i].Lane != LaneDone {
+			columns[i].Cards = orderCards(columns[i].Cards, m.Board.order[columns[i].Lane])
+		}
+	}
 	done := &columns[len(columns)-1]
 	slices.SortStableFunc(done.Cards, func(a, b BoardCard) int { return b.Issue.ClosedAt.Compare(*a.Issue.ClosedAt) })
 	done.Total = len(done.Cards)
 	done.Cards = done.Cards[:min(done.Total, doneCards)]
 	return columns
+}
+
+// orderCards puts a Lane's cards in its custom order: the cards the order does not name first, in the list's order, then the
+// named ones as the order has them. Uids of the order that are no card of the Lane are skipped.
+func orderCards(cards []BoardCard, order []string) []BoardCard {
+	if len(order) == 0 {
+		return cards
+	}
+	named := make(map[string]BoardCard, len(cards))
+	ordered := make([]BoardCard, 0, len(cards))
+	for _, card := range cards {
+		if slices.Contains(order, card.Issue.UID) {
+			named[card.Issue.UID] = card
+		} else {
+			ordered = append(ordered, card)
+		}
+	}
+	for _, uid := range order {
+		if card, ok := named[uid]; ok {
+			ordered = append(ordered, card)
+			delete(named, uid)
+		}
+	}
+	return ordered
 }
 
 // closedWithin says issue was closed on one of the last days days up to the calendar's date; without a date there is no window.

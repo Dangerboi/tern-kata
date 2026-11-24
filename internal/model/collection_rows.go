@@ -16,6 +16,7 @@ type collectionRows struct {
 	inputs   collectionInputs
 	expanded map[string]bool
 	lanes    []string
+	order    LaneOrders
 	rows     []IssueRow
 	columns  []BoardColumn
 }
@@ -53,14 +54,15 @@ func first[T any](s []T) *T {
 }
 
 func (c collectionRows) answers(m Model) bool {
-	return c.filled && c.inputs == m.collectionInputs() && maps.Equal(c.expanded, m.ExpandedUIDs) && slices.Equal(c.lanes, m.Board.Lanes)
+	return c.filled && c.inputs == m.collectionInputs() && maps.Equal(c.expanded, m.ExpandedUIDs) && slices.Equal(c.lanes, m.Board.Lanes) &&
+		maps.EqualFunc(c.order, m.Board.order, slices.Equal[[]string])
 }
 
 func (m Model) withCollectionRows() Model {
 	if m.collection.answers(m) {
 		return m
 	}
-	c := collectionRows{filled: true, inputs: m.collectionInputs(), expanded: maps.Clone(m.ExpandedUIDs), lanes: slices.Clone(m.Board.Lanes)}
+	c := collectionRows{filled: true, inputs: m.collectionInputs(), expanded: maps.Clone(m.ExpandedUIDs), lanes: slices.Clone(m.Board.Lanes), order: m.Board.order}
 	if m.OnBoard() {
 		c.columns = m.boardColumns()
 		c.rows = m.boardRowsOf(c.columns)
