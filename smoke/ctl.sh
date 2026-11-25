@@ -15,15 +15,17 @@ trace_failures() {
 }
 # pass_env_to_shells: headless Tern (0.9.35) starts its shells with a private HOME, ZDOTDIR, TMPDIR and XDG folders and only
 # the system folders on PATH, and passes nothing else of this script's environment. Steps expect what an older Tern gave them:
-# the caller's PATH, HOME and XDG folders. Tern starts $SHELL, so this writes a wrapper that puts back this script's values of
-# those variables (as set when it is called) and runs the real shell, and sets smoke_shell to it: start Tern with
-# SHELL="$smoke_shell". The wrapper has the real shell's name, since Tern picks its shell integration by that name (a shell it
-# does not know reports no running command in `ctl state`). ZDOTDIR is not set directly: Tern points it at its integration,
-# whose .zshenv puts back KITTY_ORIG_ZDOTDIR, so the caller's ZDOTDIR goes there. Set straight, it replaces the integration,
-# and a shell then reports neither prompt nor folder (a `remote loopback` tab never becomes ready).
+# the caller's PATH, HOME and XDG folders. Tern starts $SHELL, so this writes a wrapper that exports this script's values of
+# those variables (as set when it is called; one the script has not set keeps Tern's value) and runs the real shell, and sets
+# smoke_shell to it: start Tern with SHELL="$smoke_shell". The wrapper has the real shell's name, since Tern picks its shell
+# integration by that name (a shell it does not know reports no running command in `ctl state`). Tern's integration lives in
+# ZDOTDIR for zsh and ENV for bash, so neither is set directly: set straight, it replaces the integration, and a shell then
+# reports neither prompt nor folder (a `remote loopback` tab never becomes ready). The integration's .zshenv puts back
+# KITTY_ORIG_ZDOTDIR, so the script's ZDOTDIR goes there.
 pass_env_to_shells() {
-  local name exports= real=${SHELL:-$(command -v zsh)}
-  for name in PATH HOME TMPDIR BASH_ENV ENV XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_DATA_HOME TERN_KATA_NO_UPDATE_CHECK; do
+  local name exports= real=${SHELL:-$(command -v zsh || command -v bash)}
+  [[ -n $real ]] || { echo "pass_env_to_shells: no SHELL, zsh or bash" >&2; return 1; }
+  for name in PATH HOME TMPDIR BASH_ENV XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_DATA_HOME TERN_KATA_NO_UPDATE_CHECK; do
     [[ -z ${!name+set} ]] || exports+="export $name=$(printf %q "${!name}")"$'\n'
   done
   [[ -z ${ZDOTDIR+set} ]] || exports+="export KITTY_ORIG_ZDOTDIR=$(printf %q "$ZDOTDIR")"$'\n'

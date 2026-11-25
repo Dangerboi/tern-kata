@@ -122,8 +122,6 @@ zle -F -w $tick redraw_prompt
 ZSHRC
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.bashrc"
 export PATH="$tmp/bin:/usr/bin:/bin"
-# The shells get this PATH, with .zshenv's folders in front (pane-bin holds the only tern-kata they can find), ZDOTDIR and the rest.
-pass_env_to_shells
 # Update tern-kata reads version.txt from here.
 mkdir -p "$tmp/dist"
 printf '9.9.9\n' >"$tmp/dist/version.txt"
@@ -131,6 +129,9 @@ serve_dir "$tmp/dist" "$tmp/http.log"
 export TERN_KATA_BASE_URL="$serve_url" TERN_KATA_NO_UPDATE_CHECK=1
 # The host half finds the worker's binary and the omp stub in this folder, not on PATH (the window half must not find tern-kata there).
 export TERN_KATA_INSTALL_DIR="$tmp/app"
+# The shells get the PATH above, with .zshenv's folders in front (pane-bin holds the only tern-kata they can find), ZDOTDIR,
+# TERN_KATA_NO_UPDATE_CHECK and the rest.
+pass_env_to_shells
 # q asks "Quit tern-kata?" unless kata's [tui] confirm_quit is false: the steps quit with one key.
 mkdir -p "$KATA_HOME"
 printf '[tui]\nconfirm_quit = false\n' >"$KATA_HOME/config.toml"
