@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
+# The daemons this script starts carry its pid, so a run that kills it can stop them (smoke/sweep-daemons.sh).
+export SMOKE_OWNER=$$
 tmp=$(mktemp -d)
 pid=
 serve_pid=
@@ -35,6 +37,7 @@ cleanup() {
   fi
   [[ -z "$serve_pid" ]] || { kill "$serve_pid" 2>/dev/null || true; wait "$serve_pid" 2>/dev/null || true; }
   kata daemon stop >/dev/null 2>&1 || true
+  "$repo/smoke/sweep-daemons.sh" "$SMOKE_OWNER"
   if [[ $status -eq 0 ]]; then rm -rf "$tmp"; else printf 'Plugin smoke artifacts: %s\n' "$tmp" >&2; fi
   exit "$status"
 }

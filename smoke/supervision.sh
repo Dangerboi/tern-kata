@@ -4,6 +4,8 @@
 # Usage: smoke/supervision.sh [path to a built tern-kata]
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
+# The daemons this script starts carry its pid, so a run that kills it can stop them (smoke/sweep-daemons.sh).
+export SMOKE_OWNER=$$
 tmp=$(mktemp -d)
 daemon_pid=
 serve_pid=
@@ -25,6 +27,7 @@ cleanup() {
   "$tmp/bin/tern-kata" worker stop --now >/dev/null 2>&1 || true
   tern plugin unlink tern-kata >/dev/null 2>&1 || true
   kata daemon stop >/dev/null 2>&1 || true
+  "$repo/smoke/sweep-daemons.sh" "$SMOKE_OWNER"
   if [[ $status -eq 0 ]]; then rm -rf "$tmp"; else printf 'Supervision smoke artifacts: %s\n' "$tmp" >&2; [[ ! -f "$STENCIL_LOG_DIR/tern-daemon.log" ]] || tail -n 40 "$STENCIL_LOG_DIR/tern-daemon.log" >&2; fi
   exit "$status"
 }

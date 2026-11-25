@@ -23,6 +23,8 @@ To let time pass for the window plugin's timers in `plugin.sh`, sleep: headless 
 
 Smoke waits go through `wait_for` (`smoke/ctl.sh`), which polls until its command succeeds and gives up after `SMOKE_WAIT_LIMIT` seconds (default 120), naming the command. A short fixed wait or `sleep` is allowed only where the step proves a bound (something must happen, or not happen, within that time); a comment beside it says so. A sleep with no state to poll says that no wait is possible and that it is not a bound. `plugin.sh` and `release-check.sh` call `trace_failures` (`smoke/ctl.sh`), so a command that ends the script unhandled prints its file, line and command.
 
+`run.sh`, `plugin.sh` and `supervision.sh` export `SMOKE_OWNER=$$` before they start a daemon, and every kata or Docbank daemon they start inherits it. Each script's cleanup runs `smoke/sweep-daemons.sh <its pid>`, which also stops daemons a failed step left running. A run killed before its cleanup (SIGKILL, the OOM killer) leaves its daemons running, so `./smoke/run.sh` (except inside a shard) begins with `smoke/sweep-daemons.sh` and no owner: that stops every smoke daemon whose owner script is gone. Daemons of runs still going are left alone. A step that starts a daemon needs no stop of its own.
+
 ## Releases
 
 Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml` (vet, test, then publish), with the tag's `CHANGELOG.md` section as the release notes. Check it locally before tagging:

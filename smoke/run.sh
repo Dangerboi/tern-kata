@@ -2,6 +2,10 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
+# Every daemon a smoke script starts inherits SMOKE_OWNER, that script's pid: cleanup stops the ones it owns, and a run
+# starts by stopping those a killed run left behind (smoke/sweep-daemons.sh).
+export SMOKE_OWNER=$$
+[[ -n ${SMOKE_SHARD:-} ]] || "$repo/smoke/sweep-daemons.sh"
 
 # The scripts that run beside the steps, each given the binary.
 extra_scripts=(plugin.sh supervision.sh release-check.sh)
@@ -153,6 +157,7 @@ cleanup() {
   kata daemon stop >/dev/null 2>&1 || true
   # A step that set up its own Docbank exported DOCBANK_HOME into $tmp; stop that daemon even when the step failed.
   [[ ${DOCBANK_HOME:-} != "$tmp"/* ]] || docbank daemon stop >/dev/null 2>&1 || true
+  "$repo/smoke/sweep-daemons.sh" "$SMOKE_OWNER"
   if [[ $status -ne 0 ]]; then
     if [[ -n $in_extra ]]; then
       rm -rf "$tmp" # the steps passed; the failed script keeps its own folder
