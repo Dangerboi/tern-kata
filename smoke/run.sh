@@ -2,9 +2,7 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-# Every daemon a smoke script starts inherits SMOKE_OWNER, that script's pid: cleanup stops the ones it owns, and a run
-# starts by stopping those a killed run left behind (smoke/sweep-daemons.sh).
-export SMOKE_OWNER=$$
+# A run that starts stops the kata and Docbank daemons that killed runs left behind (smoke/sweep-daemons.sh).
 [[ -n ${SMOKE_SHARD:-} ]] || "$repo/smoke/sweep-daemons.sh"
 
 # The scripts that run beside the steps, each given the binary.
@@ -112,6 +110,8 @@ if (( ${#steps[@]} == 0 )); then
 fi
 
 tmp=$(mktemp -d)
+# Every daemon home lives in $tmp; smoke-owner names this script, so the sweep knows when the folder's run is gone.
+echo $$ >"$tmp/smoke-owner"
 current=
 in_extra=
 server_pid=
@@ -157,7 +157,7 @@ cleanup() {
   kata daemon stop >/dev/null 2>&1 || true
   # A step that set up its own Docbank exported DOCBANK_HOME into $tmp; stop that daemon even when the step failed.
   [[ ${DOCBANK_HOME:-} != "$tmp"/* ]] || docbank daemon stop >/dev/null 2>&1 || true
-  "$repo/smoke/sweep-daemons.sh" "$SMOKE_OWNER"
+  "$repo/smoke/sweep-daemons.sh" "$tmp"
   if [[ $status -ne 0 ]]; then
     if [[ -n $in_extra ]]; then
       rm -rf "$tmp" # the steps passed; the failed script keeps its own folder
@@ -223,8 +223,9 @@ ctl_typed() {
   printf 'tern-kata drew no columns or error within %s s of %s\n' "$wait_limit" "$1" >&2
   return 1
 }
-# VISUAL wins over EDITOR in tern-kata, so one inherited from the shell would replace the editor fixture.
-printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP -u VISUAL EDITOR=%s/smoke/editor.sh KATA_HOME=%s %s/tern-kata"\n' "$repo" "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
+# VISUAL wins over EDITOR in tern-kata, so one inherited from the shell would replace the editor fixture. Headless Tern starts its
+# shells with a PATH of the system folders only; the Pane runs kata (`daemon recover` for a stopped profile), so it gets the run's PATH.
+printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP -u VISUAL PATH=%s EDITOR=%s/smoke/editor.sh KATA_HOME=%s %s/tern-kata"\n' "$PATH" "$repo" "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
 ctl --file "$tmp/launch.ctl"
 
 expect_tree() {

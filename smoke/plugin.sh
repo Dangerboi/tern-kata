@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
-# The daemons this script starts carry its pid, so a run that kills it can stop them (smoke/sweep-daemons.sh).
-export SMOKE_OWNER=$$
 tmp=$(mktemp -d)
+# Every daemon home lives in $tmp; smoke-owner names this script for smoke/sweep-daemons.sh.
+echo $$ >"$tmp/smoke-owner"
 pid=
 serve_pid=
 export CGO_ENABLED=0 KATA_HOME="$tmp/kata" TERN_CONFIG_DIR="$tmp/config"
@@ -37,7 +37,7 @@ cleanup() {
   fi
   [[ -z "$serve_pid" ]] || { kill "$serve_pid" 2>/dev/null || true; wait "$serve_pid" 2>/dev/null || true; }
   kata daemon stop >/dev/null 2>&1 || true
-  "$repo/smoke/sweep-daemons.sh" "$SMOKE_OWNER"
+  "$repo/smoke/sweep-daemons.sh" "$tmp"
   if [[ $status -eq 0 ]]; then rm -rf "$tmp"; else printf 'Plugin smoke artifacts: %s\n' "$tmp" >&2; fi
   exit "$status"
 }
