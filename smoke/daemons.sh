@@ -64,10 +64,21 @@ each_daemon() {
 stop_in() { [[ $3 != "$1"/* ]] || kill "$2" 2>/dev/null || true; }
 stop_stale() { ! stale "$2" || kill "$1" 2>/dev/null || true; }
 
+usage() { printf 'Usage: smoke/daemons.sh own <folder> | stop <folder> | sweep\n' >&2; exit 2; }
 [[ -d /proc ]] || exit 0
 case ${1:-} in
-  own) printf '%s %s\n' "$PPID" "$(start_of "$PPID")" >"$2/smoke-owner" ;;
-  stop) each_daemon stop_in "${2%/}" ;;
+  own | stop)
+    # An empty folder would make stop match every home on the machine.
+    folder=${2:-}
+    folder=${folder%/}
+    [[ -n $folder ]] || usage
+    if [[ $1 == own ]]; then
+      start=$(start_of "$PPID")
+      printf '%s %s\n' "$PPID" "$start" >"$folder/smoke-owner"
+    else
+      each_daemon stop_in "$folder"
+    fi
+    ;;
   sweep) each_daemon stop_stale ;;
-  *) printf 'Usage: smoke/daemons.sh own <folder> | stop <folder> | sweep\n' >&2; exit 2 ;;
+  *) usage ;;
 esac
