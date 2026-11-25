@@ -5,8 +5,7 @@
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
-# Every daemon home lives in $tmp; smoke-owner names this script for smoke/sweep-daemons.sh.
-echo $$ >"$tmp/smoke-owner"
+"$repo/smoke/daemons.sh" own "$tmp"
 daemon_pid=
 serve_pid=
 keepalive=
@@ -27,7 +26,7 @@ cleanup() {
   "$tmp/bin/tern-kata" worker stop --now >/dev/null 2>&1 || true
   tern plugin unlink tern-kata >/dev/null 2>&1 || true
   kata daemon stop >/dev/null 2>&1 || true
-  "$repo/smoke/sweep-daemons.sh" "$tmp"
+  "$repo/smoke/daemons.sh" stop "$tmp"
   if [[ $status -eq 0 ]]; then rm -rf "$tmp"; else printf 'Supervision smoke artifacts: %s\n' "$tmp" >&2; [[ ! -f "$STENCIL_LOG_DIR/tern-daemon.log" ]] || tail -n 40 "$STENCIL_LOG_DIR/tern-daemon.log" >&2; fi
   exit "$status"
 }
