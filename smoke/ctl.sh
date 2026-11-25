@@ -16,7 +16,7 @@ trace_failures() {
 # pass_env_to_shells: headless Tern (0.9.35) starts its shells with a private HOME, ZDOTDIR, TMPDIR and XDG folders and only
 # the system folders on PATH, and passes nothing else of this script's environment. Steps expect what an older Tern gave them:
 # the caller's PATH, HOME and XDG folders. Tern starts $SHELL, so this writes a wrapper that exports this script's values of
-# those variables (as set when it is called; one the script has not set keeps Tern's value) and runs the real shell, and sets
+# those variables (as set when it is called; one unset in its environment keeps Tern's value) and runs the real shell, and sets
 # smoke_shell to it: start Tern with SHELL="$smoke_shell". The wrapper has the real shell's name, since Tern picks its shell
 # integration by that name (a shell it does not know reports no running command in `ctl state`). Tern's integration lives in
 # ZDOTDIR for zsh and ENV for bash, so neither is set directly: set straight, it replaces the integration, and a shell then

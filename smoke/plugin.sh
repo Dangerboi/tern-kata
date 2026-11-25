@@ -108,7 +108,7 @@ ln -s "$(command -v tern)" "$tmp/bin/tern"
 command -v zsh >/dev/null 2>&1 || { echo "plugin.sh needs zsh" >&2; exit 1; }
 export SHELL="$(command -v zsh)"
 # Window process PATH lacks tern-kata; Pane shells resolve it via their shell rc.
-export ZDOTDIR="$tmp" BASH_ENV="$tmp/.bashrc" ENV="$tmp/.bashrc"
+export ZDOTDIR="$tmp" BASH_ENV="$tmp/.bashrc"
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.zshenv"
 cat >"$tmp/.zshrc" <<'ZSHRC'
 exec {tick}< <(while sleep 0.1 && echo; do :; done)
