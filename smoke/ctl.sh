@@ -25,7 +25,7 @@ trace_failures() {
 pass_env_to_shells() {
   local name exports= real=${SHELL:-$(command -v zsh || command -v bash)}
   [[ -n $real ]] || { echo "pass_env_to_shells: no SHELL, zsh or bash" >&2; return 1; }
-  for name in PATH HOME TMPDIR BASH_ENV XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_DATA_HOME TERN_KATA_NO_UPDATE_CHECK; do
+  for name in PATH HOME TMPDIR BASH_ENV XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_DATA_HOME TERN_KATA_NO_UPDATE_CHECK DOCBANK_HOME DOCBANK_TELEMETRY_ENABLED; do
     [[ -z ${!name+set} ]] || exports+="export $name=$(printf %q "${!name}")"$'\n'
   done
   [[ -z ${ZDOTDIR+set} ]] || exports+="export KITTY_ORIG_ZDOTDIR=$(printf %q "$ZDOTDIR")"$'\n'

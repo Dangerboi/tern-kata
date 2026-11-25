@@ -1,7 +1,7 @@
 # A click on an image Attachment shows it in Tern: `tern open --preview` runs from the Pane, so the tab gets a preview file block on
 # the downloaded copy in tern-kata's cache and the focus stays in the Pane. A second Attachment replaces the preview. This step
-# gives the smoke daemon a Docbank of its own (a vault in $tmp) and runs last, because the earlier steps expect no Docbank.
-export DOCBANK_HOME="$tmp/docbank" DOCBANK_TELEMETRY_ENABLED=0
+# gives the smoke daemon a Docbank of its own (a vault in run.sh's DOCBANK_HOME, in $tmp) and runs last, because the earlier steps
+# expect no Docbank.
 oa_dir="$tmp/workspace"
 quit_app
 kata --workspace "$oa_dir" docbank setup --yes >/dev/null
@@ -12,6 +12,9 @@ oa_short=$(jq -r '.issue.short_id' "$tmp/open-attachment.json")
 printf 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFTEMLQkAbMcr8TDBSnYAAAAASUVORK5CYII=' | base64 -d >"$tmp/shot.png"
 printf 'a plain log\n' >"$tmp/notes.txt"
 kata --workspace "$oa_dir" docbank attachments add "$oa_short" "$tmp/shot.png" "$tmp/notes.txt" >/dev/null
+# The kata daemon stores Attachments in the Docbank of its own DOCBANK_HOME, run.sh's vault in $tmp. Without it there, they would
+# land in ~/.docbank, the user's own store, as every run of this step did before run.sh set the home for the whole run.
+docbank document tree /kata --json | jq -e '[.items[] | select(.node.name == "shot.png")] | length == 1' >/dev/null || { echo "The Attachment is not in the run's Docbank $DOCBANK_HOME" >&2; exit 1; }
 ctl --file "$tmp/launch.ctl"
 expect_tree "[data-id='main.columns.list.issues.$oa_uid']" '.ok and .count == 1'
 ctl click "[data-id='main.columns.list.issues.$oa_uid']"

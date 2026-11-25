@@ -131,6 +131,9 @@ export TERN_DAEMON_SOCKET="$tmp/tern-daemon.sock"
 export STENCIL_LOG_DIR="$tmp/logs"
 # The Pane's hourly `kata update --check` asks GitHub: the steps run without the network.
 export TERN_KATA_NO_UPDATE_CHECK=1
+# kata starts Docbank in DOCBANK_HOME, else ~/.docbank: every process of the run, the kata daemon started below included, has
+# this one, so a Docbank a step sets up lives in $tmp and never serves the user's own store. Setting the home configures nothing.
+export DOCBANK_HOME="$tmp/docbank" DOCBANK_TELEMETRY_ENABLED=0
 unset KATA_SERVER KATA_AUTH_TOKEN KATA_AUTHOR TMUX STY ZELLIJ TERN_TSP
 
 cleanup() {
