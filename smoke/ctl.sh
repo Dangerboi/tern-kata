@@ -13,6 +13,25 @@ trace_failures() {
   set -E
   trap 'printf "%s:%s failed: %s\n" "${BASH_SOURCE[0]##*/}" "$LINENO" "$BASH_COMMAND" >&2' ERR
 }
+# pass_env_to_shells: headless Tern (0.9.35) starts its shells with a private HOME, ZDOTDIR, TMPDIR and XDG folders and only
+# the system folders on PATH, and passes nothing else of this script's environment. Steps expect what an older Tern gave them:
+# the caller's PATH, HOME and XDG folders. Tern starts $SHELL, so this writes a wrapper that puts back this script's values of
+# those variables (as set when it is called) and runs the real shell, and sets smoke_shell to it: start Tern with
+# SHELL="$smoke_shell". The wrapper has the real shell's name, since Tern picks its shell integration by that name (a shell it
+# does not know reports no running command in `ctl state`). ZDOTDIR is not set directly: Tern points it at its integration,
+# whose .zshenv puts back KITTY_ORIG_ZDOTDIR, so the caller's ZDOTDIR goes there. Set straight, it replaces the integration,
+# and a shell then reports neither prompt nor folder (a `remote loopback` tab never becomes ready).
+pass_env_to_shells() {
+  local name exports= real=${SHELL:-$(command -v zsh)}
+  for name in PATH HOME TMPDIR BASH_ENV ENV XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_DATA_HOME TERN_KATA_NO_UPDATE_CHECK; do
+    [[ -z ${!name+set} ]] || exports+="export $name=$(printf %q "${!name}")"$'\n'
+  done
+  [[ -z ${ZDOTDIR+set} ]] || exports+="export KITTY_ORIG_ZDOTDIR=$(printf %q "$ZDOTDIR")"$'\n'
+  mkdir -p "$tmp/shell"
+  smoke_shell="$tmp/shell/${real##*/}"
+  printf '#!/usr/bin/env bash\n%sexec %q "$@"\n' "$exports" "$real" >"$smoke_shell"
+  chmod +x "$smoke_shell"
+}
 # wait_for [-t seconds] [-i interval] <command...>: polls (every 0.1 s unless -i gives the seconds) until the command succeeds,
 # for up to wait_limit seconds, and names the command when time runs out. Headless Tern runs plugin timers only on frames, so a
 # caller waiting on one keeps frames coming.

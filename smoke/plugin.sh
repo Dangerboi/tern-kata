@@ -122,6 +122,8 @@ zle -F -w $tick redraw_prompt
 ZSHRC
 printf 'export PATH=%q:%q:"$PATH"\n' "$tmp/pane-bin" "$tmp/bin" >"$tmp/.bashrc"
 export PATH="$tmp/bin:/usr/bin:/bin"
+# The shells get this PATH, with .zshenv's folders in front (pane-bin holds the only tern-kata they can find), ZDOTDIR and the rest.
+pass_env_to_shells
 # Update tern-kata reads version.txt from here.
 mkdir -p "$tmp/dist"
 printf '9.9.9\n' >"$tmp/dist/version.txt"
@@ -146,7 +148,7 @@ kata --workspace "$tmp/odd" create 'Plugin odd Issue' --body 'Plugin odd body' -
 odd=$(jq -r '.issue.short_id' "$tmp/odd.json")
 (cd "$repo" && tern plugin link . --json)
 ! command -v tern-kata >/dev/null 2>&1 || { echo "tern-kata must not be on window PATH" >&2; exit 1; }
-tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
+SHELL="$smoke_shell" tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
 pid=$!
 wait_for socket_ready "$pid" "$tmp/control.sock"
 ctl ready

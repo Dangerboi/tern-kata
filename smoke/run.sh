@@ -188,7 +188,8 @@ else
 fi
 
 source "$repo/smoke/ctl.sh"
-tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
+pass_env_to_shells
+SHELL="$smoke_shell" tern serve --control "$tmp/control.sock" --out "$tmp/shots" --dir "$tmp/workspace" >"$tmp/tern.log" 2>&1 &
 server_pid=$!
 wait_for socket_ready "$server_pid" "$tmp/control.sock"
 
@@ -220,12 +221,8 @@ ctl_typed() {
   printf 'tern-kata drew no columns or error within %s s of %s\n' "$wait_limit" "$1" >&2
   return 1
 }
-# VISUAL wins over EDITOR in tern-kata, so one inherited from the shell would replace the editor fixture. Headless Tern starts its
-# shells with only the system folders on PATH and drops the rest of this environment: pane-env gives the Pane the run's PATH (it
-# runs kata, `daemon recover` for a stopped profile) and keeps its kata update check off.
-printf '#!/usr/bin/env bash\nexport PATH=%q TERN_KATA_NO_UPDATE_CHECK=1\nexec "$@"\n' "$PATH" >"$tmp/pane-env"
-chmod +x "$tmp/pane-env"
-printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP -u VISUAL EDITOR=%s/smoke/editor.sh KATA_HOME=%s %s/pane-env %s/tern-kata"\n' "$repo" "$KATA_HOME" "$tmp" "$tmp" >"$tmp/launch.ctl"
+# VISUAL wins over EDITOR in tern-kata, so one inherited from the shell would replace the editor fixture.
+printf 'ready\nrun "env -u KATA_SERVER -u KATA_AUTH_TOKEN -u TMUX -u STY -u ZELLIJ -u TERN_TSP -u VISUAL EDITOR=%s/smoke/editor.sh KATA_HOME=%s %s/tern-kata"\n' "$repo" "$KATA_HOME" "$tmp" >"$tmp/launch.ctl"
 ctl --file "$tmp/launch.ctl"
 
 expect_tree() {
