@@ -53,7 +53,9 @@ ctl tree "[data-id='dock.hints']" | jq '.nodes[0].rect[1]' >"$tmp/workflows-dock
 ctl tree "[data-id='main.columns.list.page.inspector'],[data-id='main.columns.list.page.names']" >"$tmp/workflows-cards.json"
 jq -e --slurpfile dock "$tmp/workflows-dock-top.txt" '.count == 2 and all(.nodes[].rect; .[1] + .[3] <= $dock[0])' "$tmp/workflows-cards.json" || { printf 'A Workflows card runs past the footer\n' >&2; return 1; }
 wf_below() { ctl tree "[data-id='main.columns.list.page.inspector.viewport'],[data-id='main.columns.list.page.inspector.viewport.content']" | jq -r '.nodes | (.[1].rect[1] + .[1].rect[3]) - (.[0].rect[1] + .[0].rect[3]) | floor'; }
-[[ $(wf_below) -gt 100 ]] || { printf 'The long workflow does not overflow its inspector viewport\n' >&2; return 1; }
+# The 60 steps are laid out over a few frames after the content node appears.
+wf_overflows() { [[ $(wf_below) -gt 100 ]]; }
+wait_for wf_overflows || { printf 'The long workflow does not overflow its inspector viewport\n' >&2; return 1; }
 ctl hover "[data-id='main.columns.list.page.inspector.viewport']" >/dev/null
 for _ in $(seq 40); do ctl wheel 0 300 >/dev/null; done
 wf_at_end() { [[ $(wf_below) -le 1 ]]; }
