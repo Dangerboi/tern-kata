@@ -95,6 +95,11 @@ wait_settled lo_rects
 ctl click "$(lo_card "$lo_d")"
 ctl key Enter
 expect_tree "[data-id='main.columns.list.lane']" '.ok and .count == 1 and (.nodes[0].text | contains("custom order"))'
+# Its chips switch Lanes, as a phone needs: a tap on No lane's chip shows No lane (no custom order), Needs info's brings it back.
+ctl click "[data-id='main.columns.list.lane.lane0']"
+expect_tree "[data-id='main.columns.list.lane']" '.ok and .count == 1 and (.nodes[0].text | contains("custom order") | not)'
+ctl click "[data-id='main.columns.list.lane.lane2']"
+expect_tree "[data-id='main.columns.list.lane']" '.ok and .count == 1 and (.nodes[0].text | contains("custom order"))'
 ctl key Escape
 expect_tree "[data-id='main.columns.list.lane']" '.ok and .count == 0'
 expect_tree "$lo_head" '.ok and .count == 1'

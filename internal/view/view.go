@@ -96,6 +96,9 @@ func Render(m model.Model, now time.Time) tern.View {
 	main = append(main, footerNodes(m)...)
 	main = append(main, toasts(m)...)
 	layer := topLayer(m, now)
+	if layer == nil {
+		layer = cardMenuLayer(m)
+	}
 	if m.CloseForm.Err != nil && !m.CloseForm.Open {
 		main = append(main, plainText("close-error", ui.ToneError, m.CloseForm.Err.Error()))
 	}
@@ -189,17 +192,27 @@ func listEmpty(m model.Model) ui.Empty {
 	return emptyState("No Issues", "Pick another Project or view from the Menu.")
 }
 
-// laneHeader names the Lane the Lane view lists: its Lane tone Badge and the muted count of its cards, as the Board's header does.
+// laneHeader is the Lane view's switcher: one chip per Lane of the Board, in its order, with the Lane's card count. The shown
+// Lane's chip takes its Lane tone; a tap on another chip shows that Lane, as the keys do, so a phone with no keyboard reaches every
+// Lane. A Lane with no card has no tap, as the keys skip it. A custom-ordered shown Lane says so after the chips and offers Reset
+// order on the header's menus.
 func laneHeader(m model.Model) tern.Element {
-	title, count, tone := model.LaneTitle(m.Board.Lane), "", laneTone(m.LaneList(), m.Board.Lane)
-	for _, column := range m.BoardColumns() {
+	laneList := m.LaneList()
+	cells := ui.Nodes()
+	for i, column := range m.BoardColumns() {
+		key := laneKey(i)
+		text := column.Title + " " + strconv.Itoa(len(column.Cards))
 		if column.Lane == m.Board.Lane {
-			title, count = column.Title, strconv.Itoa(len(column.Cards))
+			cells = append(cells, ui.Badge{Common: ui.Common{Key: key, Tone: laneTone(laneList, column.Lane), Role: LaneShownRole}, Text: text})
+			continue
 		}
-	}
-	cells := ui.Nodes(ui.Badge{Common: ui.Common{Key: "title", Tone: tone}, Text: title})
-	if count != "" {
-		cells = append(cells, ui.Text{Common: ui.Common{Key: "count"}, Spans: []ui.Span{{T: count, S: "muted"}}, Wrap: ui.WrapNone})
+		chip := ui.Badge{Common: ui.Common{Key: key, Tone: ui.ToneNeutral}, Text: text}
+		if len(column.Cards) > 0 {
+			chip.Actions = &ui.Actions{Click: ShowLaneClick(column.Lane)}
+		} else {
+			chip.Tone = ui.ToneMuted
+		}
+		cells = append(cells, chip)
 	}
 	common := ui.Common{Key: "lane"}
 	if m.LaneOrderCustom(m.Board.Lane) {
@@ -207,8 +220,11 @@ func laneHeader(m model.Model) tern.Element {
 		cells = append(cells, label)
 		common.Actions = actions
 	}
-	return ui.Row{Common: common, Gap: ui.GapSM, Children: cells}
+	return ui.Row{Common: common, Gap: ui.GapSM, Wrap: true, Children: cells}
 }
+
+// LaneShownRole marks the chip of the Lane the Lane view shows.
+const LaneShownRole = "tern-kata.lane-shown"
 
 func searchInput(m model.Model) tern.Element {
 	placeholder := "Search Issues in " + m.Collection.Title

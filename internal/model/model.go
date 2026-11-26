@@ -256,10 +256,17 @@ func Update(m Model, msg Msg) (Model, []Cmd) {
 		m.DateCalendar, m.Dropdown = CalendarState{}, Dropdown{}
 		msg = KeyMsg{Chord: press.Chord}
 	}
+	var taken bool
+	if m, taken = closeCardMenu(m, msg); taken {
+		return m, nil
+	}
 	if _, ok := msg.(KeyMsg); ok {
 		m = m.clearNotice()
 	}
 	next, cmds := updateWithDetail(m, msg)
+	if _, ok := next.CardMenu(); !ok {
+		next.Board.menu = ""
+	}
 	if !prev.Stale && next.Stale {
 		next.StaleSince = next.Now
 	}
@@ -589,6 +596,10 @@ func update(m Model, msg Msg) (Model, []Cmd) {
 		}
 	case SelectMsg:
 		return selectRow(m, msg.UID), nil
+	case CardMenuMsg:
+		return cardMenu(m, msg), nil
+	case ShowLaneMsg:
+		return showLane(m, msg.Lane), nil
 	case ContextMenuPickMsg:
 		if msg.Row != "" {
 			return attachmentMenuPick(m, msg)

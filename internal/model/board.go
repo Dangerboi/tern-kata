@@ -63,6 +63,8 @@ type BoardState struct {
 	// kept is the Issues Page selection the Board's own selection replaced on entry, and replaced is what it was replaced by;
 	// leaving the Board puts kept back unless the selection moved on.
 	kept, replaced string
+	// menu is the Issue whose card menu (the … button of the selected card) is open; see CardMenu.
+	menu string
 }
 
 func (m Model) LanesRequest() int64 { return m.Board.reads.Newest() }
@@ -72,6 +74,67 @@ func (m Model) OnBoard() bool { return m.Page == PageBoard }
 func (m Model) BoardShown() bool { return m.Page == PageBoard && m.Board.Mode == BoardColumns }
 
 func (m Model) LaneViewShown() bool { return m.Page == PageBoard && m.Board.Mode == BoardLane }
+
+// CardMenuMsg opens (Open) or closes the menu of the selected Board card's … button. The Pane draws that menu itself, as a
+// floating panel beside the button, because Tern's own menu stays inside the Lane's scrolling list and is cut off there.
+type CardMenuMsg struct {
+	UID  string
+	Open bool
+}
+
+func (CardMenuMsg) msg() {}
+
+// CardMenu is the Issue whose card menu is open, ok false when none is shown: the menu belongs to the selected card of the
+// Board's columns layout, and a popup card or the help sheet hides it.
+func (m Model) CardMenu() (uid string, ok bool) {
+	if m.Board.menu == "" || m.Board.menu != m.SelectedUID || !m.BoardShown() || m.TopCard() != NoCard || m.HelpOpen {
+		return "", false
+	}
+	return m.Board.menu, true
+}
+
+func cardMenu(m Model, msg CardMenuMsg) Model {
+	m.Board.menu = ""
+	if msg.Open && msg.UID == m.SelectedUID && m.BoardShown() {
+		m.Board.menu = msg.UID
+	}
+	return m
+}
+
+// closeCardMenu closes an open card menu before msg runs: a key closes it, and Esc does nothing else; a pick from it runs
+// after it closes. done says msg was taken.
+func closeCardMenu(m Model, msg Msg) (Model, bool) {
+	if m.Board.menu == "" {
+		return m, false
+	}
+	switch msg := msg.(type) {
+	case KeyMsg:
+		m.Board.menu = ""
+		return m, msg.Chord == "escape"
+	case ContextMenuPickMsg:
+		m.Board.menu = ""
+	}
+	return m, false
+}
+
+// ShowLaneMsg is a tap on a Lane's chip in the Lane view: that Lane shows, its first card selected.
+type ShowLaneMsg struct{ Lane string }
+
+func (ShowLaneMsg) msg() {}
+
+// showLane shows lane in the Lane view. A Lane with no card is not shown, as the keys skip it.
+func showLane(m Model, lane string) Model {
+	if !m.LaneViewShown() || lane == m.Board.Lane {
+		return m
+	}
+	for _, column := range m.BoardColumns() {
+		if column.Lane == lane && len(column.Cards) > 0 {
+			m.Board.Lane = lane
+			m.SelectedUID = column.Cards[0].Issue.UID
+		}
+	}
+	return m
+}
 
 func (m Model) DoneLimits() (days, cards int) {
 	days, cards = m.Board.DoneDays, m.Board.DoneCards

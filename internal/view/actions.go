@@ -41,6 +41,9 @@ const (
 	resetOrderAct      = "reset-order"
 	legendAct          = "legend"
 	toastAct           = "toast"
+	cardMenuAct        = "card-menu"
+	cardMenuCloseAct   = "card-menu-close"
+	showLaneAct        = "show-lane"
 )
 
 const (
@@ -81,6 +84,15 @@ func ContextMenuPickClick(uid string, mode model.Mode, row, chord string) string
 // ResetLaneOrderClick is the Reset order row of a custom-ordered Lane's header menu. The value is a Lane key (No lane's is ""), not only
 // a label; a key holds no "=", so the value keeps it whole.
 func ResetLaneOrderClick(lane string) string { return click(resetOrderAct, lane) }
+
+// CardMenuClick is the selected Board card's … button: it opens the card's menu. CardMenuCloseClick closes it, on a press
+// outside the menu.
+func CardMenuClick(uid string) string { return click(cardMenuAct, uid) }
+
+const CardMenuCloseClick = cardMenuCloseAct
+
+// ShowLaneClick is a Lane's chip in the Lane view; the value is the Lane key, as ResetLaneOrderClick's.
+func ShowLaneClick(lane string) string { return click(showLaneAct, lane) }
 
 func JobClick(uid string) string { return click(jobAct, uid) }
 
@@ -180,6 +192,12 @@ func DecodeAction(id, act, value string) model.Msg {
 		}
 	case resetOrderAct:
 		return model.ResetLaneOrder{Lane: value}
+	case showLaneAct:
+		return model.ShowLaneMsg{Lane: value}
+	case cardMenuAct:
+		return model.CardMenuMsg{UID: value, Open: true}
+	case cardMenuCloseAct:
+		return model.CardMenuMsg{}
 	case contextMenuPickAct:
 		parts := strings.SplitN(value, ":", 4)
 		if len(parts) == 4 {

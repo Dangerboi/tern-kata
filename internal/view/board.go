@@ -229,9 +229,9 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 	actions := rowActions(issue, false, menu, CardClick(issue.UID))
 	if selected {
 		// A list that takes drags takes the touch long-press too, so the selected card shows its menu as a button in the
-		// card's top right corner, with the entries of its right-click menu. It is the last child of the badge row so the
-		// badges keep their ids, and CardMoreRole takes it out of the row's flow and leaves room for it.
-		ids = append(ids, ui.Menu{Common: ui.Common{Key: "more", Role: CardMoreRole, Title: "Actions"}, Items: actions.Menu, Trigger: ui.ButtonQuiet, Size: ui.SizeSM, Align: ui.AlignEnd})
+		// card's top right corner, with the entries of its right-click menu (cardMenuLayer draws them). It is the last child of
+		// the badge row so the badges keep their ids, and CardMoreRole takes it out of the row's flow and leaves room for it.
+		ids = append(ids, ui.Button{Common: ui.Common{Key: cardMoreKey, Role: CardMoreRole, Title: "Actions", Actions: &ui.Actions{Click: CardMenuClick(issue.UID)}}, Icon: ui.IconMore, Variant: ui.ButtonQuiet, Size: ui.SizeSM})
 	}
 	first := ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}
 	body = slices.Insert(body, 0, tern.Element(first))
@@ -241,6 +241,49 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		Children: body,
 	}
 }
+
+const cardMoreKey = "more"
+
+// cardMenuLayer is the open menu of the selected card's … button: the rows of the card's right-click menu, in a panel that floats
+// beside the button over the Lanes. Tern's own menu would open inside the Lane's scrolling list and be cut off at its edges. The
+// panel is not modal, so a press anywhere outside it closes it; a key closes it too, and Esc does nothing else.
+func cardMenuLayer(m model.Model) tern.Element {
+	uid, ok := m.CardMenu()
+	if !ok {
+		return nil
+	}
+	issue, ok := m.LoadedIssue(uid)
+	card := CardID(m, uid)
+	if !ok || card == "" {
+		return nil
+	}
+	lines := newContextMenuKeys(model.ModeBoard, model.OpenLane).issueLines(issue)
+	rows := make([]tern.Element, len(lines))
+	for i, line := range lines {
+		key := "row" + strconv.Itoa(i)
+		if line.sep {
+			rows[i] = ui.Rule{Common: ui.Common{Key: key}}
+			continue
+		}
+		row := ui.Item{Common: ui.Common{Key: key}, Label: ui.T(line.label), Hint: line.keys}
+		if line.reason != "" {
+			row.Disabled, row.Title = true, line.reason
+		} else {
+			row.Actions = &ui.Actions{Click: line.act}
+		}
+		rows[i] = row
+	}
+	// In a Nodes, as every popup card's layer, so the overlay's key names it: layer.card-menu.
+	return ui.Nodes(ui.Overlay{
+		Common:   ui.Common{Key: CardMenuKey, Actions: &ui.Actions{Outside: CardMenuCloseClick}},
+		Anchor:   ui.AtNode(itemID(itemID(card, "id"), cardMoreKey), "below"),
+		Size:     ui.SizeSM,
+		Children: rows,
+	})
+}
+
+// CardMenuKey is the card menu's overlay under the layer: its id is "layer." + CardMenuKey.
+const CardMenuKey = "card-menu"
 
 const maxRelationshipIDs = 3
 

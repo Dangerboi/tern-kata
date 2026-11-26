@@ -47,21 +47,30 @@ expect_tree "$(bdr_card 1 "$bdr_first")" '.ok and .count == 1'
 
 wait_settled bdr_first_rect
 
-# The selected card's … button opens the menu a right-click does.
+# The selected card's … button opens the menu a right-click does, floating over the Lanes: every row is drawn whole inside it.
 ctl click "$(bdr_card 1 "$bdr_first")"
 expect_tree "$(bdr_card 1 "$bdr_first")" '.ok and .count == 1 and (.nodes[0]["aria-selected"] == "true" or (.nodes[0].class | test("(^| )selected( |$)")))'
-bdr_menu="[data-id^='main.columns.list.board.lane1.cards.$bdr_first.'] .sf-menu-trigger"
+bdr_menu="[data-id='main.columns.list.board.lane1.cards.$bdr_first.id.more']"
 expect_tree "$bdr_menu" '.ok and .count == 1'
 bdr_trigger_rect() { ctl tree "$bdr_menu" | jq -c '.nodes[0].rect'; }
 wait_settled bdr_trigger_rect
 ctl click "$bdr_menu"
-expect_tree "[role='menu']" '.ok and .count == 1 and (.nodes[0].text | contains("Close…"))'
-bdr_close_rect() { ctl tree "[role='menuitem']" | jq -c '[.nodes[] | select(.text | startswith("Close"))][0].rect'; }
-wait_settled bdr_close_rect
-ctl tree "[role='menuitem']" | jq -er '[.nodes[] | select(.text | startswith("Close"))][0].rect | "\(.[0] + .[2] / 2) \(.[1] + .[3] / 2)"' >"$tmp/bdr-close.xy"
-# shellcheck disable=SC2046
-ctl click $(<"$tmp/bdr-close.xy")
+expect_tree "[data-id='layer.card-menu']" '.ok and .count == 1 and (.nodes[0].text | contains("Close…") and contains("New child…"))'
+bdr_menu_rows() { ctl tree "[data-id^='layer.card-menu.row']" | jq -c '[.nodes[].rect]'; }
+wait_settled bdr_menu_rows
+ctl tree "[data-id='layer.card-menu']" | jq -e --argjson rows "$(bdr_menu_rows)" '.nodes[0].rect as [$x, $y, $w, $h] | all($rows[]; .[1] >= $y and .[1] + .[3] <= $y + $h + 1)' >/dev/null ||
+  { echo "a card menu row is cut off: menu $(ctl tree "[data-id='layer.card-menu']" | jq -c '.nodes[0].rect'), rows $(bdr_menu_rows)" >&2; exit 1; }
+# A press beside the menu closes it.
+ctl click "[data-id='main.columns.list.board.lane0.head']"
+expect_tree "[data-id='layer.card-menu']" '.ok and .count == 0'
+# Its Close row opens the Close card on the card.
+ctl click "$bdr_menu"
+expect_tree "[data-id='layer.card-menu']" '.ok and .count == 1'
+# The tree lists the rows in order, row0 first, and names no ids.
+bdr_close_row=$(ctl tree "[data-id^='layer.card-menu.row']" | jq -er '[.nodes[] | (.text // "") | startswith("Close")] | index(true)')
+ctl click "[data-id='layer.card-menu.row$bdr_close_row']"
 expect_tree "[data-id='layer.close']" '.ok and .count == 1'
+expect_tree "[data-id='layer.card-menu']" '.ok and .count == 0'
 ctl key Escape
 expect_tree "[data-id='layer.close']" '.ok and .count == 0'
 

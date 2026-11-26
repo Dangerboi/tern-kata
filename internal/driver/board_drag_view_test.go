@@ -1,8 +1,11 @@
 package driver_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -87,7 +90,7 @@ func withoutRole(p map[string]any) map[string]any {
 	return out
 }
 
-func TestOnlyTheSelectedCardHasAMoreMenuWithItsRightClickEntries(t *testing.T) {
+func TestOnlyTheSelectedCardHasAMoreButtonThatOpensItsMenu(t *testing.T) {
 	s := dragPane(t)
 	nodes := wireNodes(t, view.Render(s.Model, now))
 	var more []string
@@ -98,21 +101,118 @@ func TestOnlyTheSelectedCardHasAMoreMenuWithItsRightClickEntries(t *testing.T) {
 	}
 	selected := rowOf(t, s.Model, view.BoardID, "a")
 	if want := []string{selected + ".id.more"}; !reflect.DeepEqual(more, want) {
-		t.Fatalf("more menus = %v, want only the selected card's %v", more, want)
+		t.Fatalf("more buttons = %v, want only the selected card's %v", more, want)
 	}
 	button := node(t, nodes, selected+".id.more")
-	if got := button.P["trigger"]; got != "quiet" {
-		t.Errorf("trigger = %v, want quiet", got)
+	if button.P["variant"] != "quiet" || button.P["icon"] != "more" {
+		t.Errorf("more button = %v, want a quiet … icon button", button.P)
 	}
-	if _, ok := button.P["text"]; ok {
-		t.Errorf("the button has a label %v, want Tern's square … button", button.P["text"])
+	actions, _ := button.P["actions"].(map[string]any)
+	act, value, _ := strings.Cut(fmt.Sprint(actions["click"]), "=")
+	if got, want := view.DecodeAction(button.ID, act, value), (model.CardMenuMsg{UID: "a", Open: true}); got != want {
+		t.Errorf("more button click decodes to %#v, want %#v", got, want)
 	}
-	actions, _ := node(t, nodes, selected).P["actions"].(map[string]any)
-	if len(actions) == 0 || actions["menu"] == nil {
-		t.Fatalf("the card has no right-click menu: %v", actions)
+}
+
+// cardMenuRows reads the open card menu: its rows' labels in order, "-" for a separator, and each row's click ("" for none).
+func cardMenuRows(t *testing.T, nodes []tern.WireNode) (labels, clicks []string) {
+	t.Helper()
+	for _, row := range node(t, nodes, "layer."+view.CardMenuKey).C {
+		if row.K == "rule" {
+			labels, clicks = append(labels, "-"), append(clicks, "")
+			continue
+		}
+		actions, _ := row.P["actions"].(map[string]any)
+		click, _ := actions["click"].(string)
+		labels, clicks = append(labels, fmt.Sprint(row.P["label"])), append(clicks, click)
 	}
-	if !reflect.DeepEqual(button.P["items"], actions["menu"]) {
-		t.Errorf("more menu items = %v, want the right-click menu's %v", button.P["items"], actions["menu"])
+	return labels, clicks
+}
+
+func TestTheCardMenuFloatsBesideTheButtonWithTheRightClickRows(t *testing.T) {
+	s := dragPane(t)
+	if hasNode(wireNodes(t, view.Render(s.Model, now)), "layer."+view.CardMenuKey) {
+		t.Fatal("the card menu shows before the … button is pressed")
+	}
+	s = step(t, s, &tern.Action{ID: rowOf(t, s.Model, view.BoardID, "a") + ".id.more", Act: "card-menu", Value: "a"}).State
+	nodes := wireNodes(t, view.Render(s.Model, now))
+	overlay := node(t, nodes, "layer."+view.CardMenuKey)
+	if modal, _ := overlay.P["modal"].(bool); modal {
+		t.Error("the card menu is modal: Tern then sends no outside press, so a click beside it would not close it")
+	}
+	anchor, _ := json.Marshal(overlay.P["anchor"])
+	if want := rowOf(t, s.Model, view.BoardID, "a") + ".id.more"; !strings.Contains(string(anchor), want) {
+		t.Errorf("anchor = %s, want the … button %s", anchor, want)
+	}
+	actions, _ := overlay.P["actions"].(map[string]any)
+	if got := view.DecodeAction(overlay.ID, fmt.Sprint(actions["outside"]), ""); got != (model.CardMenuMsg{}) {
+		t.Errorf("outside press decodes to %#v, want the menu closed", got)
+	}
+	// The rows are the card's right-click menu, in order, with its separators.
+	var want []string
+	right, _ := node(t, nodes, rowOf(t, s.Model, view.BoardID, "a")).P["actions"].(map[string]any)
+	raw, _ := json.Marshal(right["menu"])
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		var row struct{ Label string }
+		if json.Unmarshal(item, &row) != nil {
+			want = append(want, "-")
+			continue
+		}
+		want = append(want, row.Label)
+	}
+	if labels, _ := cardMenuRows(t, nodes); !reflect.DeepEqual(labels, want) {
+		t.Errorf("card menu rows = %q, want the right-click menu's %q", labels, want)
+	}
+}
+
+// A row of the card menu is a node click: Tern splits its act at the "=", and the Close row opens the Close card on the
+// card and closes the menu.
+func TestACardMenuRowRunsItsKeyAndClosesTheMenu(t *testing.T) {
+	s := dragPane(t)
+	s = step(t, s, model.CardMenuMsg{UID: "a", Open: true}).State
+	labels, clicks := cardMenuRows(t, wireNodes(t, view.Render(s.Model, now)))
+	i := slices.Index(labels, "Close…")
+	if i < 0 {
+		t.Fatalf("card menu rows = %q, want a Close… row", labels)
+	}
+	act, value, _ := strings.Cut(clicks[i], "=")
+	out := step(t, s, &tern.Action{ID: "layer." + view.CardMenuKey + ".row" + strconv.Itoa(i), Act: act, Value: value})
+	if form := out.State.Model.CloseForm; !form.Open || form.UID != "a" {
+		t.Errorf("Close card = %+v, want open on a", form)
+	}
+	if _, open := out.State.Model.CardMenu(); open {
+		t.Error("the card menu stays open after a pick")
+	}
+}
+
+func TestAPressOutsideOrAKeyClosesTheCardMenu(t *testing.T) {
+	open := step(t, dragPane(t), model.CardMenuMsg{UID: "a", Open: true}).State
+	if _, ok := open.Model.CardMenu(); !ok {
+		t.Fatal("the card menu did not open")
+	}
+	for _, c := range []struct {
+		name string
+		in   any
+	}{
+		{"outside press", &tern.Action{ID: "layer." + view.CardMenuKey, Act: view.CardMenuCloseClick}},
+		{"esc", key("escape")},
+		{"a move key", key("down")},
+	} {
+		m := step(t, open, c.in).State.Model
+		if _, ok := m.CardMenu(); ok {
+			t.Errorf("%s: the card menu stays open", c.name)
+		}
+		if c.name != "a move key" && (!m.BoardShown() || m.SelectedUID != "a") {
+			t.Errorf("%s: Board shown %v, selected %q; want the Board as it was, with a still selected", c.name, m.BoardShown(), m.SelectedUID)
+		}
+	}
+	// The menu belongs to the selected card: one asked for another card does not open.
+	if _, ok := step(t, dragPane(t), model.CardMenuMsg{UID: "b", Open: true}).State.Model.CardMenu(); ok {
+		t.Error("a card menu opened for a card that is not selected")
 	}
 }
 
@@ -143,11 +243,10 @@ func TestTheSelectedCardsMenuIsTheLastChildOfTheWrappingBadgeRowWithItsRole(t *t
 	}
 }
 
-// A Menu row sends its whole id as the act, with no value; the Close row of the selected card's more menu still opens the Close card.
-func TestAMoreMenuRowSentAsAWholeActOpensTheCloseCard(t *testing.T) {
+// A Tern menu row sends its whole id as the act, with no value; the Close row of the right-click menu still opens the Close card.
+func TestAMenuRowSentAsAWholeActOpensTheCloseCard(t *testing.T) {
 	s := dragPane(t)
-	more := rowOf(t, s.Model, view.BoardID, "a") + ".id.more"
-	out := step(t, s, &tern.Action{ID: more, Act: view.ContextMenuPickClick("a", model.ModeBoard, "", "x")})
+	out := step(t, s, &tern.Action{ID: rowOf(t, s.Model, view.BoardID, "a"), Act: view.ContextMenuPickClick("a", model.ModeBoard, "", "x")})
 	if form := out.State.Model.CloseForm; !form.Open || form.UID != "a" {
 		t.Errorf("Close card = %+v, want open on a", form)
 	}

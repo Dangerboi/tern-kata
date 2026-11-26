@@ -49,32 +49,62 @@ func newContextMenuKeys(mode model.Mode, open model.Action) contextMenuKeys {
 	})
 }
 
-// entries lists the rows of the menu of the Issue uid, a row of its detail when row is set. refusal says why a row's action is
+// menuLine is one row of an Issue's menu, or a separator between its groups: act is what a pick sends, reason why the row is
+// disabled ("" when it is on offer).
+type menuLine struct {
+	sep                bool
+	act, label, reason string
+	keys               []string
+}
+
+// lines lists the rows of the menu of the Issue uid, a row of its detail when row is set. refusal says why a row's action is
 // disabled, "" when it is on offer; skip leaves a row out.
-func (k contextMenuKeys) entries(uid, row string, refusal func(model.Action) string, skip func(model.Action) bool) []ui.MenuEntry {
-	menu := make([]ui.MenuEntry, 0, len(k.rows)+4)
+func (k contextMenuKeys) lines(uid, row string, refusal func(model.Action) string, skip func(model.Action) bool) []menuLine {
+	lines := make([]menuLine, 0, len(k.rows)+4)
 	group := -1
 	for _, r := range k.rows {
 		if skip != nil && skip(r.action) {
 			continue
 		}
 		if group >= 0 && r.group != group {
-			menu = append(menu, ui.MenuSep)
+			lines = append(lines, menuLine{sep: true})
 		}
 		group = r.group
-		item := ui.MenuItem{ID: ContextMenuPickClick(uid, k.mode, row, r.chord), Label: r.label, Keys: r.keys}
-		if reason := refusal(r.action); reason != "" {
-			item.Disabled = ui.Because(reason)
+		lines = append(lines, menuLine{act: ContextMenuPickClick(uid, k.mode, row, r.chord), label: r.label, keys: r.keys, reason: refusal(r.action)})
+	}
+	return lines
+}
+
+// entries are lines as the rows of Tern's own menus.
+func (k contextMenuKeys) entries(uid, row string, refusal func(model.Action) string, skip func(model.Action) bool) []ui.MenuEntry {
+	return menuEntries(k.lines(uid, row, refusal, skip))
+}
+
+func menuEntries(lines []menuLine) []ui.MenuEntry {
+	menu := make([]ui.MenuEntry, len(lines))
+	for i, line := range lines {
+		if line.sep {
+			menu[i] = ui.MenuSep
+			continue
 		}
-		menu = append(menu, item)
+		item := ui.MenuItem{ID: line.act, Label: line.label, Keys: line.keys}
+		if line.reason != "" {
+			item.Disabled = ui.Because(line.reason)
+		}
+		menu[i] = item
 	}
 	return menu
 }
 
-func (k contextMenuKeys) of(issue model.Issue) []ui.MenuEntry {
+// issueLines are the rows of an Issue's own menu: Reopen only for a closed Issue.
+func (k contextMenuKeys) issueLines(issue model.Issue) []menuLine {
 	closed := model.IsClosed(issue)
-	return k.entries(issue.UID, "", func(action model.Action) string { return model.IssueRefusal(issue, action) },
+	return k.lines(issue.UID, "", func(action model.Action) string { return model.IssueRefusal(issue, action) },
 		func(action model.Action) bool { return action == model.ReopenAction && !closed })
+}
+
+func (k contextMenuKeys) of(issue model.Issue) []ui.MenuEntry {
+	return menuEntries(k.issueLines(issue))
 }
 
 func rowMode(m model.Model) model.Mode {

@@ -3,6 +3,7 @@ package driver_test
 import (
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,13 +14,21 @@ import (
 	"github.com/stencil-hq/tern-sdk/go/tern"
 )
 
-// laneHeader is the Lane header line the Lane view draws above its list, "" when none is drawn.
+// laneHeader is what the Lane view's header says of the Lane it shows: the shown Lane's chip and what follows the chips (custom
+// order), "" when no header is drawn. The other Lanes' chips are left out, so a test reads which Lane shows.
 func laneHeader(t *testing.T, s driver.State) string {
 	t.Helper()
 	for _, n := range wireNodes(t, view.Render(s.Model, now)) {
-		if n.ID == view.LaneHeaderID {
-			return wireText(n)
+		if n.ID != view.LaneHeaderID {
+			continue
 		}
+		var parts []string
+		for _, c := range n.C {
+			if containsWord(roleWords(c), view.LaneShownRole) || !strings.HasPrefix(strings.TrimPrefix(c.ID, n.ID+"."), "lane") {
+				parts = append(parts, wireText(c))
+			}
+		}
+		return strings.Join(parts, " ")
 	}
 	return ""
 }
@@ -301,5 +310,59 @@ func TestBoardVisitKeepsTheIssuesPageSelection(t *testing.T) {
 	s = feed(t, s, key("b")).State
 	if got := s.Model.SelectedUID; got != "old" {
 		t.Errorf("back on the Issues Page selected %q, want old", got)
+	}
+}
+
+// laneChips are the Lane view header's chips: each chip's text and the message its tap sends (nil for no tap).
+func laneChips(t *testing.T, s driver.State) (texts []string, taps []model.Msg) {
+	t.Helper()
+	nodes := wireNodes(t, view.Render(s.Model, now))
+	for _, c := range node(t, nodes, view.LaneHeaderID).C {
+		if !strings.HasPrefix(strings.TrimPrefix(c.ID, view.LaneHeaderID+"."), "lane") {
+			continue
+		}
+		texts = append(texts, wireText(c))
+		var tap model.Msg
+		if actions, _ := c.P["actions"].(map[string]any); actions["click"] != nil {
+			act, value, _ := strings.Cut(actions["click"].(string), "=")
+			tap = view.DecodeAction(c.ID, act, value)
+		}
+		taps = append(taps, tap)
+	}
+	return texts, taps
+}
+
+// On a phone (a Pane too narrow for the Board) the Lane view is the Board: its header lists every Lane, and a tap on another
+// Lane's chip shows that Lane with its first card selected, as the keys do. A Lane with no card has no tap, as the keys skip it.
+func TestTheLaneViewHeaderHasAChipPerLaneAndATapShowsThatLane(t *testing.T) {
+	s := feed(t, laneBoard(t, 100), key("b")).State
+	if !s.Model.LaneViewShown() {
+		t.Fatal("a narrow Pane's Board is not the Lane view")
+	}
+	texts, taps := laneChips(t, s)
+	columns := s.Model.BoardColumns()
+	if len(texts) != len(columns) {
+		t.Fatalf("chips %q, want one per Lane of %d", texts, len(columns))
+	}
+	var info model.Msg
+	for i, column := range columns {
+		if want := column.Title + " " + strconv.Itoa(len(column.Cards)); !strings.Contains(texts[i], want) {
+			t.Errorf("chip %d = %q, want %q", i, texts[i], want)
+		}
+		switch {
+		case column.Lane == s.Model.Board.Lane || len(column.Cards) == 0:
+			if taps[i] != nil {
+				t.Errorf("chip %q taps %#v, want no tap (shown or empty Lane)", texts[i], taps[i])
+			}
+		case taps[i] != (model.ShowLaneMsg{Lane: column.Lane}):
+			t.Errorf("chip %q taps %#v, want ShowLaneMsg{%s}", texts[i], taps[i], column.Lane)
+		}
+		if column.Lane == "needs-info" {
+			info = taps[i]
+		}
+	}
+	out := step(t, s, info).State
+	if out.Model.Board.Lane != "needs-info" || out.Model.SelectedUID != "i1" || !strings.Contains(laneHeader(t, out), "Needs info") {
+		t.Errorf("after the Needs info tap: Lane %q, selected %q, header %q; want needs-info, i1", out.Model.Board.Lane, out.Model.SelectedUID, laneHeader(t, out))
 	}
 }
