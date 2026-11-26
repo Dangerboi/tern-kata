@@ -11,10 +11,10 @@ All notable changes to tern-kata are listed here. The format follows [Keep a Cha
 - On Tern 0.9.32 and later Board cards can be dragged onto another Lane to move their Issue there, as `<` and `>` do.
   - On older Terns cards do not drag; `<`, `>` and the card menu still move them.
   - On a touch screen, touch and hold a card, then drag; the Lane under the pointer lights up.
-  - The dragged card floats over the other Lanes. While it is dragged, the Lane it came from shows from its top, and a Lane you had scrolled down stays at its top after the drop.
-  - The selected card shows a `…` button that opens its menu, since a long-press now picks the card up. The menu floats over the Lanes; a press outside it or any key closes it.
+  - The dragged card floats over the other Lanes. While it is dragged, the Lane it came from shows from its top, and stays there after the drop if you had scrolled it down.
+  - The selected card shows a `…` button that opens its menu, since a long-press now picks the card up. The menu floats over the Lanes; a press outside it, a second press on `…` or any key closes it.
   - `Esc` does not cancel a drag.
-- The Lane view (narrow Panes and phones) lists every Lane as a chip with its card count in its header; a tap on a chip shows that Lane.
+- The Lane view (narrow Panes and phones) lists every Lane as a chip with its card count in its header; a tap on another Lane's chip shows that Lane (a Lane with no cards has a muted chip).
 - On Tern 0.9.32 and later dragging a Board card up or down inside its Lane gives that Lane a custom order, and the cards stay where you put them.
   - The Lane's header on the Board and the Lane view's (narrow Panes and phones) both say `custom order`, and both header menus (right-click, hold menu on a touch screen) have Reset order, which returns the Lane to the list's order.
   - Cards the order does not name (new to the Lane) show first, in the list's order.

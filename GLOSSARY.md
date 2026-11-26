@@ -72,7 +72,7 @@
 
 **Facts row**: The muted row at the end of the selected Board card, its parts joined by " · " and each present only when it has a value: the owner (with "until …" for a timed claim), the date the **Date badge** does not show, "parent a1b2", "1 of 2 children open", "blocks c3d4", "related g7h8" and, on a Done card, "reopens in Needs info". The **Blocked marker** says what blocks the card, so blockers are not in the row. Each id is a click that selects that Issue's card, or opens its detail when the Board doesn't draw it; `^` does the same for the parent.
 
-**Lane view**: One Lane as a flat, full-width list under a Lane header, with the Issue detail column beside it (only the focused column in a Pane narrower than the side-by-side width). The header holds a chip per Lane; a tap on one shows that Lane. Enter or a double-click on a card opens it, `←`/`→` switch Lanes, and Esc returns to the Board. The name avoids "focus", which already means the focused column.
+**Lane view**: One Lane as a flat, full-width list under a Lane header, with the Issue detail column beside it (only the focused column in a Pane narrower than the side-by-side width). The header holds a chip per Lane; a tap on another Lane's chip shows that Lane, except a Lane with no cards. Enter or a double-click on a card opens it, `←`/`→` switch Lanes, and Esc returns to the Board. The name avoids "focus", which already means the focused column.
 
 **Lane**: One label of the Lane list, shown as a column and titled from its label ("ready-for-agent" reads "Ready for agent"). Every Lane stands for one kata label, so the Board is a view of kata data, not a copy.
 

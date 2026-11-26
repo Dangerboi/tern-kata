@@ -3,6 +3,7 @@ package view
 import (
 	"encoding/json"
 	"math/big"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -91,8 +92,9 @@ func CardMenuClick(uid string) string { return click(cardMenuAct, uid) }
 
 const CardMenuCloseClick = cardMenuCloseAct
 
-// ShowLaneClick is a Lane's chip in the Lane view; the value is the Lane key, as ResetLaneOrderClick's.
-func ShowLaneClick(lane string) string { return click(showLaneAct, lane) }
+// ShowLaneClick is a Lane's chip in the Lane view. The value is the Lane key path-escaped: Done's key starts with a space, which
+// an act must not lose.
+func ShowLaneClick(lane string) string { return click(showLaneAct, url.PathEscape(lane)) }
 
 func JobClick(uid string) string { return click(jobAct, uid) }
 
@@ -193,7 +195,9 @@ func DecodeAction(id, act, value string) model.Msg {
 	case resetOrderAct:
 		return model.ResetLaneOrder{Lane: value}
 	case showLaneAct:
-		return model.ShowLaneMsg{Lane: value}
+		if lane, err := url.PathUnescape(value); err == nil {
+			return model.ShowLaneMsg{Lane: lane}
+		}
 	case cardMenuAct:
 		return model.CardMenuMsg{UID: value, Open: true}
 	case cardMenuCloseAct:

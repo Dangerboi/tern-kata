@@ -65,7 +65,7 @@ func board(m model.Model, now time.Time) tern.Element {
 	today := model.NewCalendarDay(m.Calendar.Date)
 	badges := m.AgentBadges()
 	lanes := make([]tern.Element, len(columns))
-	menu := newContextMenuKeys(model.ModeBoard, model.OpenLane)
+	menu := boardMenuKeys()
 	for i, column := range columns {
 		custom := m.LaneOrderCustom(column.Lane)
 		drop := ""
@@ -231,7 +231,13 @@ func boardCard(m model.Model, card model.BoardCard, tone ui.Tone, done bool, sel
 		// A list that takes drags takes the touch long-press too, so the selected card shows its menu as a button in the
 		// card's top right corner, with the entries of its right-click menu (cardMenuLayer draws them). It is the last child of
 		// the badge row so the badges keep their ids, and CardMoreRole takes it out of the row's flow and leaves room for it.
-		ids = append(ids, ui.Button{Common: ui.Common{Key: cardMoreKey, Role: CardMoreRole, Title: "Actions", Actions: &ui.Actions{Click: CardMenuClick(issue.UID)}}, Icon: ui.IconMore, Variant: ui.ButtonQuiet, Size: ui.SizeSM})
+		// While the menu is open the button closes it: its press is outside the menu, which closes it too, so it must not open
+		// it again on the release.
+		click := CardMenuClick(issue.UID)
+		if open, ok := m.CardMenu(); ok && open == issue.UID {
+			click = CardMenuCloseClick
+		}
+		ids = append(ids, ui.Button{Common: ui.Common{Key: cardMoreKey, Role: CardMoreRole, Title: "Actions", Actions: &ui.Actions{Click: click}}, Icon: ui.IconMore, Variant: ui.ButtonQuiet, Size: ui.SizeSM})
 	}
 	first := ui.Row{Common: ui.Common{Key: "id"}, Gap: ui.GapSM, Wrap: true, Children: ids}
 	body = slices.Insert(body, 0, tern.Element(first))
@@ -257,7 +263,7 @@ func cardMenuLayer(m model.Model) tern.Element {
 	if !ok || card == "" {
 		return nil
 	}
-	lines := newContextMenuKeys(model.ModeBoard, model.OpenLane).issueLines(issue)
+	lines := boardMenuKeys().issueLines(issue)
 	rows := make([]tern.Element, len(lines))
 	for i, line := range lines {
 		key := "row" + strconv.Itoa(i)
@@ -281,6 +287,9 @@ func cardMenuLayer(m model.Model) tern.Element {
 		Children: rows,
 	})
 }
+
+// boardMenuKeys are the rows of a Board card's menu: its right-click and hold menu, and the … button's.
+func boardMenuKeys() contextMenuKeys { return newContextMenuKeys(model.ModeBoard, model.OpenLane) }
 
 // CardMenuKey is the card menu's overlay under the layer: its id is "layer." + CardMenuKey.
 const CardMenuKey = "card-menu"

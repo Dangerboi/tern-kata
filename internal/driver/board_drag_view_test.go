@@ -197,18 +197,28 @@ func TestAPressOutsideOrAKeyClosesTheCardMenu(t *testing.T) {
 	for _, c := range []struct {
 		name string
 		in   any
+		// moves says the message still does its own work after closing the menu.
+		moves bool
 	}{
-		{"outside press", &tern.Action{ID: "layer." + view.CardMenuKey, Act: view.CardMenuCloseClick}},
-		{"esc", key("escape")},
-		{"a move key", key("down")},
+		{name: "outside press", in: &tern.Action{ID: "layer." + view.CardMenuKey, Act: view.CardMenuCloseClick}},
+		{name: "esc", in: key("escape")},
+		{name: "a move key", in: key("right"), moves: true},
 	} {
 		m := step(t, open, c.in).State.Model
 		if _, ok := m.CardMenu(); ok {
 			t.Errorf("%s: the card menu stays open", c.name)
 		}
-		if c.name != "a move key" && (!m.BoardShown() || m.SelectedUID != "a") {
-			t.Errorf("%s: Board shown %v, selected %q; want the Board as it was, with a still selected", c.name, m.BoardShown(), m.SelectedUID)
+		still := m.BoardShown() && m.SelectedUID == "a" && m.TopCard() == model.NoCard && m.Focus == open.Model.Focus
+		if still == c.moves {
+			t.Errorf("%s: Board shown %v, selected %q, top card %v, focus %v; want the key's own work %v", c.name, m.BoardShown(), m.SelectedUID, m.TopCard(), m.Focus, c.moves)
 		}
+	}
+	// While the menu is open the … button closes it: its press is outside the menu, so a button that opened it would open it
+	// again on the release.
+	nodes := wireNodes(t, view.Render(open.Model, now))
+	actions, _ := node(t, nodes, rowOf(t, open.Model, view.BoardID, "a")+".id.more").P["actions"].(map[string]any)
+	if got := view.DecodeAction("", fmt.Sprint(actions["click"]), ""); got != (model.CardMenuMsg{}) {
+		t.Errorf("the … button of an open menu decodes to %#v, want the menu closed", got)
 	}
 	// The menu belongs to the selected card: one asked for another card does not open.
 	if _, ok := step(t, dragPane(t), model.CardMenuMsg{UID: "b", Open: true}).State.Model.CardMenu(); ok {

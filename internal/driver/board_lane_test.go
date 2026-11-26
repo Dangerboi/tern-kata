@@ -365,4 +365,11 @@ func TestTheLaneViewHeaderHasAChipPerLaneAndATapShowsThatLane(t *testing.T) {
 	if out.Model.Board.Lane != "needs-info" || out.Model.SelectedUID != "i1" || !strings.Contains(laneHeader(t, out), "Needs info") {
 		t.Errorf("after the Needs info tap: Lane %q, selected %q, header %q; want needs-info, i1", out.Model.Board.Lane, out.Model.SelectedUID, laneHeader(t, out))
 	}
+	// Done's key starts with a space and No lane's is empty; both come back whole from their chip's click.
+	for _, lane := range []string{model.LaneDone, model.LaneNone} {
+		act, value, _ := strings.Cut(view.ShowLaneClick(lane), "=")
+		if got := view.DecodeAction("", act, value); got != (model.ShowLaneMsg{Lane: lane}) {
+			t.Errorf("chip click of %q decodes to %#v", lane, got)
+		}
+	}
 }

@@ -60,8 +60,12 @@ bdr_menu_rows() { ctl tree "[data-id^='layer.card-menu.row']" | jq -c '[.nodes[]
 wait_settled bdr_menu_rows
 ctl tree "[data-id='layer.card-menu']" | jq -e --argjson rows "$(bdr_menu_rows)" '.nodes[0].rect as [$x, $y, $w, $h] | all($rows[]; .[1] >= $y and .[1] + .[3] <= $y + $h + 1)' >/dev/null ||
   { echo "a card menu row is cut off: menu $(ctl tree "[data-id='layer.card-menu']" | jq -c '.nodes[0].rect'), rows $(bdr_menu_rows)" >&2; exit 1; }
-# A press beside the menu closes it.
+# A press beside the menu closes it, and so does a second press on its … button.
 ctl click "[data-id='main.columns.list.board.lane0.head']"
+expect_tree "[data-id='layer.card-menu']" '.ok and .count == 0'
+ctl click "$bdr_menu"
+expect_tree "[data-id='layer.card-menu']" '.ok and .count == 1'
+ctl click "$bdr_menu"
 expect_tree "[data-id='layer.card-menu']" '.ok and .count == 0'
 # Its Close row opens the Close card on the card.
 ctl click "$bdr_menu"

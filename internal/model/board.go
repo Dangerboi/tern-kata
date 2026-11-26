@@ -102,7 +102,7 @@ func cardMenu(m Model, msg CardMenuMsg) Model {
 }
 
 // closeCardMenu closes an open card menu before msg runs: a key closes it, and Esc does nothing else; a pick from it runs
-// after it closes. done says msg was taken.
+// after it closes. taken says msg was Esc, which needs nothing more.
 func closeCardMenu(m Model, msg Msg) (Model, bool) {
 	if m.Board.menu == "" {
 		return m, false
