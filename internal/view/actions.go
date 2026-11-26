@@ -87,7 +87,7 @@ func ContextMenuPickClick(uid string, mode model.Mode, row, chord string) string
 func ResetLaneOrderClick(lane string) string { return click(resetOrderAct, lane) }
 
 // CardMenuClick is the selected Board card's … button: it opens the card's menu. CardMenuCloseClick closes it, on a press
-// outside the menu.
+// outside the menu and on a second press on the … button.
 func CardMenuClick(uid string) string { return click(cardMenuAct, uid) }
 
 const CardMenuCloseClick = cardMenuCloseAct
